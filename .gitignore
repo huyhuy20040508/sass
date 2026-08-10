@@ -1,0 +1,41 @@
+# ===== Chung =====
+.DS_Store
+Thumbs.db
+*.log
+*.tmp
+~$*
+.idea/
+.vscode/
+*.swp
+
+# Bí mật: mật khẩu DB, khoá JWT, khoá cổng thanh toán, APP_KEY của Laravel.
+# Chặn cả .env.local, .env.prod, .env.bak — chỉ chừa .env.example.
+.env
+.env.*
+!.env.example
+
+# ===== Go (api) =====
+/api/bin/
+/api/tmp/
+/api/*.exe
+/api/vendor/
+/api/coverage.out
+# Binary Linux build thẳng trên máy chủ
+/api/api
+/api/api.new
+
+# ===== Laravel (admin) =====
+/admin/vendor/
+/admin/node_modules/
+/admin/public/build/
+/admin/public/hot
+/admin/storage/*.key
+/admin/storage/app/**
+!/admin/storage/app/.gitignore
+/admin/storage/debugbar/*
+/admin/storage/framework/cache/*
+/admin/storage/framework/sessions/*
+/admin/storage/framework/views/*
+/admin/storage/logs/*
+/admin/bootstrap/cache/*
+/admin/.phpunit.result.cache

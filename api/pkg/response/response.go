@@ -1,0 +1,62 @@
+// Package response chuẩn hóa định dạng JSON trả về cho toàn bộ API.
+package response
+
+import (
+	"net/http"
+
+	"github.com/gin-gonic/gin"
+)
+
+// Body là cấu trúc phản hồi thống nhất.
+//
+//	{ "success": true, "message": "...", "data": {...}, "meta": {...} }
+//	{ "success": false, "message": "...", "errors": {...} }
+type Body struct {
+	Success bool        `json:"success"`
+	Message string      `json:"message,omitempty"`
+	Data    interface{} `json:"data,omitempty"`
+	Meta    interface{} `json:"meta,omitempty"`
+	Errors  interface{} `json:"errors,omitempty"`
+}
+
+// Pagination là metadata phân trang.
+type Pagination struct {
+	Page       int   `json:"page"`
+	PageSize   int   `json:"page_size"`
+	Total      int64 `json:"total"`
+	TotalPages int   `json:"total_pages"`
+}
+
+// OK trả về 200 kèm dữ liệu.
+func OK(c *gin.Context, data interface{}) {
+	c.JSON(http.StatusOK, Body{Success: true, Data: data})
+}
+
+// OKMessage trả về 200 kèm message.
+func OKMessage(c *gin.Context, message string, data interface{}) {
+	c.JSON(http.StatusOK, Body{Success: true, Message: message, Data: data})
+}
+
+// Created trả về 201.
+func Created(c *gin.Context, data interface{}) {
+	c.JSON(http.StatusCreated, Body{Success: true, Data: data})
+}
+
+// Paginated trả về 200 kèm danh sách + metadata phân trang.
+func Paginated(c *gin.Context, data interface{}, p Pagination) {
+	c.JSON(http.StatusOK, Body{Success: true, Data: data, Meta: p})
+}
+
+// Error trả về lỗi với mã HTTP tùy chọn.
+func Error(c *gin.Context, status int, message string) {
+	c.AbortWithStatusJSON(status, Body{Success: false, Message: message})
+}
+
+// ValidationError trả về 422 kèm chi tiết lỗi từng trường.
+func ValidationError(c *gin.Context, errs interface{}) {
+	c.AbortWithStatusJSON(http.StatusUnprocessableEntity, Body{
+		Success: false,
+		Message: "Dữ liệu không hợp lệ",
+		Errors:  errs,
+	})
+}

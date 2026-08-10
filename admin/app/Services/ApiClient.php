@@ -1,0 +1,1113 @@
+<?php
+
+namespace App\Services;
+
+use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Http\Client\Response;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
+
+/**
+ * ApiClient — lớp gọi Backend Go API.
+ *
+ * Toàn bộ dữ liệu của Admin đều đi qua REST API (không kết nối MySQL trực tiếp).
+ * Access token được lấy từ session sau khi đăng nhập và tự đính kèm Bearer.
+ */
+class ApiClient
+{
+    protected string $baseUrl;
+
+    protected int $timeout;
+
+    public function __construct()
+    {
+        $this->baseUrl = (string) config('api.base_url');
+        $this->timeout = (int) config('api.timeout');
+    }
+
+    /**
+     * Tạo request nền, tự đính kèm token (mặc định lấy từ session).
+     * Truyền $token = false để chủ động bỏ qua token (vd: lúc đăng nhập).
+     */
+    public function request(string|false|null $token = null): PendingRequest
+    {
+        $req = Http::baseUrl($this->baseUrl)
+            ->timeout($this->timeout)
+            ->acceptJson()
+            ->asJson();
+
+        if ($token !== false) {
+            $token = $token ?: session('api.access_token');
+            if ($token) {
+                $req = $req->withToken($token);
+            }
+        }
+
+        return $req;
+    }
+
+    public function get(string $uri, array $query = []): Response
+    {
+        return $this->send('GET', $uri, $query);
+    }
+
+    public function post(string $uri, array $data = []): Response
+    {
+        return $this->send('POST', $uri, $data);
+    }
+
+    public function put(string $uri, array $data = []): Response
+    {
+        return $this->send('PUT', $uri, $data);
+    }
+
+    public function delete(string $uri): Response
+    {
+        return $this->send('DELETE', $uri);
+    }
+
+    /**
+     * Gửi request có đính token; nếu bị 401 (access token hết hạn) thì tự động
+     * gọi /auth/refresh bằng refresh token rồi thử lại đúng một lần.
+     */
+    protected function send(string $method, string $uri, array $payload = []): Response
+    {
+        $res = $this->dispatch($method, $uri, $payload);
+
+        if ($res->status() === 401 && $this->refreshToken()) {
+            $res = $this->dispatch($method, $uri, $payload);
+        }
+
+        return $res;
+    }
+
+    /** Thực thi một HTTP request đơn lẻ (token lấy từ session tại thời điểm gọi). */
+    protected function dispatch(string $method, string $uri, array $payload): Response
+    {
+        $req = $this->request();
+
+        return match (strtoupper($method)) {
+            'POST' => $req->post($uri, $payload),
+            'PUT' => $req->put($uri, $payload),
+            'DELETE' => $req->delete($uri),
+            default => $req->get($uri, $payload),
+        };
+    }
+
+    /**
+     * Dùng refresh token lấy cặp token mới, cập nhật lại session.
+     * Trả về true nếu làm mới thành công. Không đính access token cũ để tránh vòng lặp.
+     */
+    protected function refreshToken(): bool
+    {
+        $refresh = session('api.refresh_token');
+        if (! $refresh) {
+            return false;
+        }
+
+        try {
+            $res = $this->request(false)->post('/auth/refresh', [
+                'refresh_token' => $refresh,
+            ]);
+        } catch (\Throwable $e) {
+            return false;
+        }
+
+        if (! $res->successful()) {
+            return false;
+        }
+
+        $data = $res->json('data');
+        $access = data_get($data, 'access_token');
+        if (! $access) {
+            return false;
+        }
+
+        session([
+            'api.access_token' => $access,
+            'api.refresh_token' => data_get($data, 'refresh_token') ?: $refresh,
+        ]);
+        if ($user = data_get($data, 'user')) {
+            session(['api.user' => $user]);
+        }
+
+        return true;
+    }
+
+    // ---------- Auth ----------
+
+    /** Đăng nhập, trả về Response thô để controller xử lý. */
+    public function login(string $email, string $password): Response
+    {
+        return $this->request(false)->post('/auth/login', [
+            'email' => $email,
+            'password' => $password,
+        ]);
+    }
+
+    /** Lấy thông tin tài khoản hiện tại theo access token. */
+    public function me(): Response
+    {
+        return $this->get('/auth/me');
+    }
+
+    /**
+     * Trả access token còn hiệu lực để trình duyệt mở luồng SSE.
+     *
+     * Gọi /auth/me trước để đi qua cơ chế tự làm mới token của send(): nếu token
+     * trong session đã hết hạn thì nó được thay bằng token mới ngay tại đây, thay
+     * vì để trình duyệt mở stream rồi bị 401 và quay vòng kết nối lại.
+     * Trả null khi phiên đã chết hẳn.
+     */
+    public function streamToken(): ?string
+    {
+        try {
+            if (! $this->me()->successful()) {
+                return null;
+            }
+        } catch (\Throwable $e) {
+            return null;
+        }
+
+        return session('api.access_token') ?: null;
+    }
+
+    // ---------- Hồ sơ của tôi ----------
+
+    /**
+     * Hồ sơ tài khoản đang đăng nhập, dạng đầy đủ (vai trò, lần đăng nhập gần nhất).
+     *
+     * Khác me(): /auth/me trả bản rút gọn dùng chung với storefront, còn đường này
+     * trả đúng cấu trúc của trang Người dùng nên hai trang hiển thị giống hệt nhau.
+     * Nhân viên gọi được — API để nhóm này ở tầng quyền `admin`, không phải `manage`.
+     */
+    public function profile(): Response
+    {
+        return $this->get('/admin/me');
+    }
+
+    /** Sửa hồ sơ của chính mình. Vai trò, trạng thái và email KHÔNG đi qua đây. */
+    public function updateProfile(array $data): Response
+    {
+        return $this->put('/admin/me', $data);
+    }
+
+    /** Tự đổi mật khẩu — phải kèm mật khẩu hiện tại. */
+    public function changePassword(string $current, string $new): Response
+    {
+        return $this->put('/admin/me/password', [
+            'current_password' => $current,
+            'new_password' => $new,
+        ]);
+    }
+
+    // ---------- Notifications ----------
+
+    /** Danh sách thông báo của kênh quản trị (kèm số chưa đọc). */
+    public function notifications(array $query = []): Response
+    {
+        return $this->get('/notifications', $query);
+    }
+
+    /** Đánh dấu một thông báo đã đọc. */
+    public function readNotification(int $id): Response
+    {
+        return $this->put("/notifications/{$id}/read");
+    }
+
+    /** Đánh dấu toàn bộ thông báo đã đọc. */
+    public function readAllNotifications(): Response
+    {
+        return $this->post('/notifications/read-all');
+    }
+
+    // ---------- Categories ----------
+
+    /** Danh sách danh mục ($all = true để lấy cả danh mục ẩn). */
+    public function categories(bool $all = true): Response
+    {
+        return $this->get('/categories', $all ? ['all' => 'true'] : []);
+    }
+
+    /** Lấy 1 danh mục theo id. */
+    public function category(int $id): Response
+    {
+        return $this->get("/categories/{$id}");
+    }
+
+    public function createCategory(array $data): Response
+    {
+        return $this->post('/admin/categories', $data);
+    }
+
+    public function updateCategory(int $id, array $data): Response
+    {
+        return $this->put("/admin/categories/{$id}", $data);
+    }
+
+    public function deleteCategory(int $id): Response
+    {
+        return $this->delete("/admin/categories/{$id}");
+    }
+
+    // ---------- Brands ----------
+
+    /**
+     * Danh sách thương hiệu ($all = true để lấy cả thương hiệu ẩn).
+     * Mỗi phần tử kèm product_count — số sản phẩm đang gắn thương hiệu đó.
+     */
+    public function brands(bool $all = true): Response
+    {
+        return $this->get('/brands', $all ? ['all' => 'true'] : []);
+    }
+
+    /** Lấy 1 thương hiệu theo id. */
+    public function brand(int $id): Response
+    {
+        return $this->get("/brands/{$id}");
+    }
+
+    public function createBrand(array $data): Response
+    {
+        return $this->post('/admin/brands', $data);
+    }
+
+    public function updateBrand(int $id, array $data): Response
+    {
+        return $this->put("/admin/brands/{$id}", $data);
+    }
+
+    public function deleteBrand(int $id): Response
+    {
+        return $this->delete("/admin/brands/{$id}");
+    }
+
+    // ---------- Banners ----------
+
+    /**
+     * Danh sách banner cho trang quản trị — gồm cả banner đang tắt và banner hẹn
+     * lịch cho đợt sau (khác đường công khai /banners mà storefront dùng).
+     */
+    public function banners(string $position = ''): Response
+    {
+        return $this->get('/admin/banners', $position !== '' ? ['position' => $position] : []);
+    }
+
+    /** Lấy 1 banner theo id. */
+    public function banner(int $id): Response
+    {
+        return $this->get("/admin/banners/{$id}");
+    }
+
+    public function createBanner(array $data): Response
+    {
+        return $this->post('/admin/banners', $data);
+    }
+
+    public function updateBanner(int $id, array $data): Response
+    {
+        return $this->put("/admin/banners/{$id}", $data);
+    }
+
+    /** Bật/tắt hiển thị — không đụng tới nội dung và lịch chạy của banner. */
+    public function updateBannerStatus(int $id, bool $isActive): Response
+    {
+        return $this->put("/admin/banners/{$id}/status", ['is_active' => $isActive]);
+    }
+
+    /** Sắp xếp lại: thứ tự phần tử trong $ids là thứ tự hiển thị. */
+    public function sortBanners(array $ids): Response
+    {
+        return $this->put('/admin/banners/sort', ['ids' => array_values($ids)]);
+    }
+
+    public function deleteBanner(int $id): Response
+    {
+        return $this->delete("/admin/banners/{$id}");
+    }
+
+    // ---------- Chương trình khuyến mãi ----------
+
+    /** Danh sách chương trình (lọc/tìm/phân trang phía API). */
+    public function promotions(array $query = []): Response
+    {
+        return $this->get('/admin/promotions', $query);
+    }
+
+    /** Số đếm theo trạng thái cho dải thẻ đầu trang — không phụ thuộc bộ lọc. */
+    public function promotionStats(): Response
+    {
+        return $this->get('/admin/promotions/stats');
+    }
+
+    public function promotion(int $id): Response
+    {
+        return $this->get("/admin/promotions/{$id}");
+    }
+
+    public function createPromotion(array $data): Response
+    {
+        return $this->post('/admin/promotions', $data);
+    }
+
+    public function updatePromotion(int $id, array $data): Response
+    {
+        return $this->put("/admin/promotions/{$id}", $data);
+    }
+
+    /** Bật/tắt — dừng một đợt giữa chừng mà không phải sửa ngày kết thúc. */
+    public function updatePromotionStatus(int $id, bool $isActive): Response
+    {
+        return $this->put("/admin/promotions/{$id}/status", ['is_active' => $isActive]);
+    }
+
+    public function deletePromotion(int $id): Response
+    {
+        return $this->delete("/admin/promotions/{$id}");
+    }
+
+    // ---------- Voucher ----------
+
+    /** Danh sách voucher (lọc/tìm/phân trang phía API). */
+    public function vouchers(array $query = []): Response
+    {
+        return $this->get('/admin/vouchers', $query);
+    }
+
+    /** Số đếm theo trạng thái cho dải thẻ đầu trang — không phụ thuộc bộ lọc. */
+    public function voucherStats(): Response
+    {
+        return $this->get('/admin/vouchers/stats');
+    }
+
+    public function voucher(int $id): Response
+    {
+        return $this->get("/admin/vouchers/{$id}");
+    }
+
+    public function createVoucher(array $data): Response
+    {
+        return $this->post('/admin/vouchers', $data);
+    }
+
+    public function updateVoucher(int $id, array $data): Response
+    {
+        return $this->put("/admin/vouchers/{$id}", $data);
+    }
+
+    /** Bật/tắt — ngừng phát một mã mà không phải sửa ngày kết thúc. */
+    public function updateVoucherStatus(int $id, bool $isActive): Response
+    {
+        return $this->put("/admin/vouchers/{$id}/status", ['is_active' => $isActive]);
+    }
+
+    public function deleteVoucher(int $id): Response
+    {
+        return $this->delete("/admin/vouchers/{$id}");
+    }
+
+    // ---------- Products ----------
+
+    /**
+     * Danh sách sản phẩm (lọc/tìm/phân trang phía server).
+     * $query hỗ trợ: keyword, category_id, brand_id, kit_type, active, all,
+     * featured, min_price, max_price, sort, page, page_size.
+     */
+    public function products(array $query = []): Response
+    {
+        return $this->get('/products', $query);
+    }
+
+    /** Chi tiết sản phẩm theo slug. */
+    public function productBySlug(string $slug): Response
+    {
+        return $this->get("/products/{$slug}");
+    }
+
+    public function createProduct(array $data): Response
+    {
+        return $this->post('/admin/products', $data);
+    }
+
+    /** Chi tiết sản phẩm theo ID (dành cho admin). */
+    public function product(int $id): Response
+    {
+        return $this->get("/admin/products/{$id}");
+    }
+
+    public function updateProduct(int $id, array $data): Response
+    {
+        return $this->put("/admin/products/{$id}", $data);
+    }
+
+    /** Bật/tắt trạng thái bán — chỉ gửi is_active, không đụng biến thể/ảnh. */
+    /** Đổi trạng thái kinh doanh: active (đang bán) | hidden (tạm ẩn) | discontinued (ngừng kinh doanh). */
+    public function setProductStatus(int $id, string $status): Response
+    {
+        return $this->put("/admin/products/{$id}/status", ['status' => $status]);
+    }
+
+    /** Xoá nhiều sản phẩm trong MỘT lượt gọi (API chạy trong một giao dịch). */
+    public function bulkDeleteProducts(array $ids): Response
+    {
+        return $this->post('/admin/products/bulk-delete', ['ids' => array_values($ids)]);
+    }
+
+    public function deleteProduct(int $id): Response
+    {
+        return $this->delete("/admin/products/{$id}");
+    }
+
+    public function duplicateProduct(int $id): Response
+    {
+        return $this->post("/admin/products/{$id}/duplicate");
+    }
+
+    // ---------- Customers ----------
+
+    /**
+     * Danh sách khách hàng (lọc/tìm/sắp xếp/phân trang phía server).
+     * $query hỗ trợ: keyword, status, gender, sort, page, page_size.
+     */
+    public function customers(array $query = []): Response
+    {
+        return $this->get('/admin/customers', $query);
+    }
+
+    /** Thống kê số khách hàng theo trạng thái tài khoản. */
+    public function customerStats(): Response
+    {
+        return $this->get('/admin/customers/stats');
+    }
+
+    public function customer(int $id): Response
+    {
+        return $this->get("/admin/customers/{$id}");
+    }
+
+    public function createCustomer(array $data): Response
+    {
+        return $this->post('/admin/customers', $data);
+    }
+
+    public function updateCustomer(int $id, array $data): Response
+    {
+        return $this->put("/admin/customers/{$id}", $data);
+    }
+
+    /** Bật/tắt nhanh tài khoản khách hàng (active|inactive). */
+    public function updateCustomerStatus(int $id, string $status): Response
+    {
+        return $this->put("/admin/customers/{$id}/status", ['status' => $status]);
+    }
+
+    /** Cấp (hoặc đặt lại) mật khẩu đăng nhập storefront cho khách hàng. */
+    public function setCustomerPassword(int $id, string $password): Response
+    {
+        return $this->put("/admin/customers/{$id}/password", ['password' => $password]);
+    }
+
+    public function deleteCustomer(int $id): Response
+    {
+        return $this->delete("/admin/customers/{$id}");
+    }
+
+    // ---------- Orders ----------
+
+    /**
+     * Danh sách đơn hàng (lọc/tìm/sắp xếp/phân trang phía server).
+     * $query hỗ trợ: keyword, status, payment_status, payment_method, user_id,
+     * from_date, to_date, sort, page, page_size.
+     */
+    public function orders(array $query = []): Response
+    {
+        return $this->get('/admin/orders', $query);
+    }
+
+    /** Thống kê đơn hàng theo nhóm trạng thái + doanh thu. */
+    public function orderStats(): Response
+    {
+        return $this->get('/admin/orders/stats');
+    }
+
+    /**
+     * Doanh thu + số đơn theo từng ngày trong `days` ngày gần nhất.
+     *
+     * Kỳ LUÔN kết thúc ở hôm nay nên không diễn đạt được "hôm qua" hay một khoảng
+     * bất kỳ. Trang Tổng quan vì thế đã chuyển sang reportRevenue() (nhận from/to);
+     * giữ lại đây vì endpoint bên API vẫn còn và vẫn đúng cho nhu cầu "N ngày gần
+     * nhất" — cần khoảng tuỳ ý thì dùng reportRevenue().
+     */
+    public function orderRevenue(int $days = 30): Response
+    {
+        return $this->get('/admin/orders/revenue', ['days' => $days]);
+    }
+
+    /** Chi tiết đơn hàng (kèm sản phẩm, lịch sử trạng thái, trạng thái kế tiếp). */
+    public function order(int $id): Response
+    {
+        return $this->get("/admin/orders/{$id}");
+    }
+
+    /** Tạo đơn hàng thủ công cho khách hàng có sẵn (payload theo OrderCreateRequest). */
+    public function createOrder(array $payload): Response
+    {
+        return $this->post('/admin/orders', $payload);
+    }
+
+    /** Sửa thông tin & danh sách sản phẩm của đơn có sẵn (payload theo OrderUpdateRequest). */
+    public function updateOrder(int $id, array $payload): Response
+    {
+        return $this->put("/admin/orders/{$id}", $payload);
+    }
+
+    /** Chuyển trạng thái đơn hàng; $note là lý do khi huỷ đơn. */
+    public function updateOrderStatus(int $id, string $status, string $note = ''): Response
+    {
+        return $this->put("/admin/orders/{$id}/status", [
+            'status' => $status,
+            'note' => $note,
+        ]);
+    }
+
+    /** Cập nhật tình trạng thanh toán của đơn. */
+    public function updateOrderPayment(int $id, string $paymentStatus): Response
+    {
+        return $this->put("/admin/orders/{$id}/payment", ['payment_status' => $paymentStatus]);
+    }
+
+    /** Lưu ghi chú nội bộ trên đơn hàng. */
+    public function updateOrderNote(int $id, string $note): Response
+    {
+        return $this->put("/admin/orders/{$id}/note", ['admin_note' => $note]);
+    }
+
+    /** Cập nhật đơn vị vận chuyển & mã vận đơn của đơn. */
+    public function updateOrderShipping(int $id, string $shippingMethod, string $trackingNumber): Response
+    {
+        return $this->put("/admin/orders/{$id}/shipping", [
+            'shipping_method' => $shippingMethod,
+            'tracking_number' => $trackingNumber,
+        ]);
+    }
+
+    // ---------- Returns (trả hàng) ----------
+
+    /**
+     * Danh sách phiếu trả hàng (lọc/tìm/sắp xếp/phân trang phía server).
+     * $query hỗ trợ: keyword, status, reason, order_id, user_id, from_date,
+     * to_date, sort, page, page_size.
+     */
+    public function returns(array $query = []): Response
+    {
+        return $this->get('/admin/returns', $query);
+    }
+
+    /** Thống kê phiếu trả hàng theo trạng thái + tổng tiền đã hoàn. */
+    public function returnStats(): Response
+    {
+        return $this->get('/admin/returns/stats');
+    }
+
+    /** Chi tiết phiếu trả hàng (kèm món trả, đơn gốc, lịch sử, trạng thái kế tiếp). */
+    public function orderReturn(int $id): Response
+    {
+        return $this->get("/admin/returns/{$id}");
+    }
+
+    /**
+     * Các dòng hàng của một đơn kèm SỐ CÒN TRẢ ĐƯỢC — màn hình lập phiếu dựng
+     * form từ đây thay vì tự trừ số đã nằm trong phiếu khác.
+     */
+    public function returnableItems(int $orderId): Response
+    {
+        return $this->get("/admin/orders/{$orderId}/returnable");
+    }
+
+    /** Nhân viên lập phiếu trả hàng (payload theo ReturnAdminCreateRequest). */
+    public function createReturn(array $payload): Response
+    {
+        return $this->post('/admin/returns', $payload);
+    }
+
+    /** Chuyển trạng thái phiếu trả; $note là lý do khi từ chối. */
+    public function updateReturnStatus(int $id, string $status, string $note = ''): Response
+    {
+        return $this->put("/admin/returns/{$id}/status", [
+            'status' => $status,
+            'note' => $note,
+        ]);
+    }
+
+    /** Chốt số tiền hoàn của phiếu (payload theo ReturnSettleRequest). */
+    public function settleReturn(int $id, array $payload): Response
+    {
+        return $this->put("/admin/returns/{$id}/settle", $payload);
+    }
+
+    /** Lưu ghi chú nội bộ trên phiếu trả hàng. */
+    public function updateReturnNote(int $id, string $note): Response
+    {
+        return $this->put("/admin/returns/{$id}/note", ['admin_note' => $note]);
+    }
+
+    // ---------- Inventory (Tồn kho) ----------
+
+    /**
+     * Danh sách tồn kho theo BIẾN THỂ sản phẩm (lọc/sắp xếp/phân trang phía server).
+     * $query hỗ trợ: keyword, category_id, brand_id, stock, is_active, low_stock,
+     * sort, page, page_size.
+     */
+    public function inventory(array $query = []): Response
+    {
+        return $this->get('/admin/inventory', $query);
+    }
+
+    /** Thống kê tồn kho toàn hệ thống (không phụ thuộc bộ lọc đang áp). */
+    public function inventoryStats(int $lowStock = 5): Response
+    {
+        return $this->get('/admin/inventory/stats', ['low_stock' => $lowStock]);
+    }
+
+    /** Chi tiết một biến thể kèm 20 bút toán kho gần nhất. */
+    public function inventoryItem(int $variantId): Response
+    {
+        return $this->get("/admin/inventory/{$variantId}");
+    }
+
+    /** Sổ kho đầy đủ của một biến thể (có phân trang). */
+    public function inventoryHistory(int $variantId, array $query = []): Response
+    {
+        return $this->get("/admin/inventory/{$variantId}/history", $query);
+    }
+
+    /** Chỉnh tồn kho một biến thể (payload theo InventoryAdjustRequest). */
+    public function adjustInventory(int $variantId, array $payload): Response
+    {
+        return $this->put("/admin/inventory/{$variantId}", $payload);
+    }
+
+    /** Chỉnh tồn kho nhiều biến thể trong một lần kiểm kê (tất-cả-hoặc-không). */
+    public function bulkAdjustInventory(array $payload): Response
+    {
+        return $this->post('/admin/inventory/adjust', $payload);
+    }
+
+    /** Khai giá vốn cho nhiều biến thể (payload theo InventoryCostRequest). */
+    public function setInventoryCosts(array $payload): Response
+    {
+        return $this->put('/admin/inventory/cost', $payload);
+    }
+
+    // ---------- Suppliers (nhà cung cấp) ----------
+
+    /**
+     * Danh sách nhà cung cấp. $onlyActive = true để chỉ lấy bên đang hợp tác
+     * (dropdown lập phiếu dùng cái này). Mỗi phần tử kèm purchase_count.
+     */
+    public function suppliers(string $keyword = '', bool $onlyActive = false): Response
+    {
+        return $this->get('/admin/suppliers', array_filter([
+            'keyword' => $keyword,
+            'active' => $onlyActive ? 'true' : null,
+        ]));
+    }
+
+    public function supplier(int $id): Response
+    {
+        return $this->get("/admin/suppliers/{$id}");
+    }
+
+    /** Thêm nhà cung cấp; bỏ trống `code` thì API tự sinh mã NCC001, NCC002… */
+    public function createSupplier(array $payload): Response
+    {
+        return $this->post('/admin/suppliers', $payload);
+    }
+
+    public function updateSupplier(int $id, array $payload): Response
+    {
+        return $this->put("/admin/suppliers/{$id}", $payload);
+    }
+
+    public function deleteSupplier(int $id): Response
+    {
+        return $this->delete("/admin/suppliers/{$id}");
+    }
+
+    // ---------- Purchase returns (trả hàng nhập) ----------
+
+    /**
+     * Danh sách phiếu trả hàng lại nhà cung cấp.
+     * $query hỗ trợ: keyword, status, refund_status, reason, supplier_id,
+     * from_date, to_date, sort, page, page_size. `status` nhận nhiều giá trị
+     * ngăn cách bởi dấu phẩy.
+     */
+    public function purchaseReturns(array $query = []): Response
+    {
+        return $this->get('/admin/purchase-returns', $query);
+    }
+
+    public function purchaseReturnStats(): Response
+    {
+        return $this->get('/admin/purchase-returns/stats');
+    }
+
+    /** Chi tiết phiếu trả: dòng hàng + lịch sử + next_statuses + can_edit/can_refund. */
+    public function purchaseReturn(int $id): Response
+    {
+        return $this->get("/admin/purchase-returns/{$id}");
+    }
+
+    /** Các dòng của phiếu đặt còn trả lại được (đã nhận trừ phần đã trả). */
+    public function purchaseReturnable(int $purchaseOrderId): Response
+    {
+        return $this->get("/admin/purchase-returns/returnable/{$purchaseOrderId}");
+    }
+
+    public function createPurchaseReturn(array $payload): Response
+    {
+        return $this->post('/admin/purchase-returns', $payload);
+    }
+
+    public function updatePurchaseReturn(int $id, array $payload): Response
+    {
+        return $this->put("/admin/purchase-returns/{$id}", $payload);
+    }
+
+    /** Chuyển trạng thái: returned (trừ kho) | refunded | cancelled (kèm lý do). */
+    public function updatePurchaseReturnStatus(int $id, string $status, string $note = ''): Response
+    {
+        return $this->put("/admin/purchase-returns/{$id}/status", [
+            'status' => $status,
+            'note' => $note,
+        ]);
+    }
+
+    /** Ghi nhận tiền NCC đã hoàn — số LUỸ KẾ, không phải số vừa hoàn thêm. */
+    public function updatePurchaseReturnRefund(int $id, float $amount): Response
+    {
+        return $this->put("/admin/purchase-returns/{$id}/refund", ['refund_amount' => $amount]);
+    }
+
+    public function deletePurchaseReturn(int $id): Response
+    {
+        return $this->delete("/admin/purchase-returns/{$id}");
+    }
+
+    // ---------- Goods receipts (nhập hàng) ----------
+
+    /**
+     * Danh sách ĐỢT nhập hàng (mỗi lần nhận hàng là một đợt).
+     * $query hỗ trợ: keyword, supplier_id, from_date, to_date, sort, page, page_size.
+     *
+     * API này CHỈ ĐỌC — muốn nhập hàng thì gọi receivePurchase(): đó là đường duy
+     * nhất được cộng tồn kho.
+     */
+    public function receipts(array $query = []): Response
+    {
+        return $this->get('/admin/receipts', $query);
+    }
+
+    // ---------- Yêu cầu khách gửi từ storefront ----------
+
+    /**
+     * Danh sách yêu cầu khách để lại ở form Liên hệ / form Thu mua.
+     * $query hỗ trợ: keyword, type, status, from, to, page, page_size.
+     */
+    public function contactRequests(array $query = []): Response
+    {
+        return $this->get('/admin/contact-requests', $query);
+    }
+
+    /** Đếm yêu cầu theo trạng thái (moi / dang-xu-ly / da-xong). */
+    public function contactStats(): Response
+    {
+        return $this->get('/admin/contact-requests/stats');
+    }
+
+    /** Đổi trạng thái xử lý một yêu cầu, kèm ghi chú nội bộ. */
+    public function updateContactStatus(int $id, array $data): Response
+    {
+        return $this->put('/admin/contact-requests/'.$id.'/status', $data);
+    }
+
+    /** Xoá mềm một yêu cầu. */
+    public function deleteContactRequest(int $id): Response
+    {
+        return $this->delete('/admin/contact-requests/'.$id);
+    }
+
+    /** Danh sách email đăng ký nhận tin ở chân trang storefront. */
+    public function newsletterSubscribers(array $query = []): Response
+    {
+        return $this->get('/admin/newsletter', $query);
+    }
+
+    /** Gỡ một email khỏi danh sách nhận tin (tắt chứ không xoá dòng). */
+    public function unsubscribeNewsletter(int $id): Response
+    {
+        return $this->put('/admin/newsletter/'.$id.'/unsubscribe', []);
+    }
+
+    /** Tổng đã nhập + phần nhập hôm nay + số phiếu còn chờ hàng về. */
+    public function receiptStats(): Response
+    {
+        return $this->get('/admin/receipts/stats');
+    }
+
+    /** Chi tiết một đợt nhập theo mã đợt, VD: PO202607300001-N2. */
+    public function receipt(string $code): Response
+    {
+        return $this->get('/admin/receipts/'.rawurlencode($code));
+    }
+
+    // ---------- Purchases (đặt hàng nhập) ----------
+
+    /**
+     * Danh sách phiếu đặt hàng nhập (lọc/sắp xếp/phân trang phía server).
+     * $query hỗ trợ: keyword, status, payment_status, supplier_id, from_date,
+     * to_date, sort, page, page_size.
+     */
+    public function purchases(array $query = []): Response
+    {
+        return $this->get('/admin/purchases', $query);
+    }
+
+    /** Thống kê phiếu theo trạng thái + hàng đang trên đường + công nợ. */
+    public function purchaseStats(): Response
+    {
+        return $this->get('/admin/purchases/stats');
+    }
+
+    /** Chi tiết phiếu (kèm dòng hàng, số đã nhận, lịch sử, trạng thái kế tiếp). */
+    public function purchase(int $id): Response
+    {
+        return $this->get("/admin/purchases/{$id}");
+    }
+
+    /**
+     * Tìm BIẾN THỂ để đưa vào phiếu — kèm tồn kho hiện tại và giá vốn đang khai
+     * (màn hình lập phiếu dùng làm giá nhập gợi ý). Hàng sắp hết xếp lên đầu.
+     */
+    public function purchaseVariants(string $keyword = '', int $limit = 20): Response
+    {
+        return $this->get('/admin/purchases/variants', ['keyword' => $keyword, 'limit' => $limit]);
+    }
+
+    /** Lập phiếu đặt hàng nhập (payload theo PurchaseCreateRequest). */
+    public function createPurchase(array $payload): Response
+    {
+        return $this->post('/admin/purchases', $payload);
+    }
+
+    /** Sửa phiếu + thay toàn bộ danh sách hàng (chỉ khi chưa nhận đợt nào). */
+    public function updatePurchase(int $id, array $payload): Response
+    {
+        return $this->put("/admin/purchases/{$id}", $payload);
+    }
+
+    /** Chuyển trạng thái phiếu (ordered | cancelled); $note là lý do khi huỷ. */
+    public function updatePurchaseStatus(int $id, string $status, string $note = ''): Response
+    {
+        return $this->put("/admin/purchases/{$id}/status", [
+            'status' => $status,
+            'note' => $note,
+        ]);
+    }
+
+    /** Ghi nhận MỘT đợt hàng về kho (payload theo PurchaseReceiveRequest). */
+    public function receivePurchase(int $id, array $payload): Response
+    {
+        return $this->post("/admin/purchases/{$id}/receive", $payload);
+    }
+
+    /** Cập nhật số tiền ĐÃ TRẢ nhà cung cấp (số luỹ kế, không phải cộng thêm). */
+    public function updatePurchasePayment(int $id, float $paidAmount): Response
+    {
+        return $this->put("/admin/purchases/{$id}/payment", ['paid_amount' => $paidAmount]);
+    }
+
+    /** Xoá phiếu NHÁP (phiếu đã gửi nhà cung cấp phải huỷ, không xoá). */
+    public function deletePurchase(int $id): Response
+    {
+        return $this->delete("/admin/purchases/{$id}");
+    }
+
+    // ---------- Settings (cấu hình hệ thống) ----------
+
+    /**
+     * Cấu hình hệ thống: trả về `values` (map key → value) kèm `fields` (siêu dữ
+     * liệu từng khoá theo registry của API). $group rỗng = lấy mọi nhóm.
+     */
+    public function settings(string $group = ''): Response
+    {
+        return $this->get('/admin/settings', $group !== '' ? ['group' => $group] : []);
+    }
+
+    /**
+     * Ghi nhiều khoá cấu hình trong một lần gọi. Khoá không gửi lên giữ nguyên;
+     * một khoá sai làm cả lần ghi bị từ chối (422) chứ không lưu nửa vời.
+     */
+    public function updateSettings(array $items): Response
+    {
+        return $this->put('/admin/settings', ['items' => $items]);
+    }
+
+    // ---------- Users & Roles (tài khoản nội bộ) ----------
+
+    /**
+     * Danh sách tài khoản NỘI BỘ (quản trị + nhân viên), lọc/phân trang phía server.
+     * $query hỗ trợ: keyword, role_id, status, from_date, to_date, sort, page, page_size.
+     *
+     * Khách hàng KHÔNG nằm trong kết quả — họ có customers() riêng.
+     */
+    public function users(array $query = []): Response
+    {
+        return $this->get('/admin/users', $query);
+    }
+
+    /** Đếm tài khoản nội bộ theo trạng thái (không phụ thuộc bộ lọc đang xem). */
+    public function userStats(): Response
+    {
+        return $this->get('/admin/users/stats');
+    }
+
+    /** Chi tiết một tài khoản nội bộ. */
+    public function user(int $id): Response
+    {
+        return $this->get("/admin/users/{$id}");
+    }
+
+    /** Thêm tài khoản nội bộ (bỏ trống password thì API cấp mật khẩu mặc định). */
+    public function createUser(array $data): Response
+    {
+        return $this->post('/admin/users', $data);
+    }
+
+    /** Sửa tài khoản nội bộ (không đụng tới mật khẩu). */
+    public function updateUser(int $id, array $data): Response
+    {
+        return $this->put("/admin/users/{$id}", $data);
+    }
+
+    /** Khoá / mở khoá một tài khoản nội bộ. */
+    public function updateUserStatus(int $id, string $status): Response
+    {
+        return $this->put("/admin/users/{$id}/status", ['status' => $status]);
+    }
+
+    /** Đặt lại mật khẩu đăng nhập trang quản trị. */
+    public function setUserPassword(int $id, string $password): Response
+    {
+        return $this->put("/admin/users/{$id}/password", ['password' => $password]);
+    }
+
+    /** Xoá mềm một tài khoản nội bộ. */
+    public function deleteUser(int $id): Response
+    {
+        return $this->delete("/admin/users/{$id}");
+    }
+
+    /** Danh sách vai trò kèm số tài khoản đang mang vai trò đó. */
+    public function roles(): Response
+    {
+        return $this->get('/admin/roles');
+    }
+
+    /** Sửa vai trò — chỉ tên hiển thị và mô tả, mã vai trò không đổi được. */
+    public function updateRole(int $id, array $data): Response
+    {
+        return $this->put("/admin/roles/{$id}", $data);
+    }
+
+    // ---------- Reports ----------
+    //
+    // Bốn báo cáo nhận CÙNG một bộ tham số: from, to (YYYY-MM-DD), group_by
+    // (day|week|month); riêng sản phẩm và khách hàng nhận thêm limit, sản phẩm
+    // nhận thêm sort. Không kiểm tra gì ở đây — API tự chuẩn hoá tham số sai.
+
+    /** Báo cáo doanh thu: chuỗi theo mốc + tổng kỳ này/kỳ trước + cơ cấu thanh toán. */
+    public function reportRevenue(array $query = []): Response
+    {
+        return $this->get('/admin/reports/revenue', $query);
+    }
+
+    /** Báo cáo đơn hàng: trạng thái, tỷ lệ huỷ, khung giờ, thứ, khu vực, kênh bán. */
+    public function reportOrders(array $query = []): Response
+    {
+        return $this->get('/admin/reports/orders', $query);
+    }
+
+    /** Báo cáo sản phẩm: xếp hạng bán chạy/lợi nhuận + cơ cấu danh mục, thương hiệu, size. */
+    public function reportProducts(array $query = []): Response
+    {
+        return $this->get('/admin/reports/products', $query);
+    }
+
+    /** Báo cáo khách hàng: khách mới / quay lại, hội viên / vãng lai, xếp hạng chi tiêu. */
+    public function reportCustomers(array $query = []): Response
+    {
+        return $this->get('/admin/reports/customers', $query);
+    }
+
+    /** Khoá cache của bảng giá trị cấu hình (xem settingValues). */
+    public const SETTINGS_CACHE_KEY = 'admin.settings.values';
+
+    /**
+     * Giá trị cấu hình dạng map key → value, cache 5 phút.
+     *
+     * Dành cho các trang chỉ CẦN ĐỌC một khoá (trang Tồn kho lấy ngưỡng sắp hết
+     * chẳng hạn) — không đáng thêm một lượt gọi API cho mỗi lần mở trang. Trang
+     * Cài đặt thì gọi settings() trực tiếp để luôn thấy dữ liệu mới nhất, và xoá
+     * cache này ngay sau khi lưu.
+     *
+     * Không bao giờ ném lỗi: API hỏng thì trả mảng rỗng, nơi gọi tự dùng mặc định.
+     */
+    public function settingValues(): array
+    {
+        try {
+            $values = Cache::remember(self::SETTINGS_CACHE_KEY, 300, function () {
+                $res = $this->settings();
+
+                // Trả null khi hỏng: Cache::remember không giữ null nên lần sau thử lại.
+                return $res->successful() ? ($res->json('data.values') ?: null) : null;
+            });
+        } catch (\Throwable $e) {
+            Log::warning('Load settings cache failed', ['msg' => $e->getMessage()]);
+
+            return [];
+        }
+
+        return is_array($values) ? $values : [];
+    }
+
+    /**
+     * Đọc MỘT khoá cấu hình dạng chuỗi; thiếu hoặc rỗng thì trả $default.
+     *
+     * Rỗng cũng rơi về mặc định vì các khoá dùng ở đây (logo, favicon) hiểu "bỏ
+     * trống" là "dùng ảnh mặc định của giao diện", chứ không phải "không hiện gì".
+     */
+    public function settingString(string $key, string $default = ''): string
+    {
+        $value = trim((string) ($this->settingValues()[$key] ?? ''));
+
+        return $value !== '' ? $value : $default;
+    }
+
+    /**
+     * Đọc MỘT khoá cấu hình dạng số nguyên dương; thiếu hoặc hỏng thì trả $default.
+     * Bọc sẵn ở đây để mọi nơi gọi không phải lặp lại đoạn ép kiểu và kiểm tra.
+     */
+    public function settingInt(string $key, int $default): int
+    {
+        $raw = $this->settingValues()[$key] ?? null;
+        if ($raw === null || ! is_numeric($raw)) {
+            return $default;
+        }
+
+        $value = (int) $raw;
+
+        return $value >= 0 ? $value : $default;
+    }
+}

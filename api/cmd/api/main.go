@@ -1,0 +1,287 @@
+// football-api — điểm khởi động ứng dụng.
+// Wiring: config -> logger -> db -> repository -> service -> handler -> router.
+package main
+
+import (
+	"context"
+	"errors"
+	"net/http"
+	"net/url"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"go.uber.org/zap"
+
+	"sass-api/config"
+	"sass-api/docs"
+	"sass-api/internal/handler"
+	"sass-api/internal/realtime"
+	"sass-api/internal/repository"
+	"sass-api/internal/router"
+	"sass-api/internal/service"
+	"sass-api/pkg/facebook"
+	"sass-api/pkg/google"
+	"sass-api/pkg/jwt"
+	"sass-api/pkg/logger"
+	"sass-api/pkg/mailer"
+	"sass-api/pkg/payos"
+	"sass-api/pkg/sepay"
+)
+
+const version = "0.1.0"
+
+// @title						Football API
+// @version					0.1.0
+// @description				API cho hệ thống web bán áo bóng đá — Clean Architecture (Go + Gin + GORM).
+// @description				Định dạng response: { "success": bool, "message": string, "data": any, "meta": any, "errors": any }.
+// @contact.name				Football Team
+// @host						localhost:8080
+// @BasePath					/api/v1
+// @schemes					http https
+// @securityDefinitions.apikey	BearerAuth
+// @in							header
+// @name						Authorization
+// @description				Xác thực JWT. Nhập theo định dạng: **Bearer {access_token}**
+func main() {
+	// 1. Cấu hình
+	cfg, err := config.Load()
+	if err != nil {
+		panic("không nạp được cấu hình: " + err.Error())
+	}
+
+	// 2. Logger
+	if err := logger.Init(cfg.App.IsProduction()); err != nil {
+		panic("không khởi tạo được logger: " + err.Error())
+	}
+	defer logger.Sync()
+
+	// 2b. Swagger trỏ về đúng máy chủ đang chạy.
+	// Annotation @host/@schemes bị nướng cứng vào docs/ lúc `swag init`, nên khi
+	// deploy lên tên miền thật trang /swagger vẫn bắn request về localhost:8080.
+	// Ghi đè theo APP_BASE_URL để không phải sinh lại docs cho từng môi trường.
+	applySwaggerHost(cfg.App.BaseURL)
+
+	// 3. Database
+	db, err := repository.NewDB(cfg.Database, cfg.App.IsProduction())
+	if err != nil {
+		panic("không kết nối được database: " + err.Error())
+	}
+	logger.Info("đã kết nối MySQL", zap.String("db", cfg.Database.Name))
+
+	// 4. JWT manager
+	jwtMgr := jwt.NewManager(cfg.JWT.Secret, cfg.JWT.AccessTTL, cfg.JWT.RefreshTTL)
+
+	// 4b. Mailer (SMTP) — mã xác thực khi đăng ký + email xác nhận đơn hàng
+	mailSender := mailer.New(cfg.Mail)
+	if cfg.Mail.Enabled() {
+		logger.Info("đã bật gửi email", zap.String("smtp", cfg.Mail.Addr()), zap.String("from", cfg.Mail.FromAddress))
+	} else {
+		logger.Warn("chưa cấu hình SMTP — đăng ký sẽ báo lỗi gửi mã, đơn hàng không có email xác nhận (đặt MAIL_USERNAME/MAIL_PASSWORD trong .env)")
+	}
+
+	// 4c. Hai cổng thanh toán trực tuyến. Khách quét QR trả tiền, cổng báo về bằng
+	// webhook. PayOS giữ vai trò cổng thật (cấp link, giữ giao dịch); SePay chỉ đọc
+	// biến động số dư tài khoản ngân hàng của cửa hàng rồi báo có.
+	payosClient := payos.New(cfg.PayOS)
+	sepayClient := sepay.New(cfg.SePay)
+
+	// 4d. Đăng nhập mạng xã hội (Facebook, Google). Chưa khai khoá thì storefront tự
+	// ẩn nút đi (xem /settings/public), API vẫn chạy bình thường.
+	fbClient := facebook.New(cfg.Facebook)
+	if fbClient.Enabled() {
+		logger.Info("đã bật đăng nhập Facebook", zap.String("app_id", cfg.Facebook.AppID))
+	}
+	ggClient := google.New(cfg.Google)
+	if ggClient.Enabled() {
+		logger.Info("đã bật đăng nhập Google", zap.String("client_id", cfg.Google.ClientID))
+	}
+	if sepayClient.Enabled() {
+		logger.Info("đã bật thanh toán SePay",
+			zap.String("bank", cfg.SePay.Bank),
+			zap.String("so_tai_khoan", cfg.SePay.AccountNumber),
+			zap.Bool("nhan_webhook", cfg.SePay.WebhookEnabled()),
+			zap.Bool("tra_cuu_duoc_sao_ke", cfg.SePay.CanQuery()))
+		if !cfg.SePay.CanQuery() {
+			logger.Warn("chưa khai SEPAY_API_TOKEN — chỉ trông vào webhook, chạy ở máy local sẽ không tự xác nhận được đơn")
+		}
+		if !cfg.SePay.WebhookEnabled() {
+			logger.Warn("chưa khai SEPAY_WEBHOOK_API_KEY — webhook SePay bị từ chối hết, hệ thống chỉ tự dò sao kê (đủ dùng ở máy local)")
+		}
+	} else {
+		logger.Warn("chưa cấu hình SePay — hình thức chuyển khoản tự động bị ẩn khỏi storefront (đặt SEPAY_ACCOUNT_NUMBER/SEPAY_BANK/SEPAY_WEBHOOK_API_KEY trong .env)")
+	}
+	if payosClient.Enabled() {
+		logger.Info("đã bật thanh toán PayOS",
+			zap.String("return_url", cfg.PayOS.ReturnURL),
+			zap.Duration("han_link", cfg.PayOS.Expire))
+	} else {
+		logger.Warn("chưa cấu hình PayOS — hình thức thanh toán online bị ẩn khỏi storefront (đặt PAYOS_CLIENT_ID/PAYOS_API_KEY/PAYOS_CHECKSUM_KEY trong .env)")
+	}
+
+	// 5. Repository
+	userRepo := repository.NewUserRepository(db)
+	roleRepo := repository.NewRoleRepository(db)
+	verifyRepo := repository.NewEmailVerificationRepository(db)
+	categoryRepo := repository.NewCategoryRepository(db)
+	brandRepo := repository.NewBrandRepository(db)
+	productRepo := repository.NewProductRepository(db)
+	orderRepo := repository.NewOrderRepository(db)
+	paymentRepo := repository.NewPaymentRepository(db)
+	returnRepo := repository.NewOrderReturnRepository(db)
+	notifRepo := repository.NewNotificationRepository(db)
+	inventoryRepo := repository.NewInventoryRepository(db)
+	supplierRepo := repository.NewSupplierRepository(db)
+	purchaseRepo := repository.NewPurchaseOrderRepository(db)
+	receiptRepo := repository.NewGoodsReceiptRepository(db)
+	pReturnRepo := repository.NewPurchaseReturnRepository(db)
+	settingRepo := repository.NewSettingRepository(db)
+	bannerRepo := repository.NewBannerRepository(db)
+	reportRepo := repository.NewReportRepository(db)
+	promotionRepo := repository.NewPromotionRepository(db)
+	voucherRepo := repository.NewVoucherRepository(db)
+	contactRepo := repository.NewContactRepository(db)
+	newsletterRepo := repository.NewNewsletterRepository(db)
+
+	// 6. Service
+	// Cấu hình hệ thống: nạp snapshot vào bộ nhớ ngay lúc khởi động để các service
+	// khác đọc phí ship / thông tin cửa hàng mà không phải truy vấn từng lượt gọi.
+	// Nạp lỗi thì chạy tiếp bằng giá trị mặc định của registry — cấu hình không
+	// phải chức năng sống còn, không đáng làm sập app.
+	settingSvc := service.NewSettingService(settingRepo)
+	if err := settingSvc.Load(context.Background()); err != nil {
+		logger.Warn("không nạp được cấu hình hệ thống, dùng giá trị mặc định", zap.Error(err))
+	}
+	// Bộ khoá PayOS nằm ở .env chứ không ở bảng settings, nên registry không tự
+	// biết cổng đã sẵn sàng chưa. Không nạp vào đây thì trang Cài đặt bật được một
+	// hình thức thanh toán mà hệ thống chưa gọi nổi.
+	settingSvc.SetPayOSReady(payosClient.Enabled())
+	settingSvc.SetSePayReady(sepayClient.Enabled())
+
+	authSvc := service.NewAuthService(userRepo, roleRepo, verifyRepo, mailSender, jwtMgr, cfg.JWT, cfg.Mail, !cfg.App.IsProduction(), settingSvc, fbClient, ggClient)
+	categorySvc := service.NewCategoryService(categoryRepo)
+	brandSvc := service.NewBrandService(brandRepo)
+	bannerSvc := service.NewBannerService(bannerRepo)
+	productSvc := service.NewProductService(productRepo, categoryRepo, brandRepo)
+	// Chương trình khuyến mãi: vừa là module quản trị, vừa là thứ tính giá sau giảm
+	// cho cả trang bán hàng lẫn lúc đặt hàng. categoryRepo để chương trình khai ở
+	// danh mục cha phủ được tới sản phẩm nằm trong danh mục cháu.
+	promotionSvc := service.NewPromotionService(promotionRepo, categoryRepo)
+	// Voucher: hiện mới là module quản trị (phát mã, đặt hạn, đặt lượt). Phần khách
+	// nhập mã lúc thanh toán chưa nối vào luồng đặt hàng.
+	voucherSvc := service.NewVoucherService(voucherRepo)
+	customerSvc := service.NewCustomerService(userRepo)
+	// Tài khoản nội bộ (quản trị & nhân viên) + vai trò — dùng chung userRepo với
+	// khách hàng nhưng lọc ngược vai trò nên hai luồng không thấy dữ liệu của nhau.
+	userSvc := service.NewUserService(userRepo, roleRepo)
+	// Hub SSE + service thông báo: đơn mới hiện ngay trên trang admin và trạng thái
+	// đơn hiện ngay ở trang tài khoản của khách, không cần tải lại trang.
+	hub := realtime.NewHub()
+	notifSvc := service.NewNotificationService(notifRepo, hub)
+	// Cổng thanh toán PayOS. Dựng TRƯỚC orderSvc vì đặt hàng cần nó để xin link;
+	// chiều ngược lại paymentSvc chỉ dùng orderRepo nên hai bên không tham chiếu vòng.
+	paymentSvc := service.NewPaymentService(paymentRepo, orderRepo, payosClient, cfg.PayOS, sepayClient, notifSvc)
+	// Mailer để gửi email xác nhận sau khi khách đặt hàng (chạy nền, hỏng không chặn đơn).
+	// returnRepo để chặn hoàn cả đơn khi đơn đã có phiếu trả hàng riêng.
+	// settingSvc cấp phí vận chuyển, ngưỡng miễn phí ship, hotline và tên cửa hàng.
+	// promotionSvc để giá thu tiền đúng bằng giá khách nhìn thấy ngoài cửa hàng.
+	orderSvc := service.NewOrderService(orderRepo, returnRepo, mailSender, cfg.Mail, notifSvc, settingSvc, paymentSvc, promotionSvc, voucherSvc)
+	returnSvc := service.NewOrderReturnService(returnRepo, notifSvc, settingSvc)
+	inventorySvc := service.NewInventoryService(inventoryRepo)
+	supplierSvc := service.NewSupplierService(supplierRepo)
+	// Yêu cầu khách gửi từ storefront (Liên hệ / Thu mua) + danh sách nhận tin.
+	contactSvc := service.NewContactService(contactRepo, newsletterRepo)
+	// purchaseSvc cần supplierRepo để chụp tên nhà cung cấp vào phiếu ngay lúc lập:
+	// nhà cung cấp đổi tên sau đó thì phiếu cũ vẫn đọc đúng như lúc ký.
+	purchaseSvc := service.NewPurchaseOrderService(purchaseRepo, supplierRepo)
+	// Trang Nhập hàng chỉ ĐỌC lại các đợt hàng đã về; việc cộng tồn kho vẫn nằm
+	// duy nhất ở purchaseSvc.Receive.
+	receiptSvc := service.NewGoodsReceiptService(receiptRepo)
+	// pReturnSvc cần purchaseRepo để đọc phiếu đặt gốc: chỉ trả lại được hàng ĐÃ NHẬN
+	// của phiếu đó, và giá nhập lấy theo đúng dòng phiếu đặt.
+	pReturnSvc := service.NewPurchaseReturnService(pReturnRepo, purchaseRepo)
+	// Báo cáo chỉ đọc và gộp lại dữ liệu đã có, không phụ thuộc service nào khác —
+	// nó đi thẳng xuống repository riêng của mình để các phép gộp chạy bằng SQL
+	// thay vì nạp đơn ra bộ nhớ rồi cộng bằng Go.
+	reportSvc := service.NewReportService(reportRepo)
+
+	// 7. Handler
+	handlers := router.Handlers{
+		Health:   handler.NewHealthHandler(version),
+		Auth:     handler.NewAuthHandler(authSvc),
+		Category: handler.NewCategoryHandler(categorySvc),
+		Brand:    handler.NewBrandHandler(brandSvc),
+		Product:  handler.NewProductHandler(productSvc, promotionSvc),
+		Customer: handler.NewCustomerHandler(customerSvc),
+		Order:    handler.NewOrderHandler(orderSvc),
+		Return:   handler.NewOrderReturnHandler(returnSvc),
+		Notif:    handler.NewNotificationHandler(notifSvc, hub),
+		Stock:    handler.NewInventoryHandler(inventorySvc),
+		Supplier: handler.NewSupplierHandler(supplierSvc),
+		Purchase: handler.NewPurchaseOrderHandler(purchaseSvc),
+		Receipt:  handler.NewGoodsReceiptHandler(receiptSvc),
+		PReturn:  handler.NewPurchaseReturnHandler(pReturnSvc),
+		Setting:  handler.NewSettingHandler(settingSvc),
+		User:     handler.NewUserHandler(userSvc),
+		Payment:  handler.NewPaymentHandler(paymentSvc),
+		Banner:   handler.NewBannerHandler(bannerSvc),
+		Report:   handler.NewReportHandler(reportSvc),
+		Promo:    handler.NewPromotionHandler(promotionSvc),
+		Voucher:  handler.NewVoucherHandler(voucherSvc),
+		Contact:  handler.NewContactHandler(contactSvc),
+	}
+
+	// 8. Router + HTTP server
+	r := router.New(cfg, jwtMgr, handlers)
+	srv := &http.Server{
+		Addr:        announcedAddr(cfg.App.Port),
+		Handler:     r,
+		ReadTimeout: 15 * time.Second,
+		// KHÔNG đặt WriteTimeout: nó tính từ lúc bắt đầu ghi response chứ không
+		// phải giữa hai lần ghi, nên mọi giá trị hữu hạn đều cắt đứt luồng SSE
+		// (/events) đúng sau chừng ấy giây. IdleTimeout vẫn dọn kết nối keep-alive
+		// không dùng tới, còn kết nối SSE chết được phát hiện qua nhịp ping.
+		IdleTimeout: 60 * time.Second,
+	}
+
+	// 9. Chạy server (goroutine) + graceful shutdown
+	go func() {
+		logger.Info("football-api đang chạy", zap.String("addr", srv.Addr))
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			logger.Fatal("server dừng bất thường", zap.Error(err))
+		}
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+	logger.Info("đang tắt server...")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		logger.Error("shutdown lỗi", zap.Error(err))
+	}
+	logger.Info("server đã tắt an toàn")
+}
+
+func announcedAddr(port string) string {
+	return ":" + port
+}
+
+// applySwaggerHost đặt host/scheme của Swagger theo APP_BASE_URL.
+// Cấu hình hỏng thì giữ nguyên giá trị sinh từ annotation thay vì làm sập app —
+// trang tài liệu không phải chức năng sống còn của API.
+func applySwaggerHost(baseURL string) {
+	u, err := url.Parse(baseURL)
+	if err != nil || u.Host == "" {
+		logger.Warn("APP_BASE_URL không hợp lệ, Swagger giữ host mặc định",
+			zap.String("app_base_url", baseURL))
+		return
+	}
+	docs.SwaggerInfo.Host = u.Host
+	if u.Scheme != "" {
+		docs.SwaggerInfo.Schemes = []string{u.Scheme}
+	}
+}

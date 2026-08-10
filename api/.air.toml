@@ -1,0 +1,17 @@
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  cmd = "go build -o ./tmp/main.exe ./cmd/api"
+  bin = "tmp/main.exe"
+  full_bin = "tmp/main.exe"
+  include_ext = ["go", "env", "yaml", "yml"]
+  exclude_dir = ["tmp", "vendor", "docs"]
+  delay = 1000
+  stop_on_error = true
+
+[misc]
+  clean_on_exit = true
+
+[log]
+  time = true
