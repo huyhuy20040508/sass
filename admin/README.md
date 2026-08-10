@@ -28,6 +28,6 @@ php artisan serve --port=8001
 - Trang: `/login`, `/dashboard`.
 
 ## Tài khoản đăng nhập
-Dùng tài khoản admin có sẵn trong `football-database/seed.sql`.
+Dùng tài khoản admin có sẵn trong `database/seed.sql` — `admin@selliotech.local` / `Admin@123`.
 
 > Các module (Sản phẩm, Danh mục, Thương hiệu, Đơn hàng...) sẽ bổ sung ở bước tiếp theo.

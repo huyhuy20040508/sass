@@ -1,8 +1,8 @@
-// migrate — công cụ migration có phiên bản cho football-database.
+// migrate — công cụ migration có phiên bản cho lược đồ ở ../database.
 //
-// Kết nối đúng database ghi trong football-api/.env (cục bộ, thử hay thật là do
-// tệp .env quyết định — công cụ không tự đoán), rồi đối chiếu thư mục
-// football-database/migrations với bảng schema_migrations trong database đó.
+// Kết nối đúng database ghi trong api/.env (cục bộ, thử hay thật là do tệp .env
+// quyết định — công cụ không tự đoán), rồi đối chiếu thư mục
+// ../database/migrations với bảng schema_migrations trong database đó.
 //
 //	go run ./cmd/migrate                 # xem trạng thái (không đụng gì)
 //	go run ./cmd/migrate chay            # chạy các migration còn lại
@@ -35,10 +35,7 @@ import (
 
 // thuMucMacDinh — đường dẫn tương đối từ api/ sang thư mục migrations.
 //
-// Thư mục ../database/ CHƯA CÓ trong dự án này (bản clone chỉ lấy admin + api).
-// Chạy migrate mà chưa dựng nó thì công cụ báo không tìm thấy thư mục — đó là
-// lỗi đúng, không phải hỏng. Cần lược đồ thì chép football-database/migrations
-// sang ../database/migrations, hoặc chỉ đường khác bằng cờ -thu-muc.
+// Chạy lệnh từ thư mục khác api/ thì chỉ đường bằng cờ -thu-muc.
 const thuMucMacDinh = "../database/migrations"
 
 func main() {

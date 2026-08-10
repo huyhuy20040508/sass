@@ -26,10 +26,10 @@ Luồng phụ thuộc: `handler → service → repository → domain`. Tầng t
 # 1. Chuẩn bị cấu hình
 cp .env.example .env        # rồi sửa DB_*, JWT_SECRET
 
-# 2. Đảm bảo DB đã có lược đồ (xem ../football-database)
-#    mysql -u root -e "CREATE DATABASE IF NOT EXISTS football_shop CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+# 2. Đảm bảo DB đã có lược đồ (lược đồ nằm ở ../database/migrations)
+#    mysql -u root -e "CREATE DATABASE IF NOT EXISTS selliotech CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
 #    go run ./cmd/migrate chay              # nạp lược đồ, đọc DB_* từ .env
-#    mysql -u root football_shop < ../football-database/seed.sql   # dữ liệu mẫu
+#    mysql -u root selliotech < ../database/seed.sql   # roles + tài khoản admin đầu tiên
 
 # 3. Tải dependency
 go mod tidy

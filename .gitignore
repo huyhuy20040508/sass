@@ -39,3 +39,18 @@ Thumbs.db
 /admin/storage/logs/*
 /admin/bootstrap/cache/*
 /admin/.phpunit.result.cache
+
+# ===== Laravel (saas — khu điều hành nền tảng) =====
+/saas/vendor/
+/saas/node_modules/
+/saas/public/build/
+/saas/public/hot
+/saas/storage/*.key
+/saas/storage/app/**
+!/saas/storage/app/.gitignore
+/saas/storage/framework/cache/*
+/saas/storage/framework/sessions/*
+/saas/storage/framework/views/*
+/saas/storage/logs/*
+/saas/bootstrap/cache/*
+/saas/.phpunit.result.cache
