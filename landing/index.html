@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sellio — Phần mềm quản lý bán hàng cho cửa hàng Việt</title>
+<meta name="description" content="Sellio gom đơn hàng, tồn kho, nhập hàng, khách hàng và báo cáo của cửa hàng về một chỗ. Mở máy là biết hôm nay bán được gì, còn gì phải làm.">
+<meta name="theme-color" content="#2A0E4A">
+
+<link rel="icon" type="image/svg+xml" href="assets/sellio-favicon.svg">
+<link rel="apple-touch-icon" href="assets/sellio-favicon.svg">
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Sellio">
+<meta property="og:title" content="Sellio — Phần mềm quản lý bán hàng cho cửa hàng Việt">
+<meta property="og:description" content="Chốt sổ cuối ngày trong một phút. Đơn hàng, kho, khách hàng và báo cáo về chung một chỗ.">
+<meta property="og:url" content="https://selliotech.store/">
+<meta property="og:image" content="https://selliotech.store/assets/sellio-favicon.svg">
+<meta name="twitter:card" content="summary_large_image">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100..125,400..800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<a class="skip" href="#noi-dung">Bỏ qua, tới nội dung chính</a>
+
+<header class="topbar">
+  <div class="wrap topbar__inner">
+    <a class="topbar__logo" href="#" aria-label="Sellio — về đầu trang">
+      <img src="assets/sellio-logo-full-light.svg" alt="Sellio" width="120" height="39">
+    </a>
+
+    <nav class="topbar__nav" aria-label="Điều hướng chính">
+      <a href="#tinh-nang">Tính năng</a>
+      <a href="#mot-ngay">Cách dùng</a>
+      <a href="#bang-gia">Bảng giá</a>
+      <a href="#cau-hoi">Câu hỏi</a>
+    </nav>
+
+    <div class="topbar__act">
+      <a class="lnk" href="https://admin.selliotech.store">Đăng nhập</a>
+      <a class="btn btn--sm" href="#dang-ky">Dùng thử miễn phí</a>
+    </div>
+  </div>
+</header>
+
+<main id="noi-dung">
+
+  <!-- ── HERO ─────────────────────────────────────────────────────── -->
+  <section class="hero">
+    <div class="wrap hero__grid">
+
+      <div class="hero__text">
+        <p class="eyebrow">Phần mềm quản lý bán hàng</p>
+        <h1 class="h1">Chốt sổ cuối ngày<br>trong một phút.</h1>
+        <p class="lede">
+          Sellio gom đơn hàng, tồn kho, nhập hàng, khách hàng và thu chi của
+          cửa hàng về một chỗ. Mở máy lên là thấy hôm nay bán được gì,
+          lãi bao nhiêu, còn việc gì chưa làm xong.
+        </p>
+
+        <div class="hero__cta">
+          <a class="btn" href="#dang-ky">Dùng thử 14 ngày</a>
+          <a class="btn btn--ghost" href="#tinh-nang">Xem phần mềm làm được gì</a>
+        </div>
+
+        <ul class="hero__notes">
+          <li>Không cần thẻ ngân hàng</li>
+          <li>Dùng trên trình duyệt, không phải cài đặt</li>
+          <li>Chuyển dữ liệu cũ từ Excel</li>
+        </ul>
+      </div>
+
+      <!-- Signature: máy in hoá đơn nhả phiếu tổng kết ngày -->
+      <div class="printer" role="img"
+           aria-label="Phiếu tổng kết ngày do Sellio in ra: 47 đơn đã chốt, 12 đơn chờ xác nhận, 2 đơn trả, 3 mã sắp hết hàng, doanh thu 18.420.000 đồng, lãi gộp 8.510.000 đồng.">
+        <div class="printer__head" aria-hidden="true">
+          <span class="printer__led"></span>
+          <span class="printer__label">Sellio · máy in đơn</span>
+        </div>
+        <div class="printer__slot" aria-hidden="true"></div>
+
+        <div class="printer__mouth">
+          <div class="giay receipt" aria-hidden="true">
+            <p class="rc-brand">SELLIO</p>
+            <p class="rc-kind">PHIẾU TỔNG KẾT NGÀY</p>
+
+            <div class="rc-rule"></div>
+
+            <p class="rc-line"><span>Cửa hàng</span><span>Thời trang Minh Anh</span></p>
+            <p class="rc-line"><span>Ngày</span><span>11/08/2026</span></p>
+            <p class="rc-line"><span>Người chốt</span><span>Minh Anh</span></p>
+
+            <div class="rc-rule"></div>
+
+            <p class="rc-line"><span>Đơn đã chốt</span><span>47</span></p>
+            <p class="rc-line"><span>Đơn chờ xác nhận</span><span>12</span></p>
+            <p class="rc-line"><span>Đơn khách trả</span><span>2</span></p>
+            <p class="rc-line rc-line--warn"><span>Mã sắp hết hàng</span><span>3</span></p>
+
+            <div class="rc-rule"></div>
+
+            <p class="rc-line"><span>Doanh thu</span><span>18.420.000</span></p>
+            <p class="rc-line"><span>Giá vốn</span><span>9.910.000</span></p>
+            <p class="rc-line rc-line--total"><span>Lãi gộp</span><span>8.510.000</span></p>
+
+            <div class="rc-rule"></div>
+
+            <p class="rc-foot">21:04 · phiếu in tự động khi đóng ca</p>
+            <svg class="rc-barcode" viewBox="0 0 200 36" preserveAspectRatio="none" aria-hidden="true">
+              <g fill="currentColor">
+                <rect x="2" y="0" width="3" height="36"/><rect x="8" y="0" width="1" height="36"/>
+                <rect x="12" y="0" width="4" height="36"/><rect x="19" y="0" width="1" height="36"/>
+                <rect x="23" y="0" width="2" height="36"/><rect x="29" y="0" width="4" height="36"/>
+                <rect x="36" y="0" width="1" height="36"/><rect x="40" y="0" width="3" height="36"/>
+                <rect x="47" y="0" width="2" height="36"/><rect x="52" y="0" width="1" height="36"/>
+                <rect x="56" y="0" width="4" height="36"/><rect x="63" y="0" width="2" height="36"/>
+                <rect x="68" y="0" width="1" height="36"/><rect x="72" y="0" width="3" height="36"/>
+                <rect x="79" y="0" width="4" height="36"/><rect x="86" y="0" width="1" height="36"/>
+                <rect x="90" y="0" width="2" height="36"/><rect x="95" y="0" width="3" height="36"/>
+                <rect x="102" y="0" width="1" height="36"/><rect x="106" y="0" width="4" height="36"/>
+                <rect x="113" y="0" width="2" height="36"/><rect x="118" y="0" width="1" height="36"/>
+                <rect x="122" y="0" width="3" height="36"/><rect x="129" y="0" width="1" height="36"/>
+                <rect x="133" y="0" width="4" height="36"/><rect x="140" y="0" width="2" height="36"/>
+                <rect x="145" y="0" width="3" height="36"/><rect x="151" y="0" width="1" height="36"/>
+                <rect x="155" y="0" width="2" height="36"/><rect x="160" y="0" width="4" height="36"/>
+                <rect x="167" y="0" width="1" height="36"/><rect x="171" y="0" width="3" height="36"/>
+                <rect x="178" y="0" width="2" height="36"/><rect x="183" y="0" width="1" height="36"/>
+                <rect x="187" y="0" width="4" height="36"/><rect x="194" y="0" width="3" height="36"/>
+              </g>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ── AI DÙNG ──────────────────────────────────────────────────── -->
+  <section class="strip">
+    <div class="wrap strip__inner">
+      <p class="strip__label">Làm cho</p>
+      <ul class="strip__list">
+        <li>Cửa hàng thời trang</li>
+        <li>Mỹ phẩm</li>
+        <li>Đồ thể thao</li>
+        <li>Mẹ và bé</li>
+        <li>Nhà phân phối</li>
+        <li>Shop bán online</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ── TÍNH NĂNG ────────────────────────────────────────────────── -->
+  <section class="sec" id="tinh-nang">
+    <div class="wrap">
+      <header class="sec__head">
+        <p class="eyebrow">Tính năng</p>
+        <h2 class="h2">Bốn khu vực, đúng bằng bốn việc bạn làm mỗi ngày</h2>
+        <p class="sec__sub">
+          Menu bên trái của phần mềm chia theo cách một cửa hàng thật vận hành,
+          không chia theo cách lập trình viên nghĩ. Đây là toàn bộ những gì có bên trong.
+        </p>
+      </header>
+
+      <div class="cards">
+
+        <article class="card">
+          <p class="card__tag">Bán hàng</p>
+          <h3 class="card__title">Đơn hàng &amp; trả hàng</h3>
+          <ul class="list">
+            <li>Tạo đơn tại quầy: tìm khách, tìm sản phẩm, chọn biến thể, xong.</li>
+            <li>Lọc theo trạng thái, đổi trạng thái cho nhiều đơn cùng lúc.</li>
+            <li>In phiếu giao hàng và tem dán hộp theo lô, không in từng cái.</li>
+            <li>Nhận đơn trả, chọn đúng món khách trả, tồn kho tự cộng lại.</li>
+            <li>Chuông báo khi có đơn mới, không phải tải lại trang.</li>
+          </ul>
+        </article>
+
+        <article class="card">
+          <p class="card__tag">Hàng hoá</p>
+          <h3 class="card__title">Sản phẩm &amp; kho</h3>
+          <ul class="list">
+            <li>Sản phẩm nhiều biến thể: màu, size, mỗi biến thể một mã tồn riêng.</li>
+            <li>Danh mục, thương hiệu, ảnh, nhân bản sản phẩm cũ để tạo cái mới.</li>
+            <li>Đặt định mức tồn, phần mềm tự nhắc mã nào sắp hết.</li>
+            <li>Nhập hàng từ nhà cung cấp, nhận hàng là tồn cộng thêm ngay.</li>
+            <li>Kiểm kho, điều chỉnh hàng loạt, xem lại nhật ký từng lần thay đổi.</li>
+            <li>Nhập sản phẩm và giá vốn từ file Excel theo mẫu có sẵn.</li>
+          </ul>
+        </article>
+
+        <article class="card">
+          <p class="card__tag">Khách hàng</p>
+          <h3 class="card__title">Khách &amp; marketing</h3>
+          <ul class="list">
+            <li>Hồ sơ khách, lịch sử mua hàng, cấp tài khoản để khách tự đặt.</li>
+            <li>Chương trình khuyến mãi theo thời gian, theo nhóm sản phẩm.</li>
+            <li>Mã voucher giảm giá, đặt hạn dùng và số lần dùng.</li>
+            <li>Banner và slideshow ngoài trang bán hàng, đổi không cần lập trình.</li>
+            <li>Hộp thư liên hệ và danh sách đăng ký nhận tin gom về một nơi.</li>
+          </ul>
+        </article>
+
+        <article class="card">
+          <p class="card__tag">Con số</p>
+          <h3 class="card__title">Báo cáo</h3>
+          <ul class="list">
+            <li>Doanh thu, lãi gộp, so với kỳ trước bằng bao nhiêu phần trăm.</li>
+            <li>Đơn hàng theo trạng thái, theo hình thức thanh toán.</li>
+            <li>Sản phẩm bán chạy, sản phẩm nằm kho lâu.</li>
+            <li>Khách mua nhiều nhất, khách lâu rồi chưa quay lại.</li>
+            <li>Chọn hôm nay, 7 ngày, 30 ngày, 90 ngày hay 12 tháng. Xuất Excel.</li>
+          </ul>
+        </article>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ── MỘT NGÀY ─────────────────────────────────────────────────── -->
+  <section class="sec sec--alt" id="mot-ngay">
+    <div class="wrap">
+      <header class="sec__head">
+        <p class="eyebrow">Cách dùng</p>
+        <h2 class="h2">Một ngày ở cửa hàng, từ lúc mở cửa tới lúc chốt sổ</h2>
+        <p class="sec__sub">
+          Không phải danh sách tính năng nữa — đây là thứ tự bạn sẽ chạm vào phần mềm trong ngày.
+        </p>
+      </header>
+
+      <ol class="day">
+        <li class="day__item">
+          <p class="day__time">07:30</p>
+          <div class="day__body">
+            <h3 class="day__title">Mở máy</h3>
+            <p>Trang Tổng quan hiện đơn đã về trong đêm, đơn còn chờ xác nhận,
+               mã hàng đã xuống dưới định mức. Biết ngay hôm nay phải bắt đầu từ đâu.</p>
+          </div>
+        </li>
+        <li class="day__item">
+          <p class="day__time">10:15</p>
+          <div class="day__body">
+            <h3 class="day__title">Chốt đơn</h3>
+            <p>Tick chọn cả loạt đơn đã gọi xác nhận xong, đổi sang <em>Đang giao</em> một lần.
+               Có đơn mới về giữa chừng thì chuông kêu, số trên menu tự nhảy.</p>
+          </div>
+        </li>
+        <li class="day__item">
+          <p class="day__time">14:00</p>
+          <div class="day__body">
+            <h3 class="day__title">Đóng gói</h3>
+            <p>In phiếu giao hàng và tem dán theo lô. Người đóng gói cầm xấp giấy đi làm,
+               không cần ngồi máy.</p>
+          </div>
+        </li>
+        <li class="day__item">
+          <p class="day__time">16:40</p>
+          <div class="day__body">
+            <h3 class="day__title">Hàng về</h3>
+            <p>Mở phiếu nhập đã đặt với nhà cung cấp, bấm nhận hàng. Tồn kho cộng thêm,
+               giá vốn cập nhật, phiếu thu chi ghi lại khoản đã trả.</p>
+          </div>
+        </li>
+        <li class="day__item">
+          <p class="day__time">21:00</p>
+          <div class="day__body">
+            <h3 class="day__title">Chốt sổ</h3>
+            <p>Xem doanh thu và lãi gộp của ngày, đối chiếu tiền mặt trong két.
+               Đúng thì đóng máy. Đây chính là tờ phiếu ở đầu trang.</p>
+          </div>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- ── NỀN TẢNG ─────────────────────────────────────────────────── -->
+  <section class="sec">
+    <div class="wrap">
+      <header class="sec__head">
+        <p class="eyebrow">Phần bên dưới</p>
+        <h2 class="h2">Những thứ ít ai hỏi, nhưng ngày nào cũng chạm</h2>
+      </header>
+
+      <div class="grid4">
+        <div class="mini">
+          <h3 class="mini__title">Phân quyền theo vai trò</h3>
+          <p>Nhân viên bán hàng thấy đơn, không thấy giá vốn và báo cáo lãi.
+             Bạn chọn ai được làm gì.</p>
+        </div>
+        <div class="mini">
+          <h3 class="mini__title">Nhiều người cùng lúc</h3>
+          <p>Quầy, kho và chủ shop mở cùng một dữ liệu. Ai sửa gì, người kia thấy ngay.</p>
+        </div>
+        <div class="mini">
+          <h3 class="mini__title">Excel hai chiều</h3>
+          <p>Đưa dữ liệu cũ vào bằng file mẫu, lấy dữ liệu ra bất cứ lúc nào. Không giữ chân bạn.</p>
+        </div>
+        <div class="mini">
+          <h3 class="mini__title">Nhật ký tồn kho</h3>
+          <p>Mỗi lần số tồn thay đổi đều ghi lại: vì đơn nào, ai làm, lúc mấy giờ.
+             Lệch kho thì tra ra được.</p>
+        </div>
+        <div class="mini">
+          <h3 class="mini__title">Chạy trên trình duyệt</h3>
+          <p>Máy tính ở quầy, laptop ở nhà, điện thoại lúc đi vắng. Không cài đặt gì.</p>
+        </div>
+        <div class="mini">
+          <h3 class="mini__title">Sao lưu hằng ngày</h3>
+          <p>Dữ liệu nằm trên máy chủ đặt tại Việt Nam, sao lưu tự động, có HTTPS.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── BẢNG GIÁ ─────────────────────────────────────────────────── -->
+  <section class="sec sec--alt" id="bang-gia">
+    <div class="wrap">
+      <header class="sec__head">
+        <p class="eyebrow">Bảng giá</p>
+        <h2 class="h2">Trả theo tháng, đổi gói hoặc dừng lúc nào cũng được</h2>
+        <p class="sec__sub">Mọi gói đều có 14 ngày dùng thử đầy đủ tính năng, không cần thẻ.</p>
+      </header>
+
+      <div class="plans">
+
+        <article class="giay plan">
+          <p class="plan__name">Khởi đầu</p>
+          <p class="plan__for">Shop một mình chủ chạy</p>
+          <p class="plan__price"><span class="plan__num">199.000</span><span class="plan__unit">đ / tháng</span></p>
+          <div class="rc-rule rc-rule--dark"></div>
+          <ul class="list list--plan">
+            <li>1 cửa hàng, 2 tài khoản</li>
+            <li>500 sản phẩm</li>
+            <li>Đơn hàng, trả hàng, tồn kho</li>
+            <li>Báo cáo doanh thu và đơn hàng</li>
+            <li>Hỗ trợ qua Zalo trong giờ hành chính</li>
+          </ul>
+          <a class="btn btn--ghost btn--full" href="#dang-ky">Bắt đầu dùng thử</a>
+        </article>
+
+        <article class="giay plan plan--pick">
+          <p class="plan__badge">Hầu hết chọn gói này</p>
+          <p class="plan__name">Cửa hàng</p>
+          <p class="plan__for">Có nhân viên, có kho riêng</p>
+          <p class="plan__price"><span class="plan__num">499.000</span><span class="plan__unit">đ / tháng</span></p>
+          <div class="rc-rule rc-rule--dark"></div>
+          <ul class="list list--plan">
+            <li>1 cửa hàng, 10 tài khoản</li>
+            <li>Không giới hạn sản phẩm</li>
+            <li>Nhập hàng, nhà cung cấp, phiếu thu chi</li>
+            <li>Kiểm kho và nhật ký tồn kho</li>
+            <li>In phiếu giao và tem dán theo lô</li>
+            <li>Khuyến mãi, voucher, banner</li>
+            <li>Đủ bốn báo cáo, xuất Excel</li>
+          </ul>
+          <a class="btn btn--full" href="#dang-ky">Bắt đầu dùng thử</a>
+        </article>
+
+        <article class="giay plan">
+          <p class="plan__name">Chuỗi</p>
+          <p class="plan__for">Từ hai cửa hàng trở lên</p>
+          <p class="plan__price"><span class="plan__num plan__num--word">Liên hệ</span></p>
+          <div class="rc-rule rc-rule--dark"></div>
+          <ul class="list list--plan">
+            <li>Nhiều cửa hàng trong một tài khoản</li>
+            <li>Tồn kho và báo cáo tách theo từng chi nhánh</li>
+            <li>Phân quyền tới từng chi nhánh</li>
+            <li>Tên miền riêng và logo của bạn</li>
+            <li>Chuyển dữ liệu cũ có người làm cùng</li>
+            <li>Người hỗ trợ riêng</li>
+          </ul>
+          <a class="btn btn--ghost btn--full" href="#dang-ky">Nói chuyện với chúng tôi</a>
+        </article>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ── CÂU HỎI ──────────────────────────────────────────────────── -->
+  <section class="sec" id="cau-hoi">
+    <div class="wrap wrap--narrow">
+      <header class="sec__head">
+        <p class="eyebrow">Câu hỏi</p>
+        <h2 class="h2">Những điều người ta hay hỏi trước khi bắt đầu</h2>
+      </header>
+
+      <div class="faq">
+        <details class="qa">
+          <summary>Dữ liệu đang nằm trong Excel, chuyển sang được không?</summary>
+          <p>Được. Tải file mẫu trong phần Sản phẩm, Tồn kho hoặc Khách hàng, dán dữ liệu cũ vào
+             đúng cột rồi tải lên. Phần mềm báo dòng nào sai trước khi ghi, nên không sợ hỏng dữ liệu.
+             Từ hai nghìn dòng trở lên thì gửi file cho chúng tôi, chúng tôi làm giúp.</p>
+        </details>
+
+        <details class="qa">
+          <summary>Dùng trên điện thoại được không?</summary>
+          <p>Được, phần mềm chạy trong trình duyệt và co lại vừa màn hình điện thoại.
+             Việc xem đơn, xác nhận đơn, tra tồn kho làm trên điện thoại thoải mái.
+             Nhập hàng và kiểm kho thì màn hình lớn dễ hơn.</p>
+        </details>
+
+        <details class="qa">
+          <summary>Nhân viên có nhìn thấy giá vốn và lãi không?</summary>
+          <p>Không, trừ khi bạn cho phép. Mỗi tài khoản gắn một vai trò, và vai trò quyết định
+             thấy được menu nào. Vai trò bán hàng mặc định không mở được Báo cáo và Giá vốn.</p>
+        </details>
+
+        <details class="qa">
+          <summary>Mất mạng thì sao?</summary>
+          <p>Phần mềm cần mạng để chạy. Mất mạng thì vẫn bán được bình thường bằng cách ghi tay,
+             có mạng lại nhập đơn vào sau — đơn cho phép chọn lại ngày giờ. Chúng tôi đang làm
+             bản bán tại quầy chạy được cả khi rớt mạng.</p>
+        </details>
+
+        <details class="qa">
+          <summary>Ngừng dùng thì dữ liệu của tôi đi đâu?</summary>
+          <p>Vẫn là của bạn. Trước khi ngừng, xuất Excel toàn bộ sản phẩm, đơn hàng, khách hàng
+             và tồn kho — nút xuất nằm sẵn ở từng trang. Chúng tôi giữ dữ liệu thêm 90 ngày
+             phòng khi bạn quay lại, sau đó xoá.</p>
+        </details>
+
+        <details class="qa">
+          <summary>Có mất phí cài đặt ban đầu không?</summary>
+          <p>Không. Bạn tự tạo tài khoản và dùng được ngay. Nếu muốn chúng tôi dựng danh mục,
+             nhập hàng tồn đầu kỳ và tập huấn cho nhân viên thì có gói dịch vụ riêng, báo giá
+             theo khối lượng việc.</p>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── ĐĂNG KÝ ──────────────────────────────────────────────────── -->
+  <!-- Cặp với máy in ở đầu trang: trên kia máy nhả phiếu tổng kết ra,
+       dưới này bạn đưa phiếu đăng ký vào và máy in biên nhận trả lại. -->
+  <section class="cta" id="dang-ky">
+    <div class="wrap wrap--narrow cta__inner">
+      <p class="eyebrow">Bắt đầu</p>
+      <h2 class="h2 cta__title">Mở cửa hàng trên Sellio sáng nay, chiều đã bán được đơn đầu tiên.</h2>
+      <p class="cta__sub">
+        Điền phiếu rồi đưa vào máy. Chúng tôi gọi lại trong giờ làm việc và mở tài khoản dùng thử cùng bạn.
+      </p>
+
+      <div class="may" id="may">
+        <div class="printer__head">
+          <span class="printer__led"></span>
+          <span class="printer__label">Sellio · nhận phiếu</span>
+        </div>
+        <div class="printer__slot"></div>
+
+        <div class="khay" id="khay">
+
+          <form class="phieu" id="form-dang-ky" novalidate>
+            <p class="rc-brand">SELLIO</p>
+            <p class="rc-kind">PHIẾU ĐĂNG KÝ DÙNG THỬ</p>
+
+            <div class="rc-rule rc-rule--dark"></div>
+            <p class="rc-line"><span>Ngày lập</span><span id="hom-nay">—</span></p>
+            <p class="rc-line"><span>Thời hạn dùng thử</span><span>14 ngày</span></p>
+            <p class="rc-line"><span>Phí</span><span>0 đ</span></p>
+            <div class="rc-rule rc-rule--dark"></div>
+
+            <label class="o">
+              <span class="o__nhan">Tên cửa hàng</span>
+              <span class="o__khung">
+                <input class="o__nhap" type="text" name="shop" required
+                       autocomplete="organization" placeholder="Thời trang Minh Anh">
+                <span class="o__dau" aria-hidden="true">✓</span>
+              </span>
+            </label>
+
+            <label class="o">
+              <span class="o__nhan">Số điện thoại</span>
+              <span class="o__khung">
+                <input class="o__nhap" type="tel" name="phone" required inputmode="tel"
+                       autocomplete="tel" placeholder="09xx xxx xxx">
+                <span class="o__dau" aria-hidden="true">✓</span>
+              </span>
+            </label>
+
+            <button class="btn btn--full nut" type="submit">
+              <span class="nut__chu">Đưa phiếu vào máy</span>
+              <span class="nut__mui" aria-hidden="true">→</span>
+            </button>
+
+            <p class="phieu__note" id="form-note" role="status">
+              Chúng tôi chỉ dùng số này để gọi mở tài khoản. Không nhắn quảng cáo.
+            </p>
+          </form>
+
+          <div class="bienlai" id="bienlai" hidden>
+            <div class="giay bienlai__giay">
+              <p class="rc-brand">SELLIO</p>
+              <p class="rc-kind">BIÊN NHẬN ĐĂNG KÝ</p>
+
+              <div class="rc-rule"></div>
+              <p class="rc-line"><span>Mã phiếu</span><span id="bl-ma">—</span></p>
+              <p class="rc-line"><span>Cửa hàng</span><span id="bl-shop">—</span></p>
+              <p class="rc-line"><span>Gọi lại số</span><span id="bl-phone">—</span></p>
+              <p class="rc-line"><span>Nhận lúc</span><span id="bl-luc">—</span></p>
+              <div class="rc-rule"></div>
+
+              <p class="bienlai__loi" id="bl-loi">
+                Đã nhận. Chúng tôi gọi lại trong giờ làm việc để mở tài khoản cùng bạn.
+              </p>
+
+              <svg class="rc-barcode" viewBox="0 0 200 36" preserveAspectRatio="none" aria-hidden="true">
+                <g fill="currentColor">
+                  <rect x="2" y="0" width="3" height="36"/><rect x="8" y="0" width="1" height="36"/>
+                  <rect x="12" y="0" width="4" height="36"/><rect x="19" y="0" width="1" height="36"/>
+                  <rect x="23" y="0" width="2" height="36"/><rect x="29" y="0" width="4" height="36"/>
+                  <rect x="36" y="0" width="1" height="36"/><rect x="40" y="0" width="3" height="36"/>
+                  <rect x="47" y="0" width="2" height="36"/><rect x="52" y="0" width="1" height="36"/>
+                  <rect x="56" y="0" width="4" height="36"/><rect x="63" y="0" width="2" height="36"/>
+                  <rect x="68" y="0" width="1" height="36"/><rect x="72" y="0" width="3" height="36"/>
+                  <rect x="79" y="0" width="4" height="36"/><rect x="86" y="0" width="1" height="36"/>
+                  <rect x="90" y="0" width="2" height="36"/><rect x="95" y="0" width="3" height="36"/>
+                  <rect x="102" y="0" width="1" height="36"/><rect x="106" y="0" width="4" height="36"/>
+                  <rect x="113" y="0" width="2" height="36"/><rect x="118" y="0" width="1" height="36"/>
+                  <rect x="122" y="0" width="3" height="36"/><rect x="129" y="0" width="1" height="36"/>
+                  <rect x="133" y="0" width="4" height="36"/><rect x="140" y="0" width="2" height="36"/>
+                  <rect x="145" y="0" width="3" height="36"/><rect x="151" y="0" width="1" height="36"/>
+                  <rect x="155" y="0" width="2" height="36"/><rect x="160" y="0" width="4" height="36"/>
+                  <rect x="167" y="0" width="1" height="36"/><rect x="171" y="0" width="3" height="36"/>
+                  <rect x="178" y="0" width="2" height="36"/><rect x="183" y="0" width="1" height="36"/>
+                  <rect x="187" y="0" width="4" height="36"/><rect x="194" y="0" width="3" height="36"/>
+                </g>
+              </svg>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <p class="cta__alt">
+        Muốn tự làm luôn? <a class="lnk lnk--strong" href="https://admin.selliotech.store">Vào thẳng trang quản trị</a>
+      </p>
+    </div>
+  </section>
+
+</main>
+
+<footer class="foot">
+  <div class="wrap foot__grid">
+    <div class="foot__brand">
+      <img src="assets/sellio-logo-full-light.svg" alt="Sellio" width="112" height="36">
+      <p>Phần mềm quản lý bán hàng cho cửa hàng và chuỗi cửa hàng Việt Nam.</p>
+    </div>
+
+    <div class="foot__col">
+      <p class="foot__head">Sản phẩm</p>
+      <a href="#tinh-nang">Tính năng</a>
+      <a href="#bang-gia">Bảng giá</a>
+      <a href="#cau-hoi">Câu hỏi thường gặp</a>
+    </div>
+
+    <div class="foot__col">
+      <p class="foot__head">Đăng nhập</p>
+      <a href="https://admin.selliotech.store">Quản trị cửa hàng</a>
+      <a href="https://app.selliotech.store">Điều hành nền tảng</a>
+    </div>
+
+    <div class="foot__col">
+      <p class="foot__head">Liên hệ</p>
+      <a href="mailto:hello@selliotech.store">hello@selliotech.store</a>
+      <a href="tel:+84900000000">0900 000 000</a>
+    </div>
+  </div>
+
+  <div class="wrap foot__end">
+    <p>© 2026 Selliotech</p>
+    <p>Làm tại Việt Nam</p>
+  </div>
+</footer>
+
+<script src="main.js"></script>
+</body>
+</html>
