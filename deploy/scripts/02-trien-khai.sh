@@ -24,6 +24,26 @@ chet() { printf '\033[1;31mLỖI: %s\033[0m\n' "$*"; exit 1; }
 [[ $EUID -eq 0 ]] || chet "Phải chạy bằng root: sudo bash $0"
 [[ -x "$GO" ]] || chet "Chưa có Go ở $GO. Chạy 01-cai-may-chu.sh trước."
 
+# Chạy từ bản sao ngoài repo.
+#
+# Bước 1 bên dưới `git reset --hard`, tức là GHI ĐÈ chính tệp này trong lúc bash
+# còn đang đọc dở nó. Bash đọc script theo từng đoạn nên nó sẽ thực thi một mớ
+# lai giữa bản cũ và bản mới — biểu hiện là script báo lỗi bằng câu chữ của bản
+# đã được sửa từ lâu, không cách nào hiểu nổi nếu không biết nguyên nhân.
+#
+# Bản sao đứng ngoài $APP_DIR nên git không đụng tới. Lần chạy này vẫn dùng mã
+# của bản bạn vừa gọi (đúng như mọi công cụ triển khai khác); bản mới kéo về sẽ
+# có hiệu lực ở lần chạy sau.
+if [[ "${SELLIO_REEXEC:-}" != "1" ]]; then
+    SELF="$(readlink -f "$0")"
+    if [[ "$SELF" == "$APP_DIR"/* ]]; then
+        BANSAO="$(mktemp /tmp/selliotech-trien-khai.XXXXXX.sh)"
+        cp "$SELF" "$BANSAO"
+        export SELLIO_REEXEC=1
+        exec bash "$BANSAO" "$@"
+    fi
+fi
+
 # ---------------------------------------------------------------------
 buoc "1/9  Lấy mã nguồn"
 # ---------------------------------------------------------------------
@@ -120,6 +140,19 @@ buoc "5/9  Hai app Laravel"
 # ---------------------------------------------------------------------
 for app in admin saas; do
     cd "$APP_DIR/$app"
+
+    # Thư mục runtime của Laravel. Git KHÔNG lưu được thư mục rỗng, mà .gitignore
+    # lại loại sạch nội dung bên trong storage/ — nên bản vừa clone về không có
+    # chúng. Thiếu storage/framework/views thì `artisan` chết ngay từ lệnh đầu
+    # với "View path not found", còn thiếu sessions thì mọi request trả 500.
+    sudo -u "$APP_USER" mkdir -p \
+        storage/app/private \
+        storage/app/public \
+        storage/framework/cache/data \
+        storage/framework/sessions \
+        storage/framework/views \
+        storage/logs \
+        bootstrap/cache
 
     # --no-dev: máy thật không cần phpunit, faker, debugbar.
     sudo -u "$APP_USER" env HOME="$APP_DIR" COMPOSER_ALLOW_SUPERUSER=1 \
