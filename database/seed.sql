@@ -1,53 +1,53 @@
--- =====================================================================
---  SELLIOTECH — SEED TỐI THIỂU
---  Chạy sau khi lược đồ đã có:
---      cd api && go run ./cmd/migrate chay
---      mysql -u root selliotech < ../database/seed.sql
---
---  Chỉ có thứ BẮT BUỘC để đăng nhập được khu quản trị: bảng vai trò và một
---  tài khoản super admin. Không kèm dữ liệu mẫu (sản phẩm, đơn hàng...) —
---  đây là bản cài trắng, hàng hoá do người dùng tự nhập.
---
---  Các khoá `settings` KHÔNG cần seed: registry trong
---  api/internal/service/setting_service.go đã mang sẵn giá trị mặc định,
---  khoá chưa có dòng trong database vẫn cho ra đúng hành vi mặc định.
---
---  Tài khoản mặc định:
---    email:    admin@selliotech.local
---    password: Admin@123
---  => ĐỔI MẬT KHẨU NGAY sau khi triển khai thật.
---
---  KHÔNG viết USE ở đây: tên database khác nhau ở từng môi trường, cứ nạp
---  vào đúng database đã chọn ở dòng lệnh / .env.
--- =====================================================================
+-- -- =====================================================================
+-- --  SELLIOTECH — SEED TỐI THIỂU
+-- --  Chạy sau khi lược đồ đã có:
+-- --      cd api && go run ./cmd/migrate chay
+-- --      mysql -u root selliotech < ../database/seed.sql
+-- --
+-- --  Chỉ có thứ BẮT BUỘC để đăng nhập được khu quản trị: bảng vai trò và một
+-- --  tài khoản super admin. Không kèm dữ liệu mẫu (sản phẩm, đơn hàng...) —
+-- --  đây là bản cài trắng, hàng hoá do người dùng tự nhập.
+-- --
+-- --  Các khoá `settings` KHÔNG cần seed: registry trong
+-- --  api/internal/service/setting_service.go đã mang sẵn giá trị mặc định,
+-- --  khoá chưa có dòng trong database vẫn cho ra đúng hành vi mặc định.
+-- --
+-- --  Tài khoản mặc định:
+-- --    email:    admin@selliotech.local
+-- --    password: Admin@123
+-- --  => ĐỔI MẬT KHẨU NGAY sau khi triển khai thật.
+-- --
+-- --  KHÔNG viết USE ở đây: tên database khác nhau ở từng môi trường, cứ nạp
+-- --  vào đúng database đã chọn ở dòng lệnh / .env.
+-- -- =====================================================================
 
-SET NAMES utf8mb4;
+-- SET NAMES utf8mb4;
 
--- ---------- Vai trò (RBAC) ----------
--- Bốn mã này được middleware/RBAC tham chiếu thẳng, thiếu là chặn nhầm quyền.
-INSERT IGNORE INTO roles (id, name, display_name, description, created_at, updated_at) VALUES
-  (1, 'super_admin', 'Super Admin',   'Toàn quyền hệ thống',        NOW(3), NOW(3)),
-  (2, 'admin',       'Quản trị viên', 'Quản lý sản phẩm, đơn hàng', NOW(3), NOW(3)),
-  (3, 'staff',       'Nhân viên',     'Xử lý đơn hàng, kho',        NOW(3), NOW(3)),
-  (4, 'customer',    'Khách hàng',    'Người dùng cuối',            NOW(3), NOW(3));
+-- -- ---------- Vai trò (RBAC) ----------
+-- -- Bốn mã này được middleware/RBAC tham chiếu thẳng, thiếu là chặn nhầm quyền.
+-- INSERT IGNORE INTO roles (id, name, display_name, description, created_at, updated_at) VALUES
+--   (1, 'super_admin', 'Super Admin',   'Toàn quyền hệ thống',        NOW(3), NOW(3)),
+--   (2, 'admin',       'Quản trị viên', 'Quản lý sản phẩm, đơn hàng', NOW(3), NOW(3)),
+--   (3, 'staff',       'Nhân viên',     'Xử lý đơn hàng, kho',        NOW(3), NOW(3)),
+--   (4, 'customer',    'Khách hàng',    'Người dùng cuối',            NOW(3), NOW(3));
 
--- ---------- Tài khoản quản trị đầu tiên ----------
--- password_hash là bcrypt của "Admin@123".
--- deleted_at=NULL: chạy lại seed sẽ khôi phục tài khoản nếu lỡ xoá mềm lúc thử.
-INSERT INTO users (id, role_id, full_name, email, phone, password_hash, status, email_verified_at, created_at, updated_at) VALUES
-  (1, 1, 'Super Admin', 'admin@selliotech.local', '0900000001',
-   '$2y$10$/ltwtBCwQxRWgAwbf9nzyOxnMtx7F5QuyvZEugkB0SPFzcwlL21.u',
-   'active', NOW(3), NOW(3), NOW(3))
-ON DUPLICATE KEY UPDATE
-  role_id = VALUES(role_id), full_name = VALUES(full_name),
-  status = VALUES(status), deleted_at = NULL;
+-- -- ---------- Tài khoản quản trị đầu tiên ----------
+-- -- password_hash là bcrypt của "Admin@123".
+-- -- deleted_at=NULL: chạy lại seed sẽ khôi phục tài khoản nếu lỡ xoá mềm lúc thử.
+-- INSERT INTO users (id, role_id, full_name, email, phone, password_hash, status, email_verified_at, created_at, updated_at) VALUES
+--   (1, 1, 'Super Admin', 'admin@selliotech.local', '0900000001',
+--    '$2y$10$/ltwtBCwQxRWgAwbf9nzyOxnMtx7F5QuyvZEugkB0SPFzcwlL21.u',
+--    'active', NOW(3), NOW(3), NOW(3))
+-- ON DUPLICATE KEY UPDATE
+--   role_id = VALUES(role_id), full_name = VALUES(full_name),
+--   status = VALUES(status), deleted_at = NULL;
 
--- ---------- Cấu hình ----------
--- Chỉ đè đúng khoá mà mặc định trong registry còn mang tên dự án gốc; những
--- khoá khác để trống cho registry tự lo (xem đầu tệp).
-INSERT IGNORE INTO settings (`key`, `value`, `group`, created_at, updated_at) VALUES
-  ('site_name', 'Selliotech', 'general', NOW(3), NOW(3));
+-- -- ---------- Cấu hình ----------
+-- -- Chỉ đè đúng khoá mà mặc định trong registry còn mang tên dự án gốc; những
+-- -- khoá khác để trống cho registry tự lo (xem đầu tệp).
+-- INSERT IGNORE INTO settings (`key`, `value`, `group`, created_at, updated_at) VALUES
+--   ('site_name', 'Selliotech', 'general', NOW(3), NOW(3));
 
--- =====================================================================
---  KẾT THÚC SEED
--- =====================================================================
+-- -- =====================================================================
+-- --  KẾT THÚC SEED
+-- -- =====================================================================
