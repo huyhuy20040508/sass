@@ -1,0 +1,27 @@
+# Máy phát triển chạy Windows (core.autocrlf=true) nhưng máy chủ chạy Ubuntu.
+# Không ghim xuống dòng cho những tệp máy chủ đọc thì rất dễ dính lỗi kiểu:
+#
+#     /usr/bin/env: 'bash\r': No such file or directory
+#
+# — bash thấy ký tự \r cuối dòng shebang và coi nó là một phần tên chương trình.
+# Cùng loại lỗi cũng xảy ra với unit systemd và tệp .env.
+
+* text=auto
+
+# Bắt buộc LF: những tệp này chỉ chạy trên Linux.
+*.sh        text eol=lf
+*.service   text eol=lf
+*.conf      text eol=lf
+*.env.example text eol=lf
+
+# Tệp Windows thì ngược lại — CRLF, vì .bat chạy bằng cmd.exe.
+*.bat       text eol=crlf
+
+# Nhị phân: đừng đụng vào.
+*.png       binary
+*.jpg       binary
+*.jpeg      binary
+*.gif       binary
+*.webp      binary
+*.ico       binary
+*.pdf       binary

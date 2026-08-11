@@ -1,0 +1,51 @@
+# Go API chạy nền, nghe ở 127.0.0.1:8080 — nginx đứng trước làm TLS.
+#
+# Đặt tại: /etc/systemd/system/selliotech-api.service
+# Nạp:     systemctl daemon-reload && systemctl enable --now selliotech-api
+# Xem log: journalctl -u selliotech-api -f
+
+[Unit]
+Description=Selliotech API (Go)
+Documentation=https://github.com/huyhuy20040508/sass
+# mysql.service chứ không phải mysqld: Ubuntu đặt tên unit là mysql.
+After=network-online.target mysql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=selliotech
+Group=selliotech
+
+# WorkingDirectory quyết định app tìm thấy .env hay không: config.Load() đọc
+# tệp .env theo thư mục hiện hành. Chạy từ chỗ khác là app im lặng dùng toàn
+# giá trị mặc định — trỏ vào database `sass_shop` không tồn tại và JWT_SECRET
+# rỗng, tức là mọi người đăng nhập được bằng token tự ký.
+WorkingDirectory=/var/www/selliotech/api
+ExecStart=/var/www/selliotech/api/api
+
+Restart=always
+RestartSec=3
+
+# Dừng êm: main.go có sẵn graceful shutdown, chờ request đang chạy xong.
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+# .env chứa mật khẩu database, khoá JWT và khoá cổng thanh toán.
+UMask=0077
+
+# Rào chắn cơ bản — tiến trình này chỉ cần đọc thư mục của chính nó và nối
+# MySQL qua socket nội bộ.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+
+# Log đi thẳng vào journald (app ghi ra stdout/stderr bằng Zap).
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
