@@ -8,9 +8,10 @@
 Description=Sao lưu Selliotech mỗi 12 giờ
 
 [Timer]
-# Giờ MÁY CHỦ, mà máy chủ đang chạy UTC — tức là 10:00 và 22:00 giờ Việt Nam.
-# Muốn đổi thì sửa dòng này rồi chạy lại 02-trien-khai.sh; xem giờ hiện tại của
-# máy bằng `timedatectl`.
+# Giờ MÁY CHỦ. VPS này đặt Asia/Bangkok (+07), cùng lệch với giờ Việt Nam và
+# không có giờ mùa hè — nên 03:00 và 15:00 ở đây đúng là 3 giờ sáng và 3 giờ
+# chiều giờ ta. Đừng suy ra từ chỗ khác: kiểm bằng `timedatectl`, vì cùng một
+# dòng OnCalendar rơi vào giờ nào là do múi giờ máy quyết định.
 OnCalendar=*-*-* 03,15:00:00
 
 # Máy chủ tắt hoặc khởi động lại đúng lúc tới giờ thì chạy bù ngay khi lên.

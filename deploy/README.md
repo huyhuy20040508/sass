@@ -200,7 +200,7 @@ Bản seed tạo tài khoản `admin@selliotech.local / Admin@123`. Chuỗi này
 
 ## Sao lưu tự động
 
-Chạy **mỗi 12 giờ** (03:00 và 15:00 giờ máy chủ = 10:00 và 22:00 giờ Việt Nam), do systemd timer gọi. Không cần bật gì thêm: `02-trien-khai.sh` cài sẵn ở bước 8, và lần đầu cài nó chạy luôn một lượt.
+Chạy **mỗi 12 giờ**, 03:00 và 15:00 giờ Việt Nam (VPS đặt `Asia/Bangkok`, +07, cùng lệch với giờ ta), do systemd timer gọi. Không cần bật gì thêm: `02-trien-khai.sh` cài sẵn ở bước 8, và lần đầu cài nó chạy luôn một lượt.
 
 ```bash
 sudo selliotech-sao-luu trang-thai   # lượt gần nhất lúc nào, thành công hay không
