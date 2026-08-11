@@ -126,12 +126,14 @@ http://app.selliotech.store
 
 ```bash
 sudo certbot --nginx \
+  --cert-name selliotech.store \
   -d api.selliotech.store \
   -d admin.selliotech.store \
-  -d app.selliotech.store
+  -d app.selliotech.store \
+  --redirect
 ```
 
-Chọn **redirect** khi certbot hỏi, để `http://` tự chuyển sang `https://`.
+`--cert-name` gộp ba tên miền vào **một** chứng chỉ mang tên `selliotech.store`, tách bạch với chứng chỉ của dự án khác trên cùng máy. `--redirect` để `http://` tự chuyển sang `https://`.
 
 Certbot tự chèn phần TLS vào ba tệp trong `sites-available/` và tự gia hạn bằng timer có sẵn. Kiểm tra timer:
 
