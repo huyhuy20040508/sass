@@ -16,6 +16,17 @@ APP_USER="selliotech"
 APP_DIR="/var/www/selliotech"
 GO="/usr/local/go/bin/go"
 
+# Cache của Go phải nằm NGOÀI $APP_DIR.
+#
+# Mặc định nó rơi vào $HOME/.cache/go-build, mà $HOME của người dùng selliotech
+# chính là $APP_DIR. Bước "Quyền thư mục" bên dưới quét `chmod 644` toàn bộ
+# $APP_DIR nên gỡ luôn bit thực thi của những tệp đã biên dịch trong cache. Lần
+# triển khai sau, `go run` thấy cache còn hợp lệ nên không dựng lại, rồi chết
+# với "fork/exec ...: permission denied" — lỗi trỏ vào một đường dẫn băm loằng
+# ngoằng, không có gì gợi ý nguyên nhân thật.
+GOCACHE_DIR="/var/cache/selliotech/go-build"
+GOMODCACHE_DIR="/var/cache/selliotech/go-mod"
+
 xanh() { printf '\033[32m%s\033[0m\n' "$*"; }
 vang() { printf '\033[33m%s\033[0m\n' "$*"; }
 buoc() { printf '\n\033[1;36m==> %s\033[0m\n' "$*"; }
@@ -113,16 +124,28 @@ buoc "3/9  Build Go API"
 # Build ra tên .new rồi mới đổi chỗ: nếu build hỏng, binary đang chạy vẫn nguyên
 # vẹn và trang web không chết trong lúc mình đi sửa lỗi.
 cd "$APP_DIR/api"
-sudo -u "$APP_USER" env HOME="$APP_DIR" PATH="/usr/local/go/bin:$PATH" \
-    "$GO" build -trimpath -ldflags="-s -w" -o api.new ./cmd/api
+mkdir -p "$GOCACHE_DIR" "$GOMODCACHE_DIR"
+chown -R "$APP_USER:$APP_USER" /var/cache/selliotech
+
+# Gói lệnh gọi Go vào một chỗ để build (bước này) và migrate (bước sau) dùng
+# đúng cùng bộ cache và cùng biến môi trường.
+gochay() {
+    sudo -u "$APP_USER" env \
+        HOME="$APP_DIR" \
+        PATH="/usr/local/go/bin:$PATH" \
+        GOCACHE="$GOCACHE_DIR" \
+        GOMODCACHE="$GOMODCACHE_DIR" \
+        "$GO" "$@"
+}
+
+gochay build -trimpath -ldflags="-s -w" -o api.new ./cmd/api
 xanh "  build xong ($(du -h api.new | cut -f1))"
 
 # ---------------------------------------------------------------------
 buoc "4/9  Lược đồ database"
 # ---------------------------------------------------------------------
 # Công cụ migrate đọc DB_* từ api/.env và đối chiếu với ../database/migrations.
-sudo -u "$APP_USER" env HOME="$APP_DIR" PATH="/usr/local/go/bin:$PATH" \
-    "$GO" run ./cmd/migrate chay -y
+gochay run ./cmd/migrate chay -y
 xanh "  lược đồ đã khớp database/migrations"
 
 # Bản cài trắng thì nạp vai trò + tài khoản quản trị đầu tiên.
