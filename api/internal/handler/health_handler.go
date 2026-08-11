@@ -24,7 +24,7 @@ func (h *HealthHandler) Health(c *gin.Context) {
 	c.JSON(200, gin.H{
 		"success": true,
 		"status":  "ok",
-		"service": "football-api",
+		"service": "selliotech-api",
 		"version": h.version,
 	})
 }

@@ -5,10 +5,10 @@
     ],
     "swagger": "2.0",
     "info": {
-        "description": "API cho hệ thống web bán áo bóng đá — Clean Architecture (Go + Gin + GORM).\nĐịnh dạng response: { \"success\": bool, \"message\": string, \"data\": any, \"meta\": any, \"errors\": any }.",
-        "title": "Football API",
+        "description": "API của nền tảng bán hàng Selliotech — Clean Architecture (Go + Gin + GORM).\nĐịnh dạng response: { \"success\": bool, \"message\": string, \"data\": any, \"meta\": any, \"errors\": any }.",
+        "title": "Selliotech API",
         "contact": {
-            "name": "Football Team"
+            "name": "Selliotech"
         },
         "version": "0.1.0"
     },
@@ -9930,7 +9930,7 @@
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Mã đơn hàng (VD: FB-2026-000123)",
+                        "description": "Mã đơn hàng (VD: DH-2026-000123)",
                         "name": "order_code",
                         "in": "query",
                         "required": true

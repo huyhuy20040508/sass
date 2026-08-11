@@ -351,7 +351,7 @@ func (r *orderRepository) Create(ctx context.Context, o *domain.Order) error {
 			return err
 		}
 
-		o.OrderCode = fmt.Sprintf("FB%s%04d", time.Now().Format("20060102"), o.ID)
+		o.OrderCode = fmt.Sprintf("DH%s%04d", time.Now().Format("20060102"), o.ID)
 		if err := tx.Model(o).Update("order_code", o.OrderCode).Error; err != nil {
 			return err
 		}
@@ -516,7 +516,7 @@ func (r *orderRepository) Checkout(
 		if err := tx.Create(o).Error; err != nil {
 			return err
 		}
-		o.OrderCode = fmt.Sprintf("FB%s%04d", time.Now().Format("20060102"), o.ID)
+		o.OrderCode = fmt.Sprintf("DH%s%04d", time.Now().Format("20060102"), o.ID)
 		if err := tx.Model(o).Update("order_code", o.OrderCode).Error; err != nil {
 			return err
 		}

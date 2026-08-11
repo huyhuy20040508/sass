@@ -18,12 +18,12 @@ import (
 //
 // Dựng DB test (một lần, dùng chính lược đồ thật qua công cụ migration):
 //
-//	mysql -u root -e "CREATE DATABASE IF NOT EXISTS football_shop_test CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
-//	cd ../.. && DB_NAME=football_shop_test go run ./cmd/migrate chay -y
+//	mysql -u root -e "CREATE DATABASE IF NOT EXISTS selliotech_test CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+//	cd ../.. && DB_NAME=selliotech_test go run ./cmd/migrate chay -y
 //
 // Rồi chạy:
 //
-//	TEST_DB_DSN="root:@tcp(127.0.0.1:3306)/football_shop_test?parseTime=true" go test ./internal/repository/
+//	TEST_DB_DSN="root:@tcp(127.0.0.1:3306)/selliotech_test?parseTime=true" go test ./internal/repository/
 func testDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	dsn := os.Getenv("TEST_DB_DSN")

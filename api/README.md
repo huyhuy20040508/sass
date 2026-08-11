@@ -1,6 +1,8 @@
-# football-api
+# selliotech-api
 
-Backend API cho hệ thống bán áo bóng đá — **Go 1.25 + Gin + GORM**, theo **Clean Architecture**. Chứa 100% business logic; là service duy nhất kết nối MySQL.
+Backend API của nền tảng bán hàng Selliotech — **Go 1.25 + Gin + GORM**, theo **Clean Architecture**. Chứa 100% business logic; là service duy nhất kết nối MySQL.
+
+Hai khu quản trị (`../admin` — Shop Admin, và `../saas` — SaaS Admin) đều gọi vào đây, không khu nào tự nối database.
 
 ## Kiến trúc (Clean Architecture)
 
@@ -56,8 +58,14 @@ Docs được sinh từ annotation (`// @Summary`, `// @Router`...) bằng [swag
 go install github.com/swaggo/swag/cmd/swag@latest
 
 # Sinh lại thư mục docs/ (docs.go, swagger.json, swagger.yaml)
-swag init -g cmd/api/main.go --output docs --parseDependency --parseInternal
+swag init -g cmd/api/main.go --output docs
 ```
+
+> **Đừng thêm `--parseDependency --parseInternal`.** Hai cờ đó làm swag đổi cách
+> đặt tên kiểu (`dto.X` thành `sass-api_internal_dto.X`) và bung ra lỗi
+> `cannot find type definition` ở `payment_handler.go` — tệp đó dùng `dto.` trong
+> annotation nhưng không import gói `dto` trong mã, nên swag không có gì để tra
+> alias. Lệnh trên không cần hai cờ ấy và chạy sạch.
 
 > Thư mục `docs/` được commit vào git để `go build` chạy được mà không cần swag.
 > Với endpoint cần đăng nhập: bấm **Authorize** trên Swagger UI và nhập `Bearer {access_token}`.

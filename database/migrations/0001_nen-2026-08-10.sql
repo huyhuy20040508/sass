@@ -3,23 +3,23 @@
 -- =====================================================================
 --  Tệp này là toàn bộ lược đồ tại thời điểm dự án chuyển sang dùng công cụ
 --  migration có phiên bản. Nó gộp sẵn 13 tệp alter-*.sql chạy tay trước đó
---  (bản gốc giữ trong football-database/lich-su/ để tra cứu).
+--  (bản gốc giữ trong database/lich-su/ để tra cứu).
 --
 --  Chạy bằng:
---      cd football-api && go run ./cmd/migrate chay
+--      cd api && go run ./cmd/migrate chay
 --
 --  Database ĐÃ CÓ SẴN lược đồ này từ trước (máy cục bộ, bản thử, bản thật)
 --  thì đánh dấu chứ đừng chạy lại:
---      cd football-api && go run ./cmd/migrate danh-dau
+--      cd api && go run ./cmd/migrate danh-dau
 --
 --  KHÔNG có CREATE DATABASE / USE trong tệp này: tên database khác nhau ở
 --  từng môi trường và công cụ đã kết nối sẵn đúng chỗ theo .env. Tệp cũ nướng
---  cứng `USE football_shop` chính là lý do lệnh nạp lược đồ trong tao-prod.sh
+--  cứng `USE selliotech` chính là lý do lệnh nạp lược đồ trong tao-prod.sh
 --  từng tạo ra một database lạc chỗ thay vì nạp vào database của bản thật.
 --
 --  Đã chạy ở đâu đó rồi thì TUYỆT ĐỐI không sửa nội dung tệp này — công cụ giữ
 --  vân tay SHA-256 và sẽ báo lệch. Cần đổi lược đồ thì tạo tệp mới:
---      cd football-api && go run ./cmd/migrate tao-moi <viec-can-lam>
+--      cd api && go run ./cmd/migrate tao-moi <viec-can-lam>
 -- =====================================================================
 
 SET NAMES utf8mb4;
@@ -760,7 +760,7 @@ CREATE TABLE IF NOT EXISTS order_return_history (
 --  đặt hàng nhập là sổ riêng. Một phiếu có thể nhận làm NHIỀU đợt: số đã
 --  nhận nằm ở từng dòng hàng (received_quantity), kho chỉ được cộng đúng
 --  vào lúc bấm nhận hàng, ghi reference_type=''purchase_order''.
---  Bản đầy đủ kèm dữ liệu mẫu: football-database/purchase_orders.sql
+--  Bản đầy đủ kèm dữ liệu mẫu: database/purchase_orders.sql
 
 -- Nhà cung cấp — bên bán hàng cho cửa hàng.
 CREATE TABLE IF NOT EXISTS suppliers (

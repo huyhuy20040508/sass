@@ -547,7 +547,7 @@ func (h *OrderHandler) Quote(c *gin.Context) {
 // @Tags			Orders
 // @Accept			json
 // @Produce		json
-// @Param			order_code	query		string	true	"Mã đơn hàng (VD: FB-2026-000123)"
+// @Param			order_code	query		string	true	"Mã đơn hàng (VD: DH-2026-000123)"
 // @Success		200			{object}	response.Body{data=domain.Order}
 // @Failure		400			{object}	response.Body
 // @Failure		404			{object}	response.Body

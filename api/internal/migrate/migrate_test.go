@@ -72,13 +72,13 @@ func TestDocBatTrungSoThuTu(t *testing.T) {
 }
 
 func TestValidateChanLenhDoiDatabase(t *testing.T) {
-	// Đây là cái bẫy đã có thật trong dự án: tệp cũ nướng cứng `USE football_shop`
+	// Đây là cái bẫy đã có thật trong dự án: tệp cũ nướng cứng `USE selliotech`
 	// nên nạp lên máy chủ là ghi nhầm sang database khác.
 	cam := map[string]string{
-		"USE":             "USE football_shop;\nALTER TABLE a ADD b INT;",
+		"USE":             "USE selliotech;\nALTER TABLE a ADD b INT;",
 		"CREATE DATABASE": "CREATE DATABASE x;\nSELECT 1;",
 		"DROP DATABASE":   "DROP DATABASE x;",
-		"use chữ thường":  "use football_shop;\nSELECT 1;",
+		"use chữ thường":  "use selliotech;\nSELECT 1;",
 	}
 
 	for ten, sqlText := range cam {
@@ -93,7 +93,7 @@ func TestValidateChanLenhDoiDatabase(t *testing.T) {
 func TestValidateChoQuaKhiLenhCamNamTrongChuThich(t *testing.T) {
 	// Chú thích giải thích "đừng viết USE ở đây" không được tính là vi phạm.
 	hopLe := []string{
-		"-- KHÔNG viết USE football_shop ở đây\nALTER TABLE a ADD b INT;",
+		"-- KHÔNG viết USE selliotech ở đây\nALTER TABLE a ADD b INT;",
 		"/* CREATE DATABASE chỉ là ví dụ */\nALTER TABLE a ADD b INT;",
 		"# USE gì đó\nSELECT 1;",
 	}

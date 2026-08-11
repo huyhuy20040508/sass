@@ -32,7 +32,7 @@
                 <p class="rtc-note">
                     Hai dòng trên khác host/cổng nhau là chuyện bình thường, nhưng địa chỉ
                     <b>{{ $appOrigin }}</b> bắt buộc phải nằm trong <code>CORS_ALLOW_ORIGINS</code>
-                    của <code>football-api/.env</code>, nếu không trình duyệt sẽ chặn kết nối.
+                    của <code>api/.env</code>, nếu không trình duyệt sẽ chặn kết nối.
                 </p>
             </section>
 
@@ -158,7 +158,7 @@
                     })
                     .then(function (d) {
                         if (!d.token) throw new Error('API không trả về token.');
-                        if (!d.url) throw new Error('Thiếu cấu hình api.public_url trong football-admin/config/api.php.');
+                        if (!d.url) throw new Error('Thiếu cấu hình api.public_url trong admin/config/api.php.');
                         mark('token', 'ok', 'lấy được token');
                         log('Bước 1 OK. Luồng sẽ mở tới: ' + d.url);
                         openStream(d.url + '?token=' + encodeURIComponent(d.token));
@@ -186,7 +186,7 @@
                     if (es && es.readyState !== 1) {
                         mark('ready', 'bad', 'quá 8 giây không nối được');
                         log('Bước 3 HỎNG: không nhận được tín hiệu sẵn sàng.');
-                        log('  → Kiểm tra CORS_ALLOW_ORIGINS trong football-api/.env có chứa ' + window.location.origin + ' chưa.');
+                        log('  → Kiểm tra CORS_ALLOW_ORIGINS trong api/.env có chứa ' + window.location.origin + ' chưa.');
                         log('  → Kiểm tra API Go có đang chạy và đã khởi động lại sau khi sửa code chưa.');
                         log('  → Mở tab Network, tìm request "events", xem nó báo gì.');
                     }

@@ -1,10 +1,10 @@
-# Football Admin
+# Selliotech — Shop Admin
 
-Giao diện quản trị (Laravel 12 + Blade + Bootstrap 5). **Không kết nối MySQL trực tiếp** — mọi dữ liệu đi qua Backend Go API (`football-api`).
+Giao diện quản trị (Laravel 12 + Blade + Bootstrap 5). **Không kết nối MySQL trực tiếp** — mọi dữ liệu đi qua Backend Go API (`api/`).
 
 ## Yêu cầu
 - PHP 8.2+, Composer
-- `football-api` đang chạy (mặc định `http://localhost:8080`)
+- `api/` đang chạy (mặc định `http://localhost:8080`)
 
 ## Cài đặt
 ```bash

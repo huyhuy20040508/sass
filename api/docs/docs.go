@@ -10,7 +10,7 @@ const docTemplate = `{
         "description": "{{escape .Description}}",
         "title": "{{.Title}}",
         "contact": {
-            "name": "Football Team"
+            "name": "Selliotech"
         },
         "version": "{{.Version}}"
     },
@@ -9932,7 +9932,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Mã đơn hàng (VD: FB-2026-000123)",
+                        "description": "Mã đơn hàng (VD: DH-2026-000123)",
                         "name": "order_code",
                         "in": "query",
                         "required": true
@@ -15432,8 +15432,8 @@ var SwaggerInfo = &swag.Spec{
 	Host:             "localhost:8080",
 	BasePath:         "/api/v1",
 	Schemes:          []string{"http", "https"},
-	Title:            "Football API",
-	Description:      "API cho hệ thống web bán áo bóng đá — Clean Architecture (Go + Gin + GORM).\nĐịnh dạng response: { \"success\": bool, \"message\": string, \"data\": any, \"meta\": any, \"errors\": any }.",
+	Title:            "Selliotech API",
+	Description:      "API của nền tảng bán hàng Selliotech — Clean Architecture (Go + Gin + GORM).\nĐịnh dạng response: { \"success\": bool, \"message\": string, \"data\": any, \"meta\": any, \"errors\": any }.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

@@ -137,7 +137,7 @@ func New(cfg *config.Config, jwtMgr *jwt.Manager, h Handlers) *gin.Engine {
 		// service phía dưới vẫn còn nguyên, đây chỉ là chỗ đăng ký đường dẫn.
 		//
 		// Khu quản trị KHÔNG gọi đường nào trong cụm này — đã đối chiếu với danh
-		// sách URI trong football-admin/app/Services/ApiClient.php.
+		// sách URI trong admin/app/Services/ApiClient.php.
 		// ====================================================================
 		if cfg.App.EnableStorefront {
 			// --- Banner trang chủ (công khai, chỉ đọc) ---

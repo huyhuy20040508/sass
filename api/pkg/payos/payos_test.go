@@ -124,7 +124,7 @@ func TestCreateLinkKyDungNamTruong(t *testing.T) {
 	link, err := c.CreateLink(context.Background(), CreateRequest{
 		OrderCode:   1750000000123,
 		Amount:      250000,
-		Description: "FB202607310001",
+		Description: "DH202607310001",
 		BuyerName:   "Nguyễn Văn A",
 		CancelURL:   c.cfg.CancelURL,
 		ReturnURL:   c.cfg.ReturnURL,
@@ -138,7 +138,7 @@ func TestCreateLinkKyDungNamTruong(t *testing.T) {
 
 	want := hmacHex("amount=250000" +
 		"&cancelUrl=" + c.cfg.CancelURL +
-		"&description=FB202607310001" +
+		"&description=DH202607310001" +
 		"&orderCode=1750000000123" +
 		"&returnUrl=" + c.cfg.ReturnURL)
 	if got.Signature != want {

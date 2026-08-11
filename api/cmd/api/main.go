@@ -1,4 +1,4 @@
-// football-api — điểm khởi động ứng dụng.
+// selliotech-api — điểm khởi động ứng dụng.
 // Wiring: config -> logger -> db -> repository -> service -> handler -> router.
 package main
 
@@ -32,11 +32,11 @@ import (
 
 const version = "0.1.0"
 
-// @title						Football API
+// @title						Selliotech API
 // @version					0.1.0
-// @description				API cho hệ thống web bán áo bóng đá — Clean Architecture (Go + Gin + GORM).
+// @description				API của nền tảng bán hàng Selliotech — Clean Architecture (Go + Gin + GORM).
 // @description				Định dạng response: { "success": bool, "message": string, "data": any, "meta": any, "errors": any }.
-// @contact.name				Football Team
+// @contact.name				Selliotech
 // @host						localhost:8080
 // @BasePath					/api/v1
 // @schemes					http https
@@ -247,7 +247,7 @@ func main() {
 
 	// 9. Chạy server (goroutine) + graceful shutdown
 	go func() {
-		logger.Info("football-api đang chạy", zap.String("addr", srv.Addr))
+		logger.Info("selliotech-api đang chạy", zap.String("addr", srv.Addr))
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			logger.Fatal("server dừng bất thường", zap.Error(err))
 		}

@@ -4,6 +4,13 @@
 --}}
 @php
     $money = fn ($v) => number_format((float) $v, 0, ',', '.') . 'đ';
+
+    // Tên / địa chỉ / hotline của cửa hàng — đọc từ Cài đặt, xem ApiClient::shopInfo().
+    // Tem giao hàng ghép hotline với địa chỉ thành một dòng "Người gửi" nên lấy
+    // riêng số điện thoại thay vì dùng chuỗi `contact` đã ghép sẵn website.
+    ['name' => $shopName, 'address' => $shopAddress, 'phone' => $shopPhone]
+        = app(\App\Services\ApiClient::class)->shopInfo();
+    $shopFrom = implode(' — ', array_filter([$shopPhone, $shopAddress]));
 @endphp
 <!DOCTYPE html>
 <html lang="vi">
@@ -97,7 +104,7 @@
     <div class="label">
         {{-- Shop + đơn vị vận chuyển --}}
         <div class="lb-row lb-head">
-            <span class="lb-shop">{{ config('shop.name', 'Football Shop') }}</span>
+            <span class="lb-shop">{{ $shopName }}</span>
             <span class="lb-ship">
                 Đơn vị VC<br><b>{{ $o['shipping_method'] ?: 'Tự giao' }}</b>
             </span>
@@ -112,8 +119,8 @@
         {{-- Người gửi --}}
         <div class="lb-row lb-party lb-from">
             <div class="lb-label">Người gửi</div>
-            <div class="lb-name">{{ config('shop.name', 'Football Shop') }}</div>
-            <div class="lb-line">079.6666.468 — 22 Đồng Nai, P.15, Q.10, TP.HCM</div>
+            <div class="lb-name">{{ $shopName }}</div>
+            @if ($shopFrom !== '')<div class="lb-line">{{ $shopFrom }}</div>@endif
         </div>
 
         {{-- Người nhận --}}

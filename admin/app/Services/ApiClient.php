@@ -1110,4 +1110,33 @@ class ApiClient
 
         return $value >= 0 ? $value : $default;
     }
+
+    /**
+     * Thông tin cửa hàng dùng cho các trang IN (hoá đơn, tem giao hàng, phiếu kiểm kê).
+     *
+     * Ba trang đó trước đây ghi cứng tên, địa chỉ và hotline của một cửa hàng cụ
+     * thể, nên giấy in ra luôn mang thông tin cửa hàng đó dù người dùng đã khai
+     * khác trong Cài đặt. Gom về một chỗ để ba trang không lệch nhau, và để khi
+     * thêm trang in mới thì không phải chép lại đoạn đọc cấu hình.
+     *
+     * `contact` ghép hotline với website thành một dòng, bỏ phần nào chưa khai —
+     * in ra "Hotline:  — " giữa tờ hoá đơn trông như lỗi hệ thống.
+     */
+    public function shopInfo(): array
+    {
+        $phone = $this->settingString('contact_phone');
+        $website = $this->settingString('store_website');
+
+        $contact = array_filter([
+            $phone !== '' ? 'Hotline: ' . $phone : '',
+            $website,
+        ]);
+
+        return [
+            'name' => $this->settingString('site_name', config('app.name')),
+            'address' => $this->settingString('store_address'),
+            'phone' => $phone,
+            'contact' => implode(' — ', $contact),
+        ];
+    }
 }

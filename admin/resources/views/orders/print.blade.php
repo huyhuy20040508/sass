@@ -5,6 +5,10 @@
 @php
     use Illuminate\Support\Carbon;
 
+    // Tên / địa chỉ / liên hệ của cửa hàng — đọc từ Cài đặt, xem ApiClient::shopInfo().
+    ['name' => $shopName, 'address' => $shopAddress, 'contact' => $shopContact, 'phone' => $shopPhone]
+        = app(\App\Services\ApiClient::class)->shopInfo();
+
     $money = fn ($v) => number_format((float) $v, 0, ',', '.') . '₫';
 
     // Đọc số tiền thành chữ tiếng Việt (đủ dùng cho hóa đơn: tỷ/triệu/nghìn)
@@ -142,10 +146,15 @@
     <div class="sheet">
         {{-- Đầu trang: thông tin cửa hàng + thời điểm --}}
         <div class="inv-head">
+            {{-- Thông tin cửa hàng lấy từ Cài đặt → Cấu hình cửa hàng. Trước đây
+                 phần này ghi cứng tên, địa chỉ và hotline của một cửa hàng cụ thể,
+                 nên mọi hoá đơn in ra đều mang thông tin của cửa hàng đó bất kể
+                 người dùng đã khai gì. Dòng nào chưa khai thì bỏ hẳn, không in
+                 dòng trống. --}}
             <div class="inv-shop">
-                <b>{{ config('shop.name', 'Football Shop') }}</b>
-                <p>22 Đồng Nai, Phường 15, Quận 10, TP.HCM</p>
-                <p>Hotline: 079.6666.468 — www.footballshop.vn</p>
+                <b>{{ $shopName }}</b>
+                @if ($shopAddress !== '')<p>{{ $shopAddress }}</p>@endif
+                @if ($shopContact !== '')<p>{{ $shopContact }}</p>@endif
             </div>
             <div class="inv-meta">
                 <p>Ngày đặt: {{ $placedAt }}</p>
@@ -254,8 +263,11 @@
         </div>
 
         <p class="inv-thanks">
-            Cảm ơn quý khách đã mua hàng tại {{ config('shop.name', 'Football Shop') }}!<br>
-            Quý khách vui lòng kiểm tra hàng khi nhận. Hỗ trợ đổi size trong 3 ngày — hotline 079.6666.468.
+            Cảm ơn quý khách đã mua hàng tại {{ $shopName }}!<br>
+            {{-- Câu cũ ghi cứng hotline và chính sách "đổi size trong 3 ngày" của một
+                 cửa hàng quần áo. Hotline lấy từ Cài đặt; chưa khai thì bỏ luôn vế đó
+                 thay vì in ra một số điện thoại không gọi được ai. --}}
+            Quý khách vui lòng kiểm tra hàng khi nhận.@if ($shopPhone !== '') Hỗ trợ đổi trả qua hotline {{ $shopPhone }}.@endif
         </p>
     </div>
     @endforeach

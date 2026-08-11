@@ -1026,7 +1026,7 @@ const (
 // ContactRequest là một yêu cầu khách để lại ở form Liên hệ hoặc form Thu mua.
 //
 // Hai form dùng chung một bảng, phân biệt bằng Type — xem chú thích ở
-// football-database/migrations/0001_nen-2026-08-10.sql.
+// database/migrations/0001_nen-2026-08-10.sql.
 type ContactRequest struct {
 	ID       uint   `json:"id" gorm:"primaryKey"`
 	Type     string `json:"type"`
@@ -1095,7 +1095,7 @@ type Notification struct {
 // ---------- 9. Marketing & cấu hình ----------
 
 // Vị trí banner — mỗi mã tương ứng MỘT khối cố định trên storefront. Đây là danh
-// sách đóng: thêm mã mới ở đây phải kèm chỗ hiển thị bên football-web, nếu không
+// sách đóng: thêm mã mới ở đây phải kèm chỗ hiển thị bên storefront, nếu không
 // người bán tải ảnh lên rồi không thấy nó xuất hiện ở đâu cả.
 const (
 	BannerPositionHomeSlider = "home_slider" // Slideshow lớn đầu trang chủ

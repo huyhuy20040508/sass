@@ -30,7 +30,7 @@ class BannerController extends Controller
 
     /**
      * Vị trí hiển thị — danh sách ĐÓNG, phải khớp `domain.BannerPositions` bên API
-     * và các khối đang dựng trong football-web/resources/views/home.blade.php.
+     * và các khối đang dựng trong storefront/resources/views/home.blade.php.
      * Thêm mã mới ở đây mà không dựng khối bên storefront thì người bán tải ảnh
      * lên xong không thấy nó xuất hiện ở đâu cả.
      */

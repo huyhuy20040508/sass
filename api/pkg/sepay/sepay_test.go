@@ -32,7 +32,7 @@ const webhookBody = `{
   "transactionDate": "2026-08-01 11:08:33",
   "accountNumber": "0123456789",
   "code": null,
-  "content": "FB202608010053 chuyen tien",
+  "content": "DH202608010053 chuyen tien",
   "transferType": "in",
   "description": "NGUYEN VAN B chuyen tien",
   "transferAmount": 32000,
@@ -95,14 +95,14 @@ func TestWebhookPhanBietTienRa(t *testing.T) {
 // Mỗi ngân hàng nhào nặn nội dung một kiểu. Chuẩn hoá xong mã đơn vẫn phải nằm
 // nguyên trong chuỗi, nếu không thì tiền về mà không đơn nào nhận.
 func TestNormalizeContentGiuNguyenMaDon(t *testing.T) {
-	const code = "FB202608010053"
+	const code = "DH202608010053"
 
 	for _, raw := range []string{
-		"FB202608010053 chuyen tien",
-		"fb202608010053",
-		"CT DEN:395xxxx FB 202608010053 CHUYEN TIEN",
-		"MBVCB.123456.FB202608010053.CT tu 0123",
-		"  fb-202608010053  ",
+		"DH202608010053 chuyen tien",
+		"dh202608010053",
+		"CT DEN:395xxxx DH 202608010053 CHUYEN TIEN",
+		"MBVCB.123456.DH202608010053.CT tu 0123",
+		"  dh-202608010053  ",
 	} {
 		if !strings.Contains(NormalizeContent(raw), code) {
 			t.Fatalf("nội dung %q chuẩn hoá thành %q, mất mã đơn", raw, NormalizeContent(raw))
@@ -110,7 +110,7 @@ func TestNormalizeContentGiuNguyenMaDon(t *testing.T) {
 	}
 
 	// Nội dung của đơn khác thì không được khớp nhầm.
-	if strings.Contains(NormalizeContent("FB202608010054 chuyen tien"), code) {
+	if strings.Contains(NormalizeContent("DH202608010054 chuyen tien"), code) {
 		t.Fatal("khớp nhầm sang mã đơn khác")
 	}
 }
@@ -118,7 +118,7 @@ func TestNormalizeContentGiuNguyenMaDon(t *testing.T) {
 func TestQRImageURLDungThamSo(t *testing.T) {
 	c := testClient("http://khong-goi-toi", "")
 
-	raw := c.QRImageURL(32000, "FB202608010053")
+	raw := c.QRImageURL(32000, "DH202608010053")
 	u, err := url.Parse(raw)
 	if err != nil {
 		t.Fatalf("URL hỏng: %v", err)
@@ -128,7 +128,7 @@ func TestQRImageURLDungThamSo(t *testing.T) {
 		"acc":      "0123456789",
 		"bank":     "MBBank",
 		"amount":   "32000",
-		"des":      "FB202608010053",
+		"des":      "DH202608010053",
 		"template": "compact",
 	} {
 		if got := q.Get(key); got != want {
@@ -187,7 +187,7 @@ func TestChuaCauHinhThiTuChoi(t *testing.T) {
 	if c.Enabled() {
 		t.Fatal("thiếu cấu hình mà vẫn báo Enabled")
 	}
-	if got := c.QRImageURL(1000, "FB1"); got != "" {
+	if got := c.QRImageURL(1000, "DH1"); got != "" {
 		t.Fatalf("phải trả chuỗi rỗng, nhận %q", got)
 	}
 	if _, err := c.ParseWebhook("Apikey x", []byte(webhookBody)); err != ErrNotConfigured {
@@ -199,7 +199,7 @@ func TestChuaCauHinhThiTuChoi(t *testing.T) {
 // coi như "chưa thấy tiền".
 func TestFindIncomingCanToken(t *testing.T) {
 	c := testClient("http://khong-goi-toi", "")
-	if _, err := c.FindIncoming(context.Background(), "FB1", time.Now()); err != ErrNoAPIToken {
+	if _, err := c.FindIncoming(context.Background(), "DH1", time.Now()); err != ErrNoAPIToken {
 		t.Fatalf("phải trả ErrNoAPIToken, nhận: %v", err)
 	}
 }
@@ -213,15 +213,15 @@ func TestFindIncomingTimDungGiaoDich(t *testing.T) {
 			t.Errorf("thiếu số tài khoản: %q", got)
 		}
 		_, _ = w.Write([]byte(`{"status":200,"transactions":[
-			{"id":"1","amount_in":"0.00","amount_out":"50000.00","transaction_content":"FB202608010053 rut tien"},
-			{"id":"2","amount_in":"32000.00","amount_out":"0.00","transaction_content":"CT DEN FB202608010053 CHUYEN TIEN"},
-			{"id":"3","amount_in":"99000.00","amount_out":"0.00","transaction_content":"FB202608010099"}
+			{"id":"1","amount_in":"0.00","amount_out":"50000.00","transaction_content":"DH202608010053 rut tien"},
+			{"id":"2","amount_in":"32000.00","amount_out":"0.00","transaction_content":"CT DEN DH202608010053 CHUYEN TIEN"},
+			{"id":"3","amount_in":"99000.00","amount_out":"0.00","transaction_content":"DH202608010099"}
 		]}`))
 	}))
 	defer srv.Close()
 
 	c := testClient(srv.URL, "token-test")
-	got, err := c.FindIncoming(context.Background(), "FB202608010053", time.Now())
+	got, err := c.FindIncoming(context.Background(), "DH202608010053", time.Now())
 	if err != nil {
 		t.Fatalf("FindIncoming lỗi: %v", err)
 	}
@@ -245,7 +245,7 @@ func TestFindIncomingKhongThayThiKhongLoi(t *testing.T) {
 	defer srv.Close()
 
 	got, err := testClient(srv.URL, "token-test").
-		FindIncoming(context.Background(), "FB202608010053", time.Now())
+		FindIncoming(context.Background(), "DH202608010053", time.Now())
 	if err != nil || got != nil {
 		t.Fatalf("phải là (nil, nil), nhận: (%v, %v)", got, err)
 	}

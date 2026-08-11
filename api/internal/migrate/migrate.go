@@ -1,4 +1,4 @@
-// Package migrate — công cụ migration có phiên bản cho football-database.
+// Package migrate — công cụ migration có phiên bản cho database.
 //
 // Vì sao cần: trước đây mọi thay đổi lược đồ nằm trong các tệp alter-*.sql chạy
 // TAY theo thứ tự người chạy tự nhớ, không có chỗ nào ghi "database này đã chạy
@@ -17,7 +17,7 @@
 //
 //  1. Tệp migration KHÔNG được chứa `CREATE DATABASE` hay `USE <tên>`. Tên
 //     database là của môi trường (cục bộ, thử, thật đều khác nhau), lấy từ .env.
-//     Tệp cũ nướng cứng `USE football_shop` nên nạp vào bản thật là ghi nhầm
+//     Tệp cũ nướng cứng `USE selliotech` nên nạp vào bản thật là ghi nhầm
 //     sang một database khác — xem Validate().
 //
 //  2. MySQL KHÔNG có DDL trong transaction: mỗi lệnh ALTER/CREATE tự chốt ngay.
@@ -243,7 +243,7 @@ CREATE TABLE IF NOT EXISTS ` + TenBang + ` (
   mili_giay   BIGINT       NOT NULL DEFAULT 0 COMMENT 'thời gian chạy tệp',
   PRIMARY KEY (version)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='Lịch sử migration — do football-api/cmd/migrate ghi, đừng sửa tay'`)
+  COMMENT='Lịch sử migration — do selliotech-api/cmd/migrate ghi, đừng sửa tay'`)
 	if err != nil {
 		return fmt.Errorf("không tạo được bảng %s: %w", TenBang, err)
 	}

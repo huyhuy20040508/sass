@@ -13,7 +13,7 @@ import (
 // khách thấy ô ảnh vỡ ngay giữa bước trả tiền.
 func TestQRImageDataURILaPNGHopLe(t *testing.T) {
 	// Chuỗi VietQR rút gọn — đủ dài để buộc bộ mã hoá chọn phiên bản lớn.
-	const payload = "00020101021238570010A00000072701270006970422011301109990001080208QRIBFTTA53037045802VN62130809FB2026073163044A0B"
+	const payload = "00020101021238570010A00000072701270006970422011301109990001080208QRIBFTTA53037045802VN62130809DH2026073163044A0B"
 
 	uri := qrImageDataURI(payload)
 	const prefix = "data:image/png;base64,"

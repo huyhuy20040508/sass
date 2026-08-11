@@ -9,7 +9,7 @@ func sampleOrder() OrderData {
 	return OrderData{
 		StoreName: "Jersey House", StoreURL: "https://jerseyhouse.vn",
 		Hotline: "0796666468", Year: 2026,
-		OrderCode: "FB202607270042", PlacedAt: "14:05 27/07/2026",
+		OrderCode: "DH202607270042", PlacedAt: "14:05 27/07/2026",
 		Name: "Nguyễn Văn A", Phone: "0912345678",
 		Address:       "22 Đồng Nai, Phường Hoà Cường, Đà Nẵng",
 		PaymentMethod: "Thanh toán khi nhận hàng (COD)",
@@ -44,7 +44,7 @@ func TestRenderOrderConfirmation(t *testing.T) {
 	}
 
 	for _, want := range []string{
-		"FB202607270042", "14:05 27/07/2026", "Nguyễn Văn A", "0912345678",
+		"DH202607270042", "14:05 27/07/2026", "Nguyễn Văn A", "0912345678",
 		"22 Đồng Nai", "Thanh toán khi nhận hàng (COD)", "Giao giờ hành chính",
 		"Áo MU sân nhà 2026", "Size M / Đỏ", "RASHFORD 10", "Tất thi đấu",
 		"1.500.000₫", "90.000₫", "1.590.000₫", "Miễn phí",
@@ -115,7 +115,7 @@ func TestRenderOrderChuyenKhoan(t *testing.T) {
 		"Vietcombank", "1023456789", "NGUYEN VAN HUY",
 		"Chuyển xong nhắn Zalo giúp shop.",
 		// Nội dung chuyển khoản chính là mã đơn — thứ duy nhất đối soát được.
-		"FB202607270042",
+		"DH202607270042",
 	} {
 		if !strings.Contains(html, want) {
 			t.Errorf("bản HTML thiếu %q", want)
@@ -174,7 +174,7 @@ func sampleStatus() OrderStatusData {
 	return OrderStatusData{
 		StoreName: "Jersey House", StoreURL: "https://jerseyhouse.vn",
 		Hotline: "0796666468", Year: 2026,
-		OrderCode: "FB202607270042", Name: "Nguyễn Văn A",
+		OrderCode: "DH202607270042", Name: "Nguyễn Văn A",
 		Address:  "22 Đồng Nai, Phường Hoà Cường, Đà Nẵng",
 		Label:    "Đang giao hàng",
 		Headline: "Đơn hàng đang trên đường tới bạn",
@@ -194,7 +194,7 @@ func TestRenderOrderStatus(t *testing.T) {
 		t.Fatalf("render lỗi: %v", err)
 	}
 	for _, want := range []string{
-		"FB202607270042", "Đang giao hàng", "Nguyễn Văn A", "22 Đồng Nai",
+		"DH202607270042", "Đang giao hàng", "Nguyễn Văn A", "22 Đồng Nai",
 		"1.590.000₫", "Giao hàng nhanh", "GHN123456",
 	} {
 		if !strings.Contains(html, want) {

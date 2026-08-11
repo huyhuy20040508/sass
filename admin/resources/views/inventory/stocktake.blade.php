@@ -11,6 +11,10 @@
     $KIT_TYPES = \App\Http\Controllers\ProductController::KIT_TYPES;
     $nf = fn ($v) => number_format((int) $v, 0, ',', '.');
 
+    // Tên / địa chỉ / liên hệ của cửa hàng — đọc từ Cài đặt, xem ApiClient::shopInfo().
+    ['name' => $shopName, 'address' => $shopAddress, 'contact' => $shopContact]
+        = app(\App\Services\ApiClient::class)->shopInfo();
+
     // Mô tả bộ lọc đã tạo ra phiếu này. Phiếu rời khỏi màn hình rồi thì phải tự nói
     // được nó là danh sách gì, nếu không hai tuần sau không ai biết đã đếm những gì.
     $scope = [];
@@ -148,10 +152,12 @@
 
     <div class="sheet" id="stSheet">
         <div class="st-head">
+            {{-- Xem ghi chú ở orders/print.blade.php: thông tin cửa hàng đọc từ
+                 Cài đặt, không ghi cứng. --}}
             <div class="st-shop">
-                <b>{{ config('shop.name', 'Football Shop') }}</b>
-                <p>22 Đồng Nai, Phường 15, Quận 10, TP.HCM</p>
-                <p>Hotline: 079.6666.468 — www.footballshop.vn</p>
+                <b>{{ $shopName }}</b>
+                @if ($shopAddress !== '')<p>{{ $shopAddress }}</p>@endif
+                @if ($shopContact !== '')<p>{{ $shopContact }}</p>@endif
             </div>
             <div class="st-meta">
                 <p>Ngày in: {{ now()->format('H:i d/m/Y') }}</p>

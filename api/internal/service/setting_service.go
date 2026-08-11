@@ -111,13 +111,13 @@ var settingRegistry = []settingDef{
 	// ----- Nhận diện -----
 	{
 		Key: SettingSiteName, Group: SettingGroupGeneral, Section: SettingSectionBrand,
-		Type: SettingTypeText, Label: "Tên cửa hàng", Default: "Football Shop",
+		Type: SettingTypeText, Label: "Tên cửa hàng", Default: "Selliotech",
 		Required: true, Public: true, Max: 100,
 	},
 	{
 		Key: SettingStoreSlogan, Group: SettingGroupGeneral, Section: SettingSectionBrand,
 		Type: SettingTypeText, Label: "Câu giới thiệu ngắn",
-		Default: "Áo bóng đá chính hãng — Giao hàng toàn quốc.",
+		Default: "Bán hàng gọn nhẹ, quản lý một chỗ.",
 		Public:  true, Max: 160,
 	},
 	{
@@ -134,7 +134,7 @@ var settingRegistry = []settingDef{
 	// ----- Liên hệ -----
 	{
 		Key: SettingContactEmail, Group: SettingGroupGeneral, Section: SettingSectionContact,
-		Type: SettingTypeEmail, Label: "Email liên hệ", Default: "support@football.local",
+		Type: SettingTypeEmail, Label: "Email liên hệ", Default: "support@selliotech.local",
 		Required: true, Public: true, Max: 150,
 	},
 	{

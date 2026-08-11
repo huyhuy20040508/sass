@@ -3661,11 +3661,11 @@ definitions:
 host: localhost:8080
 info:
   contact:
-    name: Football Team
+    name: Selliotech
   description: |-
-    API cho hệ thống web bán áo bóng đá — Clean Architecture (Go + Gin + GORM).
+    API của nền tảng bán hàng Selliotech — Clean Architecture (Go + Gin + GORM).
     Định dạng response: { "success": bool, "message": string, "data": any, "meta": any, "errors": any }.
-  title: Football API
+  title: Selliotech API
   version: 0.1.0
 paths:
   /admin/banners:
@@ -10062,7 +10062,7 @@ paths:
         ở storefront — không cần đăng nhập. Trả về đơn kèm danh sách sản phẩm, đã
         ẩn ghi chú nội bộ.
       parameters:
-      - description: 'Mã đơn hàng (VD: FB-2026-000123)'
+      - description: 'Mã đơn hàng (VD: DH-2026-000123)'
         in: query
         name: order_code
         required: true
