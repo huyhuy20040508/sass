@@ -156,6 +156,12 @@ sudo certbot --nginx \
 
 Certbot tự chèn phần TLS vào bốn tệp trong `sites-available/` và tự gia hạn bằng timer có sẵn. Kiểm tra timer:
 
+> **Phần TLS đó không nằm trong git.** Bốn tệp `deploy/nginx/*.conf` chỉ có block cổng 80, mà bước 7 của `02-trien-khai.sh` thì chép đè chúng lên `sites-available/` — nên mỗi lượt triển khai xoá sạch phần certbot vừa viết. Chuyện này đã xảy ra thật ngày 11/08/2026: chứng chỉ cấp lúc 14:49, lượt triển khai tối cùng ngày làm site tụt về HTTP mà không có dấu hiệu gì (nginx vẫn chạy, cổng 80 vẫn trả trang, chỉ `https://` là đứt). Script giờ tự chạy `certbot install` ngay sau vòng chép đè để gắn lại chứng chỉ **có sẵn** — không xin cấp mới nên không đụng hạn mức Let's Encrypt. Sau mỗi lần triển khai vẫn nên kiểm một câu:
+>
+> ```bash
+> curl -s -o /dev/null -w '%{http_code}\n' https://api.selliotech.store/api/v1/health   # phải là 200
+> ```
+
 ```bash
 systemctl list-timers certbot.timer
 sudo certbot renew --dry-run

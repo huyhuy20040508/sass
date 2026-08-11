@@ -237,6 +237,25 @@ done
 # trỏ vào máy này không thấy gì cả.
 rm -f /etc/nginx/sites-enabled/default
 
+# Gắn lại chứng chỉ vào cấu hình vừa chép đè.
+#
+# Bốn tệp .conf trong repo chỉ có block cổng 80. Phần HTTPS là do certbot tự
+# viết thêm vào tệp đang chạy trên máy chủ, nên vòng `cp` ngay trên vừa xoá
+# sạch nó — site tụt về HTTP, mà APP_URL trong .env lại là https://, và mật
+# khẩu đăng nhập khu quản trị đi qua mạng ở dạng thô.
+#
+# Đây là chuyện ĐÃ XẢY RA THẬT: chứng chỉ cấp 11/08 lúc 14:49, lượt triển
+# khai tối cùng ngày xoá mất. Không ai thấy ngay vì nginx vẫn chạy bình
+# thường và cổng 80 vẫn trả trang — chỉ https:// là đứt.
+#
+# `certbot install` chỉ gắn chứng chỉ CÓ SẴN vào nginx, không xin cấp mới —
+# chạy bao nhiêu lượt cũng không đụng tới hạn mức của Let's Encrypt.
+if [[ -d /etc/letsencrypt/live/selliotech.store ]] && command -v certbot >/dev/null; then
+    certbot install --cert-name selliotech.store --nginx --redirect -n >/dev/null 2>&1 \
+        && xanh "  đã gắn lại HTTPS vào cấu hình nginx" \
+        || vang "  KHÔNG gắn lại được HTTPS — site đang chạy HTTP trần. Xem /var/log/letsencrypt/letsencrypt.log"
+fi
+
 cp "$APP_DIR/deploy/systemd/selliotech-api.service" /etc/systemd/system/
 systemctl daemon-reload
 
