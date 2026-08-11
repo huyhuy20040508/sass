@@ -1,13 +1,15 @@
 # Triển khai Selliotech lên máy chủ
 
-Đưa ba thành phần lên VPS `103.78.2.230` dưới tên miền `selliotech.store`.
+Đưa bốn thành phần lên VPS `103.78.2.230` dưới tên miền `selliotech.store`.
 
 | Tên miền | Trỏ tới | Là gì |
 |---|---|---|
-| `api.selliotech.store` | Go API (nội bộ `127.0.0.1:8080`) | Service duy nhất chạm MySQL |
+| `selliotech.store` | Thư mục tĩnh `landing/` | Trang giới thiệu bán phần mềm |
+| `api.selliotech.store` | Go API (nội bộ `127.0.0.1:8090`) | Service duy nhất chạm MySQL |
 | `admin.selliotech.store` | Laravel `admin/` | Shop Admin — khu quản lý bán hàng |
 | `app.selliotech.store` | Laravel `saas/` | SaaS Admin — khu điều hành nền tảng |
-| `selliotech.store` | *(chưa dùng)* | Để dành cho trang giới thiệu bán phần mềm |
+
+`www.selliotech.store` nhận cùng một trang giới thiệu, không chuyển hướng — lý do ghi trong `deploy/nginx/selliotech.store.conf`.
 
 Máy chủ: Ubuntu 24.04, đã có sẵn nginx 1.24.
 
@@ -25,27 +27,35 @@ VPS `103.78.2.230` còn chạy `thejerseylab.shop` và `jerseyhouse.id.vn` (thư
 
 ## Bước 1 — DNS ở Hostinger
 
-Vào **hPanel → Domains → selliotech.store → DNS / Nameservers → DNS Zone Editor**, thêm **3 bản ghi A**:
+Vào **hPanel → Domains → selliotech.store → DNS / Nameservers → DNS Zone Editor**, để **5 bản ghi A** cùng trỏ về VPS:
 
 | Type | Name | Points to | TTL |
 |---|---|---|---|
+| A | `@` | `103.78.2.230` | 300 |
+| A | `www` | `103.78.2.230` | 300 |
 | A | `api` | `103.78.2.230` | 300 |
 | A | `admin` | `103.78.2.230` | 300 |
 | A | `app` | `103.78.2.230` | 300 |
 
-Ba điều dễ vấp:
+Bốn điều dễ vấp:
 
 - **Ô Name chỉ điền `api`, không điền `api.selliotech.store`.** Hostinger tự nối phần đuôi; điền cả tên đầy đủ sẽ thành `api.selliotech.store.selliotech.store`.
-- **Kiểm tra xem zone có bản ghi `*` (wildcard) không.** Nếu có, nó tóm luôn cả ba subdomain và trỏ về trang park, ba bản ghi vừa thêm thành vô nghĩa. Có thì xoá đi.
-- **Đừng đụng vào bản ghi `@` và `www`** — cứ để trỏ về Hostinger như hiện tại. Tên miền gốc chưa dùng tới.
+- **Kiểm tra xem zone có bản ghi `*` (wildcard) không.** Nếu có, nó tóm luôn mọi subdomain và trỏ về trang park, các bản ghi vừa thêm thành vô nghĩa. Có thì xoá đi.
+- **`@` và `www` đang trỏ về Hostinger (`2.57.91.91`) — phải SỬA lại thành `103.78.2.230`.** Hostinger dựng sẵn hai bản ghi này khi mua tên miền; thêm bản ghi thứ hai cho cùng một Name sẽ thành hai địa chỉ luân phiên, tức là cứ hai lần vào thì một lần rơi vào trang park cũ. Sửa bản ghi có sẵn, đừng thêm mới.
+- **`www` ở một số zone là CNAME chứ không phải A.** Nếu vậy thì xoá CNAME đi rồi tạo bản ghi A — một Name không thể vừa có CNAME vừa có A.
+
+Bản ghi `MX` và `TXT` cứ để nguyên: đổi `@` sang địa chỉ khác không đụng gì tới email của tên miền.
 
 TTL 300 giây là cố ý: đang lúc dựng, sai thì sửa lại thấy hiệu lực sau 5 phút thay vì phải chờ 4 tiếng. Xong xuôi nâng lên 14400 cũng được.
 
 Chờ vài phút rồi kiểm từ máy bạn:
 
 ```bash
-nslookup api.selliotech.store 8.8.8.8
-# Address phải là 103.78.2.230, không phải 2.57.91.91
+for t in selliotech.store www.selliotech.store api.selliotech.store \
+         admin.selliotech.store app.selliotech.store; do
+  echo -n "$t -> "; nslookup "$t" 8.8.8.8 | awk '/^Address: /{print $2}' | tail -1
+done
+# Cả năm dòng phải ra 103.78.2.230, không phải 2.57.91.91
 ```
 
 **Phải thấy đúng địa chỉ VPS rồi mới sang bước bật HTTPS**, vì Let's Encrypt xác minh quyền sở hữu bằng cách gọi ngược vào tên miền.
@@ -112,9 +122,12 @@ Script làm: build Go API → nạp lược đồ database → `composer install
 
 Lần đầu chạy, nó nạp `database/seed.sql` và in ra tài khoản quản trị đầu tiên.
 
+Trang giới thiệu không cần bước build nào: nó là HTML tĩnh nằm sẵn trong `landing/`, script chỉ đặt tệp nginx và bước đặt quyền lo phần còn lại.
+
 Kiểm bằng trình duyệt (vẫn còn `http://`):
 
 ```
+http://selliotech.store
 http://api.selliotech.store/api/v1/health
 http://admin.selliotech.store
 http://app.selliotech.store
@@ -127,15 +140,19 @@ http://app.selliotech.store
 ```bash
 sudo certbot --nginx \
   --cert-name selliotech.store \
+  -d selliotech.store \
+  -d www.selliotech.store \
   -d api.selliotech.store \
   -d admin.selliotech.store \
   -d app.selliotech.store \
   --redirect
 ```
 
-`--cert-name` gộp ba tên miền vào **một** chứng chỉ mang tên `selliotech.store`, tách bạch với chứng chỉ của dự án khác trên cùng máy. `--redirect` để `http://` tự chuyển sang `https://`.
+`--cert-name` gộp năm tên miền vào **một** chứng chỉ mang tên `selliotech.store`, tách bạch với chứng chỉ của dự án khác trên cùng máy. `--redirect` để `http://` tự chuyển sang `https://`.
 
-Certbot tự chèn phần TLS vào ba tệp trong `sites-available/` và tự gia hạn bằng timer có sẵn. Kiểm tra timer:
+**Nếu máy đã có chứng chỉ `selliotech.store` từ lần trước** (hồi đó mới có ba tên miền), certbot sẽ hỏi có mở rộng không — chọn mở rộng, hoặc chạy thẳng với `--expand`. Đừng đặt `--cert-name` khác để xin riêng cho tên miền gốc: hai chứng chỉ cho cùng một zone làm lần gia hạn sau khó lần ra cái nào đang phục vụ cái gì.
+
+Certbot tự chèn phần TLS vào bốn tệp trong `sites-available/` và tự gia hạn bằng timer có sẵn. Kiểm tra timer:
 
 ```bash
 systemctl list-timers certbot.timer

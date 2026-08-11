@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+
+# Không khai Sitemap: trang chỉ có một địa chỉ duy nhất, khai sitemap.xml ở đây
+# mà không có tệp đó thật thì chỉ tạo thêm một lượt 404 trong log.

@@ -45,15 +45,11 @@ Riêng mục "chuỗi nhiều cửa hàng" trong bảng giá là hướng đang 
 
 ## Đưa lên máy chủ
 
-Trang tĩnh nên chỉ cần một `server` block trỏ `root` vào thư mục này:
+Không phải làm gì riêng. Trang đã nằm trong bộ triển khai chung:
 
-```nginx
-server {
-    server_name selliotech.store www.selliotech.store;
-    root /var/www/selliotech/landing;
-    index index.html;
-    location / { try_files $uri $uri/ =404; }
-}
-```
+- Cấu hình nginx: [`deploy/nginx/selliotech.store.conf`](../deploy/nginx/selliotech.store.conf) — nhận cả `selliotech.store` lẫn `www.selliotech.store`, trỏ `root` vào chính thư mục này.
+- Script [`deploy/scripts/02-trien-khai.sh`](../deploy/scripts/02-trien-khai.sh) đặt tệp đó vào `sites-enabled` và gán quyền cùng lượt với ba tên miền kia.
 
-Rồi bật HTTPS bằng certbot như ba tên miền còn lại, xem [`deploy/README.md`](../deploy/README.md).
+Nên cập nhật trang chỉ là đẩy commit rồi chạy lại script triển khai — không có bước build, không phải khởi động lại dịch vụ nào. Các bước DNS và HTTPS xem [`deploy/README.md`](../deploy/README.md).
+
+Bộ nhớ đệm của trình duyệt đặt **1 giờ** cho css/js/svg vì tên tệp không có mã băm. Sửa giao diện xong mà muốn thấy ngay thì tải lại kèm bỏ qua đệm (Ctrl+F5).

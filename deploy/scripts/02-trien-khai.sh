@@ -227,9 +227,11 @@ xanh "  đã đặt quyền cho storage/ và bootstrap/cache"
 # ---------------------------------------------------------------------
 buoc "7/9  nginx + systemd"
 # ---------------------------------------------------------------------
-for site in api app admin; do
-    cp "$APP_DIR/deploy/nginx/$site.selliotech.store.conf" "/etc/nginx/sites-available/$site.selliotech.store"
-    ln -sfn "/etc/nginx/sites-available/$site.selliotech.store" "/etc/nginx/sites-enabled/$site.selliotech.store"
+# Duyệt bằng TÊN MIỀN ĐẦY ĐỦ, không ghép "$site.selliotech.store": tên miền gốc
+# của trang giới thiệu không có phần đầu nào để ghép.
+for site in selliotech.store api.selliotech.store app.selliotech.store admin.selliotech.store; do
+    cp "$APP_DIR/deploy/nginx/$site.conf" "/etc/nginx/sites-available/$site"
+    ln -sfn "/etc/nginx/sites-available/$site" "/etc/nginx/sites-enabled/$site"
 done
 # Trang mặc định của nginx nhận mọi tên miền chưa khai; bỏ đi để tên miền lạ
 # trỏ vào máy này không thấy gì cả.
@@ -300,15 +302,20 @@ printf '\n\033[1;32m===== TRIỂN KHAI XONG =====\033[0m\n'
 cat <<'HD'
 
 Kiểm bằng trình duyệt (còn là http:// cho tới khi bật HTTPS):
+    http://selliotech.store                     <- trang giới thiệu
     http://api.selliotech.store/api/v1/health
     http://admin.selliotech.store
     http://app.selliotech.store
 
 Bật HTTPS (chỉ chạy được sau khi DNS đã trỏ về máy này):
     sudo certbot --nginx \
+        --cert-name selliotech.store \
+        -d selliotech.store \
+        -d www.selliotech.store \
         -d api.selliotech.store \
         -d admin.selliotech.store \
-        -d app.selliotech.store
+        -d app.selliotech.store \
+        --redirect
 
 Sau khi có HTTPS, sửa lại 3 tệp .env cho đúng https:// rồi chạy lại script này.
 HD
