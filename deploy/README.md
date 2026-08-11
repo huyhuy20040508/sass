@@ -207,6 +207,21 @@ sudo bash deploy/scripts/02-trien-khai.sh
 
 Script kéo bản mới từ nhánh `main`, build lại, đổi binary rồi khởi động lại. Nếu build hỏng thì binary đang chạy vẫn nguyên — web không chết trong lúc bạn đi sửa.
 
+### Khi bản cập nhật có sửa chính `02-trien-khai.sh`: chạy HAI lượt
+
+Script tự chép mình ra `/tmp` rồi chạy bản chép, vì bước 1 `git reset --hard` ghi đè chính nó trong lúc bash còn đang đọc dở (lý do đầy đủ ghi ở đầu script). Hệ quả: **lượt chạy nào cũng dùng bản script đang có sẵn trên đĩa, không phải bản vừa kéo về.**
+
+Nên khi commit mới có động vào script triển khai, lượt đầu chỉ kéo bản mới về, lượt hai mới thi hành nó:
+
+```bash
+sudo bash deploy/scripts/02-trien-khai.sh   # kéo script mới về
+sudo bash deploy/scripts/02-trien-khai.sh   # chạy script mới
+```
+
+Đây đúng là chỗ đã vấp lúc thêm tên miền gốc. Lượt đầu kéo về `landing/` và `deploy/nginx/selliotech.store.conf`, nhưng vòng lặp cài nginx của **bản script cũ** chỉ biết ba tên miền con nên bỏ qua tệp mới. Cùng lúc đó script vẫn `rm -f /etc/nginx/sites-enabled/default`, thế là tên miền gốc rơi vào block đứng đầu bảng chữ cái — `admin.selliotech.store` — và trả về trang đăng nhập Shop Admin kèm cookie phiên của khu quản trị. Nhìn thì tưởng cấu hình sai, thật ra chỉ là chưa chạy lượt hai.
+
+Dấu hiệu nhận ra: `ls -1 /etc/nginx/sites-enabled/` thiếu tệp mà bạn vừa thêm.
+
 ---
 
 ## Khi có sự cố
