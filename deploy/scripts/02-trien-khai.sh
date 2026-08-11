@@ -202,9 +202,11 @@ xanh "  admin: đã có symlink public/storage"
 # ---------------------------------------------------------------------
 buoc "6/9  Quyền thư mục"
 # ---------------------------------------------------------------------
-# Mã nguồn thuộc về selliotech; php-fpm (www-data) chỉ cần ĐỌC. Riêng storage
-# và bootstrap/cache thì phải ghi được — đó là chỗ Laravel để session, log và
-# view đã biên dịch.
+# PHP-FPM của Selliotech chạy dưới chính người dùng `selliotech` (pool riêng ở
+# bước 7), nên quyền của CHỦ SỞ HỮU là đủ để Laravel ghi vào storage/.
+#
+# Nhóm vẫn để www-data vì nginx đọc trực tiếp ảnh người bán tải lên qua symlink
+# public/storage — nó không đi qua PHP.
 chown -R "$APP_USER:$APP_USER" "$APP_DIR"
 find "$APP_DIR" -type d -exec chmod 755 {} +
 find "$APP_DIR" -type f -exec chmod 644 {} +
@@ -235,6 +237,25 @@ rm -f /etc/nginx/sites-enabled/default
 
 cp "$APP_DIR/deploy/systemd/selliotech-api.service" /etc/systemd/system/
 systemctl daemon-reload
+
+# Pool PHP-FPM riêng. KHÔNG dùng pool mặc định www.conf: dự án khác trên cùng
+# máy có thể đã đổi `user` của nó (trên VPS này nó đang chạy dưới `football`),
+# và khi đó PHP không ghi nổi vào storage/ của Selliotech — mọi trang trả 500
+# mà không để lại dòng log nào, vì thứ hỏng chính là cái ghi log.
+mkdir -p /var/lib/php/sessions
+chmod 1733 /var/lib/php/sessions
+cp "$APP_DIR/deploy/php-fpm/selliotech.conf" /etc/php/8.3/fpm/pool.d/selliotech.conf
+php-fpm8.3 -t 2>&1 | tail -1
+systemctl reload php8.3-fpm
+# Đợi socket hiện ra trước khi nginx kiểm cấu hình, nếu không nginx -t vẫn qua
+# nhưng request đầu tiên nhận 502.
+for i in $(seq 1 10); do
+    [[ -S /run/php/php8.3-fpm-selliotech.sock ]] && break
+    sleep 1
+done
+[[ -S /run/php/php8.3-fpm-selliotech.sock ]] \
+    || chet "Không thấy socket php8.3-fpm-selliotech.sock. Xem: journalctl -u php8.3-fpm -n 30"
+xanh "  pool PHP-FPM riêng (user=selliotech) đã chạy"
 
 nginx -t
 xanh "  cấu hình nginx hợp lệ"

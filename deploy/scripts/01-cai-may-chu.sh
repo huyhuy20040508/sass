@@ -112,16 +112,24 @@ fi
 # ---------------------------------------------------------------------
 buoc "5/8  Giới hạn tải tệp của PHP"
 # ---------------------------------------------------------------------
-# Phải khớp client_max_body_size 12M bên nginx. Lệch nhau thì ảnh sát trần bị
-# chặn ở một trong hai tầng, và người bán chỉ nhận được lỗi trống trơn.
-cat > /etc/php/8.3/fpm/conf.d/99-selliotech.ini <<'INI'
-; Ảnh chụp bằng điện thoại thường 3–8MB; ImageStore nhận tới 10MB rồi mới thu nhỏ.
-upload_max_filesize = 10M
-post_max_size = 12M
-memory_limit = 256M
-max_execution_time = 120
-INI
-xanh "  đã ghi /etc/php/8.3/fpm/conf.d/99-selliotech.ini"
+# Giới hạn upload nay nằm trong POOL RIÊNG (deploy/php-fpm/selliotech.conf, do
+# script 02 cài), không nằm ở conf.d dùng chung nữa.
+#
+# Lý do: conf.d áp cho MỌI pool trên máy. Máy chủ có thể đang chạy dự án khác,
+# và đổi memory_limit hay max_execution_time của họ là việc mình không có quyền
+# quyết định — nhất là khi họ không hề biết có ai vừa cài gì lên.
+if [[ -f /etc/php/8.3/fpm/conf.d/99-selliotech.ini ]]; then
+    rm -f /etc/php/8.3/fpm/conf.d/99-selliotech.ini
+    vang "  đã gỡ conf.d/99-selliotech.ini của bản cũ (nay đặt trong pool riêng)"
+else
+    xanh "  không cần — giới hạn đặt trong pool riêng"
+fi
+
+# Nơi PHP để session của chính nó. Laravel dùng session tệp trong storage/ nên
+# gần như không đụng tới, nhưng thiếu thư mục thì bất kỳ thư viện nào gọi
+# session_start() cũng làm cả request chết.
+mkdir -p /var/lib/php/sessions
+chmod 1733 /var/lib/php/sessions
 
 # ---------------------------------------------------------------------
 buoc "6/8  Người dùng chạy ứng dụng"
