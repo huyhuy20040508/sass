@@ -56,7 +56,7 @@ if [[ "${SELLIO_REEXEC:-}" != "1" ]]; then
 fi
 
 # ---------------------------------------------------------------------
-buoc "1/9  Lấy mã nguồn"
+buoc "1/10  Lấy mã nguồn"
 # ---------------------------------------------------------------------
 if [[ ! -d "$APP_DIR/.git" ]]; then
     # $APP_DIR đã tồn tại từ script 01, mà `git clone` đòi thư mục trống. Nên
@@ -80,7 +80,7 @@ sudo -u "$APP_USER" git -C "$APP_DIR" reset --hard --quiet "origin/$BRANCH"
 xanh "  đang ở $(sudo -u "$APP_USER" git -C "$APP_DIR" rev-parse --short HEAD)"
 
 # ---------------------------------------------------------------------
-buoc "2/9  Kiểm tra cấu hình"
+buoc "2/10  Kiểm tra cấu hình"
 # ---------------------------------------------------------------------
 # Dừng SỚM ở đây thay vì để chạy tiếp rồi hỏng ở bước cuối: thiếu .env thì Go
 # API im lặng dùng toàn giá trị mặc định (database sai, JWT_SECRET rỗng) chứ
@@ -119,7 +119,7 @@ chmod 600 "$APP_DIR"/{api,admin,saas}/.env
 xanh "  api/.env, admin/.env, saas/.env: đủ và đã khoá quyền 600"
 
 # ---------------------------------------------------------------------
-buoc "3/9  Build Go API"
+buoc "3/10  Build Go API"
 # ---------------------------------------------------------------------
 # Build ra tên .new rồi mới đổi chỗ: nếu build hỏng, binary đang chạy vẫn nguyên
 # vẹn và trang web không chết trong lúc mình đi sửa lỗi.
@@ -142,7 +142,7 @@ gochay build -trimpath -ldflags="-s -w" -o api.new ./cmd/api
 xanh "  build xong ($(du -h api.new | cut -f1))"
 
 # ---------------------------------------------------------------------
-buoc "4/9  Lược đồ database"
+buoc "4/10  Lược đồ database"
 # ---------------------------------------------------------------------
 # Công cụ migrate đọc DB_* từ api/.env và đối chiếu với ../database/migrations.
 gochay run ./cmd/migrate chay -y
@@ -159,7 +159,7 @@ else
 fi
 
 # ---------------------------------------------------------------------
-buoc "5/9  Hai app Laravel"
+buoc "5/10  Hai app Laravel"
 # ---------------------------------------------------------------------
 for app in admin saas; do
     cd "$APP_DIR/$app"
@@ -200,7 +200,7 @@ cd "$APP_DIR/admin"
 xanh "  admin: đã có symlink public/storage"
 
 # ---------------------------------------------------------------------
-buoc "6/9  Quyền thư mục"
+buoc "6/10  Quyền thư mục"
 # ---------------------------------------------------------------------
 # PHP-FPM của Selliotech chạy dưới chính người dùng `selliotech` (pool riêng ở
 # bước 7), nên quyền của CHỦ SỞ HỮU là đủ để Laravel ghi vào storage/.
@@ -225,7 +225,7 @@ done
 xanh "  đã đặt quyền cho storage/ và bootstrap/cache"
 
 # ---------------------------------------------------------------------
-buoc "7/9  nginx + systemd"
+buoc "7/10  nginx + systemd"
 # ---------------------------------------------------------------------
 # Duyệt bằng TÊN MIỀN ĐẦY ĐỦ, không ghép "$site.selliotech.store": tên miền gốc
 # của trang giới thiệu không có phần đầu nào để ghép.
@@ -263,7 +263,50 @@ nginx -t
 xanh "  cấu hình nginx hợp lệ"
 
 # ---------------------------------------------------------------------
-buoc "8/9  Đổi binary và khởi động lại"
+buoc "8/10  Sao lưu tự động"
+# ---------------------------------------------------------------------
+# Chép script ra /usr/local/sbin chứ không để systemd gọi thẳng tệp trong
+# $APP_DIR. Bước 1 ở trên `git reset --hard` đè cả thư mục đó, và lịch sao lưu
+# thì không nên phụ thuộc vào tình trạng của chính thứ nó đang bảo vệ — kể cả
+# lúc ai đó lỡ tay xoá /var/www.
+install -m 700 "$APP_DIR/deploy/scripts/03-sao-luu.sh"  /usr/local/sbin/selliotech-sao-luu
+install -m 700 "$APP_DIR/deploy/scripts/04-phuc-hoi.sh" /usr/local/sbin/selliotech-phuc-hoi
+
+# Bản tin hiện lúc SSH vào máy. Máy chủ này không gắn email hay dịch vụ cảnh
+# báo nào, nên đây là chỗ duy nhất người quản trị chắc chắn nhìn thấy khi sao
+# lưu chết âm thầm.
+mkdir -p /etc/update-motd.d
+install -m 755 "$APP_DIR/deploy/motd/99-selliotech-sao-luu" /etc/update-motd.d/99-selliotech-sao-luu
+
+# Bản dump chứa mật khẩu băm, thông tin khách hàng và khoá cổng thanh toán.
+install -d -m 700 -o root -g root /var/backups/selliotech
+
+cp "$APP_DIR/deploy/systemd/selliotech-sao-luu.service" /etc/systemd/system/
+cp "$APP_DIR/deploy/systemd/selliotech-sao-luu.timer"   /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now selliotech-sao-luu.timer >/dev/null 2>&1 \
+    || chet "Không bật được selliotech-sao-luu.timer. Xem: systemctl status selliotech-sao-luu.timer"
+
+# Kiểm cú pháp OnCalendar ngay tại đây. Viết sai thì timer vẫn "enabled", vẫn
+# không báo lỗi gì, chỉ là không bao giờ tới giờ chạy — đúng kiểu hỏng mà sáu
+# tháng sau mới lộ, vào hôm cần phục hồi.
+LICH="$(sed -n 's/^OnCalendar=//p' "$APP_DIR/deploy/systemd/selliotech-sao-luu.timer" | head -1)"
+systemd-analyze calendar "$LICH" >/dev/null 2>&1 \
+    || chet "OnCalendar không hợp lệ trong selliotech-sao-luu.timer: $LICH"
+systemctl is-active --quiet selliotech-sao-luu.timer \
+    || chet "Timer sao lưu chưa chạy. Xem: systemctl status selliotech-sao-luu.timer"
+xanh "  timer đã bật — $(systemd-analyze calendar "$LICH" | sed -n 's/ *Next elapse: */lượt tới /p')"
+
+# Lần cài đầu thì chạy luôn một lượt. Khoảng trống 12 tiếng giữa lúc dựng xong
+# và bản sao lưu đầu tiên rơi đúng vào lúc người ta nghịch dữ liệu nhiều nhất.
+if [[ ! -f /var/backups/selliotech/TRANG-THAI.txt ]]; then
+    vang "  chưa có bản nào — chạy lượt đầu tiên ngay"
+    /usr/local/sbin/selliotech-sao-luu chay \
+        || vang "  lượt đầu thất bại. Xem: journalctl -u selliotech-sao-luu -n 50"
+fi
+
+# ---------------------------------------------------------------------
+buoc "9/10  Đổi binary và khởi động lại"
 # ---------------------------------------------------------------------
 mv "$APP_DIR/api/api.new" "$APP_DIR/api/api"
 chown "$APP_USER:$APP_USER" "$APP_DIR/api/api"
@@ -273,7 +316,7 @@ systemctl restart selliotech-api
 systemctl reload nginx
 
 # ---------------------------------------------------------------------
-buoc "9/9  Kiểm tra"
+buoc "10/10  Kiểm tra"
 # ---------------------------------------------------------------------
 # Đọc cổng từ .env chứ không ghi cứng: máy chủ có thể đã có dịch vụ khác giữ
 # cổng mặc định, và lúc đó kiểm nhầm cổng sẽ báo "API sống" trong khi thứ trả
@@ -318,4 +361,8 @@ Bật HTTPS (chỉ chạy được sau khi DNS đã trỏ về máy này):
         --redirect
 
 Sau khi có HTTPS, sửa lại 3 tệp .env cho đúng https:// rồi chạy lại script này.
+
+Sao lưu chạy mỗi 12 giờ, tự động:
+    sudo selliotech-sao-luu trang-thai      <- xem lượt gần nhất
+    sudo selliotech-phuc-hoi                <- xem có những bản nào
 HD

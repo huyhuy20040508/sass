@@ -1,0 +1,51 @@
+# Một lượt sao lưu. Không tự chạy — timer đi kèm gọi nó mỗi 12 giờ.
+#
+# Đặt tại: /etc/systemd/system/selliotech-sao-luu.service
+# Chạy tay: systemctl start selliotech-sao-luu
+# Xem log:  journalctl -u selliotech-sao-luu -n 50 --no-pager
+
+[Unit]
+Description=Selliotech — sao lưu database, ảnh và .env
+Documentation=https://github.com/huyhuy20040508/sass
+# mysql.service chứ không phải mysqld: Ubuntu đặt tên unit là mysql.
+After=mysql.service
+Wants=mysql.service
+
+[Service]
+Type=oneshot
+User=root
+
+# Gọi bản trong /usr/local/sbin, KHÔNG gọi thẳng tệp trong /var/www/selliotech.
+#
+# Sao lưu phải sống sót qua đúng những lúc thư mục ứng dụng có vấn đề: giữa
+# chừng một lượt `git reset --hard`, hoặc sau khi ai đó xoá nhầm /var/www. Đặt
+# script ở chỗ khác thì lịch sao lưu không phụ thuộc vào thứ nó đang bảo vệ.
+# Bước 8 của 02-trien-khai.sh chép tệp sang đây mỗi lần triển khai.
+ExecStart=/usr/local/sbin/selliotech-sao-luu chay
+
+# Nhường tài nguyên cho việc phục vụ khách. Sao lưu chậm hơn vài giây không ai
+# thấy; trang web giật vì sao lưu thì ai cũng thấy.
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+
+# Kho ảnh lớn dần theo năm tháng. Một giờ là rộng rãi, nhưng có giới hạn còn
+# hơn để một lượt treo vĩnh viễn rồi chặn mọi lượt sau bằng file lock.
+TimeoutStartSec=3600
+
+# Bản dump chứa mật khẩu băm và thông tin khách hàng — tệp tạo ra chỉ root đọc.
+UMask=0077
+
+# Rào chắn: /usr, /boot và /etc thành chỉ-đọc.
+#
+# Cố ý dùng `full` chứ không phải `strict`. `strict` khoá luôn /run thành
+# chỉ-đọc, mà mysql client nối tới MySQL qua socket trong /run/mysqld — siết
+# quá tay ở đây thì chính việc sao lưu chết, và nó chết vào 3 giờ sáng, im
+# lặng. Thứ đang bảo vệ dữ liệu thì ưu tiên chạy được trước, gọn sau.
+ProtectSystem=full
+ProtectHome=read-only
+NoNewPrivileges=true
+PrivateTmp=true
+
+StandardOutput=journal
+StandardError=journal

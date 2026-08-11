@@ -92,7 +92,7 @@ Mã nguồn chưa có trên máy. Chạy script triển khai một lần cho nó
 curl -fsSL -o 02-trien-khai.sh \
   https://raw.githubusercontent.com/huyhuy20040508/sass/main/deploy/scripts/02-trien-khai.sh
 
-sudo bash 02-trien-khai.sh     # sẽ dừng ở bước 2/9 và nhắc thiếu .env
+sudo bash 02-trien-khai.sh     # sẽ dừng ở bước 2/10 và nhắc thiếu .env
 ```
 
 Giờ tạo ba tệp:
@@ -120,7 +120,7 @@ cd /var/www/selliotech
 sudo bash deploy/scripts/02-trien-khai.sh
 ```
 
-Script làm: build Go API → nạp lược đồ database → `composer install --no-dev` cho hai app Laravel → cache config/route/view → đặt quyền thư mục → cài nginx + systemd → khởi động → gọi thử `/health`.
+Script làm: build Go API → nạp lược đồ database → `composer install --no-dev` cho hai app Laravel → cache config/route/view → đặt quyền thư mục → cài nginx + systemd → bật sao lưu tự động → khởi động → gọi thử `/health`.
 
 Lần đầu chạy, nó nạp `database/seed.sql` và in ra tài khoản quản trị đầu tiên.
 
@@ -198,6 +198,94 @@ Bản seed tạo tài khoản `admin@selliotech.local / Admin@123`. Chuỗi này
 
 ---
 
+## Sao lưu tự động
+
+Chạy **mỗi 12 giờ** (03:00 và 15:00 giờ máy chủ = 10:00 và 22:00 giờ Việt Nam), do systemd timer gọi. Không cần bật gì thêm: `02-trien-khai.sh` cài sẵn ở bước 8, và lần đầu cài nó chạy luôn một lượt.
+
+```bash
+sudo selliotech-sao-luu trang-thai   # lượt gần nhất lúc nào, thành công hay không
+sudo selliotech-sao-luu liet-ke      # đang giữ những bản nào
+sudo selliotech-sao-luu chay         # chạy một lượt ngay
+```
+
+Mỗi lần SSH vào máy, dòng đầu màn hình cho biết tình hình:
+
+```
+  Sao lưu: 2026-08-11-1500 (4 giờ trước), đang giữ 23 bản.
+```
+
+### Chép những gì
+
+Đúng ba thứ **không nằm trong git** — tức là mất là mất hẳn:
+
+| Chép | Vì sao |
+|---|---|
+| database `selliotech` | Toàn bộ dữ liệu bán hàng |
+| `admin/storage/app/public` | Ảnh người bán tải lên |
+| `api/.env`, `admin/.env`, `saas/.env` | `APP_KEY`, `JWT_SECRET`, `DB_PASSWORD`, khoá cổng thanh toán |
+
+Mã nguồn, cấu hình nginx, systemd đều có trong git nên không chép lại — kéo repo về là có. `.env` thì khác: `DB_PASSWORD` đặt lại được, `JWT_SECRET` sinh lại được (chỉ tốn việc mọi người đăng nhập lại), nhưng **`APP_KEY` thì không** — mất nó là mọi thứ Laravel đã mã hoá trong database thành rác, dù database còn nguyên từng byte.
+
+Mọi thứ nằm ở `/var/backups/selliotech/<năm-tháng-ngày-giờ>/`, quyền `700` của root: bản dump chứa mật khẩu băm và thông tin cá nhân khách hàng.
+
+### Giữ bao nhiêu
+
+Ba tầng chồng lên nhau, tổng khoảng **47 bản**:
+
+| Tầng | Cứu được gì |
+|---|---|
+| 14 bản gần nhất (7 ngày, đủ cả hai lượt/ngày) | Sai sót vừa gây ra sáng nay |
+| 1 bản/ngày, 30 ngày | Sai sót âm thầm cả tuần mới lộ |
+| 1 bản/tháng, 12 tháng | "Hoá ra bảng này hỏng từ tháng Ba" |
+
+Tầng cuối quan trọng hơn vẻ ngoài của nó: hỏng dữ liệu kiểu âm thầm thường chỉ bị phát hiện **sau khi** mọi bản ngắn hạn đã cuốn qua.
+
+Kho ảnh gần như không đổi giữa hai lượt, nên nếu dấu vân tay trùng bản trước thì bản mới **hardlink** vào cùng một tệp — có đủ ảnh nhưng không tốn thêm byte nào. Vì thế cột `ẢNH` trong `liet-ke` trùng dung lượng nhau là chuyện bình thường, không phải nhân đôi trên đĩa.
+
+### Phục hồi
+
+```bash
+sudo selliotech-phuc-hoi                              # xem có những bản nào
+sudo selliotech-phuc-hoi 2026-08-11-1500              # database + ảnh
+sudo selliotech-phuc-hoi 2026-08-11-1500 --chi-db     # chỉ database
+sudo selliotech-phuc-hoi 2026-08-11-1500 --ca-env     # kèm ba tệp .env
+```
+
+Nó dừng API trước khi ghi (nạp database trong lúc API vẫn đang ghi thì kết quả là hỗn hợp hai thời điểm — tệ hơn cả hai bản gốc), **chụp lại hiện trạng** vào `truoc-khi-phuc-hoi-*` rồi mới ghi đè, và đòi gõ đúng chữ `PHUC HOI` để xác nhận. Phục hồi nhầm bản thì quay lại được từ chỗ đó.
+
+Nếu bản sao lưu thuộc mã nguồn cũ hơn bản đang chạy, script nói ra sự lệch đó — lược đồ có thể đã đổi, chạy lại `02-trien-khai.sh` để migrate đưa về khớp.
+
+### Ba cách hỏng đã được chặn sẵn
+
+Sao lưu chỉ có giá trị vào đúng cái ngày cần nó, nên chỗ nào cũng phải giả định "hôm đó mới phát hiện thì đã muộn":
+
+- **Tệp sao lưu dở dang mà trông như bình thường.** Bản mới dựng trong thư mục `.dang-tao-*`, chỉ được mang tên thật sau khi qua ba lớp kiểm: `gzip -t`, có dòng `-- Dump completed` ở cuối (mysqldump chỉ viết dòng này khi chạy trót lọt), và số bảng trong dump khớp số bảng thật trong database.
+- **Có tệp nhưng không nạp lại được.** Mỗi tuần một lượt, script tự nạp bản mới nhất vào database tạm `selliotech_thu_phuc_hoi`, đối chiếu số bảng rồi xoá đi. Sai bộ ký tự hay câu lệnh cụt thì biết vào thứ Ba, còn sửa được.
+- **Hỏng âm thầm suốt sáu tháng.** Thất bại được ghi vào ba chỗ: journal của systemd, tệp `TRANG-THAI.txt`, và bản tin lúc SSH vào máy. Trễ quá 26 giờ là hiện chữ đỏ.
+
+Thêm hai chỗ nữa cố ý làm theo hướng "thà không có bản mới còn hơn mất bản cũ":
+
+- **Cạn đĩa.** Kiểm chỗ trống trước khi dump và luôn chừa lại 500MB. Không đủ chỗ thì dọn bản quá hạn, vẫn không đủ thì **dừng và giữ nguyên bản cũ** — sao lưu làm đầy đĩa là tự tay giết máy chủ (MySQL không ghi nổi, nginx không ghi nổi log), mà đổi bản cũ đang bảo vệ dữ liệu lấy một bản mới chưa chắc tạo nổi thì lỗ vốn.
+- **Dữ liệu teo đột ngột.** Bản mới nhỏ hơn 60% bản trước là hiện cảnh báo đỏ. Vẫn giữ bản đó (dữ liệu ít đi có thể là thật), nhưng im lặng thì vài vòng xoay nữa là mọi bản còn dữ liệu đều bị cuốn đi.
+
+Dump dùng `--single-transaction`, tức là chụp ảnh nhất quán mà **không khoá bảng** — khách vẫn đặt hàng bình thường trong lúc sao lưu chạy.
+
+### Lỗ còn lại: mất chính máy chủ
+
+Sao lưu nằm cùng máy cứu được gần hết tai nạn hay xảy ra thật — xoá nhầm, migrate hỏng, một lỗi trong code quét sạch một bảng. Nó **không** cứu được trường hợp mất chính máy chủ: đĩa chết, VPS bị xoá, tài khoản nhà cung cấp bị khoá. Lúc đó dữ liệu và bản sao lưu ra đi cùng nhau.
+
+Bịt bằng cách kéo về máy cá nhân — cũng không phụ thuộc dịch vụ nào, chỉ dùng `ssh` mà Windows đã có sẵn. Chạy trong **Git Bash trên máy bạn**, không phải trên máy chủ:
+
+```bash
+bash deploy/scripts/keo-ve-sao-luu.sh "D:/sao-luu-selliotech"
+```
+
+Mỗi tuần một lần là đủ. Lượt đầu tải cả kho ảnh; các lượt sau chỉ tải phần đổi (ảnh trùng dấu vân tay thì chép ngang từ bản đã có dưới đĩa), nên thường xong trong vài giây. Muốn tự động thì Task Scheduler của Windows — cú pháp ghi ở đầu tệp script.
+
+Chỗ để những tệp này chứa dữ liệu khách hàng và toàn bộ khoá bí mật của hệ thống. Đừng đặt vào thư mục đang đồng bộ lên dịch vụ chia sẻ nào.
+
+---
+
 ## Cập nhật về sau
 
 ```bash
@@ -237,6 +325,11 @@ sudo tail -50 /var/log/nginx/admin.selliotech.store.error.log
 
 # Laravel
 sudo tail -50 /var/www/selliotech/admin/storage/logs/laravel.log
+
+# Sao lưu
+sudo selliotech-sao-luu trang-thai
+sudo journalctl -u selliotech-sao-luu -n 50 --no-pager
+systemctl list-timers selliotech-sao-luu.timer
 ```
 
 | Triệu chứng | Nguyên nhân thường gặp |
@@ -247,6 +340,9 @@ sudo tail -50 /var/www/selliotech/admin/storage/logs/laravel.log
 | Chuông thông báo không tự cập nhật | `API_PUBLIC_URL` sai, hoặc nginx đang đệm `/api/v1/events` |
 | `go build` chết với "signal: killed" | Hết RAM — kiểm tra swap đã bật chưa (`free -m`) |
 | Ảnh tải lên báo lỗi 413 | `client_max_body_size` và `upload_max_filesize` lệch nhau |
+| SSH vào thấy chữ đỏ "SAO LƯU TRỄ" | Timer bị tắt hoặc máy vừa tắt lâu — `systemctl status selliotech-sao-luu.timer` |
+| Sao lưu báo "Không đủ chỗ" | Đĩa đầy. Bản cũ vẫn được giữ nguyên; dọn chỗ rồi `sudo selliotech-sao-luu chay` |
+| Sao lưu cảnh báo đỏ "chỉ bằng N% bản trước" | Dữ liệu vừa teo đột ngột — kiểm tra xem có ai xoá nhầm **trước khi** các bản cũ bị xoay vòng |
 
 ---
 
@@ -254,7 +350,7 @@ sudo tail -50 /var/www/selliotech/admin/storage/logs/laravel.log
 
 Nói trước để không tưởng nhầm là đã xong xuôi:
 
-- **Chưa sao lưu database.** Chưa có cron `mysqldump` nào cả. Đây là việc phải làm trước khi có dữ liệu thật của khách.
+- **Sao lưu mới ở mức máy chủ.** Bản chép nằm cùng đĩa với dữ liệu, nên mất cả máy là mất cả hai. Bịt bằng cách chạy `keo-ve-sao-luu.sh` hằng tuần (xem phần "Sao lưu tự động") — nhưng đó là việc chạy tay, không ai nhắc nếu bạn quên.
 - **Chưa multi-tenant.** Shop Admin trên máy chủ này phục vụ **một** cửa hàng. Bán phần mềm cho khách thứ hai thì phải dựng thêm bản mới, hoặc làm phần tách cửa hàng.
 - **SaaS Admin mới là khung** — đăng nhập và trang tổng quan, chưa quản lý được cửa hàng nào.
 - **Chưa có giám sát.** Máy chủ chết lúc 3 giờ sáng thì không ai biết cho tới khi có người mở trang.

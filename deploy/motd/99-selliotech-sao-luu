@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+#
+# Bản tin sao lưu, hiện mỗi lần SSH vào máy.
+#
+# Đặt tại: /etc/update-motd.d/99-selliotech-sao-luu  (chmod 755)
+#
+# Vì sao cần: sao lưu hỏng âm thầm là kiểu hỏng tệ nhất — nó vẫn "đang chạy"
+# suốt sáu tháng và chỉ lộ ra đúng hôm cần tới. Máy chủ này không gắn email
+# hay dịch vụ cảnh báo nào, nhưng người quản trị thì có SSH vào mỗi lần triển
+# khai. Vậy thì báo ngay ở đó.
+#
+# KHÔNG dùng `set -e`: đây là script chạy ở màn hình đăng nhập. Nó hỏng thì
+# phải im lặng bỏ qua, chứ không được làm bẩn màn hình hay chặn phiên đăng nhập.
+
+TT="/var/backups/selliotech/TRANG-THAI.txt"
+[ -r "$TT" ] || {
+    printf '\033[1;31m  SAO LƯU: chưa từng chạy lượt nào.\033[0m Chạy: sudo selliotech-sao-luu chay\n'
+    exit 0
+}
+
+ket_qua=$(sed -n 's/^KET_QUA=//p' "$TT" 2>/dev/null)
+ban=$(sed -n 's/^BAN=//p' "$TT" 2>/dev/null)
+soban=$(sed -n 's/^SO_BAN_DANG_GIU=//p' "$TT" 2>/dev/null)
+luc=$(stat -c %Y "$TT" 2>/dev/null || echo 0)
+gio=$(( ( $(date +%s) - luc ) / 3600 ))
+
+# Ngưỡng 26 giờ chứ không phải 12: timer lệch ngẫu nhiên tới 5 phút và có thể
+# chạy bù sau khi khởi động lại. Cảnh báo mỗi lần trễ vài phút thì chỉ vài tuần
+# là không ai đọc dòng này nữa.
+if [ "$ket_qua" = "THANH_CONG" ] && [ "$gio" -lt 26 ]; then
+    printf '\033[32m  Sao lưu: %s (%s giờ trước), đang giữ %s bản.\033[0m\n' \
+        "${ban:-?}" "$gio" "${soban:-?}"
+elif [ "$ket_qua" = "THANH_CONG" ]; then
+    printf '\033[1;31m  SAO LƯU TRỄ: lượt gần nhất %s giờ trước (đáng lẽ mỗi 12 giờ).\033[0m\n' "$gio"
+    printf '           systemctl list-timers selliotech-sao-luu.timer\n'
+else
+    printf '\033[1;31m  SAO LƯU THẤT BẠI (%s giờ trước): %s\033[0m\n' \
+        "$gio" "$(sed -n 's/^LY_DO=//p' "$TT" 2>/dev/null)"
+    printf '           journalctl -u selliotech-sao-luu -n 50 --no-pager\n'
+fi
+exit 0

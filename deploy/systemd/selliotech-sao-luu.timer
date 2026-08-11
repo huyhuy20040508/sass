@@ -1,0 +1,29 @@
+# Sao lưu mỗi nửa ngày.
+#
+# Đặt tại: /etc/systemd/system/selliotech-sao-luu.timer
+# Bật:     systemctl enable --now selliotech-sao-luu.timer
+# Kiểm:    systemctl list-timers selliotech-sao-luu.timer
+
+[Unit]
+Description=Sao lưu Selliotech mỗi 12 giờ
+
+[Timer]
+# Giờ MÁY CHỦ, mà máy chủ đang chạy UTC — tức là 10:00 và 22:00 giờ Việt Nam.
+# Muốn đổi thì sửa dòng này rồi chạy lại 02-trien-khai.sh; xem giờ hiện tại của
+# máy bằng `timedatectl`.
+OnCalendar=*-*-* 03,15:00:00
+
+# Máy chủ tắt hoặc khởi động lại đúng lúc tới giờ thì chạy bù ngay khi lên.
+# Thiếu dòng này, một lần reboot đúng 03:00 là mất trắng nửa ngày dữ liệu mà
+# không có gì báo — kiểu hụt lịch không ai để ý cho tới lúc cần phục hồi.
+Persistent=true
+
+# Lệch ngẫu nhiên tối đa 5 phút. Máy chủ này chạy chung với dự án khác; mọi
+# tác vụ nặng cùng nổ đúng giây 00:00 là lúc đĩa nghẽn nhất.
+RandomizedDelaySec=300
+AccuracySec=1min
+
+Unit=selliotech-sao-luu.service
+
+[Install]
+WantedBy=timers.target
