@@ -11,6 +11,16 @@
 
 Máy chủ: Ubuntu 24.04, đã có sẵn nginx 1.24.
 
+## Máy chủ này đang dùng chung với dự án khác
+
+VPS `103.78.2.230` còn chạy `thejerseylab.shop` và `jerseyhouse.id.vn` (thư mục `/var/www/football`, `/var/www/football-prod`). Bộ triển khai này cố ý **không đụng** vào chúng, và có ba chỗ được thiết kế riêng vì lý do đó:
+
+| Chỗ | Selliotech dùng | Vì sao |
+|---|---|---|
+| Cổng Go API | `8090` | 8080 và 8081 đã bị hai `football-api` chiếm. Đặt trùng thì systemd không lên nổi, mà nginx vẫn trả lời bằng ứng dụng của dự án kia — nhìn tưởng chạy, thực ra gọi nhầm chương trình |
+| PHP-FPM | Pool riêng `selliotech`, socket `php8.3-fpm-selliotech.sock` | Pool mặc định `www.conf` đã bị dự án cũ đổi sang chạy dưới người dùng `football`; mượn nó thì Laravel không ghi nổi `storage/` và mọi trang trả 500 **mà không để lại log nào** |
+| Giới hạn upload PHP | Đặt trong pool, không đặt ở `conf.d/` | `conf.d/` áp cho mọi pool, tức là sửa luôn cấu hình của dự án kia |
+
 ---
 
 ## Bước 1 — DNS ở Hostinger
