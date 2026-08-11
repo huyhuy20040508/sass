@@ -73,8 +73,12 @@ HD
     exit 1
 fi
 
-if grep -q '<' "$APP_DIR/api/.env"; then
-    chet "api/.env còn chỗ <...> chưa điền (DB_PASSWORD hoặc JWT_SECRET)."
+# Chỉ soi DÒNG KHAI BÁO, không soi comment: chính tệp mẫu có câu hướng dẫn
+# "điền hai chỗ <...>", quét cả comment thì lần triển khai nào cũng bị chặn.
+if grep -qE '^[A-Z_]+=.*<' "$APP_DIR/api/.env"; then
+    echo "  Dòng còn chỗ trống:"
+    grep -nE '^[A-Z_]+=.*<' "$APP_DIR/api/.env" | sed 's/=.*/= <chưa điền>/'
+    chet "api/.env còn chỗ <...> chưa điền."
 fi
 if ! grep -qE '^JWT_SECRET=.{16,}' "$APP_DIR/api/.env"; then
     chet "api/.env chưa có JWT_SECRET đủ dài. Sinh bằng: openssl rand -base64 48"
