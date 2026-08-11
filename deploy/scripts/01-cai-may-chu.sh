@@ -23,6 +23,11 @@ buoc() { printf '\n\033[1;36m==> %s\033[0m\n' "$*"; }
 
 [[ $EUID -eq 0 ]] || { echo "Phải chạy bằng root: sudo bash $0"; exit 1; }
 
+# Composer hỏi "Do not run as root — Continue [yes]?" và ĐỨNG CHỜ trả lời, kể
+# cả với lệnh vô hại như `composer --version`. Trong một script chạy tự động
+# thì đó là treo cứng giữa chừng. Biến này là cách chính thức để nói "biết rồi".
+export COMPOSER_ALLOW_SUPERUSER=1
+
 # ---------------------------------------------------------------------
 buoc "1/8  Gói hệ thống"
 # ---------------------------------------------------------------------
@@ -163,7 +168,8 @@ buoc "8/8  Tường lửa"
 ufw allow OpenSSH >/dev/null
 ufw allow 'Nginx Full' >/dev/null
 ufw --force enable >/dev/null
-xanh "  đang mở: $(ufw status | awk '/ALLOW/{printf "%s ", $1}')"
+# sort -u vì ufw liệt kê riêng luật IPv4 và IPv6, in thô ra sẽ thấy mỗi tên hai lần.
+xanh "  đang mở: $(ufw status | awk '/ALLOW/{print $1}' | sort -u | tr '\n' ' ')"
 
 systemctl enable --now php8.3-fpm nginx >/dev/null 2>&1 || true
 systemctl reload php8.3-fpm
