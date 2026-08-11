@@ -125,6 +125,96 @@ func TestVanTayDoiKhiNoiDungDoi(t *testing.T) {
 	}
 }
 
+func TestVanTaySQLBoQuaChuThich(t *testing.T) {
+	// Đây là cả lý do tồn tại của vanTaySQL: đổi tên dự án trong phần giải
+	// thích của một migration đã chạy không được coi là đổi lược đồ.
+	cu := "-- bảng của football-shop\nCREATE TABLE a (id INT);\n"
+	moi := "-- bảng của selliotech\nCREATE TABLE a (id INT);\n"
+
+	if vanTaySQL(cu) != vanTaySQL(moi) {
+		t.Fatal("đổi mỗi chú thích mà vân tay phần lệnh cũng đổi")
+	}
+	if vanTay(cu) == vanTay(moi) {
+		t.Fatal("vanTay phải vẫn thấy khác — nó băm cả tệp")
+	}
+}
+
+func TestVanTaySQLBoQuaThutLeVaChuThichKhoi(t *testing.T) {
+	goc := "CREATE TABLE a (id INT);\n"
+	sua := "/* giải thích\n   nhiều dòng */\n   CREATE   TABLE a (id INT);\n\n"
+
+	if vanTaySQL(goc) != vanTaySQL(sua) {
+		t.Fatal("thụt lề và chú thích khối làm đổi vân tay phần lệnh")
+	}
+}
+
+func TestVanTaySQLDoiKhiLenhDoi(t *testing.T) {
+	if vanTaySQL("ALTER TABLE a ADD b INT;") == vanTaySQL("ALTER TABLE a ADD c INT;") {
+		t.Fatal("đổi tên cột mà vân tay phần lệnh không đổi")
+	}
+}
+
+func TestSoPhanBietChuThichVoiLenhKhiLech(t *testing.T) {
+	ds, err := Doc(tepThu(map[string]string{
+		"0001_mot.sql": "-- ghi chú mới\nSELECT 1;",
+	}), "migrations")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Database lưu vân tay tệp cũ (chú thích khác) nhưng vân tay phần lệnh khớp.
+	tt := So(ds, []DaChay{{
+		Version: 1, Ten: "mot",
+		VanTay:    vanTay("-- ghi chú cũ\nSELECT 1;"),
+		VanTaySQL: ds[0].VanTaySQL,
+	}})
+
+	if len(tt.LechVanTay) != 1 {
+		t.Fatalf("phát hiện %d tệp lệch, muốn 1", len(tt.LechVanTay))
+	}
+	if !tt.LechVanTay[0].CoBangChung {
+		t.Error("dòng có van_tay_sql mà CoBangChung lại false")
+	}
+	if !tt.LechVanTay[0].ChiChuThich {
+		t.Error("chỉ chú thích đổi mà không nhận ra")
+	}
+}
+
+func TestSoBaoLenhDoiKhiPhanSQLKhac(t *testing.T) {
+	ds, err := Doc(tepThu(map[string]string{"0001_mot.sql": "SELECT 2;"}), "migrations")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tt := So(ds, []DaChay{{
+		Version: 1, Ten: "mot",
+		VanTay:    vanTay("SELECT 1;"),
+		VanTaySQL: vanTaySQL("SELECT 1;"),
+	}})
+
+	if tt.LechVanTay[0].ChiChuThich {
+		t.Fatal("phần lệnh đổi mà lại bảo chỉ chú thích — sua-van-tay sẽ giấu mất thay đổi lược đồ")
+	}
+}
+
+func TestSoKhongDoanBuaKhiThieuVanTaySQL(t *testing.T) {
+	// Dòng ghi từ trước khi có cột van_tay_sql: không có gì để đối chiếu, phải
+	// nói thẳng là không biết chứ đừng mặc định "chắc chỉ chú thích thôi".
+	ds, err := Doc(tepThu(map[string]string{"0001_mot.sql": "SELECT 1;"}), "migrations")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tt := So(ds, []DaChay{{Version: 1, Ten: "mot", VanTay: "van-tay-cu"}})
+
+	if tt.LechVanTay[0].CoBangChung {
+		t.Error("van_tay_sql rỗng mà vẫn báo có bằng chứng")
+	}
+	if tt.LechVanTay[0].ChiChuThich {
+		t.Error("không có bằng chứng mà dám kết luận chỉ chú thích đổi")
+	}
+}
+
 func TestSoTinhDungPhanConLai(t *testing.T) {
 	ds, err := Doc(tepThu(map[string]string{
 		"0001_mot.sql": "SELECT 1;",

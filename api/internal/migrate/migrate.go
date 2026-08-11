@@ -61,11 +61,12 @@ var cauLenhCam = []struct {
 
 // Migration là một tệp .sql đã đọc xong.
 type Migration struct {
-	Version int    // 1, 2, 3...
-	Ten     string // "nen-2026-08-10"
-	TepTin  string // "0001_nen-2026-08-10.sql"
-	SQL     string
-	VanTay  string // SHA-256 của SQL, dạng hex
+	Version   int    // 1, 2, 3...
+	Ten       string // "nen-2026-08-10"
+	TepTin    string // "0001_nen-2026-08-10.sql"
+	SQL       string
+	VanTay    string // SHA-256 toàn bộ nội dung tệp, dạng hex
+	VanTaySQL string // SHA-256 phần lệnh (đã bỏ chú thích), dạng hex
 }
 
 // DaChay là một dòng trong bảng schema_migrations.
@@ -75,6 +76,10 @@ type DaChay struct {
 	VanTay   string
 	ChayLuc  time.Time
 	MiliGiay int64
+
+	// VanTaySQL rỗng với các dòng ghi trước khi có cột van_tay_sql — nghĩa là
+	// không có bằng chứng để nói phần lệnh có đổi hay không.
+	VanTaySQL string
 }
 
 // TrangThai là kết quả so sánh giữa thư mục migrations và database.
@@ -91,6 +96,15 @@ type LechVanTay struct {
 	Ten       string
 	VanTayDB  string
 	VanTayTep string
+
+	// CoBangChung: dòng trong database có lưu vân tay phần lệnh, nên trả lời
+	// được chắc chắn câu "phần SQL có đổi không". Dòng ghi từ trước khi có cột
+	// van_tay_sql thì không, và lúc đó ChiChuThich không có ý nghĩa gì.
+	CoBangChung bool
+
+	// ChiChuThich: phần lệnh SQL y hệt lúc chạy, chỉ chú thích hoặc khoảng
+	// trắng đổi — lược đồ trong database vẫn đúng.
+	ChiChuThich bool
 }
 
 // Sach trả về true khi database khớp hoàn toàn với thư mục migrations.
@@ -148,11 +162,12 @@ func Doc(fsys fs.FS, thuMuc string) ([]Migration, error) {
 		}
 
 		ds = append(ds, Migration{
-			Version: version,
-			Ten:     khop[2],
-			TepTin:  ten,
-			SQL:     sqlText,
-			VanTay:  vanTay(sqlText),
+			Version:   version,
+			Ten:       khop[2],
+			TepTin:    ten,
+			SQL:       sqlText,
+			VanTay:    vanTay(sqlText),
+			VanTaySQL: vanTaySQL(sqlText),
 		})
 	}
 
@@ -223,6 +238,31 @@ func vanTay(s string) string {
 	return hex.EncodeToString(tong[:])
 }
 
+// vanTaySQL băm riêng PHẦN LỆNH của tệp: bỏ chú thích, bỏ khoảng trắng thừa.
+//
+// vanTay băm cả tệp nên sửa một dòng chú thích cũng bị báo lệch y như sửa lược
+// đồ, mà hai việc đó khác nhau một trời một vực: chú thích không đổi cái gì
+// trong database. Có thêm vân tay này thì `sua-van-tay` mới chứng minh được
+// "chỉ chú thích đổi thôi" thay vì bắt người dùng tự hứa.
+//
+// Vẫn KHÔNG dùng nó thay cho vanTay: tệp migration đã chạy thì mặc định là
+// không được đụng vào, kể cả chú thích — báo lệch rồi xác nhận là đúng quy trình.
+func vanTaySQL(s string) string {
+	s = strings.ReplaceAll(s, "\r\n", "\n")
+
+	var dong []string
+	for _, l := range strings.Split(boChuThich(s), "\n") {
+		// Gộp khoảng trắng: thụt lề lại cho đẹp không phải là đổi lược đồ.
+		if t := strings.Join(strings.Fields(l), " "); t != "" {
+			dong = append(dong, t)
+		}
+	}
+
+	tong := sha256.Sum256([]byte(strings.Join(dong, "\n")))
+
+	return hex.EncodeToString(tong[:])
+}
+
 // ---------------------------------------------------------------- database
 
 // DB là phần giao tiếp database mà gói này cần — để test thay bằng bản giả.
@@ -239,6 +279,7 @@ CREATE TABLE IF NOT EXISTS ` + TenBang + ` (
   version     INT UNSIGNED NOT NULL COMMENT 'số thứ tự trong tên tệp',
   ten         VARCHAR(191) NOT NULL COMMENT 'phần tên sau số thứ tự',
   van_tay     CHAR(64)     NOT NULL COMMENT 'SHA-256 nội dung tệp lúc chạy',
+  van_tay_sql CHAR(64)     NOT NULL DEFAULT '' COMMENT 'SHA-256 phần lệnh, đã bỏ chú thích',
   chay_luc    DATETIME(3)  NOT NULL,
   mili_giay   BIGINT       NOT NULL DEFAULT 0 COMMENT 'thời gian chạy tệp',
   PRIMARY KEY (version)
@@ -248,12 +289,31 @@ CREATE TABLE IF NOT EXISTS ` + TenBang + ` (
 		return fmt.Errorf("không tạo được bảng %s: %w", TenBang, err)
 	}
 
+	// van_tay_sql thêm vào sau, database dựng trước đó chỉ có 4 cột và
+	// CREATE TABLE IF NOT EXISTS ở trên im lặng bỏ qua. Bảng lịch sử migration
+	// thì không tự migrate được bằng chính công cụ này, nên vá tay ngay đây.
+	// MySQL không có ADD COLUMN IF NOT EXISTS nên phải hỏi information_schema.
+	var co int
+	if err := db.QueryRow(`
+SELECT COUNT(*) FROM information_schema.columns
+ WHERE table_schema = DATABASE() AND table_name = ? AND column_name = 'van_tay_sql'`,
+		TenBang).Scan(&co); err != nil {
+		return fmt.Errorf("không kiểm tra được cột van_tay_sql của %s: %w", TenBang, err)
+	}
+	if co == 0 {
+		if _, err := db.Exec(`ALTER TABLE ` + TenBang + `
+  ADD COLUMN van_tay_sql CHAR(64) NOT NULL DEFAULT '' COMMENT 'SHA-256 phần lệnh, đã bỏ chú thích'
+  AFTER van_tay`); err != nil {
+			return fmt.Errorf("không thêm được cột van_tay_sql vào %s: %w", TenBang, err)
+		}
+	}
+
 	return nil
 }
 
 // LayDaChay đọc lịch sử đã ghi trong database.
 func LayDaChay(db DB) ([]DaChay, error) {
-	rows, err := db.Query(`SELECT version, ten, van_tay, chay_luc, mili_giay FROM ` + TenBang + ` ORDER BY version`)
+	rows, err := db.Query(`SELECT version, ten, van_tay, van_tay_sql, chay_luc, mili_giay FROM ` + TenBang + ` ORDER BY version`)
 	if err != nil {
 		return nil, fmt.Errorf("không đọc được bảng %s: %w", TenBang, err)
 	}
@@ -262,7 +322,7 @@ func LayDaChay(db DB) ([]DaChay, error) {
 	var ds []DaChay
 	for rows.Next() {
 		var d DaChay
-		if err := rows.Scan(&d.Version, &d.Ten, &d.VanTay, &d.ChayLuc, &d.MiliGiay); err != nil {
+		if err := rows.Scan(&d.Version, &d.Ten, &d.VanTay, &d.VanTaySQL, &d.ChayLuc, &d.MiliGiay); err != nil {
 			return nil, err
 		}
 		ds = append(ds, d)
@@ -293,6 +353,8 @@ func So(ds []Migration, daChay []DaChay) TrangThai {
 			tt.LechVanTay = append(tt.LechVanTay, LechVanTay{
 				Version: m.Version, Ten: m.Ten,
 				VanTayDB: d.VanTay, VanTayTep: m.VanTay,
+				CoBangChung: d.VanTaySQL != "",
+				ChiChuThich: d.VanTaySQL != "" && d.VanTaySQL == m.VanTaySQL,
 			})
 		}
 	}
@@ -342,13 +404,36 @@ func Chay(db DB, conLai []Migration, batDau func(Migration), xong func(Migration
 // GhiDaChay ghi một dòng vào bảng lịch sử.
 func GhiDaChay(db DB, m Migration, trong time.Duration) error {
 	_, err := db.Exec(
-		`INSERT INTO `+TenBang+` (version, ten, van_tay, chay_luc, mili_giay) VALUES (?, ?, ?, ?, ?)`,
-		m.Version, m.Ten, m.VanTay, time.Now(), trong.Milliseconds())
+		`INSERT INTO `+TenBang+` (version, ten, van_tay, van_tay_sql, chay_luc, mili_giay) VALUES (?, ?, ?, ?, ?, ?)`,
+		m.Version, m.Ten, m.VanTay, m.VanTaySQL, time.Now(), trong.Milliseconds())
 	if err != nil {
 		return fmt.Errorf(
 			"tệp %s ĐÃ CHẠY XONG nhưng không ghi được vào bảng %s: %w\n"+
 				"        Phải ghi tay dòng này, không thì lần chạy sau sẽ chạy lại tệp đó",
 			m.TepTin, TenBang, err)
+	}
+
+	return nil
+}
+
+// CapNhatVanTay ghi đè vân tay đã lưu bằng vân tay của tệp hiện tại.
+//
+// KHÔNG chạy lại SQL, không đụng gì tới lược đồ — chỉ nói với công cụ "bản tệp
+// bây giờ chính là bản đã chạy". Vì thế nó chỉ đúng khi phần lệnh không đổi;
+// người gọi phải kiểm tra trước (xem LechVanTay.ChiChuThich).
+func CapNhatVanTay(db DB, m Migration) error {
+	ket, err := db.Exec(
+		`UPDATE `+TenBang+` SET van_tay = ?, van_tay_sql = ? WHERE version = ?`,
+		m.VanTay, m.VanTaySQL, m.Version)
+	if err != nil {
+		return fmt.Errorf("không cập nhật được vân tay của %s: %w", m.TepTin, err)
+	}
+
+	// Không có dòng nào khớp nghĩa là migration này chưa chạy — gọi nhầm chỗ,
+	// và im lặng thì người dùng tưởng đã sửa xong.
+	n, err := ket.RowsAffected()
+	if err == nil && n == 0 {
+		return fmt.Errorf("không có dòng nào cho version %d trong %s", m.Version, TenBang)
 	}
 
 	return nil

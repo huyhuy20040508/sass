@@ -7,6 +7,7 @@
 //	go run ./cmd/migrate                 # xem trạng thái (không đụng gì)
 //	go run ./cmd/migrate chay            # chạy các migration còn lại
 //	go run ./cmd/migrate danh-dau        # ghi "đã chạy" mà KHÔNG chạy (database cũ)
+//	go run ./cmd/migrate sua-van-tay     # tệp đã chạy chỉ đổi CHÚ THÍCH: ghi lại vân tay
 //	go run ./cmd/migrate tao-moi <tên>   # tạo tệp migration mới
 //	go run ./cmd/migrate van-tay         # in vân tay lược đồ để so hai môi trường
 //	go run ./cmd/migrate van-tay --ghi t.json     # ghi vân tay ra tệp
@@ -107,8 +108,10 @@ func chay(lenh string, args []string, thuMuc string, dongY, chiTiet bool, ghiRa 
 		return lenhChay(db, tt, dongY)
 	case "danh-dau":
 		return danhDau(db, tt, ds, dongY)
+	case "sua-van-tay":
+		return suaVanTay(db, tt, ds, dongY)
 	default:
-		return fmt.Errorf("lệnh %q không có. Các lệnh: trang-thai, chay, danh-dau, tao-moi, van-tay, so-sanh", lenh)
+		return fmt.Errorf("lệnh %q không có. Các lệnh: trang-thai, chay, danh-dau, sua-van-tay, tao-moi, van-tay, so-sanh", lenh)
 	}
 }
 
@@ -164,13 +167,34 @@ func inTrangThai(tt migrate.TrangThai, chiTiet bool) error {
 
 	if len(tt.LechVanTay) > 0 {
 		fmt.Println("\n  NỘI DUNG TỆP ĐÃ BỊ SỬA SAU KHI CHẠY:")
+
+		coChuThich, coKhongRo := false, false
 		for _, l := range tt.LechVanTay {
 			fmt.Printf("            %04d_%s\n", l.Version, l.Ten)
 			fmt.Printf("              lúc chạy : %s\n", l.VanTayDB[:16])
 			fmt.Printf("              tệp hiện : %s\n", l.VanTayTep[:16])
+
+			switch {
+			case l.ChiChuThich:
+				fmt.Println("              phần lệnh SQL: KHÔNG đổi, chỉ chú thích")
+				coChuThich = true
+			case !l.CoBangChung:
+				fmt.Println("              phần lệnh SQL: không rõ (dòng ghi trước khi có cột van_tay_sql)")
+				coKhongRo = true
+			default:
+				fmt.Println("              phần lệnh SQL: ĐÃ ĐỔI")
+			}
 		}
+
 		fmt.Println("  Database này đang giữ bản CŨ của tệp đó, còn máy chưa chạy sẽ nhận bản mới.")
-		fmt.Println("  Cách chữa: trả tệp về nguyên trạng và viết một migration MỚI cho phần muốn thêm.")
+		if coChuThich || coKhongRo {
+			// Chỉ chú thích đổi thì lược đồ vẫn đúng, bắt viết migration mới là
+			// vô nghĩa — chỉ cần ghi lại sổ.
+			fmt.Println("  Cách chữa: `migrate sua-van-tay` nếu chỉ chú thích đổi;")
+			fmt.Println("             trả tệp về nguyên trạng + viết migration MỚI nếu lệnh SQL đổi.")
+		} else {
+			fmt.Println("  Cách chữa: trả tệp về nguyên trạng và viết một migration MỚI cho phần muốn thêm.")
+		}
 	}
 
 	if len(tt.ThieuTep) > 0 {
@@ -246,6 +270,88 @@ func danhDau(db *sql.DB, tt migrate.TrangThai, ds []migrate.Migration, dongY boo
 	_ = ds
 	for _, m := range tt.ConLai {
 		if err := migrate.GhiDaChay(db, m, 0); err != nil {
+			return err
+		}
+		fmt.Printf("  ✓ %s\n", m.TepTin)
+	}
+
+	return nil
+}
+
+// suaVanTay ghi lại vân tay cho những tệp đã chạy mà nội dung bị sửa sau đó.
+//
+// Có đúng MỘT trường hợp làm việc này là hợp lệ: phần lệnh SQL y nguyên, chỉ
+// chú thích hoặc thụt lề đổi (đổi tên dự án, sửa lỗi chính tả trong phần giải
+// thích). Lược đồ trong database vẫn đúng, chỉ có sổ ghi chép là lạc hậu — mà
+// công cụ thì chặn cả `chay` lẫn deploy vì cái sổ đó.
+//
+// Sửa SQL thật thì vẫn phải viết migration MỚI: cập nhật vân tay không chạy
+// lệnh nào cả, database sẽ thiếu đúng phần vừa thêm mà công cụ lại báo sạch.
+func suaVanTay(db *sql.DB, tt migrate.TrangThai, ds []migrate.Migration, dongY bool) error {
+	if len(tt.LechVanTay) == 0 {
+		fmt.Println("  Không có vân tay nào lệch.")
+
+		return nil
+	}
+
+	theoVersion := map[int]migrate.Migration{}
+	for _, m := range ds {
+		theoVersion[m.Version] = m
+	}
+
+	// chuThich: chứng minh được là chỉ chú thích đổi.
+	// khongRo  : dòng ghi từ trước khi có cột van_tay_sql, không có gì để đối chiếu.
+	var chuThich, khongRo []migrate.Migration
+	for _, l := range tt.LechVanTay {
+		m, co := theoVersion[l.Version]
+		if !co {
+			continue
+		}
+
+		switch {
+		case l.ChiChuThich:
+			chuThich = append(chuThich, m)
+		case !l.CoBangChung:
+			khongRo = append(khongRo, m)
+		default:
+			// Có bằng chứng, và bằng chứng nói phần LỆNH đã đổi. Từ chối cả
+			// lượt: cập nhật vân tay ở đây là xoá dấu vết của một thay đổi lược
+			// đồ chưa từng chạy trên database này.
+			return fmt.Errorf(
+				"tệp %s bị sửa cả phần LỆNH SQL, không phải chỉ chú thích — không cập nhật vân tay.\n"+
+					"        Trả tệp về đúng bản đã chạy rồi viết migration mới cho phần muốn thêm:\n"+
+					"            go run ./cmd/migrate tao-moi <viec-can-lam>", m.TepTin)
+		}
+	}
+
+	if len(chuThich) > 0 {
+		fmt.Println("  CHỈ CHÚ THÍCH ĐỔI — phần lệnh SQL y hệt lúc chạy:")
+		for _, m := range chuThich {
+			fmt.Printf("    %s\n", m.TepTin)
+		}
+	}
+
+	if len(khongRo) > 0 {
+		fmt.Println("\n  KHÔNG KIỂM CHỨNG ĐƯỢC — dòng này ghi từ trước khi công cụ lưu vân tay")
+		fmt.Println("  riêng cho phần lệnh, nên không có gì để đối chiếu:")
+		for _, m := range khongRo {
+			fmt.Printf("    %s\n", m.TepTin)
+		}
+		fmt.Println("\n  Tự đối chiếu trước khi đồng ý, ví dụ:")
+		fmt.Println("      git log -p -- database/migrations/<tệp>")
+		fmt.Println("  Chỉ đồng ý khi thay đổi nằm hoàn toàn trong phần chú thích. Nếu có câu SQL")
+		fmt.Println("  nào đổi thì database này đang THIẾU thay đổi đó, và cập nhật vân tay sẽ")
+		fmt.Println("  giấu luôn việc thiếu.")
+	}
+
+	fmt.Println("\n  Việc này KHÔNG chạy lệnh SQL nào, chỉ ghi lại vân tay trong bảng lịch sử.")
+
+	if !dongY && !hoi("\n  Cập nhật vân tay?") {
+		return errors.New("đã huỷ")
+	}
+
+	for _, m := range append(chuThich, khongRo...) {
+		if err := migrate.CapNhatVanTay(db, m); err != nil {
 			return err
 		}
 		fmt.Printf("  ✓ %s\n", m.TepTin)
