@@ -195,7 +195,8 @@
 
 <aside id="jhSidebar" class="jh-sidebar">
     {{-- Brand — logo lấy từ Cài đặt → Cấu hình cửa hàng, dùng chung với website.
-         Gỡ ảnh đi thì quay về logo-default-wide-light.svg mặc định của giao diện quản trị.
+         Gỡ ảnh đi thì quay về logo-default-wide-light.svg (logo Sellio bản chữ sáng,
+         giống trang giới thiệu selliotech.store).
          Lưu ý nền sidebar là xanh đậm: logo chữ đen tải lên sẽ chìm, nên chọn ảnh
          nền trong suốt chữ sáng. --}}
     @php

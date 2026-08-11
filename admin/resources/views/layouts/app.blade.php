@@ -7,16 +7,17 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'Quản trị') — {{ app(\App\Services\ApiClient::class)->settingString('site_name', config('app.name')) }}</title>
     {{-- Favicon lấy từ Cài đặt → Cấu hình cửa hàng; gỡ ảnh đi thì quay về bộ mặc
-         định (monogram The Jersey Lab): .svg cho trình duyệt mới (tự đổi trắng khi
-         tab nền tối), .ico dự phòng, apple-touch-icon cho màn hình chính iOS. --}}
+         định Sellio (dùng chung với trang giới thiệu selliotech.store): .svg cho
+         trình duyệt mới, .ico dự phòng, apple-touch-icon cho màn hình chính iOS.
+         Nền tím đặc sẵn trong hình nên đọc được cả trên tab sáng lẫn tối. --}}
     @php $adminFavicon = app(\App\Services\ApiClient::class)->settingString('store_favicon'); @endphp
     @if($adminFavicon !== '')
         <link rel="icon" href="{{ $adminFavicon }}">
         <link rel="apple-touch-icon" href="{{ $adminFavicon }}">
     @else
-        <link rel="icon" href="{{ asset('favicon.ico') }}?v=2" sizes="32x32">
-        <link rel="icon" type="image/svg+xml" href="{{ asset('favicon.svg') }}?v=2">
-        <link rel="apple-touch-icon" href="{{ asset('apple-touch-icon.png') }}?v=2">
+        <link rel="icon" href="{{ asset('favicon.ico') }}?v=3" sizes="32x32">
+        <link rel="icon" type="image/svg+xml" href="{{ asset('favicon.svg') }}?v=3">
+        <link rel="apple-touch-icon" href="{{ asset('apple-touch-icon.png') }}?v=3">
     @endif
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">

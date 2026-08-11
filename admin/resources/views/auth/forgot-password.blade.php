@@ -4,11 +4,11 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Quên mật khẩu — {{ config('app.name') }}</title>
-    {{-- Favicon mặc định (monogram The Jersey Lab): .svg cho trình duyệt mới,
-         .ico dự phòng, apple-touch-icon cho màn hình chính iOS. --}}
-    <link rel="icon" href="{{ asset('favicon.ico') }}?v=2" sizes="32x32">
-    <link rel="icon" type="image/svg+xml" href="{{ asset('favicon.svg') }}?v=2">
-    <link rel="apple-touch-icon" href="{{ asset('apple-touch-icon.png') }}?v=2">
+    {{-- Favicon Sellio (dùng chung với trang giới thiệu selliotech.store): .svg cho
+         trình duyệt mới, .ico dự phòng, apple-touch-icon cho màn hình chính iOS. --}}
+    <link rel="icon" href="{{ asset('favicon.ico') }}?v=3" sizes="32x32">
+    <link rel="icon" type="image/svg+xml" href="{{ asset('favicon.svg') }}?v=3">
+    <link rel="apple-touch-icon" href="{{ asset('apple-touch-icon.png') }}?v=3">
 
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -53,7 +53,7 @@
         </div>
 
         <div class="small text-muted mb-3">
-            <i class="bi bi-envelope me-1"></i> Hỗ trợ: <a href="mailto:support@jerseyhouse.local">support@jerseyhouse.local</a>
+            <i class="bi bi-envelope me-1"></i> Hỗ trợ: <a href="mailto:hello@selliotech.store">hello@selliotech.store</a>
         </div>
 
         <a href="{{ route('login') }}" class="btn btn-outline-secondary w-100">
