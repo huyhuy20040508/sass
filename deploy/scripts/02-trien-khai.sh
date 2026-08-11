@@ -229,20 +229,26 @@ systemctl reload nginx
 # ---------------------------------------------------------------------
 buoc "9/9  Kiểm tra"
 # ---------------------------------------------------------------------
+# Đọc cổng từ .env chứ không ghi cứng: máy chủ có thể đã có dịch vụ khác giữ
+# cổng mặc định, và lúc đó kiểm nhầm cổng sẽ báo "API sống" trong khi thứ trả
+# lời là ứng dụng của người khác.
+PORT="$(grep -E '^APP_PORT=' "$APP_DIR/api/.env" | cut -d= -f2- | tr -d '[:space:]')"
+PORT="${PORT:-8080}"
+
 # Đợi API nghe cổng — kiểm ngay lập tức thì lần nào cũng trượt.
 for i in $(seq 1 20); do
-    if curl -fsS --max-time 2 http://127.0.0.1:8080/api/v1/health >/dev/null 2>&1; then
+    if curl -fsS --max-time 2 "http://127.0.0.1:$PORT/api/v1/health" >/dev/null 2>&1; then
         break
     fi
     sleep 1
 done
 
-if curl -fsS --max-time 3 http://127.0.0.1:8080/api/v1/health; then
+if curl -fsS --max-time 3 "http://127.0.0.1:$PORT/api/v1/health"; then
     printf '\n'
     xanh "  API sống"
 else
     printf '\n'
-    vang "  API KHÔNG trả lời. Xem log: journalctl -u selliotech-api -n 50 --no-pager"
+    vang "  API KHÔNG trả lời ở cổng $PORT. Xem log: journalctl -u selliotech-api -n 50 --no-pager"
     exit 1
 fi
 
