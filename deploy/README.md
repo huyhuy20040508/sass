@@ -27,24 +27,26 @@ VPS `103.78.2.230` còn chạy `thejerseylab.shop` và `jerseyhouse.id.vn` (thư
 
 ## Bước 1 — DNS ở Hostinger
 
-Vào **hPanel → Domains → selliotech.store → DNS / Nameservers → DNS Zone Editor**, để **5 bản ghi A** cùng trỏ về VPS:
+Zone nằm ở Hostinger (nameserver `atlas.dns-parking.com` / `hyperion.dns-parking.com`), nên sửa trong **hPanel → Domains → selliotech.store → DNS / Nameservers → DNS Zone Editor**.
+
+Đích cần đạt:
 
 | Type | Name | Points to | TTL |
 |---|---|---|---|
 | A | `@` | `103.78.2.230` | 300 |
-| A | `www` | `103.78.2.230` | 300 |
+| CNAME | `www` | `selliotech.store` | *(để nguyên)* |
 | A | `api` | `103.78.2.230` | 300 |
 | A | `admin` | `103.78.2.230` | 300 |
 | A | `app` | `103.78.2.230` | 300 |
 
+**`www` không cần bản ghi A.** Hostinger dựng sẵn nó thành CNAME trỏ về `selliotech.store`, tức là nó bám theo `@` — sửa `@` xong thì `www` tự đi theo. Cũng đừng đổi nó thành A: một Name không thể vừa có CNAME vừa có A, và giữ CNAME thì sau này đổi địa chỉ máy chủ chỉ phải sửa một chỗ.
+
 Bốn điều dễ vấp:
 
 - **Ô Name chỉ điền `api`, không điền `api.selliotech.store`.** Hostinger tự nối phần đuôi; điền cả tên đầy đủ sẽ thành `api.selliotech.store.selliotech.store`.
-- **Kiểm tra xem zone có bản ghi `*` (wildcard) không.** Nếu có, nó tóm luôn mọi subdomain và trỏ về trang park, các bản ghi vừa thêm thành vô nghĩa. Có thì xoá đi.
-- **`@` và `www` đang trỏ về Hostinger (`2.57.91.91`) — phải SỬA lại thành `103.78.2.230`.** Hostinger dựng sẵn hai bản ghi này khi mua tên miền; thêm bản ghi thứ hai cho cùng một Name sẽ thành hai địa chỉ luân phiên, tức là cứ hai lần vào thì một lần rơi vào trang park cũ. Sửa bản ghi có sẵn, đừng thêm mới.
-- **`www` ở một số zone là CNAME chứ không phải A.** Nếu vậy thì xoá CNAME đi rồi tạo bản ghi A — một Name không thể vừa có CNAME vừa có A.
-
-Bản ghi `MX` và `TXT` cứ để nguyên: đổi `@` sang địa chỉ khác không đụng gì tới email của tên miền.
+- **`@` mặc định trỏ về Hostinger (`2.57.91.91`) — phải SỬA dòng có sẵn, đừng bấm Add Record.** Thêm bản ghi A thứ hai cho cùng một Name làm DNS trả về luân phiên hai địa chỉ: cứ vài lần vào thì một lần rơi lại trang park, triệu chứng rất khó lần ra nguyên nhân.
+- **Kiểm tra xem zone có bản ghi `*` (wildcard) không.** Nếu có, nó tóm luôn mọi subdomain và trỏ về trang park, các bản ghi kia thành vô nghĩa. Có thì xoá đi. Kiểm bằng cách tra một tên bịa: `nslookup khong-ton-tai.selliotech.store 8.8.8.8` phải báo không tìm thấy.
+- **Nếu sau này gắn email cho tên miền**, bản ghi `MX` và `TXT` không liên quan gì tới `@`: đổi địa chỉ A của `@` không làm hỏng email.
 
 TTL 300 giây là cố ý: đang lúc dựng, sai thì sửa lại thấy hiệu lực sau 5 phút thay vì phải chờ 4 tiếng. Xong xuôi nâng lên 14400 cũng được.
 
