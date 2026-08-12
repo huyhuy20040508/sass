@@ -43,6 +43,9 @@ type AuthService interface {
 	Login(ctx context.Context, req dto.LoginRequest) (*dto.AuthResponse, error)
 	// LoginShop là đăng nhập 3 ô của Shop Admin: mã cửa hàng + tên đăng nhập + mật khẩu.
 	LoginShop(ctx context.Context, req dto.ShopLoginRequest) (*dto.AuthResponse, error)
+	// LoginPlatform là đăng nhập của khu điều hành nền tảng: email + mật khẩu,
+	// chỉ nhận super_admin và không cần biết trước cửa hàng nào.
+	LoginPlatform(ctx context.Context, req dto.LoginRequest) (*dto.AuthResponse, error)
 	ForgotPassword(ctx context.Context, req dto.ForgotPasswordRequest) (*dto.RegisterResponse, error)
 	ResetPassword(ctx context.Context, req dto.ResetPasswordRequest) error
 	LoginWithFacebook(ctx context.Context, req dto.FacebookLoginRequest) (*dto.AuthResponse, error)
@@ -566,6 +569,61 @@ func (s *authService) LoginShop(ctx context.Context, req dto.ShopLoginRequest) (
 	res.Tenant = shop
 
 	return res, nil
+}
+
+// LoginPlatform là đăng nhập của KHU ĐIỀU HÀNH NỀN TẢNG (SaaS Console).
+//
+// VÌ SAO PHẢI CÓ ĐƯỜNG RIÊNG: Login (email) tra người dùng qua repo users, mà
+// repo đó bị plugin GORM chèn `WHERE tenant_id` — nên nó chỉ chạy được khi ĐÃ
+// biết cửa hàng, từ token hoặc từ tên miền. Người điều hành nền tảng thì không
+// đứng ở cửa hàng nào: họ đăng nhập để nhìn tất cả. Ép họ đi đường cũ nghĩa là
+// phải cấp cho khu điều hành một tên miền trỏ về một cửa hàng nào đó — dựng một
+// lời nói dối ngay tại chốt xác thực, và từ đó mọi thứ phía sau đều lệch.
+//
+// ĐỔI LẠI, đây là đường DUY NHẤT của luồng đăng nhập tắt bộ lọc tenant, nên nó
+// là bề mặt cần canh chừng nhất trong tệp này. Ba ràng buộc giữ nó không thành
+// cửa sau:
+//
+//  1. ĐÚNG MỘT câu truy vấn chạy không lọc — tra tài khoản theo email. Mọi thứ
+//     sau đó làm trên bản ghi đã đọc được, không mở thêm câu nào.
+//  2. VAI TRÒ XÉT SAU MẬT KHẨU, và cả ba kiểu hỏng (không có email, sai mật
+//     khẩu, không phải super_admin) trả về CÙNG một lỗi. Người gõ email chủ shop
+//     vào đây không được biết mình vừa gõ trúng một email có thật.
+//  3. Token phát ra vẫn mang tenant_id của chính tài khoản đó, không phải một
+//     tấm vé "xem được mọi cửa hàng". Ngày mở nhóm /platform/*, quyền xem xuyên
+//     cửa hàng phải do nhóm đó tự xét theo vai trò, chứ không phải do token này
+//     rộng sẵn.
+func (s *authService) LoginPlatform(ctx context.Context, req dto.LoginRequest) (*dto.AuthResponse, error) {
+	ctxTim := tenant.WithoutScope(ctx,
+		"đăng nhập khu điều hành nền tảng: tra super_admin theo email khi chưa biết cửa hàng nào")
+
+	user, err := s.users.FindByEmail(ctxTim, normalizeEmail(req.Email))
+	if err != nil {
+		if err == domain.ErrNotFound {
+			return nil, domain.ErrInvalidCredentials
+		}
+		return nil, err
+	}
+	if !hash.Check(req.Password, user.PasswordHash) {
+		return nil, domain.ErrInvalidCredentials
+	}
+	if user.Role == nil || user.Role.Name != domain.RoleSuperAdmin {
+		return nil, domain.ErrInvalidCredentials
+	}
+	// Trạng thái xét sau cùng, giống LoginShop: câu "tài khoản đang không hoạt
+	// động" chỉ dành cho người đã chứng minh được mình là chủ tài khoản.
+	if user.Status != "active" {
+		return nil, domain.ErrUserInactive
+	}
+
+	// Ghi lần đăng nhập cuối vẫn phải đi bằng ctx không lọc: bản ghi vừa đọc ra
+	// thuộc cửa hàng nào thì lúc này mới biết, và câu UPDATE của repo tìm theo
+	// khoá chính của chính bản ghi đó.
+	now := time.Now()
+	user.LastLoginAt = &now
+	_ = s.users.Update(ctxTim, user)
+
+	return s.buildAuthResponse(ctx, user)
 }
 
 // normalizeShopCode chuẩn hoá mã cửa hàng người dùng gõ.

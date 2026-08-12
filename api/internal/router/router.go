@@ -150,6 +150,17 @@ func New(cfg *config.Config, jwtMgr *jwt.Manager, tenMien domain.TenantDomainRep
 			// dò mật khẩu nhân viên sẽ đồng thời khoá luôn đường đăng nhập của khách
 			// mua hàng — hai nhóm người không liên quan gì tới nhau.
 			auth.POST("/shop-login", han("dang-nhap-cua-hang", 10, 5*time.Minute), h.Auth.ShopLogin)
+			// Đăng nhập KHU ĐIỀU HÀNH NỀN TẢNG (email + mật khẩu, chỉ super_admin).
+			//
+			// KHÔNG bọc khachLa, và đó là toàn bộ lý do đường này tồn tại: người điều
+			// hành nền tảng không đứng ở cửa hàng nào, nên bắt request phải xác định
+			// được cửa hàng là bắt họ giả làm khách của một tiệm. Phần tra tài khoản
+			// tự tắt bộ lọc tenant trong đúng một câu truy vấn — xem
+			// AuthService.LoginPlatform, đọc nó trước khi sửa gì ở dòng này.
+			//
+			// Hạn mức RIÊNG, cùng lý do với /auth/shop-login: gộp khoá với đường của
+			// khách mua hàng thì một máy dò mật khẩu quản trị sẽ khoá luôn cửa hàng.
+			auth.POST("/platform-login", han("dang-nhap-nen-tang", 10, 5*time.Minute), h.Auth.PlatformLogin)
 			// Rộng tay hơn hẳn: access token sống 15 phút, khách mở nhiều tab thì
 			// mỗi tab tự làm mới một lượt — siết chỗ này là đá văng người đang mua hàng.
 			auth.POST("/refresh", han("lam-moi-token", 60, 5*time.Minute), h.Auth.Refresh)

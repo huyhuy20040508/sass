@@ -212,6 +212,22 @@ func (h *AuthHandler) ShopLogin(c *gin.Context) {
 	response.OKMessage(c, "Đăng nhập thành công", res)
 }
 
+// PlatformLogin — đăng nhập khu điều hành nền tảng (email + mật khẩu, chỉ
+// super_admin). Dùng lại LoginRequest vì hai ô y hệt đăng nhập bằng email; cái
+// khác nằm ở service, xem AuthService.LoginPlatform.
+func (h *AuthHandler) PlatformLogin(c *gin.Context) {
+	var req dto.LoginRequest
+	if !bindJSON(c, &req) {
+		return
+	}
+	res, err := h.svc.LoginPlatform(c.Request.Context(), req)
+	if err != nil {
+		handleServiceError(c, err)
+		return
+	}
+	response.OKMessage(c, "Đăng nhập thành công", res)
+}
+
 // FacebookLogin godoc
 //
 //	@Summary		Đăng nhập bằng Facebook

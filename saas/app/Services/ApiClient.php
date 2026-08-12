@@ -141,9 +141,17 @@ class ApiClient
     // ---------- Auth ----------
 
     /** Đăng nhập, trả về Response thô để controller xử lý. */
+    /**
+     * Đăng nhập khu điều hành nền tảng.
+     *
+     * Đi đường /auth/platform-login chứ KHÔNG phải /auth/login: đường kia dành
+     * cho khách mua sắm nên nó bắt buộc phải biết đang đứng ở cửa hàng nào (lấy
+     * theo tên miền), mà khu điều hành thì không thuộc cửa hàng nào — gọi vào đó
+     * chỉ nhận về 401 "Chưa xác định được cửa hàng cho yêu cầu này".
+     */
     public function login(string $email, string $password): Response
     {
-        return $this->request(false)->post('/auth/login', [
+        return $this->request(false)->post('/auth/platform-login', [
             'email' => $email,
             'password' => $password,
         ]);
