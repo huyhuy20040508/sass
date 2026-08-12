@@ -518,11 +518,39 @@ p("Vì sao thiếu: ba tệp migration `0002_apps`, `0003_plans` và `0004_ten-m
   "Script `deploy/scripts/02-trien-khai.sh` tự chạy migration cho CẢ HAI lược đồ, nên lần deploy tới chúng lên cùng — không phải làm gì thêm bằng tay.")
 
 h2("Cách tự kiểm chứng hai máy có khớp nhau không")
-p("Đừng đếm bảng bằng mắt trong DBeaver — dùng vân tay lược đồ:")
-rich([("cd api && go run ./cmd/migrate -nen-tang van-tay --ghi local.json", False, True)], sau=2)
-rich([("ssh football-prod \"cd /var/www/selliotech/api && go run ./cmd/migrate -nen-tang van-tay\"", False, True)], sau=6)
-p("Hai chuỗi vân tay giống nhau là lược đồ y hệt. Khác thì `go run ./cmd/migrate -nen-tang so-sanh local.json` chỉ ra khác ở đúng chỗ nào. "
-  "Bỏ cờ `-nen-tang` để làm điều tương tự với data plane.")
+
+khung("VÂN TAY LƯỢC ĐỒ KHÔNG SO ĐƯỢC GIỮA HAI MÁY NÀY.",
+      "Máy cục bộ chạy MariaDB 10.4 (XAMPP), máy thật chạy MySQL 8.0. Hai engine mô tả CÙNG một lược đồ bằng chữ khác nhau, "
+      "nên `van-tay` luôn ra hai chuỗi khác — và đó KHÔNG phải dấu hiệu database lệch.", mau=DO)
+
+p("Ba khác biệt đã kiểm chứng ngày 12/08/2026, đều là cách viết chứ không phải lược đồ:")
+bang(
+    ["Thứ", "MariaDB 10.4 (cục bộ)", "MySQL 8.0 (máy thật)"],
+    [
+        ["Kiểu số nguyên", "`bigint(20) unsigned`", "`bigint unsigned` (MySQL 8 bỏ độ rộng hiển thị)"],
+        ["Mặc định NULL", "chuỗi `NULL`", "NULL thật"],
+        ["Mặc định chuỗi", "`'planned'` (có nháy)", "`planned` (không nháy)"],
+    ],
+    rong=[1.5, 2.3, 2.7],
+)
+p("`van-tay` / `so-sanh` vẫn đúng và vẫn nên dùng — nhưng chỉ giữa hai máy CÙNG engine "
+  "(máy thử và máy thật, cả hai MySQL 8), hoặc để so cùng một máy trước và sau khi chạy migration.")
+
+p("Giữa MariaDB và MySQL thì kiểm bằng hai câu này:", dam=True, truoc=6)
+p("1. Số migration đã chạy — rẻ nhất, trả lời đúng câu “máy thật có thiếu migration nào không”:", sau=2)
+rich([("SELECT MAX(version) FROM schema_migrations;   -- chạy ở cả hai máy, cả hai lược đồ", False, True)], sau=6)
+p("2. So thẳng danh sách cột khi nghi ngờ có lệch thật:", sau=2)
+rich([("SELECT table_name, column_name, is_nullable FROM information_schema.columns", False, True)], sau=0)
+rich([("  WHERE table_schema = 'selliotech_platform' ORDER BY table_name, ordinal_position;", False, True)], sau=6)
+p("Bỏ cột `column_type` ra khỏi câu so — chính nó là chỗ hai engine viết khác nhau. "
+  "Thứ tự dòng cũng có thể lệch (`tenant_domains` và `tenants` sắp xếp khác nhau ở hai engine), nên sắp lại trước khi so.")
+
+h2("Chạy công cụ Go trên máy thật")
+p("`go run` bằng tài khoản root trên VPS sẽ đi tải lại toàn bộ thư viện và thường hỏng giữa chừng. "
+  "Dùng đúng môi trường mà script triển khai dùng — cùng cache, cùng tài khoản:")
+rich([("cd /var/www/selliotech/api && sudo -u selliotech env HOME=/var/www/selliotech \\", False, True)], sau=0)
+rich([("  PATH=/usr/local/go/bin:$PATH GOCACHE=/var/cache/selliotech/go-build \\", False, True)], sau=0)
+rich([("  GOMODCACHE=/var/cache/selliotech/go-mod /usr/local/go/bin/go run ./cmd/ten-mien danh-sach", False, True)], sau=6)
 
 # ---------------------------------------------------------------- 6
 h1("6. Quy tắc khi đụng vào database")
