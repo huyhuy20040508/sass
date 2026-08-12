@@ -122,7 +122,9 @@ sudo bash deploy/scripts/02-trien-khai.sh
 
 Script làm: build Go API → nạp lược đồ database → `composer install --no-dev` cho hai app Laravel → cache config/route/view → đặt quyền thư mục → cài nginx + systemd → bật sao lưu tự động → khởi động → gọi thử `/health`.
 
-Lần đầu chạy, nó nạp `database/seed.sql` và in ra tài khoản quản trị đầu tiên.
+Script **không** tạo tài khoản quản trị: mật khẩu nằm trong tệp `.sh` của repo thì
+ai đọc repo cũng có. Nó chỉ đếm số tài khoản nội bộ, và khi database còn trắng thì
+in ra hướng dẫn chạy `selliotech-tao-admin` ở bước dưới.
 
 Trang giới thiệu không cần bước build nào: nó là HTML tĩnh nằm sẵn trong `landing/`, script chỉ đặt tệp nginx và bước đặt quyền lo phần còn lại.
 
@@ -192,13 +194,34 @@ curl -N -m 5 https://api.selliotech.store/api/v1/events
 
 ---
 
-## Sau khi lên xong: đổi mật khẩu
+## Sau khi lên xong: tạo tài khoản quản trị
 
-Bản seed tạo tài khoản `admin@selliotech.local / Admin@123`. Chuỗi này nằm công khai trong repo.
+Database mới lên là trắng — không có vai trò, không có cửa hàng, không có tài khoản
+nào. `database/seed.sql` **không** tạo gì nữa (toàn bộ câu lệnh trong tệp đã bị
+comment), nên đừng nạp nó rồi chờ có tài khoản.
 
-1. Đăng nhập `https://app.selliotech.store` bằng tài khoản đó.
-2. Vào **Shop Admin → Người dùng** tạo tài khoản thật của bạn (`super_admin` cho khu điều hành, `admin` cho khu bán hàng).
-3. Khoá hoặc xoá tài khoản seed.
+```bash
+sudo selliotech-tao-admin
+```
+
+Lệnh hỏi lần lượt đúng ba ô của màn hình đăng nhập rồi dựng đủ bộ: bốn vai trò RBAC
+(nếu bảng `roles` còn trống), cửa hàng trong bảng `tenants` kèm một chi nhánh mặc
+định, và tài khoản `super_admin` với mật khẩu đã băm bcrypt.
+
+| Ô | Là gì | Ví dụ |
+|---|---|---|
+| Mã cửa hàng | `tenants.code` — chuỗi mình cấp cho khách, KHÔNG phải mã chi nhánh | `quochuy` |
+| Tên đăng nhập | duy nhất trong một cửa hàng, nên shop nào cũng có `admin` của riêng mình | `admin` |
+| Mật khẩu | tối thiểu 6 ký tự | |
+
+Truyền thẳng nếu không muốn mật khẩu hiện lên màn hình lúc gõ:
+
+```bash
+sudo selliotech-tao-admin --ma-cua-hang quochuy --ten-dang-nhap admin --mat-khau '<mật khẩu>'
+```
+
+Mất mật khẩu quản trị về sau: chạy lại đúng lệnh đó kèm `--doi-mat-khau` — nó đặt
+mật khẩu mới và mở khoá tài khoản, không tạo thêm dòng nào.
 
 **Đừng dùng mật khẩu `12345678` như ở máy cá nhân.** Trên máy thật nó nằm trong mọi danh sách dò mật khẩu, và hạn mức đăng nhập (10 lượt/5 phút) chỉ làm chậm chứ không chặn được.
 
@@ -343,6 +366,7 @@ systemctl list-timers selliotech-sao-luu.timer
 | Trang trắng / lỗi 500 ở Laravel | `storage/` không ghi được — chạy lại bước 6 của `02-trien-khai.sh` |
 | Sửa `.env` mà không thấy đổi gì | Cache config còn giữ giá trị cũ — chạy lại `02-trien-khai.sh` |
 | Đăng nhập được rồi bật ra ngay | `SESSION_SECURE_COOKIE=true` nhưng đang vào bằng `http://` |
+| Đăng nhập báo sai mã cửa hàng / tên đăng nhập | Chưa tạo tài khoản, hoặc gõ nhầm mã — `sudo selliotech-tao-admin` để tạo, kèm `--doi-mat-khau` để đặt lại mật khẩu |
 | Chuông thông báo không tự cập nhật | `API_PUBLIC_URL` sai, hoặc nginx đang đệm `/api/v1/events` |
 | `go build` chết với "signal: killed" | Hết RAM — kiểm tra swap đã bật chưa (`free -m`) |
 | Ảnh tải lên báo lỗi 413 | `client_max_body_size` và `upload_max_filesize` lệch nhau |

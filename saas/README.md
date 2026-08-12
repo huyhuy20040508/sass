@@ -50,6 +50,13 @@ Hoặc chạy `start.bat` ở thư mục gốc — nó bật cả MySQL, API, Sh
 
 ## Đăng nhập
 
-Dùng tài khoản `super_admin` trong `database/seed.sql` (mặc định `admin@selliotech.local`).
+Khu điều hành nền tảng vẫn đăng nhập bằng **email + mật khẩu** (`POST /auth/login`),
+khác Shop Admin đã chuyển sang 3 ô — super admin là người của nền tảng, không thuộc
+cửa hàng nào nên không có "mã cửa hàng" để gõ.
+
+Không có tài khoản mặc định (`database/seed.sql` đã tắt). Tạo tài khoản `super_admin`
+đầu tiên bằng `cd api && go run ./cmd/tao-admin`, rồi đăng nhập ở đây bằng chính email
+mà lệnh đó đặt cho tài khoản — mặc định là `<tên đăng nhập>@<mã cửa hàng>.local`, đổi
+được bằng cờ `--email`.
 
 > Hiện `super_admin` vẫn là vai trò dùng chung với Shop Admin — cùng tài khoản đó vào được cả hai app. Khi tách multi-tenant, vai trò nền tảng phải tách khỏi vai trò cửa hàng; chỗ cần sửa là mảng `$allowedRoles` trong `EnsurePlatformAuthenticated` và phần kiểm quyền của `AuthController::login`.

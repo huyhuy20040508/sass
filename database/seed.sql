@@ -1,5 +1,21 @@
+-- =====================================================================
+--  TỆP NÀY ĐÃ TẮT — CHẠY NÓ KHÔNG TẠO RA GÌ CẢ
+--
+--  Mọi câu lệnh bên dưới đều nằm trong comment. Giữ tệp lại để đối chiếu,
+--  nhưng ĐỪNG nạp nó rồi ngồi chờ có tài khoản đăng nhập.
+--
+--  Tạo vai trò + cửa hàng + tài khoản quản trị đầu tiên bằng:
+--      cd api && go run ./cmd/tao-admin        (máy cá nhân)
+--      sudo selliotech-tao-admin               (máy chủ thật)
+--
+--  Lý do thay: từ khi đăng nhập bằng 3 ô (mã cửa hàng · tên đăng nhập ·
+--  mật khẩu), một tài khoản dùng được phải gắn với một dòng trong bảng
+--  tenants; mà mật khẩu băm sẵn nằm công khai trong repo thì bản cài nào
+--  cũng dùng chung đúng một mật khẩu ai cũng đọc được.
+-- =====================================================================
+
 -- -- =====================================================================
--- --  SELLIOTECH — SEED TỐI THIỂU
+-- --  SELLIOTECH — SEED TỐI THIỂU (bản cũ, giữ để đối chiếu)
 -- --  Chạy sau khi lược đồ đã có:
 -- --      cd api && go run ./cmd/migrate chay
 -- --      mysql -u root selliotech < ../database/seed.sql

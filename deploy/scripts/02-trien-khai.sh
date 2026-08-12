@@ -148,14 +148,26 @@ buoc "4/10  Lược đồ database"
 gochay run ./cmd/migrate chay -y
 xanh "  lược đồ đã khớp database/migrations"
 
-# Bản cài trắng thì nạp vai trò + tài khoản quản trị đầu tiên.
-SO_ROLE="$(mysql -N -B -D selliotech -e 'SELECT COUNT(*) FROM roles' 2>/dev/null || echo 0)"
-if [[ "$SO_ROLE" == "0" ]]; then
-    mysql selliotech < "$APP_DIR/database/seed.sql"
-    vang "  đã nạp seed.sql — tài khoản admin@selliotech.local / Admin@123"
-    vang "  ĐỔI MẬT KHẨU NGAY sau khi đăng nhập lần đầu."
+# Bản cài trắng thì chưa có tài khoản nào vào được khu quản trị.
+#
+# TRƯỚC ĐÂY chỗ này nạp database/seed.sql rồi in ra "tài khoản
+# admin@selliotech.local / Admin@123". Cả hai vế đều không còn đúng: seed.sql đã
+# bị tắt toàn bộ (mọi câu lệnh đều nằm trong comment) nên nạp nó KHÔNG tạo gì,
+# mà từ khi đăng nhập bằng 3 ô thì một địa chỉ email cũng không đăng nhập nổi.
+#
+# Script KHÔNG tự tạo tài khoản: mật khẩu quản trị mà nằm trong tệp .sh của repo
+# thì cả thế giới đọc được, còn hỏi ngay giữa lúc triển khai thì lần deploy nào
+# cũng bị treo chờ người gõ. Người cài chạy tay đúng một lệnh ở bước cuối.
+CAN_TAO_ADMIN=0
+# role_id <> 4 = mọi vai trò trừ khách hàng. Bỏ qua tài khoản đã xoá mềm và tài
+# khoản bị khoá: chúng có mặt trong bảng nhưng không ai đăng nhập được bằng chúng,
+# đếm vào thì script im lặng bỏ qua đúng lúc người cài đang đứng ngoài cửa.
+SO_TAI_KHOAN="$(mysql -N -B -D selliotech -e "SELECT COUNT(*) FROM users WHERE role_id <> 4 AND status = 'active' AND deleted_at IS NULL" 2>/dev/null || echo 0)"
+if [[ "$SO_TAI_KHOAN" == "0" ]]; then
+    CAN_TAO_ADMIN=1
+    vang "  chưa có tài khoản quản trị nào — xem hướng dẫn ở cuối script"
 else
-    xanh "  database đã có dữ liệu, bỏ qua seed"
+    xanh "  database đã có $SO_TAI_KHOAN tài khoản quản trị"
 fi
 
 # ---------------------------------------------------------------------
@@ -291,6 +303,11 @@ buoc "8/10  Sao lưu tự động"
 install -m 700 "$APP_DIR/deploy/scripts/03-sao-luu.sh"  /usr/local/sbin/selliotech-sao-luu
 install -m 700 "$APP_DIR/deploy/scripts/04-phuc-hoi.sh" /usr/local/sbin/selliotech-phuc-hoi
 
+# Lệnh tạo cửa hàng + tài khoản quản trị. Cùng lý do chép ra ngoài: người phải
+# dùng tới nó thường là người đang đứng ngoài hệ thống (cài mới, hoặc mất mật
+# khẩu admin), lúc đó gõ một lệnh ngắn dễ hơn nhớ cả chuỗi sudo -u ... go run ...
+install -m 700 "$APP_DIR/deploy/scripts/tao-admin.sh" /usr/local/sbin/selliotech-tao-admin
+
 # Bản tin hiện lúc SSH vào máy. Máy chủ này không gắn email hay dịch vụ cảnh
 # báo nào, nên đây là chỗ duy nhất người quản trị chắc chắn nhìn thấy khi sao
 # lưu chết âm thầm.
@@ -361,6 +378,29 @@ else
 fi
 
 printf '\n\033[1;32m===== TRIỂN KHAI XONG =====\033[0m\n'
+
+# Chưa có ai vào được khu quản trị thì đây là việc PHẢI làm tiếp, in đậm ở đầu
+# phần hướng dẫn chứ không lẫn vào giữa mấy dòng kiểm tra trình duyệt.
+if [[ "$CAN_TAO_ADMIN" == "1" ]]; then
+    printf '\n\033[1;33m----- CHƯA CÓ TÀI KHOẢN QUẢN TRỊ -----\033[0m\n'
+    cat <<'HD'
+
+Chưa ai vào được khu quản trị. Tạo cửa hàng + tài khoản đầu tiên:
+
+    sudo selliotech-tao-admin
+
+Lệnh hỏi lần lượt ba ô của màn hình đăng nhập — mã cửa hàng, tên đăng nhập,
+mật khẩu — rồi dựng luôn vai trò RBAC và cửa hàng nếu database còn trắng.
+Mật khẩu HIỆN RA màn hình khi gõ, nên đừng làm lúc có người đứng sau lưng;
+muốn kín thì truyền sẵn:
+
+    sudo selliotech-tao-admin --ma-cua-hang <mã> --ten-dang-nhap admin --mat-khau '<mật khẩu>'
+
+Mã cửa hàng là ô ĐẦU TIÊN khi đăng nhập — đặt theo tên khách hàng, không dấu.
+Quên mật khẩu về sau thì chạy lại lệnh đó kèm --doi-mat-khau.
+HD
+fi
+
 cat <<'HD'
 
 Kiểm bằng trình duyệt (còn là http:// cho tới khi bật HTTPS):

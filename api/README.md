@@ -31,7 +31,8 @@ cp .env.example .env        # rồi sửa DB_*, JWT_SECRET
 # 2. Đảm bảo DB đã có lược đồ (lược đồ nằm ở ../database/migrations)
 #    mysql -u root -e "CREATE DATABASE IF NOT EXISTS selliotech CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
 #    go run ./cmd/migrate chay              # nạp lược đồ, đọc DB_* từ .env
-#    mysql -u root selliotech < ../database/seed.sql   # roles + tài khoản admin đầu tiên
+#    go run ./cmd/tao-admin                 # vai trò + cửa hàng + tài khoản quản trị đầu tiên
+#    (database/seed.sql đã tắt — nạp nó không tạo ra gì)
 
 # 3. Tải dependency
 go mod tidy
@@ -76,7 +77,8 @@ swag init -g cmd/api/main.go --output docs
 |---|---|---|---|
 | GET  | `/health` | công khai | Health check |
 | POST | `/auth/register` | công khai | Đăng ký khách hàng |
-| POST | `/auth/login` | công khai | Đăng nhập (trả JWT) |
+| POST | `/auth/login` | công khai | Đăng nhập bằng email (khách mua sắm, khu điều hành nền tảng) |
+| POST | `/auth/shop-login` | công khai | Đăng nhập Shop Admin 3 ô: mã cửa hàng + tên đăng nhập + mật khẩu |
 | POST | `/auth/refresh` | công khai | Làm mới access token |
 | GET  | `/auth/me` | đăng nhập | Thông tin tài khoản |
 | GET  | `/categories` | công khai | Danh sách danh mục |
