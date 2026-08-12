@@ -54,3 +54,8 @@ Thumbs.db
 /saas/storage/logs/*
 /saas/bootstrap/cache/*
 /saas/.phpunit.result.cache
+
+# Tài liệu .docx là KẾT QUẢ của sass-docx/tao-tai-lieu.py — chạy lại là có,
+# không giữ bản nhị phân trong git (mỗi lần sinh lại là một tệp khác hoàn toàn).
+/sass-docx/*.docx
+/sass-docx/~$*
