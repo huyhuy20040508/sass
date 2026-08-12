@@ -6,8 +6,14 @@
 |---|---|---|
 | `selliotech.store` | Thư mục tĩnh `landing/` | Trang giới thiệu bán phần mềm |
 | `api.selliotech.store` | Go API (nội bộ `127.0.0.1:8090`) | Service duy nhất chạm MySQL |
-| `admin.selliotech.store` | Laravel `admin/` | Shop Admin — khu quản lý bán hàng |
-| `app.selliotech.store` | Laravel `saas/` | SaaS Admin — khu điều hành nền tảng |
+| `order.selliotech.store` | Laravel `admin/` | Shop Admin — khu quản lý bán hàng |
+| `admin.selliotech.store` | Laravel `saas/` | SaaS Admin — khu điều hành nền tảng |
+| `app.selliotech.store` | — | Tên miền cũ của SaaS Admin, chỉ chuyển hướng 301 sang `admin.*` |
+
+> **Hai tên miền đã đổi chỗ.** Trước đây `admin.*` là khu bán hàng và `app.*` là khu điều hành.
+> Nay khu bán hàng dời sang `order.*`, còn `admin.*` thuộc về khu điều hành. Ai quen bản cũ mà mở
+> `admin.selliotech.store` sẽ thấy màn hình đăng nhập của **khu điều hành nền tảng** — không phải
+> lỗi cấu hình, và không chuyển hướng riêng cho họ được vì cùng một tên miền giờ là app khác.
 
 `www.selliotech.store` nhận cùng một trang giới thiệu, không chuyển hướng — lý do ghi trong `deploy/nginx/selliotech.store.conf`.
 
@@ -36,8 +42,12 @@ Zone nằm ở Hostinger (nameserver `atlas.dns-parking.com` / `hyperion.dns-par
 | A | `@` | `103.78.2.230` | 300 |
 | CNAME | `www` | `selliotech.store` | *(để nguyên)* |
 | A | `api` | `103.78.2.230` | 300 |
+| A | `order` | `103.78.2.230` | 300 |
 | A | `admin` | `103.78.2.230` | 300 |
 | A | `app` | `103.78.2.230` | 300 |
+
+`app` giữ lại dù không còn app nào đứng sau: nó chỉ chuyển hướng sang `admin`. Xoá bản ghi
+DNS thì người còn giữ dấu trang cũ nhận về lỗi "không tìm thấy máy chủ", chẳng biết đi đâu tiếp.
 
 **`www` không cần bản ghi A.** Hostinger dựng sẵn nó thành CNAME trỏ về `selliotech.store`, tức là nó bám theo `@` — sửa `@` xong thì `www` tự đi theo. Cũng đừng đổi nó thành A: một Name không thể vừa có CNAME vừa có A, và giữ CNAME thì sau này đổi địa chỉ máy chủ chỉ phải sửa một chỗ.
 
@@ -54,10 +64,10 @@ Chờ vài phút rồi kiểm từ máy bạn:
 
 ```bash
 for t in selliotech.store www.selliotech.store api.selliotech.store \
-         admin.selliotech.store app.selliotech.store; do
+         order.selliotech.store admin.selliotech.store app.selliotech.store; do
   echo -n "$t -> "; nslookup "$t" 8.8.8.8 | awk '/^Address: /{print $2}' | tail -1
 done
-# Cả năm dòng phải ra 103.78.2.230, không phải 2.57.91.91
+# Cả sáu dòng phải ra 103.78.2.230, không phải 2.57.91.91
 ```
 
 **Phải thấy đúng địa chỉ VPS rồi mới sang bước bật HTTPS**, vì Let's Encrypt xác minh quyền sở hữu bằng cách gọi ngược vào tên miền.
@@ -133,8 +143,9 @@ Kiểm bằng trình duyệt (vẫn còn `http://`):
 ```
 http://selliotech.store
 http://api.selliotech.store/api/v1/health
-http://admin.selliotech.store
-http://app.selliotech.store
+http://order.selliotech.store        <- Shop Admin (bán hàng)
+http://admin.selliotech.store        <- SaaS Admin (điều hành nền tảng)
+http://app.selliotech.store          <- phải nhảy sang admin.*
 ```
 
 ---
@@ -147,12 +158,15 @@ sudo certbot --nginx \
   -d selliotech.store \
   -d www.selliotech.store \
   -d api.selliotech.store \
+  -d order.selliotech.store \
   -d admin.selliotech.store \
   -d app.selliotech.store \
   --redirect
 ```
 
-`--cert-name` gộp năm tên miền vào **một** chứng chỉ mang tên `selliotech.store`, tách bạch với chứng chỉ của dự án khác trên cùng máy. `--redirect` để `http://` tự chuyển sang `https://`.
+`--cert-name` gộp sáu tên miền vào **một** chứng chỉ mang tên `selliotech.store`, tách bạch với chứng chỉ của dự án khác trên cùng máy. `--redirect` để `http://` tự chuyển sang `https://`.
+
+**Thêm tên miền vào danh sách là phải chạy lại đúng lệnh này** (kèm `--expand`). Chứng chỉ đang có không tự mọc thêm tên miền, mà bước 7 của `02-trien-khai.sh` chỉ `certbot install` — gắn lại chứng chỉ CÓ SẴN. Tên miền mới thiếu trong chứng chỉ thì trình duyệt báo lỗi bảo mật ngay từ lần mở đầu tiên. `order.selliotech.store` được thêm theo đúng đường đó.
 
 **Nếu máy đã có chứng chỉ `selliotech.store` từ lần trước** (hồi đó mới có ba tên miền), certbot sẽ hỏi có mở rộng không — chọn mở rộng, hoặc chạy thẳng với `--expand`. Đừng đặt `--cert-name` khác để xin riêng cho tên miền gốc: hai chứng chỉ cho cùng một zone làm lần gia hạn sau khó lần ra cái nào đang phục vụ cái gì.
 
@@ -185,7 +199,7 @@ Sau đó bắt buộc kiểm hai thứ hay sai nhất:
 ```bash
 # 1. CORS: trình duyệt phải gọi được API từ hai khu quản trị
 curl -si https://api.selliotech.store/api/v1/health \
-  -H 'Origin: https://admin.selliotech.store' | grep -i access-control
+  -H 'Origin: https://order.selliotech.store' | grep -i access-control
 
 # 2. Realtime (SSE): phải giữ kết nối mở, KHÔNG trả về ngay
 curl -N -m 5 https://api.selliotech.store/api/v1/events
@@ -350,7 +364,7 @@ sudo journalctl -u selliotech-api -n 100 --no-pager
 
 # nginx
 sudo nginx -t
-sudo tail -50 /var/log/nginx/admin.selliotech.store.error.log
+sudo tail -50 /var/log/nginx/order.selliotech.store.error.log
 
 # Laravel
 sudo tail -50 /var/www/selliotech/admin/storage/logs/laravel.log

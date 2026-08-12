@@ -241,7 +241,11 @@ buoc "7/10  nginx + systemd"
 # ---------------------------------------------------------------------
 # Duyệt bằng TÊN MIỀN ĐẦY ĐỦ, không ghép "$site.selliotech.store": tên miền gốc
 # của trang giới thiệu không có phần đầu nào để ghép.
-for site in selliotech.store api.selliotech.store app.selliotech.store admin.selliotech.store; do
+#
+# Bốn app, năm tên miền: app.selliotech.store không còn app nào đứng sau, nó chỉ
+# chuyển hướng sang admin.selliotech.store cho người còn giữ dấu trang cũ.
+#   order.* -> Shop Admin (admin/)      admin.* -> SaaS Admin (saas/)
+for site in selliotech.store api.selliotech.store order.selliotech.store admin.selliotech.store app.selliotech.store; do
     cp "$APP_DIR/deploy/nginx/$site.conf" "/etc/nginx/sites-available/$site"
     ln -sfn "/etc/nginx/sites-available/$site" "/etc/nginx/sites-enabled/$site"
 done
@@ -406,8 +410,9 @@ cat <<'HD'
 Kiểm bằng trình duyệt (còn là http:// cho tới khi bật HTTPS):
     http://selliotech.store                     <- trang giới thiệu
     http://api.selliotech.store/api/v1/health
-    http://admin.selliotech.store
-    http://app.selliotech.store
+    http://order.selliotech.store               <- Shop Admin (bán hàng)
+    http://admin.selliotech.store               <- SaaS Admin (điều hành nền tảng)
+    http://app.selliotech.store                 <- tên miền cũ, phải nhảy sang admin.*
 
 Bật HTTPS (chỉ chạy được sau khi DNS đã trỏ về máy này):
     sudo certbot --nginx \
@@ -415,9 +420,15 @@ Bật HTTPS (chỉ chạy được sau khi DNS đã trỏ về máy này):
         -d selliotech.store \
         -d www.selliotech.store \
         -d api.selliotech.store \
+        -d order.selliotech.store \
         -d admin.selliotech.store \
         -d app.selliotech.store \
         --redirect
+
+Thêm/bớt tên miền trong danh sách trên là PHẢI chạy lại đúng lệnh certbot đó:
+chứng chỉ hiện có không tự mọc thêm tên miền, và `certbot install` ở bước 7 chỉ
+gắn lại chứng chỉ CÓ SẴN. Tên miền mới mà thiếu trong chứng chỉ thì trình duyệt
+báo lỗi bảo mật ngay từ lần mở đầu tiên.
 
 Sau khi có HTTPS, sửa lại 3 tệp .env cho đúng https:// rồi chạy lại script này.
 
