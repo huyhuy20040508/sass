@@ -88,7 +88,7 @@ curl -fsSL -o 01-cai-may-chu.sh \
 sudo bash 01-cai-may-chu.sh
 ```
 
-Script cài: PHP 8.3-FPM (kèm **gd** cho phần thu nhỏ ảnh), MySQL 8, Go 1.25, Composer, certbot, tường lửa; tạo người dùng `selliotech`, database `selliotech` và tài khoản MySQL riêng.
+Script cài: PHP 8.3-FPM (kèm **gd** cho phần thu nhỏ ảnh), MySQL 8, Go 1.25, Composer, certbot, tường lửa; tạo người dùng `selliotech`, **hai** database (`selliotech` cho dữ liệu bán hàng, `selliotech_platform` cho sổ cái nền tảng) và tài khoản MySQL riêng dùng chung cho cả hai.
 
 **Chép lại `DB_PASSWORD` nó in ra ở cuối** — chuỗi đó không hiện lại lần thứ hai.
 
@@ -264,6 +264,7 @@ Mỗi lần SSH vào máy, dòng đầu màn hình cho biết tình hình:
 | Chép | Vì sao |
 |---|---|
 | database `selliotech` | Toàn bộ dữ liệu bán hàng |
+| database `selliotech_platform` | Sổ cái nền tảng: khách hàng, thuê bao, tài khoản khu điều hành, tên miền. Dump ra tệp riêng (`nen-tang.sql.gz`) để phục hồi độc lập với dữ liệu bán hàng |
 | `admin/storage/app/public` | Ảnh người bán tải lên |
 | `api/.env`, `admin/.env`, `saas/.env` | `APP_KEY`, `JWT_SECRET`, `DB_PASSWORD`, khoá cổng thanh toán |
 

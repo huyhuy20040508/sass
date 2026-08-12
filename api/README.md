@@ -31,6 +31,9 @@ cp .env.example .env        # rồi sửa DB_*, JWT_SECRET
 # 2. Đảm bảo DB đã có lược đồ (lược đồ nằm ở ../database/migrations)
 #    mysql -u root -e "CREATE DATABASE IF NOT EXISTS selliotech CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
 #    go run ./cmd/migrate chay              # nạp lược đồ, đọc DB_* từ .env
+#    go run ./cmd/migrate -nen-tang chay    # lược đồ THỨ HAI: control plane
+#                                           # (selliotech_platform, tệp ở ../database/platform).
+#                                           # Tự tạo database nếu chưa có.
 #    go run ./cmd/tao-admin                 # vai trò + cửa hàng + tài khoản quản trị đầu tiên
 #    (database/seed.sql đã tắt — nạp nó không tạo ra gì)
 

@@ -148,6 +148,28 @@ if not "!MIG!"=="0" (
 )
 echo     - Luoc do database: OK
 
+REM  Luoc do THU HAI — control plane (selliotech_platform): so dang ky khach
+REM  hang, thue bao, tai khoan khu dieu hanh, ten mien. Cong cu tu tao database
+REM  neu chua co, nen lan dau chay chi can lenh "chay" o duoi.
+echo     - Doi chieu migration control plane...
+pushd api
+go run ./cmd/migrate -nen-tang >nul 2>&1
+set "MIGNT=!errorlevel!"
+popd
+if not "!MIGNT!"=="0" (
+    echo.
+    echo     [CANH BAO] Control plane chua khop voi database\platform. Chi tiet:
+    echo.
+    pushd api
+    go run ./cmd/migrate -nen-tang
+    popd
+    echo.
+    echo     Thuong la: cd api ^&^& go run ./cmd/migrate -nen-tang chay
+    pause
+    exit /b 1
+)
+echo     - Luoc do control plane: OK
+
 REM ============================================================
 REM  3) Mo cua so rieng cho tung service
 REM ============================================================

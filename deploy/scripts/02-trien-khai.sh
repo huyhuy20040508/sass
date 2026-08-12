@@ -148,6 +148,14 @@ buoc "4/10  Lược đồ database"
 gochay run ./cmd/migrate chay -y
 xanh "  lược đồ đã khớp database/migrations"
 
+# Lược đồ THỨ HAI — control plane (selliotech_platform): sổ đăng ký khách hàng,
+# thuê bao, tài khoản khu điều hành, tên miền. Đọc PLATFORM_DB_* và thư mục
+# ../database/platform. Máy chủ dựng từ trước khi có control plane thì database
+# này chưa tồn tại; công cụ tự tạo nếu tài khoản MySQL đủ quyền (01-cai-may-chu.sh
+# đã cấp), còn không thì nó in sẵn hai câu lệnh phải chạy tay bằng root.
+gochay run ./cmd/migrate -nen-tang chay -y
+xanh "  lược đồ đã khớp database/platform"
+
 # Bản cài trắng thì chưa có tài khoản nào vào được khu quản trị.
 #
 # TRƯỚC ĐÂY chỗ này nạp database/seed.sql rồi in ra "tài khoản

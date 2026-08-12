@@ -11,8 +11,13 @@ import (
 
 // Config gom toàn bộ cấu hình ứng dụng.
 type Config struct {
-	App       AppConfig
-	Database  DatabaseConfig
+	App      AppConfig
+	Database DatabaseConfig
+	// Platform là lược đồ THỨ HAI — control plane (selliotech_platform): sổ đăng
+	// ký khách hàng, thuê bao, tài khoản khu điều hành, tên miền. Nằm ở database
+	// riêng chứ không phải vài bảng trong Database, xem
+	// database/platform/0001_control-plane-2026-08-12.sql.
+	Platform  DatabaseConfig
 	JWT       JWTConfig
 	CORS      CORSConfig
 	RateLimit RateLimitConfig
@@ -72,6 +77,18 @@ func (d DatabaseConfig) DSN() string {
 	return fmt.Sprintf(
 		"%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local",
 		d.User, d.Password, d.Host, d.Port, d.Name,
+	)
+}
+
+// DSNMayChu là chuỗi kết nối tới MÁY CHỦ MySQL mà không chọn database nào.
+//
+// Cần đúng một chỗ: lúc tạo database control plane. DSN() ở trên nhét sẵn tên
+// database vào, mà database chưa tồn tại thì ngay bước kết nối đã hỏng — không
+// tới được lệnh CREATE DATABASE. Xem cmd/migrate.
+func (d DatabaseConfig) DSNMayChu() string {
+	return fmt.Sprintf(
+		"%s:%s@tcp(%s:%s)/?charset=utf8mb4&parseTime=True&loc=Local",
+		d.User, d.Password, d.Host, d.Port,
 	)
 }
 
@@ -252,6 +269,21 @@ func Load() (*Config, error) {
 	v.SetDefault("DB_MAX_IDLE_CONNS", 10)
 	v.SetDefault("DB_CONN_MAX_LIFETIME", "1h")
 	v.SetDefault("DB_CONN_MAX_IDLE_TIME", "60s")
+	// Control plane. Chỉ TÊN database là bắt buộc khác; host/cổng/tài khoản để
+	// trống thì dùng lại đúng của DB_* — hai lược đồ hiện nằm cùng một máy chủ
+	// MySQL, bắt khai lại 4 biến y hệt chỉ tạo thêm chỗ để gõ sai. Tách máy chủ
+	// hoặc dùng tài khoản MySQL riêng (chỉ nên đọc được sổ nền tảng) thì khai
+	// đè bằng PLATFORM_DB_HOST / PLATFORM_DB_USER...
+	v.SetDefault("PLATFORM_DB_HOST", "")
+	v.SetDefault("PLATFORM_DB_PORT", "")
+	v.SetDefault("PLATFORM_DB_USER", "")
+	v.SetDefault("PLATFORM_DB_PASSWORD", "")
+	v.SetDefault("PLATFORM_DB_NAME", "selliotech_platform")
+	// Pool nhỏ hơn hẳn DB_*: control plane phục vụ khu điều hành (vài người) và
+	// vài lượt tra sổ, không phải luồng bán hàng. Cấp cho nó 50 kết nối là lấy
+	// mất chỗ của chính data plane trong hạn mức max_connections của MySQL.
+	v.SetDefault("PLATFORM_DB_MAX_OPEN_CONNS", 10)
+	v.SetDefault("PLATFORM_DB_MAX_IDLE_CONNS", 2)
 	v.SetDefault("JWT_SECRET", "")
 	v.SetDefault("JWT_ACCESS_TTL", "15m")
 	v.SetDefault("JWT_REFRESH_TTL", "168h")
@@ -384,6 +416,41 @@ func Load() (*Config, error) {
 			TokenURL:     strings.TrimSpace(v.GetString("GOOGLE_TOKEN_URL")),
 			UserInfoURL:  strings.TrimSpace(v.GetString("GOOGLE_USERINFO_URL")),
 		},
+	}
+
+	// Control plane: chép cấu hình của data plane rồi mới đè những gì được khai
+	// riêng. Làm sau khi cfg.Database đã dựng xong để "để trống = giống DB_*"
+	// đúng cả với giá trị lấy từ biến môi trường lẫn từ .env.
+	cfg.Platform = cfg.Database
+	cfg.Platform.Name = strings.TrimSpace(v.GetString("PLATFORM_DB_NAME"))
+	cfg.Platform.MaxOpenConns = v.GetInt("PLATFORM_DB_MAX_OPEN_CONNS")
+	cfg.Platform.MaxIdleConns = v.GetInt("PLATFORM_DB_MAX_IDLE_CONNS")
+	if s := strings.TrimSpace(v.GetString("PLATFORM_DB_HOST")); s != "" {
+		cfg.Platform.Host = s
+	}
+	if s := strings.TrimSpace(v.GetString("PLATFORM_DB_PORT")); s != "" {
+		cfg.Platform.Port = s
+	}
+	if s := strings.TrimSpace(v.GetString("PLATFORM_DB_USER")); s != "" {
+		cfg.Platform.User = s
+		// Mật khẩu đi LIỀN với tài khoản: khai user riêng mà để trống mật khẩu
+		// thì lấy mật khẩu của tài khoản kia là sai chắc chắn, nên xoá đi.
+		cfg.Platform.Password = v.GetString("PLATFORM_DB_PASSWORD")
+	} else if s := v.GetString("PLATFORM_DB_PASSWORD"); s != "" {
+		cfg.Platform.Password = s
+	}
+
+	// Hai lược đồ trỏ vào cùng một database là hỏng âm thầm: bảng `tenants` của
+	// control plane sẽ đè lên bảng `tenants` của dữ liệu bán hàng, mà cả hai đều
+	// tên đó. Chặn ngay lúc nạp cấu hình chứ không đợi migration chạy vào.
+	if cfg.Platform.Name == "" {
+		return nil, fmt.Errorf("PLATFORM_DB_NAME không được để trống — control plane phải là database riêng")
+	}
+	if cfg.Platform.Name == cfg.Database.Name &&
+		cfg.Platform.Host == cfg.Database.Host && cfg.Platform.Port == cfg.Database.Port {
+		return nil, fmt.Errorf(
+			"PLATFORM_DB_NAME (%s) trùng DB_NAME — control plane phải nằm ở database RIÊNG, "+
+				"không phải vài bảng thêm vào database bán hàng", cfg.Platform.Name)
 	}
 
 	// Không khai báo FROM riêng thì dùng chính tài khoản SMTP

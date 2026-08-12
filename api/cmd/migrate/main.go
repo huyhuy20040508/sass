@@ -14,6 +14,19 @@
 //	go run ./cmd/migrate so-sanh t.json           # so lược đồ hiện tại với tệp đó
 //
 // Thêm -y để bỏ qua câu hỏi xác nhận (dùng trong script).
+//
+// HAI LƯỢC ĐỒ, MỘT CÔNG CỤ. Cờ -nen-tang chuyển sang control plane
+// (selliotech_platform): sổ đăng ký khách hàng, thuê bao, tài khoản khu điều
+// hành, tên miền. Nó đổi CẢ HAI đầu — database (PLATFORM_DB_* trong .env) và
+// thư mục tệp (../database/platform) — nên hai lược đồ có hai bảng
+// schema_migrations riêng, đánh số riêng từ 0001, không bao giờ lẫn vào nhau.
+//
+//	go run ./cmd/migrate -nen-tang                # trạng thái control plane
+//	go run ./cmd/migrate -nen-tang chay           # chạy migration control plane
+//	go run ./cmd/migrate -nen-tang tao-moi <tên>  # tệp mới cho control plane
+//
+// Bỏ sót cờ này là chạy tệp của lược đồ này vào database của lược đồ kia — công
+// cụ không đoán hộ được, vì cả hai đều là database MySQL hợp lệ.
 package main
 
 import (
@@ -25,6 +38,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -34,14 +48,28 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 )
 
-// thuMucMacDinh — đường dẫn tương đối từ api/ sang thư mục migrations.
+// Đường dẫn tương đối từ api/ sang hai thư mục migrations.
 //
 // Chạy lệnh từ thư mục khác api/ thì chỉ đường bằng cờ -thu-muc.
-const thuMucMacDinh = "../database/migrations"
+const (
+	thuMucMacDinh = "../database/migrations" // data plane — dữ liệu bán hàng
+	thuMucNenTang = "../database/platform"   // control plane — sổ cái nền tảng
+)
+
+// tenDatabaseHopLe — chỉ chữ, số và gạch dưới.
+//
+// Tên database đi thẳng vào câu CREATE DATABASE (tham số ? không dùng được cho
+// tên đối tượng), mà nó lấy từ .env — tệp người ta gõ tay. Soát ở đây để một
+// dòng PLATFORM_DB_NAME gõ hỏng không thành một câu lệnh khác.
+var tenDatabaseHopLe = regexp.MustCompile(`^[A-Za-z0-9_]+$`)
 
 func main() {
 	var (
-		thuMuc  = flag.String("thu-muc", thuMucMacDinh, "thư mục chứa tệp .sql")
+		// Mặc định để RỖNG chứ không phải thuMucMacDinh: có rỗng thì mới phân biệt
+		// được "người dùng không khai" (lúc đó chọn thư mục theo -nen-tang) với
+		// "người dùng khai đúng bằng giá trị mặc định".
+		thuMuc  = flag.String("thu-muc", "", "thư mục chứa tệp .sql (mặc định: "+thuMucMacDinh+", hoặc "+thuMucNenTang+" khi có -nen-tang)")
+		nenTang = flag.Bool("nen-tang", false, "làm việc với CONTROL PLANE (PLATFORM_DB_* + "+thuMucNenTang+") thay vì database bán hàng")
 		dongY   = flag.Bool("y", false, "trả lời Có cho mọi câu hỏi xác nhận")
 		chiTiet = flag.Bool("chi-tiet", false, "in đầy đủ thay vì tóm tắt")
 		ghiRa   = flag.String("ghi", "", "van-tay: ghi kết quả ra tệp JSON")
@@ -59,13 +87,20 @@ func main() {
 		args = append([]string{lenh}, flag.Args()...)
 	}
 
-	if err := chay(lenh, args, *thuMuc, *dongY, *chiTiet, *ghiRa); err != nil {
+	if *thuMuc == "" {
+		*thuMuc = thuMucMacDinh
+		if *nenTang {
+			*thuMuc = thuMucNenTang
+		}
+	}
+
+	if err := chay(lenh, args, *thuMuc, *nenTang, *dongY, *chiTiet, *ghiRa); err != nil {
 		fmt.Fprintln(os.Stderr, "\n  LỖI: "+err.Error())
 		os.Exit(1)
 	}
 }
 
-func chay(lenh string, args []string, thuMuc string, dongY, chiTiet bool, ghiRa string) error {
+func chay(lenh string, args []string, thuMuc string, nenTang, dongY, chiTiet bool, ghiRa string) error {
 	// `tao-moi` chỉ đụng tới tệp, không cần database — làm trước để tạo được
 	// migration ngay cả lúc MySQL chưa chạy.
 	if lenh == "tao-moi" {
@@ -77,19 +112,38 @@ func chay(lenh string, args []string, thuMuc string, dongY, chiTiet bool, ghiRa 
 		return fmt.Errorf("không nạp được cấu hình (.env): %w", err)
 	}
 
-	db, err := moDB(cfg.Database)
+	// Cả công cụ chỉ nhìn vào MỘT cấu hình database kể từ đây: chọn đúng một lần
+	// ở chỗ này rồi truyền đi, chứ không rải `if nenTang` xuống từng lệnh — sót
+	// một chỗ là chạy tệp của lược đồ này vào database của lược đồ kia.
+	dbCfg := cfg.Database
+	if nenTang {
+		dbCfg = cfg.Platform
+		// Database control plane thường CHƯA TỒN TẠI lúc chạy lần đầu (máy cũ chỉ
+		// có mỗi database bán hàng), mà tệp migration thì không được chứa CREATE
+		// DATABASE — xem migrate.Validate. Tạo ở đây là chỗ duy nhất hợp lý.
+		if err := taoDatabaseNeuThieu(dbCfg); err != nil {
+			return err
+		}
+	}
+
+	db, err := moDB(dbCfg)
 	if err != nil {
 		return err
 	}
 	defer db.Close()
 
-	fmt.Printf("  Database: %s @ %s:%s\n\n", cfg.Database.Name, cfg.Database.Host, cfg.Database.Port)
+	nhan := "Database"
+	if nenTang {
+		nhan = "Control plane"
+	}
+	fmt.Printf("  %s: %s @ %s:%s\n", nhan, dbCfg.Name, dbCfg.Host, dbCfg.Port)
+	fmt.Printf("  Tệp     : %s\n\n", thuMuc)
 
 	switch lenh {
 	case "van-tay":
-		return vanTay(db, cfg.Database.Name, chiTiet, ghiRa)
+		return vanTay(db, dbCfg.Name, chiTiet, ghiRa)
 	case "so-sanh":
-		return soSanh(db, cfg.Database.Name, args)
+		return soSanh(db, dbCfg.Name, args)
 	}
 
 	if err := migrate.TaoBang(db); err != nil {
@@ -101,15 +155,23 @@ func chay(lenh string, args []string, thuMuc string, dongY, chiTiet bool, ghiRa 
 		return err
 	}
 
+	// Mọi câu "cách chữa" in ra phải kèm đúng cờ của lượt chạy này: bảo người ta
+	// gõ `migrate chay` trong lúc họ đang xem trạng thái control plane là chỉ họ
+	// đi sửa nhầm lược đồ.
+	lenhGoi := "migrate"
+	if nenTang {
+		lenhGoi = "migrate -nen-tang"
+	}
+
 	switch lenh {
 	case "trang-thai":
-		return inTrangThai(tt, chiTiet)
+		return inTrangThai(tt, chiTiet, lenhGoi)
 	case "chay":
-		return lenhChay(db, tt, dongY)
+		return lenhChay(db, tt, dongY, lenhGoi)
 	case "danh-dau":
 		return danhDau(db, tt, ds, dongY)
 	case "sua-van-tay":
-		return suaVanTay(db, tt, ds, dongY)
+		return suaVanTay(db, tt, ds, dongY, lenhGoi)
 	default:
 		return fmt.Errorf("lệnh %q không có. Các lệnh: trang-thai, chay, danh-dau, sua-van-tay, tao-moi, van-tay, so-sanh", lenh)
 	}
@@ -135,6 +197,58 @@ func moDB(cfg config.DatabaseConfig) (*sql.DB, error) {
 	return db, nil
 }
 
+// taoDatabaseNeuThieu tạo database control plane khi nó chưa có.
+//
+// Chỉ dùng cho -nen-tang, KHÔNG dùng cho database bán hàng: database đó đã tồn
+// tại ở mọi môi trường, và "tự tạo database khi thiếu" ở đó có nghĩa là gõ sai
+// DB_NAME sẽ dựng một database trắng rồi chạy toàn bộ migration vào đấy, trong
+// khi database thật vẫn nằm im bên cạnh — hỏng theo kiểu im lặng nhất.
+//
+// Ở control plane thì ngược lại: lần chạy đầu tiên trên MỌI máy đều rơi vào cảnh
+// database chưa có, mà bắt người ta gõ tay một câu CREATE DATABASE với đúng bộ
+// charset/collation thì kiểu gì cũng có máy lệch collation.
+func taoDatabaseNeuThieu(cfg config.DatabaseConfig) error {
+	if !tenDatabaseHopLe.MatchString(cfg.Name) {
+		return fmt.Errorf("PLATFORM_DB_NAME = %q không hợp lệ — chỉ nhận chữ, số và gạch dưới", cfg.Name)
+	}
+
+	// Kết nối tới MÁY CHỦ, không chọn database: DSN thường nhét sẵn tên database
+	// nên còn chưa tới được lệnh CREATE đã hỏng ở bước kết nối.
+	db, err := sql.Open("mysql", cfg.DSNMayChu())
+	if err != nil {
+		return fmt.Errorf("không mở được kết nối tới MySQL: %w", err)
+	}
+	defer db.Close()
+
+	if err := db.Ping(); err != nil {
+		return fmt.Errorf("không kết nối được MySQL (%s@%s:%s): %w", cfg.User, cfg.Host, cfg.Port, err)
+	}
+
+	var co int
+	if err := db.QueryRow(
+		`SELECT COUNT(*) FROM information_schema.schemata WHERE schema_name = ?`, cfg.Name).Scan(&co); err != nil {
+		return fmt.Errorf("không kiểm tra được database %s: %w", cfg.Name, err)
+	}
+	if co > 0 {
+		return nil
+	}
+
+	// Cùng charset/collation với database bán hàng: hai lược đồ so chuỗi khác
+	// nhau thì mã cửa hàng 'ABC' và 'abc' là một bên này mà là hai bên kia.
+	if _, err := db.Exec("CREATE DATABASE `" + cfg.Name + "` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"); err != nil {
+		return fmt.Errorf(
+			"không tạo được database %s: %w\n"+
+				"        Tài khoản MySQL của app thường không có quyền CREATE DATABASE. Chạy tay bằng root:\n"+
+				"            CREATE DATABASE `%s` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;\n"+
+				"            GRANT ALL PRIVILEGES ON `%s`.* TO '%s'@'localhost';\n"+
+				"            FLUSH PRIVILEGES;",
+			cfg.Name, err, cfg.Name, cfg.Name, cfg.User)
+	}
+	fmt.Printf("  + đã tạo database %s (utf8mb4_unicode_ci)\n", cfg.Name)
+
+	return nil
+}
+
 func trangThai(db *sql.DB, thuMuc string) (migrate.TrangThai, []migrate.Migration, error) {
 	ds, err := migrate.Doc(os.DirFS(thuMuc), ".")
 	if err != nil {
@@ -151,7 +265,9 @@ func trangThai(db *sql.DB, thuMuc string) (migrate.TrangThai, []migrate.Migratio
 
 // ------------------------------------------------------------------ các lệnh
 
-func inTrangThai(tt migrate.TrangThai, chiTiet bool) error {
+// lenhGoi là cách gọi công cụ trong lượt chạy này ("migrate" hoặc
+// "migrate -nen-tang") — mọi câu hướng dẫn in ra đều phải dùng nó.
+func inTrangThai(tt migrate.TrangThai, chiTiet bool, lenhGoi string) error {
 	fmt.Printf("  Đã chạy : %d\n", len(tt.DaChay))
 	if chiTiet {
 		for _, d := range tt.DaChay {
@@ -190,7 +306,7 @@ func inTrangThai(tt migrate.TrangThai, chiTiet bool) error {
 		if coChuThich || coKhongRo {
 			// Chỉ chú thích đổi thì lược đồ vẫn đúng, bắt viết migration mới là
 			// vô nghĩa — chỉ cần ghi lại sổ.
-			fmt.Println("  Cách chữa: `migrate sua-van-tay` nếu chỉ chú thích đổi;")
+			fmt.Printf("  Cách chữa: `%s sua-van-tay` nếu chỉ chú thích đổi;\n", lenhGoi)
 			fmt.Println("             trả tệp về nguyên trạng + viết migration MỚI nếu lệnh SQL đổi.")
 		} else {
 			fmt.Println("  Cách chữa: trả tệp về nguyên trạng và viết một migration MỚI cho phần muốn thêm.")
@@ -212,7 +328,7 @@ func inTrangThai(tt migrate.TrangThai, chiTiet bool) error {
 		return nil
 	}
 	if len(tt.ConLai) > 0 && len(tt.LechVanTay) == 0 && len(tt.ThieuTep) == 0 {
-		fmt.Println("  => Chạy `migrate chay` để cập nhật.")
+		fmt.Printf("  => Chạy `%s chay` để cập nhật.\n", lenhGoi)
 	}
 
 	// Lệch thì THOÁT VỚI MÃ LỖI, không chỉ in ra cho vui: lệnh này còn được
@@ -220,9 +336,9 @@ func inTrangThai(tt migrate.TrangThai, chiTiet bool) error {
 	return migrate.ErrLech
 }
 
-func lenhChay(db *sql.DB, tt migrate.TrangThai, dongY bool) error {
+func lenhChay(db *sql.DB, tt migrate.TrangThai, dongY bool, lenhGoi string) error {
 	if len(tt.LechVanTay) > 0 || len(tt.ThieuTep) > 0 {
-		_ = inTrangThai(tt, false)
+		_ = inTrangThai(tt, false, lenhGoi)
 
 		return errors.New("dừng lại: phải xử lý phần lệch ở trên trước khi chạy tiếp")
 	}
@@ -287,7 +403,7 @@ func danhDau(db *sql.DB, tt migrate.TrangThai, ds []migrate.Migration, dongY boo
 //
 // Sửa SQL thật thì vẫn phải viết migration MỚI: cập nhật vân tay không chạy
 // lệnh nào cả, database sẽ thiếu đúng phần vừa thêm mà công cụ lại báo sạch.
-func suaVanTay(db *sql.DB, tt migrate.TrangThai, ds []migrate.Migration, dongY bool) error {
+func suaVanTay(db *sql.DB, tt migrate.TrangThai, ds []migrate.Migration, dongY bool, lenhGoi string) error {
 	if len(tt.LechVanTay) == 0 {
 		fmt.Println("  Không có vân tay nào lệch.")
 
@@ -320,7 +436,7 @@ func suaVanTay(db *sql.DB, tt migrate.TrangThai, ds []migrate.Migration, dongY b
 			return fmt.Errorf(
 				"tệp %s bị sửa cả phần LỆNH SQL, không phải chỉ chú thích — không cập nhật vân tay.\n"+
 					"        Trả tệp về đúng bản đã chạy rồi viết migration mới cho phần muốn thêm:\n"+
-					"            go run ./cmd/migrate tao-moi <viec-can-lam>", m.TepTin)
+					"            go run ./cmd/%s tao-moi <viec-can-lam>", m.TepTin, lenhGoi)
 		}
 	}
 

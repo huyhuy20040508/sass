@@ -13,9 +13,11 @@ import (
 	"time"
 
 	"go.uber.org/zap"
+	"gorm.io/gorm"
 
 	"sass-api/config"
 	"sass-api/docs"
+	"sass-api/internal/domain"
 	"sass-api/internal/handler"
 	"sass-api/internal/realtime"
 	"sass-api/internal/repository"
@@ -69,6 +71,46 @@ func main() {
 		panic("không kết nối được database: " + err.Error())
 	}
 	logger.Info("đã kết nối MySQL", zap.String("db", cfg.Database.Name))
+
+	// 3b. Control plane — KẾT NỐI THỨ HAI, sang lược đồ selliotech_platform.
+	//
+	// Hai kết nối vì hai database: dữ liệu bán hàng của khách ở một bên, sổ cái
+	// nền tảng (khách nào, gói nào, tên miền nào, tài khoản khu điều hành) ở bên
+	// kia. Không có khoá ngoại nào bắc qua hai bên, nên cũng không có truy vấn
+	// nào JOIN được hai bên — ghép dữ liệu là việc của tầng Go.
+	//
+	// CHƯA CÓ REQUEST NÀO PHỤ THUỘC VÀO KẾT NỐI NÀY. Vì vậy hỏng thì CẢNH BÁO
+	// rồi chạy tiếp, không panic: sập nguyên API bán hàng chỉ vì cái sổ chưa
+	// dựng xong là đổi một thứ chưa ai dùng lấy toàn bộ doanh thu của khách.
+	// ĐỔI THÀNH panic ngay khi có đường đăng nhập / kiểm tra thuê bao đi qua đây
+	// — lúc đó chạy tiếp mà thiếu sổ mới là thứ nguy hiểm.
+	platformDB, err := repository.NewDB(cfg.Platform, cfg.App.IsProduction())
+	if err != nil {
+		logger.Warn("chưa kết nối được control plane — khu điều hành nền tảng sẽ không dùng được, phần bán hàng vẫn chạy bình thường",
+			zap.String("db", cfg.Platform.Name),
+			zap.String("cach_chua", "cd api && go run ./cmd/migrate -nen-tang chay"),
+			zap.Error(err))
+	} else {
+		// Đếm thử một bảng: kết nối được KHÔNG có nghĩa là lược đồ đã dựng. Một
+		// database trắng vẫn cho Ping thành công, và cái sai đó chỉ lộ ra ở lượt
+		// gọi đầu tiên của khu điều hành, rất lâu sau lúc khởi động.
+		var soTenant int64
+		if err := platformDB.WithContext(context.Background()).
+			Model(&domain.PlatformTenant{}).Count(&soTenant).Error; err != nil {
+			logger.Warn("control plane kết nối được nhưng chưa có lược đồ",
+				zap.String("db", cfg.Platform.Name),
+				zap.String("cach_chua", "cd api && go run ./cmd/migrate -nen-tang chay"),
+				zap.Error(err))
+		} else {
+			logger.Info("đã kết nối control plane",
+				zap.String("db", cfg.Platform.Name), zap.Int64("so_tenant", soTenant))
+		}
+
+		// Đóng lúc thoát vì HIỆN CHƯA repository nào cầm kết nối này: thả trôi thì
+		// pool vẫn giữ kết nối nhàn rỗi tới tận lúc process chết. Bỏ dòng này đi
+		// khi repository của khu điều hành nhận platformDB.
+		defer dongKetNoi(platformDB, "control plane")
+	}
 
 	// 4. JWT manager
 	jwtMgr := jwt.NewManager(cfg.JWT.Secret, cfg.JWT.AccessTTL, cfg.JWT.RefreshTTL)
@@ -269,6 +311,21 @@ func main() {
 
 func announcedAddr(port string) string {
 	return ":" + port
+}
+
+// dongKetNoi trả kết nối về hệ điều hành lúc tắt.
+//
+// Hỏng thì chỉ ghi nhật ký: đây là lúc process sắp chết, mà kernel đóng hộ mọi
+// socket còn lại — không có gì để cứu, cũng không đáng làm lệnh tắt thất bại.
+func dongKetNoi(db *gorm.DB, ten string) {
+	sqlDB, err := db.DB()
+	if err != nil {
+		logger.Warn("không lấy được kết nối để đóng", zap.String("ket_noi", ten), zap.Error(err))
+		return
+	}
+	if err := sqlDB.Close(); err != nil {
+		logger.Warn("đóng kết nối lỗi", zap.String("ket_noi", ten), zap.Error(err))
+	}
 }
 
 // applySwaggerHost đặt host/scheme của Swagger theo APP_BASE_URL.

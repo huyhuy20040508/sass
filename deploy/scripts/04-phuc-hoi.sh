@@ -20,6 +20,10 @@ set -euo pipefail
 APP_DIR="/var/www/selliotech"
 LUU_DIR="/var/backups/selliotech"
 DB_NAME="selliotech"
+# Control plane — database thứ hai, nằm trong bản sao lưu dưới tên nen-tang.sql.gz.
+# Bản sao lưu tạo TRƯỚC khi có control plane thì không có tệp đó; khi ấy script
+# để nguyên database này chứ không xoá đi, xem bước 3/5.
+DB_NEN_TANG="selliotech_platform"
 ANH_DIR="$APP_DIR/admin/storage/app/public"
 APP_USER="selliotech"
 
@@ -128,6 +132,8 @@ LAM_DB=1; LAM_ANH=1
 (( CHI_DB ))  && LAM_ANH=0
 (( CHI_ANH )) && LAM_DB=0
 (( LAM_DB ))  && echo "  - database '$DB_NAME'  (toàn bộ dữ liệu hiện tại bị thay thế)"
+(( LAM_DB )) && [[ -f "$NGUON/nen-tang.sql.gz" ]] \
+              && echo "  - database '$DB_NEN_TANG'  (sổ cái nền tảng, cũng bị thay thế)"
 (( LAM_ANH )) && echo "  - $ANH_DIR"
 (( CA_ENV ))  && echo "  - api/.env, admin/.env, saas/.env"
 echo
@@ -175,6 +181,15 @@ if (( LAM_DB )); then
         --routines --triggers --events --set-gtid-purged=OFF \
         --default-character-set=utf8mb4 "$DB_NAME" | gzip -6 > "$CHUP/db.sql.gz"
     xanh "  database hiện tại -> $CHUP/db.sql.gz"
+
+    # Chụp cả control plane, nhưng chỉ khi lát nữa thật sự ghi đè lên nó: chụp
+    # thừa thì vô hại, còn ghi đè mà không chụp là mất hẳn.
+    if [[ -f "$NGUON/nen-tang.sql.gz" ]] && mysql "${MY[@]}" -N -B -e "USE \`$DB_NEN_TANG\`" 2>/dev/null; then
+        mysqldump "${MY[@]}" --single-transaction --quick --no-tablespaces \
+            --routines --triggers --events --set-gtid-purged=OFF \
+            --default-character-set=utf8mb4 "$DB_NEN_TANG" | gzip -6 > "$CHUP/nen-tang.sql.gz"
+        xanh "  control plane hiện tại -> $CHUP/nen-tang.sql.gz"
+    fi
 fi
 if (( LAM_ANH )) && [[ -d "$ANH_DIR" ]]; then
     tar -cf "$CHUP/anh.tar" -C "$ANH_DIR" .
@@ -210,6 +225,36 @@ if (( LAM_DB )); then
     gzip -dc "$NGUON/db.sql.gz" | mysql "${MY[@]}" "$DB_NAME"
     SO="$(mysql "${MY[@]}" -N -B -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$DB_NAME' AND table_type='BASE TABLE'")"
     xanh "  đã nạp $SO bảng"
+
+    # Control plane. Bản sao lưu cũ (tạo trước khi có lược đồ này) không có tệp
+    # đó — khi ấy ĐỂ NGUYÊN database hiện tại: nó là sổ khách hàng và thuê bao,
+    # xoá đi vì "bản sao lưu không nhắc tới" là mất sạch mà chẳng đổi lấy gì.
+    if [[ -f "$NGUON/nen-tang.sql.gz" ]]; then
+        gzip -t "$NGUON/nen-tang.sql.gz" || chet "nen-tang.sql.gz hỏng — đừng nạp, chọn bản khác"
+
+        if (( MY_ROOT )); then
+            mysql -e "DROP DATABASE IF EXISTS \`$DB_NEN_TANG\`; CREATE DATABASE \`$DB_NEN_TANG\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+        else
+            # Tài khoản của app không có quyền DROP DATABASE. Database phải có
+            # sẵn (01-cai-may-chu.sh tạo) — xoá từng bảng như bên trên.
+            mysql "${MY[@]}" -N -B -e "USE \`$DB_NEN_TANG\`" 2>/dev/null \
+                || chet "chưa có database '$DB_NEN_TANG'. Tạo bằng root rồi chạy lại: CREATE DATABASE \`$DB_NEN_TANG\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+            mapfile -t bang_nt < <(mysql "${MY[@]}" -N -B -e \
+                "SELECT table_name FROM information_schema.tables WHERE table_schema='$DB_NEN_TANG'")
+            if (( ${#bang_nt[@]} > 0 )); then
+                { echo "SET FOREIGN_KEY_CHECKS=0;"
+                  printf 'DROP TABLE IF EXISTS `%s`;\n' "${bang_nt[@]}"
+                  echo "SET FOREIGN_KEY_CHECKS=1;"
+                } | mysql "${MY[@]}" "$DB_NEN_TANG"
+            fi
+        fi
+
+        gzip -dc "$NGUON/nen-tang.sql.gz" | mysql "${MY[@]}" "$DB_NEN_TANG"
+        SO_NT="$(mysql "${MY[@]}" -N -B -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$DB_NEN_TANG' AND table_type='BASE TABLE'")"
+        xanh "  control plane: đã nạp $SO_NT bảng"
+    else
+        vang "  bản này không có nen-tang.sql.gz (tạo trước khi có control plane) — giữ nguyên '$DB_NEN_TANG'"
+    fi
 fi
 
 # ---------------------------------------------------------------------

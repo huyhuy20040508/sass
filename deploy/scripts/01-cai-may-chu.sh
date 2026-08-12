@@ -15,6 +15,12 @@ GO_VERSION="1.25.6"
 APP_USER="selliotech"
 APP_DIR="/var/www/selliotech"
 DB_NAME="selliotech"
+# Control plane — database THỨ HAI: sổ đăng ký khách hàng, thuê bao, tài khoản
+# khu điều hành, tên miền. Tách hẳn database chứ không phải thêm bảng vào cái
+# trên: hai vòng đời khác nhau, và dữ liệu bán hàng của một khách phải tách/xoá
+# được mà không đụng tới sổ cái. Xem database/platform/.
+# Phải khớp PLATFORM_DB_NAME trong api/.env.
+DB_NEN_TANG="selliotech_platform"
 DB_USER="selliotech"
 
 xanh() { printf '\033[32m%s\033[0m\n' "$*"; }
@@ -147,7 +153,7 @@ mkdir -p "$APP_DIR"
 chown "$APP_USER:$APP_USER" "$APP_DIR"
 
 # ---------------------------------------------------------------------
-buoc "7/8  MySQL: database + tài khoản riêng"
+buoc "7/8  MySQL: hai database + tài khoản riêng"
 # ---------------------------------------------------------------------
 systemctl enable --now mysql >/dev/null 2>&1 || true
 
@@ -160,14 +166,23 @@ else
     # `ps aux`, ai đang đăng nhập cùng lúc cũng đọc được mật khẩu.
     mysql <<SQL
 CREATE DATABASE IF NOT EXISTS \`$DB_NAME\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE IF NOT EXISTS \`$DB_NEN_TANG\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE USER '$DB_USER'@'localhost' IDENTIFIED BY '$DB_PASS';
 GRANT ALL PRIVILEGES ON \`$DB_NAME\`.* TO '$DB_USER'@'localhost';
+GRANT ALL PRIVILEGES ON \`$DB_NEN_TANG\`.* TO '$DB_USER'@'localhost';
 FLUSH PRIVILEGES;
 SQL
-    xanh "  đã tạo database '$DB_NAME' và tài khoản '$DB_USER'"
+    xanh "  đã tạo database '$DB_NAME' + '$DB_NEN_TANG' và tài khoản '$DB_USER'"
 fi
-# Database vẫn tạo kể cả khi tài khoản đã có từ trước.
-mysql -e "CREATE DATABASE IF NOT EXISTS \`$DB_NAME\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+# Hai database vẫn tạo kể cả khi tài khoản đã có từ trước. Quyền cũng cấp lại:
+# máy chủ dựng từ trước khi có control plane thì tài khoản cũ chưa hề có quyền
+# trên database thứ hai, mà GRANT chạy lại lần nữa không hỏng gì.
+mysql <<SQL
+CREATE DATABASE IF NOT EXISTS \`$DB_NAME\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE IF NOT EXISTS \`$DB_NEN_TANG\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+GRANT ALL PRIVILEGES ON \`$DB_NEN_TANG\`.* TO '$DB_USER'@'localhost';
+FLUSH PRIVILEGES;
+SQL
 
 # ---------------------------------------------------------------------
 buoc "8/8  Tường lửa"

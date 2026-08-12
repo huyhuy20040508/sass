@@ -10,9 +10,11 @@
 # ---------------------------------------------------------------------------
 # Chép đúng ba thứ KHÔNG nằm trong git — tức là mất thì không lấy lại được:
 #
-#   1. database `selliotech`         toàn bộ dữ liệu bán hàng
-#   2. admin/storage/app/public      ảnh người bán tải lên
-#   3. ba tệp .env                   DB_PASSWORD, JWT_SECRET, APP_KEY, khoá thanh toán
+#   1. database `selliotech`            toàn bộ dữ liệu bán hàng
+#   1b. database `selliotech_platform`  sổ cái nền tảng: khách hàng, thuê bao,
+#                                       tài khoản khu điều hành, tên miền
+#   2. admin/storage/app/public         ảnh người bán tải lên
+#   3. ba tệp .env                      DB_PASSWORD, JWT_SECRET, APP_KEY, khoá thanh toán
 #
 # Mã nguồn, cấu hình nginx và systemd đều có trong git nên không chép lại: kéo
 # repo về là có. APP_KEY thì khác hẳn — mất nó thì mọi thứ Laravel đã mã hoá
@@ -28,6 +30,9 @@ set -euo pipefail
 APP_DIR="/var/www/selliotech"
 LUU_DIR="/var/backups/selliotech"
 DB_NAME="selliotech"
+# Control plane. Dump ra TỆP RIÊNG chứ không gộp: hai database phục hồi độc lập
+# được chính là lý do tách chúng ra, gộp một tệp là tự bỏ mất tính chất đó.
+DB_NEN_TANG="selliotech_platform"
 ANH_DIR="$APP_DIR/admin/storage/app/public"
 
 # Giữ bao nhiêu bản. Ba tầng chồng lên nhau, không phải ba lựa chọn:
@@ -252,6 +257,32 @@ lam_sao_luu() {
         fi
     fi
 
+    # Control plane — database thứ hai, tệp dump riêng. Nhỏ (vài chục KB) nên
+    # không tính vào phép đo chỗ trống ở bước 1.
+    local SO_BANG_NT
+    SO_BANG_NT="$(mysql "${MY[@]}" -N -B -e \
+        "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$DB_NEN_TANG' AND table_type='BASE TABLE'" \
+        2>/dev/null || echo 0)"
+    if (( SO_BANG_NT > 0 )); then
+        mysqldump "${MY[@]}" \
+            --single-transaction --quick --no-tablespaces \
+            --routines --triggers --events \
+            --set-gtid-purged=OFF \
+            --default-character-set=utf8mb4 \
+            "$DB_NEN_TANG" | gzip -6 > "$TAM/nen-tang.sql.gz"
+
+        gzip -t "$TAM/nen-tang.sql.gz" 2>/dev/null \
+            || { rm -rf "$TAM"; chet "nen-tang.sql.gz hỏng (gzip -t không qua)"; }
+        [[ "$(gzip -dc "$TAM/nen-tang.sql.gz" | tail -3)" == *'-- Dump completed'* ]] \
+            || { rm -rf "$TAM"; chet "nen-tang.sql.gz đứt giữa chừng (thiếu dòng 'Dump completed')"; }
+
+        xanh "  control plane: $SO_BANG_NT bảng, $(doc "$(stat -c %s "$TAM/nen-tang.sql.gz")") (đã nén)"
+    else
+        # Chưa chạy `migrate -nen-tang chay` bao giờ. Cảnh báo chứ không dừng:
+        # phần bán hàng vẫn phải được sao lưu.
+        vang "  control plane ($DB_NEN_TANG) chưa có bảng nào — bỏ qua"
+    fi
+
     # -----------------------------------------------------------------
     buoc "3/6  Ảnh người bán tải lên"
     # -----------------------------------------------------------------
@@ -318,6 +349,7 @@ lam_sao_luu() {
         echo "mysql        = $(mysql "${MY[@]}" -N -B -e 'SELECT VERSION()' 2>/dev/null || echo '?')"
         echo "so_bang      = $SO_BANG_THAT"
         echo "co_database  = $(doc "$CO_DB")"
+        echo "nen_tang     = $DB_NEN_TANG, $SO_BANG_NT bảng"
         echo
         echo "So dong trong cac bang chinh:"
         for b in users products product_variants orders order_items payments product_images; do
