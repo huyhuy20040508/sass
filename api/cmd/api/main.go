@@ -84,8 +84,21 @@ func main() {
 	// dựng xong là đổi một thứ chưa ai dùng lấy toàn bộ doanh thu của khách.
 	// ĐỔI THÀNH panic ngay khi có đường đăng nhập / kiểm tra thuê bao đi qua đây
 	// — lúc đó chạy tiếp mà thiếu sổ mới là thứ nguy hiểm.
+	// tenMienRepo còn nil nghĩa là chưa phân giải được cửa hàng theo tên miền —
+	// router nhận nil và cụm bán hàng cho khách chỉ phục vụ người đã đăng nhập.
+	var tenMienRepo domain.TenantDomainRepository
+
 	platformDB, err := repository.NewPlatformDB(cfg.Platform, cfg.App.IsProduction())
 	if err != nil {
+		// Từ khi cụm bán hàng cho khách phân giải cửa hàng theo TÊN MIỀN, control
+		// plane không còn là "cái sổ chưa ai dùng": nó nằm trên đường đi của mọi
+		// request của khách vãng lai. Bật storefront mà thiếu nó thì không tên miền
+		// nào phân giải được — cả trang bán hàng đứng im, nhưng process vẫn sống và
+		// vẫn báo khoẻ, nên hỏng kiểu đó chỉ lộ ra qua lời khách phàn nàn.
+		if cfg.App.EnableStorefront {
+			panic("đã bật STOREFRONT_API_ENABLED nhưng không kết nối được control plane (" +
+				cfg.Platform.Name + "): không phân giải được tên miền nào — " + err.Error())
+		}
 		logger.Warn("chưa kết nối được control plane — khu điều hành nền tảng sẽ không dùng được, phần bán hàng vẫn chạy bình thường",
 			zap.String("db", cfg.Platform.Name),
 			zap.String("cach_chua", "cd api && go run ./cmd/migrate -nen-tang chay"),
@@ -97,6 +110,10 @@ func main() {
 		var soTenant int64
 		if err := platformDB.WithContext(context.Background()).
 			Model(&domain.PlatformTenant{}).Count(&soTenant).Error; err != nil {
+			if cfg.App.EnableStorefront {
+				panic("đã bật STOREFRONT_API_ENABLED nhưng control plane (" + cfg.Platform.Name +
+					") chưa có lược đồ — chạy `cd api && go run ./cmd/migrate -nen-tang chay`: " + err.Error())
+			}
 			logger.Warn("control plane kết nối được nhưng chưa có lược đồ",
 				zap.String("db", cfg.Platform.Name),
 				zap.String("cach_chua", "cd api && go run ./cmd/migrate -nen-tang chay"),
@@ -104,11 +121,15 @@ func main() {
 		} else {
 			logger.Info("đã kết nối control plane",
 				zap.String("db", cfg.Platform.Name), zap.Int64("so_tenant", soTenant))
+
+			// Sổ tên miền: thứ cho khách VÃNG LAI biết mình đang đứng ở tiệm nào.
+			// Chỉ dựng khi lược đồ có thật — dựng trên một database trắng thì mọi
+			// tên miền đều "không tìm thấy" và trang bán hàng im lặng đứng yên.
+			tenMienRepo = repository.NewTenantDomainRepository(platformDB)
 		}
 
-		// Đóng lúc thoát vì HIỆN CHƯA repository nào cầm kết nối này: thả trôi thì
-		// pool vẫn giữ kết nối nhàn rỗi tới tận lúc process chết. Bỏ dòng này đi
-		// khi repository của khu điều hành nhận platformDB.
+		// Kết nối này giờ ĐANG được repository trên cầm, nhưng vẫn đóng lúc thoát:
+		// tới đây server đã tắt xong, không còn request nào chạm vào nó.
 		defer dongKetNoi(platformDB, "control plane")
 	}
 
@@ -273,7 +294,7 @@ func main() {
 	}
 
 	// 8. Router + HTTP server
-	r := router.New(cfg, jwtMgr, handlers)
+	r := router.New(cfg, jwtMgr, tenMienRepo, handlers)
 	srv := &http.Server{
 		Addr:        announcedAddr(cfg.App.Port),
 		Handler:     r,

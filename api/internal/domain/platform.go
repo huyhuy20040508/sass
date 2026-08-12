@@ -1,6 +1,9 @@
 package domain
 
-import "time"
+import (
+	"context"
+	"time"
+)
 
 // Thực thể của CONTROL PLANE — lược đồ selliotech_platform.
 //
@@ -141,3 +144,23 @@ type TenantDomain struct {
 }
 
 func (TenantDomain) TableName() string { return "tenant_domains" }
+
+// TenantDomainRepository tra cửa hàng theo tên miền của request.
+//
+// CHẠY TRÊN CONTROL PLANE. Hiện thực của nó phải nhận kết nối thứ hai
+// (repository.NewPlatformDB) — đưa nhầm kết nối data plane vào thì câu truy vấn
+// vẫn chạy vì bên đó cũng có bảng `tenants`, chỉ là nó không có tenant_domains
+// và mọi tên miền sẽ thành "không tìm thấy".
+//
+// Đây là port DUY NHẤT của luồng phục vụ request đọc sang control plane, nên nó
+// cũng là chỗ quyết định control plane có phải thành phần sống còn hay không:
+// bật cụm bán hàng cho khách mà sổ này không đọc được thì không tên miền nào
+// phân giải được, tức là cả trang bán hàng đứng im.
+type TenantDomainRepository interface {
+	// FindTenantByHost trả về cửa hàng sở hữu tên miền, kèm trạng thái của nó để
+	// nơi gọi tự quyết định có phục vụ hay không.
+	//
+	// host phải đã chuẩn hoá: chữ thường, không scheme, không cổng.
+	// Không có tên miền nào khớp thì trả ErrNotFound.
+	FindTenantByHost(ctx context.Context, host string) (*PlatformTenant, error)
+}

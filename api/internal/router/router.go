@@ -45,9 +45,24 @@ type Handlers struct {
 }
 
 // New tạo *gin.Engine đã cấu hình đầy đủ middleware và route.
-func New(cfg *config.Config, jwtMgr *jwt.Manager, h Handlers) *gin.Engine {
+//
+// tenMien là sổ tên miền của control plane, dùng để biết request đang mở cửa
+// hàng nào khi người gọi chưa đăng nhập. Truyền nil = chưa dựng control plane:
+// mọi thứ chạy y như trước, cụm bán hàng cho khách chỉ phục vụ người đã có token.
+func New(cfg *config.Config, jwtMgr *jwt.Manager, tenMien domain.TenantDomainRepository, h Handlers) *gin.Engine {
 	if cfg.App.IsProduction() {
 		gin.SetMode(gin.ReleaseMode)
+	}
+
+	// Chưa bán hàng cho khách thì KHÔNG hỏi sổ tên miền, dù sổ có sẵn đó.
+	//
+	// Không phải để tiết kiệm một câu truy vấn, mà để không nới bán kính hỏng:
+	// phân giải theo tên miền chỉ phục vụ khách vãng lai, trong khi đường nó nằm
+	// trên (khachLa) cũng là đường khu quản trị đi qua. Cắm vào lúc chưa cần thì
+	// control plane trục trặc là Shop Admin đăng nhập không được — một thành phần
+	// mới hỏng kéo theo một thành phần cũ vốn chẳng liên quan gì tới nó.
+	if !cfg.App.EnableStorefront {
+		tenMien = nil
 	}
 
 	r := gin.New()
@@ -101,11 +116,23 @@ func New(cfg *config.Config, jwtMgr *jwt.Manager, h Handlers) *gin.Engine {
 		// ("chưa xác định được cửa hàng") thay vì lỗi 500 vọng lên từ bộ lọc tenant
 		// dưới tầng GORM.
 		//
-		// Đây là chỗ sẽ đổi khi có phân giải cửa hàng THEO TÊN MIỀN: cắm thêm một
-		// middleware đọc Host vào trước TenantRequired là cả cụm phục vụ được khách
-		// vãng lai, không phải sửa từng route.
+		// Thứ tự ba middleware này là thứ tự của ba câu hỏi, và không đổi được:
+		//
+		//   1. OptionalJWTAuth — "có ai đăng nhập không?" Có thì mang theo cửa hàng
+		//      của token.
+		//   2. TenantFromHost  — "đang mở tên miền của tiệm nào?" Tên miền THẮNG
+		//      token, và lệch nhau thì từ chối (xem middleware đó).
+		//   3. TenantRequired  — "sau hai bước trên vẫn chưa biết tiệm nào?" Thì trả
+		//      lời đúng sự thật thay vì để câu truy vấn vỡ tận dưới tầng GORM.
+		//
+		// Đảo 1 và 2 thì token không còn bị đối chiếu với tên miền, tức là mất luôn
+		// chốt chặn "đứng ở trang tiệm B mà đọc dữ liệu tiệm A".
 		khachLa := func(g *gin.RouterGroup) *gin.RouterGroup {
-			return g.Group("", middleware.OptionalJWTAuth(jwtMgr), middleware.TenantRequired())
+			return g.Group("",
+				middleware.OptionalJWTAuth(jwtMgr),
+				middleware.TenantFromHost(tenMien),
+				middleware.TenantRequired(),
+			)
 		}
 
 		auth := v1.Group("/auth")

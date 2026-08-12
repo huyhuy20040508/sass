@@ -2,12 +2,14 @@
 package middleware
 
 import (
+	"errors"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
+	"sass-api/internal/domain"
 	"sass-api/internal/tenant"
 	"sass-api/pkg/jwt"
 	"sass-api/pkg/logger"
@@ -141,6 +143,79 @@ func TenantRequired() gin.HandlerFunc {
 			response.Error(c, 401, "Chưa xác định được cửa hàng cho yêu cầu này")
 			return
 		}
+		c.Next()
+	}
+}
+
+// TenantFromHost xác định cửa hàng theo TÊN MIỀN của request.
+//
+// Đây là thứ cho phép KHÁCH VÃNG LAI mua hàng: trước nó, cửa hàng chỉ đến từ
+// token, nên người chưa đăng nhập không nói được mình đang đứng ở tiệm nào và cả
+// cụm storefront trả 401. Vào tên miền nào thì phục vụ cửa hàng ấy.
+//
+// Đặt SAU OptionalJWTAuth và TRƯỚC TenantRequired.
+//
+// Ba nguyên tắc:
+//
+//  1. TÊN MIỀN THẮNG TOKEN. Cùng một trình duyệt có thể còn token của tiệm A
+//     trong khi đang mở trang của tiệm B (mua ở hai tiệm cùng nền tảng là
+//     chuyện thường). Để token thắng thì người đó đứng trên trang B mà đọc dữ
+//     liệu của A — sai với mọi thứ đang hiện trên màn hình. Nên lệch nhau là
+//     TỪ CHỐI, không phải im lặng chọn một bên: client biết đường bỏ token đi
+//     và gọi lại như khách vãng lai.
+//
+//  2. TÊN MIỀN LẠ THÌ KHÔNG ĐỘNG GÌ. Tên miền chưa vào sổ (hôm nay là chính
+//     order.selliotech.store của khu quản trị) đi tiếp y như trước: có token
+//     thì dùng token, không thì TenantRequired chặn. Nhờ vậy bật middleware
+//     này lên KHÔNG đổi hành vi của bất cứ đường nào đang chạy.
+//
+//  3. CỬA HÀNG BỊ KHOÁ THÌ ĐÓNG TRANG. Đó chính là ý nghĩa của trạng thái
+//     suspended — khách hết hạn hoặc ngừng trả tiền. Trả 403 kèm câu chữ dành
+//     cho NGƯỜI MUA chứ không phải cho chủ tiệm: người đọc nó là khách vãng
+//     lai, họ không cần biết chuyện tiền nong giữa mình và chủ tiệm.
+//
+// repo = nil thì middleware thành một bước đi qua — dùng khi chưa dựng control
+// plane. Cả cụm storefront lúc đó vẫn chỉ phục vụ người đã đăng nhập.
+func TenantFromHost(repo domain.TenantDomainRepository) gin.HandlerFunc {
+	if repo == nil {
+		return func(c *gin.Context) { c.Next() }
+	}
+
+	return func(c *gin.Context) {
+		host := c.Request.Host
+		shop, err := repo.FindTenantByHost(c.Request.Context(), host)
+		switch {
+		case errors.Is(err, domain.ErrNotFound):
+			c.Next()
+			return
+		case err != nil:
+			// Không đọc được sổ tên miền: KHÔNG rơi về token. Rơi về token nghĩa là
+			// lúc control plane trục trặc, một người đang đăng nhập ở tiệm A mở trang
+			// tiệm B sẽ được phục vụ bằng dữ liệu của A — đúng cái mà nguyên tắc 1
+			// vừa chặn, chỉ khác là xảy ra đúng lúc không ai nhìn.
+			logger.Error("không tra được tên miền trong sổ nền tảng",
+				zap.String("host", host), zap.Error(err))
+			response.Error(c, 503, "Cửa hàng tạm thời không truy cập được, vui lòng thử lại sau ít phút")
+			return
+		}
+
+		if shop.Status != domain.TenantActive {
+			response.Error(c, 403, "Cửa hàng này hiện đang tạm ngừng hoạt động")
+			return
+		}
+
+		if cu, ok := tenant.ID(c.Request.Context()); ok && cu != shop.ID {
+			logger.Warn("token thuộc cửa hàng khác với tên miền đang mở",
+				zap.String("host", host),
+				zap.Uint("cua_hang_cua_ten_mien", shop.ID),
+				zap.Uint("cua_hang_cua_token", cu),
+			)
+			response.Error(c, 401, "Phiên đăng nhập thuộc cửa hàng khác, vui lòng đăng nhập lại")
+			return
+		}
+
+		c.Set(CtxTenantID, shop.ID)
+		c.Request = c.Request.WithContext(tenant.WithID(c.Request.Context(), shop.ID))
 		c.Next()
 	}
 }
