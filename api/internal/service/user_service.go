@@ -64,9 +64,15 @@ func (s *userService) List(ctx context.Context, filter domain.InternalUserFilter
 		return nil, 0, err
 	}
 
+	// Một câu truy vấn nhãn cho cả trang, không phải mỗi dòng một câu.
+	nhan, err := s.roles.Labels(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+
 	items := make([]dto.UserResponse, 0, len(users))
 	for i := range users {
-		items = append(items, buildUser(&users[i]))
+		items = append(items, buildUser(&users[i], nhan))
 	}
 	return items, total, nil
 }
@@ -80,7 +86,11 @@ func (s *userService) GetByID(ctx context.Context, id uint) (*dto.UserResponse, 
 	if err != nil {
 		return nil, err
 	}
-	res := buildUser(u)
+	nhan, err := s.roles.Labels(ctx)
+	if err != nil {
+		return nil, err
+	}
+	res := buildUser(u, nhan)
 	return &res, nil
 }
 
@@ -346,11 +356,15 @@ func (s *userService) UpdateRole(ctx context.Context, id uint, req *dto.RoleUpda
 		return nil, err
 	}
 
-	role.DisplayName = strings.TrimSpace(req.DisplayName)
-	role.Description = strings.TrimSpace(req.Description)
-	if err := s.roles.Update(ctx, role); err != nil {
+	// Ghi NHÃN của cửa hàng, không ghi bảng roles: bảng đó dùng chung cho mọi
+	// khách hàng, sửa vào đó là đổi tên vai trò trên màn hình của người khác.
+	ten := strings.TrimSpace(req.DisplayName)
+	moTa := strings.TrimSpace(req.Description)
+	if err := s.roles.SetLabel(ctx, id, ten, moTa); err != nil {
 		return nil, err
 	}
+	role.DisplayName = ten
+	role.Description = moTa
 
 	counts, err := s.roles.CountUsers(ctx)
 	if err != nil {
@@ -455,7 +469,16 @@ func isInternalRole(roleID uint) bool {
 
 // ---------- Dựng response ----------
 
-func buildUser(u *domain.User) dto.UserResponse {
+// buildUser dựng response của một tài khoản.
+//
+// nhan là nhãn vai trò của cửa hàng (roleRepository.Labels). Nó là THAM SỐ BẮT
+// BUỘC chứ không phải tuỳ chọn: quan hệ Role nạp kèm user luôn là dòng mặc định
+// dùng chung, nên quên nhãn ở đây là trang Người dùng in một tên còn trang Vai
+// trò in tên khác — cùng một vai trò, cùng một cửa hàng. Bắt truyền vào thì
+// trình biên dịch liệt kê hộ mọi chỗ phải nhớ.
+//
+// nil = cửa hàng chưa đặt tên riêng cho vai trò nào.
+func buildUser(u *domain.User, nhan map[uint]domain.RoleLabel) dto.UserResponse {
 	res := dto.UserResponse{
 		ID:            u.ID,
 		FullName:      u.FullName,
@@ -472,6 +495,9 @@ func buildUser(u *domain.User) dto.UserResponse {
 	if u.Role != nil {
 		res.RoleName = u.Role.Name
 		res.RoleDisplayName = u.Role.DisplayName
+		if n, ok := nhan[u.RoleID]; ok && n.DisplayName != "" {
+			res.RoleDisplayName = n.DisplayName
+		}
 	}
 	return res
 }

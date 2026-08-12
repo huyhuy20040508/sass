@@ -173,7 +173,13 @@ func (fakeRoleRepo) FindByID(_ context.Context, id uint) (*domain.Role, error) {
 
 func (fakeRoleRepo) List(_ context.Context) ([]domain.Role, error) { return nil, nil }
 
-func (fakeRoleRepo) Update(_ context.Context, _ *domain.Role) error { return nil }
+// Nhãn vai trò theo từng cửa hàng — bài kiểm ở tệp này không đụng tới, trả rỗng
+// nghĩa là "cửa hàng chưa đặt tên riêng", tức giữ tên mặc định của roles.
+func (fakeRoleRepo) Labels(_ context.Context) (map[uint]domain.RoleLabel, error) {
+	return map[uint]domain.RoleLabel{}, nil
+}
+
+func (fakeRoleRepo) SetLabel(_ context.Context, _ uint, _, _ string) error { return nil }
 
 func (fakeRoleRepo) CountUsers(_ context.Context) (map[uint]int64, error) {
 	return map[uint]int64{}, nil

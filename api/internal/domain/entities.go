@@ -81,6 +81,40 @@ type Role struct {
 	UpdatedAt   time.Time `json:"updated_at"`
 }
 
+// RoleLabel là tên MỘT cửa hàng đặt cho MỘT vai trò, đè lên tên mặc định trong
+// bảng roles.
+//
+// Vì sao phải có bảng riêng: roles là bảng dùng chung (bốn dòng, id cố định, code
+// tham chiếu thẳng bằng SuperAdminRoleID = 1...), nên ghi tên hiển thị vào đó là
+// ghi cho MỌI khách hàng — cửa hàng này đổi "Nhân viên" thành "Thu ngân" thì cửa
+// hàng kia mở trang lên thấy nhân viên của mình đổi tên. Tách nhãn ra đây thì
+// bảng roles chỉ còn được ĐỌC trong luồng phục vụ request.
+//
+// Không có nhãn = dùng tên mặc định của roles. Đó là trạng thái của mọi cửa hàng
+// mới, và cũng là thứ khiến bảng này không bao giờ bắt buộc phải có dữ liệu.
+type RoleLabel struct {
+	ID uint `json:"id" gorm:"primaryKey"`
+	TenantOwned
+	RoleID      uint      `json:"role_id"`
+	DisplayName string    `json:"display_name"`
+	Description string    `json:"description"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+// ApplyLabel đè nhãn của cửa hàng lên vai trò dùng chung.
+//
+// Chỉ đụng tới tên hiển thị và mô tả. `Name` (mã vai trò) là thứ middleware và
+// gate của trang quản trị so khớp để phân quyền — nó không phải chữ để đọc, và
+// không cửa hàng nào được đổi.
+func (r *Role) ApplyLabel(label *RoleLabel) {
+	if r == nil || label == nil || label.DisplayName == "" {
+		return
+	}
+	r.DisplayName = label.DisplayName
+	r.Description = label.Description
+}
+
 // Tên vai trò chuẩn (khớp seed.sql).
 const (
 	RoleSuperAdmin = "super_admin"

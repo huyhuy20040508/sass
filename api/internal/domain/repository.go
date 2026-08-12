@@ -830,11 +830,23 @@ type NotificationRepository interface {
 type RoleRepository interface {
 	FindByName(ctx context.Context, name string) (*Role, error)
 	FindByID(ctx context.Context, id uint) (*Role, error)
-	// List trả về mọi vai trò, sắp theo id (super_admin → customer).
+	// List trả về mọi vai trò, sắp theo id (super_admin → customer), ĐÃ đè nhãn
+	// riêng của cửa hàng trong ctx.
 	List(ctx context.Context) ([]Role, error)
-	// Update chỉ dùng để sửa tên hiển thị/mô tả. `name` là mã vai trò được code
-	// kiểm tra khắp nơi (RequireRoles, gate của trang quản trị) nên KHÔNG sửa được.
-	Update(ctx context.Context, r *Role) error
+	// Labels trả về nhãn vai trò của cửa hàng trong ctx, khoá là role id. Vai trò
+	// chưa đặt tên riêng thì không có mặt trong map.
+	//
+	// Dùng khi phải gắn tên hiển thị cho NHIỀU tài khoản một lượt: đọc một lần
+	// rồi tra trong bộ nhớ, thay vì mỗi dòng một câu truy vấn.
+	Labels(ctx context.Context) (map[uint]RoleLabel, error)
+	// SetLabel đặt tên hiển thị/mô tả của một vai trò CHO RIÊNG cửa hàng trong
+	// ctx. Bảng `roles` không bị ghi — nó dùng chung cho mọi khách hàng, xem
+	// RoleLabel.
+	//
+	// `name` (mã vai trò) không có mặt ở đây vì không sửa được: code kiểm tra nó
+	// khắp nơi (RequireRoles, gate của trang quản trị), đổi là khoá mọi người ra
+	// khỏi hệ thống.
+	SetLabel(ctx context.Context, roleID uint, displayName, description string) error
 	// CountUsers đếm số tài khoản còn sống của từng vai trò, khoá là role id.
 	CountUsers(ctx context.Context) (map[uint]int64, error)
 }

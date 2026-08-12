@@ -194,7 +194,7 @@ func (s *authService) VerifyEmail(ctx context.Context, req dto.VerifyEmailReques
 		return nil, err
 	}
 
-	return s.buildAuthResponse(user)
+	return s.buildAuthResponse(ctx, user)
 }
 
 // ResendVerification gửi lại mã, có chặn spam theo MAIL_RESEND_AFTER.
@@ -496,7 +496,7 @@ func (s *authService) Login(ctx context.Context, req dto.LoginRequest) (*dto.Aut
 	user.LastLoginAt = &now
 	_ = s.users.Update(ctx, user)
 
-	return s.buildAuthResponse(user)
+	return s.buildAuthResponse(ctx, user)
 }
 
 // LoginShop là đăng nhập của Shop Admin: mã cửa hàng + tên đăng nhập + mật khẩu.
@@ -559,7 +559,7 @@ func (s *authService) LoginShop(ctx context.Context, req dto.ShopLoginRequest) (
 	user.LastLoginAt = &now
 	_ = s.users.Update(ctx, user)
 
-	res, err := s.buildAuthResponse(user)
+	res, err := s.buildAuthResponse(ctx, user)
 	if err != nil {
 		return nil, err
 	}
@@ -738,7 +738,7 @@ func (s *authService) loginSocial(
 		return nil, updErr
 	}
 
-	return s.buildAuthResponse(user)
+	return s.buildAuthResponse(ctx, user)
 }
 
 func (s *authService) Refresh(ctx context.Context, refreshToken string) (*dto.AuthResponse, error) {
@@ -766,11 +766,38 @@ func (s *authService) Refresh(ctx context.Context, refreshToken string) (*dto.Au
 	if user.Status != "active" {
 		return nil, domain.ErrUserInactive
 	}
-	return s.buildAuthResponse(user)
+	return s.buildAuthResponse(ctx, user)
 }
 
 func (s *authService) Me(ctx context.Context, userID uint) (*domain.User, error) {
-	return s.users.FindByID(ctx, userID)
+	user, err := s.users.FindByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	s.ganNhanVaiTro(ctx, user)
+
+	return user, nil
+}
+
+// ganNhanVaiTro đè tên vai trò RIÊNG của cửa hàng lên user sắp trả ra ngoài.
+//
+// Quan hệ Role nạp kèm user là dòng của bảng dùng chung, tức tên mặc định của
+// nhà máy. Cửa hàng đặt tên khác ("Thu ngân" thay cho "Nhân viên") thì tên đó
+// nằm ở role_labels — không gắn vào đây là thanh tiêu đề và trang hồ sơ in một
+// tên, còn trang Vai trò in tên khác.
+//
+// Hỏng thì GIỮ TÊN MẶC ĐỊNH chứ không trả lỗi: đây là một chữ trên màn hình,
+// không phải lý do để một lượt đăng nhập thất bại.
+func (s *authService) ganNhanVaiTro(ctx context.Context, user *domain.User) {
+	if user == nil || user.Role == nil {
+		return
+	}
+	role, err := s.roles.FindByID(ctx, user.RoleID)
+	if err != nil {
+		return
+	}
+	user.Role.DisplayName = role.DisplayName
+	user.Role.Description = role.Description
 }
 
 // buildAuthResponse cấp cặp token cho một tài khoản đã xác thực xong.
@@ -780,7 +807,7 @@ func (s *authService) Me(ctx context.Context, userID uint) (*domain.User, error)
 // thẳng vào token để mọi lượt gọi sau đó bị khoá trong đúng cửa hàng ấy. Tài
 // khoản không có tenant thì jwt.Generate từ chối — thà không đăng nhập được còn
 // hơn phát ra một chiếc token không thuộc về đâu cả.
-func (s *authService) buildAuthResponse(user *domain.User) (*dto.AuthResponse, error) {
+func (s *authService) buildAuthResponse(ctx context.Context, user *domain.User) (*dto.AuthResponse, error) {
 	roleName := ""
 	if user.Role != nil {
 		roleName = user.Role.Name
