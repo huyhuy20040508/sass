@@ -6,10 +6,13 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'Tổng quan') — {{ config('app.name') }}</title>
 
-    {{-- Favicon nhúng thẳng vào trang: app này không có thư mục ảnh riêng, và
-         một chữ S trên nền tím là đủ để phân biệt tab SaaS Admin với tab Shop
-         Admin khi mở cả hai cùng lúc. --}}
-    <link rel="icon" href="data:image/svg+xml,{{ rawurlencode('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="7" fill="#4f46e5"/><text x="16" y="23" font-family="Segoe UI,Arial,sans-serif" font-size="20" font-weight="700" fill="#fff" text-anchor="middle">S</text></svg>') }}">
+    {{-- Favicon Sellio, dùng chung bộ ảnh với Shop Admin và trang giới thiệu
+         selliotech.store: .svg cho trình duyệt mới, .ico dự phòng,
+         apple-touch-icon cho màn hình chính iOS. Khác Shop Admin ở chỗ khu điều
+         hành nền tảng không cho khách đổi thương hiệu, nên gắn cứng. --}}
+    <link rel="icon" href="{{ asset('favicon.ico') }}?v=3" sizes="32x32">
+    <link rel="icon" type="image/svg+xml" href="{{ asset('favicon.svg') }}?v=3">
+    <link rel="apple-touch-icon" href="{{ asset('apple-touch-icon.png') }}?v=3">
 
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -43,16 +46,15 @@
             display: flex; flex-direction: column;
         }
         .sidebar .brand {
-            display: flex; align-items: center; gap: 10px;
+            display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
             padding: 18px 20px; color: #fff; text-decoration: none;
             border-bottom: 1px solid rgba(255, 255, 255, .08);
         }
-        .sidebar .brand-mark {
-            width: 32px; height: 32px; flex: 0 0 32px; border-radius: 8px;
-            background: var(--sa-accent); color: #fff;
-            display: grid; place-items: center; font-weight: 700;
-        }
-        .sidebar .brand-name { font-weight: 600; line-height: 1.15; }
+        /* max-width chặn bề ngang: logo chữ dài hơn chỗ trống thì tự co lại thay
+           vì tràn ra khỏi sidebar. */
+        .sidebar .brand-logo { height: 30px; width: auto; max-width: 100%; object-fit: contain; object-position: left; }
+        /* Ô vuông chỉ dùng khi sidebar thu gọn còn 64px. */
+        .sidebar .brand-mark { display: none; width: 32px; height: 32px; border-radius: 8px; }
         .sidebar .brand-sub { font-size: 11px; color: #9ca0bb; letter-spacing: .04em; text-transform: uppercase; }
 
         .nav-section {
@@ -102,7 +104,10 @@
 
         @media (max-width: 768px) {
             .sidebar { width: 64px; flex: 0 0 64px; }
-            .sidebar .brand-text, .sidebar .nav-section, .sidebar .nav-label, .badge-soon { display: none; }
+            .sidebar .brand { align-items: center; padding: 18px 0; }
+            .sidebar .brand-logo, .sidebar .brand-text,
+            .sidebar .nav-section, .sidebar .nav-label, .badge-soon { display: none; }
+            .sidebar .brand-mark { display: block; }
             .nav-link-x { justify-content: center; padding: 11px 0; }
         }
     </style>

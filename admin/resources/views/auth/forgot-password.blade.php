@@ -14,27 +14,44 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
     <style>
+        /* Nền và thẻ giữ y hệt trang đăng nhập để hai trang nhìn là một bộ —
+           xem chú thích đầy đủ ở auth/login.blade.php. */
         body {
             min-height: 100vh;
             margin: 0;
+            padding: 32px;
+            box-sizing: border-box;
             display: flex;
             align-items: center;
-            justify-content: center;
+            justify-content: flex-start;
             font-family: Roboto, sans-serif;
             font-size: 14.4px;
             color: #212529;
-            background: linear-gradient(rgba(15, 23, 42, .55), rgba(15, 23, 42, .55)),
-                        url('{{ asset('images/backround-login.jpg') }}') center / cover no-repeat fixed;
+            background: #2b2f36 url('{{ asset('images/login-bg.jpg') }}') center / cover no-repeat fixed;
         }
 
         .login-box {
             box-sizing: border-box;
             width: 100%;
-            max-width: 400px;
-            padding: 30px;
+            max-width: 520px;
+            margin-left: 6vw;
+            padding: 30px 34px 24px;
             background: #fff;
-            border-radius: 6px;
-            box-shadow: 0 .5rem 1rem rgba(0, 0, 0, .3);
+            border-radius: 10px;
+            box-shadow: 0 0 24px rgba(16, 24, 40, .10),
+                        0 8px 32px rgba(16, 24, 40, .18);
+        }
+
+        .login-box a { color: #1890ff; }
+
+        @media (max-width: 900px) {
+            body { justify-content: center; padding: 20px; }
+            .login-box { margin-left: 0; }
+        }
+
+        @media (max-width: 480px) {
+            body { padding: 16px; }
+            .login-box { padding: 26px 20px 20px; }
         }
     </style>
 </head>

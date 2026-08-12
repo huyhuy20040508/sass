@@ -6,10 +6,14 @@
     được. Khi làm xong trang nào thì đổi mục đó thành <a href> bình thường.
 --}}
 <aside class="sidebar">
+    {{-- Logo Sellio bản chữ sáng vì nền sidebar là tím đậm. Sidebar thu về 64px
+         ở màn hình hẹp, lúc đó logo chữ dài không còn đọc được nên đổi sang ô
+         vuông favicon. Khu điều hành nền tảng là của mình, không phải của khách,
+         nên logo gắn cứng chứ không lấy từ cấu hình như bên Shop Admin. --}}
     <a href="{{ route('platform.dashboard') }}" class="brand">
-        <span class="brand-mark">S</span>
+        <img src="{{ asset('images/logo-default-wide-light.svg') }}" alt="{{ config('app.name') }}" class="brand-logo">
+        <img src="{{ asset('favicon.svg') }}" alt="{{ config('app.name') }}" class="brand-mark">
         <span class="brand-text">
-            <div class="brand-name">{{ config('app.name') }}</div>
             <div class="brand-sub">Điều hành nền tảng</div>
         </span>
     </a>
