@@ -86,11 +86,109 @@ const (
 	SubscriptionCanceled = "canceled"
 )
 
-// Ba gói bán ra. Giá trị khớp ENUM `plan` dưới database.
+// Ba gói bán ra. Giá trị khớp ENUM `plan` của subscriptions VÀ cột `code` của
+// bảng giá plans dưới database — thêm mã gói mới là phải sửa cả hai bên.
 const (
 	PlanKhoiDau = "khoi_dau"
 	PlanCuaHang = "cua_hang"
 	PlanChuoi   = "chuoi"
+)
+
+// App là một phần mềm nền tảng bán ra.
+//
+// Hôm nay danh mục có đúng một dòng — AppOrder, phần mềm quản trị bán hàng
+// đang chạy ở order.selliotech.store. Vì chỉ có một nên chưa chỗ nào phải hỏi
+// "app nào": Subscription ghi gói mà không ghi gói CỦA app nào. Bảng có mặt để
+// tới lúc có sản phẩm thứ hai thì không phải vừa dựng bảng vừa điền ngược cho
+// các thuê bao đang chạy.
+//
+// Code — chứ không phải ID — là thứ đem đi dùng ở nơi khác (tiền tố tên miền,
+// cấu hình, về sau là giá trị trong JWT/URL): ID là số tự sinh của một
+// database, chép cấu hình sang máy khác là lệch.
+type App struct {
+	ID   uint   `json:"id" gorm:"primaryKey"`
+	Code string `json:"code"`
+	Name string `json:"name"`
+	// Tagline: một dòng mô tả để hiện trong khu điều hành và bảng giá.
+	Tagline StringOrNull `json:"tagline"`
+	// Status: planned | active | retired
+	Status    string    `json:"status"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+func (App) TableName() string { return "apps" }
+
+// Mã của các app. Giá trị khớp cột `code` dưới database.
+const (
+	// AppOrder là phần mềm ĐANG CHẠY — dòng duy nhất của bảng apps hôm nay.
+	AppOrder = "order"
+)
+
+// Trạng thái của một app trong danh mục.
+//
+// Mặc định dưới database là 'planned' chứ không phải 'active': dòng mới thêm mà
+// tự nhiên bán được là cách nhanh nhất để ký hợp đồng cho phần mềm chưa tồn tại.
+// AppRetired là NGỪNG BÁN, không phải ngừng chạy — khách cũ vẫn dùng tiếp.
+const (
+	AppPlanned = "planned"
+	AppActive  = "active"
+	AppRetired = "retired"
+)
+
+// Plan là MỘT MỨC GIÁ trong bảng giá hiện hành: gói này, app này, chu kỳ này.
+//
+// ĐÂY LÀ BẢNG GIÁ, KHÔNG PHẢI HỢP ĐỒNG. Subscription CHÉP Price/MaxShops ra
+// lúc ký và từ đó sống độc lập — đừng bao giờ hiển thị giá của thuê bao bằng
+// cách tra ngược về đây, vì bảng giá được phép đổi còn hợp đồng đã ký thì
+// không. Chiều tra cứu hợp lệ duy nhất là lấy TÊN gói để hiển thị.
+//
+// Một gói bán theo tháng và theo năm là HAI dòng Plan, hai giá — khoá duy nhất
+// là (AppID, Code, BillingCycle).
+type Plan struct {
+	ID    uint   `json:"id" gorm:"primaryKey"`
+	AppID uint   `json:"app_id"`
+	Code  string `json:"code"`
+	Name  string `json:"name"`
+	// Tagline: một dòng "gói này dành cho ai".
+	Tagline StringOrNull `json:"tagline"`
+	// BillingCycle: thang | nam
+	BillingCycle string `json:"billing_cycle"`
+	// Price nil = "Liên hệ" (gói Chuỗi): chưa có giá công khai, KHÁC 0 là miễn
+	// phí. Subscription.Price thì không nil được — ký hợp đồng là phải có số.
+	Price *float64 `json:"price"`
+	// MaxShops nil = số chi nhánh thoả thuận riêng lúc ký. Đây là con số người
+	// lập hợp đồng phải chép sang Subscription.MaxShops; quên chép thì mặc định
+	// bên đó là 1, tức là bán gói chuỗi mà khách chỉ mở được một chi nhánh.
+	MaxShops *uint `json:"max_shops"`
+	// OwnDomain: gói này có được cấp tên miền riêng không (cả subdomain mình cấp
+	// lẫn tên miền của khách — `TenantDomain.Kind` mới là chỗ phân biệt hai loại).
+	//
+	// ĐÂY LÀ ĐIỀU KHOẢN BÁN HÀNG NẰM TRONG DỮ LIỆU, cố ý không viết thành
+	// `if plan == "chuoi"` trong code: đổi chính sách là UPDATE một ô trong bảng
+	// giá, không phải sửa code rồi triển khai lại. Nơi ép luật là `cmd/ten-mien`,
+	// đường duy nhất ghi vào sổ tên miền.
+	OwnDomain bool `json:"own_domain"`
+	TrialDays uint `json:"trial_days"`
+	// Status: active | retired. Retired là NGỪNG BÁN MỚI — không xoá dòng, vì
+	// thuê bao cũ còn tra tên gói ở đây.
+	Status    string    `json:"status"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+func (Plan) TableName() string { return "plans" }
+
+// Trạng thái của một mức giá.
+const (
+	PlanStatusActive  = "active"
+	PlanStatusRetired = "retired"
+)
+
+// Chu kỳ tính tiền. Cùng bộ giá trị với Subscription.BillingCycle.
+const (
+	CycleThang = "thang"
+	CycleNam   = "nam"
 )
 
 // PlatformUser là tài khoản của KHU ĐIỀU HÀNH nền tảng — mình và người làm cùng,
