@@ -12,6 +12,7 @@ import (
 	"sass-api/config"
 	"sass-api/internal/domain"
 	"sass-api/internal/dto"
+	"sass-api/internal/tenant"
 	"sass-api/pkg/facebook"
 	"sass-api/pkg/google"
 	"sass-api/pkg/hash"
@@ -260,7 +261,7 @@ func (s *authService) issueCode(ctx context.Context, user *domain.User, purpose 
 			zap.String("email", user.Email), zap.String("code", code))
 	}
 
-	msgID, err := s.sendVerificationMail(user, code, ttl, purpose)
+	msgID, err := s.sendVerificationMail(ctx, user, code, ttl, purpose)
 	if err != nil {
 		logger.Error("gửi email xác thực thất bại", zap.String("email", user.Email), zap.Error(err))
 		return nil, domain.ErrMailSendFailed
@@ -281,17 +282,17 @@ func (s *authService) issueCode(ctx context.Context, user *domain.User, purpose 
 
 // storeName — tên cửa hàng in trong email. Lấy từ cấu hình hệ thống; chưa khai
 // thì dùng tên hiển thị của hộp thư gửi đi.
-func (s *authService) storeName() string {
+func (s *authService) storeName(ctx context.Context) string {
 	if s.settings != nil {
-		if v := strings.TrimSpace(s.settings.Get(SettingSiteName)); v != "" {
+		if v := strings.TrimSpace(s.settings.Get(ctx, SettingSiteName)); v != "" {
 			return v
 		}
 	}
 	return s.mailCfg.FromName
 }
 
-func (s *authService) sendVerificationMail(user *domain.User, code string, ttl time.Duration, purpose string) (string, error) {
-	store := s.storeName()
+func (s *authService) sendVerificationMail(ctx context.Context, user *domain.User, code string, ttl time.Duration, purpose string) (string, error) {
+	store := s.storeName(ctx)
 
 	data := mailer.VerificationData{
 		StoreName: store,
@@ -299,7 +300,7 @@ func (s *authService) sendVerificationMail(user *domain.User, code string, ttl t
 		Name:      user.FullName,
 		Code:      code,
 		Minutes:   int(ttl.Minutes()),
-		Hotline:   settingText(s.settings, SettingContactPhone),
+		Hotline:   settingText(ctx, s.settings, SettingContactPhone),
 		Year:      time.Now().Year(),
 	}
 	// Tiêu đề kèm mã giúp khách thấy ngay ở danh sách thư, đỡ phải mở
@@ -515,7 +516,7 @@ func (s *authService) Login(ctx context.Context, req dto.LoginRequest) (*dto.Aut
 // mật khẩu sẽ thấy câu "sai thông tin đăng nhập" — chấp nhận được, vì gõ đúng
 // một lần là biết ngay lý do thật.
 func (s *authService) LoginShop(ctx context.Context, req dto.ShopLoginRequest) (*dto.AuthResponse, error) {
-	tenant, err := s.tenants.FindByCode(ctx, normalizeShopCode(req.ShopCode))
+	shop, err := s.tenants.FindByCode(ctx, normalizeShopCode(req.ShopCode))
 	if err != nil {
 		if err == domain.ErrNotFound {
 			return nil, domain.ErrShopLoginFailed
@@ -523,7 +524,14 @@ func (s *authService) LoginShop(ctx context.Context, req dto.ShopLoginRequest) (
 		return nil, err
 	}
 
-	user, err := s.users.FindByTenantUsername(ctx, tenant.ID, NormalizeUsername(req.Username))
+	// Từ đây trở xuống, mọi câu truy vấn của lượt đăng nhập này bị khoá trong
+	// đúng cửa hàng vừa tra ra. Đây là chỗ DUY NHẤT trong luồng phục vụ request
+	// mà tenant đến từ dữ liệu người dùng gõ vào chứ không từ token — nên nó nằm
+	// SAU khi mã cửa hàng đã được đối chiếu với database, và mật khẩu vẫn còn
+	// phải kiểm ở dưới.
+	ctx = tenant.WithID(ctx, shop.ID)
+
+	user, err := s.users.FindByTenantUsername(ctx, shop.ID, NormalizeUsername(req.Username))
 	if err != nil {
 		if err == domain.ErrNotFound {
 			return nil, domain.ErrShopLoginFailed
@@ -540,7 +548,7 @@ func (s *authService) LoginShop(ctx context.Context, req dto.ShopLoginRequest) (
 		return nil, domain.ErrShopLoginFailed
 	}
 
-	if tenant.Status != domain.TenantActive {
+	if shop.Status != domain.TenantActive {
 		return nil, domain.ErrTenantSuspended
 	}
 	if user.Status != "active" {
@@ -555,7 +563,7 @@ func (s *authService) LoginShop(ctx context.Context, req dto.ShopLoginRequest) (
 	if err != nil {
 		return nil, err
 	}
-	res.Tenant = tenant
+	res.Tenant = shop
 
 	return res, nil
 }
@@ -741,6 +749,16 @@ func (s *authService) Refresh(ctx context.Context, refreshToken string) (*dto.Au
 	if claims.Type != jwt.RefreshToken {
 		return nil, domain.ErrInvalidCredentials
 	}
+	// Refresh token có chữ ký nên mã cửa hàng trong đó cũng không sửa được. Từ
+	// chối token cũ chưa mang mã: lùi về một cửa hàng mặc định ở đây là mở đúng
+	// cái cửa mà middleware vừa đóng.
+	if claims.TenantID == 0 {
+		return nil, domain.ErrInvalidCredentials
+	}
+	// Đường này KHÔNG đi qua middleware xác thực (nó nhận refresh token trong
+	// body), nên ctx tới đây chưa có tenant — phải tự gắn trước khi chạm database.
+	ctx = tenant.WithID(ctx, claims.TenantID)
+
 	user, err := s.users.FindByID(ctx, claims.UserID)
 	if err != nil {
 		return nil, err
@@ -755,16 +773,23 @@ func (s *authService) Me(ctx context.Context, userID uint) (*domain.User, error)
 	return s.users.FindByID(ctx, userID)
 }
 
+// buildAuthResponse cấp cặp token cho một tài khoản đã xác thực xong.
+//
+// TenantID lấy từ CHÍNH DÒNG user đọc dưới database, không phải từ tham số nào
+// khác: đó là nguồn sự thật về việc tài khoản này thuộc cửa hàng nào, và nó đi
+// thẳng vào token để mọi lượt gọi sau đó bị khoá trong đúng cửa hàng ấy. Tài
+// khoản không có tenant thì jwt.Generate từ chối — thà không đăng nhập được còn
+// hơn phát ra một chiếc token không thuộc về đâu cả.
 func (s *authService) buildAuthResponse(user *domain.User) (*dto.AuthResponse, error) {
 	roleName := ""
 	if user.Role != nil {
 		roleName = user.Role.Name
 	}
-	access, _, err := s.jwt.Generate(user.ID, roleName, jwt.AccessToken)
+	access, _, err := s.jwt.Generate(user.ID, user.TenantID, roleName, jwt.AccessToken)
 	if err != nil {
 		return nil, err
 	}
-	refresh, _, err := s.jwt.Generate(user.ID, roleName, jwt.RefreshToken)
+	refresh, _, err := s.jwt.Generate(user.ID, user.TenantID, roleName, jwt.RefreshToken)
 	if err != nil {
 		return nil, err
 	}

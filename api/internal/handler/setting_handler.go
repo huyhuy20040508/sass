@@ -85,7 +85,7 @@ func (h *SettingHandler) Update(c *gin.Context) {
 //	@Success		200	{object}	response.Body{data=map[string]string}
 //	@Router			/settings [get]
 func (h *SettingHandler) Public(c *gin.Context) {
-	response.OK(c, h.svc.Public())
+	response.OK(c, h.svc.Public(c.Request.Context()))
 }
 
 // handleSettingError trả 422 kèm lỗi từng khoá khi payload không hợp lệ, còn lại

@@ -1,7 +1,6 @@
 package repository
 
 import (
-	"context"
 	"testing"
 
 	"gorm.io/gorm"
@@ -16,12 +15,12 @@ import (
 func newProduct(t *testing.T, db *gorm.DB, slug, sku string) *domain.Product {
 	t.Helper()
 	var categoryID uint
-	db.Raw("SELECT id FROM categories LIMIT 1").Scan(&categoryID)
+	db.WithContext(ctxRaw()).Raw("SELECT id FROM categories LIMIT 1").Scan(&categoryID)
 	if categoryID == 0 {
 		t.Skip("bỏ qua: DB test chưa có danh mục nào")
 	}
 
-	db.Unscoped().Where("slug = ? OR sku = ?", slug, sku).Delete(&domain.Product{})
+	db.WithContext(ctxTest()).Unscoped().Where("slug = ? OR sku = ?", slug, sku).Delete(&domain.Product{})
 	p := &domain.Product{
 		CategoryID: categoryID,
 		Name:       "SP kiểm thử " + sku,
@@ -31,12 +30,12 @@ func newProduct(t *testing.T, db *gorm.DB, slug, sku string) *domain.Product {
 		Status:     domain.ProductStatusActive,
 		IsActive:   true,
 	}
-	if err := db.Create(p).Error; err != nil {
+	if err := db.WithContext(ctxTest()).Create(p).Error; err != nil {
 		t.Fatalf("không tạo được sản phẩm %s: %v", sku, err)
 	}
 	t.Cleanup(func() {
-		db.Unscoped().Where("product_id = ?", p.ID).Delete(&domain.ProductVariant{})
-		db.Unscoped().Delete(&domain.Product{}, p.ID)
+		db.WithContext(ctxTest()).Unscoped().Where("product_id = ?", p.ID).Delete(&domain.ProductVariant{})
+		db.WithContext(ctxTest()).Unscoped().Delete(&domain.Product{}, p.ID)
 	})
 	return p
 }
@@ -50,7 +49,7 @@ func newProduct(t *testing.T, db *gorm.DB, slug, sku string) *domain.Product {
 func TestExistsBySKUBatTrungTruocKhiGhi(t *testing.T) {
 	db := testDB(t)
 	repo := NewProductRepository(db)
-	ctx := context.Background()
+	ctx := ctxTest()
 
 	p := newProduct(t, db, "sp-test-sku-goc", "TEST-SKU-GOC")
 
@@ -89,7 +88,7 @@ func TestExistsBySKUBatTrungTruocKhiGhi(t *testing.T) {
 func TestXoaRoiTaoLaiCungSlugVaSKU(t *testing.T) {
 	db := testDB(t)
 	repo := NewProductRepository(db)
-	ctx := context.Background()
+	ctx := ctxTest()
 
 	const slug, sku = "sp-test-tao-lai", "TEST-TAO-LAI"
 	first := newProduct(t, db, slug, sku)
@@ -130,7 +129,7 @@ func TestXoaRoiTaoLaiCungSlugVaSKU(t *testing.T) {
 func TestSetStatusDongBoCoHienThi(t *testing.T) {
 	db := testDB(t)
 	repo := NewProductRepository(db)
-	ctx := context.Background()
+	ctx := ctxTest()
 
 	p := newProduct(t, db, "sp-test-trang-thai", "TEST-TRANG-THAI")
 
@@ -171,7 +170,7 @@ func TestSetStatusDongBoCoHienThi(t *testing.T) {
 func TestDeleteManyXoaCaLo(t *testing.T) {
 	db := testDB(t)
 	repo := NewProductRepository(db)
-	ctx := context.Background()
+	ctx := ctxTest()
 
 	a := newProduct(t, db, "sp-test-xoa-lo-1", "TEST-XOA-LO-1")
 	b := newProduct(t, db, "sp-test-xoa-lo-2", "TEST-XOA-LO-2")
@@ -204,10 +203,10 @@ func TestDeleteManyXoaCaLo(t *testing.T) {
 func TestListSlimKhongNapBienTheVaAnh(t *testing.T) {
 	db := testDB(t)
 	repo := NewProductRepository(db)
-	ctx := context.Background()
+	ctx := ctxTest()
 
 	p := newProduct(t, db, "sp-test-slim", "TEST-SLIM")
-	if err := db.Create(&domain.ProductVariant{
+	if err := db.WithContext(ctxTest()).Create(&domain.ProductVariant{
 		ProductID: p.ID, SKU: "TEST-SLIM-M", Size: "M", IsActive: true,
 	}).Error; err != nil {
 		t.Fatalf("không tạo được biến thể: %v", err)
@@ -261,7 +260,7 @@ func TestListSlimKhongNapBienTheVaAnh(t *testing.T) {
 func TestListLocTheoTrangThai(t *testing.T) {
 	db := testDB(t)
 	repo := NewProductRepository(db)
-	ctx := context.Background()
+	ctx := ctxTest()
 
 	hidden := newProduct(t, db, "sp-test-loc-am", "TEST-LOC-AN")
 	stopped := newProduct(t, db, "sp-test-loc-ngung", "TEST-LOC-NGUNG")
@@ -307,11 +306,11 @@ func TestListLocTheoTrangThai(t *testing.T) {
 // MySQL trên máy dev đang để lỏng.
 func TestSuaSanPhamKhongDapNgayTaoCuaBienTheVaAnh(t *testing.T) {
 	db := testDB(t)
-	if err := db.Exec("SET SESSION sql_mode = 'STRICT_TRANS_TABLES,NO_ZERO_DATE,NO_ZERO_IN_DATE'").Error; err != nil {
+	if err := db.WithContext(ctxRaw()).Exec("SET SESSION sql_mode = 'STRICT_TRANS_TABLES,NO_ZERO_DATE,NO_ZERO_IN_DATE'").Error; err != nil {
 		t.Fatalf("không đặt được sql_mode nghiêm ngặt: %v", err)
 	}
 	repo := NewProductRepository(db)
-	ctx := context.Background()
+	ctx := ctxTest()
 	p := newProduct(t, db, "sp-test-ngay-tao", "TEST-NGAY-TAO")
 
 	// Lần 1: tạo biến thể + ảnh.
@@ -375,7 +374,7 @@ func TestSuaSanPhamKhongDapNgayTaoCuaBienTheVaAnh(t *testing.T) {
 func TestSuaBienTheLuuDuocGiaTriRong(t *testing.T) {
 	db := testDB(t)
 	repo := NewProductRepository(db)
-	ctx := context.Background()
+	ctx := ctxTest()
 	p := newProduct(t, db, "sp-test-gia-tri-rong", "TEST-GIATRI-RONG")
 
 	gia := 650000.0

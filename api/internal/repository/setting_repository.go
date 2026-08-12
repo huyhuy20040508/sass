@@ -43,7 +43,11 @@ func (r *settingRepository) Upsert(ctx context.Context, items []domain.Setting) 
 	}
 	return r.db.WithContext(ctx).
 		Clauses(clause.OnConflict{
-			Columns:   []clause.Column{{Name: "key"}},
+			// Khoá thật là (tenant_id, key) — mỗi cửa hàng một bộ cấu hình. MySQL
+			// không nhận đích xung đột nên GORM bỏ qua danh sách này và để database
+			// tự bắt theo khoá unique nào vỡ; vẫn khai đủ cho khớp với lược đồ,
+			// khai thiếu thì người đọc tưởng cấu hình dùng chung toàn hệ thống.
+			Columns:   []clause.Column{{Name: "tenant_id"}, {Name: "key"}},
 			DoUpdates: clause.AssignmentColumns([]string{"value", "group", "updated_at"}),
 		}).
 		Create(&items).Error

@@ -131,10 +131,9 @@ func (r *userRepository) ExistsByUsernameExcept(ctx context.Context, username st
 		return false, nil
 	}
 
-	// Chưa lọc theo tenant_id, dù khoá thật là (tenant_id, username): tầng service
-	// hiện chưa biết mình đang ở tenant nào, và mọi dòng đều mang tenant_id = 1.
-	// Vì vậy chỗ này CHẶT HƠN khoá thật — chỉ sai từ khách hàng thứ hai trở đi, và
-	// đúng lúc đó plugin GORM sẽ tự chèn `WHERE tenant_id` vào đây.
+	// Không tự viết `tenant_id = ?`: bộ lọc ở tenant_scope.go chèn sẵn vào mọi câu
+	// truy vấn, nên điều kiện ở đây khớp đúng khoá thật (tenant_id, username) —
+	// hai cửa hàng cùng có tài khoản 'admin' là bình thường và không được báo trùng.
 	//
 	// Unscoped vì cùng lý do với ExistsByEmailExcept: uq_users_username không loại
 	// tài khoản đã xoá mềm ra, tên vẫn bị giữ chỗ.

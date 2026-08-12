@@ -94,11 +94,29 @@ func New(cfg *config.Config, jwtMgr *jwt.Manager, h Handlers) *gin.Engine {
 		// Hạn mức đặt theo mức KHÁCH THẬT dùng tới, không phải theo mức "đủ chặn":
 		// gõ sai mật khẩu 3-4 lần rồi nhớ ra là chuyện thường, nên 10 lượt/5 phút
 		// vẫn thoải mái cho người quên, trong khi vòng lặp dò mật khẩu thì chết ngay.
+		// khachLa gắn bộ middleware cho các đường CÔNG KHAI CÓ CHẠM DATABASE.
+		//
+		// OptionalJWTAuth để người đã đăng nhập mang theo cửa hàng của mình;
+		// TenantRequired để người chưa đăng nhập nhận một câu trả lời đúng sự thật
+		// ("chưa xác định được cửa hàng") thay vì lỗi 500 vọng lên từ bộ lọc tenant
+		// dưới tầng GORM.
+		//
+		// Đây là chỗ sẽ đổi khi có phân giải cửa hàng THEO TÊN MIỀN: cắm thêm một
+		// middleware đọc Host vào trước TenantRequired là cả cụm phục vụ được khách
+		// vãng lai, không phải sửa từng route.
+		khachLa := func(g *gin.RouterGroup) *gin.RouterGroup {
+			return g.Group("", middleware.OptionalJWTAuth(jwtMgr), middleware.TenantRequired())
+		}
+
 		auth := v1.Group("/auth")
 		{
-			// Ba đường này khu QUẢN TRỊ gọi (ApiClient: /auth/login, /auth/refresh,
-			// /auth/me) nên luôn bật, kể cả khi đã tắt phần bán cho khách.
-			auth.POST("/login", han("dang-nhap", 10, 5*time.Minute), h.Auth.Login)
+			// Hai đường khu QUẢN TRỊ gọi (ApiClient: /auth/refresh, /auth/me) nên luôn
+			// bật, kể cả khi đã tắt phần bán cho khách. Đăng nhập của khu quản trị đi
+			// đường /auth/shop-login ngay dưới.
+			//
+			// /auth/login là đăng nhập bằng EMAIL của khách mua sắm, nên nó phải biết
+			// đang đăng nhập vào cửa hàng nào — cùng lý do với cụm storefront.
+			khachLa(auth).POST("/login", han("dang-nhap", 10, 5*time.Minute), h.Auth.Login)
 			// Đăng nhập 3 ô của Shop Admin (mã cửa hàng / tên đăng nhập / mật khẩu).
 			//
 			// Hạn mức RIÊNG, không dùng chung khoá "dang-nhap": gộp chung thì một máy
@@ -113,28 +131,31 @@ func New(cfg *config.Config, jwtMgr *jwt.Manager, h Handlers) *gin.Engine {
 			// Phần còn lại chỉ dành cho khách tự đăng ký ngoài cửa hàng. Tài khoản
 			// nhân viên do quản trị viên tạo ở /admin/users, không đi đường này.
 			if cfg.App.EnableStorefront {
-				auth.POST("/register", han("dang-ky", 5, 10*time.Minute), h.Auth.Register)
-				auth.POST("/verify-email", han("xac-thuc", 10, 5*time.Minute), h.Auth.VerifyEmail)
+				khach := khachLa(auth)
+				khach.POST("/register", han("dang-ky", 5, 10*time.Minute), h.Auth.Register)
+				khach.POST("/verify-email", han("xac-thuc", 10, 5*time.Minute), h.Auth.VerifyEmail)
 				// Gửi lại mã là đường DUY NHẤT khiến API tự gửi thư ra ngoài, nên siết
 				// chặt nhất: không có nó thì bất kỳ ai cũng dội được hàng nghìn thư vào
 				// hộp thư của người khác, và địa chỉ gửi của cửa hàng bị đánh dấu spam.
-				auth.POST("/resend-verification", han("gui-lai-ma", 5, 10*time.Minute), h.Auth.ResendVerification)
-				auth.POST("/forgot-password", han("quen-mat-khau", 5, 10*time.Minute), h.Auth.ForgotPassword)
-				auth.POST("/reset-password", han("dat-lai-mat-khau", 10, 5*time.Minute), h.Auth.ResetPassword)
-				auth.POST("/facebook", han("dang-nhap-mxh", 20, 5*time.Minute), h.Auth.FacebookLogin)
-				auth.POST("/google", han("dang-nhap-mxh", 20, 5*time.Minute), h.Auth.GoogleLogin)
+				khach.POST("/resend-verification", han("gui-lai-ma", 5, 10*time.Minute), h.Auth.ResendVerification)
+				khach.POST("/forgot-password", han("quen-mat-khau", 5, 10*time.Minute), h.Auth.ForgotPassword)
+				khach.POST("/reset-password", han("dat-lai-mat-khau", 10, 5*time.Minute), h.Auth.ResetPassword)
+				khach.POST("/facebook", han("dang-nhap-mxh", 20, 5*time.Minute), h.Auth.FacebookLogin)
+				khach.POST("/google", han("dang-nhap-mxh", 20, 5*time.Minute), h.Auth.GoogleLogin)
 			}
 		}
 
 		// --- Catalog (công khai, chỉ đọc) ---
-		v1.GET("/categories", h.Category.List)
-		v1.GET("/categories/:id", h.Category.Get)
-		v1.GET("/brands", h.Brand.List)
-		v1.GET("/brands/:id", h.Brand.Get)
+		//
 		// Đọc token nếu có: cùng một endpoint, nhưng chỉ nhân viên quản trị mới thấy
 		// giá vốn. Khách và người lạ nhận đúng dữ liệu như trước.
-		v1.GET("/products", middleware.OptionalJWTAuth(jwtMgr), h.Product.List)
-		v1.GET("/products/:slug", middleware.OptionalJWTAuth(jwtMgr), h.Product.GetBySlug)
+		catalog := khachLa(v1)
+		catalog.GET("/categories", h.Category.List)
+		catalog.GET("/categories/:id", h.Category.Get)
+		catalog.GET("/brands", h.Brand.List)
+		catalog.GET("/brands/:id", h.Brand.Get)
+		catalog.GET("/products", h.Product.List)
+		catalog.GET("/products/:slug", h.Product.GetBySlug)
 
 		// ====================================================================
 		// CỤM BÁN HÀNG CHO KHÁCH (storefront) — TẮT mặc định ở dự án này.
@@ -146,53 +167,60 @@ func New(cfg *config.Config, jwtMgr *jwt.Manager, h Handlers) *gin.Engine {
 		// sách URI trong admin/app/Services/ApiClient.php.
 		// ====================================================================
 		if cfg.App.EnableStorefront {
+			// Cả cụm dưới đây phục vụ khách mua sắm, tức là phải biết đang mở cửa
+			// hàng nào. Hôm nay chỉ khách ĐÃ ĐĂNG NHẬP mới nói được điều đó (qua
+			// token); khách vãng lai sẽ nhận 401 cho tới khi có phân giải theo tên
+			// miền — kể cả webhook thanh toán, vì cổng thanh toán cũng không có
+			// cách nào tự khai mình đang báo tiền cho cửa hàng nào.
+			store := khachLa(v1)
+
 			// --- Banner trang chủ (công khai, chỉ đọc) ---
 			// Đường này CHỈ trả banner đang bật và trong lịch chạy — bản đầy đủ cho
 			// trang quản trị nằm ở /admin/banners. "positions" đứng trước để không bị
 			// hiểu nhầm thành tham số nào khác nếu sau này thêm route con.
-			v1.GET("/banners/positions", h.Banner.Positions)
-			v1.GET("/banners", h.Banner.Public)
+			store.GET("/banners/positions", h.Banner.Positions)
+			store.GET("/banners", h.Banner.Public)
 
 			// --- Cấu hình công khai (storefront đọc tên cửa hàng, liên hệ, phí ship) ---
-			v1.GET("/settings", h.Setting.Public)
+			store.GET("/settings", h.Setting.Public)
 
 			// --- Yêu cầu khách gửi từ storefront (form Liên hệ / Thu mua / nhận tin) ---
 			// Siết tay vì đây là hai đường AI CŨNG GỬI ĐƯỢC, không cần tài khoản: bỏ ngỏ
 			// thì một vòng lặp là đủ nhồi hàng nghìn dòng rác, và nhân viên phải ngồi
 			// lọc tay giữa đống đó để tìm khách thật.
-			v1.POST("/contact-requests", han("gui-yeu-cau", 5, 10*time.Minute), h.Contact.Create)
-			v1.POST("/newsletter/subscribe", han("dang-ky-nhan-tin", 5, 10*time.Minute), h.Contact.Subscribe)
+			store.POST("/contact-requests", han("gui-yeu-cau", 5, 10*time.Minute), h.Contact.Create)
+			store.POST("/newsletter/subscribe", han("dang-ky-nhan-tin", 5, 10*time.Minute), h.Contact.Subscribe)
 
 			// --- Tra cứu đơn hàng công khai (khách không cần đăng nhập) ---
 			// Có hạn mức vì đường này trả THÔNG TIN CÁ NHÂN (tên, số điện thoại, địa
 			// chỉ giao) chỉ dựa trên mã đơn: để gọi thoải mái là dò được mã đơn hàng
 			// loạt rồi gom sạch danh sách khách của cửa hàng.
-			v1.GET("/public/orders/lookup", han("tra-cuu-don", 20, 5*time.Minute), h.Order.Lookup)
+			store.GET("/public/orders/lookup", han("tra-cuu-don", 20, 5*time.Minute), h.Order.Lookup)
 			// Đặt hàng từ storefront — công khai, nhưng đọc token nếu có để gắn đơn vào tài khoản.
 			// Hạn mức ở đây chặn kiểu phá bằng cách tạo hàng loạt đơn ảo để giữ sạch tồn kho.
-			v1.POST("/orders", han("dat-hang", 10, 10*time.Minute), middleware.OptionalJWTAuth(jwtMgr), h.Order.Checkout)
+			store.POST("/orders", han("dat-hang", 10, 10*time.Minute), h.Order.Checkout)
 			// Đối chiếu giá + tồn kho của giỏ trước khi đặt (chỉ đọc, không tạo đơn).
 			// Trang thanh toán tự gọi mỗi lần khách sửa giỏ nên phải để rộng tay.
-			v1.POST("/orders/quote", han("doi-chieu-gio", 60, 5*time.Minute), h.Order.Quote)
+			store.POST("/orders/quote", han("doi-chieu-gio", 60, 5*time.Minute), h.Order.Quote)
 
 			// Xem trước mã giảm giá ở giỏ hàng. OptionalJWTAuth để mã giới hạn "mỗi
 			// khách N lượt" kiểm được ngay lúc gõ với khách đã đăng nhập, mà khách vãng
 			// lai vẫn dùng được ô nhập mã.
 			// Có hạn mức vì đây là đường DÒ MÃ: gõ thử mã nào cũng biết ngay đúng hay
 			// sai, gọi thoải mái thì quét hết được kho mã giảm giá của cửa hàng.
-			v1.POST("/vouchers/check", han("kiem-ma", 30, 5*time.Minute), middleware.OptionalJWTAuth(jwtMgr), h.Voucher.Check)
+			store.POST("/vouchers/check", han("kiem-ma", 30, 5*time.Minute), h.Voucher.Check)
 			// Mã đại trà gợi ý sẵn cho khách bấm chọn. Cũng OptionalJWTAuth để loại được
 			// mã khách đã dùng hết lượt riêng, thay vì khoe rồi báo lỗi lúc họ bấm vào.
-			v1.POST("/vouchers/available", middleware.OptionalJWTAuth(jwtMgr), h.Voucher.Available)
+			store.POST("/vouchers/available", h.Voucher.Available)
 
 			// --- Thanh toán online (PayOS) ---
 			// Cả hai đều CÔNG KHAI và bắt buộc phải vậy: webhook do máy chủ PayOS gọi
 			// (không có tài khoản nào để đăng nhập), còn trang tra kết quả thì khách vãng
 			// lai cũng phải xem được. Cái bảo vệ webhook là chữ ký HMAC trong chính gói
 			// dữ liệu, không phải token.
-			v1.POST("/payments/payos/webhook", h.Payment.PayOSWebhook)
-			v1.POST("/payments/sepay/webhook", h.Payment.SePayWebhook)
-			v1.GET("/payments/:code", h.Payment.Status)
+			store.POST("/payments/payos/webhook", h.Payment.PayOSWebhook)
+			store.POST("/payments/sepay/webhook", h.Payment.SePayWebhook)
+			store.GET("/payments/:code", h.Payment.Status)
 			// Đơn hàng của chính khách đang đăng nhập (storefront)
 			me := v1.Group("/orders/me", middleware.JWTAuth(jwtMgr))
 			{

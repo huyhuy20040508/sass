@@ -10,6 +10,7 @@ import (
 	"gorm.io/gorm/logger"
 
 	"sass-api/internal/domain"
+	"sass-api/internal/tenant"
 )
 
 // Test cần MySQL thật vì thứ đang kiểm là hành vi sinh SQL của GORM
@@ -24,6 +25,13 @@ import (
 // Rồi chạy:
 //
 //	TEST_DB_DSN="root:@tcp(127.0.0.1:3306)/selliotech_test?parseTime=true" go test ./internal/repository/
+//
+// Kết nối này GẮN BỘ LỌC TENANT y như bản chạy thật (xem tenant_scope.go). Bỏ
+// plugin ra cho test "dễ chạy" thì test không còn kiểm cái đang chạy nữa: mọi
+// câu truy vấn ở đây sẽ thiếu đúng mệnh đề mà production có.
+//
+// Hệ quả cho người viết test: mọi lượt gọi phải mang ctx có tenant (dùng
+// ctxTest) và SQL viết tay phải bọc ctxRaw.
 func testDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	dsn := os.Getenv("TEST_DB_DSN")
@@ -36,20 +44,40 @@ func testDB(t *testing.T) *gorm.DB {
 	if err != nil {
 		t.Fatalf("không kết nối được DB test: %v", err)
 	}
+	if err := db.Use(tenantScope{}); err != nil {
+		t.Fatalf("không gắn được bộ lọc tenant: %v", err)
+	}
 	return db
+}
+
+// ctxTest là ctx của cửa hàng số 1 — cửa hàng mà migration 0002 tạo sẵn và mọi
+// dữ liệu có từ trước đều thuộc về.
+func ctxTest() context.Context { return tenant.WithID(context.Background(), 1) }
+
+// ctxRaw dùng cho SQL viết tay để dựng/dọn dữ liệu test.
+//
+// Bộ lọc chặn SQL viết tay vì nó không chèn điều kiện vào chuỗi người viết được;
+// ở đây thì đó đúng là ý định — mấy câu lệnh dưới tự khai tenant_id hoặc chỉ
+// đụng vào dữ liệu do chính test tạo ra.
+func ctxRaw() context.Context {
+	return tenant.WithoutScope(context.Background(), "test: SQL viết tay dựng/dọn dữ liệu")
 }
 
 // seedProduct tạo một sản phẩm trống để treo biến thể vào, kèm dọn dẹp.
 func seedProduct(t *testing.T, db *gorm.DB) uint {
 	t.Helper()
 	var categoryID uint
-	if err := db.Raw("SELECT id FROM categories LIMIT 1").Scan(&categoryID).Error; err != nil || categoryID == 0 {
-		if err := db.Exec(
-			"INSERT INTO categories (name, slug, is_active, created_at, updated_at) VALUES ('Test', 'test-cat', 1, NOW(3), NOW(3))",
+	// tenant_id phải khai TƯỜNG MINH: từ migration 0003 cột này không còn giá trị
+	// mặc định, nên câu INSERT viết tay nào quên nó cũng hỏng ngay tại đây thay vì
+	// âm thầm rơi vào cửa hàng số 1.
+	if err := db.WithContext(ctxRaw()).
+		Raw("SELECT id FROM categories WHERE tenant_id = 1 LIMIT 1").Scan(&categoryID).Error; err != nil || categoryID == 0 {
+		if err := db.WithContext(ctxRaw()).Exec(
+			"INSERT INTO categories (tenant_id, name, slug, is_active, created_at, updated_at) VALUES (1, 'Test', 'test-cat', 1, NOW(3), NOW(3))",
 		).Error; err != nil {
 			t.Fatalf("không tạo được danh mục: %v", err)
 		}
-		db.Raw("SELECT id FROM categories WHERE slug = 'test-cat'").Scan(&categoryID)
+		db.WithContext(ctxRaw()).Raw("SELECT id FROM categories WHERE tenant_id = 1 AND slug = 'test-cat'").Scan(&categoryID)
 	}
 
 	p := &domain.Product{
@@ -60,13 +88,13 @@ func seedProduct(t *testing.T, db *gorm.DB) uint {
 		KitType:    "fan",
 		BasePrice:  100000,
 	}
-	db.Where("slug = ?", p.Slug).Unscoped().Delete(&domain.Product{})
-	if err := db.Create(p).Error; err != nil {
+	db.WithContext(ctxTest()).Where("slug = ?", p.Slug).Unscoped().Delete(&domain.Product{})
+	if err := db.WithContext(ctxTest()).Create(p).Error; err != nil {
 		t.Fatalf("không tạo được sản phẩm: %v", err)
 	}
 	t.Cleanup(func() {
-		db.Unscoped().Where("product_id = ?", p.ID).Delete(&domain.ProductVariant{})
-		db.Unscoped().Delete(&domain.Product{}, p.ID)
+		db.WithContext(ctxTest()).Unscoped().Where("product_id = ?", p.ID).Delete(&domain.ProductVariant{})
+		db.WithContext(ctxTest()).Unscoped().Delete(&domain.Product{}, p.ID)
 	})
 	return p.ID
 }
@@ -78,7 +106,7 @@ func seedProduct(t *testing.T, db *gorm.DB) uint {
 func TestReplaceVariantsKhongDungToiTonKho(t *testing.T) {
 	db := testDB(t)
 	repo := NewProductRepository(db)
-	ctx := context.Background()
+	ctx := ctxTest()
 	productID := seedProduct(t, db)
 
 	// Tạo biến thể lần đầu — tồn phải lấy DEFAULT 0 của DB.
@@ -89,7 +117,7 @@ func TestReplaceVariantsKhongDungToiTonKho(t *testing.T) {
 	}
 
 	var v domain.ProductVariant
-	if err := db.Where("product_id = ? AND size = ?", productID, "M").First(&v).Error; err != nil {
+	if err := db.WithContext(ctxTest()).Where("product_id = ? AND size = ?", productID, "M").First(&v).Error; err != nil {
 		t.Fatalf("không đọc được biến thể vừa tạo: %v", err)
 	}
 	if v.StockQuantity != 0 {
@@ -97,7 +125,7 @@ func TestReplaceVariantsKhongDungToiTonKho(t *testing.T) {
 	}
 
 	// Kho nhập 50 cái (mô phỏng nhận hàng từ phiếu nhập).
-	if err := db.Model(&domain.ProductVariant{}).Where("id = ?", v.ID).
+	if err := db.WithContext(ctxTest()).Model(&domain.ProductVariant{}).Where("id = ?", v.ID).
 		UpdateColumn("stock_quantity", 50).Error; err != nil {
 		t.Fatalf("không cập nhật được tồn kho: %v", err)
 	}
@@ -112,7 +140,7 @@ func TestReplaceVariantsKhongDungToiTonKho(t *testing.T) {
 	}
 
 	var sau domain.ProductVariant
-	if err := db.First(&sau, v.ID).Error; err != nil {
+	if err := db.WithContext(ctxTest()).First(&sau, v.ID).Error; err != nil {
 		t.Fatalf("không đọc lại được biến thể: %v", err)
 	}
 	if sau.StockQuantity != 50 {
@@ -129,7 +157,7 @@ func TestReplaceVariantsKhongDungToiTonKho(t *testing.T) {
 func TestReplaceVariantsThemLaiSizeDaXoa(t *testing.T) {
 	db := testDB(t)
 	repo := NewProductRepository(db)
-	ctx := context.Background()
+	ctx := ctxTest()
 	productID := seedProduct(t, db)
 
 	if err := repo.ReplaceVariants(ctx, productID, []domain.ProductVariant{
@@ -151,7 +179,7 @@ func TestReplaceVariantsThemLaiSizeDaXoa(t *testing.T) {
 	}
 
 	var dem int64
-	db.Model(&domain.ProductVariant{}).Where("product_id = ?", productID).Count(&dem)
+	db.WithContext(ctxTest()).Model(&domain.ProductVariant{}).Where("product_id = ?", productID).Count(&dem)
 	if dem != 1 {
 		t.Fatalf("phải còn đúng 1 biến thể đang sống, nhận %d", dem)
 	}

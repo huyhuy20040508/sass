@@ -75,9 +75,23 @@ class ApiClient
     {
         $res = $this->dispatch($method, $uri, $payload);
 
-        if ($res->status() === 401 && $this->refreshToken()) {
-            $res = $this->dispatch($method, $uri, $payload);
+        if ($res->status() !== 401) {
+            return $res;
         }
+
+        if ($this->refreshToken()) {
+            return $this->dispatch($method, $uri, $payload);
+        }
+
+        // Làm mới không được nghĩa là phiên này hết đường cứu: token đã hỏng và
+        // refresh token cũng vậy. Xoá session để lượt vào trang tiếp theo bị
+        // EnsureAdminAuthenticated đẩy về màn hình đăng nhập.
+        //
+        // Không xoá thì phiên hỏng nằm lại trong session tới lúc hết hạn, và người
+        // dùng chỉ thấy mọi trang báo lỗi mà không hiểu phải làm gì — đúng cảnh
+        // xảy ra sau khi API đổi định dạng token (token cũ không mang mã cửa hàng
+        // nên bị từ chối hết).
+        session()->forget('api');
 
         return $res;
     }

@@ -1,7 +1,6 @@
 package repository
 
 import (
-	"context"
 	"testing"
 
 	"gorm.io/gorm"
@@ -23,11 +22,11 @@ import (
 // ghi chú ở product_repository_test.go.
 func TestPurchaseReturnTruKhoDungMotLan(t *testing.T) {
 	db := testDB(t)
-	ctx := context.Background()
+	ctx := ctxTest()
 	productID := seedProduct(t, db)
 
 	v := domain.ProductVariant{ProductID: productID, SKU: "TEST-PRET-M", Size: "M", IsActive: true}
-	if err := db.Create(&v).Error; err != nil {
+	if err := db.WithContext(ctxTest()).Create(&v).Error; err != nil {
 		t.Fatalf("không tạo được biến thể: %v", err)
 	}
 
@@ -45,14 +44,14 @@ func TestPurchaseReturnTruKhoDungMotLan(t *testing.T) {
 		t.Fatalf("không tạo được phiếu đặt: %v", err)
 	}
 	t.Cleanup(func() {
-		db.Exec(`DELETE FROM inventory_transactions
+		db.WithContext(ctxRaw()).Exec(`DELETE FROM inventory_transactions
 			WHERE (reference_type = 'purchase_order' AND reference_id = ?)
 			   OR (reference_type = 'purchase_return' AND reference_id IN
 			       (SELECT id FROM purchase_returns WHERE purchase_order_id = ?))`, po.ID, po.ID)
-		db.Exec("DELETE FROM purchase_returns WHERE purchase_order_id = ?", po.ID)
-		db.Unscoped().Where("purchase_order_id = ?", po.ID).Delete(&domain.PurchaseOrderItem{})
-		db.Unscoped().Delete(&domain.PurchaseOrder{}, po.ID)
-		db.Unscoped().Delete(&domain.Supplier{}, supplierID)
+		db.WithContext(ctxRaw()).Exec("DELETE FROM purchase_returns WHERE purchase_order_id = ?", po.ID)
+		db.WithContext(ctxTest()).Unscoped().Where("purchase_order_id = ?", po.ID).Delete(&domain.PurchaseOrderItem{})
+		db.WithContext(ctxTest()).Unscoped().Delete(&domain.PurchaseOrder{}, po.ID)
+		db.WithContext(ctxTest()).Unscoped().Delete(&domain.Supplier{}, supplierID)
 	})
 
 	saved, err := poRepo.FindByID(ctx, po.ID)
@@ -126,7 +125,7 @@ func TestPurchaseReturnTruKhoDungMotLan(t *testing.T) {
 	}
 
 	var tx domain.InventoryTransaction
-	if err := db.Where("reference_type = 'purchase_return' AND reference_id = ?", rt.ID).
+	if err := db.WithContext(ctxTest()).Where("reference_type = 'purchase_return' AND reference_id = ?", rt.ID).
 		First(&tx).Error; err != nil {
 		t.Fatalf("không tìm thấy bút toán trả hàng: %v", err)
 	}
@@ -162,7 +161,7 @@ func TestPurchaseReturnTruKhoDungMotLan(t *testing.T) {
 		t.Fatalf("lập phiếu trả thứ hai lỗi: %v", err)
 	}
 	// Bán bớt 1 cái để kho chỉ còn 4 < 5 của phiếu.
-	if err := db.Model(&domain.ProductVariant{}).Where("id = ?", v.ID).
+	if err := db.WithContext(ctxTest()).Model(&domain.ProductVariant{}).Where("id = ?", v.ID).
 		Update("stock_quantity", 4).Error; err != nil {
 		t.Fatalf("không đặt được tồn kho: %v", err)
 	}
@@ -173,7 +172,7 @@ func TestPurchaseReturnTruKhoDungMotLan(t *testing.T) {
 		t.Fatalf("chốt thất bại không được đụng tới kho: tồn %d", got)
 	}
 	var count int64
-	db.Model(&domain.InventoryTransaction{}).
+	db.WithContext(ctxTest()).Model(&domain.InventoryTransaction{}).
 		Where("reference_type = 'purchase_return' AND reference_id = ?", over.ID).Count(&count)
 	if count != 0 {
 		t.Fatalf("chốt thất bại không được ghi bút toán, có %d dòng", count)
@@ -203,7 +202,7 @@ func TestPurchaseReturnTruKhoDungMotLan(t *testing.T) {
 func stockOf(t *testing.T, db *gorm.DB, variantID uint) int {
 	t.Helper()
 	var stock int
-	if err := db.Raw("SELECT stock_quantity FROM product_variants WHERE id = ?", variantID).
+	if err := db.WithContext(ctxRaw()).Raw("SELECT stock_quantity FROM product_variants WHERE id = ?", variantID).
 		Scan(&stock).Error; err != nil {
 		t.Fatalf("không đọc được tồn kho: %v", err)
 	}

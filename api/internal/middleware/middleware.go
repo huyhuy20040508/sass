@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
+	"sass-api/internal/tenant"
 	"sass-api/pkg/jwt"
 	"sass-api/pkg/logger"
 	"sass-api/pkg/response"
@@ -15,8 +16,9 @@ import (
 
 // Khóa lưu trong gin.Context.
 const (
-	CtxUserID = "ctx_user_id"
-	CtxRole   = "ctx_role"
+	CtxUserID   = "ctx_user_id"
+	CtxRole     = "ctx_role"
+	CtxTenantID = "ctx_tenant_id"
 )
 
 // CORS cấu hình Cross-Origin cho các origin được phép.
@@ -74,10 +76,30 @@ func JWTAuth(mgr *jwt.Manager) gin.HandlerFunc {
 			response.Error(c, 401, "Loại token không hợp lệ")
 			return
 		}
-		c.Set(CtxUserID, claims.UserID)
-		c.Set(CtxRole, claims.Role)
+		if claims.TenantID == 0 {
+			// Token cấp trước khi hệ thống có nhiều cửa hàng. Bắt đăng nhập lại thay
+			// vì đoán cửa hàng số 1: đoán một lần là mọi token cũ trên đời thành chìa
+			// khoá vào cửa hàng đó.
+			response.Error(c, 401, "Phiên đăng nhập đã cũ, vui lòng đăng nhập lại")
+			return
+		}
+		applyIdentity(c, claims)
 		c.Next()
 	}
+}
+
+// applyIdentity gắn danh tính vừa xác minh vào cả gin.Context (cho handler đọc)
+// lẫn context của request (cho các tầng dưới).
+//
+// Vế thứ hai mới là vế quan trọng: repository chèn `WHERE tenant_id = ?` bằng
+// cách đọc context của request (xem repository/tenant_scope.go), nên handler nào
+// gọi service bằng c.Request.Context() thì tự động được lọc, còn handler nào
+// dùng ctx khác sẽ HỎNG chứ không lặng lẽ đọc chéo dữ liệu.
+func applyIdentity(c *gin.Context, claims *jwt.Claims) {
+	c.Set(CtxUserID, claims.UserID)
+	c.Set(CtxRole, claims.Role)
+	c.Set(CtxTenantID, claims.TenantID)
+	c.Request = c.Request.WithContext(tenant.WithID(c.Request.Context(), claims.TenantID))
 }
 
 // OptionalJWTAuth đọc token nếu có nhưng KHÔNG chặn khi thiếu/sai.
@@ -91,12 +113,34 @@ func OptionalJWTAuth(mgr *jwt.Manager) gin.HandlerFunc {
 			return
 		}
 		claims, err := mgr.Parse(token)
-		if err != nil || claims.Type != jwt.AccessToken {
-			c.Next() // token hỏng thì coi như khách vãng lai
+		// Token hỏng, hoặc token cũ chưa mang mã cửa hàng, thì coi như khách vãng
+		// lai. Không nhận nửa vời: lấy danh tính người dùng mà bỏ qua cửa hàng là
+		// dựng một phiên không thuộc về đâu cả.
+		if err != nil || claims.Type != jwt.AccessToken || claims.TenantID == 0 {
+			c.Next()
 			return
 		}
-		c.Set(CtxUserID, claims.UserID)
-		c.Set(CtxRole, claims.Role)
+		applyIdentity(c, claims)
+		c.Next()
+	}
+}
+
+// TenantRequired chặn request chưa xác định được cửa hàng.
+//
+// Dùng cho các đường CÔNG KHAI có chạm database: ở đó tenant chỉ đến từ token
+// nếu người gọi có đăng nhập, mà không có thì mọi câu truy vấn sẽ hỏng tận dưới
+// tầng GORM và trả về 500 chẳng nói lên điều gì. Chặn ở đây để câu trả lời đúng
+// với sự thật: chưa biết đang hỏi cửa hàng nào.
+//
+// Đường công khai cho khách VÃNG LAI (storefront) rồi sẽ xác định cửa hàng theo
+// TÊN MIỀN của request thay vì theo token — lúc đó chỗ resolve tên miền đặt
+// trước middleware này và nó gần như không còn chặn ai nữa.
+func TenantRequired() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if _, ok := tenant.ID(c.Request.Context()); !ok {
+			response.Error(c, 401, "Chưa xác định được cửa hàng cho yêu cầu này")
+			return
+		}
 		c.Next()
 	}
 }
@@ -122,8 +166,11 @@ func JWTAuthStream(mgr *jwt.Manager) gin.HandlerFunc {
 			response.Error(c, 401, "Token không hợp lệ hoặc đã hết hạn")
 			return
 		}
-		c.Set(CtxUserID, claims.UserID)
-		c.Set(CtxRole, claims.Role)
+		if claims.TenantID == 0 {
+			response.Error(c, 401, "Phiên đăng nhập đã cũ, vui lòng đăng nhập lại")
+			return
+		}
+		applyIdentity(c, claims)
 		c.Next()
 	}
 }

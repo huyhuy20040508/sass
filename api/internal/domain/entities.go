@@ -46,6 +46,30 @@ func (e *EnumOrNull) Scan(v any) error {
 // lọt đúng MỘT dòng — tài khoản thường thứ hai đăng ký sẽ vỡ vì trùng khoá.
 type StringOrNull = EnumOrNull
 
+// TenantOwned nhúng vào MỌI entity nằm ở bảng có cột tenant_id.
+//
+// Nó phục vụ hai việc, và việc thứ hai mới là lý do nó tồn tại dưới dạng một
+// kiểu riêng thay vì một dòng `TenantID uint` chép đi chép lại:
+//
+//  1. Cho GORM biết cột tenant_id có tồn tại, để câu INSERT ghi được nó. Không
+//     có trường này thì bộ lọc không có chỗ nào để đặt giá trị vào, và dòng mới
+//     rơi vào cửa hàng nào là do database tự đoán.
+//
+//  2. Làm DẤU ĐỌC ĐƯỢC BẰNG MÁY. Bài kiểm tra ở domain/tenant_owned_test.go
+//     duyệt mọi entity trong gói này và bắt lỗi entity nào của bảng thuộc tenant
+//     mà quên nhúng — nghĩa là quên một bảng không còn là chuyện phải nhớ.
+//
+// `<-:create` (ghi lúc tạo, không ghi lúc sửa) là chủ ý: tenant của một dòng dữ
+// liệu KHÔNG BAO GIỜ đổi. Cho phép UPDATE cột này nghĩa là mở một đường chuyển
+// dữ liệu từ cửa hàng này sang cửa hàng khác — chỉ cần một lệnh Save() trên một
+// struct dựng thiếu trường là đủ.
+//
+// json:"-" vì đây là chuyện nội bộ của hệ thống: khách hàng không cần biết mình
+// là số mấy, và con số đó lộ ra ngoài là gợi ý sẵn tham số để người ta thử sửa.
+type TenantOwned struct {
+	TenantID uint `json:"-" gorm:"column:tenant_id;<-:create"`
+}
+
 // ---------- 1. Xác thực & người dùng ----------
 
 type Role struct {
@@ -103,13 +127,7 @@ const TenantActive = "active"
 
 type User struct {
 	ID uint `json:"id" gorm:"primaryKey"`
-	// TenantID là ranh giới bảo mật giữa các khách hàng.
-	//
-	// CHỈ ĐỌC (`->`) ở giai đoạn này: cột có DEFAULT 1 dưới CSDL làm giàn giáo,
-	// còn mọi INSERT của Go thì chưa biết tới tenant nào. Cho GORM ghi cột này
-	// nghĩa là mọi tài khoản tạo mới đều rơi vào tenant_id = 0 và vỡ khoá ngoại.
-	// Bỏ `->` khi plugin GORM tự chèn tenant_id — cùng lúc bỏ DEFAULT dưới CSDL.
-	TenantID uint `json:"-" gorm:"column:tenant_id;->"`
+	TenantOwned
 	// Username là ô THỨ HAI của màn hình đăng nhập 3 ô, chỉ duy nhất trong một
 	// tenant. NULL = tài khoản khách hàng (khách mua sắm đăng nhập bằng email):
 	// UNIQUE chỉ cho lọt đúng một dòng chuỗi rỗng nên bắt buộc phải là NULL.
@@ -142,7 +160,8 @@ type User struct {
 // EmailVerification lưu mã OTP gửi qua email khi khách đăng ký.
 // Chỉ lưu bcrypt của mã, không lưu mã thô.
 type EmailVerification struct {
-	ID         uint       `json:"id" gorm:"primaryKey"`
+	ID uint `json:"id" gorm:"primaryKey"`
+	TenantOwned
 	UserID     uint       `json:"user_id"`
 	Email      string     `json:"email"`
 	CodeHash   string     `json:"-"`
@@ -157,7 +176,8 @@ type EmailVerification struct {
 func (EmailVerification) TableName() string { return "email_verifications" }
 
 type UserAddress struct {
-	ID            uint           `json:"id" gorm:"primaryKey"`
+	ID uint `json:"id" gorm:"primaryKey"`
+	TenantOwned
 	UserID        uint           `json:"user_id"`
 	RecipientName string         `json:"recipient_name"`
 	Phone         string         `json:"phone"`
@@ -175,7 +195,8 @@ type UserAddress struct {
 // ---------- 2. Danh mục sản phẩm ----------
 
 type Category struct {
-	ID          uint           `json:"id" gorm:"primaryKey"`
+	ID uint `json:"id" gorm:"primaryKey"`
+	TenantOwned
 	ParentID    *uint          `json:"parent_id"`
 	Name        string         `json:"name"`
 	Slug        string         `json:"slug"`
@@ -190,7 +211,8 @@ type Category struct {
 }
 
 type Brand struct {
-	ID          uint           `json:"id" gorm:"primaryKey"`
+	ID uint `json:"id" gorm:"primaryKey"`
+	TenantOwned
 	Name        string         `json:"name"`
 	Slug        string         `json:"slug"`
 	Logo        string         `json:"logo"`
@@ -235,7 +257,8 @@ func IsValidProductStatus(s string) bool {
 }
 
 type Product struct {
-	ID               uint       `json:"id" gorm:"primaryKey"`
+	ID uint `json:"id" gorm:"primaryKey"`
+	TenantOwned
 	CategoryID       uint       `json:"category_id"`
 	Category         *Category  `json:"category,omitempty" gorm:"foreignKey:CategoryID"`
 	BrandID          *uint      `json:"brand_id"`
@@ -290,7 +313,8 @@ type Product struct {
 }
 
 type ProductVariant struct {
-	ID        uint     `json:"id" gorm:"primaryKey"`
+	ID uint `json:"id" gorm:"primaryKey"`
+	TenantOwned
 	ProductID uint     `json:"product_id"`
 	SKU       string   `json:"sku" gorm:"column:sku"`
 	Size      string   `json:"size"`
@@ -324,7 +348,8 @@ type ProductVariant struct {
 }
 
 type ProductImage struct {
-	ID        uint      `json:"id" gorm:"primaryKey"`
+	ID uint `json:"id" gorm:"primaryKey"`
+	TenantOwned
 	ProductID uint      `json:"product_id"`
 	URL       string    `json:"url" gorm:"column:url"`
 	Alt       string    `json:"alt"`
@@ -337,7 +362,8 @@ type ProductImage struct {
 // ---------- 3. Giỏ hàng ----------
 
 type Cart struct {
-	ID        uint       `json:"id" gorm:"primaryKey"`
+	ID uint `json:"id" gorm:"primaryKey"`
+	TenantOwned
 	UserID    *uint      `json:"user_id"`
 	SessionID string     `json:"session_id"`
 	Items     []CartItem `json:"items,omitempty" gorm:"foreignKey:CartID"`
@@ -346,7 +372,8 @@ type Cart struct {
 }
 
 type CartItem struct {
-	ID                 uint            `json:"id" gorm:"primaryKey"`
+	ID uint `json:"id" gorm:"primaryKey"`
+	TenantOwned
 	CartID             uint            `json:"cart_id"`
 	ProductVariantID   uint            `json:"product_variant_id"`
 	Variant            *ProductVariant `json:"variant,omitempty" gorm:"foreignKey:ProductVariantID"`
@@ -368,7 +395,8 @@ type CartItem struct {
 // StartAt/EndAt để trống nghĩa là không giới hạn phía đó: mã dùng được ngay, hoặc
 // dùng mãi tới khi bị tắt tay.
 type Voucher struct {
-	ID                uint       `json:"id" gorm:"primaryKey"`
+	ID uint `json:"id" gorm:"primaryKey"`
+	TenantOwned
 	Code              string     `json:"code"`
 	Description       string     `json:"description"`
 	DiscountType      string     `json:"discount_type"`
@@ -422,7 +450,8 @@ func (v Voucher) Discount(subtotal float64) float64 {
 // Dòng này KHÔNG bị xoá khi khách huỷ đơn: lượt đã dùng là mất luôn với khách đó.
 // Nhờ vậy nó vừa là lịch sử, vừa là thứ chặn trò đặt rồi huỷ để xài mã mãi.
 type VoucherUsage struct {
-	ID        uint  `json:"id" gorm:"primaryKey"`
+	ID uint `json:"id" gorm:"primaryKey"`
+	TenantOwned
 	VoucherID uint  `json:"voucher_id"`
 	UserID    *uint `json:"user_id"`
 	// RecipientPhone là danh tính của khách VÃNG LAI (chỉ chữ số). Không có nó thì
@@ -472,7 +501,8 @@ const (
 // sản phẩm chứ không phải trên tổng đơn. Giá gốc của sản phẩm không bị ghi đè —
 // mức giảm được tính lúc đọc nên hết đợt là giá tự về như cũ.
 type Promotion struct {
-	ID           uint   `json:"id" gorm:"primaryKey"`
+	ID uint `json:"id" gorm:"primaryKey"`
+	TenantOwned
 	Name         string `json:"name"`
 	Description  string `json:"description"`
 	DiscountType string `json:"discount_type"`
@@ -523,7 +553,8 @@ func (p Promotion) Discount(price float64) float64 {
 // PromotionTarget là một đích trong phạm vi áp dụng: một sản phẩm, một danh mục
 // hoặc một thương hiệu. Một chương trình có thể trộn cả ba loại.
 type PromotionTarget struct {
-	ID          uint   `json:"id" gorm:"primaryKey"`
+	ID uint `json:"id" gorm:"primaryKey"`
+	TenantOwned
 	PromotionID uint   `json:"promotion_id"`
 	TargetType  string `json:"target_type"`
 	TargetID    uint   `json:"target_id"`
@@ -532,7 +563,8 @@ type PromotionTarget struct {
 // ---------- 5. Đơn hàng ----------
 
 type Order struct {
-	ID               uint           `json:"id" gorm:"primaryKey"`
+	ID uint `json:"id" gorm:"primaryKey"`
+	TenantOwned
 	OrderCode        string         `json:"order_code"`
 	UserID           *uint          `json:"user_id"`
 	VoucherID        *uint          `json:"voucher_id"`
@@ -597,7 +629,8 @@ const (
 )
 
 type OrderItem struct {
-	ID                 uint      `json:"id" gorm:"primaryKey"`
+	ID uint `json:"id" gorm:"primaryKey"`
+	TenantOwned
 	OrderID            uint      `json:"order_id"`
 	ProductID          *uint     `json:"product_id"`
 	ProductVariantID   *uint     `json:"product_variant_id"`
@@ -620,7 +653,8 @@ type OrderItem struct {
 func (OrderStatusHistory) TableName() string { return "order_status_history" }
 
 type OrderStatusHistory struct {
-	ID         uint      `json:"id" gorm:"primaryKey"`
+	ID uint `json:"id" gorm:"primaryKey"`
+	TenantOwned
 	OrderID    uint      `json:"order_id"`
 	FromStatus string    `json:"from_status"`
 	ToStatus   string    `json:"to_status"`
@@ -634,7 +668,8 @@ type OrderStatusHistory struct {
 // OrderReturn — một phiếu trả hàng của đơn. Một đơn có thể có nhiều phiếu (khách
 // trả dần từng món), mỗi phiếu tự đi theo luồng duyệt riêng.
 type OrderReturn struct {
-	ID          uint   `json:"id" gorm:"primaryKey"`
+	ID uint `json:"id" gorm:"primaryKey"`
+	TenantOwned
 	ReturnCode  string `json:"return_code"`
 	OrderID     uint   `json:"order_id"`
 	UserID      *uint  `json:"user_id"`
@@ -694,7 +729,8 @@ const (
 )
 
 type OrderReturnItem struct {
-	ID               uint      `json:"id" gorm:"primaryKey"`
+	ID uint `json:"id" gorm:"primaryKey"`
+	TenantOwned
 	ReturnID         uint      `json:"return_id"`
 	OrderItemID      uint      `json:"order_item_id"`
 	ProductID        *uint     `json:"product_id"`
@@ -716,7 +752,8 @@ type OrderReturnItem struct {
 func (OrderReturnHistory) TableName() string { return "order_return_history" }
 
 type OrderReturnHistory struct {
-	ID         uint      `json:"id" gorm:"primaryKey"`
+	ID uint `json:"id" gorm:"primaryKey"`
+	TenantOwned
 	ReturnID   uint      `json:"return_id"`
 	FromStatus string    `json:"from_status"`
 	ToStatus   string    `json:"to_status"`
@@ -729,7 +766,8 @@ type OrderReturnHistory struct {
 
 // Supplier — nhà cung cấp, bên bán hàng cho cửa hàng.
 type Supplier struct {
-	ID          uint           `json:"id" gorm:"primaryKey"`
+	ID uint `json:"id" gorm:"primaryKey"`
+	TenantOwned
 	Code        string         `json:"code"`
 	Name        string         `json:"name"`
 	ContactName string         `json:"contact_name"`
@@ -762,7 +800,8 @@ type Supplier struct {
 // Phiếu có thể nhận làm NHIỀU đợt (nhà cung cấp giao thiếu, giao dần): số thực
 // nhận nằm ở từng dòng hàng, kho chỉ được cộng đúng vào lúc xác nhận nhận hàng.
 type PurchaseOrder struct {
-	ID         uint   `json:"id" gorm:"primaryKey"`
+	ID uint `json:"id" gorm:"primaryKey"`
+	TenantOwned
 	POCode     string `json:"po_code" gorm:"column:po_code"`
 	SupplierID *uint  `json:"supplier_id"`
 	// SupplierName là tên chụp lại lúc đặt — nhà cung cấp đổi tên hoặc bị xoá thì
@@ -814,7 +853,8 @@ const (
 )
 
 type PurchaseOrderItem struct {
-	ID               uint    `json:"id" gorm:"primaryKey"`
+	ID uint `json:"id" gorm:"primaryKey"`
+	TenantOwned
 	PurchaseOrderID  uint    `json:"purchase_order_id"`
 	ProductID        *uint   `json:"product_id"`
 	ProductVariantID *uint   `json:"product_variant_id"`
@@ -837,7 +877,8 @@ type PurchaseOrderItem struct {
 func (PurchaseOrderHistory) TableName() string { return "purchase_order_history" }
 
 type PurchaseOrderHistory struct {
-	ID              uint      `json:"id" gorm:"primaryKey"`
+	ID uint `json:"id" gorm:"primaryKey"`
+	TenantOwned
 	PurchaseOrderID uint      `json:"purchase_order_id"`
 	FromStatus      string    `json:"from_status"`
 	ToStatus        string    `json:"to_status"`
@@ -854,7 +895,8 @@ type PurchaseOrderHistory struct {
 // quá giờ rồi quay lại trả tiếp thì phải tạo link mới. Giữ đủ các lần thử mới đối
 // soát lại được về sau.
 type Payment struct {
-	ID      uint `json:"id" gorm:"primaryKey"`
+	ID uint `json:"id" gorm:"primaryKey"`
+	TenantOwned
 	OrderID uint `json:"order_id"`
 	// TransactionCode là mã giao dịch phía cổng. Với PayOS đây là `orderCode` do
 	// mình sinh ra và gửi sang — thứ duy nhất webhook mang về để tìm lại đơn.
@@ -908,7 +950,8 @@ const (
 // ---------- 7. Kho ----------
 
 type InventoryTransaction struct {
-	ID               uint      `json:"id" gorm:"primaryKey"`
+	ID uint `json:"id" gorm:"primaryKey"`
+	TenantOwned
 	ProductVariantID uint      `json:"product_variant_id"`
 	Type             string    `json:"type"`
 	Quantity         int       `json:"quantity"`
@@ -931,7 +974,8 @@ type InventoryTransaction struct {
 // được, còn phiếu đã trả thì không — muốn nhận lại hàng phải lập phiếu đặt hàng
 // nhập mới để có chứng từ, không sửa lịch sử kho.
 type PurchaseReturn struct {
-	ID         uint   `json:"id" gorm:"primaryKey"`
+	ID uint `json:"id" gorm:"primaryKey"`
+	TenantOwned
 	ReturnCode string `json:"return_code"`
 	// PurchaseOrderID có thể NULL nếu phiếu đặt gốc bị xoá; POCode/SupplierName là
 	// bản chụp lúc lập phiếu nên phiếu cũ vẫn đọc được nguyên trạng.
@@ -992,7 +1036,8 @@ const (
 // PurchaseReturnItem — một dòng hàng trả lại nhà cung cấp. Tên/SKU/size/màu và
 // giá nhập đều là bản chụp của dòng phiếu đặt gốc.
 type PurchaseReturnItem struct {
-	ID               uint `json:"id" gorm:"primaryKey"`
+	ID uint `json:"id" gorm:"primaryKey"`
+	TenantOwned
 	PurchaseReturnID uint `json:"purchase_return_id"`
 	// PurchaseOrderItemID để tính số CÒN TRẢ ĐƯỢC của dòng phiếu đặt gốc.
 	PurchaseOrderItemID *uint  `json:"purchase_order_item_id"`
@@ -1016,7 +1061,8 @@ type PurchaseReturnItem struct {
 func (PurchaseReturnHistory) TableName() string { return "purchase_return_history" }
 
 type PurchaseReturnHistory struct {
-	ID               uint      `json:"id" gorm:"primaryKey"`
+	ID uint `json:"id" gorm:"primaryKey"`
+	TenantOwned
 	PurchaseReturnID uint      `json:"purchase_return_id"`
 	FromStatus       string    `json:"from_status"`
 	ToStatus         string    `json:"to_status"`
@@ -1028,7 +1074,8 @@ type PurchaseReturnHistory struct {
 // ---------- 8. Tương tác ----------
 
 type ProductReview struct {
-	ID          uint           `json:"id" gorm:"primaryKey"`
+	ID uint `json:"id" gorm:"primaryKey"`
+	TenantOwned
 	ProductID   uint           `json:"product_id"`
 	UserID      uint           `json:"user_id"`
 	OrderItemID *uint          `json:"order_item_id"`
@@ -1061,7 +1108,8 @@ const (
 // Hai form dùng chung một bảng, phân biệt bằng Type — xem chú thích ở
 // database/migrations/0001_nen-2026-08-10.sql.
 type ContactRequest struct {
-	ID       uint   `json:"id" gorm:"primaryKey"`
+	ID uint `json:"id" gorm:"primaryKey"`
+	TenantOwned
 	Type     string `json:"type"`
 	FullName string `json:"full_name"`
 	Phone    string `json:"phone"`
@@ -1094,7 +1142,8 @@ func (ContactRequest) TableName() string { return "contact_requests" }
 
 // NewsletterSubscriber là một email đăng ký nhận tin ở chân trang.
 type NewsletterSubscriber struct {
-	ID             uint       `json:"id" gorm:"primaryKey"`
+	ID uint `json:"id" gorm:"primaryKey"`
+	TenantOwned
 	Email          string     `json:"email"`
 	IsActive       bool       `json:"is_active"`
 	Source         string     `json:"source"`
@@ -1107,14 +1156,16 @@ type NewsletterSubscriber struct {
 func (NewsletterSubscriber) TableName() string { return "newsletter_subscribers" }
 
 type Wishlist struct {
-	ID        uint      `json:"id" gorm:"primaryKey"`
+	ID uint `json:"id" gorm:"primaryKey"`
+	TenantOwned
 	UserID    uint      `json:"user_id"`
 	ProductID uint      `json:"product_id"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
 type Notification struct {
-	ID        uint       `json:"id" gorm:"primaryKey"`
+	ID uint `json:"id" gorm:"primaryKey"`
+	TenantOwned
 	UserID    *uint      `json:"user_id"`
 	Type      string     `json:"type"`
 	Title     string     `json:"title"`
@@ -1154,7 +1205,8 @@ func IsValidBannerPosition(p string) bool {
 }
 
 type Banner struct {
-	ID        uint   `json:"id" gorm:"primaryKey"`
+	ID uint `json:"id" gorm:"primaryKey"`
+	TenantOwned
 	Title     string `json:"title"`
 	Image     string `json:"image"`
 	Link      string `json:"link"`
@@ -1185,7 +1237,8 @@ func (b Banner) IsLive(now time.Time) bool {
 }
 
 type Setting struct {
-	ID        uint      `json:"id" gorm:"primaryKey"`
+	ID uint `json:"id" gorm:"primaryKey"`
+	TenantOwned
 	Key       string    `json:"key" gorm:"column:key"`
 	Value     string    `json:"value" gorm:"column:value"`
 	Group     string    `json:"group" gorm:"column:group"`
@@ -1196,7 +1249,8 @@ type Setting struct {
 // ---------- 10. Nhật ký ----------
 
 type ActivityLog struct {
-	ID          uint      `json:"id" gorm:"primaryKey"`
+	ID uint `json:"id" gorm:"primaryKey"`
+	TenantOwned
 	UserID      *uint     `json:"user_id"`
 	Action      string    `json:"action"`
 	SubjectType string    `json:"subject_type"`

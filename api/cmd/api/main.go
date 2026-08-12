@@ -84,7 +84,7 @@ func main() {
 	// dựng xong là đổi một thứ chưa ai dùng lấy toàn bộ doanh thu của khách.
 	// ĐỔI THÀNH panic ngay khi có đường đăng nhập / kiểm tra thuê bao đi qua đây
 	// — lúc đó chạy tiếp mà thiếu sổ mới là thứ nguy hiểm.
-	platformDB, err := repository.NewDB(cfg.Platform, cfg.App.IsProduction())
+	platformDB, err := repository.NewPlatformDB(cfg.Platform, cfg.App.IsProduction())
 	if err != nil {
 		logger.Warn("chưa kết nối được control plane — khu điều hành nền tảng sẽ không dùng được, phần bán hàng vẫn chạy bình thường",
 			zap.String("db", cfg.Platform.Name),
@@ -188,14 +188,11 @@ func main() {
 	newsletterRepo := repository.NewNewsletterRepository(db)
 
 	// 6. Service
-	// Cấu hình hệ thống: nạp snapshot vào bộ nhớ ngay lúc khởi động để các service
-	// khác đọc phí ship / thông tin cửa hàng mà không phải truy vấn từng lượt gọi.
-	// Nạp lỗi thì chạy tiếp bằng giá trị mặc định của registry — cấu hình không
-	// phải chức năng sống còn, không đáng làm sập app.
+	// Cấu hình hệ thống KHÔNG còn nạp sẵn lúc khởi động: từ khi mỗi cửa hàng có
+	// một bộ cấu hình riêng, "nạp trước" nghĩa là nạp của ai? Lúc này chưa có
+	// request nào nên chưa có câu trả lời. Snapshot giờ nạp lười theo từng cửa
+	// hàng ở lượt đọc đầu tiên (xem setting_service.go).
 	settingSvc := service.NewSettingService(settingRepo)
-	if err := settingSvc.Load(context.Background()); err != nil {
-		logger.Warn("không nạp được cấu hình hệ thống, dùng giá trị mặc định", zap.Error(err))
-	}
 	// Bộ khoá PayOS nằm ở .env chứ không ở bảng settings, nên registry không tự
 	// biết cổng đã sẵn sàng chưa. Không nạp vào đây thì trang Cài đặt bật được một
 	// hình thức thanh toán mà hệ thống chưa gọi nổi.

@@ -149,9 +149,9 @@ func (s *orderService) applyPromotions(ctx context.Context, found map[uint]domai
 
 // storeName — tên cửa hàng in trong thân email. Lấy từ cấu hình hệ thống; chưa
 // khai thì dùng tên hiển thị của hộp thư gửi đi.
-func (s *orderService) storeName() string {
+func (s *orderService) storeName(ctx context.Context) string {
 	if s.settings != nil {
-		if v := strings.TrimSpace(s.settings.Get(SettingSiteName)); v != "" {
+		if v := strings.TrimSpace(s.settings.Get(ctx, SettingSiteName)); v != "" {
 			return v
 		}
 	}
@@ -183,7 +183,7 @@ func (s *orderService) Checkout(ctx context.Context, req *dto.CheckoutRequest, u
 	// Hình thức thanh toán do cửa hàng bật/tắt ở trang Cài đặt. Chặn ngay tại đây
 	// chứ không chỉ ẩn nút bên storefront: trang khách đang mở có thể đã tải từ
 	// trước lúc cửa hàng tắt, và đây còn là API công khai.
-	if !paymentMethodAvailable(s.settings, req.PaymentMethod) {
+	if !paymentMethodAvailable(ctx, s.settings, req.PaymentMethod) {
 		return nil, domain.ErrPaymentMethodDisabled
 	}
 	// Thanh toán online còn cần chính cổng đã được nối vào bản chạy này. Chặn TRƯỚC
@@ -285,7 +285,7 @@ func (s *orderService) Checkout(ctx context.Context, req *dto.CheckoutRequest, u
 		}
 
 		o.SubtotalAmount = subtotal
-		o.ShippingFee = s.shippingFeeFor(subtotal)
+		o.ShippingFee = s.shippingFeeFor(ctx, subtotal)
 
 		// Mã giảm giá: kiểm và tính lại NGAY TẠI ĐÂY, trên số tiền hàng vừa tính từ
 		// giá đã khoá — không tin con số trình duyệt gửi lên. Cùng lý do với khuyến
@@ -308,7 +308,7 @@ func (s *orderService) Checkout(ctx context.Context, req *dto.CheckoutRequest, u
 
 	// Đơn đã tạo và kho đã trừ xong: gửi thư ở goroutine riêng để khách không phải
 	// đợi SMTP, và SMTP hỏng cũng không làm hỏng đơn đã đặt.
-	s.sendOrderMail(order)
+	s.sendOrderMail(ctx, order)
 
 	// Báo cho nhân viên đang mở trang admin — đây là lý do chính của tính năng:
 	// đơn khách đặt phải hiện lên ngay, không đợi ai bấm tải lại trang.
@@ -331,12 +331,12 @@ func (s *orderService) Checkout(ctx context.Context, req *dto.CheckoutRequest, u
 	if order.PaymentMethod == "bank_transfer" {
 		msg = "Đặt hàng thành công! Vui lòng chuyển khoản theo thông tin bên dưới, chúng tôi xác nhận ngay khi nhận được tiền."
 		bank = &dto.CheckoutBankTransfer{
-			BankName:      settingText(s.settings, SettingBankName),
-			AccountNumber: settingText(s.settings, SettingBankAccountNumber),
-			AccountName:   settingText(s.settings, SettingBankAccountName),
+			BankName:      settingText(ctx, s.settings, SettingBankName),
+			AccountNumber: settingText(ctx, s.settings, SettingBankAccountNumber),
+			AccountName:   settingText(ctx, s.settings, SettingBankAccountName),
 			Content:       order.OrderCode,
-			QRImage:       settingText(s.settings, SettingBankQRImage),
-			Note:          settingText(s.settings, SettingBankTransferNote),
+			QRImage:       settingText(ctx, s.settings, SettingBankQRImage),
+			Note:          settingText(ctx, s.settings, SettingBankTransferNote),
 		}
 	}
 	// Đơn thanh toán online: mở cổng ngay để khách trả tiền liền mạch, không phải
@@ -352,7 +352,7 @@ func (s *orderService) Checkout(ctx context.Context, req *dto.CheckoutRequest, u
 			logger.Error("đơn đã tạo nhưng không mở được cổng thanh toán",
 				zap.String("order_code", order.OrderCode), zap.Error(err))
 			msg = "Đã đặt hàng thành công nhưng chưa mở được cổng thanh toán. Vui lòng gọi " +
-				settingText(s.settings, SettingContactPhone) + " để cửa hàng hỗ trợ thanh toán."
+				settingText(ctx, s.settings, SettingContactPhone) + " để cửa hàng hỗ trợ thanh toán."
 		} else {
 			msg = "Đã tạo đơn. Vui lòng hoàn tất thanh toán để cửa hàng chuẩn bị hàng cho bạn."
 		}
@@ -416,7 +416,7 @@ func (s *orderService) Quote(ctx context.Context, req *dto.CartQuoteRequest) (*d
 
 	res := &dto.CartQuoteResponse{
 		Items:             make([]dto.CartQuoteItem, 0, len(lines)),
-		FreeShipThreshold: settingNumber(s.settings, SettingFreeShippingThreshold),
+		FreeShipThreshold: settingNumber(ctx, s.settings, SettingFreeShippingThreshold),
 	}
 
 	// Tồn kho được chia theo thứ tự các dòng: hai dòng cùng biến thể (khác tên in
@@ -469,7 +469,7 @@ func (s *orderService) Quote(ctx context.Context, req *dto.CartQuoteRequest) (*d
 		res.Items = append(res.Items, item)
 	}
 
-	res.ShippingFee = s.shippingFeeFor(res.Subtotal)
+	res.ShippingFee = s.shippingFeeFor(ctx, res.Subtotal)
 	res.Total = res.Subtotal + res.ShippingFee
 	return res, nil
 }
@@ -584,7 +584,7 @@ func (s *orderService) CancelMine(ctx context.Context, userID, id uint, reason s
 	}
 
 	// Thư xác nhận đã huỷ, cùng mẫu với khi admin huỷ.
-	s.sendOrderStatusMail(o)
+	s.sendOrderStatusMail(ctx, o)
 
 	// Khách tự huỷ là việc nhân viên cần biết ngay (hàng đã soạn, đã trả về kho).
 	s.notifyAdmin(ctx, "order_cancelled",
@@ -641,7 +641,7 @@ func fullAddress(o *domain.Order) string {
 //
 // Bỏ qua khi khách không để lại email (trường này không bắt buộc) hoặc chưa cấu
 // hình SMTP.
-func (s *orderService) sendOrderMail(o *domain.Order) {
+func (s *orderService) sendOrderMail(ctx context.Context, o *domain.Order) {
 	// Chốt o != nil TRƯỚC rồi mới đọc trường bên trong. Viết ngược lại — lấy
 	// o.RecipientEmail rồi mới kiểm tra o == nil — thì cú đọc đầu tiên đã panic
 	// mất rồi, và vế `o == nil` không bao giờ có cơ hội chạy.
@@ -656,9 +656,9 @@ func (s *orderService) sendOrderMail(o *domain.Order) {
 	// Chụp lại dữ liệu cần dùng trước khi rời hàm — goroutine không được đụng vào
 	// con trỏ đơn mà nơi gọi vẫn đang dùng.
 	data := mailer.OrderData{
-		StoreName:     s.storeName(),
+		StoreName:     s.storeName(ctx),
 		StoreURL:      s.mailCfg.StoreURL,
-		Hotline:       settingText(s.settings, SettingContactPhone),
+		Hotline:       settingText(ctx, s.settings, SettingContactPhone),
 		Year:          time.Now().Year(),
 		OrderCode:     o.OrderCode,
 		PlacedAt:      placedAtText(o),
@@ -675,11 +675,11 @@ func (s *orderService) sendOrderMail(o *domain.Order) {
 	}
 	// Chỉ đơn chuyển khoản mới kèm hướng dẫn — đơn COD nhận thêm số tài khoản chỉ
 	// tổ làm khách phân vân không biết có phải chuyển trước không.
-	if o.PaymentMethod == "bank_transfer" && paymentMethodAvailable(s.settings, "bank_transfer") {
-		data.BankName = settingText(s.settings, SettingBankName)
-		data.BankAccountNumber = settingText(s.settings, SettingBankAccountNumber)
-		data.BankAccountName = settingText(s.settings, SettingBankAccountName)
-		data.BankTransferNote = settingText(s.settings, SettingBankTransferNote)
+	if o.PaymentMethod == "bank_transfer" && paymentMethodAvailable(ctx, s.settings, "bank_transfer") {
+		data.BankName = settingText(ctx, s.settings, SettingBankName)
+		data.BankAccountNumber = settingText(ctx, s.settings, SettingBankAccountNumber)
+		data.BankAccountName = settingText(ctx, s.settings, SettingBankAccountName)
+		data.BankTransferNote = settingText(ctx, s.settings, SettingBankTransferNote)
 	}
 	for _, it := range o.Items {
 		opts := make([]string, 0, 2)
@@ -773,7 +773,7 @@ var statusMails = map[string]statusMail{
 //
 // Trạng thái đã được ghi vào database trước khi gọi hàm này, nên thư hỏng chỉ ghi
 // log: không được để lỗi SMTP làm admin tưởng thao tác thất bại rồi bấm lại.
-func (s *orderService) sendOrderStatusMail(o *domain.Order) {
+func (s *orderService) sendOrderStatusMail(ctx context.Context, o *domain.Order) {
 	if o == nil {
 		return
 	}
@@ -787,9 +787,9 @@ func (s *orderService) sendOrderStatusMail(o *domain.Order) {
 	}
 
 	data := mailer.OrderStatusData{
-		StoreName:      s.storeName(),
+		StoreName:      s.storeName(ctx),
 		StoreURL:       s.mailCfg.StoreURL,
-		Hotline:        settingText(s.settings, SettingContactPhone),
+		Hotline:        settingText(ctx, s.settings, SettingContactPhone),
 		Year:           time.Now().Year(),
 		OrderCode:      o.OrderCode,
 		Name:           o.RecipientName,
@@ -1079,11 +1079,11 @@ func matchVariant(found map[uint]domain.CheckoutVariant, l domain.CheckoutLine) 
 //
 // Ngưỡng bằng 0 nghĩa là miễn phí vận chuyển cho mọi đơn — đó là cách tắt phí ship
 // từ trang cấu hình, không phải lỗi.
-func (s *orderService) shippingFeeFor(subtotal float64) float64 {
-	if subtotal >= settingNumber(s.settings, SettingFreeShippingThreshold) {
+func (s *orderService) shippingFeeFor(ctx context.Context, subtotal float64) float64 {
+	if subtotal >= settingNumber(ctx, s.settings, SettingFreeShippingThreshold) {
 		return 0
 	}
-	return settingNumber(s.settings, SettingDefaultShippingFee)
+	return settingNumber(ctx, s.settings, SettingDefaultShippingFee)
 }
 
 // Create tạo đơn thủ công cho một khách hàng CÓ SẴN. Server tự tính tiền hàng và
@@ -1155,7 +1155,7 @@ func (s *orderService) Create(ctx context.Context, req *dto.OrderCreateRequest) 
 	}
 	// Đơn admin đặt hộ (khách gọi điện) cũng cần thư xác nhận như đơn đặt trên web,
 	// để khách có mã đơn mà tra cứu.
-	s.sendOrderMail(o)
+	s.sendOrderMail(ctx, o)
 	// Không đẩy thông báo vào chuông của admin: đơn này do chính nhân viên vừa tạo,
 	// báo lại cho họ chỉ là nhiễu. Chỉ bắn tín hiệu để bảng đơn ở các máy khác
 	// (và tab khác) tự làm mới.
@@ -1326,7 +1326,7 @@ func (s *orderService) UpdateStatus(ctx context.Context, id uint, req *dto.Order
 		return nil, err
 	}
 	// Trạng thái đã ghi xong: báo cho khách biết đơn đi tới đâu.
-	s.sendOrderStatusMail(o)
+	s.sendOrderStatusMail(ctx, o)
 	// Chuông của khách dùng lại đúng câu chữ của email — cùng một sự việc thì
 	// không nên mô tả bằng hai giọng khác nhau. Trạng thái nội bộ (đang chuẩn bị)
 	// không có trong statusMails nên cũng không làm phiền khách ở đây.

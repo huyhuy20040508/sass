@@ -6,7 +6,24 @@ import (
 	"testing"
 
 	"sass-api/internal/domain"
+	"sass-api/internal/tenant"
 )
+
+// ctxShop dựng ctx mang một cửa hàng — từ khi mỗi cửa hàng có bộ cấu hình riêng,
+// mọi lượt đọc/ghi cấu hình đều phải nói rõ đang làm việc với cửa hàng nào.
+// ctx trống là "chưa xác định được cửa hàng" và chỉ trả về giá trị mặc định.
+func ctxShop() context.Context { return tenant.WithID(context.Background(), 1) }
+
+// napLai ép service đọc lại cấu hình của cửa hàng trong ctx.
+//
+// Test seed thẳng vào fake repo nên service chưa biết gì; ngoài đời việc nạp lại
+// do chính Update lo, còn lượt đọc đầu tiên của mỗi cửa hàng thì tự nạp.
+func napLai(t *testing.T, svc SettingService, ctx context.Context) {
+	t.Helper()
+	if _, err := svc.(*settingService).reload(ctx); err != nil {
+		t.Fatalf("nạp cấu hình lỗi: %v", err)
+	}
+}
 
 // fakeSettingRepo là bảng settings trong bộ nhớ — đủ để kiểm phần logic của
 // service (registry, validate, snapshot) mà không cần MySQL.
@@ -39,7 +56,7 @@ func TestSettingUpdateTuChoiKhoaLa(t *testing.T) {
 	repo := newFakeSettingRepo()
 	svc := NewSettingService(repo)
 
-	_, err := svc.Update(context.Background(), map[string]string{"khoa_bia_dat": "1"})
+	_, err := svc.Update(ctxShop(), map[string]string{"khoa_bia_dat": "1"})
 	if err == nil {
 		t.Fatal("khoá lạ phải bị từ chối")
 	}
@@ -61,7 +78,7 @@ func TestSettingUpdateTatCaHoacKhongGi(t *testing.T) {
 	repo := newFakeSettingRepo()
 	svc := NewSettingService(repo)
 
-	_, err := svc.Update(context.Background(), map[string]string{
+	_, err := svc.Update(ctxShop(), map[string]string{
 		SettingDefaultShippingFee:    "45000",
 		SettingFreeShippingThreshold: "khong-phai-so",
 	})
@@ -78,7 +95,7 @@ func TestSettingUpdateTatCaHoacKhongGi(t *testing.T) {
 func TestSettingValidateGioiHanSo(t *testing.T) {
 	repo := newFakeSettingRepo()
 	svc := NewSettingService(repo)
-	ctx := context.Background()
+	ctx := ctxShop()
 
 	for _, tc := range []struct {
 		name  string
@@ -95,7 +112,7 @@ func TestSettingValidateGioiHanSo(t *testing.T) {
 	if _, err := svc.Update(ctx, map[string]string{SettingDefaultShippingFee: "45000"}); err != nil {
 		t.Fatalf("giá trị hợp lệ phải lưu được: %v", err)
 	}
-	if got := svc.Float(SettingDefaultShippingFee); got != 45000 {
+	if got := svc.Float(ctx, SettingDefaultShippingFee); got != 45000 {
 		t.Fatalf("snapshot phải cập nhật sau khi ghi, nhận %v", got)
 	}
 }
@@ -105,7 +122,7 @@ func TestSettingChanTatHetHinhThucThanhToan(t *testing.T) {
 	repo := newFakeSettingRepo()
 	svc := NewSettingService(repo)
 
-	_, err := svc.Update(context.Background(), map[string]string{
+	_, err := svc.Update(ctxShop(), map[string]string{
 		SettingPaymentCODEnabled:  "0",
 		SettingPaymentBankEnabled: "0",
 	})
@@ -124,7 +141,7 @@ func TestSettingChanTatHetHinhThucThanhToan(t *testing.T) {
 // Bật chuyển khoản mà chưa khai tài khoản nhận tiền = bảo khách chuyển vào hư không.
 func TestSettingChuyenKhoanPhaiCoTaiKhoan(t *testing.T) {
 	svc := NewSettingService(newFakeSettingRepo())
-	ctx := context.Background()
+	ctx := ctxShop()
 
 	_, err := svc.Update(ctx, map[string]string{
 		SettingPaymentBankEnabled: "1",
@@ -147,7 +164,7 @@ func TestSettingChuyenKhoanPhaiCoTaiKhoan(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("khai đủ thì phải lưu được, nhận: %v", err)
 	}
-	if !paymentMethodAvailable(svc, "bank_transfer") {
+	if !paymentMethodAvailable(ctx, svc, "bank_transfer") {
 		t.Fatal("khai đủ tài khoản rồi thì chuyển khoản phải dùng được")
 	}
 
@@ -155,7 +172,7 @@ func TestSettingChuyenKhoanPhaiCoTaiKhoan(t *testing.T) {
 	if _, err := svc.Update(ctx, map[string]string{SettingPaymentBankEnabled: "0"}); err != nil {
 		t.Fatalf("tắt chuyển khoản (COD vẫn bật) phải lưu được, nhận: %v", err)
 	}
-	if paymentMethodAvailable(svc, "bank_transfer") {
+	if paymentMethodAvailable(ctx, svc, "bank_transfer") {
 		t.Fatal("đã tắt thì không được chào chuyển khoản nữa")
 	}
 }
@@ -164,17 +181,16 @@ func TestSettingChuyenKhoanPhaiCoTaiKhoan(t *testing.T) {
 // nhận, không được chào ra rồi để khách bấm vào một hướng dẫn trống.
 func TestSettingChuyenKhoanMacDinhChuaSanSang(t *testing.T) {
 	svc := NewSettingService(newFakeSettingRepo())
-	if err := svc.Load(context.Background()); err != nil {
-		t.Fatalf("Load lỗi: %v", err)
-	}
+	ctx := ctxShop()
+	napLai(t, svc, ctx)
 
-	if !svc.Bool(SettingPaymentBankEnabled) {
+	if !svc.Bool(ctx, SettingPaymentBankEnabled) {
 		t.Fatal("mặc định phải bật cờ chuyển khoản")
 	}
-	if paymentMethodAvailable(svc, "bank_transfer") {
+	if paymentMethodAvailable(ctx, svc, "bank_transfer") {
 		t.Fatal("chưa khai tài khoản thì chưa được chào chuyển khoản")
 	}
-	if !paymentMethodAvailable(svc, "cod") {
+	if !paymentMethodAvailable(ctx, svc, "cod") {
 		t.Fatal("COD mặc định phải dùng được, không thì bản cài mới không bán được gì")
 	}
 }
@@ -184,7 +200,7 @@ func TestSettingChuyenKhoanMacDinhChuaSanSang(t *testing.T) {
 func TestSettingLuatThanhToanKhongChanNhomKhac(t *testing.T) {
 	svc := NewSettingService(newFakeSettingRepo())
 
-	if _, err := svc.Update(context.Background(), map[string]string{
+	if _, err := svc.Update(ctxShop(), map[string]string{
 		SettingDefaultShippingFee: "35000",
 	}); err != nil {
 		t.Fatalf("lưu nhóm vận chuyển phải chạy được, nhận: %v", err)
@@ -195,14 +211,13 @@ func TestSettingLuatThanhToanKhongChanNhomKhac(t *testing.T) {
 // giữ cho bản cài mới chạy y hệt lúc các con số còn nằm cứng trong code.
 func TestSettingMacDinhKhiChuaCoDuLieu(t *testing.T) {
 	svc := NewSettingService(newFakeSettingRepo())
-	if err := svc.Load(context.Background()); err != nil {
-		t.Fatalf("Load lỗi: %v", err)
-	}
+	ctx := ctxShop()
+	napLai(t, svc, ctx)
 
-	if got := svc.Float(SettingFreeShippingThreshold); got != 1_000_000 {
+	if got := svc.Float(ctx, SettingFreeShippingThreshold); got != 1_000_000 {
 		t.Fatalf("ngưỡng miễn phí ship mặc định phải là 1.000.000, nhận %v", got)
 	}
-	if got := svc.Int(SettingLowStockThreshold); got != 5 {
+	if got := svc.Int(ctx, SettingLowStockThreshold); got != 5 {
 		t.Fatalf("ngưỡng sắp hết mặc định phải là 5 (khớp InventoryController::LOW_STOCK), nhận %v", got)
 	}
 }
@@ -212,7 +227,7 @@ func TestSettingMacDinhKhiChuaCoDuLieu(t *testing.T) {
 // khách bấm vào ra trang 404 của cửa hàng chứ không sang Facebook.
 func TestSettingValidateDuongDan(t *testing.T) {
 	svc := NewSettingService(newFakeSettingRepo())
-	ctx := context.Background()
+	ctx := ctxShop()
 
 	for _, bad := range []string{"facebook.com/shop", "www.facebook.com", "ftp://a.com", "https://"} {
 		if _, err := svc.Update(ctx, map[string]string{SettingSocialFacebook: bad}); err == nil {
@@ -244,7 +259,7 @@ func TestSettingDocDuocKhoaDaDoiNhom(t *testing.T) {
 	}
 
 	svc := NewSettingService(repo)
-	res, err := svc.List(context.Background(), SettingGroupInventory)
+	res, err := svc.List(ctxShop(), SettingGroupInventory)
 	if err != nil {
 		t.Fatalf("List lỗi: %v", err)
 	}
@@ -257,8 +272,9 @@ func TestSettingDocDuocKhoaDaDoiNhom(t *testing.T) {
 // storefront là kể cho khách nghe cách cửa hàng quản kho.
 func TestSettingPublicKhongLoKhoaNoiBo(t *testing.T) {
 	svc := NewSettingService(newFakeSettingRepo())
+	ctx := ctxShop()
 
-	pub := svc.Public()
+	pub := svc.Public(ctx)
 	if _, ok := pub[SettingLowStockThreshold]; ok {
 		t.Fatal("ngưỡng tồn kho không được lộ ra storefront")
 	}
@@ -270,13 +286,11 @@ func TestSettingPublicKhongLoKhoaNoiBo(t *testing.T) {
 // PayOS cần ĐỦ hai vế: công tắc trong trang Cài đặt và bộ khoá trong .env. Thiếu
 // vế .env mà vẫn chào ra thì khách chọn xong sẽ bị API từ chối ở bước cuối.
 func TestSettingPayOSCanCaCongTacVaKhoaEnv(t *testing.T) {
-	ctx := context.Background()
+	ctx := ctxShop()
 	svc := NewSettingService(newFakeSettingRepo())
-	if err := svc.Load(ctx); err != nil {
-		t.Fatalf("Load lỗi: %v", err)
-	}
+	napLai(t, svc, ctx)
 
-	if svc.Bool(SettingPaymentPayOSEnabled) {
+	if svc.Bool(ctx, SettingPaymentPayOSEnabled) {
 		t.Fatal("mặc định PayOS phải TẮT — bản cài mới chưa có khoá nào")
 	}
 
@@ -294,7 +308,7 @@ func TestSettingPayOSCanCaCongTacVaKhoaEnv(t *testing.T) {
 	if _, err := svc.Update(ctx, bat("1")); err == nil {
 		t.Fatal("bật PayOS khi chưa khai khoá .env thì phải báo lại cho người dùng biết")
 	}
-	if paymentMethodAvailable(svc, "payos") {
+	if paymentMethodAvailable(ctx, svc, "payos") {
 		t.Fatal("chưa có khoá .env thì không được chào PayOS")
 	}
 
@@ -303,7 +317,7 @@ func TestSettingPayOSCanCaCongTacVaKhoaEnv(t *testing.T) {
 	if _, err := svc.Update(ctx, bat("1")); err != nil {
 		t.Fatalf("có khoá .env thì bật PayOS phải lưu được, nhận: %v", err)
 	}
-	if !paymentMethodAvailable(svc, "payos") {
+	if !paymentMethodAvailable(ctx, svc, "payos") {
 		t.Fatal("đủ cả công tắc lẫn khoá thì PayOS phải dùng được")
 	}
 
@@ -311,7 +325,7 @@ func TestSettingPayOSCanCaCongTacVaKhoaEnv(t *testing.T) {
 	if _, err := svc.Update(ctx, bat("0")); err != nil {
 		t.Fatalf("tắt PayOS (COD vẫn bật) phải lưu được, nhận: %v", err)
 	}
-	if paymentMethodAvailable(svc, "payos") {
+	if paymentMethodAvailable(ctx, svc, "payos") {
 		t.Fatal("cửa hàng đã tắt thì không được chào PayOS")
 	}
 }
@@ -319,11 +333,9 @@ func TestSettingPayOSCanCaCongTacVaKhoaEnv(t *testing.T) {
 // Cấu hình công khai phải nói THẬT: công tắc bật mà .env chưa có khoá thì báo ra
 // là tắt, vì storefront dựng danh sách hình thức thanh toán từ đúng map này.
 func TestSettingPublicGiauPayOSKhiThieuKhoa(t *testing.T) {
-	ctx := context.Background()
+	ctx := ctxShop()
 	svc := NewSettingService(newFakeSettingRepo())
-	if err := svc.Load(ctx); err != nil {
-		t.Fatalf("Load lỗi: %v", err)
-	}
+	napLai(t, svc, ctx)
 
 	svc.SetPayOSReady(true)
 	if _, err := svc.Update(ctx, map[string]string{
@@ -332,12 +344,12 @@ func TestSettingPublicGiauPayOSKhiThieuKhoa(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("Update lỗi: %v", err)
 	}
-	if svc.Public()[SettingPaymentPayOSEnabled] != "1" {
+	if svc.Public(ctx)[SettingPaymentPayOSEnabled] != "1" {
 		t.Fatal("đủ khoá + đã bật thì cấu hình công khai phải báo bật")
 	}
 
 	svc.SetPayOSReady(false)
-	if got := svc.Public()[SettingPaymentPayOSEnabled]; got != "0" {
+	if got := svc.Public(ctx)[SettingPaymentPayOSEnabled]; got != "0" {
 		t.Fatalf("mất khoá .env thì cấu hình công khai phải báo tắt, nhận: %q", got)
 	}
 }
@@ -345,13 +357,11 @@ func TestSettingPublicGiauPayOSKhiThieuKhoa(t *testing.T) {
 // SePay cũng cần đủ hai vế như PayOS: công tắc ở trang Cài đặt và cấu hình tài
 // khoản trong .env.
 func TestSettingSePayCanCaCongTacVaCauHinhEnv(t *testing.T) {
-	ctx := context.Background()
+	ctx := ctxShop()
 	svc := NewSettingService(newFakeSettingRepo())
-	if err := svc.Load(ctx); err != nil {
-		t.Fatalf("Load lỗi: %v", err)
-	}
+	napLai(t, svc, ctx)
 
-	if svc.Bool(SettingPaymentSePayEnabled) {
+	if svc.Bool(ctx, SettingPaymentSePayEnabled) {
 		t.Fatal("mặc định SePay phải TẮT — bản cài mới chưa khai tài khoản nào")
 	}
 
@@ -367,7 +377,7 @@ func TestSettingSePayCanCaCongTacVaCauHinhEnv(t *testing.T) {
 	if _, err := svc.Update(ctx, bat("1")); err == nil {
 		t.Fatal("bật SePay khi chưa khai .env thì phải báo lại cho người dùng biết")
 	}
-	if paymentMethodAvailable(svc, "sepay") {
+	if paymentMethodAvailable(ctx, svc, "sepay") {
 		t.Fatal("chưa khai .env thì không được chào SePay")
 	}
 
@@ -375,16 +385,16 @@ func TestSettingSePayCanCaCongTacVaCauHinhEnv(t *testing.T) {
 	if _, err := svc.Update(ctx, bat("1")); err != nil {
 		t.Fatalf("khai đủ .env thì bật SePay phải lưu được, nhận: %v", err)
 	}
-	if !paymentMethodAvailable(svc, "sepay") {
+	if !paymentMethodAvailable(ctx, svc, "sepay") {
 		t.Fatal("đủ cả công tắc lẫn cấu hình thì SePay phải dùng được")
 	}
-	if svc.Public()[SettingPaymentSePayEnabled] != "1" {
+	if svc.Public(ctx)[SettingPaymentSePayEnabled] != "1" {
 		t.Fatal("cấu hình công khai phải báo bật")
 	}
 
 	// Mất cấu hình .env thì cấu hình công khai phải nói thật là tắt.
 	svc.SetSePayReady(false)
-	if got := svc.Public()[SettingPaymentSePayEnabled]; got != "0" {
+	if got := svc.Public(ctx)[SettingPaymentSePayEnabled]; got != "0" {
 		t.Fatalf("mất cấu hình .env thì phải báo tắt, nhận: %q", got)
 	}
 }
@@ -392,11 +402,9 @@ func TestSettingSePayCanCaCongTacVaCauHinhEnv(t *testing.T) {
 // Hai cổng QR bật cùng lúc vẫn phải sống chung được: cửa hàng có thể muốn chào cả
 // hai, hoặc chuyển dần từ cổng này sang cổng kia.
 func TestSettingHaiCongQRSongSong(t *testing.T) {
-	ctx := context.Background()
+	ctx := ctxShop()
 	svc := NewSettingService(newFakeSettingRepo())
-	if err := svc.Load(ctx); err != nil {
-		t.Fatalf("Load lỗi: %v", err)
-	}
+	napLai(t, svc, ctx)
 	svc.SetPayOSReady(true)
 	svc.SetSePayReady(true)
 
@@ -408,7 +416,7 @@ func TestSettingHaiCongQRSongSong(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("bật cả hai cổng QR phải lưu được, nhận: %v", err)
 	}
-	if !paymentMethodAvailable(svc, "payos") || !paymentMethodAvailable(svc, "sepay") {
+	if !paymentMethodAvailable(ctx, svc, "payos") || !paymentMethodAvailable(ctx, svc, "sepay") {
 		t.Fatal("cả hai cổng phải cùng dùng được")
 	}
 }
@@ -416,11 +424,9 @@ func TestSettingHaiCongQRSongSong(t *testing.T) {
 // Tắt HẾT mọi hình thức thì không ai đặt được đơn nào — luật này phải tính cả
 // SePay, không thì tắt hết mà hệ thống vẫn báo hợp lệ.
 func TestSettingTatHetKeCaSePayBiChan(t *testing.T) {
-	ctx := context.Background()
+	ctx := ctxShop()
 	svc := NewSettingService(newFakeSettingRepo())
-	if err := svc.Load(ctx); err != nil {
-		t.Fatalf("Load lỗi: %v", err)
-	}
+	napLai(t, svc, ctx)
 	svc.SetSePayReady(true)
 
 	_, err := svc.Update(ctx, map[string]string{

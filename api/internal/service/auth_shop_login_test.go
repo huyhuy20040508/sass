@@ -20,7 +20,7 @@ func nhanVien(id, tenantID uint, username, matKhau, vaiTro string) *domain.User 
 	h, _ := hash.Hash(matKhau)
 	return &domain.User{
 		ID:           id,
-		TenantID:     tenantID,
+		TenantOwned:  domain.TenantOwned{TenantID: tenantID},
 		Username:     domain.StringOrNull(username),
 		Email:        username + "@shop.local",
 		FullName:     "Nhân viên " + username,

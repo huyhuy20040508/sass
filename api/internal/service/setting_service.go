@@ -11,6 +11,10 @@ import (
 
 	"sass-api/internal/domain"
 	"sass-api/internal/dto"
+	"sass-api/internal/tenant"
+	"sass-api/pkg/logger"
+
+	"go.uber.org/zap"
 )
 
 // Kiểu dữ liệu của một khoá cấu hình — quyết định cách validate và loại ô nhập
@@ -280,18 +284,27 @@ func (e *SettingValidationError) Error() string { return "cấu hình không h�
 
 // SettingService đọc/ghi cấu hình hệ thống.
 //
-// Giá trị được giữ trong một snapshot bộ nhớ (nạp lúc khởi động, làm mới sau mỗi
-// lần ghi) nên các service khác — order_service khi tính phí ship chẳng hạn —
-// đọc cấu hình mà không phải truy vấn database ở từng lượt gọi.
+// Giá trị được giữ trong snapshot bộ nhớ nên các service khác — order_service
+// khi tính phí ship chẳng hạn — đọc cấu hình mà không phải truy vấn database ở
+// từng lượt gọi.
+//
+// SNAPSHOT LÀ CỦA TỪNG CỬA HÀNG, không phải của hệ thống. Đây là chỗ dễ sai nhất
+// trong cả tệp: bảng settings chứa tên cửa hàng, logo, hotline và SỐ TÀI KHOẢN
+// NGÂN HÀNG. Một snapshot dùng chung nghĩa là cửa hàng nào lưu cấu hình sau cùng
+// thì số tài khoản của họ hiện ra trong email xác nhận đơn của mọi cửa hàng khác
+// — khách trả tiền vào nhầm tài khoản, và không có lỗi nào nổi lên ở đâu cả.
+//
+// Vì vậy mọi hàm đọc đều nhận ctx: cửa hàng được xác định từ đó, đúng cùng một
+// nguồn mà bộ lọc tenant dưới tầng repository dùng. ctx không xác định được cửa
+// hàng thì trả về giá trị MẶC ĐỊNH của registry — không chạm database, không trả
+// nhầm dữ liệu của ai.
 type SettingService interface {
-	// Load nạp snapshot từ database. Gọi một lần lúc khởi động.
-	Load(ctx context.Context) error
 	// List trả về cấu hình cho trang admin; group rỗng = mọi nhóm.
 	List(ctx context.Context, group string) (dto.SettingsResponse, error)
 	// Update ghi nhiều khoá rồi làm mới snapshot, trả về toàn bộ cấu hình sau khi ghi.
 	Update(ctx context.Context, items map[string]string) (dto.SettingsResponse, error)
 	// Public trả về map phẳng chỉ gồm khoá đánh dấu công khai (cho storefront).
-	Public() map[string]string
+	Public(ctx context.Context) map[string]string
 
 	// SetPayOSReady / PayOSReady / SetSePayReady / SePayReady nói cho phần cấu hình
 	// biết từng cổng đã có đủ khoá hay chưa.
@@ -305,26 +318,33 @@ type SettingService interface {
 	SetSePayReady(ready bool)
 	SePayReady() bool
 
-	// Các hàm đọc nhanh từ snapshot, không chạm database.
-	Get(key string) string
-	Float(key string) float64
-	Int(key string) int
-	Bool(key string) bool
+	// Các hàm đọc nhanh từ snapshot của cửa hàng trong ctx. Chỉ chạm database ở
+	// lượt đọc ĐẦU TIÊN của mỗi cửa hàng.
+	Get(ctx context.Context, key string) string
+	Float(ctx context.Context, key string) float64
+	Int(ctx context.Context, key string) int
+	Bool(ctx context.Context, key string) bool
 }
 
 type settingService struct {
 	repo domain.SettingRepository
 
-	mu   sync.RWMutex
-	snap map[string]string
-	// payosReady / sepayReady đi cùng snapshot dưới cùng một khoá vì chúng được đọc
-	// chung với các khoá cấu hình ở mọi lượt đặt hàng.
+	mu sync.RWMutex
+	// snaps giữ cấu hình theo TỪNG cửa hàng. Nạp lười: cửa hàng nào chưa có mặt
+	// trong map thì lượt đọc đầu tiên của nó đi hỏi database rồi cất lại.
+	//
+	// Không có cơ chế hết hạn, đúng như snapshot cũ: cấu hình chỉ đổi qua Update
+	// của chính tiến trình này, và Update nạp lại ngay sau khi ghi. Sửa thẳng
+	// dưới database thì phải khởi động lại API — cũng y như trước.
+	snaps map[uint]map[string]string
+	// payosReady / sepayReady là chuyện của .env, chung cho cả tiến trình chứ
+	// không theo cửa hàng, nên đứng riêng ngoài snaps.
 	payosReady bool
 	sepayReady bool
 }
 
 func NewSettingService(repo domain.SettingRepository) SettingService {
-	return &settingService{repo: repo, snap: defaultSnapshot()}
+	return &settingService{repo: repo, snaps: map[uint]map[string]string{}}
 }
 
 // defaultSnapshot dựng snapshot toàn giá trị mặc định — dùng làm điểm khởi đầu
@@ -337,18 +357,62 @@ func defaultSnapshot() map[string]string {
 	return m
 }
 
-func (s *settingService) Load(ctx context.Context) error {
+// reload đọc lại cấu hình của cửa hàng trong ctx từ database và cất vào bộ nhớ.
+func (s *settingService) reload(ctx context.Context) (map[string]string, error) {
+	id, ok := tenant.ID(ctx)
+	if !ok {
+		// Không xác định được cửa hàng thì không có gì để hỏi. Trả mặc định và
+		// KHÔNG cất vào map — cất là tự tạo ra một mục "cửa hàng số 0".
+		return defaultSnapshot(), nil
+	}
+
 	stored, err := s.repo.Map(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	s.replaceSnapshot(stored)
-	return nil
+	next := mergeSnapshot(stored)
+
+	s.mu.Lock()
+	s.snaps[id] = next
+	s.mu.Unlock()
+
+	return next, nil
 }
 
-// replaceSnapshot ghép giá trị từ database lên nền mặc định: khoá thiếu dòng thì
+// snapshot trả về cấu hình của cửa hàng trong ctx, nạp từ database ở lượt gọi
+// đầu tiên.
+//
+// Không trả lỗi, đúng như bộ hàm đọc cũ: cấu hình không phải chức năng sống còn,
+// và một lượt đọc hỏng thì rơi về mặc định của registry — cùng bộ giá trị từng
+// được nướng cứng trong code trước khi có trang Cài đặt. Nhưng có GHI LOG, vì
+// "cửa hàng thấy tên mặc định thay vì tên của mình" là thứ phải điều tra được.
+func (s *settingService) snapshot(ctx context.Context) map[string]string {
+	id, ok := tenant.ID(ctx)
+	if !ok {
+		return defaultSnapshot()
+	}
+
+	s.mu.RLock()
+	snap, cached := s.snaps[id]
+	s.mu.RUnlock()
+	if cached {
+		return snap
+	}
+
+	snap, err := s.reload(ctx)
+	if err != nil {
+		logger.Warn("không nạp được cấu hình cửa hàng, dùng giá trị mặc định",
+			zap.Uint("tenant_id", id), zap.Error(err))
+
+		return defaultSnapshot()
+	}
+
+	return snap
+}
+
+// mergeSnapshot ghép giá trị từ database lên nền mặc định: khoá thiếu dòng thì
 // giữ mặc định, khoá lạ trong database bị bỏ qua (registry mới là nguồn sự thật).
-func (s *settingService) replaceSnapshot(stored map[string]string) {
+func mergeSnapshot(stored map[string]string) map[string]string {
 	next := defaultSnapshot()
 	for _, d := range settingRegistry {
 		v, ok := stored[d.Key]
@@ -363,9 +427,7 @@ func (s *settingService) replaceSnapshot(stored map[string]string) {
 		next[d.Key] = v
 	}
 
-	s.mu.Lock()
-	s.snap = next
-	s.mu.Unlock()
+	return next
 }
 
 func (s *settingService) List(ctx context.Context, group string) (dto.SettingsResponse, error) {
@@ -400,7 +462,8 @@ func (s *settingService) Update(ctx context.Context, items map[string]string) (d
 	}
 	// Luật chéo chạy SAU luật từng khoá: nói "phải điền số tài khoản" trong khi ô đó
 	// đang chứa giá trị sai kiểu thì người sửa nhận hai câu lỗi đá nhau.
-	if verr := validatePaymentSetup(items, s.Get, s.PayOSReady(), s.SePayReady()); verr != nil {
+	current := func(key string) string { return s.Get(ctx, key) }
+	if verr := validatePaymentSetup(items, current, s.PayOSReady(), s.SePayReady()); verr != nil {
 		return dto.SettingsResponse{}, verr
 	}
 	if err := s.repo.Upsert(ctx, rows); err != nil {
@@ -408,16 +471,13 @@ func (s *settingService) Update(ctx context.Context, items map[string]string) (d
 	}
 	// Đọc lại từ database rồi mới thay snapshot: bảo đảm bộ nhớ khớp đúng những gì
 	// đã ghi xuống, không phải khớp với payload người dùng gửi.
-	if err := s.Load(ctx); err != nil {
+	saved, err := s.reload(ctx)
+	if err != nil {
 		return dto.SettingsResponse{}, err
 	}
 
-	s.mu.RLock()
-	current := s.snap
-	s.mu.RUnlock()
-
 	return buildSettingsResponse("", func(d settingDef) string {
-		return current[d.Key]
+		return saved[d.Key]
 	}), nil
 }
 
@@ -588,23 +648,22 @@ func validateSettingValue(d settingDef, value string) string {
 	return ""
 }
 
-func (s *settingService) Public() map[string]string {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+func (s *settingService) Public(ctx context.Context) map[string]string {
+	snap := s.snapshot(ctx)
 
 	out := make(map[string]string, len(settingRegistry))
 	for _, d := range settingRegistry {
 		if d.Public {
-			out[d.Key] = s.snap[d.Key]
+			out[d.Key] = snap[d.Key]
 		}
 	}
 	// Bật công tắc PayOS nhưng .env chưa có khoá thì báo ra là TẮT. Storefront dựng
 	// danh sách hình thức thanh toán từ đúng map này; nói dối ở đây là khách chọn
 	// được một hình thức mà API sẽ từ chối, sau khi họ đã điền xong địa chỉ.
-	if !s.payosReady {
+	if !s.PayOSReady() {
 		out[SettingPaymentPayOSEnabled] = "0"
 	}
-	if !s.sepayReady {
+	if !s.SePayReady() {
 		out[SettingPaymentSePayEnabled] = "0"
 	}
 	return out
@@ -634,16 +693,14 @@ func (s *settingService) SePayReady() bool {
 	return s.sepayReady
 }
 
-func (s *settingService) Get(key string) string {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.snap[key]
+func (s *settingService) Get(ctx context.Context, key string) string {
+	return s.snapshot(ctx)[key]
 }
 
 // Float đọc khoá dạng số. Giá trị hỏng (ai đó sửa tay trong database) rơi về mặc
 // định của registry chứ không trả 0 — 0 sẽ thành "miễn phí ship cho mọi đơn".
-func (s *settingService) Float(key string) float64 {
-	if n, err := strconv.ParseFloat(s.Get(key), 64); err == nil {
+func (s *settingService) Float(ctx context.Context, key string) float64 {
+	if n, err := strconv.ParseFloat(s.Get(ctx, key), 64); err == nil {
 		return n
 	}
 	if d, ok := settingDefs[key]; ok {
@@ -653,15 +710,15 @@ func (s *settingService) Float(key string) float64 {
 	return 0
 }
 
-func (s *settingService) Int(key string) int {
-	return int(s.Float(key))
+func (s *settingService) Int(ctx context.Context, key string) int {
+	return int(s.Float(ctx, key))
 }
 
 // Bool đọc khoá dạng công tắc. Chỉ "1" là bật; giá trị lạ (ai đó sửa tay trong
 // database) coi như tắt — với khoá thanh toán thì tắt nhầm chỉ mất một lựa chọn,
 // còn bật nhầm là chào ra hình thức cửa hàng chưa nhận được tiền.
-func (s *settingService) Bool(key string) bool {
-	return strings.TrimSpace(s.Get(key)) == "1"
+func (s *settingService) Bool(ctx context.Context, key string) bool {
+	return strings.TrimSpace(s.Get(ctx, key)) == "1"
 }
 
 // settingText / settingNumber là cửa đọc cấu hình cho các service KHÁC (đơn hàng,
@@ -670,18 +727,18 @@ func (s *settingService) Bool(key string) bool {
 // Cả hai chịu được svc == nil: service dựng trong test không cần cắm cấu hình mà
 // vẫn chạy đúng như trước, vì giá trị rơi về Default khai trong registry — đúng
 // bằng những hằng số từng nướng cứng trong code.
-func settingText(svc SettingService, key string) string {
+func settingText(ctx context.Context, svc SettingService, key string) string {
 	if svc != nil {
-		if v := strings.TrimSpace(svc.Get(key)); v != "" {
+		if v := strings.TrimSpace(svc.Get(ctx, key)); v != "" {
 			return v
 		}
 	}
 	return settingDefs[key].Default
 }
 
-func settingBool(svc SettingService, key string) bool {
+func settingBool(ctx context.Context, svc SettingService, key string) bool {
 	if svc != nil {
-		return svc.Bool(key)
+		return svc.Bool(ctx, key)
 	}
 	return settingDefs[key].Default == "1"
 }
@@ -693,16 +750,16 @@ func settingBool(svc SettingService, key string) bool {
 // khoản, chủ tài khoản. Bật cờ mà thiếu một trong ba thì coi như chưa nhận —
 // mặc định của bản cài mới rơi đúng vào trường hợp này, và thà không chào ra còn
 // hơn để khách bấm chọn rồi không biết chuyển đi đâu.
-func paymentMethodAvailable(svc SettingService, method string) bool {
+func paymentMethodAvailable(ctx context.Context, svc SettingService, method string) bool {
 	switch method {
 	case "cod":
-		return settingBool(svc, SettingPaymentCODEnabled)
+		return settingBool(ctx, svc, SettingPaymentCODEnabled)
 	case "bank_transfer":
-		if !settingBool(svc, SettingPaymentBankEnabled) {
+		if !settingBool(ctx, svc, SettingPaymentBankEnabled) {
 			return false
 		}
 		for _, key := range []string{SettingBankName, SettingBankAccountNumber, SettingBankAccountName} {
-			if strings.TrimSpace(settingText(svc, key)) == "" {
+			if strings.TrimSpace(settingText(ctx, svc, key)) == "" {
 				return false
 			}
 		}
@@ -710,9 +767,9 @@ func paymentMethodAvailable(svc SettingService, method string) bool {
 	case "payos":
 		// Hai điều kiện độc lập: cửa hàng có MUỐN nhận (công tắc trong trang Cài đặt)
 		// và hệ thống có ĐỦ KHOÁ để gọi cổng (.env). Thiếu vế nào cũng là không nhận.
-		return settingBool(svc, SettingPaymentPayOSEnabled) && svc != nil && svc.PayOSReady()
+		return settingBool(ctx, svc, SettingPaymentPayOSEnabled) && svc != nil && svc.PayOSReady()
 	case "sepay":
-		return settingBool(svc, SettingPaymentSePayEnabled) && svc != nil && svc.SePayReady()
+		return settingBool(ctx, svc, SettingPaymentSePayEnabled) && svc != nil && svc.SePayReady()
 	default:
 		// vnpay/momo… là hình thức admin ghi tay cho đơn đặt qua điện thoại, không
 		// nằm trong các công tắc của storefront.
@@ -720,9 +777,9 @@ func paymentMethodAvailable(svc SettingService, method string) bool {
 	}
 }
 
-func settingNumber(svc SettingService, key string) float64 {
+func settingNumber(ctx context.Context, svc SettingService, key string) float64 {
 	if svc != nil {
-		return svc.Float(key)
+		return svc.Float(ctx, key)
 	}
 	n, _ := strconv.ParseFloat(settingDefs[key].Default, 64)
 	return n

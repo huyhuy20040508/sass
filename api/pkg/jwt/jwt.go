@@ -19,13 +19,27 @@ const (
 var (
 	ErrInvalidToken = errors.New("token không hợp lệ")
 	ErrExpiredToken = errors.New("token đã hết hạn")
+	// ErrMissingTenant — gọi Generate mà không nói token thuộc cửa hàng nào.
+	// Lỗi lập trình, không phải lỗi người dùng.
+	ErrMissingTenant = errors.New("token phải mang mã cửa hàng")
 )
 
 // Claims là payload của token.
 type Claims struct {
-	UserID uint      `json:"uid"`
-	Role   string    `json:"role"`
-	Type   TokenType `json:"typ"`
+	UserID uint `json:"uid"`
+	// TenantID là CỬA HÀNG mà token này được cấp cho.
+	//
+	// Nằm trong token chứ không tra lại từ database ở mỗi lượt gọi vì nó là thứ
+	// quyết định người cầm token đọc được dữ liệu của ai — mà token thì đã có chữ
+	// ký, sửa một chữ số trong đó là chữ ký hỏng ngay. Đọc từ header hay tham số
+	// URL thì đổi cửa hàng chỉ là sửa một con số.
+	//
+	// 0 = token cấp TRƯỚC khi hệ thống có nhiều cửa hàng. Nơi xác thực phải TỪ
+	// CHỐI chứ đừng lùi về 1: lùi về là biến mọi token cũ thành chìa khoá vào cửa
+	// hàng số 1.
+	TenantID uint      `json:"tid"`
+	Role     string    `json:"role"`
+	Type     TokenType `json:"typ"`
 	jwt.RegisteredClaims
 }
 
@@ -41,16 +55,26 @@ func NewManager(secret string, accessTTL, refreshTTL time.Duration) *Manager {
 }
 
 // Generate tạo token theo loại (access/refresh).
-func (m *Manager) Generate(userID uint, role string, t TokenType) (string, time.Time, error) {
+//
+// tenantID là bắt buộc và phải khác 0 — token không nói được nó thuộc cửa hàng
+// nào thì mọi câu truy vấn chạy bằng nó đều hỏng ở tầng repository, và người
+// dùng nhận một lỗi 500 khó hiểu sau khi đăng nhập "thành công". Chặn ngay tại
+// đây để lỗi chỉ vào đúng chỗ quên.
+func (m *Manager) Generate(userID, tenantID uint, role string, t TokenType) (string, time.Time, error) {
+	if tenantID == 0 {
+		return "", time.Time{}, ErrMissingTenant
+	}
+
 	ttl := m.accessTTL
 	if t == RefreshToken {
 		ttl = m.refreshTTL
 	}
 	expiresAt := time.Now().Add(ttl)
 	claims := Claims{
-		UserID: userID,
-		Role:   role,
-		Type:   t,
+		UserID:   userID,
+		TenantID: tenantID,
+		Role:     role,
+		Type:     t,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expiresAt),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),

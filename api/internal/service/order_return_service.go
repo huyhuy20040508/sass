@@ -112,7 +112,7 @@ func (s *orderReturnService) GetByID(ctx context.Context, id uint) (*ReturnDetai
 //
 // Chỉ mở từ lúc hàng đã tới tay khách: đơn chưa giao thì huỷ đơn mới là thao tác
 // đúng, không phải trả hàng. Đơn đã hoàn hết cũng không còn gì để trả.
-func (s *orderReturnService) returnEligibility(o *domain.Order, selfService bool) (bool, string) {
+func (s *orderReturnService) returnEligibility(ctx context.Context, o *domain.Order, selfService bool) (bool, string) {
 	switch o.Status {
 	case domain.OrderStatusDelivered, domain.OrderStatusCompleted:
 	case domain.OrderStatusReturned:
@@ -129,7 +129,7 @@ func (s *orderReturnService) returnEligibility(o *domain.Order, selfService bool
 	if o.DeliveredAt != nil {
 		deadline := o.DeliveredAt.AddDate(0, 0, returnWindowDays)
 		if time.Now().After(deadline) {
-			return false, "Đã quá hạn đổi trả " + strconv.Itoa(returnWindowDays) + " ngày kể từ ngày nhận hàng. Vui lòng gọi " + s.hotline() + " để được hỗ trợ."
+			return false, "Đã quá hạn đổi trả " + strconv.Itoa(returnWindowDays) + " ngày kể từ ngày nhận hàng. Vui lòng gọi " + s.hotline(ctx) + " để được hỗ trợ."
 		}
 	}
 	return true, ""
@@ -162,7 +162,7 @@ func (s *orderReturnService) returnable(ctx context.Context, orderID uint, selfS
 		return nil, err
 	}
 
-	ok, reason := s.returnEligibility(o, selfService)
+	ok, reason := s.returnEligibility(ctx, o, selfService)
 	if ok {
 		// Đơn hợp lệ nhưng mọi món đã nằm trong phiếu trả khác thì cũng không tạo
 		// thêm được — nói thẳng ra thay vì để form mở với toàn ô số lượng bằng 0.
@@ -255,7 +255,7 @@ func (s *orderReturnService) CreateMine(ctx context.Context, userID uint, req *d
 		if o.UserID == nil || *o.UserID != userID {
 			return nil, domain.ErrNotFound
 		}
-		if ok, _ := s.returnEligibility(o, true); !ok {
+		if ok, _ := s.returnEligibility(ctx, o, true); !ok {
 			return nil, domain.ErrReturnNotAllowed
 		}
 
@@ -304,7 +304,7 @@ func (s *orderReturnService) CreateMine(ctx context.Context, userID uint, req *d
 
 func (s *orderReturnService) CreateByAdmin(ctx context.Context, req *dto.ReturnAdminCreateRequest, actorID uint) (*ReturnDetail, error) {
 	rt, err := s.repo.Create(ctx, req.OrderID, func(o *domain.Order, remain map[uint]domain.ReturnableItem) (*domain.OrderReturn, error) {
-		if ok, _ := s.returnEligibility(o, false); !ok {
+		if ok, _ := s.returnEligibility(ctx, o, false); !ok {
 			return nil, domain.ErrReturnNotAllowed
 		}
 
@@ -474,13 +474,13 @@ func (s *orderReturnService) CancelMine(ctx context.Context, userID, id uint, re
 const hotlinePlaceholder = "{hotline}"
 
 // hotline đọc số hỗ trợ từ cấu hình hệ thống.
-func (s *orderReturnService) hotline() string {
-	return settingText(s.settings, SettingContactPhone)
+func (s *orderReturnService) hotline(ctx context.Context) string {
+	return settingText(ctx, s.settings, SettingContactPhone)
 }
 
 // fillHotline thay chỗ trống bằng số hotline đang cấu hình.
-func (s *orderReturnService) fillHotline(text string) string {
-	return strings.ReplaceAll(text, hotlinePlaceholder, s.hotline())
+func (s *orderReturnService) fillHotline(ctx context.Context, text string) string {
+	return strings.ReplaceAll(text, hotlinePlaceholder, s.hotline(ctx))
 }
 
 // returnStatusTexts — mỗi trạng thái báo cho khách bằng câu chữ gì.
@@ -575,7 +575,7 @@ func (s *orderReturnService) UpdateStatus(ctx context.Context, id uint, req *dto
 
 	if tpl, ok := returnStatusTexts[rt.Status]; ok {
 		s.notifyCustomer(ctx, rt, "return_status",
-			"Phiếu trả hàng "+rt.ReturnCode+" "+tpl.label, s.fillHotline(tpl.detail))
+			"Phiếu trả hàng "+rt.ReturnCode+" "+tpl.label, s.fillHotline(ctx, tpl.detail))
 	}
 	s.signal(ctx, rt)
 	return s.detail(ctx, rt)

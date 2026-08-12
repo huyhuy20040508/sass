@@ -1,7 +1,6 @@
 package repository
 
 import (
-	"context"
 	"strings"
 	"testing"
 
@@ -23,7 +22,7 @@ import (
 // test xem ghi chú ở product_repository_test.go.
 func TestGoodsReceiptDungLaiTungDotNhan(t *testing.T) {
 	db := testDB(t)
-	ctx := context.Background()
+	ctx := ctxTest()
 	productID := seedProduct(t, db)
 
 	// Hai biến thể để đợt nhận có nhiều dòng hàng.
@@ -32,7 +31,7 @@ func TestGoodsReceiptDungLaiTungDotNhan(t *testing.T) {
 		{ProductID: productID, SKU: "TEST-RCPT-L", Size: "L", IsActive: true},
 	}
 	for i := range variants {
-		if err := db.Create(&variants[i]).Error; err != nil {
+		if err := db.WithContext(ctxTest()).Create(&variants[i]).Error; err != nil {
 			t.Fatalf("không tạo được biến thể: %v", err)
 		}
 	}
@@ -54,10 +53,10 @@ func TestGoodsReceiptDungLaiTungDotNhan(t *testing.T) {
 		t.Fatalf("không tạo được phiếu đặt: %v", err)
 	}
 	t.Cleanup(func() {
-		db.Exec("DELETE FROM inventory_transactions WHERE reference_type = 'purchase_order' AND reference_id = ?", po.ID)
-		db.Unscoped().Where("purchase_order_id = ?", po.ID).Delete(&domain.PurchaseOrderItem{})
-		db.Unscoped().Delete(&domain.PurchaseOrder{}, po.ID)
-		db.Unscoped().Delete(&domain.Supplier{}, supplierID)
+		db.WithContext(ctxRaw()).Exec("DELETE FROM inventory_transactions WHERE reference_type = 'purchase_order' AND reference_id = ?", po.ID)
+		db.WithContext(ctxTest()).Unscoped().Where("purchase_order_id = ?", po.ID).Delete(&domain.PurchaseOrderItem{})
+		db.WithContext(ctxTest()).Unscoped().Delete(&domain.PurchaseOrder{}, po.ID)
+		db.WithContext(ctxTest()).Unscoped().Delete(&domain.Supplier{}, supplierID)
 	})
 
 	items, err := poRepo.FindByID(ctx, po.ID)
@@ -170,8 +169,8 @@ func TestGoodsReceiptDungLaiTungDotNhan(t *testing.T) {
 func seedSupplier(t *testing.T, db *gorm.DB) uint {
 	t.Helper()
 	s := &domain.Supplier{Code: "TEST-NCC-RCPT", Name: "NCC kiểm thử nhập hàng", IsActive: true}
-	db.Unscoped().Where("code = ?", s.Code).Delete(&domain.Supplier{})
-	if err := db.Create(s).Error; err != nil {
+	db.WithContext(ctxTest()).Unscoped().Where("code = ?", s.Code).Delete(&domain.Supplier{})
+	if err := db.WithContext(ctxTest()).Create(s).Error; err != nil {
 		t.Fatalf("không tạo được nhà cung cấp: %v", err)
 	}
 	return s.ID
