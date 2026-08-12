@@ -188,12 +188,9 @@ func (r *voucherRepository) Update(ctx context.Context, v *domain.Voucher) error
 	if res.Error != nil {
 		return res.Error
 	}
+	// Có thể là id không tồn tại, cũng có thể là bấm Lưu mà không sửa gì — xem conDong.
 	if res.RowsAffected == 0 {
-		// Có thể là id không tồn tại, cũng có thể là không đổi giá trị nào. Phân biệt
-		// bằng một lần đọc lại, để sửa mà không đổi gì không bị báo "không tìm thấy".
-		if _, err := r.FindByID(ctx, v.ID); err != nil {
-			return err
-		}
+		return conDong(ctx, r.db, &domain.Voucher{}, v.ID)
 	}
 	return nil
 }
@@ -204,8 +201,10 @@ func (r *voucherRepository) SetActive(ctx context.Context, id uint, active bool)
 	if res.Error != nil {
 		return res.Error
 	}
+	// 0 dòng có thể là id không tồn tại, cũng có thể là mã đã ở đúng trạng thái
+	// này rồi — xem conDong.
 	if res.RowsAffected == 0 {
-		return domain.ErrNotFound
+		return conDong(ctx, r.db, &domain.Voucher{}, id)
 	}
 	return nil
 }

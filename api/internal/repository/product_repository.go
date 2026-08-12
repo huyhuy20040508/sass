@@ -164,8 +164,10 @@ func (r *productRepository) SetStatus(ctx context.Context, id uint, status strin
 	if res.Error != nil {
 		return res.Error
 	}
+	// 0 dòng có thể là id không tồn tại, cũng có thể là sản phẩm đã ở đúng trạng
+	// thái này rồi — xem conDong.
 	if res.RowsAffected == 0 {
-		return domain.ErrNotFound
+		return conDong(ctx, r.db, &domain.Product{}, id)
 	}
 	return nil
 }

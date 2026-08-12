@@ -175,8 +175,10 @@ func (r *promotionRepository) SetActive(ctx context.Context, id uint, active boo
 	if res.Error != nil {
 		return res.Error
 	}
+	// 0 dòng có thể là id không tồn tại, cũng có thể là chương trình đã bật/tắt
+	// sẵn ở đúng trạng thái này — xem conDong.
 	if res.RowsAffected == 0 {
-		return domain.ErrNotFound
+		return conDong(ctx, r.db, &domain.Promotion{}, id)
 	}
 	return nil
 }
