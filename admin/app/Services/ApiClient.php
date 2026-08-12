@@ -146,6 +146,21 @@ class ApiClient
         ]);
     }
 
+    /**
+     * Đăng nhập 3 ô: mã cửa hàng + tên đăng nhập + mật khẩu.
+     *
+     * Đường riêng chứ không dùng /auth/login: đường kia dành cho khách mua sắm
+     * (đăng nhập bằng email) và có hạn mức chống dò mật khẩu riêng.
+     */
+    public function shopLogin(string $shopCode, string $username, string $password): Response
+    {
+        return $this->request(false)->post('/auth/shop-login', [
+            'shop_code' => $shopCode,
+            'username' => $username,
+            'password' => $password,
+        ]);
+    }
+
     /** Lấy thông tin tài khoản hiện tại theo access token. */
     public function me(): Response
     {

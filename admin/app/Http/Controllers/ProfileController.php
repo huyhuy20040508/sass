@@ -50,6 +50,7 @@ class ProfileController extends Controller
             $u = session('api.user') ?: [];
             $profile = [
                 'full_name' => (string) data_get($u, 'full_name', ''),
+                'username' => (string) data_get($u, 'username', ''),
                 'email' => (string) data_get($u, 'email', ''),
                 'phone' => (string) data_get($u, 'phone', ''),
                 'avatar' => (string) data_get($u, 'avatar', ''),

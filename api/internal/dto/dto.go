@@ -17,6 +17,22 @@ type LoginRequest struct {
 	Password string `json:"password" binding:"required"`
 }
 
+// ShopLoginRequest — đăng nhập 3 ô của Shop Admin.
+//
+// Tách hẳn khỏi LoginRequest (đăng nhập bằng email) vì hai đường phục vụ hai
+// nhóm người khác nhau: đường này cho NHÂN VIÊN của một cửa hàng, còn email là
+// đường của khách mua sắm và của khu điều hành nền tảng. Gộp chung một endpoint
+// thì hai nhóm dùng chung hạn mức chống dò mật khẩu, và ô nào cũng thành tuỳ chọn
+// nên không còn kiểm tra được gì.
+type ShopLoginRequest struct {
+	// ShopCode là tenants.code — MÃ KHÁCH HÀNG, không phải mã chi nhánh
+	// (shops.code). Gọi là "mã cửa hàng" vì đó là chữ người dùng nhìn thấy: chuỗi
+	// mình cấp lúc bàn giao phần mềm.
+	ShopCode string `json:"shop_code" binding:"required,max=30"`
+	Username string `json:"username" binding:"required,max=50"`
+	Password string `json:"password" binding:"required"`
+}
+
 // VerifyEmailRequest — xác thực email bằng mã 6 số gửi qua thư.
 type VerifyEmailRequest struct {
 	Email string `json:"email" binding:"required,email"`
@@ -136,6 +152,13 @@ type AuthResponse struct {
 	TokenType    string       `json:"token_type"`
 	ExpiresIn    int64        `json:"expires_in"` // giây
 	User         *domain.User `json:"user"`
+	// Tenant CHỈ có ở đăng nhập 3 ô: Shop Admin cần tên cửa hàng để hiện lên
+	// thanh tiêu đề, mà token thì chưa mang tenant_id nên nó không tự tra được.
+	// Các đường đăng nhập khác để trống (omitempty giấu hẳn khỏi JSON).
+	//
+	// Làm mới token KHÔNG trả lại trường này — Shop Admin cất vào session lúc
+	// đăng nhập và giữ nguyên tới lúc đăng xuất.
+	Tenant *domain.Tenant `json:"tenant,omitempty"`
 }
 
 // ---------- Brand ----------
@@ -484,7 +507,13 @@ type CustomerRequest struct {
 // staff). Muốn tạo khách hàng thì dùng /admin/customers, không phải đường này.
 type UserRequest struct {
 	FullName string `json:"full_name" binding:"required,max=150"`
-	// Email vừa là tên đăng nhập trang quản trị, vừa là UNIQUE key ở bảng users.
+	// Username là thứ người này gõ vào ô THỨ HAI của màn hình đăng nhập Shop Admin.
+	// Bắt buộc: tài khoản nội bộ không có tên đăng nhập thì tạo ra xong không vào
+	// được trang quản trị bằng đường nào cả.
+	Username string `json:"username" binding:"required,min=3,max=50"`
+	// Email KHÔNG còn là tên đăng nhập (xem Username) nhưng vẫn bắt buộc và vẫn là
+	// UNIQUE key ở bảng users: nó là đường liên lạc và là chỗ bám của các chức năng
+	// gửi thư. Nhân viên không có email thật thì chủ shop đặt một địa chỉ nội bộ.
 	Email  string `json:"email" binding:"required,email,max=191"`
 	Phone  string `json:"phone" binding:"omitempty,max=20"`
 	Avatar string `json:"avatar" binding:"omitempty,max=255"`
@@ -530,6 +559,7 @@ type ChangePasswordRequest struct {
 type UserResponse struct {
 	ID       uint   `json:"id"`
 	FullName string `json:"full_name"`
+	Username string `json:"username"`
 	Email    string `json:"email"`
 	Phone    string `json:"phone"`
 	Avatar   string `json:"avatar"`

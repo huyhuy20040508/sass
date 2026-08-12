@@ -40,6 +40,8 @@ type AuthService interface {
 	VerifyEmail(ctx context.Context, req dto.VerifyEmailRequest) (*dto.AuthResponse, error)
 	ResendVerification(ctx context.Context, req dto.ResendCodeRequest) (*dto.RegisterResponse, error)
 	Login(ctx context.Context, req dto.LoginRequest) (*dto.AuthResponse, error)
+	// LoginShop là đăng nhập 3 ô của Shop Admin: mã cửa hàng + tên đăng nhập + mật khẩu.
+	LoginShop(ctx context.Context, req dto.ShopLoginRequest) (*dto.AuthResponse, error)
 	ForgotPassword(ctx context.Context, req dto.ForgotPasswordRequest) (*dto.RegisterResponse, error)
 	ResetPassword(ctx context.Context, req dto.ResetPasswordRequest) error
 	LoginWithFacebook(ctx context.Context, req dto.FacebookLoginRequest) (*dto.AuthResponse, error)
@@ -49,7 +51,9 @@ type AuthService interface {
 }
 
 type authService struct {
-	users    domain.UserRepository
+	users domain.UserRepository
+	// tenants tra cửa hàng theo mã người dùng gõ ở ô đầu của màn hình đăng nhập 3 ô.
+	tenants  domain.TenantRepository
 	roles    domain.RoleRepository
 	verifies domain.EmailVerificationRepository
 	mail     mailer.Mailer
@@ -70,6 +74,7 @@ type authService struct {
 
 func NewAuthService(
 	users domain.UserRepository,
+	tenants domain.TenantRepository,
 	roles domain.RoleRepository,
 	verifies domain.EmailVerificationRepository,
 	mail mailer.Mailer,
@@ -82,7 +87,7 @@ func NewAuthService(
 	gg *google.Client,
 ) AuthService {
 	return &authService{
-		users: users, roles: roles, verifies: verifies, mail: mail,
+		users: users, tenants: tenants, roles: roles, verifies: verifies, mail: mail,
 		jwt: jwtMgr, cfg: cfg, mailCfg: mailCfg, devMode: devMode,
 		// settings TỪNG BỊ BỎ QUÊN ở đây: tham số nhận vào nhưng không gán, mà Go
 		// không báo lỗi tham số thừa nên chẳng ai thấy. Hậu quả là mọi email mã
@@ -492,6 +497,80 @@ func (s *authService) Login(ctx context.Context, req dto.LoginRequest) (*dto.Aut
 
 	return s.buildAuthResponse(user)
 }
+
+// LoginShop là đăng nhập của Shop Admin: mã cửa hàng + tên đăng nhập + mật khẩu.
+//
+// VÌ SAO KHÔNG DÙNG EMAIL: nhân viên bán hàng phần lớn không có email, bắt đăng
+// nhập bằng email nghĩa là chủ shop phải bịa địa chỉ giả cho từng người. Tên đăng
+// nhập chỉ cần duy nhất TRONG MỘT cửa hàng, nên mọi chủ shop đều được làm 'admin'.
+//
+// THỨ TỰ KIỂM TRA có chủ ý:
+//  1. Tra cửa hàng theo mã — KHÔNG xét trạng thái vội.
+//  2. Tra tài khoản trong đúng cửa hàng đó, đối chiếu mật khẩu, xét vai trò.
+//  3. ĐÚNG MẬT KHẨU RỒI mới báo cửa hàng đang bị khoá.
+//
+// Bước 3 đặt cuối vì báo "cửa hàng đang tạm khoá" ngay từ ô đầu tiên là trả lời
+// miễn phí cho người ngoài hai câu hỏi: mã này có phải khách của mình không, và
+// khách đó còn trả tiền không. Đổi lại, nhân viên của cửa hàng bị khoá mà gõ sai
+// mật khẩu sẽ thấy câu "sai thông tin đăng nhập" — chấp nhận được, vì gõ đúng
+// một lần là biết ngay lý do thật.
+func (s *authService) LoginShop(ctx context.Context, req dto.ShopLoginRequest) (*dto.AuthResponse, error) {
+	tenant, err := s.tenants.FindByCode(ctx, normalizeShopCode(req.ShopCode))
+	if err != nil {
+		if err == domain.ErrNotFound {
+			return nil, domain.ErrShopLoginFailed
+		}
+		return nil, err
+	}
+
+	user, err := s.users.FindByTenantUsername(ctx, tenant.ID, NormalizeUsername(req.Username))
+	if err != nil {
+		if err == domain.ErrNotFound {
+			return nil, domain.ErrShopLoginFailed
+		}
+		return nil, err
+	}
+	if !hash.Check(req.Password, user.PasswordHash) {
+		return nil, domain.ErrShopLoginFailed
+	}
+	// Khách mua sắm không có tên đăng nhập nên gần như không lọt tới đây, nhưng
+	// chặn tường minh: cửa sau vào trang quản trị mà dựa vào "dữ liệu chắc là NULL"
+	// thì chỉ cần một dòng username gán nhầm là mở toang.
+	if user.Role == nil || user.Role.Name == domain.RoleCustomer {
+		return nil, domain.ErrShopLoginFailed
+	}
+
+	if tenant.Status != domain.TenantActive {
+		return nil, domain.ErrTenantSuspended
+	}
+	if user.Status != "active" {
+		return nil, domain.ErrUserInactive
+	}
+
+	now := time.Now()
+	user.LastLoginAt = &now
+	_ = s.users.Update(ctx, user)
+
+	res, err := s.buildAuthResponse(user)
+	if err != nil {
+		return nil, err
+	}
+	res.Tenant = tenant
+
+	return res, nil
+}
+
+// normalizeShopCode chuẩn hoá mã cửa hàng người dùng gõ.
+//
+// Hạ chữ thường vì mã được cấp bằng chữ thường, mà bàn phím điện thoại thì tự
+// viết hoa chữ đầu — không hạ thì nhân viên gõ "Cuahangabc" và bị từ chối mà
+// không hiểu vì sao.
+func normalizeShopCode(s string) string { return strings.ToLower(strings.TrimSpace(s)) }
+
+// NormalizeUsername chuẩn hoá tên đăng nhập. Cùng lý do với normalizeShopCode,
+// và phải dùng CHUNG cho cả lúc đăng nhập lẫn lúc quản trị viên đặt tên — chuẩn
+// hoá lệch nhau giữa hai chỗ thì tài khoản tạo ra không đăng nhập được.
+func NormalizeUsername(s string) string { return strings.ToLower(strings.TrimSpace(s)) }
 
 // facebookEnabled cho biết đã khai đủ khoá app để đăng nhập Facebook hay chưa.
 func (s *authService) facebookEnabled() bool { return s.fb != nil && s.fb.Enabled() }

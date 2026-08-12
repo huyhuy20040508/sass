@@ -1217,6 +1217,24 @@ definitions:
       updated_at:
         type: string
     type: object
+  domain.Tenant:
+    properties:
+      code:
+        description: |-
+          Code là thứ người dùng gõ vào ô ĐẦU TIÊN của màn hình đăng nhập 3 ô. Chuỗi
+          do mình cấp, không phải id — số auto-increment cho người ngoài đếm được hệ
+          thống có bao nhiêu khách.
+        type: string
+      id:
+        type: integer
+      name:
+        type: string
+      status:
+        description: |-
+          Status: active | suspended. suspended = khách hết hạn hoặc ngừng trả tiền —
+          chặn đăng nhập nhưng KHÔNG xoá dữ liệu, đóng tiền lại là mở.
+        type: string
+    type: object
   domain.User:
     properties:
       avatar:
@@ -1249,6 +1267,12 @@ definitions:
         type: string
       updated_at:
         type: string
+      username:
+        description: |-
+          Username là ô THỨ HAI của màn hình đăng nhập 3 ô, chỉ duy nhất trong một
+          tenant. NULL = tài khoản khách hàng (khách mua sắm đăng nhập bằng email):
+          UNIQUE chỉ cho lọt đúng một dòng chuỗi rỗng nên bắt buộc phải là NULL.
+        type: string
     type: object
   domain.VoucherStats:
     properties:
@@ -1274,6 +1298,16 @@ definitions:
         type: integer
       refresh_token:
         type: string
+      tenant:
+        allOf:
+        - $ref: '#/definitions/domain.Tenant'
+        description: |-
+          Tenant CHỈ có ở đăng nhập 3 ô: Shop Admin cần tên cửa hàng để hiện lên
+          thanh tiêu đề, mà token thì chưa mang tenant_id nên nó không tự tra được.
+          Các đường đăng nhập khác để trống (omitempty giấu hẳn khỏi JSON).
+
+          Làm mới token KHÔNG trả lại trường này — Shop Admin cất vào session lúc
+          đăng nhập và giữ nguyên tới lúc đăng xuất.
       token_type:
         type: string
       user:
@@ -2932,6 +2966,25 @@ definitions:
     required:
     - items
     type: object
+  dto.ShopLoginRequest:
+    properties:
+      password:
+        type: string
+      shop_code:
+        description: |-
+          ShopCode là tenants.code — MÃ KHÁCH HÀNG, không phải mã chi nhánh
+          (shops.code). Gọi là "mã cửa hàng" vì đó là chữ người dùng nhìn thấy: chuỗi
+          mình cấp lúc bàn giao phần mềm.
+        maxLength: 30
+        type: string
+      username:
+        maxLength: 50
+        type: string
+    required:
+    - password
+    - shop_code
+    - username
+    type: object
   dto.SubscribeNewsletterRequest:
     properties:
       email:
@@ -3005,8 +3058,10 @@ definitions:
         maxLength: 255
         type: string
       email:
-        description: Email vừa là tên đăng nhập trang quản trị, vừa là UNIQUE key
-          ở bảng users.
+        description: |-
+          Email KHÔNG còn là tên đăng nhập (xem Username) nhưng vẫn bắt buộc và vẫn là
+          UNIQUE key ở bảng users: nó là đường liên lạc và là chỗ bám của các chức năng
+          gửi thư. Nhân viên không có email thật thì chủ shop đặt một địa chỉ nội bộ.
         maxLength: 191
         type: string
       full_name:
@@ -3030,11 +3085,20 @@ definitions:
         - active
         - inactive
         type: string
+      username:
+        description: |-
+          Username là thứ người này gõ vào ô THỨ HAI của màn hình đăng nhập Shop Admin.
+          Bắt buộc: tài khoản nội bộ không có tên đăng nhập thì tạo ra xong không vào
+          được trang quản trị bằng đường nào cả.
+        maxLength: 50
+        minLength: 3
+        type: string
     required:
     - email
     - full_name
     - role_id
     - status
+    - username
     type: object
   dto.UserResponse:
     properties:
@@ -3065,6 +3129,8 @@ definitions:
         type: string
       status:
         example: active
+        type: string
+      username:
         type: string
     type: object
   dto.UserStatusRequest:
@@ -9242,6 +9308,51 @@ paths:
           schema:
             $ref: '#/definitions/response.Body'
       summary: Quên mật khẩu — đặt mật khẩu mới
+      tags:
+      - Auth
+  /auth/shop-login:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Đăng nhập trang quản trị cửa hàng bằng mã cửa hàng + tên đăng nhập + mật khẩu.
+
+        `shop_code` là mã KHÁCH HÀNG (bảng tenants), không phải mã chi nhánh.
+        Sai bất kỳ ô nào cũng chỉ nhận về đúng một câu 401 chung — nói rõ ô nào sai
+        là biến màn hình đăng nhập thành công cụ dò danh sách cửa hàng và tài khoản.
+        Tài khoản khách mua sắm không vào được đường này (dùng /auth/login).
+      parameters:
+      - description: Mã cửa hàng, tên đăng nhập, mật khẩu
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.ShopLoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.AuthResponse'
+              type: object
+        "401":
+          description: Sai mã cửa hàng, tên đăng nhập hoặc mật khẩu
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: Cửa hàng đang tạm khoá, hoặc tài khoản bị khoá
+          schema:
+            $ref: '#/definitions/response.Body'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Body'
+      summary: Đăng nhập cửa hàng (3 ô)
       tags:
       - Auth
   /auth/verify-email:

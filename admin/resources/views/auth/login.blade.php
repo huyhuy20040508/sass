@@ -52,22 +52,44 @@
 
         <form method="POST" action="{{ route('login.attempt') }}" novalidate>
             @csrf
+            {{-- Ba ô: mã cửa hàng · tên đăng nhập · mật khẩu.
+                 Mã cửa hàng là chuỗi được cấp lúc bàn giao phần mềm (bảng tenants),
+                 không phải mã chi nhánh. Tên đăng nhập chỉ cần duy nhất trong một
+                 cửa hàng, nên mỗi shop đều có thể có tài khoản 'admin' của riêng mình. --}}
             <div class="mb-3">
-                <label class="form-label">Email</label>
-                <input type="email" name="email" value="{{ old('email', $rememberedEmail ?? '') }}"
-                    class="form-control @error('email') is-invalid @enderror"
-                       required autofocus placeholder="Nhập địa chỉ email">
+                <label class="form-label" for="shopCode">Mã cửa hàng</label>
+                <input type="text" name="shop_code" id="shopCode"
+                       value="{{ old('shop_code', $rememberedShopCode ?? '') }}"
+                       class="form-control @error('shop_code') is-invalid @enderror"
+                       maxlength="30" required
+                       {{-- Con trỏ vào ô đầu còn trống: người đã ghi nhớ mã cửa hàng thì
+                            nhảy thẳng xuống ô tên đăng nhập, khỏi phải bấm chuột. --}}
+                       @if (empty(old('shop_code', $rememberedShopCode ?? ''))) autofocus @endif
+                       autocapitalize="none" autocorrect="off" spellcheck="false"
+                       autocomplete="organization" placeholder="Mã cửa hàng được cấp">
             </div>
             <div class="mb-3">
-                <label class="form-label">Mật khẩu</label>
-                <input type="password" name="password"
+                <label class="form-label" for="username">Tên đăng nhập</label>
+                <input type="text" name="username" id="username"
+                       value="{{ old('username', $rememberedUsername ?? '') }}"
+                       class="form-control @error('username') is-invalid @enderror"
+                       maxlength="50" required
+                       @if (filled(old('shop_code', $rememberedShopCode ?? '')) && empty(old('username', $rememberedUsername ?? ''))) autofocus @endif
+                       autocapitalize="none" autocorrect="off" spellcheck="false"
+                       autocomplete="username" placeholder="Nhập tên đăng nhập">
+            </div>
+            <div class="mb-3">
+                <label class="form-label" for="password">Mật khẩu</label>
+                <input type="password" name="password" id="password"
                        class="form-control @error('password') is-invalid @enderror"
-                       required placeholder="••••••••">
+                       required autocomplete="current-password"
+                       @if (filled(old('shop_code', $rememberedShopCode ?? '')) && filled(old('username', $rememberedUsername ?? ''))) autofocus @endif
+                       placeholder="••••••••">
             </div>
             <div class="d-flex justify-content-between align-items-center mb-3">
                 <div class="form-check mb-0">
                     <input type="checkbox" name="remember" id="remember" value="1"
-                           class="form-check-input" @checked(!empty($rememberedEmail))>
+                           class="form-check-input" @checked(!empty($rememberedShopCode) || !empty($rememberedUsername))>
                     <label class="form-check-label" for="remember">Ghi nhớ đăng nhập</label>
                 </div>
                 <a href="{{ route('password.forgot') }}" class="small text-decoration-none">Quên mật khẩu?</a>

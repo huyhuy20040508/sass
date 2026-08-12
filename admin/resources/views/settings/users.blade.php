@@ -51,7 +51,7 @@
             <div class="usr-toolbar">
                 <div class="usr-searchbox">
                     <input type="text" name="keyword" value="{{ $filters['keyword'] }}" class="usr-search-input"
-                           placeholder="Tìm theo họ tên, email hoặc số điện thoại" autocomplete="off">
+                           placeholder="Tìm theo họ tên, tên đăng nhập, email hoặc số điện thoại" autocomplete="off">
                     <button type="submit" class="usr-search-btn" title="Tìm kiếm">
                         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
                     </button>
@@ -145,7 +145,13 @@
                                     {{ $name !== '' ? $name : '—' }}
                                     @if($isMe)<span class="usr-tag-me">Bạn</span>@endif
                                 </span>
-                                <span class="usr-sub">{{ $u['email'] ?? '—' }}</span>
+                                {{-- Tên đăng nhập đứng trước email: từ khi đăng nhập bằng 3 ô,
+                                     đó mới là thứ người quản lý cần tra khi nhân viên báo
+                                     "em không vào được". Email lùi xuống hàng liên lạc. --}}
+                                <span class="usr-sub">
+                                    {{ !empty($u['username']) ? '@'.$u['username'] : '—' }}
+                                    @if(!empty($u['email'])) · {{ $u['email'] }}@endif
+                                </span>
                             </td>
                             <td class="usr-c-phone">
                                 @if(!empty($u['phone']))
@@ -299,10 +305,19 @@
                                    autocomplete="off" placeholder="VD: Nguyễn Văn A">
                         </div>
                         <div>
-                            <label class="usr-field-label" for="usrEmail">Email đăng nhập <span class="usr-req">*</span></label>
+                            <label class="usr-field-label" for="usrUsername">Tên đăng nhập <span class="usr-req">*</span></label>
+                            <input type="text" id="usrUsername" name="username" class="usr-input" maxlength="50" required
+                                   autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false"
+                                   placeholder="VD: nguyenvana">
+                            <p class="usr-hint">Người này gõ tên đăng nhập (không phải email) ở ô thứ hai màn hình đăng nhập.
+                                Chữ không dấu, số, dấu chấm, gạch ngang hoặc gạch dưới — hệ thống tự hạ về chữ thường.</p>
+                        </div>
+
+                        <div>
+                            <label class="usr-field-label" for="usrEmail">Email <span class="usr-req">*</span></label>
                             <input type="email" id="usrEmail" name="email" class="usr-input" maxlength="191" required
                                    autocomplete="off" placeholder="ten@cuahang.vn">
-                            <p class="usr-hint">Đây cũng là tên đăng nhập trang quản trị.</p>
+                            <p class="usr-hint">Dùng để liên lạc và nhận thư hệ thống, không dùng để đăng nhập.</p>
                         </div>
 
                         <div>
@@ -766,6 +781,7 @@
             const passwordBox = document.getElementById('usrPasswordBox');
             const fields = {
                 full_name: document.getElementById('usrName'),
+                username: document.getElementById('usrUsername'),
                 email: document.getElementById('usrEmail'),
                 phone: document.getElementById('usrPhone'),
                 role_id: document.getElementById('usrRole'),
@@ -795,6 +811,7 @@
 
                 const d = isEdit ? u : { status: 'active' };
                 fields.full_name.value = d.full_name || '';
+                fields.username.value = d.username || '';
                 fields.email.value = d.email || '';
                 fields.phone.value = d.phone || '';
                 fields.status.value = d.status || 'active';
@@ -815,8 +832,8 @@
 
                 formNote.style.display = editingSelf ? '' : 'none';
                 if (editingSelf) {
-                    formNote.textContent = 'Đây là tài khoản bạn đang đăng nhập. Sửa được họ tên, email và số điện thoại; '
-                        + 'vai trò và trạng thái phải nhờ người quản trị khác đổi giúp.';
+                    formNote.textContent = 'Đây là tài khoản bạn đang đăng nhập. Sửa được họ tên, tên đăng nhập, email và số điện thoại '
+                        + '(đổi tên đăng nhập thì lần sau phải dùng tên mới); vai trò và trạng thái phải nhờ người quản trị khác đổi giúp.';
                 }
 
                 $overlay.style.display = 'flex';

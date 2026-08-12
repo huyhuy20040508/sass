@@ -62,6 +62,23 @@ func (r *userRepository) FindByEmail(ctx context.Context, email string) (*domain
 	return &u, err
 }
 
+func (r *userRepository) FindByTenantUsername(ctx context.Context, tenantID uint, username string) (*domain.User, error) {
+	var u domain.User
+	// Chuỗi rỗng khớp với... không gì cả (tài khoản khách hàng để NULL), nhưng chặn
+	// từ đây cho khỏi bắn một câu truy vấn vô nghĩa xuống CSDL mỗi lần ai đó gửi
+	// form rỗng. tenantID = 0 cũng vậy: không có cửa hàng nào mang id đó.
+	if tenantID == 0 || username == "" {
+		return nil, domain.ErrNotFound
+	}
+	err := r.db.WithContext(ctx).Preload("Role").
+		Where("tenant_id = ? AND username = ?", tenantID, username).
+		First(&u).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, domain.ErrNotFound
+	}
+	return &u, err
+}
+
 func (r *userRepository) FindByFacebookID(ctx context.Context, fbID string) (*domain.User, error) {
 	var u domain.User
 	// Chuỗi rỗng khớp với mọi tài khoản chưa liên kết — chặn từ đây cho chắc, kể cả
@@ -98,6 +115,30 @@ func (r *userRepository) ExistsByEmailExcept(ctx context.Context, email string, 
 	// Unscoped: tài khoản xoá mềm vẫn chiếm email trong UNIQUE index nên phải tính vào,
 	// nếu không sẽ lọt xuống DB và vỡ thành lỗi 500 thay vì báo trùng email.
 	q := r.db.WithContext(ctx).Unscoped().Model(&domain.User{}).Where("email = ?", email)
+	if excludeID > 0 {
+		q = q.Where("id <> ?", excludeID)
+	}
+
+	var count int64
+	err := q.Count(&count).Error
+	return count > 0, err
+}
+
+func (r *userRepository) ExistsByUsernameExcept(ctx context.Context, username string, excludeID uint) (bool, error) {
+	// Tên rỗng nghĩa là "không đặt tên đăng nhập" — ghi xuống là NULL, mà nhiều
+	// dòng NULL thì UNIQUE cho phép thoải mái, nên không có gì để đụng nhau.
+	if username == "" {
+		return false, nil
+	}
+
+	// Chưa lọc theo tenant_id, dù khoá thật là (tenant_id, username): tầng service
+	// hiện chưa biết mình đang ở tenant nào, và mọi dòng đều mang tenant_id = 1.
+	// Vì vậy chỗ này CHẶT HƠN khoá thật — chỉ sai từ khách hàng thứ hai trở đi, và
+	// đúng lúc đó plugin GORM sẽ tự chèn `WHERE tenant_id` vào đây.
+	//
+	// Unscoped vì cùng lý do với ExistsByEmailExcept: uq_users_username không loại
+	// tài khoản đã xoá mềm ra, tên vẫn bị giữ chỗ.
+	q := r.db.WithContext(ctx).Unscoped().Model(&domain.User{}).Where("username = ?", username)
 	if excludeID > 0 {
 		q = q.Where("id <> ?", excludeID)
 	}
@@ -173,7 +214,9 @@ func (r *userRepository) ListInternal(ctx context.Context, f domain.InternalUser
 	if f.Keyword != "" {
 		kw := "%" + f.Keyword + "%"
 		// Bọc trong một Where duy nhất để nhóm OR không "ăn" mất điều kiện vai trò.
-		q = q.Where("(full_name LIKE ? OR email LIKE ? OR phone LIKE ?)", kw, kw, kw)
+		// Có cả username: từ khi đăng nhập bằng 3 ô, nhân viên báo hỏng thường chỉ
+		// đọc được tên đăng nhập của mình chứ không nhớ email đã khai là gì.
+		q = q.Where("(full_name LIKE ? OR username LIKE ? OR email LIKE ? OR phone LIKE ?)", kw, kw, kw, kw)
 	}
 
 	if f.Status != "" && f.Status != "all" {

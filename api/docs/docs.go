@@ -8750,6 +8750,70 @@ const docTemplate = `{
                 }
             }
         },
+        "/auth/shop-login": {
+            "post": {
+                "description": "Đăng nhập trang quản trị cửa hàng bằng mã cửa hàng + tên đăng nhập + mật khẩu.\n\n` + "`" + `shop_code` + "`" + ` là mã KHÁCH HÀNG (bảng tenants), không phải mã chi nhánh.\nSai bất kỳ ô nào cũng chỉ nhận về đúng một câu 401 chung — nói rõ ô nào sai\nlà biến màn hình đăng nhập thành công cụ dò danh sách cửa hàng và tài khoản.\nTài khoản khách mua sắm không vào được đường này (dùng /auth/login).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Đăng nhập cửa hàng (3 ô)",
+                "parameters": [
+                    {
+                        "description": "Mã cửa hàng, tên đăng nhập, mật khẩu",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.ShopLoginRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.AuthResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Sai mã cửa hàng, tên đăng nhập hoặc mật khẩu",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "Cửa hàng đang tạm khoá, hoặc tài khoản bị khoá",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
         "/auth/verify-email": {
             "post": {
                 "description": "Đối chiếu mã 6 số đã gửi qua email. Đúng mã thì kích hoạt tài khoản và trả về JWT ngay.\nMã hết hạn sau MAIL_CODE_TTL (mặc định 10 phút) và bị khoá sau 5 lần nhập sai.",
@@ -12132,6 +12196,25 @@ const docTemplate = `{
                 }
             }
         },
+        "domain.Tenant": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "description": "Code là thứ người dùng gõ vào ô ĐẦU TIÊN của màn hình đăng nhập 3 ô. Chuỗi\ndo mình cấp, không phải id — số auto-increment cho người ngoài đếm được hệ\nthống có bao nhiêu khách.",
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "status": {
+                    "description": "Status: active | suspended. suspended = khách hết hạn hoặc ngừng trả tiền —\nchặn đăng nhập nhưng KHÔNG xoá dữ liệu, đóng tiền lại là mở.",
+                    "type": "string"
+                }
+            }
+        },
         "domain.User": {
             "type": "object",
             "properties": {
@@ -12179,6 +12262,10 @@ const docTemplate = `{
                 },
                 "updated_at": {
                     "type": "string"
+                },
+                "username": {
+                    "description": "Username là ô THỨ HAI của màn hình đăng nhập 3 ô, chỉ duy nhất trong một\ntenant. NULL = tài khoản khách hàng (khách mua sắm đăng nhập bằng email):\nUNIQUE chỉ cho lọt đúng một dòng chuỗi rỗng nên bắt buộc phải là NULL.",
+                    "type": "string"
                 }
             }
         },
@@ -12217,6 +12304,14 @@ const docTemplate = `{
                 },
                 "refresh_token": {
                     "type": "string"
+                },
+                "tenant": {
+                    "description": "Tenant CHỈ có ở đăng nhập 3 ô: Shop Admin cần tên cửa hàng để hiện lên\nthanh tiêu đề, mà token thì chưa mang tenant_id nên nó không tự tra được.\nCác đường đăng nhập khác để trống (omitempty giấu hẳn khỏi JSON).\n\nLàm mới token KHÔNG trả lại trường này — Shop Admin cất vào session lúc\nđăng nhập và giữ nguyên tới lúc đăng xuất.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/domain.Tenant"
+                        }
+                    ]
                 },
                 "token_type": {
                     "type": "string"
@@ -14430,6 +14525,28 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.ShopLoginRequest": {
+            "type": "object",
+            "required": [
+                "password",
+                "shop_code",
+                "username"
+            ],
+            "properties": {
+                "password": {
+                    "type": "string"
+                },
+                "shop_code": {
+                    "description": "ShopCode là tenants.code — MÃ KHÁCH HÀNG, không phải mã chi nhánh\n(shops.code). Gọi là \"mã cửa hàng\" vì đó là chữ người dùng nhìn thấy: chuỗi\nmình cấp lúc bàn giao phần mềm.",
+                    "type": "string",
+                    "maxLength": 30
+                },
+                "username": {
+                    "type": "string",
+                    "maxLength": 50
+                }
+            }
+        },
         "dto.SubscribeNewsletterRequest": {
             "type": "object",
             "required": [
@@ -14529,7 +14646,8 @@ const docTemplate = `{
                 "email",
                 "full_name",
                 "role_id",
-                "status"
+                "status",
+                "username"
             ],
             "properties": {
                 "avatar": {
@@ -14537,7 +14655,7 @@ const docTemplate = `{
                     "maxLength": 255
                 },
                 "email": {
-                    "description": "Email vừa là tên đăng nhập trang quản trị, vừa là UNIQUE key ở bảng users.",
+                    "description": "Email KHÔNG còn là tên đăng nhập (xem Username) nhưng vẫn bắt buộc và vẫn là\nUNIQUE key ở bảng users: nó là đường liên lạc và là chỗ bám của các chức năng\ngửi thư. Nhân viên không có email thật thì chủ shop đặt một địa chỉ nội bộ.",
                     "type": "string",
                     "maxLength": 191
                 },
@@ -14565,6 +14683,12 @@ const docTemplate = `{
                         "active",
                         "inactive"
                     ]
+                },
+                "username": {
+                    "description": "Username là thứ người này gõ vào ô THỨ HAI của màn hình đăng nhập Shop Admin.\nBắt buộc: tài khoản nội bộ không có tên đăng nhập thì tạo ra xong không vào\nđược trang quản trị bằng đường nào cả.",
+                    "type": "string",
+                    "maxLength": 50,
+                    "minLength": 3
                 }
             }
         },
@@ -14610,6 +14734,9 @@ const docTemplate = `{
                 "status": {
                     "type": "string",
                     "example": "active"
+                },
+                "username": {
+                    "type": "string"
                 }
             }
         },

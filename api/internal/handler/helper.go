@@ -117,6 +117,16 @@ func handleServiceError(c *gin.Context, err error) {
 		response.Error(c, 409, "Dữ liệu đang được tham chiếu hoặc bị trùng, không thể thực hiện")
 	case errors.Is(err, domain.ErrInvalidCredentials):
 		response.Error(c, 401, "Email hoặc mật khẩu không đúng")
+	case errors.Is(err, domain.ErrShopLoginFailed):
+		response.Error(c, 401, "Mã cửa hàng, tên đăng nhập hoặc mật khẩu không đúng")
+	case errors.Is(err, domain.ErrTenantSuspended):
+		response.Error(c, 403, "Cửa hàng đang tạm khoá, vui lòng liên hệ nhà cung cấp phần mềm")
+	case errors.Is(err, domain.ErrUsernameExists):
+		response.Error(c, 409, "Tên đăng nhập này đã có người dùng, vui lòng đặt tên khác")
+	case errors.Is(err, domain.ErrUsernameInvalid):
+		response.ValidationError(c, map[string]string{
+			"username": "Tên đăng nhập chỉ gồm chữ thường không dấu, số, dấu chấm, gạch ngang hoặc gạch dưới (3–50 ký tự)",
+		})
 	case errors.Is(err, domain.ErrUserInactive):
 		response.Error(c, 403, "Tài khoản đang không hoạt động, vui lòng liên hệ cửa hàng")
 	case errors.Is(err, domain.ErrPaymentMethodDisabled):

@@ -70,6 +70,21 @@ func (r *fakeVerifyRepo) InvalidateByUser(_ context.Context, userID uint, purpos
 	return nil
 }
 
+// fakeTenantRepo giữ danh sách cửa hàng trong bộ nhớ, tra theo mã như bản thật.
+type fakeTenantRepo struct{ tenants []*domain.Tenant }
+
+func (r *fakeTenantRepo) FindByCode(_ context.Context, code string) (*domain.Tenant, error) {
+	if code == "" {
+		return nil, domain.ErrNotFound
+	}
+	for _, t := range r.tenants {
+		if t.Code == code {
+			return t, nil
+		}
+	}
+	return nil, domain.ErrNotFound
+}
+
 // fakeMailer ghi lại thư đã gửi thay vì mở kết nối SMTP.
 type fakeMailer struct {
 	subjects []string
@@ -99,8 +114,12 @@ func khachHang(id uint, email, matKhau string) *domain.User {
 }
 
 func dungAuthService(users *fakeUserRepo, verifies *fakeVerifyRepo, mail *fakeMailer) AuthService {
+	return dungAuthServiceCoCuaHang(users, &fakeTenantRepo{}, verifies, mail)
+}
+
+func dungAuthServiceCoCuaHang(users *fakeUserRepo, tenants *fakeTenantRepo, verifies *fakeVerifyRepo, mail *fakeMailer) AuthService {
 	return NewAuthService(
-		users, fakeRoleRepo{}, verifies, mail,
+		users, tenants, fakeRoleRepo{}, verifies, mail,
 		nil, // jwt.Manager: chỉ cần khi phát token, các test dưới đây không đụng tới
 		config.JWTConfig{},
 		config.MailConfig{CodeTTL: 10 * time.Minute, ResendAfter: 60 * time.Second, FromName: "Cửa hàng"},

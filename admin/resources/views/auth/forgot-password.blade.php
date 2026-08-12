@@ -52,6 +52,14 @@
             Vui lòng liên hệ <strong>quản trị viên hệ thống (Super Admin)</strong> để được cấp lại mật khẩu.
         </div>
 
+        {{-- Mã cửa hàng là ô đầu tiên của màn hình đăng nhập nên quên nó cũng là
+             đứng ngoài cửa y như quên mật khẩu — phải chỉ chỗ hỏi. --}}
+        <div class="alert alert-light border small">
+            <i class="bi bi-shop me-1"></i>
+            Quên <strong>mã cửa hàng</strong>? Đó là mã được cấp khi bàn giao phần mềm —
+            hỏi lại quản lý cửa hàng, hoặc liên hệ hỗ trợ bên dưới.
+        </div>
+
         <div class="small text-muted mb-3">
             <i class="bi bi-envelope me-1"></i> Hỗ trợ: <a href="mailto:hello@selliotech.store">hello@selliotech.store</a>
         </div>

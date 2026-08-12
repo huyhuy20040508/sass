@@ -122,6 +122,7 @@ func main() {
 
 	// 5. Repository
 	userRepo := repository.NewUserRepository(db)
+	tenantRepo := repository.NewTenantRepository(db)
 	roleRepo := repository.NewRoleRepository(db)
 	verifyRepo := repository.NewEmailVerificationRepository(db)
 	categoryRepo := repository.NewCategoryRepository(db)
@@ -159,7 +160,7 @@ func main() {
 	settingSvc.SetPayOSReady(payosClient.Enabled())
 	settingSvc.SetSePayReady(sepayClient.Enabled())
 
-	authSvc := service.NewAuthService(userRepo, roleRepo, verifyRepo, mailSender, jwtMgr, cfg.JWT, cfg.Mail, !cfg.App.IsProduction(), settingSvc, fbClient, ggClient)
+	authSvc := service.NewAuthService(userRepo, tenantRepo, roleRepo, verifyRepo, mailSender, jwtMgr, cfg.JWT, cfg.Mail, !cfg.App.IsProduction(), settingSvc, fbClient, ggClient)
 	categorySvc := service.NewCategoryService(categoryRepo)
 	brandSvc := service.NewBrandService(brandRepo)
 	bannerSvc := service.NewBannerService(bannerRepo)

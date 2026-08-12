@@ -25,6 +25,22 @@ var (
 	// cùng sẽ không còn ai mở lại được hệ thống.
 	ErrLastSuperAdmin = errors.New("phải còn ít nhất một super admin đang hoạt động")
 
+	// Đăng nhập 3 ô của Shop Admin (mã cửa hàng / tên đăng nhập / mật khẩu).
+	//
+	// MỘT lỗi chung cho cả ba ô, cố ý: nói riêng "mã cửa hàng không tồn tại" thì
+	// màn hình đăng nhập thành công cụ dò xem mình có những khách hàng nào, và
+	// nói riêng "sai mật khẩu" là xác nhận tên đăng nhập đó có thật.
+	ErrShopLoginFailed = errors.New("mã cửa hàng, tên đăng nhập hoặc mật khẩu không đúng")
+	// Cửa hàng bị khoá (tenants.status = suspended) — hết hạn hoặc ngừng trả tiền.
+	// Chỉ báo SAU khi đã đúng mật khẩu, xem authService.LoginShop.
+	ErrTenantSuspended = errors.New("cửa hàng đang tạm khoá")
+
+	// Tên đăng nhập của tài khoản nội bộ.
+	ErrUsernameExists = errors.New("tên đăng nhập đã được sử dụng")
+	// Tên đăng nhập phải gõ được trên bàn phím điện thoại, không dấu, không
+	// khoảng trắng — nhân viên gõ nó mỗi ca làm.
+	ErrUsernameInvalid = errors.New("tên đăng nhập chỉ gồm chữ thường không dấu, số, dấu chấm, gạch ngang hoặc gạch dưới (3–50 ký tự)")
+
 	// Tự đổi mật khẩu. Tách khỏi ErrInvalidCredentials (401 — token hỏng, phải
 	// đăng nhập lại): ở đây token vẫn tốt, chỉ mỗi ô "mật khẩu hiện tại" gõ sai,
 	// trả 401 thì trang quản trị sẽ đá người dùng ra màn hình đăng nhập oan.

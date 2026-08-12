@@ -61,6 +61,18 @@ func (r *fakeUserRepo) FindByEmail(_ context.Context, email string) (*domain.Use
 	return nil, domain.ErrNotFound
 }
 
+func (r *fakeUserRepo) FindByTenantUsername(_ context.Context, tenantID uint, username string) (*domain.User, error) {
+	if tenantID == 0 || username == "" {
+		return nil, domain.ErrNotFound
+	}
+	for _, u := range r.users {
+		if u.TenantID == tenantID && string(u.Username) == username {
+			return u, nil
+		}
+	}
+	return nil, domain.ErrNotFound
+}
+
 func (r *fakeUserRepo) FindByFacebookID(_ context.Context, fbID string) (*domain.User, error) {
 	if fbID == "" {
 		return nil, domain.ErrNotFound
@@ -93,6 +105,18 @@ func (r *fakeUserRepo) ExistsByEmail(_ context.Context, email string) (bool, err
 func (r *fakeUserRepo) ExistsByEmailExcept(_ context.Context, email string, excludeID uint) (bool, error) {
 	for _, u := range r.users {
 		if u.Email == email && u.ID != excludeID {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (r *fakeUserRepo) ExistsByUsernameExcept(_ context.Context, username string, excludeID uint) (bool, error) {
+	if username == "" {
+		return false, nil
+	}
+	for _, u := range r.users {
+		if string(u.Username) == username && u.ID != excludeID {
 			return true, nil
 		}
 	}

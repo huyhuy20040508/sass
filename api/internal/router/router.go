@@ -99,6 +99,12 @@ func New(cfg *config.Config, jwtMgr *jwt.Manager, h Handlers) *gin.Engine {
 			// Ba đường này khu QUẢN TRỊ gọi (ApiClient: /auth/login, /auth/refresh,
 			// /auth/me) nên luôn bật, kể cả khi đã tắt phần bán cho khách.
 			auth.POST("/login", han("dang-nhap", 10, 5*time.Minute), h.Auth.Login)
+			// Đăng nhập 3 ô của Shop Admin (mã cửa hàng / tên đăng nhập / mật khẩu).
+			//
+			// Hạn mức RIÊNG, không dùng chung khoá "dang-nhap": gộp chung thì một máy
+			// dò mật khẩu nhân viên sẽ đồng thời khoá luôn đường đăng nhập của khách
+			// mua hàng — hai nhóm người không liên quan gì tới nhau.
+			auth.POST("/shop-login", han("dang-nhap-cua-hang", 10, 5*time.Minute), h.Auth.ShopLogin)
 			// Rộng tay hơn hẳn: access token sống 15 phút, khách mở nhiều tab thì
 			// mỗi tab tự làm mới một lượt — siết chỗ này là đá văng người đang mua hàng.
 			auth.POST("/refresh", han("lam-moi-token", 60, 5*time.Minute), h.Auth.Refresh)

@@ -181,6 +181,37 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	response.OKMessage(c, "Đăng nhập thành công", res)
 }
 
+// ShopLogin godoc
+//
+//	@Summary		Đăng nhập cửa hàng (3 ô)
+//	@Description	Đăng nhập trang quản trị cửa hàng bằng mã cửa hàng + tên đăng nhập + mật khẩu.
+//	@Description
+//	@Description	`shop_code` là mã KHÁCH HÀNG (bảng tenants), không phải mã chi nhánh.
+//	@Description	Sai bất kỳ ô nào cũng chỉ nhận về đúng một câu 401 chung — nói rõ ô nào sai
+//	@Description	là biến màn hình đăng nhập thành công cụ dò danh sách cửa hàng và tài khoản.
+//	@Description	Tài khoản khách mua sắm không vào được đường này (dùng /auth/login).
+//	@Tags			Auth
+//	@Accept			json
+//	@Produce		json
+//	@Param			body	body		dto.ShopLoginRequest	true	"Mã cửa hàng, tên đăng nhập, mật khẩu"
+//	@Success		200		{object}	response.Body{data=dto.AuthResponse}
+//	@Failure		401		{object}	response.Body	"Sai mã cửa hàng, tên đăng nhập hoặc mật khẩu"
+//	@Failure		403		{object}	response.Body	"Cửa hàng đang tạm khoá, hoặc tài khoản bị khoá"
+//	@Failure		422		{object}	response.Body
+//	@Router			/auth/shop-login [post]
+func (h *AuthHandler) ShopLogin(c *gin.Context) {
+	var req dto.ShopLoginRequest
+	if !bindJSON(c, &req) {
+		return
+	}
+	res, err := h.svc.LoginShop(c.Request.Context(), req)
+	if err != nil {
+		handleServiceError(c, err)
+		return
+	}
+	response.OKMessage(c, "Đăng nhập thành công", res)
+}
+
 // FacebookLogin godoc
 //
 //	@Summary		Đăng nhập bằng Facebook

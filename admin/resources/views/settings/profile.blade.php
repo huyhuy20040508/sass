@@ -29,6 +29,7 @@
         }
 
         $name = trim((string) ($profile['full_name'] ?? ''));
+        $username = (string) ($profile['username'] ?? '');
         $email = (string) ($profile['email'] ?? '');
         $initials = mb_strtoupper(mb_substr($name !== '' ? $name : ($email !== '' ? $email : 'A'), 0, 2), 'UTF-8');
     @endphp
@@ -60,7 +61,10 @@
             <div class="prf-identity-text">
                 <p class="prf-identity-name">{{ $name !== '' ? $name : 'Chưa đặt họ tên' }}</p>
                 <p class="prf-identity-meta">
-                    <span>{{ $email !== '' ? $email : '—' }}</span>
+                    {{-- Tên đăng nhập, không phải email: đây là dòng trả lời câu
+                         "mình đang ngồi trong tài khoản nào", mà từ nay người dùng
+                         nhận ra mình qua tên đăng nhập. --}}
+                    <span>{{ $username !== '' ? '@'.$username : ($email !== '' ? $email : '—') }}</span>
                     <span class="prf-dot"></span>
                     <span>{{ $roleLabel }}</span>
                     @if($lastLogin !== '')
@@ -116,13 +120,24 @@
                      được lối đăng nhập và quyền hạn của chính mình — API chặn cả
                      hai, hiện ô sửa rồi trả lỗi chỉ tổ gây hiểu lầm. --}}
                 <div class="prf-field">
+                    <label class="prf-label" for="prfUsername">
+                        Tên đăng nhập
+                        <span class="prf-tag" title="Chỉ xem, không sửa được ở trang này">Chỉ xem</span>
+                    </label>
+                    <div class="prf-control">
+                        <input type="text" id="prfUsername" class="prf-input" value="{{ $username !== '' ? $username : '—' }}" readonly>
+                        <p class="prf-hint">Gõ ở ô thứ hai màn hình đăng nhập, sau mã cửa hàng. Cần đổi thì nhờ quản trị viên đổi giúp ở trang Người dùng &amp; vai trò.</p>
+                    </div>
+                </div>
+
+                <div class="prf-field">
                     <label class="prf-label" for="prfEmail">
-                        Email đăng nhập
+                        Email
                         <span class="prf-tag" title="Chỉ xem, không sửa được ở trang này">Chỉ xem</span>
                     </label>
                     <div class="prf-control">
                         <input type="email" id="prfEmail" class="prf-input" value="{{ $email }}" readonly>
-                        <p class="prf-hint">Đây cũng là tên đăng nhập. Cần đổi thì nhờ quản trị viên đổi giúp ở trang Người dùng &amp; vai trò.</p>
+                        <p class="prf-hint">Dùng để liên lạc và nhận thư hệ thống, không dùng để đăng nhập.</p>
                     </div>
                 </div>
 

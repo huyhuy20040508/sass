@@ -336,6 +336,14 @@ class UserController extends Controller
     {
         $rules = [
             'full_name' => ['required', 'string', 'max:150'],
+            // Tên đăng nhập: ô thứ hai của màn hình đăng nhập. Bộ ký tự khớp với
+            // usernameRe bên Go — kiểm ở đây chỉ để người dùng thấy lỗi ngay tại
+            // form thay vì chờ API trả về.
+            //
+            // CHO PHÉP chữ hoa rồi hạ xuống bên dưới, đúng như Go làm: bàn phím
+            // điện thoại tự viết hoa chữ đầu, từ chối thẳng là bắt người ta sửa
+            // một thứ mà hệ thống thừa sức tự xử lý.
+            'username' => ['required', 'string', 'min:3', 'max:50', 'regex:/^[A-Za-z0-9._-]+$/'],
             'email' => ['required', 'email', 'max:191'],
             'phone' => ['nullable', 'string', 'max:20'],
             'avatar' => ['nullable', 'string', 'max:255'],
@@ -349,7 +357,11 @@ class UserController extends Controller
         $validated = $request->validate($rules, [
             'full_name.required' => 'Vui lòng nhập họ tên.',
             'full_name.max' => 'Họ tên tối đa 150 ký tự.',
-            'email.required' => 'Vui lòng nhập email đăng nhập.',
+            'username.required' => 'Vui lòng nhập tên đăng nhập.',
+            'username.min' => 'Tên đăng nhập tối thiểu 3 ký tự.',
+            'username.max' => 'Tên đăng nhập tối đa 50 ký tự.',
+            'username.regex' => 'Tên đăng nhập chỉ gồm chữ không dấu, số, dấu chấm, gạch ngang hoặc gạch dưới (không khoảng trắng).',
+            'email.required' => 'Vui lòng nhập email.',
             'email.email' => 'Email không đúng định dạng.',
             'phone.max' => 'Số điện thoại tối đa 20 ký tự.',
             'role_id.required' => 'Vui lòng chọn vai trò.',
@@ -360,6 +372,10 @@ class UserController extends Controller
 
         $data = [
             'full_name' => $validated['full_name'],
+            // Hạ chữ thường ngay tại đây cho khớp cách Go chuẩn hoá: gửi 'Admin'
+            // rồi lưu thành 'admin' thì người tạo tài khoản đưa nhân viên một tên
+            // đăng nhập khác với tên thật sự nằm dưới CSDL.
+            'username' => mb_strtolower(trim($validated['username'])),
             'email' => $validated['email'],
             'phone' => (string) ($validated['phone'] ?? ''),
             'avatar' => (string) ($validated['avatar'] ?? ''),

@@ -10,9 +10,17 @@
     // tự đặt cho mình, hiện phần đầu email thay vào chỗ đó là phủi đi lần sửa đó.
     $name = trim((string) data_get($u, 'full_name', ''));
     if ($name === '') {
+        // Chưa đặt họ tên thì lấy tên đăng nhập — đó là thứ người này vừa gõ để
+        // vào đây. Phần đầu email chỉ còn là đường lui cuối cùng.
+        $name = (string) data_get($u, 'username', '');
+    }
+    if ($name === '') {
         $name = $email !== '' ? explode('@', $email)[0] : 'Admin';
     }
     $role = (string) data_get($u, 'role.display_name', data_get($u, 'role.name', ''));
+    // Cửa hàng lấy từ lúc đăng nhập 3 ô (session api.tenant). Phiên cũ mở từ trước
+    // khi đổi luồng thì chưa có — để trống, không hiện gì thêm.
+    $shop = trim((string) data_get(session('api.tenant'), 'name', ''));
     $initials = mb_strtoupper(mb_substr($name, 0, 2), 'UTF-8');
 @endphp
 
@@ -99,7 +107,10 @@
                 <div class="jh-tb-menu__head">
                     <p class="jh-tb-menu__name">{{ $name }}</p>
                     @if($role !== '')
-                        <p class="jh-tb-menu__role">{{ $role }}</p>
+                        {{-- Kèm cửa hàng vừa đăng nhập: một người có thể có tài khoản
+                             ở nhiều cửa hàng, mà mọi màn hình trông y hệt nhau — nhìn
+                             nhầm chỗ rồi sửa giá hay xoá đơn là hỏng dữ liệu thật. --}}
+                        <p class="jh-tb-menu__role">{{ $role }}@if($shop !== '') · {{ $shop }}@endif</p>
                     @endif
                 </div>
                 {{-- Hồ sơ & mật khẩu của chính mình. Đặt ở menu này chứ không phải

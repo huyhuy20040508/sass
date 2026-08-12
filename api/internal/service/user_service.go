@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"regexp"
 	"strings"
 	"time"
 
@@ -97,6 +98,11 @@ func (s *userService) Create(ctx context.Context, req *dto.UserRequest, actor Ac
 		return nil, domain.ErrEmailExists
 	}
 
+	username, err := s.resolveUsername(ctx, req.Username, 0)
+	if err != nil {
+		return nil, err
+	}
+
 	password := req.Password
 	if password == "" {
 		password = defaultStaffPassword
@@ -109,6 +115,7 @@ func (s *userService) Create(ctx context.Context, req *dto.UserRequest, actor Ac
 	u := &domain.User{
 		RoleID:       req.RoleID,
 		FullName:     strings.TrimSpace(req.FullName),
+		Username:     domain.StringOrNull(username),
 		Email:        email,
 		Phone:        strings.TrimSpace(req.Phone),
 		Avatar:       strings.TrimSpace(req.Avatar),
@@ -172,7 +179,13 @@ func (s *userService) Update(ctx context.Context, id uint, req *dto.UserRequest,
 		}
 	}
 
+	username, err := s.resolveUsername(ctx, req.Username, id)
+	if err != nil {
+		return nil, err
+	}
+
 	u.FullName = strings.TrimSpace(req.FullName)
+	u.Username = domain.StringOrNull(username)
 	u.Email = email
 	u.Phone = strings.TrimSpace(req.Phone)
 	u.Avatar = strings.TrimSpace(req.Avatar)
@@ -364,6 +377,39 @@ func (s *userService) internalUser(ctx context.Context, id uint) (*domain.User, 
 	return u, nil
 }
 
+// usernameRe là bộ ký tự cho phép trong tên đăng nhập.
+//
+// Chỉ chữ THƯỜNG không dấu, số, dấu chấm, gạch ngang, gạch dưới. Hẹp có chủ ý:
+// tên này được gõ tay mỗi ca làm, phần lớn trên bàn phím điện thoại. Cho phép
+// chữ hoa thì 'Admin' và 'admin' thành hai tài khoản khác nhau dưới CSDL nhưng
+// người dùng đọc thấy như một; cho phép khoảng trắng hay dấu tiếng Việt thì có
+// người gõ mãi không vào được mà không hiểu vì sao.
+var usernameRe = regexp.MustCompile(`^[a-z0-9._-]{3,50}$`)
+
+// resolveUsername chuẩn hoá và kiểm tra tên đăng nhập trước khi ghi.
+//
+// excludeID = 0 khi tạo mới, = id tài khoản đang sửa khi cập nhật (không thì tự
+// tài khoản đó bị tính là trùng với chính nó).
+//
+// Chặn ở đây thay vì để UNIQUE dưới CSDL đỡ, vì lỗi trùng khoá thô không nói được
+// trùng cột nào — translateUserErr đang quy MỌI lỗi 1062 của bảng users về "email
+// đã được sử dụng", nên người dùng sẽ nhận một câu sai hẳn chỗ cần sửa.
+func (s *userService) resolveUsername(ctx context.Context, raw string, excludeID uint) (string, error) {
+	username := NormalizeUsername(raw)
+	if !usernameRe.MatchString(username) {
+		return "", domain.ErrUsernameInvalid
+	}
+
+	exists, err := s.users.ExistsByUsernameExcept(ctx, username, excludeID)
+	if err != nil {
+		return "", err
+	}
+	if exists {
+		return "", domain.ErrUsernameExists
+	}
+	return username, nil
+}
+
 // canAssignRole kiểm tra vai trò định gán có hợp lệ với quyền của người thao tác.
 func (s *userService) canAssignRole(roleID uint, actor Actor) error {
 	if !isInternalRole(roleID) {
@@ -413,6 +459,7 @@ func buildUser(u *domain.User) dto.UserResponse {
 	res := dto.UserResponse{
 		ID:            u.ID,
 		FullName:      u.FullName,
+		Username:      string(u.Username),
 		Email:         u.Email,
 		Phone:         u.Phone,
 		Avatar:        u.Avatar,

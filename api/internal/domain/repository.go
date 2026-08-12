@@ -893,6 +893,18 @@ type EmailVerificationRepository interface {
 	InvalidateByUser(ctx context.Context, userID uint, purpose string) error
 }
 
+// TenantRepository — truy cập bảng tenants.
+//
+// Mới có đúng một hàm tra theo mã: giai đoạn này tenant chỉ được ĐỌC lúc đăng
+// nhập. Tạo/sửa/khoá cửa hàng thuộc khu điều hành nền tảng (SaaS Admin), làm khi
+// dựng control plane.
+type TenantRepository interface {
+	// FindByCode tra cửa hàng theo mã người dùng gõ. Trả ErrNotFound nếu không có.
+	// KHÔNG lọc theo status: trạng thái do tầng nghiệp vụ xét, và chỉ xét sau khi
+	// đã đúng mật khẩu — xem authService.LoginShop.
+	FindByCode(ctx context.Context, code string) (*Tenant, error)
+}
+
 // UserRepository — truy cập bảng users.
 type UserRepository interface {
 	Create(ctx context.Context, u *User) error
@@ -900,6 +912,10 @@ type UserRepository interface {
 	Delete(ctx context.Context, id uint) error
 	FindByID(ctx context.Context, id uint) (*User, error)
 	FindByEmail(ctx context.Context, email string) (*User, error)
+	// FindByTenantUsername tra tài khoản theo ô 2 của màn hình đăng nhập 3 ô.
+	// Cặp (tenant_id, username) chính là UNIQUE key uq_users_username, nên tra
+	// thiếu tenant_id là tra nhầm sang tài khoản 'admin' của khách hàng khác.
+	FindByTenantUsername(ctx context.Context, tenantID uint, username string) (*User, error)
 	// FindByFacebookID tìm tài khoản đã liên kết Facebook. Trả ErrNotFound nếu chưa
 	// có ai liên kết id này.
 	FindByFacebookID(ctx context.Context, fbID string) (*User, error)
@@ -910,6 +926,9 @@ type UserRepository interface {
 	ExistsByEmail(ctx context.Context, email string) (bool, error)
 	// ExistsByEmailExcept như trên nhưng bỏ qua chính tài khoản đang sửa.
 	ExistsByEmailExcept(ctx context.Context, email string, excludeID uint) (bool, error)
+	// ExistsByUsernameExcept — cặp với ExistsByEmailExcept, cho ô tên đăng nhập.
+	// Cũng tính cả tài khoản đã xoá mềm vì uq_users_username không loại chúng ra.
+	ExistsByUsernameExcept(ctx context.Context, username string, excludeID uint) (bool, error)
 	ListCustomers(ctx context.Context, filter CustomerFilter) ([]User, int64, error)
 
 	// CustomerStats đếm khách hàng theo trạng thái (không phụ thuộc bộ lọc).

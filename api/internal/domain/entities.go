@@ -79,14 +79,47 @@ const (
 // riêng và không bao giờ được tạo/sửa qua đường này.
 var InternalRoleIDs = []uint{SuperAdminRoleID, AdminRoleID, StaffRoleID}
 
+// Tenant là MỘT khách hàng đã mua phần mềm (xem bảng tenants).
+//
+// Chỉ khai những cột code thật sự đọc: GORM bỏ qua cột thừa trong SELECT *, nên
+// không cần map `note`/`created_at` — hai cột đó NULL được, mà quét NULL vào
+// string/time.Time thì lỗi ngay ở tầng driver.
+type Tenant struct {
+	ID uint `json:"id" gorm:"primaryKey"`
+	// Code là thứ người dùng gõ vào ô ĐẦU TIÊN của màn hình đăng nhập 3 ô. Chuỗi
+	// do mình cấp, không phải id — số auto-increment cho người ngoài đếm được hệ
+	// thống có bao nhiêu khách.
+	Code string `json:"code"`
+	Name string `json:"name"`
+	// Status: active | suspended. suspended = khách hết hạn hoặc ngừng trả tiền —
+	// chặn đăng nhập nhưng KHÔNG xoá dữ liệu, đóng tiền lại là mở.
+	Status string `json:"status"`
+}
+
+func (Tenant) TableName() string { return "tenants" }
+
+// TenantActive là trạng thái duy nhất cho phép đăng nhập vào cửa hàng.
+const TenantActive = "active"
+
 type User struct {
-	ID           uint   `json:"id" gorm:"primaryKey"`
-	RoleID       uint   `json:"role_id"`
-	Role         *Role  `json:"role,omitempty" gorm:"foreignKey:RoleID"`
-	FullName     string `json:"full_name"`
-	Email        string `json:"email"`
-	Phone        string `json:"phone"`
-	PasswordHash string `json:"-"`
+	ID uint `json:"id" gorm:"primaryKey"`
+	// TenantID là ranh giới bảo mật giữa các khách hàng.
+	//
+	// CHỈ ĐỌC (`->`) ở giai đoạn này: cột có DEFAULT 1 dưới CSDL làm giàn giáo,
+	// còn mọi INSERT của Go thì chưa biết tới tenant nào. Cho GORM ghi cột này
+	// nghĩa là mọi tài khoản tạo mới đều rơi vào tenant_id = 0 và vỡ khoá ngoại.
+	// Bỏ `->` khi plugin GORM tự chèn tenant_id — cùng lúc bỏ DEFAULT dưới CSDL.
+	TenantID uint `json:"-" gorm:"column:tenant_id;->"`
+	// Username là ô THỨ HAI của màn hình đăng nhập 3 ô, chỉ duy nhất trong một
+	// tenant. NULL = tài khoản khách hàng (khách mua sắm đăng nhập bằng email):
+	// UNIQUE chỉ cho lọt đúng một dòng chuỗi rỗng nên bắt buộc phải là NULL.
+	Username     StringOrNull `json:"username" gorm:"column:username"`
+	RoleID       uint         `json:"role_id"`
+	Role         *Role        `json:"role,omitempty" gorm:"foreignKey:RoleID"`
+	FullName     string       `json:"full_name"`
+	Email        string       `json:"email"`
+	Phone        string       `json:"phone"`
+	PasswordHash string       `json:"-"`
 	// FacebookID là id người dùng do Facebook cấp (chỉ duy nhất trong phạm vi một
 	// app). Rỗng = tài khoản chưa liên kết Facebook. Không trả ra JSON: giao diện
 	// không dùng tới, mà lộ ra thì thành một mảnh dữ liệu định danh khách hàng.
