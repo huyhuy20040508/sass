@@ -54,13 +54,22 @@
            Trước đây chỗ này là ảnh chụp màn hình phần mềm làm nền, làm mờ đi.
            Bỏ hẳn: ảnh mờ vẫn đọc được số và chữ nên nó tranh chỗ với tiêu đề,
            mà ảnh sản phẩm mờ sau thẻ đăng nhập cũng đúng là kiểu trang mà bản
-           mẫu nào cũng dựng. Ảnh vẫn nằm trong public/images nếu cần lấy lại. */
+           mẫu nào cũng dựng. Ảnh vẫn nằm trong public/images nếu cần lấy lại.
+
+           Ở chân bảng cũng từng in địa chỉ Go API. Đã bỏ: trang đăng nhập thì ai
+           mở cũng thấy, mà địa chỉ đó là chuyện nội bộ — trên máy thật nó ra
+           http://127.0.0.1:8090/api/v1, tức là khoe luôn cổng dịch vụ cho người
+           chưa đăng nhập. Trong khu điều hành vẫn giữ (đáy thanh trái): ở đó
+           người xem đã là người nhà và nó có ích khi dò lỗi kết nối. */
         .brand-side {
             background: linear-gradient(180deg, var(--plum) 0%, var(--plum) 52%, var(--plum-deep) 100%);
-            display: flex; flex-direction: column; justify-content: space-between;
+            display: flex; flex-direction: column;
             padding: 46px 50px;
             color: #fff;
         }
+        /* Bỏ dòng chân rồi thì space-between đẩy đoạn chữ xuống sát đáy. Cho nó
+           tự căn giữa khoảng trống còn lại, ngang tầm biểu mẫu bên phải. */
+        .brand-copy { margin-top: auto; margin-bottom: auto; }
 
         /* align-self bắt buộc: mặc định flex kéo hộp của ảnh rộng bằng cả cột,
            và SVG thì tự căn giữa trong hộp của nó — thành ra logo nằm giữa cột
@@ -86,10 +95,6 @@
             color: rgba(255, 255, 255, .70);
         }
 
-        .brand-foot {
-            font-family: var(--font-data); font-size: 11.5px;
-            color: rgba(255, 255, 255, .42);
-        }
 
         /* ===== Nửa phải: biểu mẫu ===== */
         .form-side {
@@ -166,11 +171,12 @@
            dưới. Bỏ câu giới thiệu dài, giữ logo và một dòng nói đây là chỗ nào. */
         @media (max-width: 880px) {
             body { grid-template-columns: 1fr; }
-            /* Bỏ space-between: ở đây chỉ còn logo và tiêu đề, dàn hai đầu thì
-               hở một khoảng tím rỗng giữa hai thứ đáng lẽ đứng liền nhau. */
-            .brand-side { padding: 26px 24px 30px; gap: 20px; justify-content: flex-start; }
+            .brand-side { padding: 26px 24px 30px; gap: 20px; }
+            /* Bỏ căn giữa của bản rộng: ở dải ngang này logo và tiêu đề phải
+               đứng liền nhau, đẩy ra là hở một khoảng tím rỗng giữa hai thứ. */
+            .brand-copy { margin-top: 0; margin-bottom: 0; }
             .brand-copy h1 { font-size: 21px; }
-            .brand-copy p, .brand-foot { display: none; }
+            .brand-copy p { display: none; }
             .form-side { padding: 34px 24px 46px; align-items: flex-start; }
         }
     </style>
@@ -188,7 +194,6 @@
             <p>Cửa hàng, gói dịch vụ, hạn dùng và hoá đơn của toàn bộ khách hàng đang chạy trên nền tảng.</p>
         </div>
 
-        <div class="brand-foot">{{ config('api.base_url') }}</div>
     </section>
 
     <section class="form-side">
