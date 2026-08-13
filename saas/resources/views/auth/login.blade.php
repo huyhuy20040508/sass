@@ -51,10 +51,19 @@
            hành: đăng nhập xong là thấy đúng vật liệu đó nằm dọc bên trái, hai
            màn hình nối liền nhau chứ không phải hai trang rời.
 
-           Trước đây chỗ này là ảnh chụp màn hình phần mềm làm nền, làm mờ đi.
-           Bỏ hẳn: ảnh mờ vẫn đọc được số và chữ nên nó tranh chỗ với tiêu đề,
-           mà ảnh sản phẩm mờ sau thẻ đăng nhập cũng đúng là kiểu trang mà bản
-           mẫu nào cũng dựng. Ảnh vẫn nằm trong public/images nếu cần lấy lại.
+           Ảnh chụp phần mềm làm nền, xếp hai lớp:
+
+             ::before  ảnh, LÀM MỜ 4px rồi giảm bão hoà.
+             ::after   lớp tím phủ lên trên.
+
+           Mờ là phần quan trọng, không phải để cho đẹp. Bản trước chỉ hạ
+           opacity nên chữ và con số trong ảnh vẫn đọc được, mắt bị kéo vào đó
+           đọc thay vì đọc dòng tiêu đề — hai thứ chữ tranh nhau trên cùng một
+           nền. Mờ đi thì ảnh chỉ còn hình khối và màu, tức là còn nhận ra được
+           đây là ảnh sản phẩm, nhưng thôi cạnh tranh với chữ thật.
+
+           scale(1.06) đi kèm blur: làm mờ thì mép ảnh loang ra thành viền nhạt,
+           phóng to lên một chút để mép đó nằm ngoài khung.
 
            Ở chân bảng cũng từng in config('api.base_url'). Đã bỏ: trang đăng nhập
            thì ai mở cũng thấy, mà trên máy thật giá trị đó là địa chỉ nội bộ kèm
@@ -66,11 +75,26 @@
            khác chú thích Blade (loại bị xoá lúc biên dịch). Viết số cổng hay
            đường dẫn nội bộ vào đây là vẫn phơi ra đúng thứ vừa gỡ đi. */
         .brand-side {
-            background: linear-gradient(180deg, var(--plum) 0%, var(--plum) 52%, var(--plum-deep) 100%);
+            position: relative; overflow: hidden;
+            background: var(--plum);
             display: flex; flex-direction: column;
             padding: 46px 50px;
             color: #fff;
         }
+        .brand-side::before,
+        .brand-side::after { content: ''; position: absolute; inset: 0; }
+        .brand-side::before {
+            background: url('{{ asset('images/login-bg.jpg') }}') center / cover no-repeat;
+            filter: blur(5px) saturate(.5);
+            transform: scale(1.08);
+        }
+        /* Đậm hơn ở đỉnh: logo trắng-vàng nằm góc trên trái, mà đúng chỗ đó ảnh
+           có mảng sáng — để lớp phủ nhạt thì logo bị nền nuốt mất. */
+        .brand-side::after {
+            background: linear-gradient(180deg, rgba(58, 18, 102, .90) 0%, rgba(50, 16, 88, .86) 42%, rgba(42, 13, 75, .96) 100%);
+        }
+        /* Nội dung phải nổi lên trên hai lớp nền. */
+        .brand-side > * { position: relative; z-index: 1; }
         /* Bỏ dòng chân rồi thì space-between đẩy đoạn chữ xuống sát đáy. Cho nó
            tự căn giữa khoảng trống còn lại, ngang tầm biểu mẫu bên phải. */
         .brand-copy { margin-top: auto; margin-bottom: auto; }
