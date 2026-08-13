@@ -2,12 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Services\ApiClient;
-
 class DashboardController extends Controller
 {
-    public function __construct(protected ApiClient $api) {}
-
     /**
      * Trang tổng quan.
      *
@@ -15,11 +11,14 @@ class DashboardController extends Controller
      * từ dữ liệu của một cửa hàng: nền tảng chưa có bảng cửa hàng nào, mọi con
      * số hiện ra lúc này đều sai. Ô nào cũng chỉ nối vào /platform/* khi Go API
      * mở nhóm đó.
+     *
+     * $apiOnline không lấy ở đây: View composer trong AppServiceProvider đã bơm
+     * cho cả `dashboard` lẫn `partials.sidebar`, và có cache 30 giây — gọi thêm
+     * một lần nữa ở đây là gọi /health hai lượt cho cùng một lần mở trang.
      */
     public function index()
     {
         return view('dashboard', [
-            'apiOnline' => $this->api->health(),
             'user' => session('api.user'),
         ]);
     }
