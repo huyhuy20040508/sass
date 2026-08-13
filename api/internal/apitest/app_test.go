@@ -98,7 +98,11 @@ func mocCauHinh(t *testing.T, banHang bool) *config.Config {
 
 	return &config.Config{
 		App: config.AppConfig{
-			Name:           "apitest",
+			Name: "apitest",
+			// Mã phần mềm của tiến trình test, khớp `apps.code` mà migration nạp
+			// sẵn. Thiếu nó thì repo tên miền từ chối mọi host (xem
+			// NewTenantDomainRepository) và cả cụm bán hàng cho khách đứng im.
+			Code:           domain.AppOrder,
 			Env:            "test",
 			Port:           "0",
 			BaseURL:        "http://localhost",
@@ -142,7 +146,7 @@ type heThong struct {
 func dungHeThong(t *testing.T) *heThong {
 	t.Helper()
 
-	return dungHeThongVoi(t, false)
+	return dungHeThongVoi(t, false, false)
 }
 
 // dungHeThongBanHang dựng API với cụm bán hàng cho khách BẬT, tức là có phân
@@ -153,7 +157,18 @@ func dungHeThong(t *testing.T) *heThong {
 func dungHeThongBanHang(t *testing.T) *heThong {
 	t.Helper()
 
-	return dungHeThongVoi(t, true)
+	return dungHeThongVoi(t, true, false)
+}
+
+// dungHeThongDieuHanh dựng API có KHU ĐIỀU HÀNH NỀN TẢNG (nhóm /platform), cụm
+// bán hàng cho khách vẫn TẮT như production.
+//
+// Cũng cần database CONTROL PLANE của bộ test — bảng giá và sổ người điều hành
+// đều nằm bên đó.
+func dungHeThongDieuHanh(t *testing.T) *heThong {
+	t.Helper()
+
+	return dungHeThongVoi(t, false, true)
 }
 
 // dungHeThongVoi nối dây y hệt cmd/api/main.go.
@@ -162,7 +177,7 @@ func dungHeThongBanHang(t *testing.T) *heThong {
 // kiểm này chỉ hỏng khi chữ ký constructor đổi (trình biên dịch báo ngay), còn
 // tách hàm chung thì một ngày nào đó main.go bọc thêm middleware mà bài kiểm
 // không có — và bài kiểm sẽ kiểm một hệ thống không tồn tại.
-func dungHeThongVoi(t *testing.T, banHang bool) *heThong {
+func dungHeThongVoi(t *testing.T, banHang, dieuHanh bool) *heThong {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 
@@ -184,10 +199,13 @@ func dungHeThongVoi(t *testing.T, banHang bool) *heThong {
 	// Control plane: chỉ mở khi cần: sổ tên miền là thứ DUY NHẤT của luồng phục vụ
 	// request đọc sang lược đồ đó.
 	var (
-		nenTang     *gorm.DB
-		tenMienRepo domain.TenantDomainRepository
+		nenTang           *gorm.DB
+		tenMienRepo       domain.TenantDomainRepository
+		nguoiDieuHanhRepo domain.PlatformUserRepository
+		planHandler       *handler.PlanHandler
+		khachHangHandler  *handler.KhachHangHandler
 	)
-	if banHang {
+	if banHang || dieuHanh {
 		nenTang, err = repository.NewPlatformDB(cfg.Platform, true)
 		if err != nil {
 			t.Skipf("bỏ qua: chưa dựng control plane của bộ test (%s).\n"+
@@ -205,7 +223,16 @@ func dungHeThongVoi(t *testing.T, banHang bool) *heThong {
 				"Dựng bằng: cd api && PLATFORM_DB_NAME=%s go run ./cmd/migrate -nen-tang chay -y\nLỗi: %v",
 				cfg.Platform.Name, cfg.Platform.Name, err)
 		}
-		tenMienRepo = repository.NewTenantDomainRepository(nenTang)
+		// Sổ tên miền chỉ dựng cho bản BÁN HÀNG, y như main.go: nó là thứ phục vụ
+		// khách vãng lai, không liên quan tới khu điều hành.
+		if banHang {
+			tenMienRepo = repository.NewTenantDomainRepository(nenTang, cfg.App.Code)
+		}
+		nguoiDieuHanhRepo = repository.NewPlatformUserRepository(nenTang)
+		planHandler = handler.NewPlanHandler(service.NewPlanService(
+			repository.NewPlanRepository(nenTang), repository.NewAppRepository(nenTang)))
+		khachHangHandler = handler.NewKhachHangHandler(
+			service.NewKhachHangService(repository.NewKhachHangRepository(nenTang)))
 	}
 
 	jwtMgr := jwt.NewManager(cfg.JWT.Secret, cfg.JWT.AccessTTL, cfg.JWT.RefreshTTL)
@@ -240,7 +267,7 @@ func dungHeThongVoi(t *testing.T, banHang bool) *heThong {
 	newsletterRepo := repository.NewNewsletterRepository(db)
 
 	settingSvc := service.NewSettingService(settingRepo)
-	authSvc := service.NewAuthService(userRepo, tenantRepo, roleRepo, verifyRepo, mailSender, jwtMgr,
+	authSvc := service.NewAuthService(userRepo, nguoiDieuHanhRepo, tenantRepo, roleRepo, verifyRepo, mailSender, jwtMgr,
 		cfg.JWT, cfg.Mail, true, settingSvc, fbClient, ggClient)
 	categorySvc := service.NewCategoryService(categoryRepo)
 	brandSvc := service.NewBrandService(brandRepo)
@@ -263,29 +290,31 @@ func dungHeThongVoi(t *testing.T, banHang bool) *heThong {
 	pReturnSvc := service.NewPurchaseReturnService(pReturnRepo, purchaseRepo)
 	reportSvc := service.NewReportService(reportRepo)
 
-	r := router.New(cfg, jwtMgr, tenMienRepo, router.Handlers{
-		Health:   handler.NewHealthHandler("test"),
-		Auth:     handler.NewAuthHandler(authSvc),
-		Category: handler.NewCategoryHandler(categorySvc),
-		Brand:    handler.NewBrandHandler(brandSvc),
-		Product:  handler.NewProductHandler(productSvc, promotionSvc),
-		Customer: handler.NewCustomerHandler(customerSvc),
-		Order:    handler.NewOrderHandler(orderSvc),
-		Return:   handler.NewOrderReturnHandler(returnSvc),
-		Notif:    handler.NewNotificationHandler(notifSvc, hub),
-		Stock:    handler.NewInventoryHandler(inventorySvc),
-		Supplier: handler.NewSupplierHandler(supplierSvc),
-		Purchase: handler.NewPurchaseOrderHandler(purchaseSvc),
-		Receipt:  handler.NewGoodsReceiptHandler(receiptSvc),
-		PReturn:  handler.NewPurchaseReturnHandler(pReturnSvc),
-		Setting:  handler.NewSettingHandler(settingSvc),
-		User:     handler.NewUserHandler(userSvc),
-		Payment:  handler.NewPaymentHandler(paymentSvc),
-		Banner:   handler.NewBannerHandler(bannerSvc),
-		Report:   handler.NewReportHandler(reportSvc),
-		Promo:    handler.NewPromotionHandler(promotionSvc),
-		Voucher:  handler.NewVoucherHandler(voucherSvc),
-		Contact:  handler.NewContactHandler(contactSvc),
+	r := router.New(cfg, jwtMgr, tenMienRepo, nguoiDieuHanhRepo, router.Handlers{
+		Health:    handler.NewHealthHandler("test"),
+		Auth:      handler.NewAuthHandler(authSvc),
+		Category:  handler.NewCategoryHandler(categorySvc),
+		Brand:     handler.NewBrandHandler(brandSvc),
+		Product:   handler.NewProductHandler(productSvc, promotionSvc),
+		Customer:  handler.NewCustomerHandler(customerSvc),
+		Order:     handler.NewOrderHandler(orderSvc),
+		Return:    handler.NewOrderReturnHandler(returnSvc),
+		Notif:     handler.NewNotificationHandler(notifSvc, hub),
+		Stock:     handler.NewInventoryHandler(inventorySvc),
+		Supplier:  handler.NewSupplierHandler(supplierSvc),
+		Purchase:  handler.NewPurchaseOrderHandler(purchaseSvc),
+		Receipt:   handler.NewGoodsReceiptHandler(receiptSvc),
+		PReturn:   handler.NewPurchaseReturnHandler(pReturnSvc),
+		Setting:   handler.NewSettingHandler(settingSvc),
+		User:      handler.NewUserHandler(userSvc),
+		Payment:   handler.NewPaymentHandler(paymentSvc),
+		Banner:    handler.NewBannerHandler(bannerSvc),
+		Report:    handler.NewReportHandler(reportSvc),
+		Promo:     handler.NewPromotionHandler(promotionSvc),
+		Voucher:   handler.NewVoucherHandler(voucherSvc),
+		Contact:   handler.NewContactHandler(contactSvc),
+		Plan:      planHandler,
+		KhachHang: khachHangHandler,
 	})
 
 	return &heThong{r: r, db: db, nenTang: nenTang}
@@ -445,13 +474,25 @@ func gieoTenMien(t *testing.T, h *heThong, c *cuaHang, host string) {
 		t.Fatalf("không ghi được cửa hàng %s vào sổ nền tảng: %v", c.ma, err)
 	}
 
-	err = h.nenTang.WithContext(nen).Exec(
-		`INSERT INTO tenant_domains (tenant_id, host, kind, is_primary, verified_at, created_at, updated_at)
-		 VALUES (?, ?, 'subdomain', 1, NOW(3), NOW(3), NOW(3))
-		 ON DUPLICATE KEY UPDATE tenant_id = VALUES(tenant_id)`,
-		c.id, host).Error
+	gieoTenMienCuaApp(t, h, c, host, domain.AppOrder)
+}
+
+// gieoTenMienCuaApp đăng ký tên miền cho MỘT PHẦN MỀM cụ thể.
+//
+// Tách ra khỏi gieoTenMien để bài kiểm dựng được tình huống có thật từ khi một
+// khách mua nhiều phần mềm: tên miền của phần mềm KHÁC cũng nằm trong cùng sổ,
+// và tiến trình API này không được phục vụ nó.
+func gieoTenMienCuaApp(t *testing.T, h *heThong, c *cuaHang, host, maApp string) {
+	t.Helper()
+
+	nen := context.Background()
+	err := h.nenTang.WithContext(nen).Exec(
+		`INSERT INTO tenant_domains (tenant_id, app_id, host, kind, is_primary, verified_at, created_at, updated_at)
+		 SELECT ?, a.id, ?, 'subdomain', 0, NOW(3), NOW(3), NOW(3) FROM apps a WHERE a.code = ?
+		 ON DUPLICATE KEY UPDATE tenant_id = VALUES(tenant_id), app_id = VALUES(app_id)`,
+		c.id, host, maApp).Error
 	if err != nil {
-		t.Fatalf("không đăng ký được tên miền %s: %v", host, err)
+		t.Fatalf("không đăng ký được tên miền %s cho app %s: %v", host, maApp, err)
 	}
 }
 

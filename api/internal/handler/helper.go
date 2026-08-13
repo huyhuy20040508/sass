@@ -157,6 +157,10 @@ func handleServiceError(c *gin.Context, err error) {
 	case errors.Is(err, domain.ErrResendTooSoon):
 		// err đã kèm số giây còn phải chờ
 		response.Error(c, 429, "Vui lòng chờ "+strings.TrimPrefix(err.Error(), domain.ErrResendTooSoon.Error()+": ")+" rồi thử lại")
+	case errors.Is(err, domain.ErrKhongPhuTrachApp):
+		response.Error(c, 403, "Bạn không phụ trách phần mềm này")
+	case errors.Is(err, domain.ErrPlatformUnavailable):
+		response.Error(c, 503, "Khu điều hành nền tảng chưa sẵn sàng — máy chủ chưa nối được sổ nền tảng")
 	case errors.Is(err, domain.ErrFacebookDisabled):
 		response.Error(c, 503, "Cửa hàng chưa bật đăng nhập bằng Facebook")
 	case errors.Is(err, domain.ErrFacebookAuthFailed):

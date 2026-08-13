@@ -1,6 +1,7 @@
 package apitest
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -264,4 +265,71 @@ func (h *heThong) dangNhapKhach(t *testing.T, host string, c *cuaHang) string {
 	}
 
 	return body.Data.AccessToken
+}
+
+// TestTenMien_TenMienCuaPhanMemKhacKhongPhucVu — sổ tên miền là sổ của CẢ NỀN
+// TẢNG, nên trong đó có cả địa chỉ của những phần mềm khác.
+//
+// Từ khi một khách mua được nhiều phần mềm (migration 0008/0009), tình huống
+// này là chuyện bình thường: cùng một cửa hàng có `quochuy.selliotech.store`
+// cho phần mềm bán hàng và một địa chỉ khác cho phần mềm bida. Tiến trình API
+// này phục vụ ĐÚNG MỘT phần mềm (APP_CODE), và địa chỉ của phần mềm kia phải
+// rơi vào nhánh "không tìm thấy" — không phải được phục vụ bằng dữ liệu bán
+// hàng, vì khi đó khách gõ đúng địa chỉ của mình rồi nhìn thấy nhầm sản phẩm.
+func TestTenMien_TenMienCuaPhanMemKhacKhongPhucVu(t *testing.T) {
+	h, a, _ := haiCuaHangBanHang(t)
+
+	const (
+		appKhac  = "isobida"
+		hostKhac = "bida.iso.test"
+	)
+	gieoAppKhac(t, h, appKhac)
+	gieoTenMienCuaApp(t, h, a, hostKhac, appKhac)
+
+	// Khách vãng lai vào địa chỉ của phần mềm KHÁC: không xác định được cửa hàng
+	// cho API này, nên 401 y như một tên miền lạ.
+	if res := h.goiTuHost(t, hostKhac, "", http.MethodGet, "/api/v1/products", nil); res.ma != http.StatusUnauthorized {
+		t.Fatalf("tên miền của phần mềm khác phải KHÔNG phân giải được (401), nhận %d\n%s",
+			res.ma, catBot(res.than))
+	}
+
+	// Đối chứng: CÙNG cửa hàng đó, địa chỉ của phần mềm này thì phục vụ bình
+	// thường. Không có vế này thì bài trên vẫn xanh kể cả khi phân giải tên miền
+	// hỏng hoàn toàn.
+	res := h.goiTuHost(t, hostA, "", http.MethodGet, "/api/v1/products?page_size=100", nil)
+	if res.ma != http.StatusOK {
+		t.Fatalf("địa chỉ của chính phần mềm này phải phục vụ được, nhận %d\n%s", res.ma, catBot(res.than))
+	}
+	if !chuaDauVet(res.than, a.vet) {
+		t.Fatalf("vào %s mà không thấy hàng của %s\n%s", hostA, a.ma, catBot(res.than))
+	}
+}
+
+// gieoAppKhac thêm một phần mềm thứ hai vào danh mục của nền tảng.
+//
+// Dọn ngay khi bài kiểm xong: danh mục app là dữ liệu dùng chung của database
+// test, để lại một dòng rác thì lần chạy sau đếm nhầm.
+func gieoAppKhac(t *testing.T, h *heThong, ma string) {
+	t.Helper()
+
+	nen := context.Background()
+	err := h.nenTang.WithContext(nen).Exec(
+		`INSERT INTO apps (code, name, status, created_at, updated_at)
+		 VALUES (?, ?, 'active', NOW(3), NOW(3))
+		 ON DUPLICATE KEY UPDATE status = 'active'`, ma, "Phần mềm thử "+ma).Error
+	if err != nil {
+		t.Fatalf("không gieo được app %s: %v", ma, err)
+	}
+
+	t.Cleanup(func() {
+		// tenant_domains trỏ vào apps bằng khoá ngoại, nên xoá tên miền trước.
+		for _, cau := range []string{
+			"DELETE d FROM tenant_domains d JOIN apps a ON a.id = d.app_id WHERE a.code = ?",
+			"DELETE FROM apps WHERE code = ?",
+		} {
+			if err := h.nenTang.WithContext(nen).Exec(cau, ma).Error; err != nil {
+				t.Fatalf("không dọn được app thử %s: %v", ma, err)
+			}
+		}
+	})
 }

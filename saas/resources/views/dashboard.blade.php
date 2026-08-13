@@ -41,16 +41,23 @@
                 <h3 class="h6 fw-semibold mb-3">Còn thiếu gì để trang này có số liệu</h3>
                 <ol class="small mb-0 ps-3 text-muted-x">
                     <li class="mb-2">
-                        Go API mở nhóm <code>/platform/*</code> kèm bảng
-                        <code>shops</code>, <code>plans</code>, <code>subscriptions</code>.
+                        Go API mở nhóm <code>/platform</code> cho <code>tenants</code> và
+                        <code>subscriptions</code> — ba màn hình Người dùng thử, Người dùng
+                        chính thức và Doanh thu đọc từ đó. Đã có:
+                        <code>/platform/apps</code>, <code>/platform/plans</code>.
                     </li>
                     <li class="mb-2">
-                        Tách vai trò: <code>super_admin</code> phải mang nghĩa "quản trị nền tảng",
-                        không còn là vai trò cao nhất trong một cửa hàng.
+                        <span class="text-decoration-line-through">Tách vai trò của khu điều hành
+                        khỏi <code>super_admin</code> của cửa hàng.</span>
+                        Xong: khu điều hành đăng nhập bằng sổ riêng
+                        (<code>platform_users</code>), tài khoản cửa hàng không vào được.
                     </li>
                     <li class="mb-0">
-                        Thêm cột phân tách cửa hàng vào dữ liệu nghiệp vụ, và sửa các
-                        UNIQUE KEY đang ở phạm vi toàn cục.
+                        <span class="text-decoration-line-through">Thêm cột phân tách cửa hàng
+                        vào dữ liệu nghiệp vụ, và sửa các UNIQUE KEY đang ở phạm vi toàn cục.</span>
+                        Xong: 40/43 bảng có <code>tenant_id</code> (ba bảng còn lại là
+                        <code>roles</code>, <code>tenants</code>, <code>schema_migrations</code> —
+                        dùng chung có chủ ý), khoá duy nhất đã gắn tiền tố <code>tenant_id</code>.
                     </li>
                 </ol>
             </div>
@@ -74,7 +81,7 @@
                 </div>
                 <div class="d-flex align-items-center justify-content-between py-2">
                     <span class="small">Vai trò đang dùng</span>
-                    <span class="badge text-bg-secondary">{{ data_get($user, 'role.name') }}</span>
+                    <span class="badge text-bg-secondary">{{ data_get($user, 'role') ?: '—' }}</span>
                 </div>
 
                 @unless ($apiOnline)

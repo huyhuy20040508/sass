@@ -57,6 +57,24 @@ var (
 
 	// Đăng nhập bằng Facebook
 	// Chưa khai FACEBOOK_APP_ID / FACEBOOK_APP_SECRET ở .env của API.
+	// ErrKhongPhuTrachApp — người điều hành đang đụng vào một PHẦN MỀM không
+	// được giao cho họ (xem migration 0010).
+	//
+	// Lỗi riêng chứ không gộp vào ErrForbidden: câu trả lời cho người dùng phải
+	// nói đúng chuyện gì đang xảy ra ("bạn không phụ trách phần mềm này"), khác
+	// hẳn "vai trò của bạn chỉ được xem". Hai thứ đó chữa bằng hai cách khác
+	// nhau — một cái là nhờ giao thêm phần mềm, một cái là nhờ nâng vai trò.
+	ErrKhongPhuTrachApp = errors.New("không phụ trách phần mềm này")
+
+	// ErrPlatformUnavailable — máy chủ chưa nối được control plane, nên khu điều
+	// hành không xác thực được ai cả.
+	//
+	// Trả lỗi RIÊNG chứ không gộp vào "sai mật khẩu": đây là lỗi cấu hình máy
+	// chủ, và người gõ đúng mật khẩu mà bị bảo là sai sẽ đi đổi mật khẩu vòng vo
+	// hàng giờ. Cũng KHÔNG được lặng lẽ rơi về cách đăng nhập cũ (mượn
+	// super_admin của một cửa hàng) — cách đó chính là lỗ hổng đã đóng.
+	ErrPlatformUnavailable = errors.New("khu điều hành nền tảng chưa sẵn sàng")
+
 	ErrFacebookDisabled = errors.New("chưa bật đăng nhập bằng Facebook")
 	// Code/token không đổi được hoặc do app khác cấp — coi như không xác minh được ai.
 	ErrFacebookAuthFailed = errors.New("không xác minh được tài khoản Facebook")

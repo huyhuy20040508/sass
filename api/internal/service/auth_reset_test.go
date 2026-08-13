@@ -119,7 +119,7 @@ func dungAuthService(users *fakeUserRepo, verifies *fakeVerifyRepo, mail *fakeMa
 
 func dungAuthServiceCoCuaHang(users *fakeUserRepo, tenants *fakeTenantRepo, verifies *fakeVerifyRepo, mail *fakeMailer) AuthService {
 	return NewAuthService(
-		users, tenants, fakeRoleRepo{}, verifies, mail,
+		users, nil, tenants, fakeRoleRepo{}, verifies, mail,
 		nil, // jwt.Manager: chỉ cần khi phát token, các test dưới đây không đụng tới
 		config.JWTConfig{},
 		config.MailConfig{CodeTTL: 10 * time.Minute, ResendAfter: 60 * time.Second, FromName: "Cửa hàng"},

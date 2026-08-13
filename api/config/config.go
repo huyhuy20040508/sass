@@ -29,7 +29,18 @@ type Config struct {
 }
 
 type AppConfig struct {
-	Name    string
+	Name string
+	// Code là MÃ PHẦN MỀM mà tiến trình này phục vụ — khớp `apps.code` của
+	// control plane ("order", "bida"...).
+	//
+	// Từ khi một khách mua được nhiều phần mềm (migration 0008/0009), mỗi tiến
+	// trình API phải biết mình là phần mềm nào: sổ tên miền có cả tên miền của
+	// các phần mềm khác, và phân giải một địa chỉ KHÔNG PHẢI của mình rồi phục
+	// vụ bằng dữ liệu của mình là cho khách xem nhầm sản phẩm.
+	//
+	// Nướng vào .env chứ không đoán theo tên miền hay theo database: một tiến
+	// trình chỉ phục vụ đúng một phần mềm, và đó là quyết định lúc triển khai.
+	Code    string
 	Env     string
 	Port    string
 	BaseURL string
@@ -255,6 +266,9 @@ func Load() (*Config, error) {
 
 	// Mặc định
 	v.SetDefault("APP_NAME", "Sass API")
+	// Mặc định "order" — phần mềm duy nhất đang bán. Bản cài cũ không có dòng
+	// APP_CODE trong .env vẫn chạy đúng như trước.
+	v.SetDefault("APP_CODE", "order")
 	// Mặc định TẮT: dự án này chỉ có khu quản trị, không có trang bán cho khách.
 	v.SetDefault("STOREFRONT_API_ENABLED", false)
 	v.SetDefault("APP_ENV", "development")
@@ -338,6 +352,7 @@ func Load() (*Config, error) {
 	cfg := &Config{
 		App: AppConfig{
 			Name:           v.GetString("APP_NAME"),
+			Code:           strings.ToLower(strings.TrimSpace(v.GetString("APP_CODE"))),
 			Env:            v.GetString("APP_ENV"),
 			Port:           v.GetString("APP_PORT"),
 			BaseURL:        v.GetString("APP_BASE_URL"),

@@ -8518,6 +8518,177 @@ const docTemplate = `{
                 }
             }
         },
+        "/auth/platform-login": {
+            "post": {
+                "description": "Email + mật khẩu của một tài khoản trong sổ ` + "`" + `platform_users` + "`" + ` — sổ RIÊNG của\nnền tảng, không liên quan tới tài khoản của cửa hàng nào. Tài khoản cửa\nhàng (kể cả super_admin của một tiệm) KHÔNG vào được đường này.\nToken trả về mang cờ nền tảng và tenant_id = 0, nên nó chỉ mở được nhóm\n/platform và không mở được đường nào của khu cửa hàng.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Đăng nhập khu điều hành nền tảng",
+                "parameters": [
+                    {
+                        "description": "Email + mật khẩu của người điều hành",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.LoginRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.PlatformAuthResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Sai email hoặc mật khẩu, hoặc tài khoản chưa đặt mật khẩu",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "503": {
+                        "description": "Máy chủ chưa nối được sổ nền tảng",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/platform-me": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Đọc từ sổ ` + "`" + `platform_users` + "`" + ` theo id trong token nền tảng.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Hồ sơ người điều hành đang đăng nhập",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/domain.PlatformUser"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/platform-refresh": {
+            "post": {
+                "description": "Đường riêng vì /auth/refresh cố ý TỪ CHỐI mọi token không thuộc cửa hàng\nnào, mà token của khu điều hành thì luôn như vậy. Mỗi lượt làm mới đều đọc\nlại người điều hành trong sổ: người vừa bị khoá không gia hạn thêm được.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Làm mới token khu điều hành",
+                "parameters": [
+                    {
+                        "description": "Refresh token",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.RefreshRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.PlatformAuthResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
         "/auth/refresh": {
             "post": {
                 "description": "Dùng refresh token để lấy cặp token mới.",
@@ -9826,6 +9997,469 @@ const docTemplate = `{
                     },
                     "422": {
                         "description": "Cổng thanh toán chưa được cấu hình",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/platform/apps": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Chỉ những phần mềm NGƯỜI GỌI được phụ trách (owner thấy hết). Bộ chọn\nphần mềm ở đầu khu điều hành dựng từ đây.\n` + "`" + `so_goi_dang_ban` + "`" + ` tách khỏi ` + "`" + `status` + "`" + `: app đang chạy mà 0 gói đang bán thì\nvẫn chưa ai mua được. App 'planned' và 'retired' vẫn xuất hiện — đây là\nmàn hình quản lý vòng đời của chúng.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Platform - Apps"
+                ],
+                "summary": "Danh mục phần mềm của nền tảng",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.AppsResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/platform/doanh-thu": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "TIỀN ĐÃ VÀO (sổ thu ` + "`" + `invoices` + "`" + `), KHÔNG phải tiền đáng lẽ phải thu theo\nhợp đồng. Sổ thu trống thì doanh thu là 0 kể cả khi có hợp đồng đang chạy\n— và đó là câu trả lời đúng.\nLọc theo NGÀY TIỀN VÀO. ` + "`" + `tu` + "`" + ` tính từ 00:00 ngày đó, ` + "`" + `den` + "`" + ` là mốc CHẶN\nTRÊN không bao gồm — muốn trọn tháng 8 thì tu=2026-08-01\u0026den=2026-09-01.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Platform - Khách hàng"
+                ],
+                "summary": "Doanh thu theo quán",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Mã phần mềm; bỏ trống = mọi phần mềm được giao",
+                        "name": "app",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Từ ngày, dạng 2006-01-02",
+                        "name": "tu",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Tới ngày (không bao gồm), dạng 2006-01-02",
+                        "name": "den",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.DoanhThuResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/platform/plans": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Trả về ` + "`" + `plans` + "`" + ` (mỗi dòng là một mức giá: gói + app + chu kỳ, kèm ` + "`" + `features` + "`" + `\nlà hạn mức/tính năng đã khai của gói đó) và ` + "`" + `fields` + "`" + ` (siêu dữ liệu từng khoá\ntính năng: kiểu, nhãn, đơn vị, trần) để màn hình dựng ô nhập đúng kiểu.\nKhoá KHÔNG có trong ` + "`" + `features` + "`" + ` nghĩa là bảng giá không quy định — khác hẳn\ngiá trị 0. Gói đã ngừng bán (` + "`" + `retired` + "`" + `) vẫn xuất hiện.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Platform - Plans"
+                ],
+                "summary": "Bảng giá của nền tảng",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Lọc theo mã app, vd: order. Bỏ trống = mọi app",
+                        "name": "app",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.PlansResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/platform/plans/{id}/features": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Một dòng bảng giá kèm hạn mức/tính năng đã khai của nó. Đây là dữ liệu của\nmàn hình Tính năng gói.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Platform - Plans"
+                ],
+                "summary": "Tính năng của một gói",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID dòng bảng giá",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.PlanFeaturesResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Ghi nhiều khoá trong một lần gọi; khoá không gửi lên giữ nguyên. Gửi GIÁ TRỊ\nRỖNG là XOÁ khoá đó, nghĩa là \"bảng giá không quy định hạn mức này\" — khác\nhẳn gửi \"0\". Hạn mức không giới hạn thì gửi ` + "`" + `vo_han` + "`" + `.\nKhoá lạ hoặc giá trị sai kiểu làm cả yêu cầu bị từ chối (422), không ghi\nxuống một phần. Trả về gói sau khi ghi.\nCHỈ vai trò owner/operator của khu điều hành ghi được; support chỉ đọc.\nSửa ở đây KHÔNG đụng tới khách đang dùng: thuê bao đã ký chép hạn mức ra\nlúc ký và sống độc lập với bảng giá.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Platform - Plans"
+                ],
+                "summary": "Sửa tính năng của một gói",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID dòng bảng giá",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Các khoá cần ghi",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.PlanFeaturesUpdateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.PlanFeaturesResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/platform/subscriptions": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Màn hình \"Người dùng thử\" là ` + "`" + `?trang_thai=trial` + "`" + `, \"Người dùng chính thức\"\nlà ` + "`" + `?trang_thai=active` + "`" + `. Sắp theo ngày hết hạn gần nhất trước —\n` + "`" + `con_lai_ngay` + "`" + ` âm nghĩa là ĐÃ QUÁ HẠN.\nHạn mức trong câu trả lời lấy THẲNG từ hợp đồng, không tra bảng giá: bảng\ngiá được phép đổi, hợp đồng đã ký thì không. Giá trị 0 = không giới hạn.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Platform - Khách hàng"
+                ],
+                "summary": "Hợp đồng đã ký",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Mã phần mềm; bỏ trống = mọi phần mềm được giao",
+                        "name": "app",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "trial | active | past_due | canceled",
+                        "name": "trang_thai",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.HopDongResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/platform/tenants": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Chỉ khách CÓ hợp đồng: quan hệ \"khách của phần mềm này\" tồn tại qua hợp\nđồng, không qua bảng khách hàng. Mặc định bỏ hợp đồng đã huỷ — muốn xem\nkhách cũ thì lọc ` + "`" + `?trang_thai=canceled` + "`" + `.\nChỉ phần mềm người gọi được phụ trách (owner thấy hết).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Platform - Khách hàng"
+                ],
+                "summary": "Khách hàng của một phần mềm",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Mã phần mềm; bỏ trống = mọi phần mềm được giao",
+                        "name": "app",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "trial | active | past_due | canceled",
+                        "name": "trang_thai",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.KhachHangResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
@@ -11346,6 +11980,37 @@ const docTemplate = `{
                 }
             }
         },
+        "domain.PlatformUser": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "full_name": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "last_login_at": {
+                    "type": "string"
+                },
+                "role": {
+                    "description": "Role: owner | operator | support",
+                    "type": "string"
+                },
+                "status": {
+                    "description": "Status: active | locked",
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
         "domain.ProductReport": {
             "type": "object",
             "properties": {
@@ -12292,6 +12957,47 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.AppItem": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string",
+                    "example": "order"
+                },
+                "id": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "name": {
+                    "type": "string",
+                    "example": "Sellio Order"
+                },
+                "so_goi_dang_ban": {
+                    "type": "integer",
+                    "example": 3
+                },
+                "status": {
+                    "description": "Status: planned | active | retired",
+                    "type": "string",
+                    "example": "active"
+                },
+                "tagline": {
+                    "type": "string",
+                    "example": "Quản trị bán hàng cho cửa hàng"
+                }
+            }
+        },
+        "dto.AppsResponse": {
+            "type": "object",
+            "properties": {
+                "apps": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.AppItem"
+                    }
+                }
+            }
+        },
         "dto.AuthResponse": {
             "type": "object",
             "properties": {
@@ -13024,6 +13730,50 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.DoanhThuItem": {
+            "type": "object",
+            "properties": {
+                "lan_cuoi": {
+                    "type": "string",
+                    "example": "13/08/2026"
+                },
+                "ma_cua_hang": {
+                    "type": "string",
+                    "example": "quochuy"
+                },
+                "so_lan_thu": {
+                    "type": "integer",
+                    "example": 3
+                },
+                "ten_cua_hang": {
+                    "type": "string",
+                    "example": "Quốc Huy"
+                },
+                "tong_tien": {
+                    "type": "number",
+                    "example": 29970000
+                }
+            }
+        },
+        "dto.DoanhThuResponse": {
+            "type": "object",
+            "properties": {
+                "so_lan_thu": {
+                    "type": "integer",
+                    "example": 3
+                },
+                "theo_quan": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.DoanhThuItem"
+                    }
+                },
+                "tong_tien": {
+                    "type": "number",
+                    "example": 29970000
+                }
+            }
+        },
         "dto.FacebookLoginRequest": {
             "type": "object",
             "required": [
@@ -13064,6 +13814,87 @@ const docTemplate = `{
                 "redirect_uri": {
                     "description": "RedirectURI phải TRÙNG TỪNG KÝ TỰ với cái đã dùng lúc mở màn hình chọn tài\nkhoản, nếu không Google từ chối đổi code (redirect_uri_mismatch).",
                     "type": "string"
+                }
+            }
+        },
+        "dto.HopDongItem": {
+            "type": "object",
+            "properties": {
+                "bat_dau": {
+                    "type": "string"
+                },
+                "chi_nhanh": {
+                    "type": "integer",
+                    "example": 5
+                },
+                "chu_ky": {
+                    "description": "ChuKy: thang | nam",
+                    "type": "string",
+                    "example": "thang"
+                },
+                "con_lai_ngay": {
+                    "description": "ConLaiNgay âm = ĐÃ QUÁ HẠN.",
+                    "type": "integer",
+                    "example": 41
+                },
+                "gia": {
+                    "type": "number",
+                    "example": 9990000
+                },
+                "goi": {
+                    "type": "string",
+                    "example": "chuoi"
+                },
+                "het_han": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer",
+                    "example": 12
+                },
+                "ma_app": {
+                    "type": "string",
+                    "example": "order"
+                },
+                "ma_cua_hang": {
+                    "type": "string",
+                    "example": "quochuy"
+                },
+                "san_pham": {
+                    "type": "integer",
+                    "example": 0
+                },
+                "tai_khoan": {
+                    "type": "integer",
+                    "example": 0
+                },
+                "ten_app": {
+                    "type": "string",
+                    "example": "Sellio Order"
+                },
+                "ten_cua_hang": {
+                    "type": "string",
+                    "example": "Quốc Huy"
+                },
+                "ten_mien_rieng": {
+                    "type": "boolean",
+                    "example": true
+                },
+                "trang_thai": {
+                    "description": "TrangThai: trial | active | past_due | canceled",
+                    "type": "string",
+                    "example": "active"
+                }
+            }
+        },
+        "dto.HopDongResponse": {
+            "type": "object",
+            "properties": {
+                "hop_dong": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.HopDongItem"
+                    }
                 }
             }
         },
@@ -13212,6 +14043,55 @@ const docTemplate = `{
                     "minItems": 1,
                     "items": {
                         "$ref": "#/definitions/dto.InventoryCostItem"
+                    }
+                }
+            }
+        },
+        "dto.KhachHangItem": {
+            "type": "object",
+            "properties": {
+                "dien_thoai": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer",
+                    "example": 7
+                },
+                "ma": {
+                    "type": "string",
+                    "example": "quochuy"
+                },
+                "ngay_vao_so": {
+                    "type": "string"
+                },
+                "nguoi_lien_he": {
+                    "type": "string"
+                },
+                "so_hop_dong": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "ten": {
+                    "type": "string",
+                    "example": "Quốc Huy"
+                },
+                "trang_thai": {
+                    "description": "TrangThai: active | suspended — trạng thái CỬA HÀNG, không phải hợp đồng.",
+                    "type": "string",
+                    "example": "active"
+                }
+            }
+        },
+        "dto.KhachHangResponse": {
+            "type": "object",
+            "properties": {
+                "khach_hang": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.KhachHangItem"
                     }
                 }
             }
@@ -13530,6 +14410,169 @@ const docTemplate = `{
                 "status": {
                     "description": "Status: pending | paid | failed | cancelled | expired",
                     "type": "string"
+                }
+            }
+        },
+        "dto.PlanFeatureField": {
+            "type": "object",
+            "properties": {
+                "cho_vo_han": {
+                    "description": "ChoVoHan = true: khoá này nhận giá trị \"vo_han\" ngoài các con số.",
+                    "type": "boolean",
+                    "example": true
+                },
+                "don_vi": {
+                    "description": "DonVi in sau ô nhập (\"tài khoản\", \"sản phẩm\"). Rỗng với khoá bật/tắt.",
+                    "type": "string",
+                    "example": "tài khoản"
+                },
+                "key": {
+                    "type": "string",
+                    "example": "max_users"
+                },
+                "khong_co_dong": {
+                    "description": "KhongCoDong là điều người đọc thấy khi gói KHÔNG có dòng cho khoá này:\n\"0\" với khoá bật/tắt (mặc định là tắt), rỗng với hạn mức (bảng giá không\nquy định, chốt lúc ký hợp đồng).",
+                    "type": "string",
+                    "example": ""
+                },
+                "label": {
+                    "type": "string",
+                    "example": "Số tài khoản"
+                },
+                "max_num": {
+                    "description": "MaxNum là trần server áp khi lưu (0 = không chặn). Trả ra để màn hình đặt\nmax cho ô nhập, chặn ngay trên giao diện thay vì để bấm Lưu rồi mới báo lỗi.",
+                    "type": "number",
+                    "example": 1000
+                },
+                "type": {
+                    "description": "Type: so | co_khong",
+                    "type": "string",
+                    "example": "so"
+                }
+            }
+        },
+        "dto.PlanFeaturesResponse": {
+            "type": "object",
+            "properties": {
+                "fields": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.PlanFeatureField"
+                    }
+                },
+                "plan": {
+                    "$ref": "#/definitions/dto.PlanItem"
+                }
+            }
+        },
+        "dto.PlanFeaturesUpdateRequest": {
+            "type": "object",
+            "required": [
+                "items"
+            ],
+            "properties": {
+                "items": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "dto.PlanItem": {
+            "type": "object",
+            "properties": {
+                "app_code": {
+                    "type": "string",
+                    "example": "order"
+                },
+                "app_name": {
+                    "type": "string",
+                    "example": "Sellio Order"
+                },
+                "billing_cycle": {
+                    "description": "BillingCycle: thang | nam",
+                    "type": "string",
+                    "example": "thang"
+                },
+                "code": {
+                    "type": "string",
+                    "example": "chuoi"
+                },
+                "features": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "id": {
+                    "type": "integer",
+                    "example": 3
+                },
+                "name": {
+                    "type": "string",
+                    "example": "Chuỗi"
+                },
+                "price": {
+                    "description": "Price nil = \"Liên hệ\" — chưa có giá công khai, KHÁC 0 (miễn phí).",
+                    "type": "number",
+                    "example": 499000
+                },
+                "status": {
+                    "description": "Status: active | retired",
+                    "type": "string",
+                    "example": "active"
+                },
+                "tagline": {
+                    "type": "string",
+                    "example": "Từ hai cửa hàng trở lên"
+                },
+                "trial_days": {
+                    "type": "integer",
+                    "example": 14
+                }
+            }
+        },
+        "dto.PlansResponse": {
+            "type": "object",
+            "properties": {
+                "fields": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.PlanFeatureField"
+                    }
+                },
+                "plans": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.PlanItem"
+                    }
+                }
+            }
+        },
+        "dto.PlatformAuthResponse": {
+            "type": "object",
+            "properties": {
+                "access_token": {
+                    "type": "string"
+                },
+                "expires_in": {
+                    "description": "giây",
+                    "type": "integer"
+                },
+                "refresh_token": {
+                    "type": "string"
+                },
+                "token_type": {
+                    "type": "string"
+                },
+                "user": {
+                    "description": "User.Role là CHUỖI (owner | operator | support), không phải một đối tượng\nvai trò như bên cửa hàng — khu điều hành không có bảng RBAC riêng.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/domain.PlatformUser"
+                        }
+                    ]
                 }
             }
         },

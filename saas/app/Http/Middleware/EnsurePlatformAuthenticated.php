@@ -11,25 +11,32 @@ use Symfony\Component\HttpFoundation\Response;
  * Trạng thái đăng nhập nằm trong session (không dùng bảng users cục bộ).
  *
  * KHÁC hẳn Shop Admin: bên đó cho cả `admin` và `staff` vào để làm đơn và kho.
- * Ở đây CHỈ `super_admin` — đây là khu điều hành nền tảng, người của cửa hàng
- * khách không có việc gì bên trong, kể cả chủ cửa hàng.
+ * Ở đây là ba vai trò của KHU ĐIỀU HÀNH — người của cửa hàng khách không có
+ * việc gì bên trong, kể cả chủ cửa hàng.
  *
- * Lưu ý khi làm multi-tenant: lúc đó `super_admin` phải mang nghĩa "quản trị
- * NỀN TẢNG" chứ không còn là "vai trò cao nhất trong một cửa hàng" như hiện tại.
- * Chừng nào chưa tách, danh sách dưới đây là điểm duy nhất cần sửa.
+ * VAI TRÒ Ở ĐÂY LÀ CHUỖI, không phải đối tượng vai trò như bên cửa hàng: khu
+ * điều hành không có bảng RBAC riêng, `platform_users.role` là một ENUM ba giá
+ * trị. Trước đây chỗ này xét 'super_admin' — vai trò cao nhất trong MỘT cửa
+ * hàng, mà tiệm nào cũng có một người như vậy, nên nó chưa bao giờ trả lời được
+ * câu "ai là người của nền tảng".
+ *
+ * Đây là lưới THỨ HAI. Lưới thứ nhất nằm ở Go API: token của khu điều hành chỉ
+ * cấp cho tài khoản trong sổ `platform_users`, và mọi request của nhóm
+ * /platform đều tra lại sổ đó. Session bên này chỉ quyết định hiện hay không
+ * hiện màn hình.
  */
 class EnsurePlatformAuthenticated
 {
-    /** Vai trò được phép vào khu điều hành nền tảng. */
-    protected array $allowedRoles = ['super_admin'];
+    /** Vai trò được phép vào khu điều hành nền tảng — khớp ENUM của API. */
+    public const VAI_TRO = ['owner', 'operator', 'support'];
 
     public function handle(Request $request, Closure $next): Response
     {
         $token = session('api.access_token');
         $user = session('api.user');
-        $role = $user ? data_get($user, 'role.name') : null;
+        $role = $user ? data_get($user, 'role') : null;
 
-        if (! $token || ! in_array($role, $this->allowedRoles, true)) {
+        if (! $token || ! in_array($role, self::VAI_TRO, true)) {
             session()->forget('api');
 
             if ($request->expectsJson() || $request->ajax() || $request->wantsJson()) {

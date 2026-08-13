@@ -4,6 +4,7 @@ package service
 import (
 	"context"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"math/big"
 	"strings"
@@ -43,9 +44,17 @@ type AuthService interface {
 	Login(ctx context.Context, req dto.LoginRequest) (*dto.AuthResponse, error)
 	// LoginShop là đăng nhập 3 ô của Shop Admin: mã cửa hàng + tên đăng nhập + mật khẩu.
 	LoginShop(ctx context.Context, req dto.ShopLoginRequest) (*dto.AuthResponse, error)
-	// LoginPlatform là đăng nhập của khu điều hành nền tảng: email + mật khẩu,
-	// chỉ nhận super_admin và không cần biết trước cửa hàng nào.
-	LoginPlatform(ctx context.Context, req dto.LoginRequest) (*dto.AuthResponse, error)
+	// LoginPlatform là đăng nhập của KHU ĐIỀU HÀNH NỀN TẢNG: email + mật khẩu của
+	// một tài khoản trong sổ `platform_users`, không liên quan tới cửa hàng nào.
+	//
+	// Trả về kiểu response RIÊNG vì người đăng nhập ở đây không phải một dòng
+	// `users` của cửa hàng nào — nhét họ vào dto.AuthResponse là buộc phải bịa ra
+	// một tài khoản cửa hàng cho họ.
+	LoginPlatform(ctx context.Context, req dto.LoginRequest) (*dto.PlatformAuthResponse, error)
+	// RefreshPlatform làm mới cặp token của khu điều hành.
+	RefreshPlatform(ctx context.Context, refreshToken string) (*dto.PlatformAuthResponse, error)
+	// MePlatform trả hồ sơ người điều hành đang đăng nhập.
+	MePlatform(ctx context.Context, id uint) (*domain.PlatformUser, error)
 	ForgotPassword(ctx context.Context, req dto.ForgotPasswordRequest) (*dto.RegisterResponse, error)
 	ResetPassword(ctx context.Context, req dto.ResetPasswordRequest) error
 	LoginWithFacebook(ctx context.Context, req dto.FacebookLoginRequest) (*dto.AuthResponse, error)
@@ -56,6 +65,11 @@ type AuthService interface {
 
 type authService struct {
 	users domain.UserRepository
+	// nenTang là sổ NGƯỜI CỦA NỀN TẢNG (control plane) — nơi khu điều hành xác
+	// thực. Có thể nil khi máy chủ chưa nối được control plane; lúc đó mọi đường
+	// của khu điều hành trả về ErrPlatformUnavailable chứ KHÔNG rơi về cách cũ
+	// (mượn super_admin của một cửa hàng), vì cách cũ chính là lỗ hổng.
+	nenTang domain.PlatformUserRepository
 	// tenants tra cửa hàng theo mã người dùng gõ ở ô đầu của màn hình đăng nhập 3 ô.
 	tenants  domain.TenantRepository
 	roles    domain.RoleRepository
@@ -78,6 +92,7 @@ type authService struct {
 
 func NewAuthService(
 	users domain.UserRepository,
+	nenTang domain.PlatformUserRepository,
 	tenants domain.TenantRepository,
 	roles domain.RoleRepository,
 	verifies domain.EmailVerificationRepository,
@@ -91,7 +106,7 @@ func NewAuthService(
 	gg *google.Client,
 ) AuthService {
 	return &authService{
-		users: users, tenants: tenants, roles: roles, verifies: verifies, mail: mail,
+		users: users, nenTang: nenTang, tenants: tenants, roles: roles, verifies: verifies, mail: mail,
 		jwt: jwtMgr, cfg: cfg, mailCfg: mailCfg, devMode: devMode,
 		// settings TỪNG BỊ BỎ QUÊN ở đây: tham số nhận vào nhưng không gán, mà Go
 		// không báo lỗi tham số thừa nên chẳng ai thấy. Hậu quả là mọi email mã
@@ -573,57 +588,129 @@ func (s *authService) LoginShop(ctx context.Context, req dto.ShopLoginRequest) (
 
 // LoginPlatform là đăng nhập của KHU ĐIỀU HÀNH NỀN TẢNG (SaaS Console).
 //
-// VÌ SAO PHẢI CÓ ĐƯỜNG RIÊNG: Login (email) tra người dùng qua repo users, mà
-// repo đó bị plugin GORM chèn `WHERE tenant_id` — nên nó chỉ chạy được khi ĐÃ
-// biết cửa hàng, từ token hoặc từ tên miền. Người điều hành nền tảng thì không
-// đứng ở cửa hàng nào: họ đăng nhập để nhìn tất cả. Ép họ đi đường cũ nghĩa là
-// phải cấp cho khu điều hành một tên miền trỏ về một cửa hàng nào đó — dựng một
-// lời nói dối ngay tại chốt xác thực, và từ đó mọi thứ phía sau đều lệch.
+// KHÔNG CHẠM DATA PLANE. Đó là toàn bộ điểm mấu chốt của hàm này, và là thứ đã
+// đổi so với bản trước:
 //
-// ĐỔI LẠI, đây là đường DUY NHẤT của luồng đăng nhập tắt bộ lọc tenant, nên nó
-// là bề mặt cần canh chừng nhất trong tệp này. Ba ràng buộc giữ nó không thành
-// cửa sau:
+// Bản trước tra `selliotech.users` rồi đòi vai trò `super_admin`. Vai trò đó là
+// vai trò cao nhất TRONG MỘT CỬA HÀNG, mà cửa hàng nào cũng có một người như
+// vậy — chính là chủ shop. Nghĩa là chìa vào khu điều hành nằm trong bảng tài
+// khoản của khách hàng: ai đổi được mật khẩu trong một tiệm bất kỳ cũng đổi
+// được chìa. Ranh giới giữa "khách hàng" và "nhà cung cấp phần mềm" đi ngang
+// qua đúng chỗ không được phép đi qua.
 //
-//  1. ĐÚNG MỘT câu truy vấn chạy không lọc — tra tài khoản theo email. Mọi thứ
-//     sau đó làm trên bản ghi đã đọc được, không mở thêm câu nào.
-//  2. VAI TRÒ XÉT SAU MẬT KHẨU, và cả ba kiểu hỏng (không có email, sai mật
-//     khẩu, không phải super_admin) trả về CÙNG một lỗi. Người gõ email chủ shop
-//     vào đây không được biết mình vừa gõ trúng một email có thật.
-//  3. Token phát ra vẫn mang tenant_id của chính tài khoản đó, không phải một
-//     tấm vé "xem được mọi cửa hàng". Ngày mở nhóm /platform/*, quyền xem xuyên
-//     cửa hàng phải do nhóm đó tự xét theo vai trò, chứ không phải do token này
-//     rộng sẵn.
-func (s *authService) LoginPlatform(ctx context.Context, req dto.LoginRequest) (*dto.AuthResponse, error) {
-	ctxTim := tenant.WithoutScope(ctx,
-		"đăng nhập khu điều hành nền tảng: tra super_admin theo email khi chưa biết cửa hàng nào")
+// Nay tra `platform_users` của control plane: sổ riêng, mật khẩu riêng, chỉ ghi
+// được từ máy chủ (`cmd/nguoi-dieu-hanh`), không có đường HTTP nào tự thêm
+// người vào. Bộ lọc tenant không dính dáng gì tới bảng đó, nên cũng không còn
+// câu truy vấn nào phải tắt bộ lọc để chạy — bề mặt nguy hiểm nhất của bản
+// trước biến mất luôn thay vì được canh chừng.
+//
+// Ba ràng buộc còn lại:
+//
+//  1. MỌI KIỂU HỎNG TRẢ VỀ CÙNG MỘT LỖI — không có email, chưa đặt mật khẩu,
+//     sai mật khẩu. Người gõ thử không được biết mình vừa gõ trúng một email có
+//     thật trong sổ điều hành.
+//  2. TRẠNG THÁI XÉT TRƯỚC, ngay trong câu truy vấn: repo chỉ trả về dòng đang
+//     hoạt động và chưa xoá. Khoá một người là có hiệu lực ở lượt đăng nhập kế
+//     tiếp, không cần thêm điều kiện nào ở đây.
+//  3. TOKEN PHÁT RA KHÔNG THUỘC CỬA HÀNG NÀO (tenant = 0, kèm cờ nền tảng), nên
+//     nó không mở được đường nào của khu cửa hàng — JWTAuth từ chối thẳng. Chiều
+//     ngược lại do XacThucNenTang chặn.
+func (s *authService) LoginPlatform(ctx context.Context, req dto.LoginRequest) (*dto.PlatformAuthResponse, error) {
+	if s.nenTang == nil {
+		// Chưa dựng control plane. Nói thẳng thay vì trả "sai mật khẩu": đây là
+		// lỗi CẤU HÌNH MÁY CHỦ, và người gõ đúng mật khẩu mà bị bảo là sai sẽ đi
+		// đổi mật khẩu vòng vo hàng giờ.
+		return nil, domain.ErrPlatformUnavailable
+	}
 
-	user, err := s.users.FindByEmail(ctxTim, normalizeEmail(req.Email))
+	nguoi, err := s.nenTang.FindByEmail(ctx, normalizeEmail(req.Email))
 	if err != nil {
-		if err == domain.ErrNotFound {
+		if errors.Is(err, domain.ErrNotFound) {
 			return nil, domain.ErrInvalidCredentials
 		}
 		return nil, err
 	}
-	if !hash.Check(req.Password, user.PasswordHash) {
+	// Chưa đặt mật khẩu = chưa đăng nhập được, KHÔNG phải bỏ qua bước mật khẩu.
+	// Nếu quên vế này thì mọi dòng vừa thêm vào sổ đều mở toang cho tới lúc ai đó
+	// đặt mật khẩu cho nó.
+	if nguoi.PasswordHash == nil || *nguoi.PasswordHash == "" {
+		logger.Warn("tài khoản điều hành chưa đặt mật khẩu nên chưa đăng nhập được",
+			zap.String("email", nguoi.Email))
+
 		return nil, domain.ErrInvalidCredentials
 	}
-	if user.Role == nil || user.Role.Name != domain.RoleSuperAdmin {
+	if !hash.Check(req.Password, *nguoi.PasswordHash) {
 		return nil, domain.ErrInvalidCredentials
 	}
-	// Trạng thái xét sau cùng, giống LoginShop: câu "tài khoản đang không hoạt
-	// động" chỉ dành cho người đã chứng minh được mình là chủ tài khoản.
-	if user.Status != "active" {
-		return nil, domain.ErrUserInactive
+
+	// Không ghi được cái mốc thời gian thì thôi, đừng chặn người ta ở cửa.
+	if err := s.nenTang.GhiLanDangNhap(ctx, nguoi.ID); err != nil {
+		logger.Warn("không ghi được lần đăng nhập cuối của người điều hành",
+			zap.Uint("id", nguoi.ID), zap.Error(err))
 	}
 
-	// Ghi lần đăng nhập cuối vẫn phải đi bằng ctx không lọc: bản ghi vừa đọc ra
-	// thuộc cửa hàng nào thì lúc này mới biết, và câu UPDATE của repo tìm theo
-	// khoá chính của chính bản ghi đó.
-	now := time.Now()
-	user.LastLoginAt = &now
-	_ = s.users.Update(ctxTim, user)
+	return s.capTokenNenTang(nguoi)
+}
 
-	return s.buildAuthResponse(ctx, user)
+// RefreshPlatform làm mới cặp token của khu điều hành.
+//
+// Đường riêng chứ không nhập vào Refresh: Refresh từ chối mọi token có
+// tenant = 0 (và phải tiếp tục từ chối — đó là chốt chặn token cũ từ thời chưa
+// đa cửa hàng), trong khi token nền tảng LUÔN mang tenant = 0.
+//
+// Đọc lại người điều hành từ sổ ở mỗi lượt làm mới: người vừa bị khoá không
+// được gia hạn thêm một phiên nữa.
+func (s *authService) RefreshPlatform(ctx context.Context, refreshToken string) (*dto.PlatformAuthResponse, error) {
+	if s.nenTang == nil {
+		return nil, domain.ErrPlatformUnavailable
+	}
+
+	claims, err := s.jwt.Parse(refreshToken)
+	if err != nil {
+		return nil, domain.ErrInvalidCredentials
+	}
+	if claims.Type != jwt.RefreshToken || !claims.Platform {
+		return nil, domain.ErrInvalidCredentials
+	}
+
+	nguoi, err := s.nenTang.FindByID(ctx, claims.UserID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil, domain.ErrInvalidCredentials
+		}
+		return nil, err
+	}
+
+	return s.capTokenNenTang(nguoi)
+}
+
+// MePlatform trả hồ sơ người điều hành đang đăng nhập.
+func (s *authService) MePlatform(ctx context.Context, id uint) (*domain.PlatformUser, error) {
+	if s.nenTang == nil {
+		return nil, domain.ErrPlatformUnavailable
+	}
+
+	return s.nenTang.FindByID(ctx, id)
+}
+
+// capTokenNenTang cấp cặp token cho một người điều hành đã xác thực xong.
+func (s *authService) capTokenNenTang(nguoi *domain.PlatformUser) (*dto.PlatformAuthResponse, error) {
+	access, _, err := s.jwt.GeneratePlatform(nguoi.ID, nguoi.Role, jwt.AccessToken)
+	if err != nil {
+		return nil, err
+	}
+	refresh, _, err := s.jwt.GeneratePlatform(nguoi.ID, nguoi.Role, jwt.RefreshToken)
+	if err != nil {
+		return nil, err
+	}
+
+	return &dto.PlatformAuthResponse{
+		AccessToken:  access,
+		RefreshToken: refresh,
+		TokenType:    "Bearer",
+		ExpiresIn:    int64(s.cfg.AccessTTL.Seconds()),
+		User:         nguoi,
+	}, nil
 }
 
 // normalizeShopCode chuẩn hoá mã cửa hàng người dùng gõ.

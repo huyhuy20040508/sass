@@ -26,7 +26,7 @@ Route::post('/login', [AuthController::class, 'login'])->name('login.attempt');
 // --- Đăng xuất (KHÔNG nằm trong platform.auth để không mất request khi session hết hạn) ---
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
-// --- Khu điều hành (yêu cầu đăng nhập bằng tài khoản super_admin) ---
+// --- Khu điều hành (yêu cầu tài khoản trong sổ platform_users của nền tảng) ---
 Route::middleware('platform.auth')->name('platform.')->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 });

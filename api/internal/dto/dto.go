@@ -1,7 +1,11 @@
 // Package dto định nghĩa cấu trúc request/response của tầng HTTP.
 package dto
 
-import "sass-api/internal/domain"
+import (
+	"time"
+
+	"sass-api/internal/domain"
+)
 
 // ---------- Auth ----------
 
@@ -159,6 +163,26 @@ type AuthResponse struct {
 	// Làm mới token KHÔNG trả lại trường này — Shop Admin cất vào session lúc
 	// đăng nhập và giữ nguyên tới lúc đăng xuất.
 	Tenant *domain.Tenant `json:"tenant,omitempty"`
+}
+
+// PlatformAuthResponse — kết quả đăng nhập / làm mới token của KHU ĐIỀU HÀNH.
+//
+// Kiểu riêng chứ không dùng chung AuthResponse, và khác biệt nằm ở đúng một
+// trường: `user` ở đây là một dòng `platform_users` (người của nền tảng), không
+// phải một dòng `users` của cửa hàng nào. Dùng chung kiểu thì phải bịa ra một
+// tài khoản cửa hàng cho người điều hành — chính là cách làm cũ, và là lỗ hổng
+// mà migration 0007 đóng lại.
+//
+// Cũng KHÔNG có trường `tenant`: người điều hành không đứng ở cửa hàng nào, và
+// token phát ra mang tenant_id = 0.
+type PlatformAuthResponse struct {
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+	TokenType    string `json:"token_type"`
+	ExpiresIn    int64  `json:"expires_in"` // giây
+	// User.Role là CHUỖI (owner | operator | support), không phải một đối tượng
+	// vai trò như bên cửa hàng — khu điều hành không có bảng RBAC riêng.
+	User *domain.PlatformUser `json:"user"`
 }
 
 // ---------- Brand ----------
@@ -1171,4 +1195,174 @@ type SettingsResponse struct {
 // vào database.
 type SettingsUpdateRequest struct {
 	Items map[string]string `json:"items" binding:"required,min=1,max=50"`
+}
+
+// ---------- Khu điều hành nền tảng: bảng giá & tính năng gói ----------
+
+// PlanFeatureField mô tả MỘT khoá tính năng theo registry của service: kiểu dữ
+// liệu, nhãn, đơn vị, trần được phép.
+//
+// Màn hình Tính năng gói dựng ô nhập từ danh sách này, nên bảng khoá không bị
+// chép lại lần thứ hai ở tầng Blade — thêm một hạn mức mới là sửa registry, màn
+// hình tự có thêm ô.
+type PlanFeatureField struct {
+	Key string `json:"key" example:"max_users"`
+	// Type: so | co_khong
+	Type  string `json:"type" example:"so"`
+	Label string `json:"label" example:"Số tài khoản"`
+	// DonVi in sau ô nhập ("tài khoản", "sản phẩm"). Rỗng với khoá bật/tắt.
+	DonVi string `json:"don_vi" example:"tài khoản"`
+	// KhongCoDong là điều người đọc thấy khi gói KHÔNG có dòng cho khoá này:
+	// "0" với khoá bật/tắt (mặc định là tắt), rỗng với hạn mức (bảng giá không
+	// quy định, chốt lúc ký hợp đồng).
+	KhongCoDong string `json:"khong_co_dong" example:""`
+	// ChoVoHan = true: khoá này nhận giá trị "vo_han" ngoài các con số.
+	ChoVoHan bool `json:"cho_vo_han" example:"true"`
+	// MaxNum là trần server áp khi lưu (0 = không chặn). Trả ra để màn hình đặt
+	// max cho ô nhập, chặn ngay trên giao diện thay vì để bấm Lưu rồi mới báo lỗi.
+	MaxNum float64 `json:"max_num" example:"1000"`
+}
+
+// PlanItem là MỘT dòng bảng giá kèm điều khoản của nó.
+//
+// Features CHỈ chứa những khoá thật sự có dòng dưới database. Khoá vắng mặt
+// mang nghĩa riêng — bảng giá không quy định — nên không được điền hộ giá trị
+// mặc định vào đây; xem PlanFeatureField.KhongCoDong.
+type PlanItem struct {
+	ID      uint   `json:"id" example:"3"`
+	AppCode string `json:"app_code" example:"order"`
+	AppName string `json:"app_name" example:"Sellio Order"`
+	Code    string `json:"code" example:"chuoi"`
+	Name    string `json:"name" example:"Chuỗi"`
+	Tagline string `json:"tagline" example:"Từ hai cửa hàng trở lên"`
+	// BillingCycle: thang | nam
+	BillingCycle string `json:"billing_cycle" example:"thang"`
+	// Price nil = "Liên hệ" — chưa có giá công khai, KHÁC 0 (miễn phí).
+	Price     *float64 `json:"price" example:"499000"`
+	TrialDays uint     `json:"trial_days" example:"14"`
+	// Status: active | retired
+	Status   string            `json:"status" example:"active"`
+	Features map[string]string `json:"features"`
+}
+
+// PlansResponse — kết quả GET bảng giá của khu điều hành.
+type PlansResponse struct {
+	Plans  []PlanItem         `json:"plans"`
+	Fields []PlanFeatureField `json:"fields"`
+}
+
+// PlanFeaturesResponse — kết quả GET/PUT tính năng của MỘT gói.
+type PlanFeaturesResponse struct {
+	Plan   PlanItem           `json:"plan"`
+	Fields []PlanFeatureField `json:"fields"`
+}
+
+// PlanFeaturesUpdateRequest — ghi nhiều khoá của một gói trong một lần gọi.
+//
+// Khoá không gửi lên giữ nguyên. Gửi GIÁ TRỊ RỖNG là XOÁ dòng đó, nghĩa là
+// "bảng giá không quy định hạn mức này" — khác hẳn gửi "0". Khoá lạ (không có
+// trong registry) làm cả yêu cầu bị từ chối 422 chứ không âm thầm ghi xuống.
+type PlanFeaturesUpdateRequest struct {
+	Items map[string]string `json:"items" binding:"required,min=1,max=30"`
+}
+
+// AppItem là một phần mềm trong danh mục của nền tảng.
+//
+// `so_goi_dang_ban` tách khỏi `status` vì hai thứ độc lập: app 'active' mà 0
+// gói đang bán thì vẫn không ai mua được, và màn hình phải nói ra điều đó thay
+// vì để người đọc suy từ trạng thái.
+type AppItem struct {
+	ID      uint   `json:"id" example:"1"`
+	Code    string `json:"code" example:"order"`
+	Name    string `json:"name" example:"Sellio Order"`
+	Tagline string `json:"tagline" example:"Quản trị bán hàng cho cửa hàng"`
+	// Status: planned | active | retired
+	Status       string `json:"status" example:"active"`
+	SoGoiDangBan int    `json:"so_goi_dang_ban" example:"3"`
+}
+
+// AppsResponse — danh mục phần mềm mà NGƯỜI GỌI được phụ trách.
+//
+// KHÔNG phải toàn bộ danh mục: operator/support chỉ thấy phần mềm được giao
+// (xem migration 0010). Bộ chọn phần mềm ở đầu khu điều hành dựng từ danh sách
+// này, nên nó cũng chính là thứ quyết định người ta thấy những màn hình nào.
+type AppsResponse struct {
+	Apps []AppItem `json:"apps"`
+}
+
+// ---------- Khu điều hành: khách hàng · hợp đồng · doanh thu ----------
+
+// KhachHangItem là một khách hàng của MỘT phần mềm.
+//
+// `so_hop_dong` đếm hợp đồng còn hiệu lực trong phạm vi đang lọc — nó phân biệt
+// khách đang dùng với khách đã dừng hẳn, thứ mà `trang_thai` (mở/khoá cửa hàng)
+// không nói được.
+type KhachHangItem struct {
+	ID  uint   `json:"id" example:"7"`
+	Ma  string `json:"ma" example:"quochuy"`
+	Ten string `json:"ten" example:"Quốc Huy"`
+	// TrangThai: active | suspended — trạng thái CỬA HÀNG, không phải hợp đồng.
+	TrangThai   string    `json:"trang_thai" example:"active"`
+	NguoiLienHe string    `json:"nguoi_lien_he"`
+	DienThoai   string    `json:"dien_thoai"`
+	Email       string    `json:"email"`
+	SoHopDong   int       `json:"so_hop_dong" example:"1"`
+	NgayVaoSo   time.Time `json:"ngay_vao_so"`
+}
+
+// KhachHangResponse — GET /platform/tenants.
+type KhachHangResponse struct {
+	KhachHang []KhachHangItem `json:"khach_hang"`
+}
+
+// HopDongItem là một thuê bao đã ký.
+//
+// Ba hạn mức và cờ tên miền lấy THẲNG từ hợp đồng, không tra sang bảng giá: bảng
+// giá được phép đổi, hợp đồng thì không. Giá trị 0 ở ba hạn mức nghĩa là KHÔNG
+// GIỚI HẠN — màn hình phải in ra chữ, không in số 0.
+type HopDongItem struct {
+	ID         uint   `json:"id" example:"12"`
+	MaCuaHang  string `json:"ma_cua_hang" example:"quochuy"`
+	TenCuaHang string `json:"ten_cua_hang" example:"Quốc Huy"`
+	MaApp      string `json:"ma_app" example:"order"`
+	TenApp     string `json:"ten_app" example:"Sellio Order"`
+	Goi        string `json:"goi" example:"chuoi"`
+	// TrangThai: trial | active | past_due | canceled
+	TrangThai string `json:"trang_thai" example:"active"`
+	// ChuKy: thang | nam
+	ChuKy        string    `json:"chu_ky" example:"thang"`
+	Gia          float64   `json:"gia" example:"9990000"`
+	ChiNhanh     uint      `json:"chi_nhanh" example:"5"`
+	TaiKhoan     uint      `json:"tai_khoan" example:"0"`
+	SanPham      uint      `json:"san_pham" example:"0"`
+	TenMienRieng bool      `json:"ten_mien_rieng" example:"true"`
+	BatDau       time.Time `json:"bat_dau"`
+	HetHan       time.Time `json:"het_han"`
+	// ConLaiNgay âm = ĐÃ QUÁ HẠN.
+	ConLaiNgay int `json:"con_lai_ngay" example:"41"`
+}
+
+// HopDongResponse — GET /platform/subscriptions.
+type HopDongResponse struct {
+	HopDong []HopDongItem `json:"hop_dong"`
+}
+
+// DoanhThuItem là tổng tiền ĐÃ THU của một cửa hàng.
+type DoanhThuItem struct {
+	MaCuaHang  string  `json:"ma_cua_hang" example:"quochuy"`
+	TenCuaHang string  `json:"ten_cua_hang" example:"Quốc Huy"`
+	SoLanThu   int     `json:"so_lan_thu" example:"3"`
+	TongTien   float64 `json:"tong_tien" example:"29970000"`
+	LanCuoi    string  `json:"lan_cuoi" example:"13/08/2026"`
+}
+
+// DoanhThuResponse — GET /platform/doanh-thu.
+//
+// Con số ở đây là TIỀN ĐÃ VÀO (bảng `invoices`), không phải tiền đáng lẽ phải
+// thu theo hợp đồng. Sổ thu trống thì doanh thu là 0 kể cả khi có hợp đồng đang
+// chạy — và đó là câu trả lời đúng.
+type DoanhThuResponse struct {
+	TheoQuan []DoanhThuItem `json:"theo_quan"`
+	TongTien float64        `json:"tong_tien" example:"29970000"`
+	SoLanThu int            `json:"so_lan_thu" example:"3"`
 }

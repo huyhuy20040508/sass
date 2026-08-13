@@ -110,7 +110,11 @@ class ApiClient
         }
 
         try {
-            $res = $this->request(false)->post('/auth/refresh', [
+            // ĐƯỜNG RIÊNG của khu điều hành. /auth/refresh cố ý từ chối mọi token
+            // không thuộc cửa hàng nào, mà token của khu điều hành thì luôn như
+            // vậy — gọi vào đó chỉ nhận 401 và người dùng bị đá ra màn hình đăng
+            // nhập mỗi 15 phút.
+            $res = $this->request(false)->post('/auth/platform-refresh', [
                 'refresh_token' => $refresh,
             ]);
         } catch (\Throwable $e) {
@@ -148,6 +152,10 @@ class ApiClient
      * cho khách mua sắm nên nó bắt buộc phải biết đang đứng ở cửa hàng nào (lấy
      * theo tên miền), mà khu điều hành thì không thuộc cửa hàng nào — gọi vào đó
      * chỉ nhận về 401 "Chưa xác định được cửa hàng cho yêu cầu này".
+     *
+     * Tài khoản dùng ở đây nằm trong sổ RIÊNG của nền tảng (`platform_users`),
+     * do `cmd/nguoi-dieu-hanh` tạo trên máy chủ. Tài khoản của một cửa hàng —
+     * kể cả super_admin của tiệm đó — không đăng nhập được vào đây.
      */
     public function login(string $email, string $password): Response
     {
@@ -157,10 +165,15 @@ class ApiClient
         ]);
     }
 
-    /** Lấy thông tin tài khoản hiện tại theo access token. */
+    /**
+     * Lấy hồ sơ người điều hành hiện tại theo access token.
+     *
+     * /auth/platform-me chứ không phải /auth/me: đường kia đòi token của một cửa
+     * hàng, và token khu điều hành cố ý không mang cửa hàng nào.
+     */
     public function me(): Response
     {
-        return $this->get('/auth/me');
+        return $this->get('/auth/platform-me');
     }
 
     /** Kiểm tra API có sống không — dùng cho ô trạng thái ở Dashboard. */

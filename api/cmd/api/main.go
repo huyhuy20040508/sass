@@ -86,7 +86,15 @@ func main() {
 	// — lúc đó chạy tiếp mà thiếu sổ mới là thứ nguy hiểm.
 	// tenMienRepo còn nil nghĩa là chưa phân giải được cửa hàng theo tên miền —
 	// router nhận nil và cụm bán hàng cho khách chỉ phục vụ người đã đăng nhập.
-	var tenMienRepo domain.TenantDomainRepository
+	// nguoiDieuHanhRepo + planHandler là KHU ĐIỀU HÀNH: sổ người của nền tảng và
+	// bảng giá. Cả hai còn nil nghĩa là nhóm /platform không được đăng ký — khu
+	// điều hành nhận 404, đúng sự thật là máy chủ này chưa nối được sổ.
+	var (
+		tenMienRepo       domain.TenantDomainRepository
+		nguoiDieuHanhRepo domain.PlatformUserRepository
+		planHandler       *handler.PlanHandler
+		khachHangHandler  *handler.KhachHangHandler
+	)
 
 	platformDB, err := repository.NewPlatformDB(cfg.Platform, cfg.App.IsProduction())
 	if err != nil {
@@ -125,7 +133,20 @@ func main() {
 			// Sổ tên miền: thứ cho khách VÃNG LAI biết mình đang đứng ở tiệm nào.
 			// Chỉ dựng khi lược đồ có thật — dựng trên một database trắng thì mọi
 			// tên miền đều "không tìm thấy" và trang bán hàng im lặng đứng yên.
-			tenMienRepo = repository.NewTenantDomainRepository(platformDB)
+			tenMienRepo = repository.NewTenantDomainRepository(platformDB, cfg.App.Code)
+
+			// Khu điều hành: sổ người của nền tảng (canh cửa nhóm /platform) và bảng
+			// giá. Dựng CÙNG nhau vì thiếu vế đầu thì vế sau không có ai canh —
+			// middleware nhận nil sẽ đóng cửa, nhưng đóng cửa một nhóm đã đăng ký thì
+			// khó hiểu hơn hẳn là không đăng ký nó.
+			nguoiDieuHanhRepo = repository.NewPlatformUserRepository(platformDB)
+			planHandler = handler.NewPlanHandler(service.NewPlanService(
+				repository.NewPlanRepository(platformDB),
+				repository.NewAppRepository(platformDB),
+			))
+			khachHangHandler = handler.NewKhachHangHandler(service.NewKhachHangService(
+				repository.NewKhachHangRepository(platformDB),
+			))
 		}
 
 		// Kết nối này giờ ĐANG được repository trên cầm, nhưng vẫn đóng lúc thoát:
@@ -220,7 +241,10 @@ func main() {
 	settingSvc.SetPayOSReady(payosClient.Enabled())
 	settingSvc.SetSePayReady(sepayClient.Enabled())
 
-	authSvc := service.NewAuthService(userRepo, tenantRepo, roleRepo, verifyRepo, mailSender, jwtMgr, cfg.JWT, cfg.Mail, !cfg.App.IsProduction(), settingSvc, fbClient, ggClient)
+	// nguoiDieuHanhRepo có thể nil (chưa dựng control plane): khi đó đăng nhập
+	// khu điều hành trả 503 nói đúng lý do, chứ KHÔNG rơi về cách cũ là mượn
+	// super_admin của một cửa hàng — cách đó chính là lỗ hổng đã đóng ở 0007.
+	authSvc := service.NewAuthService(userRepo, nguoiDieuHanhRepo, tenantRepo, roleRepo, verifyRepo, mailSender, jwtMgr, cfg.JWT, cfg.Mail, !cfg.App.IsProduction(), settingSvc, fbClient, ggClient)
 	categorySvc := service.NewCategoryService(categoryRepo)
 	brandSvc := service.NewBrandService(brandRepo)
 	bannerSvc := service.NewBannerService(bannerRepo)
@@ -269,32 +293,34 @@ func main() {
 
 	// 7. Handler
 	handlers := router.Handlers{
-		Health:   handler.NewHealthHandler(version),
-		Auth:     handler.NewAuthHandler(authSvc),
-		Category: handler.NewCategoryHandler(categorySvc),
-		Brand:    handler.NewBrandHandler(brandSvc),
-		Product:  handler.NewProductHandler(productSvc, promotionSvc),
-		Customer: handler.NewCustomerHandler(customerSvc),
-		Order:    handler.NewOrderHandler(orderSvc),
-		Return:   handler.NewOrderReturnHandler(returnSvc),
-		Notif:    handler.NewNotificationHandler(notifSvc, hub),
-		Stock:    handler.NewInventoryHandler(inventorySvc),
-		Supplier: handler.NewSupplierHandler(supplierSvc),
-		Purchase: handler.NewPurchaseOrderHandler(purchaseSvc),
-		Receipt:  handler.NewGoodsReceiptHandler(receiptSvc),
-		PReturn:  handler.NewPurchaseReturnHandler(pReturnSvc),
-		Setting:  handler.NewSettingHandler(settingSvc),
-		User:     handler.NewUserHandler(userSvc),
-		Payment:  handler.NewPaymentHandler(paymentSvc),
-		Banner:   handler.NewBannerHandler(bannerSvc),
-		Report:   handler.NewReportHandler(reportSvc),
-		Promo:    handler.NewPromotionHandler(promotionSvc),
-		Voucher:  handler.NewVoucherHandler(voucherSvc),
-		Contact:  handler.NewContactHandler(contactSvc),
+		Health:    handler.NewHealthHandler(version),
+		Auth:      handler.NewAuthHandler(authSvc),
+		Category:  handler.NewCategoryHandler(categorySvc),
+		Brand:     handler.NewBrandHandler(brandSvc),
+		Product:   handler.NewProductHandler(productSvc, promotionSvc),
+		Customer:  handler.NewCustomerHandler(customerSvc),
+		Order:     handler.NewOrderHandler(orderSvc),
+		Return:    handler.NewOrderReturnHandler(returnSvc),
+		Notif:     handler.NewNotificationHandler(notifSvc, hub),
+		Stock:     handler.NewInventoryHandler(inventorySvc),
+		Supplier:  handler.NewSupplierHandler(supplierSvc),
+		Purchase:  handler.NewPurchaseOrderHandler(purchaseSvc),
+		Receipt:   handler.NewGoodsReceiptHandler(receiptSvc),
+		PReturn:   handler.NewPurchaseReturnHandler(pReturnSvc),
+		Setting:   handler.NewSettingHandler(settingSvc),
+		User:      handler.NewUserHandler(userSvc),
+		Payment:   handler.NewPaymentHandler(paymentSvc),
+		Banner:    handler.NewBannerHandler(bannerSvc),
+		Report:    handler.NewReportHandler(reportSvc),
+		Promo:     handler.NewPromotionHandler(promotionSvc),
+		Voucher:   handler.NewVoucherHandler(voucherSvc),
+		Contact:   handler.NewContactHandler(contactSvc),
+		Plan:      planHandler,
+		KhachHang: khachHangHandler,
 	}
 
 	// 8. Router + HTTP server
-	r := router.New(cfg, jwtMgr, tenMienRepo, handlers)
+	r := router.New(cfg, jwtMgr, tenMienRepo, nguoiDieuHanhRepo, handlers)
 	srv := &http.Server{
 		Addr:        announcedAddr(cfg.App.Port),
 		Handler:     r,

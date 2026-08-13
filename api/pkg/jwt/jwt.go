@@ -37,8 +37,22 @@ type Claims struct {
 	// 0 = token cấp TRƯỚC khi hệ thống có nhiều cửa hàng. Nơi xác thực phải TỪ
 	// CHỐI chứ đừng lùi về 1: lùi về là biến mọi token cũ thành chìa khoá vào cửa
 	// hàng số 1.
-	TenantID uint      `json:"tid"`
-	Role     string    `json:"role"`
+	TenantID uint   `json:"tid"`
+	Role     string `json:"role"`
+	// Platform = true: đây là token của NGƯỜI ĐIỀU HÀNH NỀN TẢNG, và UserID trỏ
+	// vào platform_users chứ không phải users. TenantID của nó LUÔN bằng 0.
+	//
+	// Hai loại token vì thế loại trừ nhau bằng chính cấu trúc, không phải bằng
+	// một dãy điều kiện ai đó phải nhớ viết:
+	//
+	//   - Token nền tảng KHÔNG dùng được ở khu cửa hàng: JWTAuth từ chối mọi
+	//     token có TenantID = 0, và nó từ chối như vậy từ trước khi có cờ này.
+	//   - Token cửa hàng KHÔNG dùng được ở khu điều hành: XacThucNenTang đòi cờ
+	//     này bằng true.
+	//
+	// Nhờ vậy một tài khoản của cửa hàng không có đường nào chạm vào bảng giá
+	// của nền tảng, kể cả khi nó mang vai trò cao nhất trong cửa hàng của mình.
+	Platform bool      `json:"pf,omitempty"`
 	Type     TokenType `json:"typ"`
 	jwt.RegisteredClaims
 }
@@ -82,6 +96,40 @@ func (m *Manager) Generate(userID, tenantID uint, role string, t TokenType) (str
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	signed, err := token.SignedString(m.secret)
+	return signed, expiresAt, err
+}
+
+// GeneratePlatform cấp token cho NGƯỜI ĐIỀU HÀNH NỀN TẢNG.
+//
+// Hàm riêng chứ không thêm tham số vào Generate, vì hai loại token có hai ràng
+// buộc NGƯỢC NHAU: Generate từ chối tenantID = 0 (token của cửa hàng phải nói
+// được nó thuộc tiệm nào), còn token ở đây BẮT BUỘC tenant = 0 (người điều hành
+// không thuộc tiệm nào). Gộp làm một hàm là gộp hai luật đối nhau vào một chỗ,
+// và chỗ đó sẽ nới lỏng dần cho tới lúc không còn ràng buộc nào.
+//
+// role là vai trò trong khu điều hành (owner | operator | support). Nó nằm
+// trong token cho tiện đọc log, nhưng NƠI QUYẾT ĐỊNH QUYỀN không đọc nó: mỗi
+// request tra lại vai trò trong sổ (xem middleware.XacThucNenTang), để thu
+// quyền của một người là có hiệu lực ngay chứ không phải chờ token hết hạn.
+func (m *Manager) GeneratePlatform(userID uint, role string, t TokenType) (string, time.Time, error) {
+	ttl := m.accessTTL
+	if t == RefreshToken {
+		ttl = m.refreshTTL
+	}
+	expiresAt := time.Now().Add(ttl)
+	claims := Claims{
+		UserID:   userID,
+		TenantID: 0,
+		Role:     role,
+		Platform: true,
+		Type:     t,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(expiresAt),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+		},
+	}
+	signed, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(m.secret)
+
 	return signed, expiresAt, err
 }
 

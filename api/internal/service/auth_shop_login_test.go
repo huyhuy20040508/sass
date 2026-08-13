@@ -37,8 +37,17 @@ func cuaHang(id uint, code, status string) *domain.Tenant {
 // dungAuthServiceDangNhap khác dungAuthService ở chỗ có jwt.Manager thật: đăng
 // nhập THÀNH CÔNG thì phải phát được token, không như mấy test quên mật khẩu.
 func dungAuthServiceDangNhap(users *fakeUserRepo, tenants *fakeTenantRepo) AuthService {
+	return dungAuthServiceDangNhapVoi(users, tenants, nil)
+}
+
+// dungAuthServiceDangNhapVoi thêm sổ NGƯỜI ĐIỀU HÀNH NỀN TẢNG.
+//
+// nil = máy chủ chưa nối control plane, và đó là mặc định của mọi bài kiểm đăng
+// nhập cửa hàng: hai luồng không dùng chung một dòng dữ liệu nào, nên bài kiểm
+// bên này không được vô tình phụ thuộc vào sổ bên kia.
+func dungAuthServiceDangNhapVoi(users *fakeUserRepo, tenants *fakeTenantRepo, nenTang domain.PlatformUserRepository) AuthService {
 	return NewAuthService(
-		users, tenants, fakeRoleRepo{}, newFakeVerifyRepo(), &fakeMailer{},
+		users, nenTang, tenants, fakeRoleRepo{}, newFakeVerifyRepo(), &fakeMailer{},
 		jwt.NewManager("bi-mat-test", 15*time.Minute, 24*time.Hour),
 		config.JWTConfig{AccessTTL: 15 * time.Minute},
 		config.MailConfig{},

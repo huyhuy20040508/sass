@@ -123,10 +123,12 @@ func chay(lenh, maCuaHang, host string, chinh bool, dacCach string, xemTruoc boo
 // kiemTraLuocDo chặn sớm khi control plane chưa chạy migration — không có bước
 // này thì lỗi hiện ra là "Table 'tenant_domains' doesn't exist" ở giữa chừng.
 func kiemTraLuocDo(db *sql.DB) error {
-	// apps/plans/subscriptions có mặt trong danh sách từ khi tên miền riêng trở
-	// thành tính năng của gói: thiếu chúng thì luật không xét được, và câu lỗi
-	// "Unknown column own_domain" ở giữa chừng không chỉ được ai đi sửa cái gì.
-	for _, bang := range []string{"tenants", "tenant_domains", "apps", "plans", "subscriptions"} {
+	// KHÔNG có `plans` và `plan_features` trong danh sách, và đó là điều đáng
+	// chú ý chứ không phải thiếu sót: từ 0013 lệnh này đọc điều khoản ở HỢP ĐỒNG
+	// (`subscriptions.own_domain`), nên nó chạy được kể cả khi bảng giá chưa
+	// dựng. Thêm hai bảng đó vào đây là dấu hiệu ai đó vừa nối lại đường đọc
+	// ngược về bảng giá.
+	for _, bang := range []string{"tenants", "tenant_domains", "apps", "subscriptions"} {
 		var so int
 		err := db.QueryRow(
 			`SELECT COUNT(*) FROM information_schema.tables
@@ -143,31 +145,34 @@ func kiemTraLuocDo(db *sql.DB) error {
 
 func danhSach(nenTang *sql.DB) error {
 	rows, err := nenTang.Query(
-		`SELECT d.host, d.kind, d.is_primary, t.code, t.name, t.status,
+		`SELECT d.host, a.code, d.kind, d.is_primary, t.code, t.name, t.status,
 		        d.verified_at IS NOT NULL, IFNULL(d.note, '')
 		   FROM tenant_domains d
 		   JOIN tenants t ON t.id = d.tenant_id
-		  ORDER BY t.code, d.is_primary DESC, d.host`)
+		   JOIN apps a    ON a.id = d.app_id
+		  ORDER BY a.code, t.code, d.is_primary DESC, d.host`)
 	if err != nil {
 		return fmt.Errorf("không đọc được sổ tên miền: %w", err)
 	}
 	defer rows.Close()
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "\nTÊN MIỀN\tLOẠI\tCHÍNH\tCỬA HÀNG\tTRẠNG THÁI\tĐÃ XÁC MINH DNS\tĐẶC CÁCH")
+	// Cột PHẦN MỀM có mặt từ 0009: sổ này chứa tên miền của MỌI phần mềm, và một
+	// địa chỉ chỉ phân giải được ở tiến trình API của đúng phần mềm đó.
+	fmt.Fprintln(w, "\nTÊN MIỀN\tPHẦN MỀM\tLOẠI\tCHÍNH\tCỬA HÀNG\tTRẠNG THÁI\tĐÃ XÁC MINH DNS\tĐẶC CÁCH")
 
 	var so int
 	for rows.Next() {
 		var (
-			host, kind, code, ten, trangThai, note string
-			laChinh, daXacMinh                     bool
+			host, maApp, kind, code, ten, trangThai, note string
+			laChinh, daXacMinh                            bool
 		)
-		if err := rows.Scan(&host, &kind, &laChinh, &code, &ten, &trangThai, &daXacMinh, &note); err != nil {
+		if err := rows.Scan(&host, &maApp, &kind, &laChinh, &code, &ten, &trangThai, &daXacMinh, &note); err != nil {
 			return err
 		}
 		so++
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s (%s)\t%s\t%s\t%s\n",
-			host, kind, danhDau(laChinh), code, ten, trangThai, danhDau(daXacMinh), note)
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s (%s)\t%s\t%s\t%s\n",
+			host, maApp, kind, danhDau(laChinh), code, ten, trangThai, danhDau(daXacMinh), note)
 	}
 	if err := rows.Err(); err != nil {
 		return err
@@ -256,12 +261,19 @@ func them(banHang, nenTang *sql.DB, maCuaHang, host string, chinh bool, dacCach 
 		return fmt.Errorf("không ghi được cửa hàng vào sổ nền tảng: %w", err)
 	}
 
-	// Tên miền chính là duy nhất trong một cửa hàng (khoá uq_tenant_domains_primary),
-	// nên phải hạ cờ của tên miền cũ TRƯỚC khi dựng cờ cho tên miền mới.
+	// Tên miền chính là duy nhất trong một cửa hàng CỦA MỘT PHẦN MỀM (khoá
+	// uq_tenant_domains_primary từ 0009), nên phải hạ cờ của tên miền cũ TRƯỚC
+	// khi dựng cờ cho tên miền mới.
+	//
+	// Vế `app_id` không được quên: hạ cờ trên mọi tên miền của cửa hàng là gỡ
+	// luôn địa chỉ chính của phần mềm khác mà họ đang dùng, và link trong email
+	// của phần mềm đó mất chỗ dựng.
 	if chinh {
 		if _, err := nenTang.Exec(
-			"UPDATE tenant_domains SET is_primary = 0, updated_at = NOW(3) WHERE tenant_id = ? AND host <> ?",
-			id, host); err != nil {
+			`UPDATE tenant_domains SET is_primary = 0, updated_at = NOW(3)
+			  WHERE tenant_id = ? AND host <> ?
+			    AND app_id = (SELECT id FROM apps WHERE code = ?)`,
+			id, host, appCuaLenh); err != nil {
 			return fmt.Errorf("không hạ được cờ tên miền chính cũ: %w", err)
 		}
 	}
@@ -273,12 +285,21 @@ func them(banHang, nenTang *sql.DB, maCuaHang, host string, chinh bool, dacCach 
 		note = dacCach
 	}
 
-	if _, err := nenTang.Exec(
-		`INSERT INTO tenant_domains (tenant_id, host, kind, is_primary, note, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, NOW(3), NOW(3))
+	// app_id lấy từ danh mục theo MÃ, không gõ số: id là số tự sinh của từng
+	// database. Không có dòng app nào khớp thì INSERT ... SELECT ghi 0 dòng và
+	// khoá ngoại không kêu — nên phải tự kiểm, xem ngay dưới.
+	kq, err := nenTang.Exec(
+		`INSERT INTO tenant_domains (tenant_id, app_id, host, kind, is_primary, note, created_at, updated_at)
+		 SELECT ?, a.id, ?, ?, ?, ?, NOW(3), NOW(3) FROM apps a WHERE a.code = ?
 		 ON DUPLICATE KEY UPDATE is_primary = VALUES(is_primary), note = VALUES(note), updated_at = NOW(3)`,
-		id, host, loaiTenMien(host), chinh, note); err != nil {
+		id, host, loaiTenMien(host), chinh, note, appCuaLenh)
+	if err != nil {
 		return fmt.Errorf("không ghi được tên miền: %w", err)
+	}
+	if so, _ := kq.RowsAffected(); so == 0 {
+		return fmt.Errorf(
+			"danh mục nền tảng chưa có phần mềm %q, nên chưa biết tên miền này phục vụ cái gì.\n"+
+				"        Chạy `go run ./cmd/migrate -nen-tang chay` để nạp danh mục app.", appCuaLenh)
 	}
 
 	fmt.Printf("\n  + %s → cửa hàng %s (%s), tenant_id = %d%s\n", host, maCuaHang, ten, id, keo(chinh, " [chính]", ""))
@@ -298,6 +319,18 @@ func them(banHang, nenTang *sql.DB, maCuaHang, host string, chinh bool, dacCach 
 // chạy, một việc phải đi kèm DNS, nginx và chứng chỉ mới — không phải thứ để
 // một dòng .env gõ nhầm làm được.
 const tenMienGoc = "selliotech.store"
+
+// appCuaLenh — lệnh này cấp tên miền cho PHẦN MỀM NÀO.
+//
+// Từ migration 0008, một khách mua được nhiều phần mềm và mỗi cái có thuê bao
+// riêng, nên câu "gói của khách này có kèm tên miền không" phải hỏi kèm tên
+// phần mềm. Hôm nay chỉ có một app bán ra, và subdomain sinh ở đây trỏ vào cụm
+// bán hàng của chính nó.
+//
+// Hằng số chứ không phải cờ dòng lệnh: thêm một cờ mà chỉ có đúng một giá trị
+// hợp lệ là bắt người ta gõ thêm một thứ không có lựa chọn nào. Ngày có app thứ
+// hai bán kèm tên miền thì đổi chỗ này thành cờ `--app`.
+const appCuaLenh = "order"
 
 // tuDong cấp tên miền cho cửa hàng, TỰ SINH từ tên cửa hàng.
 //
@@ -434,9 +467,22 @@ func nhanConTrong(nenTang *sql.DB, nhanGoc string, tenantID int64) (string, erro
 // xetGoi kiểm tra cửa hàng có được cấp tên miền riêng theo gói đang mua không.
 //
 // TÊN MIỀN RIÊNG LÀ TÍNH NĂNG CỦA GÓI, và luật nằm trong DỮ LIỆU chứ không nằm
-// trong hàm này: cột `plans.own_domain`. Ở đây chỉ đọc ra và xử. Nhờ vậy ngày
-// bán kèm tên miền cho gói khác thì đổi một ô trong bảng giá, không phải sửa
-// code rồi triển khai lại.
+// trong hàm này. Ở đây chỉ đọc ra và xử.
+//
+// ĐỌC Ở HỢP ĐỒNG, KHÔNG ĐỌC Ở BẢNG GIÁ — `subscriptions.own_domain`, không phải
+// `plan_features`. Ranh giới của cả cụm control plane:
+//
+//	plans + plan_features = bảng giá HIỆN HÀNH, được phép đổi
+//	subscriptions         = bản ĐÃ CHỐT với khách, không đổi theo
+//
+// Hàm này TỪNG tra ngược về bảng giá (subscriptions → plans → plan_features), và
+// đó là một lỗi thật: quyền lợi của khách đang trả tiền bị quyết bởi bảng giá
+// của hôm nay. Bỏ own_domain khỏi gói Chuỗi vào tháng sau là khách Chuỗi đã ký
+// mất luôn quyền được cấp tên miền — không lỗi nào nổi lên, chỉ một lệnh từ chối
+// nghe rất hợp lý. Migration 0013 chép điều khoản đó vào hợp đồng.
+//
+// Vì vậy tệp lệnh này KHÔNG được nhắc tới `plans` hay `plan_features` nữa. Thấy
+// hai cái tên đó xuất hiện trở lại ở đây nghĩa là có người vừa đọc ngược.
 //
 // Ba điều kiện, thiếu một là từ chối:
 //
@@ -445,15 +491,23 @@ func nhanConTrong(nenTang *sql.DB, nhanGoc string, tenantID int64) (string, erro
 //     chính là câu "khách dùng thử thì dùng chung order.selliotech.store";
 //     'past_due' cũng không: đang nợ thì không cấp THÊM địa chỉ mới, còn địa
 //     chỉ đã cấp vẫn chạy cho tới lúc khoá hẳn cửa hàng.
-//   - gói của thuê bao đó có `own_domain = 1`.
+//   - hợp đồng đó ghi `own_domain = 1`. Mặc định dưới database là 0, nên hợp
+//     đồng không nói gì cũng là không — mặc định của một gói là không kèm tên
+//     miền.
 //
 // dacCach khác rỗng thì bỏ qua cả ba, nhưng vẫn ĐỌC và IN ra tình trạng thật —
 // người cấp đặc cách phải nhìn thấy mình đang phá luật nào.
 //
-// Nối `subscriptions` với `plans` bằng (mã gói, chu kỳ) trong bảng giá của app
-// 'order' chứ không bằng khoá ngoại: thuê bao chép giá ra lúc ký và cố ý KHÔNG
-// trỏ vào dòng bảng giá (xem migration 0003). Vế `apps.code = 'order'` là chỗ
-// tạm — nó biến mất khi `subscriptions` có cột app_id.
+// Câu truy vấn chỉ chạm ĐÚNG MỘT BẢNG: `subscriptions`. Không JOIN đi đâu cả —
+// mọi thứ cần để xử đều đã nằm trong hợp đồng.
+//
+// XÉT THUÊ BAO CỦA APP NÀO: từ 0008 một khách mua được nhiều phần mềm, mỗi cái
+// một thuê bao. Lệnh này cấp tên miền cho SELLIO ORDER (tên miền nó sinh ra là
+// <nhãn>.selliotech.store, và cụm bán hàng chạy sau tên miền đó), nên nó hỏi
+// đúng thuê bao của app 'order'. Ngày cấp tên miền cho phần mềm thứ hai thì
+// thêm cờ `--app` và truyền xuống đây, đừng bỏ điều kiện này đi — bỏ đi là lấy
+// bừa thuê bao nào MySQL trả trước, tức là gói của một phần mềm khác quyết định
+// tên miền của phần mềm này.
 func xetGoi(nenTang *sql.DB, tenantID int64, maCuaHang, dacCach string) error {
 	var (
 		goi       string
@@ -461,29 +515,27 @@ func xetGoi(nenTang *sql.DB, tenantID int64, maCuaHang, dacCach string) error {
 		coTenMien bool
 	)
 	err := nenTang.QueryRow(
-		`SELECT s.plan, s.status, IFNULL(p.own_domain, 0)
+		`SELECT s.plan, s.status, s.own_domain
 		   FROM subscriptions s
-		   LEFT JOIN apps a  ON a.code = 'order'
-		   LEFT JOIN plans p ON p.app_id = a.id
-		                    AND p.code = s.plan
-		                    AND p.billing_cycle = s.billing_cycle
-		  WHERE s.tenant_id = ? AND s.status <> 'canceled'`, tenantID).
+		  WHERE s.tenant_id = ? AND s.app_id = (SELECT id FROM apps WHERE code = ?)
+		    AND s.status <> 'canceled'`, tenantID, appCuaLenh).
 		Scan(&goi, &trangThai, &coTenMien)
 
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
 		if dacCach != "" {
-			fmt.Printf("\n  ! ĐẶC CÁCH: cửa hàng %s chưa có thuê bao nào trong sổ nền tảng.\n    Lý do ghi vào sổ: %s\n", maCuaHang, dacCach)
+			fmt.Printf("\n  ! ĐẶC CÁCH: cửa hàng %s chưa có thuê bao %s nào trong sổ nền tảng.\n    Lý do ghi vào sổ: %s\n",
+				maCuaHang, appCuaLenh, dacCach)
 
 			return nil
 		}
 
 		return fmt.Errorf(
-			"cửa hàng %q chưa có thuê bao nào trong sổ nền tảng, nên chưa chứng minh được đã mua gói gì.\n"+
+			"cửa hàng %q chưa có thuê bao %s nào trong sổ nền tảng, nên chưa chứng minh được đã mua gói gì.\n"+
 				"        Tên miền riêng là tính năng của gói — hôm nay là gói Chuỗi đã trả tiền.\n"+
 				"        Đăng ký thuê bao cho cửa hàng này trước, hoặc cấp ngoài luật bằng:\n"+
 				"            go run ./cmd/ten-mien them --ma-cua-hang %s --host <tên miền> --dac-cach \"<lý do>\"",
-			maCuaHang, maCuaHang)
+			maCuaHang, appCuaLenh, maCuaHang)
 
 	case err != nil:
 		return fmt.Errorf("không tra được thuê bao của cửa hàng: %w", err)
@@ -504,11 +556,16 @@ func xetGoi(nenTang *sql.DB, tenantID int64, maCuaHang, dacCach string) error {
 	}
 	if !coTenMien {
 		return fmt.Errorf(
-			"gói %q của cửa hàng %q không kèm tên miền riêng (plans.own_domain = 0).\n"+
+			"hợp đồng %q của cửa hàng %q không kèm tên miền riêng (subscriptions.own_domain = 0).\n"+
 				"        Cửa hàng này dùng chung order.selliotech.store và gõ mã cửa hàng lúc đăng nhập.\n"+
-				"        Muốn đổi chính sách bán hàng thì sửa BẢNG GIÁ, đừng sửa lệnh này:\n"+
-				"            UPDATE plans SET own_domain = 1, updated_at = NOW(3) WHERE code = '%s';",
-			goi, maCuaHang, goi)
+				"        SỬA BẢNG GIÁ Ở ĐÂY KHÔNG CÓ TÁC DỤNG: hợp đồng đã ký không đi theo bảng giá.\n"+
+				"        Bật ô \"Tên miền riêng\" ở màn hình Tính năng gói chỉ áp cho hợp đồng ký TỪ NAY\n"+
+				"        VỀ SAU. Bán thêm quyền này cho khách hiện tại là sửa CHÍNH hợp đồng của họ:\n"+
+				"            UPDATE subscriptions SET own_domain = 1, updated_at = NOW(3)\n"+
+				"             WHERE tenant_id = <id cửa hàng>\n"+
+				"               AND app_id = (SELECT id FROM apps WHERE code = '%s')\n"+
+				"               AND status <> 'canceled';",
+			goi, maCuaHang, appCuaLenh)
 	}
 
 	fmt.Printf("\n  · gói %q (%s) có kèm tên miền riêng — hợp lệ\n", goi, trangThai)

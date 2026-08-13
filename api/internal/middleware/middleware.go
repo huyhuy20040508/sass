@@ -21,6 +21,12 @@ const (
 	CtxUserID   = "ctx_user_id"
 	CtxRole     = "ctx_role"
 	CtxTenantID = "ctx_tenant_id"
+	// CtxPlatformRole là vai trò trong KHU ĐIỀU HÀNH (owner | operator |
+	// support), do XacThucNenTang đặt. Khác CtxRole — vai trò trong một cửa hàng.
+	CtxPlatformRole = "ctx_platform_role"
+	// CtxPlatformApps là TẬP PHẦN MỀM người điều hành được đụng vào
+	// (domain.QuyenApp), cũng do XacThucNenTang đặt.
+	CtxPlatformApps = "ctx_platform_apps"
 )
 
 // CORS cấu hình Cross-Origin cho các origin được phép.
@@ -271,6 +277,130 @@ func RequireRoles(roles ...string) gin.HandlerFunc {
 		}
 		c.Next()
 	}
+}
+
+// XacThucNenTang là chốt xác thực của KHU ĐIỀU HÀNH. Nó thay hẳn cho bộ
+// JWTAuth + RequireRoles, KHÔNG đứng sau chúng.
+//
+// VÌ SAO KHÔNG DÙNG JWTAuth + RequireRoles(super_admin) — chỗ dễ hiểu nhầm nhất
+// của cả tệp: `super_admin` là vai trò cao nhất TRONG MỘT CỬA HÀNG, và cửa hàng
+// nào cũng có một người như vậy, chính là chủ shop. Chặn khu điều hành bằng vai
+// trò đó nghĩa là chủ của bất kỳ tiệm nào cũng sửa được bảng giá của cả nền
+// tảng, gồm cả việc tự bật tên miền riêng cho gói mình đang dùng.
+//
+// Ở đây token phải là TOKEN NỀN TẢNG (claims.Platform), thứ chỉ
+// /auth/platform-login cấp ra sau khi đối chiếu mật khẩu trong sổ
+// `platform_users`. Token của cửa hàng không có cờ đó và không có cách nào tự
+// gắn vào — sửa một bit trong token là chữ ký hỏng.
+//
+// Hai chiều loại trừ nhau, và cả hai đều bằng cấu trúc chứ không bằng danh sách
+// điều kiện phải nhớ:
+//
+//   - token cửa hàng ở khu điều hành → chặn tại đây (thiếu cờ);
+//   - token nền tảng ở khu cửa hàng  → chặn tại JWTAuth (tenant = 0, điều kiện
+//     đã có sẵn từ trước khi có tính năng này).
+//
+// VAI TRÒ ĐỌC LẠI TỪ SỔ Ở MỖI REQUEST, không lấy từ token, dù token có mang
+// sẵn: khoá một người hay hạ vai trò của họ phải có hiệu lực NGAY. Lấy theo
+// token thì người vừa bị thu quyền vẫn ghi được cho tới khi token cũ hết hạn —
+// và access token sống 15 phút, đủ dài cho một người đang giận.
+//
+// Một lượt tra cho mỗi request, không đệm: nhóm này vài người dùng, vài lượt
+// mỗi ngày, còn cái đệm đổi lấy đúng khoảng trống vừa nói ở trên.
+//
+// repo = nil nghĩa là chưa dựng control plane. Trả 503 chứ KHÔNG cho đi tiếp:
+// một cổng không tra được sổ thì phải đóng.
+func XacThucNenTang(mgr *jwt.Manager, repo domain.PlatformUserRepository) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if repo == nil {
+			response.Error(c, 503, "Khu điều hành chưa sẵn sàng — máy chủ chưa nối được sổ nền tảng")
+			return
+		}
+
+		token := extractBearer(c)
+		if token == "" {
+			response.Error(c, 401, "Thiếu access token")
+			return
+		}
+		claims, err := mgr.Parse(token)
+		if err != nil {
+			response.Error(c, 401, "Token không hợp lệ hoặc đã hết hạn")
+			return
+		}
+		if claims.Type != jwt.AccessToken {
+			response.Error(c, 401, "Loại token không hợp lệ")
+			return
+		}
+		if !claims.Platform {
+			// Đây chính là lượt chặn quan trọng nhất: token thật, chữ ký thật, người
+			// thật — nhưng là người của một CỬA HÀNG. Ghi log vì nó phải điều tra
+			// được: hoặc người dùng đang mở nhầm cửa, hoặc ai đó đang thử.
+			logger.Warn("token của cửa hàng gọi vào khu điều hành nền tảng",
+				zap.Uint("tenant_id", claims.TenantID),
+				zap.Uint("user_id", claims.UserID),
+				zap.String("path", c.Request.URL.Path),
+			)
+			response.Error(c, 403, "Token này thuộc một cửa hàng, không vào được khu điều hành nền tảng")
+			return
+		}
+
+		nguoi, err := repo.FindByID(c.Request.Context(), claims.UserID)
+		switch {
+		case errors.Is(err, domain.ErrNotFound):
+			// Token còn hạn nhưng người đã bị khoá hoặc xoá khỏi sổ.
+			logger.Warn("token nền tảng của một tài khoản không còn hiệu lực",
+				zap.Uint("platform_user_id", claims.UserID),
+				zap.String("path", c.Request.URL.Path),
+			)
+			response.Error(c, 403, "Tài khoản điều hành này không còn hiệu lực, vui lòng đăng nhập lại")
+			return
+		case err != nil:
+			logger.Error("không tra được sổ người điều hành nền tảng",
+				zap.Uint("platform_user_id", claims.UserID), zap.Error(err))
+			response.Error(c, 503, "Khu điều hành tạm thời không truy cập được, vui lòng thử lại sau ít phút")
+			return
+		}
+
+		// Tập phần mềm được giao, đọc cùng lượt với vai trò và vì cùng một lý do:
+		// thu một phần mềm khỏi ai đó phải có hiệu lực ngay, không chờ token hết
+		// hạn. owner không tốn câu truy vấn nào (xem repo).
+		quyen, err := repo.QuyenApp(c.Request.Context(), nguoi)
+		if err != nil {
+			logger.Error("không đọc được phân công phần mềm của người điều hành",
+				zap.Uint("platform_user_id", nguoi.ID), zap.Error(err))
+			response.Error(c, 503, "Khu điều hành tạm thời không truy cập được, vui lòng thử lại sau ít phút")
+			return
+		}
+
+		// KHÔNG gọi applyIdentity: hàm đó rót tenant vào context của request cho bộ
+		// lọc GORM dùng, mà người điều hành không thuộc cửa hàng nào. Rót một số
+		// vào đó là dựng một lời nói dối ngay tại chốt xác thực.
+		c.Set(CtxUserID, nguoi.ID)
+		c.Set(CtxPlatformRole, nguoi.Role)
+		c.Set(CtxPlatformApps, quyen)
+		c.Next()
+	}
+}
+
+// PlatformRole đọc vai trò khu điều hành mà XacThucNenTang vừa đặt.
+//
+// Rỗng nghĩa là request KHÔNG đi qua middleware đó — handler phải coi đó là
+// không có quyền, chứ đừng coi là chưa xác định.
+func PlatformRole(c *gin.Context) string { return c.GetString(CtxPlatformRole) }
+
+// PlatformApps đọc tập phần mềm được giao mà XacThucNenTang vừa đặt.
+//
+// Request không đi qua middleware đó thì trả về zero value — tức KHÔNG phần mềm
+// nào, không phải toàn quyền. Quên gắn middleware phải làm mọi thứ đóng lại,
+// không phải mở ra.
+func PlatformApps(c *gin.Context) domain.QuyenApp {
+	if v, ok := c.Get(CtxPlatformApps); ok {
+		if q, ok := v.(domain.QuyenApp); ok {
+			return q
+		}
+	}
+
+	return domain.QuyenApp{}
 }
 
 // extractBearer trích xuất token Bearer từ header Authorization.

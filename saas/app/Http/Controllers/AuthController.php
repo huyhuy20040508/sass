@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Middleware\EnsurePlatformAuthenticated;
 use App\Services\ApiClient;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -54,11 +55,17 @@ class AuthController extends Controller
         }
 
         $data = $res->json('data');
-        $role = data_get($data, 'user.role.name');
+        $role = data_get($data, 'user.role');
 
-        // CHỈ super_admin. Chủ cửa hàng, nhân viên và khách hàng đều dùng Shop
-        // Admin, không có đường nào vào khu điều hành nền tảng.
-        if ($role !== 'super_admin') {
+        // Vai trò ở đây là vai trò TRONG KHU ĐIỀU HÀNH (owner | operator |
+        // support), một chuỗi chứ không phải đối tượng vai trò như bên cửa hàng.
+        //
+        // Trước đây chỗ này xét 'super_admin' — vai trò cao nhất trong MỘT cửa
+        // hàng, mà tiệm nào cũng có một người như vậy. Nay API chỉ cấp token cho
+        // tài khoản trong sổ `platform_users`, nên tài khoản cửa hàng đã bị chặn
+        // từ trước khi tới đây. Dòng dưới là lưới thứ hai, phòng khi API trả về
+        // một vai trò lạ.
+        if (! in_array($role, EnsurePlatformAuthenticated::VAI_TRO, true)) {
             return back()->withInput($request->only('email'))
                 ->with('error', 'Tài khoản này không có quyền vào khu điều hành nền tảng.');
         }

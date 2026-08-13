@@ -212,9 +212,23 @@ func (h *AuthHandler) ShopLogin(c *gin.Context) {
 	response.OKMessage(c, "Đăng nhập thành công", res)
 }
 
-// PlatformLogin — đăng nhập khu điều hành nền tảng (email + mật khẩu, chỉ
-// super_admin). Dùng lại LoginRequest vì hai ô y hệt đăng nhập bằng email; cái
-// khác nằm ở service, xem AuthService.LoginPlatform.
+// PlatformLogin godoc
+//
+//	@Summary		Đăng nhập khu điều hành nền tảng
+//	@Description	Email + mật khẩu của một tài khoản trong sổ `platform_users` — sổ RIÊNG của
+//	@Description	nền tảng, không liên quan tới tài khoản của cửa hàng nào. Tài khoản cửa
+//	@Description	hàng (kể cả super_admin của một tiệm) KHÔNG vào được đường này.
+//	@Description	Token trả về mang cờ nền tảng và tenant_id = 0, nên nó chỉ mở được nhóm
+//	@Description	/platform và không mở được đường nào của khu cửa hàng.
+//	@Tags			Auth
+//	@Accept			json
+//	@Produce		json
+//	@Param			body	body		dto.LoginRequest	true	"Email + mật khẩu của người điều hành"
+//	@Success		200		{object}	response.Body{data=dto.PlatformAuthResponse}
+//	@Failure		401		{object}	response.Body	"Sai email hoặc mật khẩu, hoặc tài khoản chưa đặt mật khẩu"
+//	@Failure		422		{object}	response.Body
+//	@Failure		503		{object}	response.Body	"Máy chủ chưa nối được sổ nền tảng"
+//	@Router			/auth/platform-login [post]
 func (h *AuthHandler) PlatformLogin(c *gin.Context) {
 	var req dto.LoginRequest
 	if !bindJSON(c, &req) {
@@ -226,6 +240,53 @@ func (h *AuthHandler) PlatformLogin(c *gin.Context) {
 		return
 	}
 	response.OKMessage(c, "Đăng nhập thành công", res)
+}
+
+// PlatformRefresh godoc
+//
+//	@Summary		Làm mới token khu điều hành
+//	@Description	Đường riêng vì /auth/refresh cố ý TỪ CHỐI mọi token không thuộc cửa hàng
+//	@Description	nào, mà token của khu điều hành thì luôn như vậy. Mỗi lượt làm mới đều đọc
+//	@Description	lại người điều hành trong sổ: người vừa bị khoá không gia hạn thêm được.
+//	@Tags			Auth
+//	@Accept			json
+//	@Produce		json
+//	@Param			body	body		dto.RefreshRequest	true	"Refresh token"
+//	@Success		200		{object}	response.Body{data=dto.PlatformAuthResponse}
+//	@Failure		401		{object}	response.Body
+//	@Failure		503		{object}	response.Body
+//	@Router			/auth/platform-refresh [post]
+func (h *AuthHandler) PlatformRefresh(c *gin.Context) {
+	var req dto.RefreshRequest
+	if !bindJSON(c, &req) {
+		return
+	}
+	res, err := h.svc.RefreshPlatform(c.Request.Context(), req.RefreshToken)
+	if err != nil {
+		handleServiceError(c, err)
+		return
+	}
+	response.OK(c, res)
+}
+
+// PlatformMe godoc
+//
+//	@Summary		Hồ sơ người điều hành đang đăng nhập
+//	@Description	Đọc từ sổ `platform_users` theo id trong token nền tảng.
+//	@Tags			Auth
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Success		200	{object}	response.Body{data=domain.PlatformUser}
+//	@Failure		401	{object}	response.Body
+//	@Failure		403	{object}	response.Body
+//	@Router			/auth/platform-me [get]
+func (h *AuthHandler) PlatformMe(c *gin.Context) {
+	res, err := h.svc.MePlatform(c.Request.Context(), currentUserID(c))
+	if err != nil {
+		handleServiceError(c, err)
+		return
+	}
+	response.OK(c, res)
 }
 
 // FacebookLogin godoc

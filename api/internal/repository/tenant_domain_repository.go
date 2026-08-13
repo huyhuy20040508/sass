@@ -22,11 +22,27 @@ import (
 // đây nói VỀ các cửa hàng chứ không THUỘC cửa hàng nào, và câu truy vấn dưới đây
 // chạy TRƯỚC khi biết đang phục vụ cửa hàng nào — nó chính là thứ đi tìm câu trả
 // lời đó.
-type tenantDomainRepository struct{ db *gorm.DB }
+type tenantDomainRepository struct {
+	db *gorm.DB
+	// maApp là phần mềm mà TIẾN TRÌNH NÀY phục vụ (cfg.App.Code).
+	//
+	// Sổ tên miền là sổ của cả nền tảng: từ khi một khách mua được nhiều phần
+	// mềm (migration 0009), trong đó có cả địa chỉ của những phần mềm khác.
+	// Không lọc thì `bida.quochuy.store` phân giải ra đúng cửa hàng Quốc Huy và
+	// API bán hàng phục vụ luôn — khách gõ đúng địa chỉ của mình rồi nhìn thấy
+	// một sản phẩm khác, mà không có lỗi nào nổi lên ở đâu cả.
+	maApp string
+}
 
-// NewTenantDomainRepository nhận kết nối CONTROL PLANE (NewPlatformDB).
-func NewTenantDomainRepository(platformDB *gorm.DB) domain.TenantDomainRepository {
-	return &tenantDomainRepository{db: platformDB}
+// NewTenantDomainRepository nhận kết nối CONTROL PLANE (NewPlatformDB) và mã
+// phần mềm mà tiến trình này phục vụ.
+//
+// maApp rỗng bị coi là lỗi lập trình chứ không phải "không lọc": nơi gọi quên
+// truyền thì mọi tên miền của mọi phần mềm đều phân giải được ở đây, đúng cái
+// mà cột app_id sinh ra để chặn. Vì vậy repo trả về "không tìm thấy" cho mọi
+// host — hỏng thì hỏng hẳn và thấy ngay, thay vì phục vụ nhầm.
+func NewTenantDomainRepository(platformDB *gorm.DB, maApp string) domain.TenantDomainRepository {
+	return &tenantDomainRepository{db: platformDB, maApp: strings.ToLower(strings.TrimSpace(maApp))}
 }
 
 // FindTenantByHost tra cửa hàng sở hữu tên miền.
@@ -45,7 +61,7 @@ func NewTenantDomainRepository(platformDB *gorm.DB) domain.TenantDomainRepositor
 // có mặt ở đây đều là dòng đã được duyệt.
 func (r *tenantDomainRepository) FindTenantByHost(ctx context.Context, host string) (*domain.PlatformTenant, error) {
 	host = ChuanHoaHost(host)
-	if host == "" {
+	if host == "" || r.maApp == "" {
 		return nil, domain.ErrNotFound
 	}
 
@@ -54,6 +70,10 @@ func (r *tenantDomainRepository) FindTenantByHost(ctx context.Context, host stri
 		err := r.db.WithContext(ctx).
 			Table("tenants AS t").
 			Joins("JOIN tenant_domains d ON d.tenant_id = t.id").
+			// Tên miền phải thuộc ĐÚNG phần mềm mà tiến trình này phục vụ. Lọc
+			// bằng JOIN sang `apps` chứ không nướng id vào cấu hình: id là số tự
+			// sinh của từng database, chép .env sang máy khác là lệch.
+			Joins("JOIN apps a ON a.id = d.app_id AND a.code = ?", r.maApp).
 			Where("d.host = ?", h).
 			Select("t.*").
 			First(&t).Error

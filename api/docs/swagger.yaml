@@ -621,6 +621,27 @@ definitions:
       to_status:
         type: string
     type: object
+  domain.PlatformUser:
+    properties:
+      created_at:
+        type: string
+      email:
+        type: string
+      full_name:
+        type: string
+      id:
+        type: integer
+      last_login_at:
+        type: string
+      role:
+        description: 'Role: owner | operator | support'
+        type: string
+      status:
+        description: 'Status: active | locked'
+        type: string
+      updated_at:
+        type: string
+    type: object
   domain.ProductReport:
     properties:
       by_brand:
@@ -1289,6 +1310,35 @@ definitions:
       used_up:
         type: integer
     type: object
+  dto.AppItem:
+    properties:
+      code:
+        example: order
+        type: string
+      id:
+        example: 1
+        type: integer
+      name:
+        example: Sellio Order
+        type: string
+      so_goi_dang_ban:
+        example: 3
+        type: integer
+      status:
+        description: 'Status: planned | active | retired'
+        example: active
+        type: string
+      tagline:
+        example: Quản trị bán hàng cho cửa hàng
+        type: string
+    type: object
+  dto.AppsResponse:
+    properties:
+      apps:
+        items:
+          $ref: '#/definitions/dto.AppItem'
+        type: array
+    type: object
   dto.AuthResponse:
     properties:
       access_token:
@@ -1844,6 +1894,37 @@ definitions:
     required:
     - status
     type: object
+  dto.DoanhThuItem:
+    properties:
+      lan_cuoi:
+        example: 13/08/2026
+        type: string
+      ma_cua_hang:
+        example: quochuy
+        type: string
+      so_lan_thu:
+        example: 3
+        type: integer
+      ten_cua_hang:
+        example: Quốc Huy
+        type: string
+      tong_tien:
+        example: 29970000
+        type: number
+    type: object
+  dto.DoanhThuResponse:
+    properties:
+      so_lan_thu:
+        example: 3
+        type: integer
+      theo_quan:
+        items:
+          $ref: '#/definitions/dto.DoanhThuItem'
+        type: array
+      tong_tien:
+        example: 29970000
+        type: number
+    type: object
   dto.FacebookLoginRequest:
     properties:
       code:
@@ -1876,6 +1957,65 @@ definitions:
     required:
     - code
     - redirect_uri
+    type: object
+  dto.HopDongItem:
+    properties:
+      bat_dau:
+        type: string
+      chi_nhanh:
+        example: 5
+        type: integer
+      chu_ky:
+        description: 'ChuKy: thang | nam'
+        example: thang
+        type: string
+      con_lai_ngay:
+        description: ConLaiNgay âm = ĐÃ QUÁ HẠN.
+        example: 41
+        type: integer
+      gia:
+        example: 9990000
+        type: number
+      goi:
+        example: chuoi
+        type: string
+      het_han:
+        type: string
+      id:
+        example: 12
+        type: integer
+      ma_app:
+        example: order
+        type: string
+      ma_cua_hang:
+        example: quochuy
+        type: string
+      san_pham:
+        example: 0
+        type: integer
+      tai_khoan:
+        example: 0
+        type: integer
+      ten_app:
+        example: Sellio Order
+        type: string
+      ten_cua_hang:
+        example: Quốc Huy
+        type: string
+      ten_mien_rieng:
+        example: true
+        type: boolean
+      trang_thai:
+        description: 'TrangThai: trial | active | past_due | canceled'
+        example: active
+        type: string
+    type: object
+  dto.HopDongResponse:
+    properties:
+      hop_dong:
+        items:
+          $ref: '#/definitions/dto.HopDongItem'
+        type: array
     type: object
   dto.ImageRequest:
     properties:
@@ -1983,6 +2123,41 @@ definitions:
         type: array
     required:
     - items
+    type: object
+  dto.KhachHangItem:
+    properties:
+      dien_thoai:
+        type: string
+      email:
+        type: string
+      id:
+        example: 7
+        type: integer
+      ma:
+        example: quochuy
+        type: string
+      ngay_vao_so:
+        type: string
+      nguoi_lien_he:
+        type: string
+      so_hop_dong:
+        example: 1
+        type: integer
+      ten:
+        example: Quốc Huy
+        type: string
+      trang_thai:
+        description: 'TrangThai: active | suspended — trạng thái CỬA HÀNG, không phải
+          hợp đồng.'
+        example: active
+        type: string
+    type: object
+  dto.KhachHangResponse:
+    properties:
+      khach_hang:
+        items:
+          $ref: '#/definitions/dto.KhachHangItem'
+        type: array
     type: object
   dto.LoginRequest:
     properties:
@@ -2216,6 +2391,129 @@ definitions:
       status:
         description: 'Status: pending | paid | failed | cancelled | expired'
         type: string
+    type: object
+  dto.PlanFeatureField:
+    properties:
+      cho_vo_han:
+        description: 'ChoVoHan = true: khoá này nhận giá trị "vo_han" ngoài các con
+          số.'
+        example: true
+        type: boolean
+      don_vi:
+        description: DonVi in sau ô nhập ("tài khoản", "sản phẩm"). Rỗng với khoá
+          bật/tắt.
+        example: tài khoản
+        type: string
+      key:
+        example: max_users
+        type: string
+      khong_co_dong:
+        description: |-
+          KhongCoDong là điều người đọc thấy khi gói KHÔNG có dòng cho khoá này:
+          "0" với khoá bật/tắt (mặc định là tắt), rỗng với hạn mức (bảng giá không
+          quy định, chốt lúc ký hợp đồng).
+        example: ""
+        type: string
+      label:
+        example: Số tài khoản
+        type: string
+      max_num:
+        description: |-
+          MaxNum là trần server áp khi lưu (0 = không chặn). Trả ra để màn hình đặt
+          max cho ô nhập, chặn ngay trên giao diện thay vì để bấm Lưu rồi mới báo lỗi.
+        example: 1000
+        type: number
+      type:
+        description: 'Type: so | co_khong'
+        example: so
+        type: string
+    type: object
+  dto.PlanFeaturesResponse:
+    properties:
+      fields:
+        items:
+          $ref: '#/definitions/dto.PlanFeatureField'
+        type: array
+      plan:
+        $ref: '#/definitions/dto.PlanItem'
+    type: object
+  dto.PlanFeaturesUpdateRequest:
+    properties:
+      items:
+        additionalProperties:
+          type: string
+        type: object
+    required:
+    - items
+    type: object
+  dto.PlanItem:
+    properties:
+      app_code:
+        example: order
+        type: string
+      app_name:
+        example: Sellio Order
+        type: string
+      billing_cycle:
+        description: 'BillingCycle: thang | nam'
+        example: thang
+        type: string
+      code:
+        example: chuoi
+        type: string
+      features:
+        additionalProperties:
+          type: string
+        type: object
+      id:
+        example: 3
+        type: integer
+      name:
+        example: Chuỗi
+        type: string
+      price:
+        description: Price nil = "Liên hệ" — chưa có giá công khai, KHÁC 0 (miễn phí).
+        example: 499000
+        type: number
+      status:
+        description: 'Status: active | retired'
+        example: active
+        type: string
+      tagline:
+        example: Từ hai cửa hàng trở lên
+        type: string
+      trial_days:
+        example: 14
+        type: integer
+    type: object
+  dto.PlansResponse:
+    properties:
+      fields:
+        items:
+          $ref: '#/definitions/dto.PlanFeatureField'
+        type: array
+      plans:
+        items:
+          $ref: '#/definitions/dto.PlanItem'
+        type: array
+    type: object
+  dto.PlatformAuthResponse:
+    properties:
+      access_token:
+        type: string
+      expires_in:
+        description: giây
+        type: integer
+      refresh_token:
+        type: string
+      token_type:
+        type: string
+      user:
+        allOf:
+        - $ref: '#/definitions/domain.PlatformUser'
+        description: |-
+          User.Role là CHUỖI (owner | operator | support), không phải một đối tượng
+          vai trò như bên cửa hàng — khu điều hành không có bảng RBAC riêng.
     type: object
   dto.ProductBulkDeleteRequest:
     properties:
@@ -9157,6 +9455,116 @@ paths:
       summary: Thông tin tài khoản
       tags:
       - Auth
+  /auth/platform-login:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Email + mật khẩu của một tài khoản trong sổ `platform_users` — sổ RIÊNG của
+        nền tảng, không liên quan tới tài khoản của cửa hàng nào. Tài khoản cửa
+        hàng (kể cả super_admin của một tiệm) KHÔNG vào được đường này.
+        Token trả về mang cờ nền tảng và tenant_id = 0, nên nó chỉ mở được nhóm
+        /platform và không mở được đường nào của khu cửa hàng.
+      parameters:
+      - description: Email + mật khẩu của người điều hành
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.PlatformAuthResponse'
+              type: object
+        "401":
+          description: Sai email hoặc mật khẩu, hoặc tài khoản chưa đặt mật khẩu
+          schema:
+            $ref: '#/definitions/response.Body'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Body'
+        "503":
+          description: Máy chủ chưa nối được sổ nền tảng
+          schema:
+            $ref: '#/definitions/response.Body'
+      summary: Đăng nhập khu điều hành nền tảng
+      tags:
+      - Auth
+  /auth/platform-me:
+    get:
+      description: Đọc từ sổ `platform_users` theo id trong token nền tảng.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/domain.PlatformUser'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Hồ sơ người điều hành đang đăng nhập
+      tags:
+      - Auth
+  /auth/platform-refresh:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Đường riêng vì /auth/refresh cố ý TỪ CHỐI mọi token không thuộc cửa hàng
+        nào, mà token của khu điều hành thì luôn như vậy. Mỗi lượt làm mới đều đọc
+        lại người điều hành trong sổ: người vừa bị khoá không gia hạn thêm được.
+      parameters:
+      - description: Refresh token
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.RefreshRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.PlatformAuthResponse'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/response.Body'
+      summary: Làm mới token khu điều hành
+      tags:
+      - Auth
   /auth/refresh:
     post:
       consumes:
@@ -10063,6 +10471,315 @@ paths:
       summary: Webhook SePay báo tài khoản có tiền vào (công khai)
       tags:
       - Payments
+  /platform/apps:
+    get:
+      description: |-
+        Chỉ những phần mềm NGƯỜI GỌI được phụ trách (owner thấy hết). Bộ chọn
+        phần mềm ở đầu khu điều hành dựng từ đây.
+        `so_goi_dang_ban` tách khỏi `status`: app đang chạy mà 0 gói đang bán thì
+        vẫn chưa ai mua được. App 'planned' và 'retired' vẫn xuất hiện — đây là
+        màn hình quản lý vòng đời của chúng.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.AppsResponse'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Danh mục phần mềm của nền tảng
+      tags:
+      - Platform - Apps
+  /platform/doanh-thu:
+    get:
+      description: |-
+        TIỀN ĐÃ VÀO (sổ thu `invoices`), KHÔNG phải tiền đáng lẽ phải thu theo
+        hợp đồng. Sổ thu trống thì doanh thu là 0 kể cả khi có hợp đồng đang chạy
+        — và đó là câu trả lời đúng.
+        Lọc theo NGÀY TIỀN VÀO. `tu` tính từ 00:00 ngày đó, `den` là mốc CHẶN
+        TRÊN không bao gồm — muốn trọn tháng 8 thì tu=2026-08-01&den=2026-09-01.
+      parameters:
+      - description: Mã phần mềm; bỏ trống = mọi phần mềm được giao
+        in: query
+        name: app
+        type: string
+      - description: Từ ngày, dạng 2006-01-02
+        in: query
+        name: tu
+        type: string
+      - description: Tới ngày (không bao gồm), dạng 2006-01-02
+        in: query
+        name: den
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.DoanhThuResponse'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Body'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Doanh thu theo quán
+      tags:
+      - Platform - Khách hàng
+  /platform/plans:
+    get:
+      description: |-
+        Trả về `plans` (mỗi dòng là một mức giá: gói + app + chu kỳ, kèm `features`
+        là hạn mức/tính năng đã khai của gói đó) và `fields` (siêu dữ liệu từng khoá
+        tính năng: kiểu, nhãn, đơn vị, trần) để màn hình dựng ô nhập đúng kiểu.
+        Khoá KHÔNG có trong `features` nghĩa là bảng giá không quy định — khác hẳn
+        giá trị 0. Gói đã ngừng bán (`retired`) vẫn xuất hiện.
+      parameters:
+      - description: 'Lọc theo mã app, vd: order. Bỏ trống = mọi app'
+        in: query
+        name: app
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.PlansResponse'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Body'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Bảng giá của nền tảng
+      tags:
+      - Platform - Plans
+  /platform/plans/{id}/features:
+    get:
+      description: |-
+        Một dòng bảng giá kèm hạn mức/tính năng đã khai của nó. Đây là dữ liệu của
+        màn hình Tính năng gói.
+      parameters:
+      - description: ID dòng bảng giá
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.PlanFeaturesResponse'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Body'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Tính năng của một gói
+      tags:
+      - Platform - Plans
+    put:
+      consumes:
+      - application/json
+      description: |-
+        Ghi nhiều khoá trong một lần gọi; khoá không gửi lên giữ nguyên. Gửi GIÁ TRỊ
+        RỖNG là XOÁ khoá đó, nghĩa là "bảng giá không quy định hạn mức này" — khác
+        hẳn gửi "0". Hạn mức không giới hạn thì gửi `vo_han`.
+        Khoá lạ hoặc giá trị sai kiểu làm cả yêu cầu bị từ chối (422), không ghi
+        xuống một phần. Trả về gói sau khi ghi.
+        CHỈ vai trò owner/operator của khu điều hành ghi được; support chỉ đọc.
+        Sửa ở đây KHÔNG đụng tới khách đang dùng: thuê bao đã ký chép hạn mức ra
+        lúc ký và sống độc lập với bảng giá.
+      parameters:
+      - description: ID dòng bảng giá
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Các khoá cần ghi
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.PlanFeaturesUpdateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.PlanFeaturesResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.Body'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Body'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Sửa tính năng của một gói
+      tags:
+      - Platform - Plans
+  /platform/subscriptions:
+    get:
+      description: |-
+        Màn hình "Người dùng thử" là `?trang_thai=trial`, "Người dùng chính thức"
+        là `?trang_thai=active`. Sắp theo ngày hết hạn gần nhất trước —
+        `con_lai_ngay` âm nghĩa là ĐÃ QUÁ HẠN.
+        Hạn mức trong câu trả lời lấy THẲNG từ hợp đồng, không tra bảng giá: bảng
+        giá được phép đổi, hợp đồng đã ký thì không. Giá trị 0 = không giới hạn.
+      parameters:
+      - description: Mã phần mềm; bỏ trống = mọi phần mềm được giao
+        in: query
+        name: app
+        type: string
+      - description: trial | active | past_due | canceled
+        in: query
+        name: trang_thai
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.HopDongResponse'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Hợp đồng đã ký
+      tags:
+      - Platform - Khách hàng
+  /platform/tenants:
+    get:
+      description: |-
+        Chỉ khách CÓ hợp đồng: quan hệ "khách của phần mềm này" tồn tại qua hợp
+        đồng, không qua bảng khách hàng. Mặc định bỏ hợp đồng đã huỷ — muốn xem
+        khách cũ thì lọc `?trang_thai=canceled`.
+        Chỉ phần mềm người gọi được phụ trách (owner thấy hết).
+      parameters:
+      - description: Mã phần mềm; bỏ trống = mọi phần mềm được giao
+        in: query
+        name: app
+        type: string
+      - description: trial | active | past_due | canceled
+        in: query
+        name: trang_thai
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.KhachHangResponse'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Khách hàng của một phần mềm
+      tags:
+      - Platform - Khách hàng
   /products:
     get:
       description: |-

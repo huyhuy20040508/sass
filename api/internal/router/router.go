@@ -42,6 +42,13 @@ type Handlers struct {
 	Promo    *handler.PromotionHandler
 	Voucher  *handler.VoucherHandler
 	Contact  *handler.ContactHandler
+	// Plan phục vụ KHU ĐIỀU HÀNH NỀN TẢNG (danh mục phần mềm, bảng giá, tính
+	// năng gói). nil = chưa dựng control plane; cả nhóm /platform không được
+	// đăng ký.
+	Plan *handler.PlanHandler
+	// KhachHang phục vụ ba màn hình còn lại của khu điều hành: khách hàng, hợp
+	// đồng, doanh thu. Dựng cùng lúc với Plan — cùng một kết nối control plane.
+	KhachHang *handler.KhachHangHandler
 }
 
 // New tạo *gin.Engine đã cấu hình đầy đủ middleware và route.
@@ -49,7 +56,16 @@ type Handlers struct {
 // tenMien là sổ tên miền của control plane, dùng để biết request đang mở cửa
 // hàng nào khi người gọi chưa đăng nhập. Truyền nil = chưa dựng control plane:
 // mọi thứ chạy y như trước, cụm bán hàng cho khách chỉ phục vụ người đã có token.
-func New(cfg *config.Config, jwtMgr *jwt.Manager, tenMien domain.TenantDomainRepository, h Handlers) *gin.Engine {
+//
+// nguoiDieuHanh là sổ NGƯỜI CỦA NỀN TẢNG, thứ canh nhóm /platform. nil thì nhóm
+// đó trả 503 chứ không mở — xem middleware.XacThucNenTang.
+func New(
+	cfg *config.Config,
+	jwtMgr *jwt.Manager,
+	tenMien domain.TenantDomainRepository,
+	nguoiDieuHanh domain.PlatformUserRepository,
+	h Handlers,
+) *gin.Engine {
 	if cfg.App.IsProduction() {
 		gin.SetMode(gin.ReleaseMode)
 	}
@@ -150,17 +166,25 @@ func New(cfg *config.Config, jwtMgr *jwt.Manager, tenMien domain.TenantDomainRep
 			// dò mật khẩu nhân viên sẽ đồng thời khoá luôn đường đăng nhập của khách
 			// mua hàng — hai nhóm người không liên quan gì tới nhau.
 			auth.POST("/shop-login", han("dang-nhap-cua-hang", 10, 5*time.Minute), h.Auth.ShopLogin)
-			// Đăng nhập KHU ĐIỀU HÀNH NỀN TẢNG (email + mật khẩu, chỉ super_admin).
+			// Đăng nhập KHU ĐIỀU HÀNH NỀN TẢNG (email + mật khẩu của một tài khoản
+			// trong sổ `platform_users` — KHÔNG phải tài khoản của cửa hàng nào).
 			//
 			// KHÔNG bọc khachLa, và đó là toàn bộ lý do đường này tồn tại: người điều
 			// hành nền tảng không đứng ở cửa hàng nào, nên bắt request phải xác định
-			// được cửa hàng là bắt họ giả làm khách của một tiệm. Phần tra tài khoản
-			// tự tắt bộ lọc tenant trong đúng một câu truy vấn — xem
-			// AuthService.LoginPlatform, đọc nó trước khi sửa gì ở dòng này.
+			// được cửa hàng là bắt họ giả làm khách của một tiệm. Đường này cũng
+			// không chạm data plane lần nào — xem AuthService.LoginPlatform, đọc nó
+			// trước khi sửa gì ở dòng này.
 			//
 			// Hạn mức RIÊNG, cùng lý do với /auth/shop-login: gộp khoá với đường của
 			// khách mua hàng thì một máy dò mật khẩu quản trị sẽ khoá luôn cửa hàng.
 			auth.POST("/platform-login", han("dang-nhap-nen-tang", 10, 5*time.Minute), h.Auth.PlatformLogin)
+			// Làm mới token của khu điều hành. Đường RIÊNG vì /auth/refresh ngay
+			// dưới từ chối mọi token không thuộc cửa hàng nào — mà token nền tảng
+			// thì luôn như vậy, và điều kiện đó bên kia phải giữ nguyên.
+			auth.POST("/platform-refresh", han("lam-moi-token-nen-tang", 60, 5*time.Minute), h.Auth.PlatformRefresh)
+			// Hồ sơ người điều hành. Đi qua chốt của khu điều hành chứ không phải
+			// JWTAuth: token nền tảng không mang cửa hàng nào nên JWTAuth từ chối nó.
+			auth.GET("/platform-me", middleware.XacThucNenTang(jwtMgr, nguoiDieuHanh), h.Auth.PlatformMe)
 			// Rộng tay hơn hẳn: access token sống 15 phút, khách mở nhiều tab thì
 			// mỗi tab tự làm mới một lượt — siết chỗ này là đá văng người đang mua hàng.
 			auth.POST("/refresh", han("lam-moi-token", 60, 5*time.Minute), h.Auth.Refresh)
@@ -508,6 +532,43 @@ func New(cfg *config.Config, jwtMgr *jwt.Manager, tenMien domain.TenantDomainRep
 			if !cfg.App.IsProduction() {
 				admin.POST("/notifications/test", h.Notif.TestPush)
 			}
+		}
+
+		// --- Khu điều hành nền tảng ---
+		//
+		// Nhóm này đọc/ghi CONTROL PLANE: bảng giá, tính năng gói — dữ liệu của
+		// nền tảng, không thuộc cửa hàng nào. Vì vậy nó KHÔNG được bộ lọc tenant
+		// che chắn, và phải tự canh cửa.
+		//
+		// MỘT middleware duy nhất, và cố ý KHÔNG phải JWTAuth + RequireRoles:
+		// `super_admin` là vai trò trong MỘT CỬA HÀNG, cửa hàng nào cũng có một
+		// người như vậy. XacThucNenTang đòi TOKEN NỀN TẢNG — thứ chỉ
+		// /auth/platform-login cấp sau khi đối chiếu mật khẩu trong sổ
+		// `platform_users`. Đọc chú thích ở middleware đó trước khi đụng vào.
+		//
+		// h.Plan nil = chưa dựng control plane: không đăng ký đường nào cả, nhóm
+		// trả 404 y như trước khi có nó. Khác với việc đăng ký rồi trả 503 ở từng
+		// đường — một hệ thống chưa lắp bộ phận này thì đừng quảng cáo là có.
+		if h.Plan != nil {
+			nenTang := v1.Group("/platform", middleware.XacThucNenTang(jwtMgr, nguoiDieuHanh))
+			// Danh mục phần mềm — thứ khu điều hành đọc đầu tiên để dựng bộ chọn
+			// phần mềm, vì mọi màn hình phía sau đều tách theo app.
+			nenTang.GET("/apps", h.Plan.Apps)
+			// "features" nằm sau /:id nên không có đường tĩnh nào bị hiểu nhầm thành
+			// id gói.
+			nenTang.GET("/plans", h.Plan.List)
+			nenTang.GET("/plans/:id/features", h.Plan.Features)
+			nenTang.PUT("/plans/:id/features", h.Plan.UpdateFeatures)
+
+			// Ba màn hình còn lại. Tất cả đều ĐỌC XUYÊN MỌI KHÁCH HÀNG, và phạm vi
+			// duy nhất giới hạn chúng là phân công phần mềm của người gọi.
+			//
+			// "Người dùng thử" và "Người dùng chính thức" là CÙNG một đường, khác
+			// mỗi `?trang_thai=` — hai bảng dữ liệu giống hệt nhau chỉ khác một bộ
+			// lọc thì tách làm hai endpoint là chép luật lọc ra hai bản.
+			nenTang.GET("/tenants", h.KhachHang.KhachHang)
+			nenTang.GET("/subscriptions", h.KhachHang.HopDong)
+			nenTang.GET("/doanh-thu", h.KhachHang.DoanhThu)
 		}
 	}
 

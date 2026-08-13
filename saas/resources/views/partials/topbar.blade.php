@@ -1,4 +1,13 @@
-@php $me = session('api.user'); @endphp
+@php
+    $me = session('api.user');
+    // Vai trò khu điều hành là một CHUỖI (owner|operator|support) — sổ nền tảng
+    // không có bảng vai trò riêng để lấy tên hiển thị như bên cửa hàng.
+    $vaiTro = [
+        'owner' => 'Chủ nền tảng',
+        'operator' => 'Điều hành',
+        'support' => 'Hỗ trợ (chỉ xem)',
+    ][data_get($me, 'role')] ?? data_get($me, 'role');
+@endphp
 <header class="topbar">
     <h1 class="page-title">@yield('title', 'Tổng quan')</h1>
 
@@ -13,7 +22,7 @@
                 <li class="px-3 py-2">
                     <div class="fw-semibold small">{{ data_get($me, 'full_name') ?: '—' }}</div>
                     <div class="text-muted-x small">{{ data_get($me, 'email') }}</div>
-                    <span class="badge text-bg-secondary mt-1">{{ data_get($me, 'role.display_name') ?: data_get($me, 'role.name') }}</span>
+                    <span class="badge text-bg-secondary mt-1">{{ $vaiTro ?: '—' }}</span>
                 </li>
                 <li><hr class="dropdown-divider"></li>
                 <li>
