@@ -167,14 +167,8 @@
         }
         .rail-status-line {
             display: flex; align-items: center; gap: 10px;
-            padding: 8px 12px 0;
+            padding: 8px 12px;
             font-size: 13px; line-height: 20px; color: rgba(255, 255, 255, .78);
-        }
-        .rail-status-host {
-            display: block; padding: 0 12px 6px;
-            font-family: var(--font-data); font-size: 11px; line-height: 16px;
-            letter-spacing: 0; color: rgba(255, 255, 255, .38);
-            overflow-wrap: anywhere;
         }
         .dot { width: 7px; height: 7px; border-radius: 50%; flex: 0 0 7px; }
         .dot-good { background: #46C08D; }

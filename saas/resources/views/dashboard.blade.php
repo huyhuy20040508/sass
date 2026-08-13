@@ -210,9 +210,13 @@
 
                     @unless ($apiOnline)
                         <p class="warn-note mb-0">
-                            Không gọi được <span class="mono">/health</span>. Kiểm tra Go API đã chạy ở cổng
-                            8080 chưa, và <span class="mono">API_BASE_URL</span> trong
-                            <span class="mono">saas/.env</span>.
+                            {{-- Không ghi cứng số cổng ở đây: máy cục bộ dùng 8080 còn máy
+                                 thật dùng 8090 (8080 và 8081 đã bị dự án football chiếm),
+                                 nên một con số cố định thì luôn sai ở một trong hai nơi.
+                                 Chỉ trỏ vào chỗ khai báo là đủ. --}}
+                            Không gọi được <span class="mono">/health</span>. Kiểm tra dịch vụ Go API
+                            còn chạy không, và <span class="mono">API_BASE_URL</span> trong
+                            <span class="mono">saas/.env</span> có trỏ đúng chỗ không.
                         </p>
                     @endunless
                 </div>
