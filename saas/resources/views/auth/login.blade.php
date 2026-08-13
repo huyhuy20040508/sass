@@ -56,11 +56,15 @@
            mà ảnh sản phẩm mờ sau thẻ đăng nhập cũng đúng là kiểu trang mà bản
            mẫu nào cũng dựng. Ảnh vẫn nằm trong public/images nếu cần lấy lại.
 
-           Ở chân bảng cũng từng in địa chỉ Go API. Đã bỏ: trang đăng nhập thì ai
-           mở cũng thấy, mà địa chỉ đó là chuyện nội bộ — trên máy thật nó ra
-           http://127.0.0.1:8090/api/v1, tức là khoe luôn cổng dịch vụ cho người
-           chưa đăng nhập. Trong khu điều hành vẫn giữ (đáy thanh trái): ở đó
-           người xem đã là người nhà và nó có ích khi dò lỗi kết nối. */
+           Ở chân bảng cũng từng in config('api.base_url'). Đã bỏ: trang đăng nhập
+           thì ai mở cũng thấy, mà trên máy thật giá trị đó là địa chỉ nội bộ kèm
+           số cổng của dịch vụ — không có lý do gì đưa cho người chưa đăng nhập.
+           Trong khu điều hành vẫn giữ (đáy thanh trái): ở đó người xem đã đăng
+           nhập rồi và nó có ích khi dò lỗi kết nối.
+
+           Lưu ý khi sửa khối style này: chú thích CSS ĐƯỢC GỬI VỀ trình duyệt,
+           khác chú thích Blade (loại bị xoá lúc biên dịch). Viết số cổng hay
+           đường dẫn nội bộ vào đây là vẫn phơi ra đúng thứ vừa gỡ đi. */
         .brand-side {
             background: linear-gradient(180deg, var(--plum) 0%, var(--plum) 52%, var(--plum-deep) 100%);
             display: flex; flex-direction: column;
