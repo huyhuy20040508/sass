@@ -40,12 +40,14 @@
     <nav class="topbar__nav" aria-label="Điều hướng chính">
       <a href="#tinh-nang">Tính năng</a>
       <a href="#mot-ngay">Cách dùng</a>
-      <a href="#bang-gia">Bảng giá</a>
+      <a href="#bang-gia">Các gói</a>
       <a href="#cau-hoi">Câu hỏi</a>
     </nav>
 
+    <!-- KHÔNG có liên kết "Đăng nhập" ở đây nữa. Trang này nói chuyện với người
+         CHƯA dùng Sellio; khách đã có tài khoản vào thẳng địa chỉ đăng nhập của
+         cửa hàng họ, không đi vòng qua trang giới thiệu. -->
     <div class="topbar__act">
-      <a class="lnk" href="https://order.selliotech.store">Đăng nhập</a>
       <a class="btn btn--sm" href="#dang-ky">Dùng thử miễn phí</a>
     </div>
   </div>
@@ -324,9 +326,14 @@
   <section class="sec sec--alt" id="bang-gia">
     <div class="wrap">
       <header class="sec__head">
-        <p class="eyebrow">Bảng giá</p>
+        <!-- Nhãn là "Các gói" chứ không còn "Bảng giá": một mục tên Bảng giá mà
+             không có giá nào đọc như trang lỗi. id #bang-gia GIỮ NGUYÊN — nó là
+             đích của liên kết ở thanh trên, chân trang và có thể cả link đã chia
+             sẻ ra ngoài. -->
+        <p class="eyebrow">Các gói</p>
         <h2 class="h2">Trả theo tháng, đổi gói hoặc dừng lúc nào cũng được</h2>
-        <p class="sec__sub">Mọi gói đều có 14 ngày dùng thử đầy đủ tính năng, không cần thẻ.</p>
+        <p class="sec__sub">Mọi gói đều có 14 ngày dùng thử đầy đủ tính năng, không cần thẻ.
+           Giá báo khi bạn liên hệ, theo số cửa hàng và số tài khoản cần dùng.</p>
       </header>
 
       <div class="plans">
@@ -334,7 +341,10 @@
         <article class="giay plan">
           <p class="plan__name">Khởi đầu</p>
           <p class="plan__for">Shop một mình chủ chạy</p>
-          <p class="plan__price"><span class="plan__num">199.000</span><span class="plan__unit">đ / tháng</span></p>
+          <!-- KHÔNG công khai số tiền. Cả ba gói đều "Liên hệ": giá bán chốt khi
+               nói chuyện với khách. Con số thật nằm ở bảng giá của khu điều hành
+               (selliotech_platform.plans) và chỉ ra ngoài qua báo giá. -->
+          <p class="plan__price"><span class="plan__num plan__num--word">Liên hệ</span></p>
           <div class="rc-rule rc-rule--dark"></div>
           <ul class="list list--plan">
             <li>1 cửa hàng, 2 tài khoản</li>
@@ -350,7 +360,7 @@
           <p class="plan__badge">Hầu hết chọn gói này</p>
           <p class="plan__name">Cửa hàng</p>
           <p class="plan__for">Có nhân viên, có kho riêng</p>
-          <p class="plan__price"><span class="plan__num">499.000</span><span class="plan__unit">đ / tháng</span></p>
+          <p class="plan__price"><span class="plan__num plan__num--word">Liên hệ</span></p>
           <div class="rc-rule rc-rule--dark"></div>
           <ul class="list list--plan">
             <li>1 cửa hàng, 10 tài khoản</li>
@@ -539,9 +549,6 @@
         </div>
       </div>
 
-      <p class="cta__alt">
-        Muốn tự làm luôn? <a class="lnk lnk--strong" href="https://order.selliotech.store">Vào thẳng trang quản trị</a>
-      </p>
     </div>
   </section>
 
@@ -557,14 +564,8 @@
     <div class="foot__col">
       <p class="foot__head">Sản phẩm</p>
       <a href="#tinh-nang">Tính năng</a>
-      <a href="#bang-gia">Bảng giá</a>
+      <a href="#bang-gia">Các gói</a>
       <a href="#cau-hoi">Câu hỏi thường gặp</a>
-    </div>
-
-    <div class="foot__col">
-      <p class="foot__head">Đăng nhập</p>
-      <a href="https://order.selliotech.store">Quản trị cửa hàng</a>
-      <a href="https://admin.selliotech.store">Điều hành nền tảng</a>
     </div>
 
     <div class="foot__col">

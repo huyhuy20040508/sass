@@ -839,9 +839,12 @@ p { margin: 0; }
   border-top: 1px solid var(--vien);
 }
 
+/* HAI cột chữ, không phải ba: cột "Đăng nhập" đã bỏ đi cùng lúc với liên kết
+   vào trang quản trị. Để nguyên repeat(3) thì chân trang chừa một khoảng trống
+   bằng cả một cột ở mép phải mà không có gì trong đó. */
 .foot__grid {
   display: grid;
-  grid-template-columns: minmax(220px, 1.6fr) repeat(3, minmax(140px, 1fr));
+  grid-template-columns: minmax(220px, 1.6fr) repeat(2, minmax(140px, 1fr));
   gap: 40px;
   padding-bottom: 48px;
 }
@@ -901,7 +904,9 @@ p { margin: 0; }
   .day__item::before { display: none; }
   .day__time { padding-left: 20px; }
   .foot__grid { grid-template-columns: minmax(0, 1fr); gap: 32px; }
-  .topbar__act .lnk { display: none; }
+  /* `.topbar__act .lnk { display: none }` từng ở đây để giấu liên kết "Đăng
+     nhập" trên màn hình hẹp. Liên kết đó đã bỏ hẳn khỏi trang, nên luật này
+     không còn gì để giấu. */
 }
 
 /* ── ai tắt hiệu ứng thì tắt hẳn ─────────────────────────────────────── */

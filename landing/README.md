@@ -35,13 +35,25 @@ Màu và chữ khai báo ở đầu `styles.css` dưới dạng biến, sửa m�
 | Chỗ | Đang là | Cần |
 |---|---|---|
 | `main.js` → `ENDPOINT` | chuỗi rỗng | địa chỉ API nhận đăng ký; để rỗng thì form chỉ báo "đã nhận" mà không gửi đi đâu |
-| Giá ba gói trong `index.html` | 199.000đ / 499.000đ / Liên hệ | giá bán thật |
 | Số điện thoại | `0900 000 000` (ở chân trang và trong `main.js`) | số hotline thật |
 | Email | `hello@selliotech.store` | hộp thư thật |
 | Tên cửa hàng mẫu trên phiếu | Thời trang Minh Anh | giữ nguyên cũng được, đây là ví dụ |
 
 Phần nội dung tính năng lấy đúng theo những gì Shop Admin đang có, không hứa thứ chưa làm.
 Riêng mục "chuỗi nhiều cửa hàng" trong bảng giá là hướng đang làm — bỏ gói đó đi nếu chưa muốn bán.
+
+## Không công khai giá
+
+Cả ba gói trong mục `#bang-gia` đều ghi "Liên hệ" — trang này KHÔNG in số tiền, cố ý. Giá bán
+thật nằm ở bảng giá của khu điều hành (`selliotech_platform.plans`, màn hình *Các gói dịch vụ*)
+và chỉ ra ngoài qua báo giá cho từng khách.
+
+Nhãn ở thanh trên, chân trang và đầu mục vì vậy là "Các gói" chứ không phải "Bảng giá". `id` của
+mục vẫn là `bang-gia`: đó là đích của các liên kết đang có, đổi đi là gãy hết.
+
+Muốn công khai giá trở lại thì thay `<span class="plan__num plan__num--word">Liên hệ</span>` bằng
+`<span class="plan__num">499.000</span><span class="plan__unit">đ / tháng</span>` — kiểu chữ cho
+cả hai dạng đã có sẵn trong `styles.css`.
 
 ## Đưa lên máy chủ
 
