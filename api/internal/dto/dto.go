@@ -163,6 +163,14 @@ type AuthResponse struct {
 	// Làm mới token KHÔNG trả lại trường này — Shop Admin cất vào session lúc
 	// đăng nhập và giữ nguyên tới lúc đăng xuất.
 	Tenant *domain.Tenant `json:"tenant,omitempty"`
+	// CuaHangKhoa = true: cửa hàng đã HẾT HẠN HỢP ĐỒNG. Phiên vừa cấp vẫn dùng
+	// được, nhưng chỉ cho ĐÚNG một đường đọc (gói dịch vụ) — mọi đường khác trả
+	// 403 kèm mã CUA_HANG_KHOA.
+	//
+	// Chỉ vai trò quản lý mới nhận được phiên như vậy; nhân viên bị từ chối ngay
+	// từ lượt đăng nhập. Shop Admin đọc cờ này để đưa người dùng thẳng tới trang
+	// gói dịch vụ thay vì để họ bấm quanh và nhận lỗi ở từng trang.
+	CuaHangKhoa bool `json:"cua_hang_khoa,omitempty"`
 }
 
 // PlatformAuthResponse — kết quả đăng nhập / làm mới token của KHU ĐIỀU HÀNH.
@@ -1692,4 +1700,193 @@ type DoanhThuResponse struct {
 	TheoQuan []DoanhThuItem `json:"theo_quan"`
 	TongTien float64        `json:"tong_tien" example:"29970000"`
 	SoLanThu int            `json:"so_lan_thu" example:"3"`
+}
+
+// ---------- Gói dịch vụ CỦA CHÍNH CỬA HÀNG ----------
+//
+// Khối này phục vụ màn hình "Các gói dịch vụ" trong Shop Admin — chỗ chủ tiệm tự
+// tra mình đang dùng gói nào, còn bao nhiêu ngày, và muốn gia hạn thì có những
+// mức giá nào. Nó ĐỌC CÙNG hai bảng với khu điều hành (`subscriptions`, `plans`)
+// nhưng qua một cửa khác và hẹp hơn hẳn: đúng một khách, đúng một phần mềm.
+//
+// CỐ Ý KHÔNG có ghi chú hợp đồng, ghi chú khách và thông tin liên hệ trong sổ
+// nền tảng. Đó là chỗ người bán ghi việc nội bộ ("khách trả chậm", "anh Sơn giới
+// thiệu"), và nó không dành cho mắt khách đọc.
+
+// HopDongCuaToi là hợp đồng ĐANG CHẠY của cửa hàng đang đăng nhập.
+//
+// Ba hạn mức và cờ tên miền lấy THẲNG từ hợp đồng chứ không tra sang bảng giá:
+// bảng giá được phép đổi, hợp đồng đã ký thì không (xem domain.Subscription).
+// Giá trị 0 ở ba hạn mức nghĩa là KHÔNG GIỚI HẠN — màn hình phải in ra chữ.
+type HopDongCuaToi struct {
+	TenApp string `json:"ten_app" example:"Sellio Order"`
+	// Goi là MÃ gói đã chốt trong hợp đồng; TenGoi là tên hiển thị tra từ bảng
+	// giá, rơi về mã khi không tra ra (hợp đồng thoả thuận riêng).
+	Goi    string `json:"goi" example:"cua_hang"`
+	TenGoi string `json:"ten_goi" example:"Cửa hàng"`
+	// TrangThai: trial | active | past_due. `canceled` không bao giờ tới đây —
+	// đường đọc chỉ trả hợp đồng còn hiệu lực.
+	TrangThai string `json:"trang_thai" example:"active"`
+	// ChuKy: thang | nam
+	ChuKy        string    `json:"chu_ky" example:"thang"`
+	Gia          float64   `json:"gia" example:"499000"`
+	ChiNhanh     uint      `json:"chi_nhanh" example:"1"`
+	TaiKhoan     uint      `json:"tai_khoan" example:"0"`
+	SanPham      uint      `json:"san_pham" example:"0"`
+	TenMienRieng bool      `json:"ten_mien_rieng" example:"false"`
+	BatDau       time.Time `json:"bat_dau"`
+	HetHan       time.Time `json:"het_han"`
+	// DaHetHan là câu trả lời DUY NHẤT ĐÚNG cho "hết hạn chưa", so tới từng giây.
+	//
+	// KHÔNG suy ra từ ConLaiNgay. Hợp đồng vừa hết hạn hai phút trước có
+	// ConLaiNgay = 0 chứ không âm, nên `con_lai_ngay < 0` đọc thành "chưa hết
+	// hạn" đúng trong khoảng nguy hiểm nhất — ngay sau thời khắc hết hạn, lúc màn
+	// hình phải báo động nhất.
+	DaHetHan bool `json:"da_het_han" example:"false"`
+	// ConLaiNgay là số ngày còn lại, LÀM TRÒN LÊN: còn 2 phút vẫn là "1 ngày" chứ
+	// không phải 0, và quá hạn 25 giờ là -1. Đây là con số màn hình in to nhất,
+	// nên nó được tính ở máy chủ — hai nơi tự tính theo giờ máy mình là hai câu
+	// trả lời khác nhau cho cùng một hợp đồng.
+	//
+	// 0 mang HAI nghĩa, và phải đọc kèm DaHetHan mới phân biệt được: hết hạn
+	// trong hôm nay (chưa hết) hoặc vừa hết hạn trong hôm nay (đã hết).
+	ConLaiNgay int `json:"con_lai_ngay" example:"41"`
+	// DungThu = true: hợp đồng còn ở KỲ DÙNG THỬ, khách chưa trả đồng nào. Khác
+	// hẳn khách cũ sắp tới hạn, và câu mời gia hạn phải khác theo.
+	DungThu bool `json:"dung_thu" example:"false"`
+}
+
+// GoiDichVuCuaToiResponse — GET /admin/goi-dich-vu.
+//
+// HopDong nil = cửa hàng chưa có hợp đồng nào trong sổ nền tảng. Đó là trạng
+// thái HỢP LỆ chứ không phải lỗi (cửa hàng dựng tay trước khi có control plane),
+// và màn hình phải nói ra điều đó thay vì hiện một khối trống.
+//
+// BangGia chỉ gồm gói ĐANG BÁN của phần mềm này, cộng thêm đúng dòng gói mà hợp
+// đồng hiện tại đang dùng — kể cả khi nó đã ngừng bán. Thiếu vế sau thì khách
+// đang dùng một gói cũ mở trang ra và không thấy gói của mình đâu cả.
+type GoiDichVuCuaToiResponse struct {
+	HopDong *HopDongCuaToi `json:"hop_dong"`
+	BangGia []PlanItem     `json:"bang_gia"`
+	// Fields là siêu dữ liệu của từng khoá hạn mức (nhãn, đơn vị, giá trị khi gói
+	// không khai). Trả kèm để màn hình khỏi chép lại bảng khoá lần thứ hai —
+	// thêm một hạn mức mới ở registry là trang này tự có thêm dòng.
+	Fields []PlanFeatureField `json:"fields"`
+}
+
+// ---------- Khu điều hành: cấu hình của NHÀ CUNG CẤP ----------
+
+// CauHinhNenTangField mô tả MỘT ô cấu hình theo registry của service.
+//
+// Màn hình dựng form từ danh sách này, nên bảng khoá không bị chép lại lần thứ
+// hai ở tầng Blade — thêm một ô mới bên Go là màn hình tự có thêm ô.
+type CauHinhNenTangField struct {
+	Key string `json:"key" example:"ck_so_tai_khoan"`
+	// Type: text | bool | image | textarea
+	Type  string `json:"type" example:"text"`
+	Label string `json:"label" example:"Số tài khoản"`
+	// GoiY là câu in dưới ô nhập, viết cho người bán đọc.
+	GoiY    string `json:"goi_y" example:"Chỉ gồm chữ số."`
+	MacDinh string `json:"mac_dinh" example:""`
+	// BatBuocKhiBat = true: bỏ trống ô này mà vẫn bật hình thức TƯƠNG ỨNG thì API
+	// từ chối lưu. Trả ra để màn hình đánh dấu sao đỏ đúng chỗ, thay vì để người
+	// dùng bấm Lưu rồi mới biết.
+	BatBuocKhiBat bool `json:"bat_buoc_khi_bat" example:"true"`
+	// CongTac là khoá bật/tắt chi phối ô này ("ck_bat", "payos_bat"). Rỗng với
+	// chính ô công tắc. Màn hình dùng nó để gom ô vào đúng khối và để biết sao đỏ
+	// đang nói về hình thức nào.
+	CongTac string `json:"cong_tac" example:"ck_bat"`
+	// BiMat = true: giá trị cất ở dạng MÃ HOÁ và KHÔNG bao giờ trả nguyên văn —
+	// `values` chỉ mang bản che (••••1234). Gửi lên chuỗi rỗng nghĩa là GIỮ
+	// NGUYÊN khoá cũ, không phải xoá.
+	BiMat bool `json:"bi_mat" example:"true"`
+	Max   int  `json:"max" example:"32"`
+}
+
+// CauHinhNenTangResponse — GET/PUT /platform/cau-hinh.
+//
+// Values là map phẳng khoá → giá trị, ĐÃ ghép với mặc định của registry: khoá
+// chưa có dòng dưới database vẫn xuất hiện, mang giá trị mặc định.
+type CauHinhNenTangResponse struct {
+	Values map[string]string     `json:"values"`
+	Fields []CauHinhNenTangField `json:"fields"`
+	// KhoaMaHoa = false: máy chủ CHƯA khai PLATFORM_SECRET_KEY, nên mọi ô bí mật
+	// đều không lưu được. Trả ra để màn hình nói trước điều đó, thay vì để người
+	// dùng gõ xong khoá PayOS rồi bấm Lưu và nhận lỗi.
+	KhoaMaHoa bool `json:"khoa_ma_hoa" example:"true"`
+}
+
+// CauHinhNenTangUpdateRequest — ghi nhiều khoá trong một lần gọi.
+//
+// Chỉ những khoá gửi lên bị đổi, khoá không gửi giữ nguyên. Khoá lạ làm cả yêu
+// cầu bị từ chối 422 chứ không âm thầm ghi xuống.
+type CauHinhNenTangUpdateRequest struct {
+	Items map[string]string `json:"items" binding:"required,min=1,max=30"`
+}
+
+// ---------- Khách tự gia hạn ----------
+
+// DatGiaHanRequest — khách chọn gói và số tháng để gia hạn.
+//
+// KHÔNG có số tiền: giá do máy chủ tra từ bảng giá và chốt vào đơn. Nhận số tiền
+// từ client nghĩa là ai cũng gia hạn được với giá một đồng.
+type DatGiaHanRequest struct {
+	PlanID uint `json:"plan_id" binding:"required" example:"2"`
+	// SoThang: 1–24. Dài hơn là một thoả thuận cần người nói chuyện với nhau, không
+	// phải một ô chọn trên màn hình.
+	SoThang int `json:"so_thang" binding:"required,min=1,max=24" example:"3"`
+}
+
+// DonGiaHanResponse là một đơn gia hạn nhìn từ phía CHỦ TIỆM.
+//
+// Cố ý KHÔNG mang id hợp đồng, id gói hay tên cổng thanh toán: màn hình chỉ cần
+// biết trả bao nhiêu, trả ở đâu, và đã xong chưa.
+type DonGiaHanResponse struct {
+	ID    uint `json:"id" example:"12"`
+	MaDon uint `json:"ma_don" example:"12"`
+	// TenGoi là gói của HỢP ĐỒNG hiện tại, để màn hình nhắc lại khách đang gia hạn
+	// cái gì.
+	TenGoi string `json:"ten_goi" example:"Cửa hàng"`
+	// ----- BÊN MUA: cửa hàng đang trả tiền -----
+	//
+	// Có mặt vì một trang thanh toán phải nói rõ ĐANG THU TIỀN CHO AI. Không có
+	// nó, người bấm trả tiền trên một máy dùng chung không có cách nào chắc mình
+	// đang gia hạn đúng cửa hàng của mình — và tiền đã chuyển thì không rút lại
+	// được.
+	//
+	// Ba ô liên hệ lấy từ SỔ KHÁCH HÀNG của nền tảng, tức đúng thứ sẽ in trên hoá
+	// đơn. Sai thì khách sửa được bằng cách gọi cho nhà cung cấp — nên hiện ra là
+	// để họ phát hiện, không phải để trang trí.
+	TenApp      string  `json:"ten_app" example:"Sellio Order"`
+	MaCuaHang   string  `json:"ma_cua_hang" example:"order1"`
+	TenCuaHang  string  `json:"ten_cua_hang" example:"Quốc Huy"`
+	NguoiLienHe string  `json:"nguoi_lien_he" example:"Nguyễn Quốc Huy"`
+	DienThoai   string  `json:"dien_thoai" example:"0901234567"`
+	Email       string  `json:"email" example:"huy@quochuy.vn"`
+	SoThang     uint    `json:"so_thang" example:"3"`
+	SoTien      float64 `json:"so_tien" example:"1497000"`
+	// TrangThai: cho_thanh_toan | da_thanh_toan | huy | het_han
+	TrangThai string `json:"trang_thai" example:"cho_thanh_toan"`
+	// DaTra là bản rút gọn của TrangThai cho màn hình khỏi so chuỗi — nó quyết
+	// định trang thanh toán hiện "đang chờ" hay "đã gia hạn".
+	DaTra bool `json:"da_tra" example:"false"`
+	// CheckoutURL là trang trả tiền của cổng — đường LUI, cho khách muốn trả
+	// bằng ví điện tử hoặc thẻ. Trang thanh toán của mình tự dựng được màn hình
+	// chuyển khoản từ năm trường ngay dưới, nên khách không bắt buộc phải rời
+	// phần mềm.
+	CheckoutURL string `json:"checkout_url"`
+	// QRCode là chuỗi VietQR nguyên văn — màn hình tự vẽ mã QR từ nó.
+	QRCode string `json:"qr_code"`
+	// Bốn ô dưới là bản CHỮ của chính mã QR, cho khách không quét được (máy bàn,
+	// app ngân hàng cũ) vẫn chuyển tay đúng.
+	NganHangBIN string `json:"ngan_hang_bin" example:"970422"`
+	SoTaiKhoan  string `json:"so_tai_khoan"`
+	ChuTaiKhoan string `json:"chu_tai_khoan"`
+	// NoiDung là nội dung chuyển khoản — thứ duy nhất nối một lần tiền vào với
+	// một đơn. Gõ sai thì tiền vào tài khoản mà không đơn nào được chốt.
+	NoiDung   string     `json:"noi_dung"`
+	HetHanLuc *time.Time `json:"het_han_luc"`
+	// HanMoi là hạn hợp đồng SAU khi đã gia hạn — chỉ có nghĩa khi DaTra = true.
+	// Đây là câu trả lời khách chờ nghe nhất sau khi trả tiền.
+	HanMoi time.Time `json:"han_moi"`
 }

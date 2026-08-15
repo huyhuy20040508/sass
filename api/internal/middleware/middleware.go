@@ -27,6 +27,10 @@ const (
 	// CtxPlatformApps là TẬP PHẦN MỀM người điều hành được đụng vào
 	// (domain.QuyenApp), cũng do XacThucNenTang đặt.
 	CtxPlatformApps = "ctx_platform_apps"
+	// CtxCuaHangKhoa = true: cửa hàng ĐÃ BỊ KHOÁ (hợp đồng hết hạn) nhưng request
+	// này vẫn được đi tiếp, vì nó nằm trong danh sách đường cho phép khi khoá.
+	// Handler nào cần nói khác đi trong tình huống đó thì đọc cờ này.
+	CtxCuaHangKhoa = "ctx_cua_hang_khoa"
 )
 
 // CORS cấu hình Cross-Origin cho các origin được phép.
@@ -88,7 +92,17 @@ func RequestLogger() gin.HandlerFunc {
 // phien = nil thì bỏ qua vế thứ hai (chỉ kiểm chữ ký, y như trước). Có mặt để
 // bài kiểm thử dựng middleware mà không cần database; ĐỪNG truyền nil ở
 // cmd/api.
-func JWTAuth(mgr *jwt.Manager, phien domain.PhienRepository) gin.HandlerFunc {
+//
+// choPhepKhiKhoa là các ĐƯỜNG (c.FullPath, vd "/api/v1/admin/goi-dich-vu") vẫn
+// đi được khi CỬA HÀNG ĐÃ BỊ KHOÁ vì hết hạn hợp đồng. Danh sách này phải luôn
+// ngắn và phải là đường CHỈ ĐỌC: nó là ngoại lệ duy nhất của chốt chặn quan
+// trọng nhất hệ thống. Lý do nó tồn tại — xem choPhepKhiCuaHangKhoa.
+func JWTAuth(mgr *jwt.Manager, phien domain.PhienRepository, choPhepKhiKhoa ...string) gin.HandlerFunc {
+	choPhep := make(map[string]bool, len(choPhepKhiKhoa))
+	for _, duong := range choPhepKhiKhoa {
+		choPhep[duong] = true
+	}
+
 	return func(c *gin.Context) {
 		token := extractBearer(c)
 		if token == "" {
@@ -111,7 +125,7 @@ func JWTAuth(mgr *jwt.Manager, phien domain.PhienRepository) gin.HandlerFunc {
 			response.Error(c, 401, "Phiên đăng nhập đã cũ, vui lòng đăng nhập lại")
 			return
 		}
-		if !phienConSong(c, phien, claims) {
+		if !phienConSong(c, phien, claims, choPhep) {
 			return
 		}
 		applyIdentity(c, claims)
@@ -129,7 +143,9 @@ func JWTAuth(mgr *jwt.Manager, phien domain.PhienRepository) gin.HandlerFunc {
 // hàng cần gọi cho nhà cung cấp phần mềm, người bị khoá tài khoản cần gọi cho
 // quản lý của họ. Một câu "phiên hết hiệu lực" chung chung đẩy cả hai đi hỏi
 // nhầm chỗ.
-func phienConSong(c *gin.Context, phien domain.PhienRepository, claims *jwt.Claims) bool {
+func phienConSong(
+	c *gin.Context, phien domain.PhienRepository, claims *jwt.Claims, choPhep map[string]bool,
+) bool {
 	if phien == nil {
 		return true
 	}
@@ -163,9 +179,7 @@ func phienConSong(c *gin.Context, phien domain.PhienRepository, claims *jwt.Clai
 		// động. Không tách hai câu — với người đang ngồi trước màn hình thì "cửa
 		// hàng bị khoá" và "cửa hàng không còn" dẫn tới cùng một việc: gọi cho
 		// nhà cung cấp.
-		response.Error(c, 401, "Cửa hàng đang tạm khoá, vui lòng liên hệ nhà cung cấp phần mềm")
-
-		return false
+		return choPhepKhiCuaHangKhoa(c, claims, choPhep)
 	case !tt.CoNguoiDung:
 		response.Error(c, 401, "Tài khoản không còn tồn tại, vui lòng đăng nhập lại")
 
@@ -177,6 +191,47 @@ func phienConSong(c *gin.Context, phien domain.PhienRepository, claims *jwt.Clai
 	}
 
 	return true
+}
+
+// choPhepKhiCuaHangKhoa quyết định một request của CỬA HÀNG ĐÃ BỊ KHOÁ đi được
+// tới đâu. true = cho đi tiếp.
+//
+// VÌ SAO KHÔNG ĐÓNG SẠCH NHƯ TRƯỚC: khoá cửa hàng vì hết hạn hợp đồng mà chặn cả
+// đường đọc gói dịch vụ thì người bị khoá không còn chỗ nào biết mình vừa hết
+// hạn, hết hạn từ bao giờ, và gia hạn bao nhiêu tiền — họ chỉ thấy màn hình đăng
+// nhập từ chối mật khẩu đúng. Cách chữa duy nhất khi đó là gọi điện, mà gọi cho
+// ai thì cũng không trang nào nói.
+//
+// Ngoại lệ này hẹp theo BA chiều, và cả ba đều cần thiết:
+//
+//   - CHỈ vai trò quản lý (super_admin, admin). Nhân viên bán hàng không gia hạn
+//     được gì, giữ họ lại trong một phần mềm đã khoá chỉ là để họ bấm vào từng
+//     trang một và nhận lỗi. Họ nhận đúng câu 401 như trước và bị đưa ra màn hình
+//     đăng nhập, nơi câu chữ nói rõ phải hỏi ai.
+//   - CHỈ những đường trong danh sách cho phép — hôm nay là một đường đọc duy
+//     nhất. Mọi đường còn lại bị chặn ngay tại đây, TRƯỚC khi chạm bất kỳ handler
+//     nào, nên không có chỗ nào cho một lượt ghi lọt qua.
+//   - 403 CHỨ KHÔNG PHẢI 401, kèm mã máy đọc được. 401 nghĩa là "danh tính hết
+//     hiệu lực" và Shop Admin xử lý nó bằng cách xoá session rồi đá ra màn hình
+//     đăng nhập — đúng cái phải tránh ở đây, vì phiên này vẫn còn dùng được cho
+//     trang gói dịch vụ. Mã `CUA_HANG_KHOA` là thứ bên đó rẽ nhánh, thay vì so
+//     khớp câu chữ tiếng Việt.
+func choPhepKhiCuaHangKhoa(c *gin.Context, claims *jwt.Claims, choPhep map[string]bool) bool {
+	if claims.Role != domain.RoleSuperAdmin && claims.Role != domain.RoleAdmin {
+		response.Error(c, 401, "Cửa hàng đang tạm khoá, vui lòng liên hệ nhà cung cấp phần mềm")
+
+		return false
+	}
+
+	c.Set(CtxCuaHangKhoa, true)
+	if choPhep[c.FullPath()] {
+		return true
+	}
+
+	response.ErrorMa(c, 403, response.MaCuaHangKhoa,
+		"Cửa hàng đã hết hạn sử dụng — vui lòng gia hạn để tiếp tục làm việc")
+
+	return false
 }
 
 // applyIdentity gắn danh tính vừa xác minh vào cả gin.Context (cho handler đọc)

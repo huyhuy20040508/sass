@@ -756,7 +756,7 @@ func (s *orderReturnService) signal(ctx context.Context, rt *domain.OrderReturn)
 		return
 	}
 	payload := returnPayload(rt)
-	s.notify.Signal(ctx, realtime.TopicAdmin, realtime.EventReturn, payload)
+	s.notify.SignalAdmin(ctx, realtime.EventReturn, payload)
 	if rt.UserID != nil {
 		s.notify.Signal(ctx, realtime.TopicUser(*rt.UserID), realtime.EventReturn, payload)
 	}

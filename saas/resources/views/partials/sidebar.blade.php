@@ -81,6 +81,15 @@
                 @endforeach
             </div>
         </div>
+
+        {{-- Cài đặt của NHÀ CUNG CẤP: không thuộc phần mềm nào nên đứng ngoài
+             nhóm sản phẩm ở trên, và đứng cuối — thứ sửa vài tháng một lần thì
+             không tranh chỗ với thứ mở hằng ngày. --}}
+        <a href="{{ route('platform.cai-dat.thanh-toan') }}"
+           class="rail-link {{ request()->routeIs('platform.cai-dat.*') ? 'is-current' : '' }}"
+           @if (request()->routeIs('platform.cai-dat.*')) aria-current="page" @endif>
+            Phương thức thanh toán
+        </a>
     </nav>
 
     <div class="rail-status">

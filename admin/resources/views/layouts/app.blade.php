@@ -198,7 +198,30 @@
 @include('partials.modals')
 
 {{-- Chuông thông báo + luồng realtime. Nạp SAU partials.toasts vì nó dùng
-     window.adminToast được định nghĩa trong đó. --}}
-<script src="{{ asset('js/realtime.js') }}?v=4"></script>
+     window.adminToast được định nghĩa trong đó.
+
+     Cửa hàng hết hạn thì KHÔNG nạp: mọi đường thông báo lúc đó trả 403, nên
+     script chỉ ngồi thử lại và bắn lỗi vào console. Người đang đọc trang gia hạn
+     không cần thêm một cái chuông hỏng. --}}
+@unless(\App\Services\HanSuDung::daKhoa())
+    <script src="{{ asset('js/realtime.js') }}?v=5"></script>
+@endunless
+
+{{-- HẸN GIỜ HẾT HẠN — trên MỌI trang quản trị.
+     Hợp đồng chết trong lúc người dùng đang mở dở một trang thì chính trang đó
+     phải nói ra, chứ không đợi họ bấm đi đâu đó mới biết. Tới giây hết hạn thì
+     đưa thẳng sang trang Các gói dịch vụ, nơi có hộp thoại và bảng giá.
+
+     Số giây do MÁY CHỦ tính (xem HanSuDung::giayConLai) nên đồng hồ máy khách
+     lệch giờ cũng không ảnh hưởng. Chỉ đặt hẹn khi còn dưới 24 giờ: setTimeout
+     không đáng tin với khoảng dài, và tab nào cũng đóng trước đó. --}}
+@php $gdvGiayConLai = \App\Services\HanSuDung::giayConLai(); @endphp
+@if(! \App\Services\HanSuDung::daKhoa() && $gdvGiayConLai !== null && $gdvGiayConLai > 0 && $gdvGiayConLai < 86400)
+    <script>
+        setTimeout(function () {
+            window.location.href = @json(route('admin.goi-dich-vu.index'));
+        }, {{ $gdvGiayConLai * 1000 }} + 1500);
+    </script>
+@endif
 </body>
 </html>

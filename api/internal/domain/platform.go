@@ -643,7 +643,10 @@ type HopDongRepository interface {
 	// Đụng khoá uq_invoices_ky (subscription_id, period_start) thì trả về
 	// ErrDaThuKyNay — ghi trùng một kỳ là cách dễ nhất để doanh thu tháng đó
 	// phồng gấp đôi mà không ai thấy sai.
-	ThuTien(ctx context.Context, hd Invoice) error
+	// Nhận CON TRỎ để trả lại id vừa cấp: đơn gia hạn của khách phải chỉ ra được
+	// dòng sổ thu tương ứng, nếu không thì hai bảng nói hai chuyện và không ai
+	// đối chiếu được.
+	ThuTien(ctx context.Context, hd *Invoice) error
 	// TongDaThu cộng tiền đã thu của MỘT hợp đồng, kèm số lần thu.
 	TongDaThu(ctx context.Context, id uint) (tong float64, soLan int, err error)
 	// TenantDangCoHopDong trả về id những khách ĐANG có hợp đồng còn hiệu lực cho
@@ -679,11 +682,49 @@ type HopDongRepository interface {
 	// KHÔNG đụng `ends_at`: cái mốc đó là ngày hợp đồng chết, và nó phải đứng
 	// nguyên để lượt gia hạn sau còn biết khách nợ từ bao giờ.
 	DanhDauQuaHan(ctx context.Context, ids []uint) (int64, error)
+	// SapHetHan liệt kê hợp đồng đang chạy sẽ hết hạn TRONG KHOẢNG [bayGio, den).
+	//
+	// Khác QuaHan ở chiều thời gian: bên kia nhặt hợp đồng đã chết để khoá cửa
+	// hàng, còn đây nhặt hợp đồng CÒN SỐNG để nhắc khách trước khi nó chết.
+	SapHetHan(ctx context.Context, bayGio, den time.Time) ([]HopDongQuaHan, error)
+	// DanhDauDaNhac ghi "đã nhắc hợp đồng này trong ngày đó".
+	//
+	// Trả về true nếu ĐÂY là lượt nhắc đầu tiên trong ngày, false nếu đã nhắc rồi.
+	// Hiện thực phải dựa vào KHOÁ CHÍNH của bảng chứ đừng đọc trước rồi ghi: lượt
+	// quét chạy 5 phút một lần và hai tiến trình cùng đọc thấy "chưa nhắc" sẽ cùng
+	// gửi, biến cái chuông của khách thành nơi không ai bấm nữa.
+	DanhDauDaNhac(ctx context.Context, subscriptionID uint, ngay time.Time, conLaiNgay int) (bool, error)
 	// DoiTrangThaiKhach ghi `tenants.status` của SỔ NỀN TẢNG.
 	//
 	// Bản sao ở control plane, chỉ để khu điều hành nhìn đúng. Chốt chặn thật
 	// nằm ở data plane — xem CuaHangMoiRepository.DoiTrangThai.
 	DoiTrangThaiKhach(ctx context.Context, tenantIDs []uint, trangThai string) (int64, error)
+}
+
+// ThueBaoCuaKhachRepository đọc thuê bao của ĐÚNG MỘT khách — đường đọc duy nhất
+// đi từ phía CỬA HÀNG sang sổ nền tảng.
+//
+// CHẠY TRÊN CONTROL PLANE (repository.NewPlatformDB), cùng ràng buộc với
+// KhachHangRepository. Khác nó ở chỗ nguy hiểm: ba hàm bên kia đọc XUYÊN mọi
+// khách và được canh bằng middleware của khu điều hành, còn hàm dưới đây chạy
+// sau token của một cửa hàng bất kỳ. Vì thế nó nhận tenantID làm THAM SỐ BẮT
+// BUỘC và không có biến thể nào bỏ điều kiện đó ra — quên lọc ở đây nghĩa là chủ
+// tiệm này đọc được hợp đồng của tiệm khác.
+//
+// Lưu ý bộ lọc tenant tự động KHÔNG có tác dụng ở đây: nó chỉ gắn vào kết nối
+// data plane, còn sổ nền tảng thì không. Điều kiện `tenant_id = ?` phải nằm ngay
+// trong câu truy vấn.
+type ThueBaoCuaKhachRepository interface {
+	// HienTai trả về hợp đồng CÒN HIỆU LỰC của một khách cho một phần mềm.
+	//
+	// "Còn hiệu lực" = mọi trạng thái trừ `canceled`, khớp đúng định nghĩa của
+	// khoá uq_subscriptions_current — nên kết quả nhiều nhất là một dòng. Hợp
+	// đồng quá hạn (`past_due`) VẪN trả về: đó chính là lúc chủ tiệm mở trang gói
+	// dịch vụ ra xem, và giấu nó đi thì màn hình nói "chưa có hợp đồng nào" ngay
+	// giữa lúc khách cần biết mình vừa hết hạn.
+	//
+	// ErrNotFound = khách chưa có hợp đồng nào trong sổ, một trạng thái hợp lệ.
+	HienTai(ctx context.Context, tenantID uint, maApp string) (*HopDongDayDu, error)
 }
 
 // HopDongQuaHan là MỘT hợp đồng đã chạy quá hạn mà chưa ai đóng lại.
@@ -809,6 +850,45 @@ type CuaHangMoiRepository interface {
 	// Nhận cả danh sách vì lượt quét hạn khoá nhiều khách một lượt: một câu
 	// UPDATE ... IN (...) thay cho N câu.
 	DoiTrangThai(ctx context.Context, ids []uint, trangThai string) (int64, error)
+}
+
+// PlatformSetting là MỘT ô cấu hình của NHÀ CUNG CẤP phần mềm, dạng khoá · giá
+// trị.
+//
+// KHÔNG CÓ tenant_id, và đó là khác biệt quan trọng nhất với `settings` bên data
+// plane (bảng cùng vai trò nhưng của từng cửa hàng): đây là cấu hình của chính
+// mình, một bộ duy nhất cho cả nền tảng. Lẫn hai bảng là đem số tài khoản của
+// mình ghi đè cấu hình của một khách hàng.
+//
+// KHÔNG CẤT BÍ MẬT ở đây. Số tài khoản ngân hàng là thông tin công khai; khoá API
+// của cổng thanh toán thì không, và chúng ở lại .env cho tới ngày có chỗ mã hoá
+// đàng hoàng — xem migration 0015.
+type PlatformSetting struct {
+	Key       string    `json:"key" gorm:"column:setting_key;primaryKey"`
+	Value     string    `json:"value"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+func (PlatformSetting) TableName() string { return "platform_settings" }
+
+// PlatformSettingRepository đọc/ghi cấu hình của nhà cung cấp.
+//
+// CHẠY TRÊN CONTROL PLANE (repository.NewPlatformDB), cùng ràng buộc với
+// PlanRepository. Đưa nhầm kết nối data plane vào thì bảng `platform_settings`
+// không tồn tại bên đó và mọi lượt gọi đều lỗi — nhầm kiểu ồn ào, dễ thấy.
+type PlatformSettingRepository interface {
+	// All trả về TOÀN BỘ dòng đang có, dạng map khoá → giá trị.
+	//
+	// Khoá thiếu dòng KHÔNG được điền hộ ở đây: giá trị mặc định là chuyện của
+	// registry bên service, và trộn hai nguồn lại thì không ai phân biệt được
+	// "người bán đã khai đúng bằng mặc định" với "chưa ai khai bao giờ".
+	All(ctx context.Context) (map[string]string, error)
+	// Save ghi nhiều khoá trong MỘT giao dịch.
+	//
+	// Tất-cả-hoặc-không: một bộ thông tin chuyển khoản ghi được nửa chừng là số
+	// tài khoản mới đứng cạnh tên chủ tài khoản cũ — khách chuyển tiền theo đó thì
+	// tiền đi đúng một nơi không ai ngờ.
+	Save(ctx context.Context, items map[string]string) error
 }
 
 // PlatformUser là tài khoản của KHU ĐIỀU HÀNH nền tảng — mình và người làm cùng,

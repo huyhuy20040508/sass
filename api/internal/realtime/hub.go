@@ -15,10 +15,25 @@ import (
 )
 
 // Tên kênh (topic). Mỗi client chỉ nhận sự kiện của kênh mình đăng ký.
-const (
-	// TopicAdmin — mọi nhân viên quản trị đang mở trang admin.
-	TopicAdmin = "admin"
-)
+
+// TopicAdmin trả kênh quản trị CỦA MỘT CỬA HÀNG.
+//
+// PHẢI KÈM MÃ CỬA HÀNG. Trước đây đây là một hằng số "admin" dùng chung, nghĩa
+// là mọi quản trị viên của MỌI cửa hàng cùng nghe một kênh: tiệm A có đơn mới
+// thì tiệm B cũng nhận sự kiện đó và hiện toast "Đơn hàng mới #..." kèm tên
+// khách của tiệm A. Danh sách trong chuông thì vẫn đúng (câu truy vấn có lọc
+// tenant), nên lỗi này không lộ ra ở đâu ngoài cái toast — chỗ chẳng ai nghĩ tới
+// khi kiểm tra ranh giới dữ liệu.
+//
+// tenantID = 0 (không xác định được cửa hàng) trả về kênh rỗng: KHÔNG rơi về một
+// kênh chung. Rơi về kênh chung là mở lại đúng cái vừa đóng.
+func TopicAdmin(tenantID uint) string {
+	if tenantID == 0 {
+		return ""
+	}
+
+	return "admin:t" + strconv.FormatUint(uint64(tenantID), 10)
+}
 
 // TopicUser trả kênh riêng của một khách hàng.
 func TopicUser(userID uint) string { return "user:" + strconv.FormatUint(uint64(userID), 10) }

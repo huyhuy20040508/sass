@@ -30,6 +30,9 @@ type Config struct {
 
 type AppConfig struct {
 	Name string
+	// ShopAdminURL là gốc địa chỉ khu quản trị cửa hàng. Dùng để dựng đường quay
+	// về sau khi khách trả tiền gia hạn ở cổng thanh toán.
+	ShopAdminURL string
 	// Code là MÃ PHẦN MỀM mà tiến trình này phục vụ — khớp `apps.code` của
 	// control plane ("order", "bida"...).
 	//
@@ -81,6 +84,14 @@ type DatabaseConfig struct {
 	// ConnMaxIdleTime phải NHỎ HƠN wait_timeout của MySQL, nếu không kết nối
 	// nhàn rỗi bị server đóng sẽ được tái sử dụng và gây lỗi "invalid connection".
 	ConnMaxIdleTime time.Duration
+	// SecretKey CHỈ có nghĩa với cfg.Platform: khoá mã hoá các giá trị bí mật cất
+	// trong `platform_settings` (khoá cổng thanh toán của nền tảng — xem
+	// pkg/bimat). Nằm trong struct này vì nó đi cùng đúng một kết nối, và tách ra
+	// một struct riêng cho một chuỗi thì chỗ khai báo xa chỗ dùng.
+	//
+	// Rỗng = chưa khai. API vẫn chạy; màn hình cài đặt từ chối lưu ô bí mật và
+	// nói rõ lý do, thay vì lặng lẽ ghi plaintext.
+	SecretKey string
 }
 
 // DSN trả về chuỗi kết nối MySQL cho GORM.
@@ -293,6 +304,16 @@ func Load() (*Config, error) {
 	v.SetDefault("PLATFORM_DB_USER", "")
 	v.SetDefault("PLATFORM_DB_PASSWORD", "")
 	v.SetDefault("PLATFORM_DB_NAME", "selliotech_platform")
+	// Khoá mã hoá những giá trị KHÔNG được nằm nguyên văn trong database — hôm
+	// nay là khoá cổng thanh toán của nền tảng (xem pkg/bimat). Rỗng = chưa khai:
+	// API vẫn chạy, chỉ là màn hình cài đặt TỪ CHỐI lưu mấy ô bí mật và nói rõ
+	// lý do. Từ chối chứ không ghi plaintext.
+	v.SetDefault("PLATFORM_SECRET_KEY", "")
+	// Gốc địa chỉ Shop Admin — nơi cổng thanh toán đưa khách quay về sau khi trả
+	// tiền gia hạn. Máy chủ tự dựng returnUrl từ đây chứ KHÔNG nhận từ client:
+	// để client tự khai địa chỉ quay về là mở một đường chuyển hướng sang bất cứ
+	// đâu, ký sẵn bằng tên miền của mình.
+	v.SetDefault("SHOP_ADMIN_URL", "http://localhost:8001")
 	// Pool nhỏ hơn hẳn DB_*: control plane phục vụ khu điều hành (vài người) và
 	// vài lượt tra sổ, không phải luồng bán hàng. Cấp cho nó 50 kết nối là lấy
 	// mất chỗ của chính data plane trong hạn mức max_connections của MySQL.
@@ -301,7 +322,13 @@ func Load() (*Config, error) {
 	v.SetDefault("JWT_SECRET", "")
 	v.SetDefault("JWT_ACCESS_TTL", "15m")
 	v.SetDefault("JWT_REFRESH_TTL", "168h")
-	v.SetDefault("CORS_ALLOW_ORIGINS", "http://localhost:8000,http://localhost:8001")
+	// localhost VÀ 127.0.0.1 là HAI ORIGIN khác nhau với trình duyệt, dù cùng trỏ
+	// về một máy. Thiếu bản 127.0.0.1 thì mở Shop Admin bằng địa chỉ số sẽ hỏng
+	// đúng một thứ: luồng realtime (/events) — đường DUY NHẤT trình duyệt gọi
+	// thẳng sang API, mọi lượt gọi khác đi vòng qua PHP nên không dính CORS.
+	// Nghĩa là chuông thông báo im lặng chết, còn các trang vẫn chạy bình thường.
+	v.SetDefault("CORS_ALLOW_ORIGINS",
+		"http://localhost:8000,http://localhost:8001,http://127.0.0.1:8000,http://127.0.0.1:8001")
 	v.SetDefault("TRUSTED_PROXIES", "127.0.0.1,::1")
 	v.SetDefault("RATE_LIMIT_ENABLED", true)
 	v.SetDefault("MAIL_HOST", "smtp.gmail.com")
@@ -438,6 +465,8 @@ func Load() (*Config, error) {
 	// đúng cả với giá trị lấy từ biến môi trường lẫn từ .env.
 	cfg.Platform = cfg.Database
 	cfg.Platform.Name = strings.TrimSpace(v.GetString("PLATFORM_DB_NAME"))
+	cfg.Platform.SecretKey = strings.TrimSpace(v.GetString("PLATFORM_SECRET_KEY"))
+	cfg.App.ShopAdminURL = strings.TrimRight(strings.TrimSpace(v.GetString("SHOP_ADMIN_URL")), "/")
 	cfg.Platform.MaxOpenConns = v.GetInt("PLATFORM_DB_MAX_OPEN_CONNS")
 	cfg.Platform.MaxIdleConns = v.GetInt("PLATFORM_DB_MAX_IDLE_CONNS")
 	if s := strings.TrimSpace(v.GetString("PLATFORM_DB_HOST")); s != "" {

@@ -197,3 +197,26 @@ func TestChuaCauHinhThiKhongGoi(t *testing.T) {
 		t.Fatalf("phải trả ErrNotConfigured, nhận: %v", err)
 	}
 }
+
+// Client dựng từ CẤU HÌNH ĐỘNG (khoá đọc từ database) chỉ cầm ba khoá, không có
+// BaseURL — và nếu trường đó rỗng thì mọi lượt gọi hỏng với "unsupported protocol
+// scheme", một câu chẳng nói gì về nguyên nhân.
+//
+// Đây là lỗi thật đã gặp: luồng khách tự gia hạn dựng client từ platform_settings
+// và người dùng chỉ thấy "cổng thanh toán đang không phản hồi".
+func TestNew_ThieuBaseURLThiRoiVeMacDinh(t *testing.T) {
+	c := New(config.PayOSConfig{ClientID: "a", APIKey: "b", ChecksumKey: "c"})
+
+	if c.cfg.BaseURL != BaseURLMacDinh {
+		t.Errorf("BaseURL rỗng phải rơi về %q, nhận %q", BaseURLMacDinh, c.cfg.BaseURL)
+	}
+}
+
+// Khai rõ BaseURL thì GIỮ NGUYÊN — đó là cách trỏ sang máy chủ thử của PayOS.
+func TestNew_GiuNguyenBaseURLDaKhai(t *testing.T) {
+	c := New(config.PayOSConfig{BaseURL: "https://thu.payos.vn", ClientID: "a", APIKey: "b", ChecksumKey: "c"})
+
+	if c.cfg.BaseURL != "https://thu.payos.vn" {
+		t.Errorf("phải giữ nguyên địa chỉ đã khai, nhận %q", c.cfg.BaseURL)
+	}
+}

@@ -219,8 +219,8 @@ func (r *hopDongRepository) KyCuoiDaThu(ctx context.Context, id uint) (*time.Tim
 }
 
 // ThuTien ghi một dòng vào sổ thu.
-func (r *hopDongRepository) ThuTien(ctx context.Context, hd domain.Invoice) error {
-	err := r.db.WithContext(ctx).Create(&hd).Error
+func (r *hopDongRepository) ThuTien(ctx context.Context, hd *domain.Invoice) error {
+	err := r.db.WithContext(ctx).Create(hd).Error
 
 	// uq_invoices_ky (subscription_id, period_start) là khoá duy nhất duy nhất
 	// của bảng, nên "trùng khoá" ở đây chỉ có một nghĩa.
@@ -295,6 +295,53 @@ func (r *hopDongRepository) QuaHan(ctx context.Context, moc time.Time) ([]domain
 		Scan(&rows).Error
 
 	return rows, err
+}
+
+// SapHetHan nhặt hợp đồng CÒN SỐNG sẽ hết hạn trong khoảng tới.
+//
+// Cùng bộ cột với QuaHan để hai đường dùng chung một kiểu dữ liệu — nơi gọi chỉ
+// khác nhau ở việc làm gì với danh sách đó (khoá cửa hàng, hay nhắc khách).
+func (r *hopDongRepository) SapHetHan(ctx context.Context, bayGio, den time.Time) ([]domain.HopDongQuaHan, error) {
+	var rows []domain.HopDongQuaHan
+	err := r.db.WithContext(ctx).
+		Table("subscriptions AS s").
+		Joins("JOIN tenants t ON t.id = s.tenant_id").
+		Joins("JOIN apps a ON a.id = s.app_id").
+		Select(`s.id, s.tenant_id, t.code AS ma_cua_hang, a.code AS ma_app,
+		        s.ends_at AS het_han, s.trial_ends_at IS NOT NULL AS dung_thu`).
+		Where("s.status IN ?", []string{domain.SubscriptionTrial, domain.SubscriptionActive}).
+		// Cận dưới là BÂY GIỜ: hợp đồng đã quá hạn thuộc về lượt khoá cửa hàng,
+		// không phải lượt nhắc — nhắc "còn 0 ngày" cho một khách đã bị khoá là nói
+		// sai với người đang không dùng được phần mềm.
+		Where("s.ends_at >= ? AND s.ends_at < ?", bayGio, den).
+		// Chỉ khách còn mở cửa: khách đang bị khoá vì lý do khác thì lời nhắc gia
+		// hạn không phải thứ họ cần đọc.
+		Where("t.status = ?", domain.TenantActive).
+		Order("s.ends_at").
+		Scan(&rows).Error
+
+	return rows, err
+}
+
+// DanhDauDaNhac chèn dấu "đã nhắc hợp đồng này hôm nay".
+//
+// DỰA VÀO KHOÁ CHÍNH, không đọc trước rồi ghi: `INSERT ... ON DUPLICATE KEY` trả
+// về 0 dòng khi đã có, và con số đó là câu trả lời cho "đã nhắc chưa". Đọc trước
+// thì hai lượt quét chạy chồng nhau cùng thấy "chưa nhắc" và khách nhận hai
+// thông báo giống hệt.
+func (r *hopDongRepository) DanhDauDaNhac(
+	ctx context.Context, subscriptionID uint, ngay time.Time, conLaiNgay int,
+) (bool, error) {
+	res := r.db.WithContext(ctx).Exec(`
+		INSERT INTO renewal_reminders (subscription_id, ngay, con_lai_ngay)
+		VALUES (?, ?, ?)
+		ON DUPLICATE KEY UPDATE subscription_id = subscription_id`,
+		subscriptionID, ngay.Format("2006-01-02"), conLaiNgay)
+	if res.Error != nil {
+		return false, res.Error
+	}
+
+	return res.RowsAffected > 0, nil
 }
 
 // ConHopDongSong lọc ra khách vẫn còn một hợp đồng CHƯA tới hạn.

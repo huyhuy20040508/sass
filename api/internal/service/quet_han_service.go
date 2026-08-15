@@ -2,11 +2,14 @@ package service
 
 import (
 	"context"
+	"math"
+	"strconv"
 	"time"
 
 	"go.uber.org/zap"
 
 	"sass-api/internal/domain"
+	"sass-api/internal/tenant"
 	"sass-api/pkg/logger"
 )
 
@@ -53,19 +56,43 @@ type KetQuaQuet struct {
 	// GiuLai là số khách quá hạn một phần mềm nhưng còn hợp đồng sống ở phần
 	// mềm khác, nên KHÔNG bị khoá.
 	GiuLai int
+	// DaNhac là số khách vừa được nhắc "sắp hết hạn" trong lượt này. Chỉ đếm lượt
+	// nhắc THẬT — khách đã nhắc hôm nay rồi thì không tính lại.
+	DaNhac int
 }
 
 type quetHanService struct {
 	hopDong domain.HopDongRepository
 	cuaHang domain.CuaHangMoiRepository
+	// thongBao đẩy lời nhắc vào chuông của cửa hàng (DATA PLANE) và bắn realtime
+	// xuống trình duyệt đang mở. nil = tắt hẳn phần nhắc hạn; phần khoá cửa hàng
+	// vẫn chạy bình thường.
+	thongBao NotificationService
 }
 
 // NewQuetHanService nhận repository hợp đồng của CONTROL PLANE và repository
 // cửa hàng của DATA PLANE — đúng cặp mà DungThuService cầm, và vì cùng lý do:
 // đây là hai việc duy nhất trong hệ thống phải ghi sang cả hai bên.
-func NewQuetHanService(hopDong domain.HopDongRepository, cuaHang domain.CuaHangMoiRepository) QuetHanService {
-	return &quetHanService{hopDong: hopDong, cuaHang: cuaHang}
+func NewQuetHanService(
+	hopDong domain.HopDongRepository,
+	cuaHang domain.CuaHangMoiRepository,
+	thongBao NotificationService,
+) QuetHanService {
+	return &quetHanService{hopDong: hopDong, cuaHang: cuaHang, thongBao: thongBao}
 }
+
+// SoNgayNhacTruoc — nhắc khách trước bao nhiêu ngày.
+//
+// NĂM NGÀY: đủ để chủ tiệm thu xếp tiền và không rơi vào cuối tuần, nhưng chưa
+// xa tới mức lời nhắc đọc như quảng cáo rồi bị bỏ qua. Khách được nhắc LẠI mỗi
+// ngày trong khoảng đó — xem migration 0018 về việc vì sao không nhắc đúng một lần.
+const SoNgayNhacTruoc = 5
+
+// LoaiThongBaoNhacHan là `notifications.type` của lời nhắc hạn.
+//
+// Mã riêng chứ không dùng chung với thông báo đơn hàng: giao diện chuông hiển
+// thị theo loại, và một lời nhắc gia hạn không nên mang biểu tượng cái giỏ hàng.
+const LoaiThongBaoNhacHan = "sap_het_han"
 
 // NhipQuetMacDinh — khoảng cách giữa hai lượt quét.
 //
@@ -113,6 +140,82 @@ func (s *quetHanService) Chay(ctx context.Context, nhip time.Duration) {
 	}
 }
 
+// nhacSapHetHan đẩy lời nhắc "sắp hết hạn" vào chuông của từng cửa hàng.
+//
+// CHẠY SAU bước khoá, và đó là thứ tự có chủ ý: khách vừa bị khoá trong cùng lượt
+// này không nên nhận thêm một lời nhắc "còn 0 ngày" — họ đã thấy màn hình khoá
+// rồi, và hai câu nói khác nhau về cùng một tình trạng thì câu nào cũng mất tin.
+//
+// Hỏng thì KHÔNG làm hỏng cả lượt quét: nhắc là việc phụ, còn khoá cửa hàng của
+// khách hết hạn mới là việc chính. Ghi nhật ký rồi đi tiếp.
+func (s *quetHanService) nhacSapHetHan(ctx context.Context) int {
+	if s.thongBao == nil {
+		return 0
+	}
+
+	bayGio := time.Now()
+	den := bayGio.AddDate(0, 0, SoNgayNhacTruoc)
+
+	ds, err := s.hopDong.SapHetHan(ctx, bayGio, den)
+	if err != nil {
+		logger.Error("không đọc được danh sách hợp đồng sắp hết hạn", zap.Error(err))
+
+		return 0
+	}
+
+	daNhac := 0
+	for _, hd := range ds {
+		// Làm tròn LÊN: hợp đồng chết sau 30 tiếng nữa là "còn 2 ngày", không phải
+		// "còn 1". Nói ít hơn thực tế thì khách tưởng mình còn ít thời gian hơn —
+		// sai theo chiều làm người ta hoảng, và lần sau họ không tin con số nữa.
+		conLai := int(math.Ceil(hd.HetHan.Sub(bayGio).Hours() / 24))
+
+		moi, err := s.hopDong.DanhDauDaNhac(ctx, hd.ID, bayGio, conLai)
+		if err != nil {
+			logger.Error("không ghi được dấu đã nhắc hạn",
+				zap.Uint("hop_dong", hd.ID), zap.Error(err))
+
+			continue
+		}
+		// Đã nhắc hôm nay rồi: lượt quét chạy 5 phút/lần, không có bước này thì
+		// khách nhận 288 thông báo giống hệt mỗi ngày.
+		if !moi {
+			continue
+		}
+
+		// Thông báo nằm ở DATA PLANE và bị lọc theo tenant, nên phải rót cửa hàng
+		// vào ctx trước khi ghi — đây là chỗ duy nhất trong lượt quét nền chạm vào
+		// dữ liệu của MỘT khách cụ thể.
+		ctxKhach := tenant.WithID(ctx, hd.TenantID)
+
+		tieuDe := "Phần mềm sắp hết hạn"
+		noiDung := "Hợp đồng còn " + strconv.Itoa(conLai) + " ngày, hết hạn " +
+			hd.HetHan.Format("15:04 02/01/2006") + ". Gia hạn ngay để không bị gián đoạn bán hàng."
+		if hd.DungThu {
+			tieuDe = "Bản dùng thử sắp hết hạn"
+			noiDung = "Bản dùng thử còn " + strconv.Itoa(conLai) + " ngày, hết hạn " +
+				hd.HetHan.Format("15:04 02/01/2006") +
+				". Hết thời gian này cửa hàng sẽ tạm khoá cho tới khi chuyển sang gói chính thức."
+		}
+
+		// userID = nil: kênh QUẢN TRỊ của cửa hàng đó. Chủ tiệm và quản trị viên
+		// thấy trong chuông, đồng thời trình duyệt đang mở nhận ngay qua SSE.
+		if n := s.thongBao.Push(ctxKhach, nil, LoaiThongBaoNhacHan, tieuDe, noiDung, map[string]any{
+			"con_lai_ngay": conLai,
+			"het_han":      hd.HetHan,
+			"dung_thu":     hd.DungThu,
+			"duong_dan":    "/admin/goi-dich-vu",
+		}); n != nil {
+			daNhac++
+			logger.Info("đã nhắc khách sắp hết hạn",
+				zap.Uint("tenant", hd.TenantID), zap.String("ma_cua_hang", hd.MaCuaHang),
+				zap.Int("con_lai_ngay", conLai))
+		}
+	}
+
+	return daNhac
+}
+
 func (s *quetHanService) QuetMotLuot(ctx context.Context) (KetQuaQuet, error) {
 	var kq KetQuaQuet
 
@@ -123,6 +226,11 @@ func (s *quetHanService) QuetMotLuot(ctx context.Context) (KetQuaQuet, error) {
 		return kq, err
 	}
 	if len(ds) == 0 {
+		// KHÔNG có hợp đồng nào quá hạn vẫn phải chạy bước nhắc: ngày bình thường
+		// thì đây chính là nhánh đi qua, và bỏ nhắc ở đây nghĩa là chỉ nhắc được
+		// vào đúng những ngày có người khác vừa bị khoá.
+		kq.DaNhac = s.nhacSapHetHan(ctx)
+
 		return kq, nil
 	}
 	kq.QuaHan = len(ds)
@@ -200,6 +308,12 @@ func (s *quetHanService) QuetMotLuot(ctx context.Context) (KetQuaQuet, error) {
 	if _, err := s.hopDong.DanhDauQuaHan(ctx, ids); err != nil {
 		return kq, err
 	}
+
+	// Nhắc SAU cùng: khách vừa bị khoá trong chính lượt này không nên nhận thêm
+	// một lời nhắc "sắp hết hạn" — họ đã thấy màn hình khoá rồi, và hai câu nói
+	// khác nhau về cùng một tình trạng thì câu nào cũng mất tin. Danh sách nhắc
+	// đọc lại từ database nên nó đã thấy trạng thái vừa ghi.
+	kq.DaNhac = s.nhacSapHetHan(ctx)
 
 	return kq, nil
 }

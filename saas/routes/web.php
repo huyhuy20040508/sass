@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\CauHinhController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\KhachHangOrderController;
 use Illuminate\Support\Facades\Route;
@@ -31,6 +32,22 @@ Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 // --- Khu điều hành (yêu cầu tài khoản trong sổ platform_users của nền tảng) ---
 Route::middleware('platform.auth')->name('platform.')->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+
+    /*
+     * Cài đặt của NHÀ CUNG CẤP — không thuộc phần mềm nào, nên nằm ngoài nhóm
+     * `khach-hang-order`.
+     *
+     * Hôm nay đúng một trang: phương thức thanh toán (khách trả tiền gia hạn vào
+     * đâu). Prefix `cai-dat` đã đặt sẵn để trang thứ hai — hồ sơ nhà cung cấp,
+     * mẫu email — về đúng chỗ mà không phải đổi đường của trang này.
+     *
+     * POST chứ không PUT: form HTML thường, trình duyệt chỉ gửi được GET/POST.
+     * Việc đi tiếp sang Go bằng phương thức nào là chuyện của ApiClient.
+     */
+    Route::prefix('cai-dat')->name('cai-dat.')->group(function () {
+        Route::get('/thanh-toan', [CauHinhController::class, 'thanhToan'])->name('thanh-toan');
+        Route::post('/thanh-toan', [CauHinhController::class, 'luuThanhToan'])->name('thanh-toan.luu');
+    });
 
     /*
      * QLTK khách hàng order — sổ tài khoản khách của phần mềm Sellio Order.

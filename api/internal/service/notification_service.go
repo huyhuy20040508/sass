@@ -7,6 +7,7 @@ import (
 
 	"sass-api/internal/domain"
 	"sass-api/internal/realtime"
+	"sass-api/internal/tenant"
 	"sass-api/pkg/logger"
 
 	"go.uber.org/zap"
@@ -31,6 +32,9 @@ type NotificationService interface {
 	Push(ctx context.Context, userID *uint, nType, title, content string, data map[string]any) *domain.Notification
 	// Signal đẩy một tín hiệu KHÔNG lưu database (vd: "đơn vừa đổi, làm mới bảng đi").
 	Signal(ctx context.Context, topic string, evType string, payload any)
+	// SignalAdmin như Signal nhưng tự chọn kênh quản trị của CỬA HÀNG trong ctx —
+	// dùng nó thay vì tự ghép tên kênh, xem realtime.TopicAdmin.
+	SignalAdmin(ctx context.Context, evType string, payload any)
 }
 
 type notificationService struct {
@@ -90,12 +94,41 @@ func (s *notificationService) Push(ctx context.Context, userID *uint, nType, tit
 		return nil
 	}
 
-	topic := realtime.TopicAdmin
+	topic := realtime.TopicUser(0)
 	if userID != nil {
 		topic = realtime.TopicUser(*userID)
+	} else {
+		// Kênh quản trị CỦA CỬA HÀNG trong ctx. Không xác định được cửa hàng thì
+		// KHÔNG phát đi đâu cả — thông báo đã nằm trong database rồi, và phát vào
+		// một kênh chung là gửi nó sang cửa hàng khác.
+		id, _ := tenant.ID(ctx)
+		topic = realtime.TopicAdmin(id)
 	}
+	if topic == "" {
+		return n
+	}
+
 	s.hub.Publish(topic, realtime.Event{Type: realtime.EventNotification, Payload: n})
+
 	return n
+}
+
+// SignalAdmin đẩy một tín hiệu KHÔNG lưu database tới kênh quản trị của CỬA HÀNG
+// trong ctx.
+//
+// Có mặt để nơi gọi không phải tự dựng tên kênh: chúng chỉ cầm ctx, và mỗi chỗ
+// tự ghép tên kênh là mỗi chỗ có thể quên mã cửa hàng — đúng cách lỗi rò sự kiện
+// giữa các tiệm đã xảy ra.
+func (s *notificationService) SignalAdmin(ctx context.Context, evType string, payload any) {
+	id, ok := tenant.ID(ctx)
+	if !ok {
+		logger.Warn("bỏ qua tín hiệu realtime vì chưa xác định được cửa hàng",
+			zap.String("su_kien", evType))
+
+		return
+	}
+
+	s.hub.Publish(realtime.TopicAdmin(id), realtime.Event{Type: evType, Payload: payload})
 }
 
 func (s *notificationService) Signal(_ context.Context, topic string, evType string, payload any) {

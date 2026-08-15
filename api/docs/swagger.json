@@ -1668,6 +1668,200 @@
                 }
             }
         },
+        "/admin/goi-dich-vu": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Hợp đồng hiện tại của CHÍNH cửa hàng này (gói, hạn mức đã ký, ngày hết\nhạn, số ngày còn lại) kèm bảng giá đang bán của phần mềm để chủ tiệm biết\ngia hạn hết bao nhiêu.\n`hop_dong` = null nghĩa là cửa hàng chưa có hợp đồng nào trong sổ nền\ntảng — trạng thái hợp lệ, không phải lỗi.\nHạn mức đọc THẲNG ở hợp đồng, không tra sang bảng giá: bảng giá đổi được,\nhợp đồng đã ký thì không. Giá trị 0 nghĩa là không giới hạn.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Gói dịch vụ"
+                ],
+                "summary": "Gói dịch vụ của cửa hàng đang đăng nhập",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.GoiDichVuCuaToiResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/goi-dich-vu/dat": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Tạo đơn gia hạn cho hợp đồng hiện tại của cửa hàng đang đăng nhập rồi sinh\nlink thanh toán. Số tiền do MÁY CHỦ tính (giá bảng giá × số tháng) và chốt\nvào đơn — bảng giá đổi sau đó không làm đổi số khách phải trả.\nĐơn cũ còn hiệu lực cho cùng gói và cùng số tháng thì trả lại đơn đó thay vì\nsinh link mới.\nGói \"Liên hệ\" (chưa công bố giá) và gói đã ngừng bán đều bị từ chối.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Gói dịch vụ"
+                ],
+                "summary": "Đặt đơn gia hạn và lấy link thanh toán",
+                "parameters": [
+                    {
+                        "description": "Gói và số tháng",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.DatGiaHanRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.DonGiaHanResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/goi-dich-vu/don/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Trang thanh toán hỏi lại đường này mỗi vài giây. Đơn còn chờ thì máy chủ HỎI\nTHẲNG CỔNG xem tiền vào chưa — đây là đường xác nhận dự phòng cho webhook,\ncần cho cả lúc chạy ở máy local (cổng không gọi vào localhost được) lẫn lúc\nwebhook tới trễ.\nTiền đã vào thì chính lượt gọi này chốt đơn: ghi sổ thu, đẩy hạn hợp đồng và\nmở khoá cửa hàng. Chốt đúng MỘT LẦN cho mỗi đơn, dù gọi bao nhiêu lần.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Gói dịch vụ"
+                ],
+                "summary": "Trạng thái một đơn gia hạn",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID đơn gia hạn",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.DonGiaHanResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/inventory": {
             "get": {
                 "security": [
@@ -10051,6 +10245,128 @@
                 }
             }
         },
+        "/platform/cau-hinh": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Trả về `values` (map khoá → giá trị, đã ghép mặc định của registry) và\n`fields` (siêu dữ liệu từng ô: kiểu, nhãn, gợi ý, bắt buộc hay không) để\nmàn hình dựng form mà không chép lại bảng khoá.\nHôm nay gồm bộ thông tin NHẬN CHUYỂN KHOẢN dùng cho việc khách gia hạn.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Platform - Cấu hình"
+                ],
+                "summary": "Cấu hình của nhà cung cấp",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.CauHinhNenTangResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Ghi nhiều khoá trong một lần gọi; khoá không gửi lên giữ nguyên. Khoá lạ\nlàm cả yêu cầu bị từ chối (422), không ghi xuống một phần.\nBẬT nhận chuyển khoản thì tên ngân hàng, số tài khoản, chủ tài khoản và\nmẫu nội dung đều bắt buộc — và mẫu nội dung phải chứa {ma_cua_hang}, thứ\nduy nhất nói tiền vừa vào là của khách nào.\nCHỈ vai trò owner/operator ghi được; support chỉ đọc.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Platform - Cấu hình"
+                ],
+                "summary": "Sửa cấu hình của nhà cung cấp",
+                "parameters": [
+                    {
+                        "description": "Các khoá cần ghi",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.CauHinhNenTangUpdateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.CauHinhNenTangResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
         "/platform/chinh-thuc": {
             "post": {
                 "security": [
@@ -10716,7 +11032,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Màn hình \"Người dùng thử\" là `?trang_thai=trial`, \"Người dùng chính thức\"\nlà `?trang_thai=active`. Sắp theo ngày hết hạn gần nhất trước —\n`con_lai_ngay` âm nghĩa là ĐÃ QUÁ HẠN.\nHạn mức trong câu trả lời lấy THẲNG từ hợp đồng, không tra bảng giá: bảng\ngiá được phép đổi, hợp đồng đã ký thì không. Giá trị 0 = không giới hạn.",
+                "description": "Màn hình \"Người dùng thử\" là `?nhom=dung_thu`, \"Người dùng chính thức\"\nlà `?nhom=chinh_thuc`. Lọc theo NHÓM chứ không theo `trang_thai`: trạng\nthái đổi theo thời gian (hết hạn → past_due, huỷ → canceled) nên lọc\ntheo nó thì hợp đồng biến mất khỏi màn hình đúng lúc cần nhìn nhất.\nSắp theo ngày hết hạn gần nhất trước, hợp đồng đã huỷ xuống cuối —\n`con_lai_ngay` âm nghĩa là ĐÃ QUÁ HẠN.\nHạn mức trong câu trả lời lấy THẲNG từ hợp đồng, không tra bảng giá: bảng\ngiá được phép đổi, hợp đồng đã ký thì không. Giá trị 0 = không giới hạn.",
                 "produces": [
                     "application/json"
                 ],
@@ -10735,6 +11051,12 @@
                         "type": "string",
                         "description": "trial | active | past_due | canceled",
                         "name": "trang_thai",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "dung_thu | chinh_thuc; bỏ trống = cả hai nhóm",
+                        "name": "nhom",
                         "in": "query"
                     }
                 ],
@@ -11299,6 +11621,41 @@
                     },
                     "403": {
                         "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/platform/webhook/payos": {
+            "post": {
+                "description": "PayOS gọi vào đây khi một đơn gia hạn được trả tiền. KHÔNG có token: thứ\nchứng minh gói dữ liệu đến từ PayOS là chữ ký HMAC-SHA256 tính trên chính\nbody — sai chữ ký thì từ chối thẳng.\nTiền vào ĐỦ số của đơn thì hợp đồng được đẩy hạn và cửa hàng mở khoá ngay.\nTrả thiếu thì chỉ ghi nhật ký để người bán đối soát tay, KHÔNG tự gia hạn.\nMã đơn lạ (của hệ thống khác dùng chung kênh) vẫn trả 200 kèm log — trả lỗi\nchỉ khiến PayOS gửi lại gói đó suốt nhiều giờ.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Platform - Gia hạn"
+                ],
+                "summary": "Webhook PayOS báo tiền gia hạn đã vào (công khai)",
+                "responses": {
+                    "200": {
+                        "description": "Đã nhận (hoặc đã bỏ qua)",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "400": {
+                        "description": "Không đọc được dữ liệu",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "401": {
+                        "description": "Chữ ký không hợp lệ",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
@@ -13843,6 +14200,10 @@
                 "access_token": {
                     "type": "string"
                 },
+                "cua_hang_khoa": {
+                    "description": "CuaHangKhoa = true: cửa hàng đã HẾT HẠN HỢP ĐỒNG. Phiên vừa cấp vẫn dùng\nđược, nhưng chỉ cho ĐÚNG một đường đọc (gói dịch vụ) — mọi đường khác trả\n403 kèm mã CUA_HANG_KHOA.\n\nChỉ vai trò quản lý mới nhận được phiên như vậy; nhân viên bị từ chối ngay\ntừ lượt đăng nhập. Shop Admin đọc cờ này để đưa người dùng thẳng tới trang\ngói dịch vụ thay vì để họ bấm quanh và nhận lỗi ở từng trang.",
+                    "type": "boolean"
+                },
                 "expires_in": {
                     "description": "giây",
                     "type": "integer"
@@ -14083,6 +14444,88 @@
                 },
                 "sort_order": {
                     "type": "integer"
+                }
+            }
+        },
+        "dto.CauHinhNenTangField": {
+            "type": "object",
+            "properties": {
+                "bat_buoc_khi_bat": {
+                    "description": "BatBuocKhiBat = true: bỏ trống ô này mà vẫn bật hình thức TƯƠNG ỨNG thì API\ntừ chối lưu. Trả ra để màn hình đánh dấu sao đỏ đúng chỗ, thay vì để người\ndùng bấm Lưu rồi mới biết.",
+                    "type": "boolean",
+                    "example": true
+                },
+                "bi_mat": {
+                    "description": "BiMat = true: giá trị cất ở dạng MÃ HOÁ và KHÔNG bao giờ trả nguyên văn —\n`values` chỉ mang bản che (••••1234). Gửi lên chuỗi rỗng nghĩa là GIỮ\nNGUYÊN khoá cũ, không phải xoá.",
+                    "type": "boolean",
+                    "example": true
+                },
+                "cong_tac": {
+                    "description": "CongTac là khoá bật/tắt chi phối ô này (\"ck_bat\", \"payos_bat\"). Rỗng với\nchính ô công tắc. Màn hình dùng nó để gom ô vào đúng khối và để biết sao đỏ\nđang nói về hình thức nào.",
+                    "type": "string",
+                    "example": "ck_bat"
+                },
+                "goi_y": {
+                    "description": "GoiY là câu in dưới ô nhập, viết cho người bán đọc.",
+                    "type": "string",
+                    "example": "Chỉ gồm chữ số."
+                },
+                "key": {
+                    "type": "string",
+                    "example": "ck_so_tai_khoan"
+                },
+                "label": {
+                    "type": "string",
+                    "example": "Số tài khoản"
+                },
+                "mac_dinh": {
+                    "type": "string",
+                    "example": ""
+                },
+                "max": {
+                    "type": "integer",
+                    "example": 32
+                },
+                "type": {
+                    "description": "Type: text | bool | image | textarea",
+                    "type": "string",
+                    "example": "text"
+                }
+            }
+        },
+        "dto.CauHinhNenTangResponse": {
+            "type": "object",
+            "properties": {
+                "fields": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.CauHinhNenTangField"
+                    }
+                },
+                "khoa_ma_hoa": {
+                    "description": "KhoaMaHoa = false: máy chủ CHƯA khai PLATFORM_SECRET_KEY, nên mọi ô bí mật\nđều không lưu được. Trả ra để màn hình nói trước điều đó, thay vì để người\ndùng gõ xong khoá PayOS rồi bấm Lưu và nhận lỗi.",
+                    "type": "boolean",
+                    "example": true
+                },
+                "values": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "dto.CauHinhNenTangUpdateRequest": {
+            "type": "object",
+            "required": [
+                "items"
+            ],
+            "properties": {
+                "items": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
                 }
             }
         },
@@ -14598,6 +15041,26 @@
                 }
             }
         },
+        "dto.DatGiaHanRequest": {
+            "type": "object",
+            "required": [
+                "plan_id",
+                "so_thang"
+            ],
+            "properties": {
+                "plan_id": {
+                    "type": "integer",
+                    "example": 2
+                },
+                "so_thang": {
+                    "description": "SoThang: 1–24. Dài hơn là một thoả thuận cần người nói chuyện với nhau, không\nphải một ô chọn trên màn hình.",
+                    "type": "integer",
+                    "maximum": 24,
+                    "minimum": 1,
+                    "example": 3
+                }
+            }
+        },
         "dto.DoanhThuItem": {
             "type": "object",
             "properties": {
@@ -14656,6 +15119,97 @@
                 }
             }
         },
+        "dto.DonGiaHanResponse": {
+            "type": "object",
+            "properties": {
+                "checkout_url": {
+                    "description": "CheckoutURL là trang trả tiền của cổng — đường LUI, cho khách muốn trả\nbằng ví điện tử hoặc thẻ. Trang thanh toán của mình tự dựng được màn hình\nchuyển khoản từ năm trường ngay dưới, nên khách không bắt buộc phải rời\nphần mềm.",
+                    "type": "string"
+                },
+                "chu_tai_khoan": {
+                    "type": "string"
+                },
+                "da_tra": {
+                    "description": "DaTra là bản rút gọn của TrangThai cho màn hình khỏi so chuỗi — nó quyết\nđịnh trang thanh toán hiện \"đang chờ\" hay \"đã gia hạn\".",
+                    "type": "boolean",
+                    "example": false
+                },
+                "dien_thoai": {
+                    "type": "string",
+                    "example": "0901234567"
+                },
+                "email": {
+                    "type": "string",
+                    "example": "huy@quochuy.vn"
+                },
+                "han_moi": {
+                    "description": "HanMoi là hạn hợp đồng SAU khi đã gia hạn — chỉ có nghĩa khi DaTra = true.\nĐây là câu trả lời khách chờ nghe nhất sau khi trả tiền.",
+                    "type": "string"
+                },
+                "het_han_luc": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer",
+                    "example": 12
+                },
+                "ma_cua_hang": {
+                    "type": "string",
+                    "example": "order1"
+                },
+                "ma_don": {
+                    "type": "integer",
+                    "example": 12
+                },
+                "ngan_hang_bin": {
+                    "description": "Bốn ô dưới là bản CHỮ của chính mã QR, cho khách không quét được (máy bàn,\napp ngân hàng cũ) vẫn chuyển tay đúng.",
+                    "type": "string",
+                    "example": "970422"
+                },
+                "nguoi_lien_he": {
+                    "type": "string",
+                    "example": "Nguyễn Quốc Huy"
+                },
+                "noi_dung": {
+                    "description": "NoiDung là nội dung chuyển khoản — thứ duy nhất nối một lần tiền vào với\nmột đơn. Gõ sai thì tiền vào tài khoản mà không đơn nào được chốt.",
+                    "type": "string"
+                },
+                "qr_code": {
+                    "description": "QRCode là chuỗi VietQR nguyên văn — màn hình tự vẽ mã QR từ nó.",
+                    "type": "string"
+                },
+                "so_tai_khoan": {
+                    "type": "string"
+                },
+                "so_thang": {
+                    "type": "integer",
+                    "example": 3
+                },
+                "so_tien": {
+                    "type": "number",
+                    "example": 1497000
+                },
+                "ten_app": {
+                    "description": "----- BÊN MUA: cửa hàng đang trả tiền -----\n\nCó mặt vì một trang thanh toán phải nói rõ ĐANG THU TIỀN CHO AI. Không có\nnó, người bấm trả tiền trên một máy dùng chung không có cách nào chắc mình\nđang gia hạn đúng cửa hàng của mình — và tiền đã chuyển thì không rút lại\nđược.\n\nBa ô liên hệ lấy từ SỔ KHÁCH HÀNG của nền tảng, tức đúng thứ sẽ in trên hoá\nđơn. Sai thì khách sửa được bằng cách gọi cho nhà cung cấp — nên hiện ra là\nđể họ phát hiện, không phải để trang trí.",
+                    "type": "string",
+                    "example": "Sellio Order"
+                },
+                "ten_cua_hang": {
+                    "type": "string",
+                    "example": "Quốc Huy"
+                },
+                "ten_goi": {
+                    "description": "TenGoi là gói của HỢP ĐỒNG hiện tại, để màn hình nhắc lại khách đang gia hạn\ncái gì.",
+                    "type": "string",
+                    "example": "Cửa hàng"
+                },
+                "trang_thai": {
+                    "description": "TrangThai: cho_thanh_toan | da_thanh_toan | huy | het_han",
+                    "type": "string",
+                    "example": "cho_thanh_toan"
+                }
+            }
+        },
         "dto.FacebookLoginRequest": {
             "type": "object",
             "required": [
@@ -14695,6 +15249,27 @@
                     "maximum": 60,
                     "minimum": 1,
                     "example": 12
+                }
+            }
+        },
+        "dto.GoiDichVuCuaToiResponse": {
+            "type": "object",
+            "properties": {
+                "bang_gia": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.PlanItem"
+                    }
+                },
+                "fields": {
+                    "description": "Fields là siêu dữ liệu của từng khoá hạn mức (nhãn, đơn vị, giá trị khi gói\nkhông khai). Trả kèm để màn hình khỏi chép lại bảng khoá lần thứ hai —\nthêm một hạn mức mới ở registry là trang này tự có thêm dòng.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.PlanFeatureField"
+                    }
+                },
+                "hop_dong": {
+                    "$ref": "#/definitions/dto.HopDongCuaToi"
                 }
             }
         },
@@ -14844,6 +15419,75 @@
             "properties": {
                 "hop_dong": {
                     "$ref": "#/definitions/dto.HopDongChiTiet"
+                }
+            }
+        },
+        "dto.HopDongCuaToi": {
+            "type": "object",
+            "properties": {
+                "bat_dau": {
+                    "type": "string"
+                },
+                "chi_nhanh": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "chu_ky": {
+                    "description": "ChuKy: thang | nam",
+                    "type": "string",
+                    "example": "thang"
+                },
+                "con_lai_ngay": {
+                    "description": "ConLaiNgay là số ngày còn lại, LÀM TRÒN LÊN: còn 2 phút vẫn là \"1 ngày\" chứ\nkhông phải 0, và quá hạn 25 giờ là -1. Đây là con số màn hình in to nhất,\nnên nó được tính ở máy chủ — hai nơi tự tính theo giờ máy mình là hai câu\ntrả lời khác nhau cho cùng một hợp đồng.\n\n0 mang HAI nghĩa, và phải đọc kèm DaHetHan mới phân biệt được: hết hạn\ntrong hôm nay (chưa hết) hoặc vừa hết hạn trong hôm nay (đã hết).",
+                    "type": "integer",
+                    "example": 41
+                },
+                "da_het_han": {
+                    "description": "DaHetHan là câu trả lời DUY NHẤT ĐÚNG cho \"hết hạn chưa\", so tới từng giây.\n\nKHÔNG suy ra từ ConLaiNgay. Hợp đồng vừa hết hạn hai phút trước có\nConLaiNgay = 0 chứ không âm, nên `con_lai_ngay \u003c 0` đọc thành \"chưa hết\nhạn\" đúng trong khoảng nguy hiểm nhất — ngay sau thời khắc hết hạn, lúc màn\nhình phải báo động nhất.",
+                    "type": "boolean",
+                    "example": false
+                },
+                "dung_thu": {
+                    "description": "DungThu = true: hợp đồng còn ở KỲ DÙNG THỬ, khách chưa trả đồng nào. Khác\nhẳn khách cũ sắp tới hạn, và câu mời gia hạn phải khác theo.",
+                    "type": "boolean",
+                    "example": false
+                },
+                "gia": {
+                    "type": "number",
+                    "example": 499000
+                },
+                "goi": {
+                    "description": "Goi là MÃ gói đã chốt trong hợp đồng; TenGoi là tên hiển thị tra từ bảng\ngiá, rơi về mã khi không tra ra (hợp đồng thoả thuận riêng).",
+                    "type": "string",
+                    "example": "cua_hang"
+                },
+                "het_han": {
+                    "type": "string"
+                },
+                "san_pham": {
+                    "type": "integer",
+                    "example": 0
+                },
+                "tai_khoan": {
+                    "type": "integer",
+                    "example": 0
+                },
+                "ten_app": {
+                    "type": "string",
+                    "example": "Sellio Order"
+                },
+                "ten_goi": {
+                    "type": "string",
+                    "example": "Cửa hàng"
+                },
+                "ten_mien_rieng": {
+                    "type": "boolean",
+                    "example": false
+                },
+                "trang_thai": {
+                    "description": "TrangThai: trial | active | past_due. `canceled` không bao giờ tới đây —\nđường đọc chỉ trả hợp đồng còn hiệu lực.",
+                    "type": "string",
+                    "example": "active"
                 }
             }
         },

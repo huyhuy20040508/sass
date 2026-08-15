@@ -55,10 +55,28 @@ type Client struct {
 	http *http.Client
 }
 
+// BaseURLMacDinh là địa chỉ máy chủ PayOS.
+//
+// Cùng giá trị với mặc định của PAYOS_BASE_URL trong config, và cố ý lặp lại ở
+// đây: client này còn được dựng từ CẤU HÌNH ĐỘNG (khoá đọc từ database, xem
+// GiaHanService.congPayOS), và ở đó không có .env nào điền hộ trường BaseURL.
+// Thiếu nó thì mọi lượt gọi hỏng với "unsupported protocol scheme" — một câu lỗi
+// chẳng nói gì về nguyên nhân, mà người dùng thì chỉ thấy "cổng thanh toán đang
+// không phản hồi".
+const BaseURLMacDinh = "https://api-merchant.payos.vn"
+
 // New dựng client từ cấu hình. Trả về client kể cả khi chưa khai khoá — mọi lời
 // gọi sẽ trả ErrNotConfigured, để phần còn lại của ứng dụng không phải kiểm tra
 // nil ở từng chỗ dùng.
+//
+// BaseURL bỏ trống thì rơi về BaseURLMacDinh: nơi dựng client từ database chỉ
+// cầm ba khoá, và bắt nó phải nhớ điền thêm một địa chỉ hằng số là mở đúng cái
+// bẫy vừa nói ở trên.
 func New(cfg config.PayOSConfig) *Client {
+	if strings.TrimSpace(cfg.BaseURL) == "" {
+		cfg.BaseURL = BaseURLMacDinh
+	}
+
 	return &Client{
 		cfg: cfg,
 		// Có hạn thời gian vì lời gọi này nằm ngay trên đường đặt hàng của khách:

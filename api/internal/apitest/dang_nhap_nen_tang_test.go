@@ -227,7 +227,7 @@ func TestDangNhapNenTang_TokenCuaHangKhongMoDuocKhuDieuHanh(t *testing.T) {
 
 	for ten, token := range map[string]string{
 		"token super_admin của một cửa hàng": tokenSuperAdmin,
-		"không token":                        "",
+		"không token": "",
 	} {
 		res := h.goi(t, token, http.MethodGet, "/api/v1/platform/plans", nil)
 		muon := http.StatusForbidden

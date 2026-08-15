@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\EnsureAdminAuthenticated;
 use App\Http\Middleware\EnsureManagerRole;
+use App\Http\Middleware\KhoaKhiHetHan;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -26,6 +27,8 @@ return Application::configure(basePath: dirname(__DIR__))
             'admin.auth' => EnsureAdminAuthenticated::class,
             // Gắn thêm cho các trang quản lý người & cấu hình — nhân viên không vào.
             'admin.manage' => EnsureManagerRole::class,
+            // Cửa hàng hết hạn hợp đồng: mọi trang dồn về trang Các gói dịch vụ.
+            'admin.khoa' => KhoaKhiHetHan::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

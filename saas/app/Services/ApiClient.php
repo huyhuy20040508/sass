@@ -258,6 +258,39 @@ class ApiClient
         return $this->put("/platform/plans/{$planId}", $body);
     }
 
+    // ---------- Cấu hình của nhà cung cấp ----------
+
+    /**
+     * Cấu hình của CHÍNH MÌNH — hôm nay là thông tin nhận chuyển khoản để khách
+     * gia hạn.
+     *
+     * KHÁC hẳn cấu hình của một cửa hàng (bên Shop Admin): đây là bộ duy nhất cho
+     * cả nền tảng, không có tenant nào. Trả về `values` (map khoá => giá trị, đã
+     * ghép mặc định) và `fields` (siêu dữ liệu từng ô) để màn hình dựng form mà
+     * không chép lại bảng khoá.
+     *
+     * Cả ba vai trò đều ĐỌC được — người trực hỗ trợ cần đọc số tài khoản để trả
+     * lời khách đang gọi.
+     */
+    public function cauHinh(): Response
+    {
+        return $this->get('/platform/cau-hinh');
+    }
+
+    /**
+     * Ghi cấu hình. $items là map khoá => giá trị; khoá không gửi lên giữ nguyên.
+     *
+     * BẬT nhận chuyển khoản mà thiếu ngân hàng / số tài khoản / chủ tài khoản /
+     * mẫu nội dung thì API từ chối cả yêu cầu (422) — bật hình thức nhận tiền lên
+     * mà khách không biết chuyển vào đâu là kiểu hỏng tốn tiền thật.
+     *
+     * Chỉ owner/operator ghi được; support gọi vào đây nhận 403.
+     */
+    public function luuCauHinh(array $items): Response
+    {
+        return $this->put('/platform/cau-hinh', ['items' => $items]);
+    }
+
     /**
      * Sổ khách hàng của một phần mềm.
      *

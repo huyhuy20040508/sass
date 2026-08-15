@@ -23,6 +23,7 @@ import (
 	"sass-api/internal/repository"
 	"sass-api/internal/router"
 	"sass-api/internal/service"
+	"sass-api/pkg/bimat"
 	"sass-api/pkg/facebook"
 	"sass-api/pkg/google"
 	"sass-api/pkg/jwt"
@@ -95,10 +96,24 @@ func main() {
 		planHandler       *handler.PlanHandler
 		khachHangHandler  *handler.KhachHangHandler
 		dungThuHandler    *handler.DungThuHandler
-		// quetHan là lượt quét nền khoá cửa hàng của hợp đồng đã hết hạn. Còn nil
-		// nghĩa là chưa nối được control plane — và khi đó KHÔNG có hợp đồng nào
-		// đọc được, nên cũng không có gì để quét.
-		quetHan service.QuetHanService
+		// goiDichVuHandler là trang "Các gói dịch vụ" của Shop Admin — chủ tiệm tự
+		// tra hợp đồng của chính mình. Cũng đọc control plane nên cũng nil khi chưa
+		// nối được sổ; lúc đó Shop Admin nói rõ là chưa tra được, thay vì hiện một
+		// trang trống.
+		goiDichVuHandler *handler.GoiDichVuHandler
+		// cauHinhHandler là màn hình Cài đặt của khu điều hành — hôm nay giữ thông
+		// tin nhận chuyển khoản để khách tự gia hạn.
+		cauHinhHandler *handler.CauHinhNenTangHandler
+		// giaHanHandler là luồng KHÁCH TỰ GIA HẠN: đặt đơn, hỏi trạng thái, nhận
+		// webhook của cổng thanh toán. Cầm CẢ HAI kết nối — hợp đồng và sổ thu ở
+		// control plane, còn lượt mở khoá cửa hàng thì ở data plane.
+		giaHanHandler *handler.GiaHanHandler
+		// quetHan là lượt quét nền: khoá cửa hàng của hợp đồng đã hết hạn, và nhắc
+		// khách trước khi hợp đồng chết. Còn nil nghĩa là chưa nối được control
+		// plane — khi đó KHÔNG có hợp đồng nào đọc được, nên cũng không có gì để quét.
+		quetHan         service.QuetHanService
+		quetHopDongRepo domain.HopDongRepository
+		quetCuaHangRepo domain.CuaHangMoiRepository
 	)
 
 	platformDB, err := repository.NewPlatformDB(cfg.Platform, cfg.App.IsProduction())
@@ -149,6 +164,34 @@ func main() {
 				repository.NewPlanRepository(platformDB),
 				repository.NewAppRepository(platformDB),
 			))
+			// Hộp mã hoá cho các ô BÍ MẬT của cấu hình nền tảng (khoá PayOS).
+			// Chưa khai PLATFORM_SECRET_KEY thì hộp rỗng: màn hình cài đặt vẫn mở,
+			// vẫn sửa được số tài khoản, chỉ TỪ CHỐI lưu khoá bí mật kèm lý do —
+			// từ chối chứ không ghi plaintext.
+			hopBiMat := bimat.New(cfg.Platform.SecretKey)
+			if !hopBiMat.SanSang() {
+				logger.Warn("chưa khai PLATFORM_SECRET_KEY — khu điều hành sẽ không lưu được khoá cổng thanh toán",
+					zap.String("cach_chua", "thêm PLATFORM_SECRET_KEY vào api/.env rồi khởi động lại"))
+			}
+			cauHinhNenTangRepo := repository.NewCauHinhNenTangRepository(platformDB)
+			cauHinhHandler = handler.NewCauHinhNenTangHandler(
+				service.NewCauHinhNenTangService(cauHinhNenTangRepo, hopBiMat),
+			)
+
+			// Khách tự gia hạn. Khoá cổng thanh toán đọc từ chính bảng cấu hình trên
+			// (đã mã hoá), nên đổi khoá ở màn hình Cài đặt là có hiệu lực ngay, không
+			// đợi khởi động lại máy chủ.
+			giaHanHandler = handler.NewGiaHanHandler(service.NewGiaHanService(
+				repository.NewDonGiaHanRepository(platformDB),
+				repository.NewThueBaoCuaKhachRepository(platformDB),
+				repository.NewPlanRepository(platformDB),
+				repository.NewHopDongRepository(platformDB),
+				repository.NewCuaHangMoiRepository(db),
+				cauHinhNenTangRepo,
+				hopBiMat,
+				cfg.App.Code,
+				cfg.App.ShopAdminURL,
+			))
 			khachHangHandler = handler.NewKhachHangHandler(service.NewKhachHangService(
 				repository.NewKhachHangRepository(platformDB),
 			))
@@ -165,14 +208,24 @@ func main() {
 				repository.NewTaiKhoanCuaHangRepository(db),
 			))
 
+			// Trang gói dịch vụ của Shop Admin. Cùng bảng giá với khu điều hành,
+			// nhưng đọc qua một cửa hẹp hơn hẳn: đúng một khách, đúng phần mềm mà
+			// tiến trình này phục vụ (cfg.App.Code) — xem service.GoiDichVuService.
+			goiDichVuHandler = handler.NewGoiDichVuHandler(service.NewGoiDichVuService(
+				repository.NewThueBaoCuaKhachRepository(platformDB),
+				repository.NewPlanRepository(platformDB),
+				cfg.App.Code,
+			))
+
 			// Lượt quét hạn: cầm đúng cặp repository của DungThuService, và cũng bắc
 			// qua hai plane. Nó là mảnh còn thiếu của cơ chế chặn khách hết hạn —
 			// `tenants.status` từ trước tới nay chỉ có người ghi bằng tay, nên hợp
 			// đồng dùng thử hết hạn không đá được ai ra khỏi phần mềm.
-			quetHan = service.NewQuetHanService(
-				repository.NewHopDongRepository(platformDB),
-				repository.NewCuaHangMoiRepository(db),
-			)
+			// Hai repository của lượt quét hạn. Bản thân service dựng ở mục 6, sau
+			// khi có sổ thông báo — nó cần đẩy lời nhắc "sắp hết hạn" vào chuông của
+			// khách, mà chuông thì nằm ở data plane.
+			quetHopDongRepo = repository.NewHopDongRepository(platformDB)
+			quetCuaHangRepo = repository.NewCuaHangMoiRepository(db)
 		}
 
 		// Kết nối này giờ ĐANG được repository trên cầm, nhưng vẫn đóng lúc thoát:
@@ -317,6 +370,14 @@ func main() {
 	// thay vì nạp đơn ra bộ nhớ rồi cộng bằng Go.
 	reportSvc := service.NewReportService(reportRepo)
 
+	// Lượt quét hạn dựng ở ĐÂY chứ không ở mục 3b: nó cần notifSvc để đẩy lời
+	// nhắc "sắp hết hạn" vào chuông của khách, mà sổ thông báo chỉ có sau khi
+	// dựng xong tầng service. Thiếu control plane thì hai repository còn nil và
+	// lượt quét không được bật — đúng như trước.
+	if quetHopDongRepo != nil && quetCuaHangRepo != nil {
+		quetHan = service.NewQuetHanService(quetHopDongRepo, quetCuaHangRepo, notifSvc)
+	}
+
 	// 7. Handler
 	handlers := router.Handlers{
 		Health:    handler.NewHealthHandler(version),
@@ -344,6 +405,9 @@ func main() {
 		Plan:      planHandler,
 		KhachHang: khachHangHandler,
 		DungThu:   dungThuHandler,
+		GoiDichVu: goiDichVuHandler,
+		CauHinh:   cauHinhHandler,
+		GiaHan:    giaHanHandler,
 	}
 
 	// 8. Router + HTTP server

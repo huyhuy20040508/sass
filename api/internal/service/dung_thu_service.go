@@ -793,7 +793,7 @@ func (s *dungThuService) ThuTien(ctx context.Context, quyen domain.QuyenApp, id 
 		return rong, loiO(map[string]string{"ky_den": "Ngày cuối kỳ phải sau ngày đầu kỳ"})
 	}
 
-	if err := s.hopDong.ThuTien(ctx, domain.Invoice{
+	if err := s.hopDong.ThuTien(ctx, &domain.Invoice{
 		SubscriptionID: id,
 		Amount:         soTien,
 		PeriodStart:    kyTu,

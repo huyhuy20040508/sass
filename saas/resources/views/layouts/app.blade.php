@@ -136,6 +136,7 @@
             font-size: 11px; font-weight: 600; line-height: 16px;
             letter-spacing: .05em; text-transform: uppercase;
             color: rgba(255, 255, 255, .42);
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
         /* padding 8px 12px + line-height 20px = hàng cao 36px, khớp .jh-item bên
            Shop Admin. Chữ hoa cỡ 13 thay vì 14 thường: chữ hoa nhìn to hơn cùng
@@ -144,10 +145,24 @@
             display: block;
             padding: 8px 12px; border-radius: 6px;
             font-family: var(--font-display);
-            font-size: 13px; font-weight: 600; line-height: 20px; letter-spacing: .06em;
+            font-size: 12px; font-weight: 600; line-height: 20px; letter-spacing: .02em;
             text-transform: uppercase; text-decoration: none;
             color: rgba(255, 255, 255, .62);
             transition: color .12s ease, background-color .12s ease;
+            /* MỘT DÒNG, KHÔNG XUỐNG HÀNG.
+               Tên mục ở đây là NHÃN, không phải câu văn: "Phương thức thanh toán"
+               gãy làm hai dòng thì hàng cao gấp đôi các mục khác, và cả thanh mất
+               nhịp — mắt không còn quét được danh sách như một cột đều nhau.
+
+               Cỡ chữ và giãn chữ đã hạ vừa đủ để hai nhãn dài nhất nằm gọn trong
+               230px (đo thật: 182px và 173px, chỗ trống 196px và 180px). Đây là lý
+               do KHÔNG tăng lại hai con số đó khi thêm mục mới — thêm nhãn dài hơn
+               thì rút gọn CHỮ, đừng nới cỡ.
+
+               ellipsis là lưới an toàn cho ngày ai đó thêm một nhãn dài hơn nữa:
+               cắt cuối chữ kèm dấu … vẫn đọc ra là bị cắt, còn cắt giữa nét chữ
+               (hệ quả của overflow-x:hidden trên .rail) thì đọc như lỗi hiển thị. */
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
         .rail-link:hover { color: #fff; background: rgba(255, 255, 255, .06); }
         /* Vạch vàng đánh dấu mục đang mở, vẽ bằng inset box-shadow để nó ăn theo
@@ -167,9 +182,19 @@
             width: 100%; text-align: left;
             background: none; border: 0; cursor: pointer;
             font: inherit; font-family: var(--font-display);
-            font-size: 13px; font-weight: 600; letter-spacing: .06em;
+            font-size: 12px; font-weight: 600; letter-spacing: .02em;
+            /* Nút cha có ít chỗ hơn mục thường đúng bằng mũi tên + khoảng cách
+               (16px), nên nó là chỗ chật nhất thanh — đo theo nó chứ đừng đo theo
+               mục thường. */
+            overflow: hidden;
         }
-        .rail-drop-toggle > span:first-child { flex: 1; min-width: 0; }
+        /* min-width:0 mới cho phép ô flex co xuống dưới min-content; thiếu nó thì
+           ellipsis bên trong không bao giờ có hiệu lực và chữ cứ đẩy mũi tên ra
+           khỏi thanh. */
+        .rail-drop-toggle > span:first-child {
+            flex: 1; min-width: 0;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
         /* Nhóm đang chứa trang hiện tại: sáng chữ lên nhưng KHÔNG tô nền và
            không kẻ vạch vàng — hai dấu hiệu đó dành riêng cho mục con đang mở.
            Cha và con cùng được đánh dấu như nhau thì không đọc ra cái nào là
@@ -197,6 +222,9 @@
             font-size: 13px; font-weight: 400; line-height: 20px; letter-spacing: -.1px;
             text-decoration: none;
             color: rgba(255, 255, 255, .58);
+            /* Cùng luật với mục cha: một dòng. Mục con hiện đều ngắn, nhưng thanh
+               trái phải giữ được nhịp hàng đều nhau kể cả khi thêm tên dài. */
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
             transition: color .12s ease, background-color .12s ease;
         }
         .rail-sublink:hover { color: #fff; background: rgba(255, 255, 255, .06); }

@@ -2,6 +2,7 @@
 package router
 
 import (
+	"strings"
 	"time"
 
 	"sass-api/config"
@@ -16,6 +17,23 @@ import (
 	swaggerfiles "github.com/swaggo/files"
 	ginswagger "github.com/swaggo/gin-swagger"
 	"go.uber.org/zap"
+)
+
+// Tiền tố chung của mọi đường API và ĐƯỜNG GÓI DỊCH VỤ của khu quản trị.
+//
+// Hằng số chứ không phải chuỗi rời: đường này được viết ở HAI chỗ — lúc đăng ký
+// route, và lúc khai ngoại lệ "cửa hàng hết hạn vẫn đọc được đường này" cho
+// JWTAuth. Hai bản chuỗi rời nhau thì đổi một bên là ngoại lệ lặng lẽ mất tác
+// dụng, không lỗi nào nổi lên.
+const (
+	apiV1 = "/api/v1"
+	// DuongGoiDichVu là đường đọc gói dịch vụ của CHÍNH cửa hàng đang đăng nhập.
+	DuongGoiDichVu = "/admin/goi-dich-vu"
+	// Hai đường của luồng KHÁCH TỰ GIA HẠN. Cùng nằm trong danh sách cho phép khi
+	// cửa hàng đã bị khoá vì hết hạn — khách hết hạn chính là người cần trả tiền
+	// nhất, đóng đường thanh toán của họ là tự cắt doanh thu của mình.
+	DuongDatGiaHan = "/admin/goi-dich-vu/dat"
+	DuongDonGiaHan = "/admin/goi-dich-vu/don/:id"
 )
 
 // Handlers gom các handler cần thiết để đăng ký route.
@@ -53,6 +71,17 @@ type Handlers struct {
 	// hạn, huỷ). Khác hai cái trên ở chỗ nó cầm CẢ HAI kết nối: cửa hàng và tài
 	// khoản đăng nhập của khách nằm ở data plane.
 	DungThu *handler.DungThuHandler
+	// GiaHan là luồng KHÁCH TỰ GIA HẠN: đặt đơn, hỏi trạng thái, và nhận webhook
+	// của cổng thanh toán. Cần control plane nên cũng nil khi chưa dựng.
+	GiaHan *handler.GiaHanHandler
+	// CauHinh là cấu hình của NHÀ CUNG CẤP (hôm nay: thông tin nhận chuyển khoản
+	// để khách gia hạn). Cùng kết nối control plane với Plan, và cũng nil khi
+	// chưa dựng.
+	CauHinh *handler.CauHinhNenTangHandler
+	// GoiDichVu là đường đọc của CHỦ TIỆM về hợp đồng của chính họ. Cũng cần
+	// control plane nên cũng nil khi chưa dựng, nhưng nó nằm trong nhóm /admin
+	// chứ không phải /platform — xem handler.GoiDichVuHandler.
+	GoiDichVu *handler.GoiDichVuHandler
 }
 
 // New tạo *gin.Engine đã cấu hình đầy đủ middleware và route.
@@ -337,7 +366,14 @@ func New(
 		// người khác. Đây là chặn theo NHÓM ENDPOINT, chưa phải phân quyền theo từng
 		// chức năng — muốn chi tiết hơn thì phải dựng bảng permissions.
 		admin := v1.Group("/admin")
-		admin.Use(middleware.JWTAuth(jwtMgr, phien), middleware.RequireRoles(
+		// DuongGoiDichVu đi cùng JWTAuth ở đây, chứ không nằm trong middleware:
+		// đó là đường DUY NHẤT một cửa hàng đã hết hạn còn đọc được, và nó phải
+		// khớp từng ký tự với chỗ đăng ký route bên dưới. Viết hằng số ở một chỗ
+		// rồi dùng cho cả hai để không có bản nào lệch bản nào — lệch thì ngoại lệ
+		// im lặng biến mất, và người hết hạn quay lại cảnh không mở được trang nào.
+		admin.Use(middleware.JWTAuth(jwtMgr, phien,
+			apiV1+DuongGoiDichVu, apiV1+DuongDatGiaHan, apiV1+DuongDonGiaHan,
+		), middleware.RequireRoles(
 			domain.RoleSuperAdmin, domain.RoleAdmin, domain.RoleStaff,
 		))
 		manage := admin.Group("")
@@ -519,6 +555,29 @@ func New(
 			manage.DELETE("/users/:id", h.User.Delete)
 
 			manage.GET("/roles", h.User.Roles)
+
+			// Gói dịch vụ của CHÍNH cửa hàng này — đường đọc duy nhất đi từ phía
+			// khách sang sổ nền tảng.
+			//
+			// Nằm ở nhóm `manage` (nhân viên KHÔNG vào): đây là chuyện hợp đồng và
+			// tiền giữa chủ tiệm với nhà cung cấp phần mềm, cùng mức riêng tư với
+			// trang Khách hàng và Cài đặt.
+			//
+			// h.GoiDichVu nil = chưa nối được control plane: không đăng ký đường nào,
+			// trả 404 y như trước khi có tính năng. Đăng ký rồi trả 503 ở từng lượt
+			// gọi thì màn hình trông như đang hỏng, trong khi máy chủ này đơn giản là
+			// chưa có sổ để đọc.
+			if h.GoiDichVu != nil {
+				manage.GET(strings.TrimPrefix(DuongGoiDichVu, "/admin"), h.GoiDichVu.CuaToi)
+			}
+
+			// Khách tự gia hạn: đặt đơn và hỏi trạng thái. Cùng nhóm quyền `manage`
+			// với đường đọc gói — trả tiền cho phần mềm là việc của chủ tiệm, không
+			// phải của nhân viên bán hàng.
+			if h.GiaHan != nil {
+				manage.POST(strings.TrimPrefix(DuongDatGiaHan, "/admin"), h.GiaHan.Dat)
+				manage.GET(strings.TrimPrefix(DuongDonGiaHan, "/admin"), h.GiaHan.TrangThai)
+			}
 			manage.PUT("/roles/:id", h.User.UpdateRole)
 
 			admin.GET("/receipts", h.Receipt.List)
@@ -544,6 +603,19 @@ func New(
 			}
 		}
 
+		// --- Webhook của cổng thanh toán (CÔNG KHAI) ---
+		//
+		// KHÔNG nằm trong nhóm /platform bên dưới, dù đường dẫn trông giống: nhóm đó
+		// đứng sau XacThucNenTang (đòi token của người điều hành), mà PayOS thì không
+		// có token nào. Thứ chứng minh gói dữ liệu đến từ họ là CHỮ KÝ trên body —
+		// xem GiaHanHandler.Webhook.
+		//
+		// Đặt hạn mức theo IP: đây là đường công khai duy nhất của control plane, và
+		// một vòng lặp gửi chữ ký sai vào đây không được phép ăn hết kết nối database.
+		if h.GiaHan != nil {
+			v1.POST("/platform/webhook/payos", han("webhook-gia-han", 120, time.Minute), h.GiaHan.Webhook)
+		}
+
 		// --- Khu điều hành nền tảng ---
 		//
 		// Nhóm này đọc/ghi CONTROL PLANE: bảng giá, tính năng gói — dữ liệu của
@@ -566,6 +638,13 @@ func New(
 			nenTang.GET("/apps", h.Plan.Apps)
 			// "features" nằm sau /:id nên không có đường tĩnh nào bị hiểu nhầm thành
 			// id gói.
+			// Cấu hình của nhà cung cấp — đọc mở cho cả `support`, ghi chỉ
+			// owner/operator (xét trong handler).
+			if h.CauHinh != nil {
+				nenTang.GET("/cau-hinh", h.CauHinh.Doc)
+				nenTang.PUT("/cau-hinh", h.CauHinh.Ghi)
+			}
+
 			nenTang.GET("/plans", h.Plan.List)
 			nenTang.GET("/plans/:id/features", h.Plan.Features)
 			nenTang.PUT("/plans/:id/features", h.Plan.UpdateFeatures)

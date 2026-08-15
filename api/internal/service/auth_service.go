@@ -566,7 +566,20 @@ func (s *authService) LoginShop(ctx context.Context, req dto.ShopLoginRequest) (
 		return nil, domain.ErrShopLoginFailed
 	}
 
-	if shop.Status != domain.TenantActive {
+	// CỬA HÀNG BỊ KHOÁ (hợp đồng hết hạn): chủ tiệm và quản trị viên VẪN đăng
+	// nhập được, nhân viên thì không.
+	//
+	// Trước đây cửa đóng với tất cả, và hậu quả rơi đúng vào người có thể sửa được
+	// tình hình: chủ tiệm gõ đúng mật khẩu vẫn bị từ chối, không trang nào nói cho
+	// họ biết hợp đồng hết hạn từ bao giờ hay gia hạn bao nhiêu tiền. Phiên cấp ra
+	// ở đây bị middleware giới hạn xuống ĐÚNG một đường đọc (xem
+	// middleware.choPhepKhiCuaHangKhoa), nên "vào được" không có nghĩa là làm được
+	// việc — bán hàng, sửa kho, đổi cấu hình đều đóng như cũ.
+	//
+	// Nhân viên nhận đúng câu từ chối như trước: họ không gia hạn được gì, cho vào
+	// một phần mềm đã khoá chỉ để họ bấm từng trang và nhận lỗi.
+	khoa := shop.Status != domain.TenantActive
+	if khoa && user.Role.Name != domain.RoleSuperAdmin && user.Role.Name != domain.RoleAdmin {
 		return nil, domain.ErrTenantSuspended
 	}
 	if user.Status != "active" {
@@ -582,6 +595,7 @@ func (s *authService) LoginShop(ctx context.Context, req dto.ShopLoginRequest) (
 		return nil, err
 	}
 	res.Tenant = shop
+	res.CuaHangKhoa = khoa
 
 	return res, nil
 }
@@ -920,10 +934,6 @@ func (s *authService) Refresh(ctx context.Context, refreshToken string) (*dto.Au
 
 		return nil, err
 	}
-	if trangThai != domain.TenantActive {
-		return nil, domain.ErrTenantSuspended
-	}
-
 	user, err := s.users.FindByID(ctx, claims.UserID)
 	if err != nil {
 		return nil, err
@@ -931,7 +941,35 @@ func (s *authService) Refresh(ctx context.Context, refreshToken string) (*dto.Au
 	if user.Status != "active" {
 		return nil, domain.ErrUserInactive
 	}
-	return s.buildAuthResponse(ctx, user)
+
+	// Cửa hàng bị khoá: CÙNG LUẬT với LoginShop — quản lý làm mới được token,
+	// nhân viên thì không.
+	//
+	// Không có vế này thì phiên hạn chế của chủ tiệm chết đúng lúc access token
+	// hết hạn (15 phút): họ đang đọc trang gói dịch vụ thì bị đá ra màn hình đăng
+	// nhập, gõ lại mật khẩu, vào lại, rồi 15 phút sau lặp lại. Cấp token mới ở đây
+	// KHÔNG nới thêm quyền gì — middleware vẫn chặn mọi đường trừ một.
+	//
+	// s.ganNhanVaiTro chưa chạy ở đây nên vai trò đọc thẳng từ quan hệ Role của
+	// bản ghi vừa tra.
+	khoa := trangThai != domain.TenantActive
+	if khoa {
+		vaiTro := ""
+		if user.Role != nil {
+			vaiTro = user.Role.Name
+		}
+		if vaiTro != domain.RoleSuperAdmin && vaiTro != domain.RoleAdmin {
+			return nil, domain.ErrTenantSuspended
+		}
+	}
+
+	res, err := s.buildAuthResponse(ctx, user)
+	if err != nil {
+		return nil, err
+	}
+	res.CuaHangKhoa = khoa
+
+	return res, nil
 }
 
 func (s *authService) Me(ctx context.Context, userID uint) (*domain.User, error) {

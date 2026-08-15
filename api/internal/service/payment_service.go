@@ -616,7 +616,7 @@ func (s *paymentService) markOrderPaid(ctx context.Context, orderID uint) error 
 // signal bắn tín hiệu "đơn này vừa đổi" để màn hình đang mở tự làm mới.
 func (s *paymentService) signal(ctx context.Context, o *domain.Order) {
 	payload := orderPayload(o)
-	s.notify.Signal(ctx, realtime.TopicAdmin, realtime.EventOrder, payload)
+	s.notify.SignalAdmin(ctx, realtime.EventOrder, payload)
 	if o.UserID != nil {
 		s.notify.Signal(ctx, realtime.TopicUser(*o.UserID), realtime.EventOrder, payload)
 	}

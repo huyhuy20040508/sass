@@ -10,6 +10,7 @@ import (
 	"sass-api/internal/middleware"
 	"sass-api/internal/realtime"
 	"sass-api/internal/service"
+	"sass-api/internal/tenant"
 	"sass-api/pkg/logger"
 	"sass-api/pkg/response"
 
@@ -143,7 +144,7 @@ func (h *NotificationHandler) TestPush(c *gin.Context) {
 	}
 
 	// Kèm luôn tín hiệu `order` để kiểm tra cả nhánh làm mới bảng đơn hàng.
-	h.svc.Signal(c.Request.Context(), realtime.TopicAdmin, realtime.EventOrder, gin.H{"test": true})
+	h.svc.SignalAdmin(c.Request.Context(), realtime.EventOrder, gin.H{"test": true})
 
 	response.OK(c, gin.H{"notification": n, "clients": h.hub.Count()})
 }
@@ -164,9 +165,15 @@ func (h *NotificationHandler) Stream(c *gin.Context) {
 	role := c.GetString(middleware.CtxRole)
 
 	// Kênh nghe được quyết định hoàn toàn từ token: client không gửi lên topic nào.
+	//
+	// Kênh quản trị KÈM MÃ CỬA HÀNG — cửa hàng lấy từ context của request, nơi
+	// middleware xác thực vừa đặt sau khi kiểm chữ ký. Thiếu nó thì quản trị viên
+	// của tiệm này nhận sự kiện của tiệm kia (xem realtime.TopicAdmin).
 	topics := []string{realtime.TopicUser(userID)}
 	if isAdminRole(role) {
-		topics = append(topics, realtime.TopicAdmin)
+		if id, ok := tenant.ID(c.Request.Context()); ok {
+			topics = append(topics, realtime.TopicAdmin(id))
+		}
 	}
 
 	sub := h.hub.Subscribe(topics...)

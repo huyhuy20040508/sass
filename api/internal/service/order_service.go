@@ -904,7 +904,7 @@ func (s *orderService) signalOrder(ctx context.Context, o *domain.Order) {
 		return
 	}
 	payload := orderPayload(o)
-	s.notify.Signal(ctx, realtime.TopicAdmin, realtime.EventOrder, payload)
+	s.notify.SignalAdmin(ctx, realtime.EventOrder, payload)
 	if o.UserID != nil {
 		s.notify.Signal(ctx, realtime.TopicUser(*o.UserID), realtime.EventOrder, payload)
 	}

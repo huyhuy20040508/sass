@@ -147,18 +147,39 @@ func TestDangNhap3O_KhongLotSangCuaHangKhac(t *testing.T) {
 	}
 }
 
-// Cửa hàng bị khoá (hết hạn / ngừng trả tiền) thì không vào được — nhưng chỉ nói
-// lý do thật SAU KHI đã gõ đúng mật khẩu. Người ngoài dò mã cửa hàng chỉ nhận
-// được câu lỗi chung, không biết mã đó có thật hay khách đó còn trả tiền không.
+// Cửa hàng bị khoá (hết hạn hợp đồng): QUẢN LÝ vào được, NHÂN VIÊN thì không.
+//
+// Phiên cấp cho quản lý bị middleware giới hạn xuống đúng một đường đọc — trang
+// gói dịch vụ (xem middleware.choPhepKhiCuaHangKhoa) — nên "vào được" ở đây
+// không có nghĩa là bán hàng được. Đóng cửa với cả chủ tiệm như trước thì người
+// duy nhất sửa được tình hình lại là người duy nhất không đọc được lý do.
+//
+// Sai mật khẩu vẫn chỉ nhận câu lỗi chung: người ngoài dò mã cửa hàng không được
+// biết mã đó có thật hay khách đó còn trả tiền không.
 func TestDangNhap3O_CuaHangBiKhoa(t *testing.T) {
-	users := newFakeUserRepo(nhanVien(10, 1, "admin", "MatKhau@123", domain.RoleAdmin))
+	users := newFakeUserRepo(
+		nhanVien(10, 1, "admin", "MatKhau@123", domain.RoleAdmin),
+		nhanVien(11, 1, "nhanvien", "MatKhau@123", domain.RoleStaff),
+	)
 	tenants := &fakeTenantRepo{tenants: []*domain.Tenant{cuaHang(1, "cuahang", "suspended")}}
 	svc := dungAuthServiceDangNhap(users, tenants)
 
-	if _, err := svc.LoginShop(context.Background(), dto.ShopLoginRequest{
+	res, err := svc.LoginShop(context.Background(), dto.ShopLoginRequest{
 		ShopCode: "cuahang", Username: "admin", Password: "MatKhau@123",
+	})
+	if err != nil {
+		t.Fatalf("quản trị của cửa hàng hết hạn phải vào được để còn gia hạn, nhận: %v", err)
+	}
+	// Cờ này là thứ Shop Admin đọc để đưa thẳng người dùng tới trang gói dịch vụ.
+	// Thiếu nó thì họ vào được nhưng lại đi lang thang giữa các trang trả 403.
+	if !res.CuaHangKhoa {
+		t.Error("phiên của cửa hàng bị khoá phải mang cờ cua_hang_khoa")
+	}
+
+	if _, err := svc.LoginShop(context.Background(), dto.ShopLoginRequest{
+		ShopCode: "cuahang", Username: "nhanvien", Password: "MatKhau@123",
 	}); !errors.Is(err, domain.ErrTenantSuspended) {
-		t.Fatalf("cửa hàng bị khoá phải trả ErrTenantSuspended, nhận: %v", err)
+		t.Fatalf("nhân viên không gia hạn được gì nên vẫn bị từ chối, nhận: %v", err)
 	}
 
 	if _, err := svc.LoginShop(context.Background(), dto.ShopLoginRequest{

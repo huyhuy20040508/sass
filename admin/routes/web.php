@@ -7,6 +7,7 @@ use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\ContactController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\GoiDichVuController;
 use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\OrderController;
@@ -37,7 +38,11 @@ Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 Route::get('/quen-mat-khau', [AuthController::class, 'forgotPassword'])->name('password.forgot');
 
 // --- Khu vực quản trị (yêu cầu đăng nhập + quyền admin) ---
-Route::middleware('admin.auth')->prefix('admin')->name('admin.')->group(function () {
+// `admin.khoa` chạy ngay sau `admin.auth`: cửa hàng hết hạn hợp đồng thì mọi
+// đường trong nhóm này dồn về trang Các gói dịch vụ. Chốt chặn thật nằm ở Go API
+// (403 kèm mã CUA_HANG_KHOA); middleware ở đây chỉ để người dùng nhìn thấy một
+// trang nói rõ phải làm gì, thay vì lỗi rải rác ở từng mục.
+Route::middleware(['admin.auth', 'admin.khoa'])->prefix('admin')->name('admin.')->group(function () {
     Route::get('/', fn () => redirect()->route('admin.dashboard'));
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
@@ -283,6 +288,22 @@ Route::middleware('admin.auth')->prefix('admin')->name('admin.')->group(function
         Route::put('/customers/{id}', [CustomerController::class, 'update'])->name('customers.update');
         Route::put('/customers/{id}/toggle-status', [CustomerController::class, 'toggleStatus'])->name('customers.toggleStatus');
         Route::delete('/customers/{id}', [CustomerController::class, 'destroy'])->name('customers.destroy');
+
+        // Gói dịch vụ — hợp đồng phần mềm của CHÍNH cửa hàng này.
+        //
+        // Nằm trong nhóm `admin.manage` cùng Khách hàng và Cài đặt: đây là
+        // chuyện hợp đồng và tiền giữa chủ tiệm với nhà cung cấp phần mềm, nhân
+        // viên bán hàng không cần và không nên đọc. API chặn đúng như vậy.
+        Route::get('/goi-dich-vu', [GoiDichVuController::class, 'index'])->name('goi-dich-vu.index');
+        // Khách tự gia hạn: đặt đơn → trang thanh toán → hỏi trạng thái.
+        //
+        // Cả ba nằm trong danh sách route CÒN ĐI ĐƯỢC khi cửa hàng đã hết hạn (xem
+        // KhoaKhiHetHan): người hết hạn chính là người cần trả tiền nhất.
+        Route::post('/goi-dich-vu/gia-han', [GoiDichVuController::class, 'datGiaHan'])->name('goi-dich-vu.gia-han');
+        Route::get('/goi-dich-vu/thanh-toan/{id}', [GoiDichVuController::class, 'thanhToan'])
+            ->whereNumber('id')->name('goi-dich-vu.thanh-toan');
+        Route::get('/goi-dich-vu/don/{id}', [GoiDichVuController::class, 'trangThaiDon'])
+            ->whereNumber('id')->name('goi-dich-vu.don');
 
         // Báo cáo — bốn trang CHỈ ĐỌC, gộp lại dữ liệu đã có theo khoảng ngày.
         //

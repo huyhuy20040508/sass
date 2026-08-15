@@ -211,6 +211,13 @@ var (
 	// huỷ cái cũ trước, muốn dài thêm thì gia hạn.
 	ErrHopDongDangChay = errors.New("cửa hàng này đã có hợp đồng còn hiệu lực cho phần mềm đó")
 
+	// ErrChuaBatCongThanhToan — nhà cung cấp chưa bật (hoặc chưa khai đủ khoá)
+	// cổng thanh toán, nên khách chưa tự trả tiền được. KHÁC ErrCongThanhToanLoi:
+	// bên đó là cổng có thật nhưng vừa hỏng, còn đây là chưa cấu hình bao giờ —
+	// hai câu trả lời khác nhau cho người đọc, và hai việc khác nhau để sửa.
+	ErrChuaBatCongThanhToan = errors.New("chưa bật cổng thanh toán cho việc gia hạn")
+	// ErrCongThanhToanLoi — gọi sang cổng thanh toán không thành công.
+	ErrCongThanhToanLoi = errors.New("cổng thanh toán đang không phản hồi")
 	// ErrGoiNgungBan — gói đang ở trạng thái 'retired'.
 	//
 	// Tra ra được nhưng không ký MỚI được: dòng bảng giá không bị xoá vì hợp đồng

@@ -3,10 +3,12 @@ package service
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
 	"sass-api/internal/domain"
+	"sass-api/internal/tenant"
 )
 
 // ---------- sổ giả ----------
@@ -14,13 +16,15 @@ import (
 // fakeHopDongQuet là bản ghi nhớ tối thiểu của HopDongRepository, đủ cho lượt
 // quét hạn: mấy hàm còn lại của cổng không nằm trên đường đi này và trả zero.
 type fakeHopDongQuet struct {
-	quaHan   []domain.HopDongQuaHan
-	conSong  []uint
-	daDanh   []uint
-	daDoiSo  []uint
-	trangSo  string
-	loiQuaHa error
-	loiKhoa  error
+	quaHan    []domain.HopDongQuaHan
+	conSong   []uint
+	daDanh    []uint
+	daDoiSo   []uint
+	trangSo   string
+	loiQuaHa  error
+	loiKhoa   error
+	sapHetHan []domain.HopDongQuaHan
+	daNhac    map[uint]bool
 }
 
 func (f *fakeHopDongQuet) QuaHan(_ context.Context, _ time.Time) ([]domain.HopDongQuaHan, error) {
@@ -53,8 +57,23 @@ func (f *fakeHopDongQuet) GiaHan(context.Context, uint, int) error              
 func (f *fakeHopDongQuet) Huy(context.Context, uint, string) error                      { return nil }
 func (f *fakeHopDongQuet) Sua(context.Context, uint, uint, domain.SuaHopDong) error     { return nil }
 func (f *fakeHopDongQuet) KyCuoiDaThu(context.Context, uint) (*time.Time, error)        { return nil, nil }
-func (f *fakeHopDongQuet) ThuTien(context.Context, domain.Invoice) error                { return nil }
+func (f *fakeHopDongQuet) ThuTien(context.Context, *domain.Invoice) error               { return nil }
 func (f *fakeHopDongQuet) TongDaThu(context.Context, uint) (float64, int, error)        { return 0, 0, nil }
+
+func (f *fakeHopDongQuet) SapHetHan(context.Context, time.Time, time.Time) ([]domain.HopDongQuaHan, error) {
+	return f.sapHetHan, nil
+}
+func (f *fakeHopDongQuet) DanhDauDaNhac(_ context.Context, id uint, _ time.Time, _ int) (bool, error) {
+	if f.daNhac == nil {
+		f.daNhac = map[uint]bool{}
+	}
+	if f.daNhac[id] {
+		return false, nil
+	}
+	f.daNhac[id] = true
+
+	return true, nil
+}
 func (f *fakeHopDongQuet) TenantDangCoHopDong(context.Context, string) ([]uint, error) {
 	return nil, nil
 }
@@ -116,7 +135,7 @@ func TestQuetHan_HetHanThiKhoaCuaHang(t *testing.T) {
 	hd := &fakeHopDongQuet{quaHan: []domain.HopDongQuaHan{hopDongChet(7, 42, "order1", true)}}
 	ch := &fakeCuaHangQuet{}
 
-	kq, err := NewQuetHanService(hd, ch).QuetMotLuot(context.Background())
+	kq, err := NewQuetHanService(hd, ch, nil).QuetMotLuot(context.Background())
 	if err != nil {
 		t.Fatalf("lượt quét hỏng: %v", err)
 	}
@@ -147,7 +166,7 @@ func TestQuetHan_ConHopDongSongThiKhongKhoa(t *testing.T) {
 	}
 	ch := &fakeCuaHangQuet{}
 
-	kq, err := NewQuetHanService(hd, ch).QuetMotLuot(context.Background())
+	kq, err := NewQuetHanService(hd, ch, nil).QuetMotLuot(context.Background())
 	if err != nil {
 		t.Fatalf("lượt quét hỏng: %v", err)
 	}
@@ -171,7 +190,7 @@ func TestQuetHan_KhongConGiThiKhongGhiGi(t *testing.T) {
 	hd := &fakeHopDongQuet{}
 	ch := &fakeCuaHangQuet{}
 
-	kq, err := NewQuetHanService(hd, ch).QuetMotLuot(context.Background())
+	kq, err := NewQuetHanService(hd, ch, nil).QuetMotLuot(context.Background())
 	if err != nil {
 		t.Fatalf("lượt quét hỏng: %v", err)
 	}
@@ -187,7 +206,7 @@ func TestQuetHan_KhoaHongThiKhongDanhDauHopDong(t *testing.T) {
 	hd := &fakeHopDongQuet{quaHan: []domain.HopDongQuaHan{hopDongChet(7, 42, "order1", true)}}
 	ch := &fakeCuaHangQuet{loiGhi: errors.New("mất kết nối data plane")}
 
-	if _, err := NewQuetHanService(hd, ch).QuetMotLuot(context.Background()); err == nil {
+	if _, err := NewQuetHanService(hd, ch, nil).QuetMotLuot(context.Background()); err == nil {
 		t.Fatal("khoá hụt mà lượt quét báo thành công")
 	}
 	if len(hd.daDanh) != 0 {
@@ -222,5 +241,147 @@ func TestSuaDuocHan_ThuQuaHanVanDoiDuocNgay(t *testing.T) {
 		if got := suaDuocHan(c.row); got != c.muonCo {
 			t.Errorf("%s: suaDuocHan = %v, muốn %v", c.ten, got, c.muonCo)
 		}
+	}
+}
+
+// ---------- NHẮC HẠN: chuông + realtime, 5 ngày trước ----------
+
+// fakeThongBao ghi lại từng lời nhắc kèm CỬA HÀNG trong ctx — vế thứ hai mới là
+// vế đáng kiểm: thông báo nằm ở data plane và bị lọc theo tenant, nên rót nhầm
+// cửa hàng nghĩa là lời nhắc của tiệm này rơi vào chuông tiệm khác.
+type fakeThongBao struct {
+	daDay []loiNhac
+}
+
+type loiNhac struct {
+	tenantID uint
+	loai     string
+	tieuDe   string
+	noiDung  string
+}
+
+func (f *fakeThongBao) Push(
+	ctx context.Context, userID *uint, nType, title, content string, _ map[string]any,
+) *domain.Notification {
+	id, _ := tenant.ID(ctx)
+	f.daDay = append(f.daDay, loiNhac{tenantID: id, loai: nType, tieuDe: title, noiDung: content})
+
+	return &domain.Notification{ID: uint(len(f.daDay)), Type: nType, Title: title}
+}
+
+func (f *fakeThongBao) List(context.Context, domain.NotificationFilter) (*NotificationList, error) {
+	return nil, nil
+}
+func (f *fakeThongBao) UnreadCount(context.Context, *uint) (int64, error) { return 0, nil }
+func (f *fakeThongBao) MarkRead(context.Context, uint, *uint) error       { return nil }
+func (f *fakeThongBao) MarkAllRead(context.Context, *uint) (int64, error) { return 0, nil }
+func (f *fakeThongBao) Signal(context.Context, string, string, any)       {}
+func (f *fakeThongBao) SignalAdmin(context.Context, string, any)          {}
+
+// hopDongSapChet dựng một hợp đồng còn sống, hết hạn sau `ngay` ngày nữa.
+func hopDongSapChet(id, tenantID uint, ma string, ngay int, dungThu bool) domain.HopDongQuaHan {
+	return domain.HopDongQuaHan{
+		ID: id, TenantID: tenantID, MaCuaHang: ma, MaApp: domain.AppOrder,
+		HetHan: time.Now().Add(time.Duration(ngay)*24*time.Hour + time.Hour), DungThu: dungThu,
+	}
+}
+
+// Khách sắp hết hạn nhận thông báo vào chuông CỦA CHÍNH HỌ.
+func TestNhacHan_DayThongBaoVaoDungCuaHang(t *testing.T) {
+	hd := &fakeHopDongQuet{sapHetHan: []domain.HopDongQuaHan{
+		hopDongSapChet(7, 42, "order1", 3, false),
+	}}
+	tb := &fakeThongBao{}
+
+	kq, err := NewQuetHanService(hd, &fakeCuaHangQuet{}, tb).QuetMotLuot(context.Background())
+	if err != nil {
+		t.Fatalf("lượt quét hỏng: %v", err)
+	}
+
+	if kq.DaNhac != 1 {
+		t.Fatalf("mong nhắc 1 khách, nhận %d", kq.DaNhac)
+	}
+	if len(tb.daDay) != 1 {
+		t.Fatalf("mong 1 thông báo, nhận %d", len(tb.daDay))
+	}
+	n := tb.daDay[0]
+	if n.tenantID != 42 {
+		t.Errorf("thông báo phải rơi vào cửa hàng 42, nhận %d", n.tenantID)
+	}
+	if n.loai != LoaiThongBaoNhacHan {
+		t.Errorf("loại thông báo phải là %q, nhận %q", LoaiThongBaoNhacHan, n.loai)
+	}
+	if !strings.Contains(n.noiDung, "4 ngày") {
+		// Còn 3 ngày + 1 giờ → làm tròn LÊN thành 4. Nói ít hơn thực tế là sai theo
+		// chiều làm khách hoảng, và lần sau họ không tin con số nữa.
+		t.Errorf("nội dung phải nói số ngày làm tròn lên, nhận %q", n.noiDung)
+	}
+}
+
+// Lượt quét chạy 5 phút/lần: KHÔNG được nhắc lại trong cùng ngày.
+//
+// Thiếu chốt này thì khách nhận 288 thông báo giống hệt mỗi ngày, và cái chuông
+// lập tức thành thứ không ai bấm nữa — kể cả khi có việc thật.
+func TestNhacHan_MotNgayChiNhacMotLan(t *testing.T) {
+	hd := &fakeHopDongQuet{sapHetHan: []domain.HopDongQuaHan{
+		hopDongSapChet(7, 42, "order1", 3, false),
+	}}
+	tb := &fakeThongBao{}
+	svc := NewQuetHanService(hd, &fakeCuaHangQuet{}, tb)
+
+	_, _ = svc.QuetMotLuot(context.Background())
+	kq, _ := svc.QuetMotLuot(context.Background())
+
+	if kq.DaNhac != 0 {
+		t.Errorf("lượt thứ hai không được nhắc lại, nhận %d", kq.DaNhac)
+	}
+	if len(tb.daDay) != 1 {
+		t.Errorf("chỉ được đẩy 1 thông báo, nhận %d", len(tb.daDay))
+	}
+}
+
+// Hợp đồng DÙNG THỬ nói câu khác: khách chưa trả đồng nào, nên "gia hạn" không
+// phải việc họ đang nghĩ tới — họ đang quyết định có mua hay không.
+func TestNhacHan_DungThuNoiCauKhac(t *testing.T) {
+	hd := &fakeHopDongQuet{sapHetHan: []domain.HopDongQuaHan{
+		hopDongSapChet(7, 42, "order1", 2, true),
+	}}
+	tb := &fakeThongBao{}
+
+	_, _ = NewQuetHanService(hd, &fakeCuaHangQuet{}, tb).QuetMotLuot(context.Background())
+
+	if len(tb.daDay) != 1 {
+		t.Fatalf("mong 1 thông báo, nhận %d", len(tb.daDay))
+	}
+	if !strings.Contains(tb.daDay[0].tieuDe, "dùng thử") {
+		t.Errorf("tiêu đề phải nói về bản dùng thử, nhận %q", tb.daDay[0].tieuDe)
+	}
+}
+
+// Không có sổ thông báo (chưa dựng, hoặc tắt): phần KHOÁ CỬA HÀNG vẫn phải chạy.
+// Nhắc là việc phụ; khoá khách hết hạn mới là việc chính.
+func TestNhacHan_ThieuSoThongBaoVanKhoaCuaHang(t *testing.T) {
+	hd := &fakeHopDongQuet{
+		quaHan:    []domain.HopDongQuaHan{hopDongChet(7, 42, "order1", true)},
+		sapHetHan: []domain.HopDongQuaHan{hopDongSapChet(8, 43, "order2", 3, false)},
+	}
+	ch := &fakeCuaHangQuet{}
+
+	kq, err := NewQuetHanService(hd, ch, nil).QuetMotLuot(context.Background())
+	if err != nil {
+		t.Fatalf("lượt quét hỏng: %v", err)
+	}
+	if kq.DaKhoa != 1 {
+		t.Errorf("vẫn phải khoá cửa hàng quá hạn, nhận %d", kq.DaKhoa)
+	}
+	if kq.DaNhac != 0 {
+		t.Errorf("không có sổ thông báo thì không nhắc ai, nhận %d", kq.DaNhac)
+	}
+}
+
+// Nhắc trước ĐÚNG 5 ngày — con số nghiệp vụ, đổi nó là đổi thói quen của khách.
+func TestSoNgayNhacTruoc_LaNam(t *testing.T) {
+	if SoNgayNhacTruoc != 5 {
+		t.Errorf("mong 5 ngày, nhận %d", SoNgayNhacTruoc)
 	}
 }

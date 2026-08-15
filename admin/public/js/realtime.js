@@ -87,6 +87,13 @@
     function targetUrl(n) {
         var d = parseData(n);
         if (!d) return URLS.orders;
+        // Thông báo tự khai chỗ cần mở (vd nhắc hạn hợp đồng → trang Gói dịch vụ).
+        // Chỉ nhận ĐƯỜNG DẪN NỘI BỘ bắt đầu bằng "/admin/": dữ liệu này đi qua
+        // database, và nhận một địa chỉ đầy đủ ở đây là biến cái chuông thành chỗ
+        // đưa người dùng sang trang bất kỳ.
+        if (typeof d.duong_dan === 'string' && d.duong_dan.indexOf('/admin/') === 0) {
+            return d.duong_dan;
+        }
         // Thông báo trả hàng phải mở đúng trang Trả hàng: gói tin của phiếu có kèm
         // cả order_code nên nếu chỉ nhìn order_code sẽ đưa nhầm sang trang Đơn hàng.
         if (d.return_code && URLS.returns) {

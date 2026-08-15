@@ -61,6 +61,33 @@ func Error(c *gin.Context, status int, message string) {
 	c.AbortWithStatusJSON(status, Body{Success: false, Message: message})
 }
 
+// Mã lỗi MÁY ĐỌC ĐƯỢC, đi trong `errors.ma`.
+//
+// Chỉ khai ở đây những lỗi mà ứng dụng phía trước phải XỬ LÝ KHÁC HẲN, không
+// phải chỉ in câu chữ ra màn hình. Danh sách này cố tình ngắn: mỗi mã là một
+// nhánh code bên kia phải viết, và một mã không ai đọc chỉ là rác trong response.
+const (
+	// MaCuaHangKhoa: cửa hàng đã hết hạn / bị khoá, nhưng NGƯỜI GỌI vẫn còn phiên
+	// hợp lệ và vẫn vào được trang gói dịch vụ. Khác hẳn 401 "cửa hàng đang tạm
+	// khoá" của nhân viên — bên đó là mất phiên, còn đây là phiên bị giới hạn
+	// xuống đúng một trang. Shop Admin đọc mã này để đưa người dùng về trang gói
+	// dịch vụ thay vì xoá session và đá ra màn hình đăng nhập.
+	MaCuaHangKhoa = "CUA_HANG_KHOA"
+)
+
+// ErrorMa trả lỗi kèm MÃ máy đọc được trong `errors.ma`.
+//
+// Dùng khi phía trước phải rẽ nhánh theo lỗi. So khớp bằng câu chữ thì mọi lần
+// sửa chính tả một thông báo là một lần làm hỏng nhánh xử lý ở đầu bên kia, và
+// không có gì báo.
+func ErrorMa(c *gin.Context, status int, ma, message string) {
+	c.AbortWithStatusJSON(status, Body{
+		Success: false,
+		Message: message,
+		Errors:  gin.H{"ma": ma},
+	})
+}
+
 // ValidationError trả về 422 kèm chi tiết lỗi từng trường.
 func ValidationError(c *gin.Context, errs interface{}) {
 	c.AbortWithStatusJSON(http.StatusUnprocessableEntity, Body{

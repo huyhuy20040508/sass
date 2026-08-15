@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Services\HanSuDung;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Cache;
@@ -76,11 +77,18 @@ class ApiClient
         $res = $this->dispatch($method, $uri, $payload);
 
         if ($res->status() !== 401) {
+            $this->ghiNhanKhoaCuaHang($res);
+
             return $res;
         }
 
         if ($this->refreshToken()) {
-            return $this->dispatch($method, $uri, $payload);
+            $res = $this->dispatch($method, $uri, $payload);
+            // Lượt thử lại cũng phải đi qua bộ dò cờ khoá: hợp đồng hết hạn giữa
+            // lúc token cũ vừa chết thì tín hiệu 403 nằm ở đúng lượt gọi này.
+            $this->ghiNhanKhoaCuaHang($res);
+
+            return $res;
         }
 
         // Làm mới không được nghĩa là phiên này hết đường cứu: token đã hỏng và
@@ -109,6 +117,30 @@ class ApiClient
         }
 
         return $res;
+    }
+
+    /**
+     * Bắt tín hiệu CỬA HÀNG HẾT HẠN HỢP ĐỒNG và cất vào session.
+     *
+     * API trả 403 kèm `errors.ma = CUA_HANG_KHOA` cho mọi đường trừ đường đọc gói
+     * dịch vụ. Mã máy đọc được chứ không phải câu chữ: so khớp thông báo tiếng
+     * Việt thì một lần sửa chính tả bên kia là một lần hỏng lặng lẽ bên này.
+     *
+     * KHÔNG xoá session như nhánh 401: phiên này vẫn còn dùng được cho trang gói
+     * dịch vụ, và đá người ta ra màn hình đăng nhập là lấy mất đúng chỗ nói cho
+     * họ biết phải gia hạn bao nhiêu. Middleware `admin.khoa` đọc cờ này ở lượt
+     * vào trang tiếp theo.
+     */
+    protected function ghiNhanKhoaCuaHang(Response $res): void
+    {
+        if ($res->status() !== 403) {
+            return;
+        }
+        if ($res->json('errors.ma') !== 'CUA_HANG_KHOA') {
+            return;
+        }
+
+        session([HanSuDung::KHOA_CO => true]);
     }
 
     /** Thực thi một HTTP request đơn lẻ (token lấy từ session tại thời điểm gọi). */
@@ -160,6 +192,11 @@ class ApiClient
         if ($user = data_get($data, 'user')) {
             session(['api.user' => $user]);
         }
+        // Làm mới token là lượt duy nhất API tra lại tình trạng cửa hàng bằng
+        // refresh token, nên câu trả lời của nó là bản mới nhất về việc còn hạn
+        // hay không. Ghi cả khi false: khách vừa gia hạn thì cờ phải rũ được ra,
+        // không bắt họ đăng xuất rồi đăng nhập lại mới dùng tiếp được.
+        session([HanSuDung::KHOA_CO => (bool) data_get($data, 'cua_hang_khoa', false)]);
 
         return true;
     }
@@ -1093,6 +1130,50 @@ class ApiClient
     public function reportCustomers(array $query = []): Response
     {
         return $this->get('/admin/reports/customers', $query);
+    }
+
+    // ---------- Gói dịch vụ của cửa hàng ----------
+
+    /**
+     * Hợp đồng phần mềm của CHÍNH cửa hàng này, kèm bảng giá đang bán.
+     *
+     * Đây là đường duy nhất Shop Admin đọc được sổ nền tảng, và nó chỉ đọc: gia
+     * hạn vẫn là việc của nhà cung cấp (tiền phải vào sổ thu trước), nên trang
+     * gói dịch vụ chỉ mời liên hệ chứ không có nút tự đẩy hạn.
+     *
+     * Trả 404 khi máy chủ API chưa nối được sổ nền tảng — nhóm route bên đó
+     * không được đăng ký. Nơi gọi phải nói đúng câu đó ra thay vì hiện trang
+     * trống; xem GoiDichVuController.
+     */
+    public function goiDichVu(): Response
+    {
+        return $this->get('/admin/goi-dich-vu');
+    }
+
+    /**
+     * Đặt đơn gia hạn và lấy link thanh toán.
+     *
+     * KHÔNG gửi số tiền: giá do API tra từ bảng giá rồi chốt vào đơn. Gửi số tiền
+     * từ đây nghĩa là trang web tự khai mình phải trả bao nhiêu.
+     */
+    public function datGiaHan(int $planId, int $soThang): Response
+    {
+        return $this->post('/admin/goi-dich-vu/dat', [
+            'plan_id' => $planId,
+            'so_thang' => $soThang,
+        ]);
+    }
+
+    /**
+     * Trạng thái một đơn gia hạn.
+     *
+     * Đường này KHÔNG chỉ đọc: đơn còn chờ thì API hỏi thẳng cổng thanh toán xem
+     * tiền vào chưa, và chốt đơn ngay tại đó nếu đã vào. Nhờ vậy khách vẫn được
+     * gia hạn kể cả khi webhook không tới được máy chủ (máy chạy ở localhost).
+     */
+    public function donGiaHan(int $id): Response
+    {
+        return $this->get("/admin/goi-dich-vu/don/{$id}");
     }
 
     /** Khoá cache của bảng giá trị cấu hình (xem settingValues). */

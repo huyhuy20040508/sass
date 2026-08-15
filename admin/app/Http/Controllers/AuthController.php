@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\ApiClient;
+use App\Services\HanSuDung;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
@@ -109,6 +110,25 @@ class AuthController extends Controller
             'api.tenant' => data_get($data, 'tenant'),
         ]);
 
+        // CỬA HÀNG ĐÃ HẾT HẠN HỢP ĐỒNG.
+        //
+        // API vẫn cấp phiên cho quản trị viên (nhân viên thì bị từ chối ngay ở
+        // trên), nhưng phiên đó chỉ đọc được đúng trang Các gói dịch vụ. Cất cờ
+        // vào session để middleware `admin.khoa` dồn mọi đường về trang đó —
+        // xem KhoaKhiHetHan.
+        //
+        // Ghi cả khi FALSE: khách vừa gia hạn xong đăng nhập lại phải rũ được cờ
+        // cũ, không thì họ trả tiền rồi vẫn bị giam trong trang gói dịch vụ.
+        // Bắt đầu lại từ đầu: phiên trước trên cùng máy có thể để lại mốc cũ của
+        // một cửa hàng khác.
+        HanSuDung::quen();
+        $khoa = (bool) data_get($data, 'cua_hang_khoa', false);
+        session([HanSuDung::KHOA_CO => $khoa]);
+
+        if ($khoa) {
+            return redirect()->route('admin.goi-dich-vu.index');
+        }
+
         $redirect = redirect()->intended(route('admin.dashboard'))
             ->with('success', 'Đăng nhập thành công.');
 
@@ -129,6 +149,10 @@ class AuthController extends Controller
     public function logout(Request $request)
     {
         $request->session()->forget('api');
+        // Cờ khoá và mốc hết hạn nằm NGOÀI khoá 'api' (để sống sót qua lượt forget
+        // của ApiClient), nên phải xoá riêng — bỏ sót thì người đăng nhập sau trên
+        // cùng máy vẫn bị giam trong trang gói dịch vụ.
+        HanSuDung::quen();
         $request->session()->regenerate();
 
         return redirect()->route('login')->with('success', 'Đã đăng xuất.');

@@ -159,6 +159,13 @@ func handleServiceError(c *gin.Context, err error) {
 		response.Error(c, 429, "Vui lòng chờ "+strings.TrimPrefix(err.Error(), domain.ErrResendTooSoon.Error()+": ")+" rồi thử lại")
 	case errors.Is(err, domain.ErrKhongPhuTrachApp):
 		response.Error(c, 403, "Bạn không phụ trách phần mềm này")
+	// Hai lỗi của luồng KHÁCH TỰ GIA HẠN. Tách hẳn nhau vì người đọc phải làm hai
+	// việc khác nhau: một bên là gọi cho nhà cung cấp (chưa bật cổng), một bên là
+	// thử lại sau ít phút (cổng vừa trục trặc).
+	case errors.Is(err, domain.ErrChuaBatCongThanhToan):
+		response.Error(c, 503, "Nhà cung cấp chưa bật thanh toán trực tuyến — vui lòng liên hệ để gia hạn")
+	case errors.Is(err, domain.ErrCongThanhToanLoi):
+		response.Error(c, 502, "Cổng thanh toán đang không phản hồi, vui lòng thử lại sau ít phút")
 	case errors.Is(err, domain.ErrPlatformUnavailable):
 		response.Error(c, 503, "Khu điều hành nền tảng chưa sẵn sàng — máy chủ chưa nối được sổ nền tảng")
 

@@ -1343,6 +1343,16 @@ definitions:
     properties:
       access_token:
         type: string
+      cua_hang_khoa:
+        description: |-
+          CuaHangKhoa = true: cửa hàng đã HẾT HẠN HỢP ĐỒNG. Phiên vừa cấp vẫn dùng
+          được, nhưng chỉ cho ĐÚNG một đường đọc (gói dịch vụ) — mọi đường khác trả
+          403 kèm mã CUA_HANG_KHOA.
+
+          Chỉ vai trò quản lý mới nhận được phiên như vậy; nhân viên bị từ chối ngay
+          từ lượt đăng nhập. Shop Admin đọc cờ này để đưa người dùng thẳng tới trang
+          gói dịch vụ thay vì để họ bấm quanh và nhận lỗi ở từng trang.
+        type: boolean
       expires_in:
         description: giây
         type: integer
@@ -1523,6 +1533,77 @@ definitions:
     required:
     - name
     - slug
+    type: object
+  dto.CauHinhNenTangField:
+    properties:
+      bat_buoc_khi_bat:
+        description: |-
+          BatBuocKhiBat = true: bỏ trống ô này mà vẫn bật hình thức TƯƠNG ỨNG thì API
+          từ chối lưu. Trả ra để màn hình đánh dấu sao đỏ đúng chỗ, thay vì để người
+          dùng bấm Lưu rồi mới biết.
+        example: true
+        type: boolean
+      bi_mat:
+        description: |-
+          BiMat = true: giá trị cất ở dạng MÃ HOÁ và KHÔNG bao giờ trả nguyên văn —
+          `values` chỉ mang bản che (••••1234). Gửi lên chuỗi rỗng nghĩa là GIỮ
+          NGUYÊN khoá cũ, không phải xoá.
+        example: true
+        type: boolean
+      cong_tac:
+        description: |-
+          CongTac là khoá bật/tắt chi phối ô này ("ck_bat", "payos_bat"). Rỗng với
+          chính ô công tắc. Màn hình dùng nó để gom ô vào đúng khối và để biết sao đỏ
+          đang nói về hình thức nào.
+        example: ck_bat
+        type: string
+      goi_y:
+        description: GoiY là câu in dưới ô nhập, viết cho người bán đọc.
+        example: Chỉ gồm chữ số.
+        type: string
+      key:
+        example: ck_so_tai_khoan
+        type: string
+      label:
+        example: Số tài khoản
+        type: string
+      mac_dinh:
+        example: ""
+        type: string
+      max:
+        example: 32
+        type: integer
+      type:
+        description: 'Type: text | bool | image | textarea'
+        example: text
+        type: string
+    type: object
+  dto.CauHinhNenTangResponse:
+    properties:
+      fields:
+        items:
+          $ref: '#/definitions/dto.CauHinhNenTangField'
+        type: array
+      khoa_ma_hoa:
+        description: |-
+          KhoaMaHoa = false: máy chủ CHƯA khai PLATFORM_SECRET_KEY, nên mọi ô bí mật
+          đều không lưu được. Trả ra để màn hình nói trước điều đó, thay vì để người
+          dùng gõ xong khoá PayOS rồi bấm Lưu và nhận lỗi.
+        example: true
+        type: boolean
+      values:
+        additionalProperties:
+          type: string
+        type: object
+    type: object
+  dto.CauHinhNenTangUpdateRequest:
+    properties:
+      items:
+        additionalProperties:
+          type: string
+        type: object
+    required:
+    - items
     type: object
   dto.ChangePasswordRequest:
     properties:
@@ -1916,6 +1997,23 @@ definitions:
     required:
     - status
     type: object
+  dto.DatGiaHanRequest:
+    properties:
+      plan_id:
+        example: 2
+        type: integer
+      so_thang:
+        description: |-
+          SoThang: 1–24. Dài hơn là một thoả thuận cần người nói chuyện với nhau, không
+          phải một ô chọn trên màn hình.
+        example: 3
+        maximum: 24
+        minimum: 1
+        type: integer
+    required:
+    - plan_id
+    - so_thang
+    type: object
   dto.DoanhThuItem:
     properties:
       lan_cuoi:
@@ -1957,6 +2055,98 @@ definitions:
     required:
     - mat_khau
     type: object
+  dto.DonGiaHanResponse:
+    properties:
+      checkout_url:
+        description: |-
+          CheckoutURL là trang trả tiền của cổng — đường LUI, cho khách muốn trả
+          bằng ví điện tử hoặc thẻ. Trang thanh toán của mình tự dựng được màn hình
+          chuyển khoản từ năm trường ngay dưới, nên khách không bắt buộc phải rời
+          phần mềm.
+        type: string
+      chu_tai_khoan:
+        type: string
+      da_tra:
+        description: |-
+          DaTra là bản rút gọn của TrangThai cho màn hình khỏi so chuỗi — nó quyết
+          định trang thanh toán hiện "đang chờ" hay "đã gia hạn".
+        example: false
+        type: boolean
+      dien_thoai:
+        example: "0901234567"
+        type: string
+      email:
+        example: huy@quochuy.vn
+        type: string
+      han_moi:
+        description: |-
+          HanMoi là hạn hợp đồng SAU khi đã gia hạn — chỉ có nghĩa khi DaTra = true.
+          Đây là câu trả lời khách chờ nghe nhất sau khi trả tiền.
+        type: string
+      het_han_luc:
+        type: string
+      id:
+        example: 12
+        type: integer
+      ma_cua_hang:
+        example: order1
+        type: string
+      ma_don:
+        example: 12
+        type: integer
+      ngan_hang_bin:
+        description: |-
+          Bốn ô dưới là bản CHỮ của chính mã QR, cho khách không quét được (máy bàn,
+          app ngân hàng cũ) vẫn chuyển tay đúng.
+        example: "970422"
+        type: string
+      nguoi_lien_he:
+        example: Nguyễn Quốc Huy
+        type: string
+      noi_dung:
+        description: |-
+          NoiDung là nội dung chuyển khoản — thứ duy nhất nối một lần tiền vào với
+          một đơn. Gõ sai thì tiền vào tài khoản mà không đơn nào được chốt.
+        type: string
+      qr_code:
+        description: QRCode là chuỗi VietQR nguyên văn — màn hình tự vẽ mã QR từ nó.
+        type: string
+      so_tai_khoan:
+        type: string
+      so_thang:
+        example: 3
+        type: integer
+      so_tien:
+        example: 1497000
+        type: number
+      ten_app:
+        description: |-
+          ----- BÊN MUA: cửa hàng đang trả tiền -----
+
+          Có mặt vì một trang thanh toán phải nói rõ ĐANG THU TIỀN CHO AI. Không có
+          nó, người bấm trả tiền trên một máy dùng chung không có cách nào chắc mình
+          đang gia hạn đúng cửa hàng của mình — và tiền đã chuyển thì không rút lại
+          được.
+
+          Ba ô liên hệ lấy từ SỔ KHÁCH HÀNG của nền tảng, tức đúng thứ sẽ in trên hoá
+          đơn. Sai thì khách sửa được bằng cách gọi cho nhà cung cấp — nên hiện ra là
+          để họ phát hiện, không phải để trang trí.
+        example: Sellio Order
+        type: string
+      ten_cua_hang:
+        example: Quốc Huy
+        type: string
+      ten_goi:
+        description: |-
+          TenGoi là gói của HỢP ĐỒNG hiện tại, để màn hình nhắc lại khách đang gia hạn
+          cái gì.
+        example: Cửa hàng
+        type: string
+      trang_thai:
+        description: 'TrangThai: cho_thanh_toan | da_thanh_toan | huy | het_han'
+        example: cho_thanh_toan
+        type: string
+    type: object
   dto.FacebookLoginRequest:
     properties:
       code:
@@ -1990,6 +2180,23 @@ definitions:
         type: integer
     required:
     - so_thang
+    type: object
+  dto.GoiDichVuCuaToiResponse:
+    properties:
+      bang_gia:
+        items:
+          $ref: '#/definitions/dto.PlanItem'
+        type: array
+      fields:
+        description: |-
+          Fields là siêu dữ liệu của từng khoá hạn mức (nhãn, đơn vị, giá trị khi gói
+          không khai). Trả kèm để màn hình khỏi chép lại bảng khoá lần thứ hai —
+          thêm một hạn mức mới ở registry là trang này tự có thêm dòng.
+        items:
+          $ref: '#/definitions/dto.PlanFeatureField'
+        type: array
+      hop_dong:
+        $ref: '#/definitions/dto.HopDongCuaToi'
     type: object
   dto.GoogleLoginRequest:
     properties:
@@ -2127,6 +2334,77 @@ definitions:
     properties:
       hop_dong:
         $ref: '#/definitions/dto.HopDongChiTiet'
+    type: object
+  dto.HopDongCuaToi:
+    properties:
+      bat_dau:
+        type: string
+      chi_nhanh:
+        example: 1
+        type: integer
+      chu_ky:
+        description: 'ChuKy: thang | nam'
+        example: thang
+        type: string
+      con_lai_ngay:
+        description: |-
+          ConLaiNgay là số ngày còn lại, LÀM TRÒN LÊN: còn 2 phút vẫn là "1 ngày" chứ
+          không phải 0, và quá hạn 25 giờ là -1. Đây là con số màn hình in to nhất,
+          nên nó được tính ở máy chủ — hai nơi tự tính theo giờ máy mình là hai câu
+          trả lời khác nhau cho cùng một hợp đồng.
+
+          0 mang HAI nghĩa, và phải đọc kèm DaHetHan mới phân biệt được: hết hạn
+          trong hôm nay (chưa hết) hoặc vừa hết hạn trong hôm nay (đã hết).
+        example: 41
+        type: integer
+      da_het_han:
+        description: |-
+          DaHetHan là câu trả lời DUY NHẤT ĐÚNG cho "hết hạn chưa", so tới từng giây.
+
+          KHÔNG suy ra từ ConLaiNgay. Hợp đồng vừa hết hạn hai phút trước có
+          ConLaiNgay = 0 chứ không âm, nên `con_lai_ngay < 0` đọc thành "chưa hết
+          hạn" đúng trong khoảng nguy hiểm nhất — ngay sau thời khắc hết hạn, lúc màn
+          hình phải báo động nhất.
+        example: false
+        type: boolean
+      dung_thu:
+        description: |-
+          DungThu = true: hợp đồng còn ở KỲ DÙNG THỬ, khách chưa trả đồng nào. Khác
+          hẳn khách cũ sắp tới hạn, và câu mời gia hạn phải khác theo.
+        example: false
+        type: boolean
+      gia:
+        example: 499000
+        type: number
+      goi:
+        description: |-
+          Goi là MÃ gói đã chốt trong hợp đồng; TenGoi là tên hiển thị tra từ bảng
+          giá, rơi về mã khi không tra ra (hợp đồng thoả thuận riêng).
+        example: cua_hang
+        type: string
+      het_han:
+        type: string
+      san_pham:
+        example: 0
+        type: integer
+      tai_khoan:
+        example: 0
+        type: integer
+      ten_app:
+        example: Sellio Order
+        type: string
+      ten_goi:
+        example: Cửa hàng
+        type: string
+      ten_mien_rieng:
+        example: false
+        type: boolean
+      trang_thai:
+        description: |-
+          TrangThai: trial | active | past_due. `canceled` không bao giờ tới đây —
+          đường đọc chỉ trả hợp đồng còn hiệu lực.
+        example: active
+        type: string
     type: object
   dto.HopDongItem:
     properties:
@@ -5670,6 +5948,140 @@ paths:
       summary: Thống kê khách hàng
       tags:
       - Admin - Customers
+  /admin/goi-dich-vu:
+    get:
+      description: |-
+        Hợp đồng hiện tại của CHÍNH cửa hàng này (gói, hạn mức đã ký, ngày hết
+        hạn, số ngày còn lại) kèm bảng giá đang bán của phần mềm để chủ tiệm biết
+        gia hạn hết bao nhiêu.
+        `hop_dong` = null nghĩa là cửa hàng chưa có hợp đồng nào trong sổ nền
+        tảng — trạng thái hợp lệ, không phải lỗi.
+        Hạn mức đọc THẲNG ở hợp đồng, không tra sang bảng giá: bảng giá đổi được,
+        hợp đồng đã ký thì không. Giá trị 0 nghĩa là không giới hạn.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.GoiDichVuCuaToiResponse'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Gói dịch vụ của cửa hàng đang đăng nhập
+      tags:
+      - Admin - Gói dịch vụ
+  /admin/goi-dich-vu/dat:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Tạo đơn gia hạn cho hợp đồng hiện tại của cửa hàng đang đăng nhập rồi sinh
+        link thanh toán. Số tiền do MÁY CHỦ tính (giá bảng giá × số tháng) và chốt
+        vào đơn — bảng giá đổi sau đó không làm đổi số khách phải trả.
+        Đơn cũ còn hiệu lực cho cùng gói và cùng số tháng thì trả lại đơn đó thay vì
+        sinh link mới.
+        Gói "Liên hệ" (chưa công bố giá) và gói đã ngừng bán đều bị từ chối.
+      parameters:
+      - description: Gói và số tháng
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.DatGiaHanRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.DonGiaHanResponse'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Body'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Body'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Đặt đơn gia hạn và lấy link thanh toán
+      tags:
+      - Admin - Gói dịch vụ
+  /admin/goi-dich-vu/don/{id}:
+    get:
+      description: |-
+        Trang thanh toán hỏi lại đường này mỗi vài giây. Đơn còn chờ thì máy chủ HỎI
+        THẲNG CỔNG xem tiền vào chưa — đây là đường xác nhận dự phòng cho webhook,
+        cần cho cả lúc chạy ở máy local (cổng không gọi vào localhost được) lẫn lúc
+        webhook tới trễ.
+        Tiền đã vào thì chính lượt gọi này chốt đơn: ghi sổ thu, đẩy hạn hợp đồng và
+        mở khoá cửa hàng. Chốt đúng MỘT LẦN cho mỗi đơn, dù gọi bao nhiêu lần.
+      parameters:
+      - description: ID đơn gia hạn
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.DonGiaHanResponse'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Body'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Trạng thái một đơn gia hạn
+      tags:
+      - Admin - Gói dịch vụ
   /admin/inventory:
     get:
       consumes:
@@ -11101,6 +11513,88 @@ paths:
       summary: Danh mục phần mềm của nền tảng
       tags:
       - Platform - Apps
+  /platform/cau-hinh:
+    get:
+      description: |-
+        Trả về `values` (map khoá → giá trị, đã ghép mặc định của registry) và
+        `fields` (siêu dữ liệu từng ô: kiểu, nhãn, gợi ý, bắt buộc hay không) để
+        màn hình dựng form mà không chép lại bảng khoá.
+        Hôm nay gồm bộ thông tin NHẬN CHUYỂN KHOẢN dùng cho việc khách gia hạn.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.CauHinhNenTangResponse'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Cấu hình của nhà cung cấp
+      tags:
+      - Platform - Cấu hình
+    put:
+      consumes:
+      - application/json
+      description: |-
+        Ghi nhiều khoá trong một lần gọi; khoá không gửi lên giữ nguyên. Khoá lạ
+        làm cả yêu cầu bị từ chối (422), không ghi xuống một phần.
+        BẬT nhận chuyển khoản thì tên ngân hàng, số tài khoản, chủ tài khoản và
+        mẫu nội dung đều bắt buộc — và mẫu nội dung phải chứa {ma_cua_hang}, thứ
+        duy nhất nói tiền vừa vào là của khách nào.
+        CHỈ vai trò owner/operator ghi được; support chỉ đọc.
+      parameters:
+      - description: Các khoá cần ghi
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CauHinhNenTangUpdateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.CauHinhNenTangResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.Body'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Body'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Sửa cấu hình của nhà cung cấp
+      tags:
+      - Platform - Cấu hình
   /platform/chinh-thuc:
     post:
       consumes:
@@ -11556,8 +12050,11 @@ paths:
   /platform/subscriptions:
     get:
       description: |-
-        Màn hình "Người dùng thử" là `?trang_thai=trial`, "Người dùng chính thức"
-        là `?trang_thai=active`. Sắp theo ngày hết hạn gần nhất trước —
+        Màn hình "Người dùng thử" là `?nhom=dung_thu`, "Người dùng chính thức"
+        là `?nhom=chinh_thuc`. Lọc theo NHÓM chứ không theo `trang_thai`: trạng
+        thái đổi theo thời gian (hết hạn → past_due, huỷ → canceled) nên lọc
+        theo nó thì hợp đồng biến mất khỏi màn hình đúng lúc cần nhìn nhất.
+        Sắp theo ngày hết hạn gần nhất trước, hợp đồng đã huỷ xuống cuối —
         `con_lai_ngay` âm nghĩa là ĐÃ QUÁ HẠN.
         Hạn mức trong câu trả lời lấy THẲNG từ hợp đồng, không tra bảng giá: bảng
         giá được phép đổi, hợp đồng đã ký thì không. Giá trị 0 = không giới hạn.
@@ -11569,6 +12066,10 @@ paths:
       - description: trial | active | past_due | canceled
         in: query
         name: trang_thai
+        type: string
+      - description: dung_thu | chinh_thuc; bỏ trống = cả hai nhóm
+        in: query
+        name: nhom
         type: string
       produces:
       - application/json
@@ -11966,6 +12467,36 @@ paths:
       summary: Khách hàng của một phần mềm
       tags:
       - Platform - Khách hàng
+  /platform/webhook/payos:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        PayOS gọi vào đây khi một đơn gia hạn được trả tiền. KHÔNG có token: thứ
+        chứng minh gói dữ liệu đến từ PayOS là chữ ký HMAC-SHA256 tính trên chính
+        body — sai chữ ký thì từ chối thẳng.
+        Tiền vào ĐỦ số của đơn thì hợp đồng được đẩy hạn và cửa hàng mở khoá ngay.
+        Trả thiếu thì chỉ ghi nhật ký để người bán đối soát tay, KHÔNG tự gia hạn.
+        Mã đơn lạ (của hệ thống khác dùng chung kênh) vẫn trả 200 kèm log — trả lỗi
+        chỉ khiến PayOS gửi lại gói đó suốt nhiều giờ.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Đã nhận (hoặc đã bỏ qua)
+          schema:
+            $ref: '#/definitions/response.Body'
+        "400":
+          description: Không đọc được dữ liệu
+          schema:
+            $ref: '#/definitions/response.Body'
+        "401":
+          description: Chữ ký không hợp lệ
+          schema:
+            $ref: '#/definitions/response.Body'
+      summary: Webhook PayOS báo tiền gia hạn đã vào (công khai)
+      tags:
+      - Platform - Gia hạn
   /products:
     get:
       description: |-

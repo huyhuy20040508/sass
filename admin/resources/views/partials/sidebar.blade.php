@@ -11,6 +11,13 @@
     $role = (string) data_get(session('api.user'), 'role.name', '');
     $canManage = in_array($role, ['super_admin', 'admin'], true);
 
+    // CỬA HÀNG HẾT HẠN HỢP ĐỒNG: bỏ hẳn phần điều hướng.
+    //
+    // Mọi mục trong đó đều bị `admin.khoa` đá về trang Các gói dịch vụ (và API
+    // cũng từ chối), nên để chúng lại chỉ mời người dùng bấm mười lần và mười lần
+    // quay về cùng một chỗ. Còn lại đúng một lối đi, là lối duy nhất còn nghĩa.
+    $khoa = (bool) session('phien.cua_hang_khoa');
+
     // Cấu trúc điều hướng — mirror NAV trong sidebar.tsx.
     $nav = [
         [
@@ -187,6 +194,8 @@
         // Loa cầm tay + hai vòng sóng — nhóm việc rao ra bên ngoài cửa hàng.
         'marketing' => '<path d="M4 9.5h2.5L12 5.2v13.6L6.5 14.5H4a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1Z"/><path d="M6.6 14.5v3a1.4 1.4 0 0 0 1.4 1.4h.9a1.4 1.4 0 0 0 1.4-1.4v-1.1"/><path d="M15.6 9.4a3.9 3.9 0 0 1 0 5.2"/><path d="M18.2 6.8a7.6 7.6 0 0 1 0 10.4"/>',
         'report' => '<path d="M3 3v18h18"/><path d="M7 15v3M12 10v8M17 6v12"/>',
+        // Thẻ có dấu tích — gói dịch vụ đang dùng và hạn của nó.
+        'plan' => '<rect x="2.5" y="5" width="19" height="14" rx="2"/><path d="M2.5 9.5h19"/><path d="M6 14h4"/><path d="m14.5 15 1.6 1.6 3.4-3.6"/>',
         'settings' => '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/>',
     ];
 
@@ -216,7 +225,12 @@
 
     {{-- Nav --}}
     <nav class="jh-nav">
-        @foreach($nav as $gi => $group)
+        @if($khoa)
+            <p class="jh-locked">
+                Cửa hàng đã hết hạn. Các chức năng tạm khoá cho tới khi gia hạn.
+            </p>
+        @endif
+        @foreach(($khoa ? [] : $nav) as $gi => $group)
             <div class="jh-group">
                 @if(!empty($group['title']))
                     <p class="jh-group__title">{{ $group['title'] }}</p>
@@ -303,14 +317,33 @@
         @endforeach
     </nav>
 
-    {{-- Footer: hiện vai trò của người đang đăng nhập.
-         Trước đây chỗ này là link "Cài đặt" trỏ vào href="#" — bấm không ra gì.
-         Cài đặt giờ nằm trong nav như mọi module khác. --}}
+    {{-- Footer.
+
+         Chỗ này từng in VAI TRÒ của người đang đăng nhập ("Super Admin") — một
+         dòng chữ không bấm được và không nói thêm gì: ai cũng biết mình là chủ
+         tiệm, và cái nhãn đó chiếm đúng vị trí dễ thấy nhất của thanh trái.
+
+         Thay bằng lối vào trang Các gói dịch vụ: hợp đồng phần mềm sắp hết hạn là
+         thứ chủ tiệm cần thấy mà trước nay không có chỗ nào nói, dấu hiệu duy
+         nhất là một hôm đăng nhập không được nữa.
+
+         Nhân viên (staff) KHÔNG mở được trang đó — route đã chặn bằng
+         `admin.manage` — nên với họ chỗ này giữ nguyên nhãn vai trò cũ thay vì
+         mời bấm vào một đường sẽ bị đá ra. --}}
     <div class="jh-footer">
-        <div class="jh-role" title="Vai trò của tài khoản bạn đang dùng">
-            <span class="jh-item__icon">{!! $svg('settings') !!}</span>
-            <span class="jh-item__label">{{ data_get(session('api.user'), 'role.display_name', 'Tài khoản') }}</span>
-        </div>
+        @if($canManage || $khoa)
+            <a href="{{ route('admin.goi-dich-vu.index') }}"
+               class="jh-item {{ request()->routeIs('admin.goi-dich-vu.*') ? 'active' : '' }}"
+               title="Gói phần mềm bạn đang dùng và hạn gia hạn">
+                <span class="jh-item__icon">{!! $svg('plan') !!}</span>
+                <span class="jh-item__label">Các gói dịch vụ</span>
+            </a>
+        @else
+            <div class="jh-role" title="Vai trò của tài khoản bạn đang dùng">
+                <span class="jh-item__icon">{!! $svg('settings') !!}</span>
+                <span class="jh-item__label">{{ data_get(session('api.user'), 'role.display_name', 'Tài khoản') }}</span>
+            </div>
+        @endif
     </div>
 </aside>
 
@@ -464,6 +497,14 @@
     .jh-sidebar.collapsed .jh-role { justify-content: center; padding-left: 0; padding-right: 0; gap: 0; }
     .jh-role .jh-item__icon { opacity: .7; }
     .jh-sidebar.collapsed .jh-role .jh-item__label { display: none; }
+
+    /* Câu giải thích thay cho cả thanh điều hướng khi cửa hàng hết hạn */
+    .jh-locked {
+        margin: 4px; padding: 10px 12px; border-radius: 6px;
+        background: rgba(255, 255, 255, .05);
+        font-size: 12px; line-height: 1.6; color: #94a3b8;
+    }
+    .jh-sidebar.collapsed .jh-locked { display: none; }
 </style>
 
 <script>
