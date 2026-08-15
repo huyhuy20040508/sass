@@ -161,6 +161,40 @@ func handleServiceError(c *gin.Context, err error) {
 		response.Error(c, 403, "Bạn không phụ trách phần mềm này")
 	case errors.Is(err, domain.ErrPlatformUnavailable):
 		response.Error(c, 503, "Khu điều hành nền tảng chưa sẵn sàng — máy chủ chưa nối được sổ nền tảng")
+
+	// --- Ký hợp đồng từ khu điều hành ---
+	// 409 cho hai lỗi TRÙNG (thứ đã có người chiếm) và 422 cho các lỗi bảng giá
+	// (thứ phải đi sửa nơi khác rồi quay lại). Người bấm nút xử lý hai nhóm này
+	// bằng hai cách hoàn toàn khác nhau, nên chúng không được cùng một mã.
+	case errors.Is(err, domain.ErrCuaHangDaCo):
+		response.ValidationError(c, map[string]string{
+			"ma_cua_hang": "Mã cửa hàng này đã có người dùng, vui lòng đặt mã khác",
+		})
+	case errors.Is(err, domain.ErrHopDongDangChay):
+		response.Error(c, 409, "Cửa hàng này đã có hợp đồng còn hiệu lực cho phần mềm đó — gia hạn hợp đồng cũ, hoặc huỷ nó trước rồi ký lại")
+	case errors.Is(err, domain.ErrGoiNgungBan):
+		response.ValidationError(c, map[string]string{
+			"plan_id": "Gói này đã ngừng bán nên không ký mới được, vui lòng chọn gói khác",
+		})
+	case errors.Is(err, domain.ErrAppChuaBan):
+		response.Error(c, 422, "Phần mềm này chưa ở trạng thái đang bán")
+	case errors.Is(err, domain.ErrBangGiaChuaCoGia):
+		response.ValidationError(c, map[string]string{
+			"plan_id": "Bảng giá ghi \"Liên hệ\" cho gói này nên chưa có giá để chép sang hợp đồng",
+		})
+	case errors.Is(err, domain.ErrBangGiaThieuHanMuc):
+		// err đã kèm tên hạn mức còn thiếu — in nguyên ra, vì người sửa cần biết
+		// phải điền ô nào ở màn hình Tính năng gói.
+		response.ValidationError(c, map[string]string{
+			"plan_id": "Bảng giá của gói này chưa khai đủ hạn mức (" +
+				strings.TrimPrefix(err.Error(), domain.ErrBangGiaThieuHanMuc.Error()+": ") + ")",
+		})
+	case errors.Is(err, domain.ErrDaThuKyNay):
+		response.Error(c, 409, "Kỳ này đã có một lần thu ghi trong sổ. Nếu đây là lần thu của kỳ khác thì khai rõ ngày đầu và ngày cuối kỳ.")
+	case errors.Is(err, domain.ErrKhongConKyDeThu):
+		response.Error(c, 409, "Hợp đồng đã trả tiền tới hết hạn hiện tại — gia hạn trước, rồi mới có kỳ mới để thu")
+	case errors.Is(err, domain.ErrHopDongDaHuy):
+		response.Error(c, 409, "Hợp đồng này đã huỷ — khách quay lại thì ký hợp đồng mới, không mở lại hợp đồng cũ")
 	case errors.Is(err, domain.ErrFacebookDisabled):
 		response.Error(c, 503, "Cửa hàng chưa bật đăng nhập bằng Facebook")
 	case errors.Is(err, domain.ErrFacebookAuthFailed):

@@ -41,7 +41,7 @@ func (r *planRepository) truyVanBangGia(ctx context.Context) *gorm.DB {
 	return r.db.WithContext(ctx).
 		Table("plans AS p").
 		Joins("JOIN apps a ON a.id = p.app_id").
-		Select("p.*, a.code AS app_code, a.name AS app_name").
+		Select("p.*, a.code AS app_code, a.name AS app_name, a.status AS app_status").
 		Order("a.code, p.id")
 }
 
@@ -163,6 +163,43 @@ func (r *planRepository) SaveFeatures(ctx context.Context, planID uint, dat map[
 			DoUpdates: clause.AssignmentColumns([]string{"value", "updated_at"}),
 		}).Create(&rows).Error
 	})
+}
+
+// Sua ghi các cột thương mại của MỘT dòng bảng giá.
+//
+// Dùng Updates(map) chứ không Save(struct) vì hai lý do, và cả hai đều là lỗi
+// im lặng nếu làm cách kia:
+//
+//   - Save() ghi TOÀN BỘ cột, kể cả app_id/code/billing_cycle lấy từ struct
+//     trong bộ nhớ. Một lượt sửa giá khi đó có quyền đổi danh tính của dòng.
+//   - GORM bỏ qua trường zero khi cập nhật bằng struct, nên `price = nil`
+//     ("Liên hệ") và `trial_days = 0` ("không cho dùng thử") sẽ không được ghi —
+//     màn hình báo đã lưu còn database giữ nguyên giá cũ.
+//
+// KHÔNG coi RowsAffected == 0 là lỗi: MySQL trả 0 khi giá trị mới trùng y hệt
+// giá trị cũ, và bấm Lưu mà không đổi gì thì không phải hỏng. Việc "gói có tồn
+// tại không" đã do service hỏi bằng Find trước đó.
+func (r *planRepository) Sua(ctx context.Context, id uint, dat domain.SuaPlan) error {
+	// Tagline rỗng ghi NULL chứ không ghi chuỗi rỗng: cột đó NULL-able và các
+	// dòng do migration tạo ra đang để NULL khi không có mô tả. Hai cách viết
+	// cùng một ý nghĩa trong một cột là thứ mọi câu truy vấn sau này phải nhớ xử
+	// lý cả hai.
+	var tagline any
+	if s := strings.TrimSpace(dat.Tagline); s != "" {
+		tagline = s
+	}
+
+	return r.db.WithContext(ctx).
+		Model(&domain.Plan{}).
+		Where("id = ?", id).
+		Updates(map[string]any{
+			"name":       strings.TrimSpace(dat.Name),
+			"tagline":    tagline,
+			"price":      dat.Price,
+			"trial_days": dat.TrialDays,
+			"status":     dat.Status,
+			"updated_at": time.Now(),
+		}).Error
 }
 
 // platformUserRepository tra người điều hành nền tảng. Cũng chạy trên CONTROL

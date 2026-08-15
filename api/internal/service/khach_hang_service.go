@@ -23,8 +23,9 @@ import (
 type KhachHangService interface {
 	// KhachHang liệt kê khách hàng của một phần mềm.
 	KhachHang(ctx context.Context, quyen domain.QuyenApp, maApp, trangThai string) (dto.KhachHangResponse, error)
-	// HopDong liệt kê thuê bao; trangThai rỗng = mọi trạng thái.
-	HopDong(ctx context.Context, quyen domain.QuyenApp, maApp, trangThai string) (dto.HopDongResponse, error)
+	// HopDong liệt kê thuê bao; trangThai rỗng = mọi trạng thái, nhom rỗng = cả
+	// hai nhóm (xem domain.NhomDungThu).
+	HopDong(ctx context.Context, quyen domain.QuyenApp, maApp, trangThai, nhom string) (dto.HopDongResponse, error)
 	// DoanhThu cộng tiền đã thu theo từng cửa hàng trong khoảng [tu, den).
 	DoanhThu(ctx context.Context, quyen domain.QuyenApp, maApp string, tu, den *time.Time) (dto.DoanhThuResponse, error)
 }
@@ -99,11 +100,12 @@ func (s *khachHangService) KhachHang(ctx context.Context, quyen domain.QuyenApp,
 	return res, nil
 }
 
-func (s *khachHangService) HopDong(ctx context.Context, quyen domain.QuyenApp, maApp, trangThai string) (dto.HopDongResponse, error) {
+func (s *khachHangService) HopDong(ctx context.Context, quyen domain.QuyenApp, maApp, trangThai, nhom string) (dto.HopDongResponse, error) {
 	loc, err := phamVi(quyen, maApp, trangThai)
 	if err != nil {
 		return dto.HopDongResponse{}, err
 	}
+	loc.Nhom = strings.TrimSpace(nhom)
 
 	rows, err := s.repo.HopDong(ctx, loc)
 	if err != nil {
@@ -113,30 +115,56 @@ func (s *khachHangService) HopDong(ctx context.Context, quyen domain.QuyenApp, m
 	homNay := time.Now()
 	res := dto.HopDongResponse{HopDong: make([]dto.HopDongItem, 0, len(rows))}
 	for _, row := range rows {
-		res.HopDong = append(res.HopDong, dto.HopDongItem{
-			ID:         row.ID,
-			MaCuaHang:  row.MaCuaHang,
-			TenCuaHang: row.TenCuaHang,
-			MaApp:      row.MaApp,
-			TenApp:     row.TenApp,
-			Goi:        row.Plan,
-			TrangThai:  row.Status,
-			ChuKy:      row.BillingCycle,
-			Gia:        row.Price,
-			// Hạn mức đọc THẲNG ở hợp đồng, không tra sang bảng giá — xem
-			// domain.Subscription. 0 = không giới hạn, và màn hình phải dịch ra chữ
-			// chứ đừng in số 0.
-			ChiNhanh:     row.MaxShops,
-			TaiKhoan:     row.MaxUsers,
-			SanPham:      row.MaxProducts,
-			TenMienRieng: row.OwnDomain,
-			BatDau:       row.StartedAt,
-			HetHan:       row.EndsAt,
-			ConLaiNgay:   int(row.EndsAt.Sub(homNay).Hours() / 24),
-		})
+		res.HopDong = append(res.HopDong, hopDongItem(row, homNay))
 	}
 
 	return res, nil
+}
+
+// hopDongItem dịch một dòng hợp đồng sang DTO.
+//
+// Tách ra khỏi vòng lặp vì hai đường GHI (gia hạn · huỷ, xem DungThuService)
+// cũng trả về đúng hình dạng này để màn hình cập nhật lại dòng vừa đổi. Chép
+// phép dịch ra hai bản thì `con_lai_ngay` sẽ được tính bằng hai cách, và cách
+// thứ hai sẽ là cách sai.
+//
+// homNay truyền vào chứ không gọi time.Now() bên trong: cả một danh sách phải
+// được tính theo CÙNG một mốc, nếu không hai dòng cạnh nhau có thể lệch một ngày
+// chỉ vì vòng lặp chạy qua nửa đêm.
+func hopDongItem(row domain.HopDongDayDu, homNay time.Time) dto.HopDongItem {
+	// Rơi về MÃ gói khi bảng giá không tra ra tên: hợp đồng thoả thuận riêng
+	// (plan_id nil) hoặc dòng bảng giá đã bị xoá. Chốt chặn đặt Ở ĐÂY, một chỗ,
+	// để mọi màn hình khỏi tự nghĩ ra cách xử lý ô trống — và nghĩ khác nhau.
+	tenGoi := string(row.TenGoi)
+	if tenGoi == "" {
+		tenGoi = row.Plan
+	}
+
+	return dto.HopDongItem{
+		ID:         row.ID,
+		MaCuaHang:  row.MaCuaHang,
+		TenCuaHang: row.TenCuaHang,
+		MaApp:      row.MaApp,
+		TenApp:     row.TenApp,
+		Goi:        row.Plan,
+		TenGoi:     tenGoi,
+		TrangThai:  row.Status,
+		ChuKy:      row.BillingCycle,
+		Gia:        row.Price,
+		// Hạn mức đọc THẲNG ở hợp đồng, không tra sang bảng giá — xem
+		// domain.Subscription. 0 = không giới hạn, và màn hình phải dịch ra chữ
+		// chứ đừng in số 0.
+		ChiNhanh:     row.MaxShops,
+		TaiKhoan:     row.MaxUsers,
+		SanPham:      row.MaxProducts,
+		TenMienRieng: row.OwnDomain,
+		BatDau:       row.StartedAt,
+		HetHan:       row.EndsAt,
+		ConLaiNgay:   int(row.EndsAt.Sub(homNay).Hours() / 24),
+		NguoiLienHe:  string(row.NguoiLienHe),
+		DienThoai:    string(row.DienThoai),
+		Email:        string(row.Email),
+	}
 }
 
 func (s *khachHangService) DoanhThu(ctx context.Context, quyen domain.QuyenApp, maApp string, tu, den *time.Time) (dto.DoanhThuResponse, error) {

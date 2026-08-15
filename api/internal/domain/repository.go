@@ -915,6 +915,47 @@ type TenantRepository interface {
 	// KHÔNG lọc theo status: trạng thái do tầng nghiệp vụ xét, và chỉ xét sau khi
 	// đã đúng mật khẩu — xem authService.LoginShop.
 	FindByCode(ctx context.Context, code string) (*Tenant, error)
+	// TrangThaiTheoID đọc `status` của một cửa hàng theo id.
+	//
+	// Có mặt cho đường LÀM MỚI TOKEN: khoá một cửa hàng
+	// (`status = 'suspended'`) chỉ chặn được lượt đăng nhập mới, còn phiên đang
+	// mở thì cứ tự gia hạn — trừ khi chỗ gia hạn tự tra lại. Xem
+	// authService.Refresh.
+	TrangThaiTheoID(ctx context.Context, id uint) (string, error)
+}
+
+// TinhTrangPhien là câu trả lời cho "phiên này còn dùng được không".
+//
+// Ba trạng thái tách bạch chứ không gộp thành một bool: chúng dẫn tới ba câu
+// trả lời khác nhau cho người dùng, và gộp lại thì người bị khoá cửa hàng nhận
+// đúng câu của người bị xoá tài khoản.
+type TinhTrangPhien struct {
+	// CoNguoiDung = false: tài khoản đã bị xoá (kể cả xoá mềm).
+	CoNguoiDung bool
+	// NguoiDungHoatDong = false: tài khoản còn đó nhưng đã bị khoá.
+	NguoiDungHoatDong bool
+	// CuaHangHoatDong = false: cửa hàng bị khoá hoặc đã bị xoá khỏi sổ.
+	CuaHangHoatDong bool
+}
+
+// ConDungDuoc gộp ba vế lại cho nơi gọi chỉ cần một câu trả lời.
+func (t TinhTrangPhien) ConDungDuoc() bool {
+	return t.CoNguoiDung && t.NguoiDungHoatDong && t.CuaHangHoatDong
+}
+
+// PhienRepository trả lời câu hỏi DUY NHẤT của middleware xác thực: chiếc token
+// này còn ứng với một tài khoản sống trong một cửa hàng đang mở không.
+//
+// VÌ SAO CÓ PORT RIÊNG thay vì gọi UserRepository + TenantRepository: câu hỏi
+// này chạy ở MỌI request đã đăng nhập, nên nó phải là ĐÚNG MỘT lượt đọc. Ghép
+// hai repository lại thành hai lượt là nhân đôi chi phí của đường đi nóng nhất
+// hệ thống, và không ai nhìn ra điều đó khi đọc riêng từng chỗ gọi.
+//
+// CHẠY TRÊN DATA PLANE. Kết nối có bộ lọc tenant, nhưng hàm dưới đây nhận
+// tenantID tường minh và tự khai điều kiện — nó được gọi TRƯỚC khi ctx kịp mang
+// tenant, vì chính nó là bước quyết định có gắn tenant vào ctx hay không.
+type PhienRepository interface {
+	KiemPhien(ctx context.Context, userID, tenantID uint) (TinhTrangPhien, error)
 }
 
 // UserRepository — truy cập bảng users.

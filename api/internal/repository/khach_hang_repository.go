@@ -52,21 +52,28 @@ func (r *khachHangRepository) KhachHang(ctx context.Context, loc domain.LocKhuDi
 	// đó chỉ tồn tại qua hợp đồng. Khách chưa mua gì thì chưa thuộc phần mềm nào
 	// — họ vẫn nằm trong `tenants`, chỉ là không có chỗ trên màn hình đang lọc
 	// theo app.
+	//
+	// HỢP ĐỒNG ĐÃ HUỶ VẪN GIỮ KHÁCH LẠI TRONG SỔ, chỉ không được ĐẾM.
+	//
+	// Trước đây điều kiện `s.status <> 'canceled'` nằm ở WHERE, nên khách có đúng
+	// một hợp đồng và hợp đồng đó bị huỷ thì cả DÒNG biến mất khỏi sổ. Hai chỗ
+	// hỏng vì việc đó: sổ khách hàng là nơi tra lại khách CŨ, mà khách cũ thì
+	// theo định nghĩa không còn hợp đồng nào; và chính chú thích của
+	// KhachHangTrongSo nói "khách có mặt trong sổ mà 0 hợp đồng là khách đã dừng
+	// hẳn" — một trạng thái mà câu truy vấn cũ không bao giờ tạo ra được.
+	//
+	// Điều kiện chuyển vào trong COUNT: dòng ở lại, con số nói đúng.
 	q := r.db.WithContext(ctx).
 		Table("tenants AS t").
 		Joins("JOIN subscriptions s ON s.tenant_id = t.id").
 		Joins("JOIN apps a ON a.id = s.app_id").
-		Select("t.*, COUNT(DISTINCT s.id) AS so_hop_dong").
+		Select("t.*, COUNT(DISTINCT CASE WHEN s.status <> ? THEN s.id END) AS so_hop_dong",
+			domain.SubscriptionCanceled).
 		Group("t.id").
 		Order("t.code")
 	q = locApp(q, loc.MaApp)
 	if loc.TrangThai != "" {
 		q = q.Where("s.status = ?", loc.TrangThai)
-	} else {
-		// Mặc định KHÔNG đếm hợp đồng đã huỷ: "khách hàng của phần mềm này" nghĩa
-		// là khách đang dùng. Muốn xem cả khách cũ thì lọc `trang_thai=canceled`
-		// tường minh.
-		q = q.Where("s.status <> ?", domain.SubscriptionCanceled)
 	}
 
 	var rows []domain.KhachHangTrongSo
@@ -82,13 +89,38 @@ func (r *khachHangRepository) HopDong(ctx context.Context, loc domain.LocKhuDieu
 		Table("subscriptions AS s").
 		Joins("JOIN tenants t ON t.id = s.tenant_id").
 		Joins("JOIN apps a ON a.id = s.app_id").
-		Select("s.*, t.code AS ma_cua_hang, t.name AS ten_cua_hang, a.code AS ma_app, a.name AS ten_app").
+		// LEFT JOIN, và chỉ lấy MỖI CÁI TÊN: hợp đồng thoả thuận riêng không có
+		// plan_id, và dòng bảng giá cũng có thể đã bị xoá — cả hai đều không được
+		// làm biến mất một hợp đồng khỏi danh sách. Giá và hạn mức vẫn đọc ở `s.*`,
+		// không bao giờ ở đây.
+		Joins("LEFT JOIN plans p ON p.id = s.plan_id").
+		Select(`s.*, t.code AS ma_cua_hang, t.name AS ten_cua_hang,
+		        t.contact_name AS nguoi_lien_he, t.contact_phone AS dien_thoai,
+		        t.contact_email AS email,
+		        a.code AS ma_app, a.name AS ten_app, p.name AS ten_goi,
+		        t.note AS ghi_chu_khach, t.created_at AS ngay_vao_so,
+		        t.status AS trang_thai_cua_hang`).
 		// Hợp đồng sắp hết hạn phải nằm gần đầu: đó là danh sách người ta mở màn
 		// hình này để xem.
-		Order("s.ends_at ASC, t.code")
+		//
+		// ĐÃ HUỶ XUỐNG CUỐI, tách hẳn khỏi thứ tự theo hạn. Hợp đồng đóng từ năm
+		// ngoái có `ends_at` xa nhất về quá khứ, nên chỉ sắp theo hạn thôi là dồn
+		// hết khách cũ lên đầu bảng và đẩy những khách CÒN phải gọi điện xuống
+		// dưới — đúng ngược với việc màn hình này phục vụ.
+		Order("(s.status = '" + domain.SubscriptionCanceled + "') ASC, s.ends_at ASC, t.code")
 	q = locApp(q, loc.MaApp)
 	if loc.TrangThai != "" {
 		q = q.Where("s.status = ?", loc.TrangThai)
+	}
+
+	// Nhóm — xem domain.NhomDungThu về việc vì sao hai màn hình lọc theo đây chứ
+	// không theo trạng thái. Giá trị lạ thì KHÔNG lọc, và cái sai đó hiện ra ngay
+	// trên màn hình dưới dạng hai nhóm trộn vào nhau.
+	switch loc.Nhom {
+	case domain.NhomDungThu:
+		q = q.Where("s.trial_ends_at IS NOT NULL")
+	case domain.NhomChinhThuc:
+		q = q.Where("s.trial_ends_at IS NULL")
 	}
 
 	var rows []domain.HopDongDayDu

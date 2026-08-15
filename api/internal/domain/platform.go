@@ -348,6 +348,30 @@ type PlanRepository interface {
 	// Xoá là một hành động RIÊNG chứ không phải ghi giá trị rỗng, vì "không có
 	// dòng" mang nghĩa riêng — bảng giá không quy định (xem PlanFeature).
 	SaveFeatures(ctx context.Context, planID uint, dat map[string]string, xoa []string) error
+	// Sua ghi các cột THƯƠNG MẠI của một dòng bảng giá: tên, mô tả, giá, số ngày
+	// dùng thử, còn bán hay không.
+	//
+	// KHÔNG đụng tới (app_id, code, billing_cycle). Bộ ba đó là DANH TÍNH của
+	// dòng — khoá duy nhất của bảng — và hợp đồng đã ký tra tên gói về đây theo
+	// `code`. Sửa mã của một dòng đang có khách nghĩa là hợp đồng của họ trỏ vào
+	// hư không, mà không có gì báo. Muốn một mức giá khác thì thêm dòng mới.
+	Sua(ctx context.Context, id uint, dat SuaPlan) error
+}
+
+// SuaPlan là phần SỬA ĐƯỢC của một dòng bảng giá.
+//
+// Là struct riêng chứ không dùng lại Plan: Plan có cả danh tính (app_id, code,
+// billing_cycle) lẫn dấu thời gian, và nhận nguyên nó ở tầng ghi là mở đường cho
+// một lượt sửa giá lỡ tay đổi luôn mã gói.
+type SuaPlan struct {
+	Name    string
+	Tagline string
+	// Price nil = "Liên hệ" (chưa công bố giá), KHÁC 0 là miễn phí. Đây là lý do
+	// nó là con trỏ chứ không phải float64 — xem Plan.Price.
+	Price     *float64
+	TrialDays uint
+	// Status: PlanStatusActive | PlanStatusRetired.
+	Status string
 }
 
 // PlanWithApp là một dòng bảng giá kèm app của nó.
@@ -358,6 +382,10 @@ type PlanWithApp struct {
 	Plan
 	AppCode string `json:"app_code"`
 	AppName string `json:"app_name"`
+	// AppStatus là trạng thái của PHẦN MỀM, khác hẳn Plan.Status (trạng thái của
+	// một mức giá). Hai thứ đó độc lập: một gói 'active' của một app 'planned'
+	// vẫn không bán được, và nơi ký hợp đồng phải xét cả hai.
+	AppStatus string `json:"app_status"`
 }
 
 // PlatformUserRepository là sổ NGƯỜI CỦA NỀN TẢNG — nơi khu điều hành xác thực
@@ -417,6 +445,14 @@ type Invoice struct {
 
 func (Invoice) TableName() string { return "invoices" }
 
+// Hình thức tiền vào. Khớp ENUM của cột `invoices.method` — thêm giá trị mới ở
+// đây mà quên migration thì MySQL từ chối cả câu INSERT.
+const (
+	PaymentChuyenKhoan = "chuyen_khoan"
+	PaymentTienMat     = "tien_mat"
+	PaymentKhac        = "khac"
+)
+
 // LocKhuDieuHanh là bộ lọc dùng chung của mọi màn hình khu điều hành.
 //
 // MaApp là danh sách mã phần mềm được phép đọc. nil = KHÔNG lọc (chỉ owner),
@@ -427,10 +463,37 @@ type LocKhuDieuHanh struct {
 	// TrangThai lọc theo trạng thái thuê bao (trial | active | past_due |
 	// canceled). Rỗng = mọi trạng thái.
 	TrangThai string
+	// Nhom lọc theo LOẠI hợp đồng chứ không theo trạng thái hiện tại của nó —
+	// xem NhomDungThu. Rỗng = cả hai nhóm.
+	Nhom string
 	// Tu/Den giới hạn khoảng thời gian TIỀN VÀO, chỉ dùng cho báo cáo doanh thu.
 	Tu  *time.Time
 	Den *time.Time
 }
+
+// Hai NHÓM hợp đồng, tương ứng đúng hai màn hình "Người dùng thử" và "Người
+// dùng chính thức" của khu điều hành.
+//
+// VÌ SAO KHÔNG LỌC BẰNG `status`, dù hai màn hình từng làm đúng như vậy
+// (`?trang_thai=trial` và `?trang_thai=active`): trạng thái ĐỔI theo thời gian
+// còn màn hình thì không. Hợp đồng thử hết hạn thành `past_due`, bấm huỷ thành
+// `canceled` — và với bộ lọc theo trạng thái thì cả hai BIẾN MẤT khỏi màn hình
+// đang mở, đúng lúc người ta cần nhìn thấy chúng nhất: khách vừa hết hạn là
+// khách phải gọi điện, khách vừa huỷ là khách phải hỏi vì sao.
+//
+// Nhóm thì KHÔNG đổi: một hợp đồng sinh ra từ kỳ dùng thử vẫn mãi là hợp đồng
+// dùng thử, dù hôm nay nó đang chạy, đã quá hạn hay đã đóng. Danh sách vì thế
+// ổn định, và `trang_thai` của từng dòng trở thành thông tin hiển thị — đúng
+// vai của nó.
+//
+// PHÂN BIỆT BẰNG `trial_ends_at`, không bằng một cột mới: cột đó có mặt đúng ở
+// hợp đồng có giai đoạn thử, và GiaHan xoá nó đi đúng lúc chuyển sang chính
+// thức — nên khách trả tiền lần đầu tự chuyển sang màn hình bên kia, không cần
+// ai đánh dấu gì.
+const (
+	NhomDungThu   = "dung_thu"
+	NhomChinhThuc = "chinh_thuc"
+)
 
 // KhachHangTrongSo là một khách hàng kèm tình trạng hợp đồng của họ.
 //
@@ -450,6 +513,54 @@ type HopDongDayDu struct {
 	TenCuaHang string `json:"ten_cua_hang"`
 	MaApp      string `json:"ma_app"`
 	TenApp     string `json:"ten_app"`
+	// TenGoi là TÊN HIỂN THỊ của gói ("Cửa hàng"), tra từ bảng giá qua PlanID.
+	//
+	// Đây là chiều tra cứu hợp lệ DUY NHẤT từ hợp đồng sang bảng giá — xem chú
+	// thích ở Plan. Giá và hạn mức thì tuyệt đối không: chúng đã chép ra lúc ký
+	// và phải đọc thẳng ở dòng hợp đồng.
+	//
+	// Rỗng khi PlanID nil (hợp đồng thoả thuận riêng, không sinh từ dòng bảng giá
+	// nào) hoặc dòng bảng giá đã bị xoá. Nơi hiển thị phải rơi về `Plan` — mã gói
+	// xấu nhưng vẫn nói được cái gì đó, còn ô trống thì không.
+	TenGoi StringOrNull `json:"ten_goi"`
+	// Ba ô liên lạc chép từ SỔ KHÁCH HÀNG (`tenants` của control plane), không
+	// phải từ hợp đồng: người gọi khách lúc sắp hết hạn cần số điện thoại ngay
+	// trên dòng đó. Chúng đổi được sau khi ký, và đúng là phải như vậy — hợp đồng
+	// thì không đổi, còn người liên lạc thì có.
+	NguoiLienHe StringOrNull `json:"nguoi_lien_he"`
+	DienThoai   StringOrNull `json:"dien_thoai"`
+	Email       StringOrNull `json:"email"`
+	// Ba ô dưới đây chỉ màn hình CHI TIẾT dùng tới. Danh sách không in chúng, nhưng
+	// chúng đi cùng câu truy vấn sẵn có thay vì thêm một lượt đọc thứ hai — chi
+	// phí bằng không, và giữ một hình dạng dữ liệu thay vì hai.
+	GhiChuKhach      StringOrNull `json:"ghi_chu_khach"`
+	NgayVaoSo        time.Time    `json:"ngay_vao_so"`
+	TrangThaiCuaHang string       `json:"trang_thai_cua_hang"`
+}
+
+// SuaHopDong là phần SỬA ĐƯỢC của một hợp đồng và của khách đứng sau nó.
+//
+// DANH SÁCH NÀY CỐ TÌNH NGẮN. Gói, chu kỳ, giá và ba hạn mức KHÔNG có mặt: đó
+// là điều khoản đã ký, và cả hệ thống dựng trên nguyên tắc chúng không đổi (xem
+// Subscription). Bán thêm quyền lợi cho một khách là việc của `cmd/thue-bao`,
+// nơi có bảng đối chiếu in ra trước mắt người ký — không phải một ô nhập trên
+// màn hình danh sách.
+//
+// Thứ sửa được ở đây đều là THÔNG TIN, không phải điều khoản: khách đổi tên
+// tiệm, đổi người phụ trách, đổi số điện thoại. Những thứ đó đổi thật, và không
+// có chỗ nào khác để sửa chúng.
+type SuaHopDong struct {
+	TenCuaHang    string
+	NguoiLienHe   string
+	DienThoai     string
+	Email         string
+	GhiChuKhach   string
+	GhiChuHopDong string
+	// HetHan nil = giữ nguyên. Chỉ nhận khi hợp đồng còn ĐANG DÙNG THỬ: hạn của
+	// một kỳ dùng thử là quyết định bán hàng, còn hạn của hợp đồng đã trả tiền là
+	// điều khoản — muốn dài thêm thì gia hạn, để đường tiền và đường hạn đi cùng
+	// nhau.
+	HetHan *time.Time
 }
 
 // DoanhThuTheoQuan là tổng tiền ĐÃ THU của một cửa hàng trong khoảng lọc.
@@ -478,6 +589,226 @@ type KhachHangRepository interface {
 	HopDong(ctx context.Context, loc LocKhuDieuHanh) ([]HopDongDayDu, error)
 	// DoanhThu cộng tiền ĐÃ THU theo từng cửa hàng.
 	DoanhThu(ctx context.Context, loc LocKhuDieuHanh) ([]DoanhThuTheoQuan, error)
+}
+
+// HopDongRepository GHI vào sổ hợp đồng của control plane.
+//
+// Tách khỏi KhachHangRepository (chỉ đọc) vì hai bên có mức nguy hiểm khác hẳn
+// nhau: quên bộ lọc app ở một hàm đọc là để người này nhìn thấy khách của người
+// kia; quên ở một hàm ghi là để họ SỬA hợp đồng của khách người kia. Cửa vào của
+// nhóm này vì thế nằm ở service — mọi hàm dưới đây nhận id đã được đối chiếu
+// phạm vi, repository không tự xét lấy.
+//
+// CHẠY TRÊN CONTROL PLANE (repository.NewPlatformDB), cùng ràng buộc với
+// KhachHangRepository.
+type HopDongRepository interface {
+	// UpsertKhachHang chép cửa hàng sang sổ nền tảng.
+	//
+	// ID KHÔNG tự tăng ở bảng này: nó là số chung với data plane, nên nơi gọi
+	// phải truyền id đã có bên kia. Upsert chứ không insert vì khách có thể đã
+	// nằm sẵn trong sổ từ một hợp đồng của phần mềm khác.
+	UpsertKhachHang(ctx context.Context, kh PlatformTenant) error
+	// Tao ghi một hợp đồng mới. Đụng khoá uq_subscriptions_current thì trả về
+	// ErrHopDongDangChay chứ không phải lỗi thô của MySQL.
+	Tao(ctx context.Context, s *Subscription) error
+	// Tim tra một hợp đồng theo id, kèm tên khách và mã app — mã app là thứ
+	// service cần để đối chiếu phạm vi trước khi cho ghi.
+	Tim(ctx context.Context, id uint) (*HopDongDayDu, error)
+	// GiaHan đẩy hạn hợp đồng thêm soThang tháng và đưa nó về 'active'.
+	//
+	// Mốc tính là GREATEST(ends_at, NOW()) chứ không phải ends_at: gia hạn một
+	// hợp đồng đã quá hạn ba tháng mà cộng dồn từ ngày cũ thì khách trả tiền
+	// xong vẫn còn quá hạn.
+	//
+	// Đây CŨNG LÀ đường chuyển dùng thử sang chính thức — trial_ends_at bị xoá và
+	// trạng thái thành 'active'. Hai việc đó là một; tách thành hai hàm thì bản
+	// thứ hai sẽ quên một trong hai vế.
+	GiaHan(ctx context.Context, id uint, soThang int) error
+	// Huy đóng hợp đồng, ghi lý do vào note. Không xoá dòng: khách cũ vẫn phải
+	// tra được mình đã dùng gì.
+	Huy(ctx context.Context, id uint, lyDo string) error
+	// Sua ghi phần sửa được của hợp đồng VÀ của khách đứng sau nó.
+	//
+	// Hai bảng trong MỘT giao dịch — làm được vì `tenants` và `subscriptions` của
+	// control plane nằm cùng một lược đồ. Khác hẳn lúc mở tài khoản dùng thử, nơi
+	// phải bắc qua hai database và không có giao dịch chung nào.
+	Sua(ctx context.Context, id, tenantID uint, hs SuaHopDong) error
+	// KyCuoiDaThu trả về `period_end` xa nhất đã ghi trong sổ thu của hợp đồng.
+	//
+	// nil = chưa thu lần nào. Nơi gọi dùng nó làm ĐIỂM BẮT ĐẦU của kỳ sắp thu, để
+	// hai lần thu liên tiếp không chồng lấn và cũng không để hở khoảng giữa.
+	KyCuoiDaThu(ctx context.Context, id uint) (*time.Time, error)
+	// ThuTien ghi MỘT LẦN TIỀN VÀO.
+	//
+	// Đụng khoá uq_invoices_ky (subscription_id, period_start) thì trả về
+	// ErrDaThuKyNay — ghi trùng một kỳ là cách dễ nhất để doanh thu tháng đó
+	// phồng gấp đôi mà không ai thấy sai.
+	ThuTien(ctx context.Context, hd Invoice) error
+	// TongDaThu cộng tiền đã thu của MỘT hợp đồng, kèm số lần thu.
+	TongDaThu(ctx context.Context, id uint) (tong float64, soLan int, err error)
+	// TenantDangCoHopDong trả về id những khách ĐANG có hợp đồng còn hiệu lực cho
+	// một phần mềm.
+	//
+	// Dùng để trừ ra khỏi danh sách cửa hàng có thể ký mới: khoá
+	// uq_subscriptions_current chỉ cho mỗi khách một hợp đồng còn sống trên mỗi
+	// app, nên mời người ta chọn một cửa hàng đã có hợp đồng là mời họ ăn lỗi
+	// trùng khoá sau khi đã điền xong form.
+	TenantDangCoHopDong(ctx context.Context, maApp string) ([]uint, error)
+
+	// ---------- Quét hợp đồng quá hạn ----------
+	//
+	// Bốn hàm dưới đây phục vụ MỘT việc: tới hạn mà chưa trả tiền thì khoá cửa
+	// hàng lại. Xem service.QuetHanService về thứ tự và lý do.
+
+	// QuaHan liệt kê hợp đồng đang chạy (`trial` hoặc `active`) mà `ends_at` đã
+	// lùi về trước `moc`.
+	//
+	// KHÔNG tự ghi gì: người gọi còn phải hỏi thêm ConHopDongSong trước khi khoá,
+	// và gộp cả ba việc vào một câu SQL thì không chỗ nào ghi được nhật ký nói rõ
+	// khách nào vừa bị khoá vì hợp đồng nào.
+	QuaHan(ctx context.Context, moc time.Time) ([]HopDongQuaHan, error)
+	// ConHopDongSong lọc ra những khách VẪN CÒN một hợp đồng chưa tới hạn.
+	//
+	// Có mặt vì `tenants.status` là của CẢ KHÁCH HÀNG chứ không của riêng một
+	// phần mềm: khách mua hai phần mềm, hết hạn một cái, mà khoá luôn cửa hàng
+	// thì họ mất nốt cái đang còn trả tiền. Hôm nay mới bán một app nên danh sách
+	// này gần như luôn rỗng — và đó chính là lúc dễ quên nhất.
+	ConHopDongSong(ctx context.Context, tenantIDs []uint, moc time.Time) ([]uint, error)
+	// DanhDauQuaHan đưa các hợp đồng sang `past_due`. Trả về số dòng đã đổi.
+	//
+	// KHÔNG đụng `ends_at`: cái mốc đó là ngày hợp đồng chết, và nó phải đứng
+	// nguyên để lượt gia hạn sau còn biết khách nợ từ bao giờ.
+	DanhDauQuaHan(ctx context.Context, ids []uint) (int64, error)
+	// DoiTrangThaiKhach ghi `tenants.status` của SỔ NỀN TẢNG.
+	//
+	// Bản sao ở control plane, chỉ để khu điều hành nhìn đúng. Chốt chặn thật
+	// nằm ở data plane — xem CuaHangMoiRepository.DoiTrangThai.
+	DoiTrangThaiKhach(ctx context.Context, tenantIDs []uint, trangThai string) (int64, error)
+}
+
+// HopDongQuaHan là MỘT hợp đồng đã chạy quá hạn mà chưa ai đóng lại.
+//
+// Đủ thông tin để GHI NHẬT KÝ ra một dòng người đọc hiểu được: khoá cửa hàng
+// của khách là việc nặng nhất mà máy chủ này tự làm không cần ai bấm nút, nên
+// "khách nào, phần mềm nào, hết hạn lúc nào" phải tra lại được.
+type HopDongQuaHan struct {
+	ID        uint
+	TenantID  uint
+	MaCuaHang string
+	MaApp     string
+	HetHan    time.Time
+	// DungThu = true: hợp đồng chết ở kỳ DÙNG THỬ, khách chưa từng trả đồng nào.
+	// Khác hẳn khách cũ ngừng đóng tiền, và người gọi điện cho họ cần biết.
+	DungThu bool
+}
+
+// CuaHangMoi là bộ ba thứ cần để dựng một khách hàng mới ở DATA PLANE: cửa hàng,
+// chi nhánh mặc định, và tài khoản quản trị đầu tiên của họ.
+//
+// Đúng thứ `cmd/tao-admin` dựng. Gom thành một struct chứ không phải sáu tham số
+// chuỗi liền nhau: sáu tham số cùng kiểu string thì hoán vị nhầm hai cái là lỗi
+// mà trình biên dịch không bắt được, và cái hoán vị đó ghi thẳng xuống database.
+type CuaHangMoi struct {
+	Ma          string
+	Ten         string
+	TenDangNhap string
+	HoTen       string
+	Email       string
+	// BamMatKhau là bcrypt của mật khẩu, KHÔNG phải mật khẩu thô. Băm ở tầng
+	// service; repository không được nhận mật khẩu thô để không có đường nào ghi
+	// nhầm nó xuống nguyên văn.
+	BamMatKhau string
+}
+
+// CuaHangMoiRepository dựng một cửa hàng mới ở DATA PLANE.
+//
+// CHẠY TRÊN DATA PLANE (repository.NewDB — kết nối CÓ bộ lọc tenant). Đây là
+// repository duy nhất của khu điều hành chạm vào data plane, và nó tồn tại vì
+// một lý do: bán phần mềm cho khách mới nghĩa là phải có chỗ cho họ đăng nhập,
+// mà chỗ đó nằm bên kia ranh giới.
+//
+// `tenants` là bảng toàn cục nên không cần tenant trong ctx; `shops` và `users`
+// thì có, và hiện thực phải gắn tenant VỪA TẠO vào ctx trước khi ghi hai bảng đó
+// — xem chú thích ở hiện thực.
+// QuanTriCuaHang là TÀI KHOẢN QUẢN TRỊ của một cửa hàng — ô thứ hai của màn
+// hình đăng nhập 3 ô, phía khách.
+//
+// KHÔNG có mật khẩu ở đây, kể cả bản băm. Khu điều hành không cần đọc nó và
+// không được đọc nó: đường duy nhất chạm tới mật khẩu của khách là ĐẶT LẠI, và
+// đường đó chỉ ghi.
+type QuanTriCuaHang struct {
+	ID          uint   `json:"id"`
+	TenDangNhap string `json:"ten_dang_nhap"`
+	HoTen       string `json:"ho_ten"`
+	Email       string `json:"email"`
+	// TrangThai: active | inactive.
+	TrangThai string `json:"trang_thai"`
+}
+
+// TaiKhoanCuaHangRepository đọc và đặt lại mật khẩu TÀI KHOẢN QUẢN TRỊ của một
+// cửa hàng.
+//
+// CHẠY TRÊN DATA PLANE (repository.NewDB). Tách khỏi CuaHangMoiRepository vì
+// vòng đời khác hẳn: bên kia chỉ dựng cửa hàng MỚI, còn đây đụng vào tài khoản
+// của một khách đang chạy.
+//
+// VÌ SAO KHU ĐIỀU HÀNH ĐƯỢC ĐẶT LẠI MẬT KHẨU KHÁCH: tài khoản quản trị của cửa
+// hàng KHÔNG có đường tự khôi phục nào — quên-mật-khẩu-qua-email chỉ tồn tại
+// trong cụm storefront dành cho khách mua sắm. Khách quên mật khẩu thì gọi cho
+// nhà cung cấp phần mềm, và đây là chỗ nhà cung cấp làm được việc đó.
+type TaiKhoanCuaHangRepository interface {
+	// QuanTri trả về tài khoản quản trị của cửa hàng, ErrNotFound nếu không có.
+	//
+	// Một cửa hàng có thể có NHIỀU super_admin. Hàm này trả về người CŨ NHẤT —
+	// tài khoản đầu tiên được dựng cùng cửa hàng, tức người mà "đổi mật khẩu cho
+	// khách" gần như luôn có nghĩa là họ. Nơi hiển thị phải in tên đăng nhập ra
+	// để người bấm nút biết mình đang đổi mật khẩu của ai.
+	QuanTri(ctx context.Context, tenantID uint) (*QuanTriCuaHang, error)
+	// DoiMatKhau ghi mật khẩu đã băm. Nhận CẢ tenantID để điều kiện WHERE mang
+	// theo cửa hàng — id người dùng đến từ một lượt đọc trước đó, và bắt buộc nó
+	// đi kèm cửa hàng nghĩa là không có đường nào đổi nhầm sang tài khoản của
+	// khách khác dù id có bị truyền sai.
+	DoiMatKhau(ctx context.Context, tenantID, userID uint, bamMatKhau string) error
+}
+
+// CuaHangCoSan là một cửa hàng ĐÃ TỒN TẠI ở data plane — ứng viên để ký hợp
+// đồng, khác hẳn CuaHangMoi (thứ sắp được dựng).
+type CuaHangCoSan struct {
+	ID  uint   `json:"id"`
+	Ma  string `json:"ma"`
+	Ten string `json:"ten"`
+	// TrangThai: active | suspended. Trả ra để màn hình in kèm — ký hợp đồng cho
+	// một cửa hàng đang bị khoá là chuyện hợp lệ (ký xong mở khoá), nhưng người
+	// ký phải biết mình đang ký cho cái gì.
+	TrangThai string `json:"trang_thai"`
+}
+
+type CuaHangMoiRepository interface {
+	// CoMa cho biết mã cửa hàng đã có người dùng chưa. Tính cả cửa hàng đang bị
+	// khoá: mã là duy nhất toàn hệ thống, không phải duy nhất trong số đang mở.
+	CoMa(ctx context.Context, ma string) (bool, error)
+	// Tao dựng cửa hàng + chi nhánh mặc định + tài khoản quản trị, trả về
+	// tenant_id vừa cấp. Trọn gói trong một giao dịch: một cửa hàng có mặt mà
+	// không ai đăng nhập được vào là thứ tệ hơn cả không tạo gì.
+	Tao(ctx context.Context, moi CuaHangMoi) (uint, error)
+	// DanhSach liệt kê MỌI cửa hàng đang có ở data plane, sắp theo mã.
+	//
+	// KHÔNG lọc "cửa hàng nào chưa ký hợp đồng" ở đây, dù đó mới là thứ màn hình
+	// cần: câu hỏi ấy cần đọc `subscriptions` bên CONTROL PLANE, mà hai lược đồ
+	// không JOIN được. Việc trừ ra thuộc về service — nơi cầm cả hai kết nối.
+	DanhSach(ctx context.Context) ([]CuaHangCoSan, error)
+	// TimTheoMa tra một cửa hàng theo mã, ErrNotFound nếu không có.
+	TimTheoMa(ctx context.Context, ma string) (*CuaHangCoSan, error)
+	// DoiTrangThai ghi `tenants.status` ở DATA PLANE. Trả về số dòng đã đổi.
+	//
+	// ĐÂY LÀ CHỐT CHẶN THẬT, không phải bản ở control plane: cột này là thứ
+	// authService.LoginShop đọc lúc đăng nhập và middleware.JWTAuth đọc ở mọi
+	// request, nên ghi hụt ở đây nghĩa là khách hết hạn vẫn dùng tiếp bình
+	// thường — dù sổ nền tảng đã ghi "đã khoá".
+	//
+	// Nhận cả danh sách vì lượt quét hạn khoá nhiều khách một lượt: một câu
+	// UPDATE ... IN (...) thay cho N câu.
+	DoiTrangThai(ctx context.Context, ids []uint, trangThai string) (int64, error)
 }
 
 // PlatformUser là tài khoản của KHU ĐIỀU HÀNH nền tảng — mình và người làm cùng,

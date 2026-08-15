@@ -290,7 +290,7 @@ func dungHeThongVoi(t *testing.T, banHang, dieuHanh bool) *heThong {
 	pReturnSvc := service.NewPurchaseReturnService(pReturnRepo, purchaseRepo)
 	reportSvc := service.NewReportService(reportRepo)
 
-	r := router.New(cfg, jwtMgr, tenMienRepo, nguoiDieuHanhRepo, router.Handlers{
+	r := router.New(cfg, jwtMgr, tenMienRepo, nguoiDieuHanhRepo, nil, router.Handlers{
 		Health:    handler.NewHealthHandler("test"),
 		Auth:      handler.NewAuthHandler(authSvc),
 		Category:  handler.NewCategoryHandler(categorySvc),

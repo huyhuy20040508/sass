@@ -13,6 +13,12 @@
     mềm hỏng chứ không như lộ trình — bản đồ đó nằm ở trang Tổng quan. Làm xong
     trang nào thì thêm <a> vào đây lúc đó.
 
+    Nhóm xổ (.rail-drop) mang tên MỘT PHẦN MỀM: "QLTK khách hàng order" là sổ
+    khách của Sellio Order. Nền tảng bán nhiều phần mềm, nên khi có phần mềm thứ
+    hai thì thêm một nhóm nữa cạnh nó — chứ không gộp thành một nhóm chung rồi
+    bắt người dùng đổi bộ chọn phần mềm ở trong trang: lúc đó thanh trái không
+    còn nói được đang xem phần mềm nào.
+
     $apiOnline do View composer trong AppServiceProvider bơm vào (cache 30 giây),
     nên dải tình trạng ở đáy luôn có dữ liệu dù trang nào gọi tới.
 --}}
@@ -24,6 +30,25 @@
         <img src="{{ asset('images/logo-default-wide-light.svg') }}" alt="{{ config('app.name') }}">
     </a>
 
+    @php
+        // Mục con của nhóm "QLTK khách hàng order". Để thành mảng chứ không viết
+        // tay 5 thẻ <a>: trạng thái "đang mở" của nhóm cha suy ra từ chính danh
+        // sách này, nên không có cách nào thêm mục mới mà quên khai báo nó với
+        // cái nút bật/tắt.
+        $muc_order = [
+            ['route' => 'platform.khach-hang-order.nguoi-dung-thu',  'nhan' => 'Người dùng thử'],
+            ['route' => 'platform.khach-hang-order.nguoi-chinh-thuc', 'nhan' => 'Người chính thức'],
+            ['route' => 'platform.khach-hang-order.goi-dich-vu',      'nhan' => 'Các gói dịch vụ'],
+            ['route' => 'platform.khach-hang-order.tinh-nang-goi',    'nhan' => 'Tính năng gói'],
+            ['route' => 'platform.khach-hang-order.database',         'nhan' => 'Database'],
+        ];
+
+        // Nhóm mở sẵn khi đang đứng ở một trang bên trong nó. Người ta vừa bấm
+        // vào đấy xong: mở trang mới ra mà nhóm đã cụp lại thì đọc như menu quên
+        // mất mình đang ở đâu.
+        $order_dang_mo = request()->routeIs('platform.khach-hang-order.*');
+    @endphp
+
     <nav class="rail-nav">
         <p class="rail-group">Điều hành nền tảng</p>
         <a href="{{ route('platform.dashboard') }}"
@@ -31,6 +56,31 @@
            @if (request()->routeIs('platform.dashboard')) aria-current="page" @endif>
             Tổng quan
         </a>
+
+        {{-- Nhóm xổ. Cái mũi tên là NÚT ĐIỀU KHIỂN chứ không phải biểu tượng
+             trang trí cho mục menu, nên nó không phạm vào quy tắc "menu chỉ có
+             chữ" ở đầu tệp — cùng lý do với ba vạch của nút mở ngăn kéo. Vẽ
+             bằng CSS, không mượn phông biểu tượng. --}}
+        <div class="rail-drop {{ $order_dang_mo ? 'is-open' : '' }}" data-rail-drop>
+            <button type="button" class="rail-link rail-drop-toggle {{ $order_dang_mo ? 'is-parent' : '' }}"
+                    aria-expanded="{{ $order_dang_mo ? 'true' : 'false' }}"
+                    aria-controls="drop-order">
+                <span>QLTK khách hàng order</span>
+                <span class="rail-caret" aria-hidden="true"></span>
+            </button>
+
+            {{-- hidden (không phải chỉ cao 0): nhóm cụp lại mà mục con vẫn "nhìn
+                 thấy được" thì phím Tab vẫn nhảy vào 5 đường dẫn đang bị giấu. --}}
+            <div class="rail-drop-panel" id="drop-order" @unless ($order_dang_mo) hidden @endunless>
+                @foreach ($muc_order as $muc)
+                    <a href="{{ route($muc['route']) }}"
+                       class="rail-sublink {{ request()->routeIs($muc['route']) ? 'is-current' : '' }}"
+                       @if (request()->routeIs($muc['route'])) aria-current="page" @endif>
+                        {{ $muc['nhan'] }}
+                    </a>
+                @endforeach
+            </div>
+        </div>
     </nav>
 
     <div class="rail-status">

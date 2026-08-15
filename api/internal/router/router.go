@@ -49,6 +49,10 @@ type Handlers struct {
 	// KhachHang phục vụ ba màn hình còn lại của khu điều hành: khách hàng, hợp
 	// đồng, doanh thu. Dựng cùng lúc với Plan — cùng một kết nối control plane.
 	KhachHang *handler.KhachHangHandler
+	// DungThu là ba đường GHI trên vòng đời hợp đồng (mở tài khoản dùng thử, gia
+	// hạn, huỷ). Khác hai cái trên ở chỗ nó cầm CẢ HAI kết nối: cửa hàng và tài
+	// khoản đăng nhập của khách nằm ở data plane.
+	DungThu *handler.DungThuHandler
 }
 
 // New tạo *gin.Engine đã cấu hình đầy đủ middleware và route.
@@ -59,11 +63,17 @@ type Handlers struct {
 //
 // nguoiDieuHanh là sổ NGƯỜI CỦA NỀN TẢNG, thứ canh nhóm /platform. nil thì nhóm
 // đó trả 503 chứ không mở — xem middleware.XacThucNenTang.
+//
+// phien là lượt tra "tài khoản và cửa hàng của token này còn dùng được không",
+// chạy ở mọi request đã đăng nhập — xem middleware.JWTAuth. Truyền nil thì
+// middleware chỉ kiểm chữ ký như trước, và khoá/xoá một cửa hàng sẽ KHÔNG đá
+// được phiên đang mở; chỉ dùng nil trong bài kiểm thử không có database.
 func New(
 	cfg *config.Config,
 	jwtMgr *jwt.Manager,
 	tenMien domain.TenantDomainRepository,
 	nguoiDieuHanh domain.PlatformUserRepository,
+	phien domain.PhienRepository,
 	h Handlers,
 ) *gin.Engine {
 	if cfg.App.IsProduction() {
@@ -188,7 +198,7 @@ func New(
 			// Rộng tay hơn hẳn: access token sống 15 phút, khách mở nhiều tab thì
 			// mỗi tab tự làm mới một lượt — siết chỗ này là đá văng người đang mua hàng.
 			auth.POST("/refresh", han("lam-moi-token", 60, 5*time.Minute), h.Auth.Refresh)
-			auth.GET("/me", middleware.JWTAuth(jwtMgr), h.Auth.Me)
+			auth.GET("/me", middleware.JWTAuth(jwtMgr, phien), h.Auth.Me)
 
 			// Phần còn lại chỉ dành cho khách tự đăng ký ngoài cửa hàng. Tài khoản
 			// nhân viên do quản trị viên tạo ở /admin/users, không đi đường này.
@@ -284,7 +294,7 @@ func New(
 			store.POST("/payments/sepay/webhook", h.Payment.SePayWebhook)
 			store.GET("/payments/:code", h.Payment.Status)
 			// Đơn hàng của chính khách đang đăng nhập (storefront)
-			me := v1.Group("/orders/me", middleware.JWTAuth(jwtMgr))
+			me := v1.Group("/orders/me", middleware.JWTAuth(jwtMgr, phien))
 			{
 				me.GET("", h.Order.MyList)
 				me.GET("/:id", h.Order.MyGet)
@@ -294,7 +304,7 @@ func New(
 			}
 
 			// --- Trả hàng của chính khách đang đăng nhập (storefront) ---
-			myReturns := v1.Group("/returns/me", middleware.JWTAuth(jwtMgr))
+			myReturns := v1.Group("/returns/me", middleware.JWTAuth(jwtMgr, phien))
 			{
 				myReturns.GET("", h.Return.MyList)
 				myReturns.POST("", h.Return.MyCreate)
@@ -307,7 +317,7 @@ func New(
 		// Cùng một bộ endpoint cho cả hai bên: kênh đọc được suy ra từ vai trò
 		// trong token chứ không phải từ đường dẫn, nên không có cách nào gọi
 		// nhầm sang kênh của người khác.
-		notif := v1.Group("/notifications", middleware.JWTAuth(jwtMgr))
+		notif := v1.Group("/notifications", middleware.JWTAuth(jwtMgr, phien))
 		{
 			notif.GET("", h.Notif.List)
 			notif.POST("/read-all", h.Notif.MarkAllRead)
@@ -327,7 +337,7 @@ func New(
 		// người khác. Đây là chặn theo NHÓM ENDPOINT, chưa phải phân quyền theo từng
 		// chức năng — muốn chi tiết hơn thì phải dựng bảng permissions.
 		admin := v1.Group("/admin")
-		admin.Use(middleware.JWTAuth(jwtMgr), middleware.RequireRoles(
+		admin.Use(middleware.JWTAuth(jwtMgr, phien), middleware.RequireRoles(
 			domain.RoleSuperAdmin, domain.RoleAdmin, domain.RoleStaff,
 		))
 		manage := admin.Group("")
@@ -559,6 +569,10 @@ func New(
 			nenTang.GET("/plans", h.Plan.List)
 			nenTang.GET("/plans/:id/features", h.Plan.Features)
 			nenTang.PUT("/plans/:id/features", h.Plan.UpdateFeatures)
+			// Sửa chính DÒNG bảng giá (tên, giá, dùng thử, còn bán hay không) —
+			// khác /features là điều khoản của gói. Hai đường riêng vì hai màn hình
+			// riêng, và vì gộp lại thì một lượt sửa giá phải gửi kèm cả bộ hạn mức.
+			nenTang.PUT("/plans/:id", h.Plan.Sua)
 
 			// Ba màn hình còn lại. Tất cả đều ĐỌC XUYÊN MỌI KHÁCH HÀNG, và phạm vi
 			// duy nhất giới hạn chúng là phân công phần mềm của người gọi.
@@ -569,6 +583,48 @@ func New(
 			nenTang.GET("/tenants", h.KhachHang.KhachHang)
 			nenTang.GET("/subscriptions", h.KhachHang.HopDong)
 			nenTang.GET("/doanh-thu", h.KhachHang.DoanhThu)
+
+			// Ba đường GHI trên vòng đời hợp đồng.
+			//
+			// Chỉ đăng ký khi h.DungThu có thật: nhóm này cần CẢ kết nối data plane
+			// (cửa hàng, tài khoản đăng nhập của khách) lẫn control plane, nên nó
+			// vắng mặt được trong khi phần đọc vẫn chạy.
+			//
+			// /dung-thu là đường RIÊNG chứ không phải POST /subscriptions: đường kia
+			// đọc như "thêm một hợp đồng cho khách đã có", còn cái này dựng cả một
+			// khách hàng mới. Hai việc khác nhau thì hai tên khác nhau — gộp lại là
+			// ngày mai có người gọi nó với `tenant_id` sẵn có và không hiểu vì sao
+			// nó lại đòi mật khẩu.
+			if h.DungThu != nil {
+				// Hai đường TẠO KHÁCH MỚI trọn gói (cửa hàng + tài khoản đăng nhập +
+				// hợp đồng). Khác nhau đúng một chỗ: hợp đồng ra `trial` hay
+				// `active`. Bên dưới chúng dùng chung một hàm — xem
+				// service.taoKhachHangMoi.
+				nenTang.POST("/dung-thu", h.DungThu.Tao)
+				nenTang.POST("/chinh-thuc", h.DungThu.TaoChinhThuc)
+
+				// Ký hợp đồng cho cửa hàng ĐÃ TỒN TẠI. Không dựng gì bên data plane,
+				// nên nó là đường duy nhất dùng được cho khách CŨ quay lại — mã cửa
+				// hàng của họ đã bị chiếm, hai đường trên sẽ từ chối.
+				nenTang.GET("/cua-hang-chua-ky", h.DungThu.CuaHangChuaKy)
+				nenTang.POST("/hop-dong", h.DungThu.KyHopDong)
+				// Chi tiết + sửa của MỘT hợp đồng. GET không qua cửa vai trò
+				// (`support` phải xem được), PUT thì có — chốt nằm trong handler.
+				nenTang.GET("/subscriptions/:id", h.DungThu.ChiTiet)
+				nenTang.PUT("/subscriptions/:id", h.DungThu.Sua)
+				// POST chứ không PUT: đây là HÀNH ĐỘNG trên một hợp đồng (đẩy hạn,
+				// đóng lại), không phải thay thế nội dung của nó. Hậu tố nằm sau /:id
+				// nên không có đường tĩnh nào bị hiểu nhầm thành id.
+				nenTang.POST("/subscriptions/:id/gia-han", h.DungThu.GiaHan)
+				// Đặt lại mật khẩu tài khoản quản trị của khách. Đường DUY NHẤT của
+				// khu điều hành ghi vào `users` của data plane — xem TaiKhoanCuaHangRepository.
+				nenTang.POST("/subscriptions/:id/doi-mat-khau", h.DungThu.DoiMatKhau)
+				// Ghi nhận tiền vào. Đường RIÊNG với gia-han, không phải tham số của
+				// nó: đẩy hạn và ghi nhận tiền là hai việc, và gộp lại thì mỗi lần
+				// gia hạn báo một khoản doanh thu chưa ai trả.
+				nenTang.POST("/subscriptions/:id/thu-tien", h.DungThu.ThuTien)
+				nenTang.POST("/subscriptions/:id/huy", h.DungThu.Huy)
+			}
 		}
 	}
 

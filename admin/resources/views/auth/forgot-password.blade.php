@@ -78,7 +78,7 @@
         </div>
 
         <div class="small text-muted mb-3">
-            <i class="bi bi-envelope me-1"></i> Hỗ trợ: <a href="mailto:hello@selliotech.store">hello@selliotech.store</a>
+            <i class="bi bi-envelope me-1"></i> Hỗ trợ: <a href="mailto:nhuy08052004@gmail.com">nhuy08052004@gmail.com</a>
         </div>
 
         <a href="{{ route('login') }}" class="btn btn-outline-secondary w-100">

@@ -904,6 +904,26 @@ func (s *authService) Refresh(ctx context.Context, refreshToken string) (*dto.Au
 	// body), nên ctx tới đây chưa có tenant — phải tự gắn trước khi chạm database.
 	ctx = tenant.WithID(ctx, claims.TenantID)
 
+	// Cửa hàng phải còn MỞ, không chỉ tài khoản còn sống.
+	//
+	// Thiếu vế này thì `UPDATE tenants SET status = 'suspended'` — cách chính thức
+	// để cắt một khách không trả tiền — chỉ chặn được lượt ĐĂNG NHẬP MỚI: ai đang
+	// mở sẵn phiên cứ mỗi chu kỳ lại tự gia hạn ở đây, và không bao giờ bị đẩy ra.
+	//
+	// ErrNotFound (cửa hàng đã bị xoá khỏi sổ) cũng đi vào nhánh này: không còn
+	// cửa hàng thì không còn phiên.
+	trangThai, err := s.tenants.TrangThaiTheoID(ctx, claims.TenantID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil, domain.ErrTenantSuspended
+		}
+
+		return nil, err
+	}
+	if trangThai != domain.TenantActive {
+		return nil, domain.ErrTenantSuspended
+	}
+
 	user, err := s.users.FindByID(ctx, claims.UserID)
 	if err != nil {
 		return nil, err

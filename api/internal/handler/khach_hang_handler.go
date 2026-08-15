@@ -53,8 +53,11 @@ func (h *KhachHangHandler) KhachHang(c *gin.Context) {
 // HopDong godoc
 //
 //	@Summary		Hợp đồng đã ký
-//	@Description	Màn hình "Người dùng thử" là `?trang_thai=trial`, "Người dùng chính thức"
-//	@Description	là `?trang_thai=active`. Sắp theo ngày hết hạn gần nhất trước —
+//	@Description	Màn hình "Người dùng thử" là `?nhom=dung_thu`, "Người dùng chính thức"
+//	@Description	là `?nhom=chinh_thuc`. Lọc theo NHÓM chứ không theo `trang_thai`: trạng
+//	@Description	thái đổi theo thời gian (hết hạn → past_due, huỷ → canceled) nên lọc
+//	@Description	theo nó thì hợp đồng biến mất khỏi màn hình đúng lúc cần nhìn nhất.
+//	@Description	Sắp theo ngày hết hạn gần nhất trước, hợp đồng đã huỷ xuống cuối —
 //	@Description	`con_lai_ngay` âm nghĩa là ĐÃ QUÁ HẠN.
 //	@Description	Hạn mức trong câu trả lời lấy THẲNG từ hợp đồng, không tra bảng giá: bảng
 //	@Description	giá được phép đổi, hợp đồng đã ký thì không. Giá trị 0 = không giới hạn.
@@ -63,13 +66,14 @@ func (h *KhachHangHandler) KhachHang(c *gin.Context) {
 //	@Security		BearerAuth
 //	@Param			app			query		string	false	"Mã phần mềm; bỏ trống = mọi phần mềm được giao"
 //	@Param			trang_thai	query		string	false	"trial | active | past_due | canceled"
+//	@Param			nhom		query		string	false	"dung_thu | chinh_thuc; bỏ trống = cả hai nhóm"
 //	@Success		200			{object}	response.Body{data=dto.HopDongResponse}
 //	@Failure		401			{object}	response.Body
 //	@Failure		403			{object}	response.Body
 //	@Router			/platform/subscriptions [get]
 func (h *KhachHangHandler) HopDong(c *gin.Context) {
 	res, err := h.svc.HopDong(c.Request.Context(), middleware.PlatformApps(c),
-		c.Query("app"), c.Query("trang_thai"))
+		c.Query("app"), c.Query("trang_thai"), c.Query("nhom"))
 	if err != nil {
 		handleServiceError(c, err)
 		return

@@ -126,6 +126,74 @@
     })();
 </script>
 
+{{-- Hộp thoại "phiên đã kết thúc".
+     Hiện khi API từ chối danh tính đang dùng: hợp đồng hết hạn nên cửa hàng bị
+     khoá, tài khoản bị khoá, hoặc phiên đã chết hẳn. Trước đây những lượt gọi
+     nền ấy chỉ hỏng lặng lẽ và người dùng ngồi lại trên một trang đã mất quyền,
+     bấm gì cũng báo lỗi vu vơ — nên phải nói thẳng ra và đưa họ về đăng nhập.
+
+     KHÔNG dùng modal Bootstrap: nó đóng được bằng phím Esc và bằng cú bấm ra
+     ngoài, mà đây là thứ không nên đóng — quyền đã mất rồi, ở lại trang chỉ là
+     ở lại với một màn hình không làm gì được nữa. --}}
+<div id="phienHetHieuLuc"
+     style="display:none; position:fixed; inset:0; z-index:2000; background:rgba(15,23,42,.55);
+            align-items:center; justify-content:center; padding:16px;">
+    <div style="max-width:420px; width:100%; background:#fff; border-radius:12px; padding:24px;
+                box-shadow:0 20px 45px rgba(15,23,42,.25); font-family:'Inter',sans-serif;">
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+            <i class="bi bi-exclamation-triangle-fill" style="color:#f59e0b; font-size:20px;"></i>
+            <b style="font-size:16px; color:#111827;">Phiên làm việc đã kết thúc</b>
+        </div>
+        <p id="phienHetHieuLucLyDo" style="margin:0 0 18px; color:#4b5563; font-size:14px; line-height:1.6;"></p>
+        <button type="button" id="phienHetHieuLucNut" class="btn btn-primary w-100">Đăng nhập lại</button>
+    </div>
+</div>
+
+<script>
+    // Bắt 401 của MỌI lượt fetch trong khu quản trị.
+    //
+    // Bọc window.fetch thay vì sửa từng chỗ gọi: các trang danh sách gọi fetch ở
+    // hàng chục chỗ, và chỗ thứ mười một sẽ là chỗ quên. Chỉ ĐỌC mã trạng thái
+    // rồi trả nguyên response về — phần xử lý lỗi sẵn có của từng trang vẫn chạy
+    // y như cũ.
+    (function () {
+        var goc = window.fetch;
+        if (typeof goc !== 'function') return;
+
+        var dangHien = false;
+        var $hop = document.getElementById('phienHetHieuLuc');
+        var $lyDo = document.getElementById('phienHetHieuLucLyDo');
+        var duongDangNhap = @json(route('login'));
+
+        function hien(lyDo) {
+            if (dangHien) return;
+            dangHien = true;
+            $lyDo.textContent = lyDo || 'Phiên đăng nhập không còn hiệu lực, vui lòng đăng nhập lại.';
+            $hop.style.display = 'flex';
+        }
+
+        document.getElementById('phienHetHieuLucNut').addEventListener('click', function () {
+            window.location.href = duongDangNhap;
+        });
+
+        window.fetch = function () {
+            return goc.apply(this, arguments).then(function (res) {
+                if (res && res.status === 401) {
+                    // clone(): thân response chỉ đọc được MỘT lần, và bên gọi vẫn
+                    // đang cần nó để hiện lỗi của riêng họ.
+                    res.clone().json().then(function (data) {
+                        hien(data && data.message);
+                    }).catch(function () {
+                        hien('');
+                    });
+                }
+
+                return res;
+            });
+        };
+    })();
+</script>
+
 @include('partials.toasts')
 @include('partials.modals')
 

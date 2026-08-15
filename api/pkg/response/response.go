@@ -42,6 +42,15 @@ func Created(c *gin.Context, data interface{}) {
 	c.JSON(http.StatusCreated, Body{Success: true, Data: data})
 }
 
+// CreatedMessage trả về 201 kèm message — cặp đôi của OKMessage.
+//
+// Có mặt để một lượt tạo vẫn nói được câu của nó mà không phải hạ xuống 200:
+// giao diện đọc `message` để hiện thông báo, còn mã 201 mới là thứ phân biệt
+// "đã tạo" với "đã sửa" trong log và trong swagger.
+func CreatedMessage(c *gin.Context, message string, data interface{}) {
+	c.JSON(http.StatusCreated, Body{Success: true, Message: message, Data: data})
+}
+
 // Paginated trả về 200 kèm danh sách + metadata phân trang.
 func Paginated(c *gin.Context, data interface{}, p Pagination) {
 	c.JSON(http.StatusOK, Body{Success: true, Data: data, Meta: p})

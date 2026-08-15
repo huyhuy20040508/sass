@@ -61,7 +61,7 @@ func TestJWTAuthRotTenantVaoContext(t *testing.T) {
 		t.Fatalf("không cấp được token: %v", err)
 	}
 
-	r, thay := dungEngineTenant(JWTAuth(mgr))
+	r, thay := dungEngineTenant(JWTAuth(mgr, nil))
 	if w := goiVoiToken(r, token); w.Code != http.StatusOK {
 		t.Fatalf("token hợp lệ phải đi qua, nhận %d", w.Code)
 	}
@@ -77,7 +77,7 @@ func TestJWTAuthTuChoiTokenKhongCoCuaHang(t *testing.T) {
 	mgr := mgrTest()
 	token := tokenKhongCuaHang(t, mgr)
 
-	r, thay := dungEngineTenant(JWTAuth(mgr))
+	r, thay := dungEngineTenant(JWTAuth(mgr, nil))
 	w := goiVoiToken(r, token)
 	if w.Code != http.StatusUnauthorized {
 		t.Fatalf("token thiếu cửa hàng phải bị từ chối 401, nhận %d", w.Code)

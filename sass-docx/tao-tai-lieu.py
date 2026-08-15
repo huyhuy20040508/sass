@@ -592,6 +592,120 @@ bang(
     rong=[2.2, 4.4],
 )
 
+# ---------------------------------------------------------------- 8
+h1("8. Xoá một cửa hàng khỏi database")
+
+p("Không có nút nào làm việc này, và cố ý như vậy. Xoá một cửa hàng là xoá dữ liệu kinh doanh "
+  "của một khách hàng trả tiền — nó phải là một việc có người ngồi gõ tay, đọc lại con số trước "
+  "khi bấm Enter.")
+
+khung("ĐỌC TRƯỚC:",
+      "gần như mọi trường hợp KHÔNG nên xoá. Cách đúng là `UPDATE tenants SET status = 'suspended'` "
+      "— chặn đăng nhập, giữ nguyên dữ liệu, đóng tiền lại là mở. Chỉ xoá thật khi cửa hàng được "
+      "tạo nhầm hoặc là dữ liệu thử.")
+
+h2("Vì sao không xoá được bằng một câu DELETE")
+
+cham([("Hai database, không có khoá ngoại bắc qua. ", True, False),
+      ("Cửa hàng nằm ở `selliotech` (tenants · shops · users · toàn bộ hàng hoá, đơn từ) VÀ ở "
+       "`selliotech_platform` (sổ khách hàng · hợp đồng · hoá đơn · tên miền). Xoá một bên thì "
+       "bên kia không báo lỗi gì cả, nó chỉ lặng lẽ trỏ vào một id không còn ai.", False, False)])
+cham([("`selliotech_platform.tenants.id` là số CHÉP từ data plane, ", True, False),
+      ("không tự tăng. Cùng một cửa hàng mang cùng một id ở hai lược đồ — đó là dây nối duy nhất "
+       "giữa hai bên.", False, False)])
+cham([("42 khoá ngoại trỏ vào `tenants`, TẤT CẢ đều RESTRICT. ", True, False),
+      ("Không cái nào CASCADE. Nghĩa là câu `DELETE FROM tenants` sẽ bị từ chối cho tới khi mọi "
+       "dòng con biến mất — database giữ hộ, nhưng nó không dọn hộ.", False, False)])
+cham([("40 bảng ở data plane có cột `tenant_id`. ", True, False),
+      ("Viết tay danh sách đó vào tài liệu là bảo đảm ngày mai thêm bảng thứ 41 thì tài liệu sai. "
+       "Vì vậy bước 4 dưới đây SINH danh sách từ `information_schema` chứ không chép sẵn.", False, False)])
+
+h2("Quy trình — 5 bước")
+
+p("Chạy theo đúng thứ tự này. Control plane TRƯỚC, data plane SAU: hợp đồng trỏ vào cửa hàng, "
+  "nên bỏ cửa hàng trước là để lại hợp đồng mồ côi trong khoảng giữa hai lệnh.", sau=8)
+
+p("Bước 1 — Sao lưu.", dam=True, sau=2)
+p("Trên máy thật: `bash deploy/scripts/03-sao-luu.sh`. Trên máy cục bộ thì `mysqldump` hai lược đồ "
+  "ra tệp. Không có bước này thì bốn bước sau là một chiều.", sau=8)
+
+p("Bước 2 — Nhìn xem sắp xoá cái gì.", dam=True, sau=2)
+rich([("SET @t := <tenant_id>;", False, True)], sau=0)
+rich([("SELECT id, code, name, status FROM selliotech.tenants WHERE id = @t;", False, True)], sau=0)
+rich([("SELECT s.id, s.plan, s.status,", False, True)], sau=0)
+rich([("       (SELECT COUNT(*) FROM selliotech_platform.invoices i WHERE i.subscription_id = s.id) AS so_hoa_don", False, True)], sau=0)
+rich([("  FROM selliotech_platform.subscriptions s WHERE s.tenant_id = @t;", False, True)], sau=6)
+p("Có hoá đơn đã thu thì DỪNG LẠI. Đó là tiền đã vào sổ; xoá đi là báo cáo doanh thu của những "
+  "tháng đã qua tự đổi số. Khoá cửa hàng, đừng xoá.", sau=8)
+
+p("Bước 3 — Xoá ở control plane (`selliotech_platform`).", dam=True, sau=2)
+p("Bốn bảng, con trước cha. `invoices` trỏ vào `subscriptions` nên phải đi đầu.", sau=2)
+rich([("SET @t := <tenant_id>;", False, True)], sau=0)
+rich([("START TRANSACTION;", False, True)], sau=0)
+rich([("DELETE i FROM invoices i JOIN subscriptions s ON s.id = i.subscription_id WHERE s.tenant_id = @t;", False, True)], sau=0)
+rich([("DELETE FROM tenant_domains WHERE tenant_id = @t;", False, True)], sau=0)
+rich([("DELETE FROM subscriptions  WHERE tenant_id = @t;", False, True)], sau=0)
+rich([("DELETE FROM tenants        WHERE id = @t;", False, True)], sau=0)
+rich([("COMMIT;", False, True)], sau=6)
+p("Câu `DELETE i FROM ... JOIN` đòi phải CÓ database đang chọn — chạy bằng `mysql -D selliotech_platform`, "
+  "hoặc gõ `USE selliotech_platform;` trước. Thiếu thì nó báo “No database selected” dù tên bảng đã ghi đủ.", sau=8)
+
+p("Bước 4 — Xoá ở data plane (`selliotech`).", dam=True, sau=2)
+p("Sinh danh sách câu lệnh từ chính lược đồ, để không bảng nào bị bỏ sót:", sau=2)
+rich([("SELECT GROUP_CONCAT(CONCAT('DELETE FROM `', TABLE_NAME, '` WHERE tenant_id = @t;') SEPARATOR '\\n')", False, True)], sau=0)
+rich([("  FROM information_schema.COLUMNS", False, True)], sau=0)
+rich([(" WHERE TABLE_SCHEMA = 'selliotech' AND COLUMN_NAME = 'tenant_id';", False, True)], sau=6)
+p("Chép kết quả (40 câu) rồi bọc lại như sau. `FOREIGN_KEY_CHECKS = 0` là để khỏi phải sắp 40 bảng "
+  "theo đúng thứ tự phụ thuộc — an toàn vì mọi dòng của cửa hàng này đều bị xoá trong CÙNG một "
+  "giao dịch, không có trạng thái nửa vời nào lọt ra ngoài:", sau=2)
+rich([("SET @t := <tenant_id>;", False, True)], sau=0)
+rich([("START TRANSACTION;", False, True)], sau=0)
+rich([("SET FOREIGN_KEY_CHECKS = 0;", False, True)], sau=0)
+rich([("  ...40 câu DELETE vừa sinh...", False, True)], sau=0)
+rich([("DELETE FROM tenants WHERE id = @t;", False, True)], sau=0)
+rich([("SET FOREIGN_KEY_CHECKS = 1;", False, True)], sau=0)
+rich([("COMMIT;", False, True)], sau=6)
+khung("CẢNH BÁO:",
+      "tắt kiểm khoá ngoại nghĩa là database thôi giữ hộ. Bỏ sót một bảng thì dòng thừa nằm lại "
+      "mà KHÔNG câu lệnh nào báo lỗi — đó chính là lý do bước sinh danh sách ở trên phải đọc từ "
+      "`information_schema` thay vì chép tay.", mau=DO)
+p("Chạy bằng dòng lệnh thì thêm `--raw`: `mysql -N -B` mặc định đổi ký tự xuống dòng thành hai ký "
+  "tự `\\n`, và cả 40 câu dính thành một dòng không chạy được.", truoc=4)
+
+p("Bước 5 — Đối chiếu lại.", dam=True, sau=2)
+p("Hai câu. Câu đầu bắt dòng còn sót, câu sau bắt bản ghi mồ côi giữa hai lược đồ:", sau=2)
+rich([("-- (a) còn bảng nào sót dòng của cửa hàng đã xoá không — sinh câu giống bước 4,", False, True)], sau=0)
+rich([("--     đổi DELETE FROM thành SELECT COUNT(*) FROM", False, True)], sau=0)
+rich([("-- (b) sổ khách hàng trỏ vào cửa hàng không còn tồn tại:", False, True)], sau=0)
+rich([("SELECT pt.id, pt.code FROM selliotech_platform.tenants pt", False, True)], sau=0)
+rich([("  LEFT JOIN selliotech.tenants t ON t.id = pt.id WHERE t.id IS NULL;", False, True)], sau=6)
+p("Cả hai phải trả về 0 dòng.", sau=8)
+
+h2("Mấy chỗ dễ sai")
+
+bang(
+    ["Hiện tượng", "Nguyên nhân"],
+    [
+        ["Xoá xong vẫn báo “mã cửa hàng đã có người dùng”",
+         "Mới xoá ở `selliotech_platform.tenants`. Khoá duy nhất `uq_tenants_code` nằm ở "
+         "`selliotech.tenants` bên data plane, và màn hình kiểm trùng đọc đúng bảng đó."],
+        ["`DELETE FROM tenants` báo lỗi khoá ngoại",
+         "Còn dòng con. Cả 42 khoá đều RESTRICT, không cái nào tự dọn."],
+        ["Xoá nhầm database",
+         "`tenants` có mặt ở CẢ HAI lược đồ với cột gần giống nhau. Câu lệnh vẫn chạy, chỉ là sai bảng."],
+        ["Cửa hàng biến mất nhưng vẫn đăng nhập được",
+         "Mới xoá `tenants`, chưa xoá `users`. Đường đăng nhập 3 ô tra `users` theo (tenant_id, username)."],
+        ["Xoá tenant 1 (`cuahang`)",
+         "Đó là bản cài gốc do migration 0002 tạo. Migration đã chạy nên nó KHÔNG tự dựng lại — "
+         "phải tạo tay bằng `go run ./cmd/tao-admin`."],
+    ],
+    rong=[2.4, 4.2],
+)
+
+p("Quy trình trên đã chạy thử trọn vẹn trên máy cục bộ ngày 13/08/2026: dựng một cửa hàng bằng "
+  "màn hình “Thêm tài khoản dùng thử” (5 dòng ở 2 database), rồi xoá theo đúng 5 bước — bước 5 "
+  "trả về 0 dòng ở cả hai câu.", mau=XAM, truoc=6)
+
 p()
 p("— Hết —", mau=XAM)
 

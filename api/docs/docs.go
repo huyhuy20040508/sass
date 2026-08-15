@@ -10053,6 +10053,138 @@ const docTemplate = `{
                 }
             }
         },
+        "/platform/chinh-thuc": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Dựng TRỌN GÓI một khách hàng mới — cửa hàng + chi nhánh mặc định + tài\nkhoản quản trị (data plane) + hợp đồng (control plane) — y hệt\nPOST /platform/dung-thu, khác đúng một chỗ: hợp đồng ra ` + "`" + `active` + "`" + ` ngay và\nKHÔNG có giai đoạn dùng thử. Thời hạn tính bằng THÁNG.\n` + "`" + `so_thang` + "`" + ` bỏ trống = một chu kỳ của gói (1 tháng, hoặc 12 nếu gói theo năm).\nGiá và ba hạn mức CHÉP từ bảng giá lúc ký rồi sống độc lập — không có ô\nnào khai tay. Bảng giá thiếu hạn mức thì lượt tạo bị TỪ CHỐI (422).\nViệc này KHÔNG ghi tiền vào sổ thu; thu tiền là đường riêng.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Platform - Khách hàng"
+                ],
+                "summary": "Thêm khách mới kèm hợp đồng chính thức",
+                "parameters": [
+                    {
+                        "description": "Cửa hàng, tài khoản quản trị và dòng bảng giá",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.TaoChinhThucRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.TaoDungThuResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/platform/cua-hang-chua-ky": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Ứng viên để KÝ HỢP ĐỒNG CHÍNH THỨC: cửa hàng đã tồn tại ở database bán\nhàng nhưng chưa có hợp đồng còn hiệu lực cho phần mềm này.\nPhép trừ làm ở tầng Go vì hai danh sách nằm ở hai database khác nhau —\nkhông câu truy vấn nào JOIN được chúng.\n\"Còn hiệu lực\" gồm cả ` + "`" + `trial` + "`" + ` và ` + "`" + `past_due` + "`" + `, không riêng ` + "`" + `active` + "`" + `: cả hai\nđều đang giữ chỗ của khoá \"mỗi khách mỗi phần mềm một hợp đồng\".",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Platform - Khách hàng"
+                ],
+                "summary": "Cửa hàng đã có nhưng chưa ký hợp đồng",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Mã phần mềm; bỏ trống = mọi phần mềm được giao",
+                        "name": "app",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.CuaHangCoSanResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
         "/platform/doanh-thu": {
             "get": {
                 "security": [
@@ -10128,6 +10260,156 @@ const docTemplate = `{
                 }
             }
         },
+        "/platform/dung-thu": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Dựng TRỌN GÓI một khách hàng mới: cửa hàng + chi nhánh mặc định + tài\nkhoản quản trị (data plane), rồi ký hợp đồng dùng thử (control plane).\nBản HTTP của ` + "`" + `cmd/thue-bao ky --dung-thu` + "`" + `, khác một điểm: KHÔNG cho khai\ntay giá và hạn mức — hợp đồng thử chạy đúng theo gói đang bán. Thoả thuận\nriêng vẫn đi qua công cụ dòng lệnh.\nĐiều khoản CHÉP từ bảng giá lúc ký rồi sống độc lập: sửa bảng giá sau đó\nkhông đụng tới khách này. Bảng giá không quy định một hạn mức nào thì lượt\nký bị TỪ CHỐI (422) chứ không đoán hộ con số.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Platform - Khách hàng"
+                ],
+                "summary": "Mở tài khoản dùng thử cho khách mới",
+                "parameters": [
+                    {
+                        "description": "Cửa hàng, tài khoản quản trị và dòng bảng giá",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.TaoDungThuRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.TaoDungThuResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/platform/hop-dong": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Ghi một hợp đồng ` + "`" + `active` + "`" + ` cho cửa hàng ĐÃ TỒN TẠI. Khác POST /platform/dung-thu\nở chỗ không dựng gì bên database bán hàng — cửa hàng và tài khoản đăng\nnhập đã có sẵn, nên đường này không bắc qua hai database.\nGiá và ba hạn mức CHÉP từ bảng giá lúc ký rồi sống độc lập; không có ô nào\nkhai tay. Thoả thuận riêng vẫn đi qua ` + "`" + `cmd/thue-bao ky` + "`" + `.\n` + "`" + `so_thang` + "`" + ` bỏ trống = một chu kỳ của gói (1 tháng, hoặc 12 nếu gói theo năm).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Platform - Khách hàng"
+                ],
+                "summary": "Ký hợp đồng chính thức cho cửa hàng đã có",
+                "parameters": [
+                    {
+                        "description": "Cửa hàng và dòng bảng giá",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.KyHopDongRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.HopDongMotItem"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
         "/platform/plans": {
             "get": {
                 "security": [
@@ -10184,6 +10466,94 @@ const docTemplate = `{
                     },
                     "503": {
                         "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/platform/plans/{id}": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Ghi phần THƯƠNG MẠI của một dòng bảng giá: tên, mô tả, giá, số ngày dùng\nthử, còn bán hay không. Mã gói, app và chu kỳ KHÔNG sửa được — bộ ba đó là\ndanh tính của dòng và hợp đồng đã ký tra tên gói về đây theo mã; muốn một\nmức giá khác thì thêm dòng mới.\n` + "`" + `price` + "`" + ` gửi ` + "`" + `null` + "`" + ` nghĩa là \"Liên hệ\" (chưa công bố giá), KHÁC hẳn gửi 0\n(miễn phí). ` + "`" + `status` + "`" + ` = retired là ngừng bán mới, không xoá dòng.\nCHỈ vai trò owner/operator của khu điều hành ghi được; support chỉ đọc.\nSửa ở đây KHÔNG đụng tới khách đang dùng: thuê bao chép giá ra lúc ký và\nsống độc lập với bảng giá.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Platform - Plans"
+                ],
+                "summary": "Sửa một mức giá",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID dòng bảng giá",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Nội dung mới của mức giá",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.SuaGoiRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.PlanFeaturesResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
@@ -10397,6 +10767,477 @@ const docTemplate = `{
                     },
                     "403": {
                         "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/platform/subscriptions/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Trọn hợp đồng kèm hồ sơ khách đứng sau nó: điều khoản đã chốt, hai mốc\ncủa kỳ dùng thử, ghi chú hợp đồng và ghi chú khách, ngày vào sổ.\n` + "`" + `sua_duoc_han` + "`" + ` nói màn hình có được hiện ô đổi ngày hết hạn không —\nluật do máy chủ quyết, giao diện chỉ đọc cờ.\nChỉ phần mềm người gọi được phụ trách.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Platform - Khách hàng"
+                ],
+                "summary": "Chi tiết một hợp đồng",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID hợp đồng",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.HopDongChiTietResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Sửa THÔNG TIN, không sửa ĐIỀU KHOẢN. Gói, chu kỳ, giá và ba hạn mức\nkhông có ô nào ở đây: chúng đã chốt lúc ký và cả hệ thống dựng trên\nnguyên tắc chúng không đổi. Bán thêm quyền lợi cho một khách vẫn là việc\ncủa ` + "`" + `cmd/thue-bao` + "`" + `.\n` + "`" + `het_han` + "`" + ` chỉ nhận khi hợp đồng đang dùng thử — hạn của kỳ thử là quyết\nđịnh bán hàng, còn hạn của hợp đồng đã trả tiền thì đi đường Gia hạn để\nđường tiền và đường hạn không tách nhau. Bỏ trống = giữ nguyên.\nHợp đồng đã huỷ không sửa được: đó là bản ghi lịch sử.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Platform - Khách hàng"
+                ],
+                "summary": "Sửa thông tin khách và ghi chú của hợp đồng",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID hợp đồng",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Thông tin khách và ghi chú",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.SuaHopDongRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.HopDongChiTietResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/platform/subscriptions/{id}/doi-mat-khau": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Đặt lại mật khẩu cho tài khoản quản trị (super_admin cũ nhất) của cửa\nhàng đứng sau hợp đồng này.\nCó đường này vì tài khoản quản trị cửa hàng KHÔNG có cách tự khôi phục:\nquên-mật-khẩu-qua-email chỉ tồn tại trong cụm storefront dành cho khách\nmua sắm. Khách quên mật khẩu thì gọi nhà cung cấp, và đây là chỗ nhà cung\ncấp làm được việc đó.\nCHỈ đổi mật khẩu — tài khoản đang bị khoá thì vẫn khoá sau khi đổi.\nCâu trả lời kèm tên đăng nhập để đọc lại cho khách nghe.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Platform - Khách hàng"
+                ],
+                "summary": "Đặt lại mật khẩu tài khoản quản trị của khách",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID hợp đồng",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Mật khẩu mới",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.DoiMatKhauRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.QuanTriItem"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/platform/subscriptions/{id}/gia-han": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Đẩy hạn thêm ` + "`" + `so_thang` + "`" + ` tháng tính từ GREATEST(ngày hết hạn, hôm nay) —\nhợp đồng đã quá hạn ba tháng mà cộng dồn từ ngày cũ thì khách trả tiền\nxong vẫn còn quá hạn.\nTrạng thái chuyển sang ` + "`" + `active` + "`" + ` và mốc hết dùng thử bị xoá, nên gọi trên\nmột hợp đồng ` + "`" + `trial` + "`" + ` CHÍNH LÀ chuyển khách sang chính thức. Không có\nendpoint riêng cho việc đó: hai việc là một.\nKHÔNG ghi vào sổ thu — tiền vào là ` + "`" + `cmd/thue-bao thu-tien` + "`" + `, việc khác.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Platform - Khách hàng"
+                ],
+                "summary": "Gia hạn hợp đồng (cũng là chuyển dùng thử sang chính thức)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID hợp đồng",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Số tháng gia hạn",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.GiaHanRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.HopDongMotItem"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/platform/subscriptions/{id}/huy": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Đóng hợp đồng và nối lý do vào ` + "`" + `note` + "`" + ` — KHÔNG xoá dòng: khách cũ vẫn phải\ntra được mình đã dùng gì, và báo cáo doanh thu của những tháng đã qua vẫn\nphải đứng nguyên.\nHuỷ xong là khoá \"mỗi khách mỗi phần mềm một hợp đồng\" được nhả ra, nên\nđây cũng là bước bắt buộc trước khi ký lại cho khách đổi gói.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Platform - Khách hàng"
+                ],
+                "summary": "Huỷ hợp đồng",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID hợp đồng",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Lý do huỷ",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/dto.HuyRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/platform/subscriptions/{id}/thu-tien": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Ghi MỘT LẦN TIỀN VÀO sổ thu, KHÔNG đẩy hạn hợp đồng. Hai việc đó cố ý\ntách rời: gộp lại thì mỗi lần gia hạn báo một khoản doanh thu chưa ai\ntrả, và khách trả trước mà chưa muốn đẩy hạn thì không ghi vào đâu được.\nChu kỳ bỏ trống thì máy chủ tự tính: từ điểm cuối của kỳ đã trả gần nhất\n(hoặc ngày bắt đầu hợp đồng) tới hạn hiện tại — nhờ vậy hai lần thu liên\ntiếp không chồng lấn và cũng không để hở khoảng nào.\nSố tiền bỏ trống = giá đã ký của hợp đồng.\nMột hợp đồng · một chu kỳ · một lần thu (409 nếu ghi trùng kỳ).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Platform - Khách hàng"
+                ],
+                "summary": "Ghi nhận một lần tiền vào",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID hợp đồng",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Số tiền, hình thức, chu kỳ",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.ThuTienRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.ThuTienResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
@@ -13590,6 +14431,35 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.CuaHangCoSanItem": {
+            "type": "object",
+            "properties": {
+                "ma": {
+                    "type": "string",
+                    "example": "quochuy"
+                },
+                "ten": {
+                    "type": "string",
+                    "example": "Cửa hàng Quốc Huy"
+                },
+                "trang_thai": {
+                    "description": "TrangThai: active | suspended. Cửa hàng đang khoá vẫn ký được (ký xong mở\nkhoá), nhưng người ký phải nhìn thấy mình đang ký cho cái gì.",
+                    "type": "string",
+                    "example": "active"
+                }
+            }
+        },
+        "dto.CuaHangCoSanResponse": {
+            "type": "object",
+            "properties": {
+                "cua_hang": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.CuaHangCoSanItem"
+                    }
+                }
+            }
+        },
         "dto.CustomerPasswordRequest": {
             "type": "object",
             "required": [
@@ -13774,6 +14644,20 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.DoiMatKhauRequest": {
+            "type": "object",
+            "required": [
+                "mat_khau"
+            ],
+            "properties": {
+                "mat_khau": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 6,
+                    "example": "MatKhauMoi@123"
+                }
+            }
+        },
         "dto.FacebookLoginRequest": {
             "type": "object",
             "required": [
@@ -13801,6 +14685,21 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.GiaHanRequest": {
+            "type": "object",
+            "required": [
+                "so_thang"
+            ],
+            "properties": {
+                "so_thang": {
+                    "description": "SoThang cộng vào GREATEST(ends_at, NOW()), không phải vào ends_at: hợp đồng\nđã quá hạn ba tháng mà cộng dồn từ ngày cũ thì khách trả tiền xong vẫn còn\nquá hạn.",
+                    "type": "integer",
+                    "maximum": 60,
+                    "minimum": 1,
+                    "example": 12
+                }
+            }
+        },
         "dto.GoogleLoginRequest": {
             "type": "object",
             "required": [
@@ -13814,6 +14713,139 @@ const docTemplate = `{
                 "redirect_uri": {
                     "description": "RedirectURI phải TRÙNG TỪNG KÝ TỰ với cái đã dùng lúc mở màn hình chọn tài\nkhoản, nếu không Google từ chối đổi code (redirect_uri_mismatch).",
                     "type": "string"
+                }
+            }
+        },
+        "dto.HopDongChiTiet": {
+            "type": "object",
+            "properties": {
+                "bat_dau": {
+                    "type": "string"
+                },
+                "chi_nhanh": {
+                    "type": "integer",
+                    "example": 5
+                },
+                "chu_ky": {
+                    "description": "ChuKy: thang | nam",
+                    "type": "string",
+                    "example": "thang"
+                },
+                "con_lai_ngay": {
+                    "description": "ConLaiNgay âm = ĐÃ QUÁ HẠN.",
+                    "type": "integer",
+                    "example": 41
+                },
+                "dien_thoai": {
+                    "type": "string",
+                    "example": "0901234567"
+                },
+                "email": {
+                    "type": "string",
+                    "example": "huy@quochuy.vn"
+                },
+                "ghi_chu_hop_dong": {
+                    "description": "GhiChuHopDong là điều khoản riêng đã thoả thuận, cộng lịch sử huỷ nếu có.",
+                    "type": "string",
+                    "example": "khách anh Sơn giới thiệu"
+                },
+                "ghi_chu_khach": {
+                    "description": "GhiChuKhach là ghi chú về KHÁCH trong sổ khách hàng — khác ghi chú hợp đồng:\nmột cái đi theo khách qua nhiều hợp đồng, một cái chết cùng hợp đồng.",
+                    "type": "string",
+                    "example": "khách quen, trả đúng hạn"
+                },
+                "gia": {
+                    "type": "number",
+                    "example": 9990000
+                },
+                "goi": {
+                    "description": "Goi là MÃ gói đã chốt trong hợp đồng — thứ không đổi.",
+                    "type": "string",
+                    "example": "chuoi"
+                },
+                "het_dung_thu": {
+                    "description": "BatDauDungThu / HetDungThu là hai mốc của KỲ DÙNG THỬ. HetDungThu rỗng khi\nhợp đồng không có giai đoạn thử, hoặc đã chuyển sang chính thức — lúc gia\nhạn, mốc này bị xoá.",
+                    "type": "string"
+                },
+                "het_han": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer",
+                    "example": 12
+                },
+                "ma_app": {
+                    "type": "string",
+                    "example": "order"
+                },
+                "ma_cua_hang": {
+                    "type": "string",
+                    "example": "quochuy"
+                },
+                "ngay_vao_so": {
+                    "description": "NgayVaoSo là ngày khách được ghi vào sổ nền tảng, không phải ngày ký hợp\nđồng này — khách cũ ký hợp đồng mới thì hai ngày đó cách nhau rất xa.",
+                    "type": "string"
+                },
+                "nguoi_lien_he": {
+                    "description": "Ba ô liên lạc lấy từ SỔ KHÁCH HÀNG (tenants của control plane), không phải\ntừ hợp đồng: người gọi khách lúc sắp hết hạn cần số điện thoại ngay trên\ndòng đó, chứ không phải mở thêm màn hình khác để tra. Rỗng = chưa ai điền.",
+                    "type": "string",
+                    "example": "Anh Huy"
+                },
+                "quan_tri": {
+                    "description": "QuanTri là TÀI KHOẢN ĐĂNG NHẬP của khách — ô thứ hai của màn hình đăng nhập\n3 ô. Đọc từ DATA PLANE, nên nó vắng mặt (nil) khi cửa hàng không còn tài\nkhoản quản trị nào, hoặc khi lượt đọc bên đó hỏng.\n\nnil KHÔNG được hiểu là \"cửa hàng hỏng\": danh sách và điều khoản vẫn đúng,\nchỉ là chưa biết ai đang quản trị. Màn hình phải nói ra điều đó thay vì\ngiấu đi cả khối.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/dto.QuanTriItem"
+                        }
+                    ]
+                },
+                "san_pham": {
+                    "type": "integer",
+                    "example": 0
+                },
+                "sua_duoc_han": {
+                    "description": "SuaDuocHan cho màn hình biết có được hiện ô đổi ngày hết hạn không. Máy chủ\nquyết, không phải giao diện tự suy: luật \"chỉ hợp đồng dùng thử mới đổi hạn\ntrực tiếp\" nằm ở service, và chép nó lên Blade là để hai bên lệch nhau.",
+                    "type": "boolean",
+                    "example": true
+                },
+                "tai_khoan": {
+                    "type": "integer",
+                    "example": 0
+                },
+                "ten_app": {
+                    "type": "string",
+                    "example": "Sellio Order"
+                },
+                "ten_cua_hang": {
+                    "type": "string",
+                    "example": "Quốc Huy"
+                },
+                "ten_goi": {
+                    "description": "TenGoi là tên hiển thị tra từ bảng giá (\"Chuỗi cửa hàng\"). Rơi về ` + "`" + `Goi` + "`" + ` khi\nhợp đồng không sinh từ dòng bảng giá nào, nên nơi hiển thị KHÔNG bao giờ\nnhận chuỗi rỗng và không phải tự nghĩ ra chỗ dự phòng.",
+                    "type": "string",
+                    "example": "Chuỗi cửa hàng"
+                },
+                "ten_mien_rieng": {
+                    "type": "boolean",
+                    "example": true
+                },
+                "trang_thai": {
+                    "description": "TrangThai: trial | active | past_due | canceled",
+                    "type": "string",
+                    "example": "active"
+                },
+                "trang_thai_cua_hang": {
+                    "description": "TrangThaiCuaHang: active | suspended. KHÁC trạng thái hợp đồng, và hai thứ\nđó rời nhau — cửa hàng vẫn mở mà hợp đồng đã hết hạn là chuyện có thật.",
+                    "type": "string",
+                    "example": "active"
+                }
+            }
+        },
+        "dto.HopDongChiTietResponse": {
+            "type": "object",
+            "properties": {
+                "hop_dong": {
+                    "$ref": "#/definitions/dto.HopDongChiTiet"
                 }
             }
         },
@@ -13837,11 +14869,20 @@ const docTemplate = `{
                     "type": "integer",
                     "example": 41
                 },
+                "dien_thoai": {
+                    "type": "string",
+                    "example": "0901234567"
+                },
+                "email": {
+                    "type": "string",
+                    "example": "huy@quochuy.vn"
+                },
                 "gia": {
                     "type": "number",
                     "example": 9990000
                 },
                 "goi": {
+                    "description": "Goi là MÃ gói đã chốt trong hợp đồng — thứ không đổi.",
                     "type": "string",
                     "example": "chuoi"
                 },
@@ -13860,6 +14901,11 @@ const docTemplate = `{
                     "type": "string",
                     "example": "quochuy"
                 },
+                "nguoi_lien_he": {
+                    "description": "Ba ô liên lạc lấy từ SỔ KHÁCH HÀNG (tenants của control plane), không phải\ntừ hợp đồng: người gọi khách lúc sắp hết hạn cần số điện thoại ngay trên\ndòng đó, chứ không phải mở thêm màn hình khác để tra. Rỗng = chưa ai điền.",
+                    "type": "string",
+                    "example": "Anh Huy"
+                },
                 "san_pham": {
                     "type": "integer",
                     "example": 0
@@ -13876,6 +14922,11 @@ const docTemplate = `{
                     "type": "string",
                     "example": "Quốc Huy"
                 },
+                "ten_goi": {
+                    "description": "TenGoi là tên hiển thị tra từ bảng giá (\"Chuỗi cửa hàng\"). Rơi về ` + "`" + `Goi` + "`" + ` khi\nhợp đồng không sinh từ dòng bảng giá nào, nên nơi hiển thị KHÔNG bao giờ\nnhận chuỗi rỗng và không phải tự nghĩ ra chỗ dự phòng.",
+                    "type": "string",
+                    "example": "Chuỗi cửa hàng"
+                },
                 "ten_mien_rieng": {
                     "type": "boolean",
                     "example": true
@@ -13887,6 +14938,14 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.HopDongMotItem": {
+            "type": "object",
+            "properties": {
+                "hop_dong": {
+                    "$ref": "#/definitions/dto.HopDongItem"
+                }
+            }
+        },
         "dto.HopDongResponse": {
             "type": "object",
             "properties": {
@@ -13895,6 +14954,17 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/dto.HopDongItem"
                     }
+                }
+            }
+        },
+        "dto.HuyRequest": {
+            "type": "object",
+            "properties": {
+                "ly_do": {
+                    "description": "LyDo nối vào ` + "`" + `note` + "`" + ` của hợp đồng, không ghi đè: note đang giữ điều khoản\nriêng đã thoả thuận với khách.",
+                    "type": "string",
+                    "maxLength": 300,
+                    "example": "khách đổi sang gói Chuỗi"
                 }
             }
         },
@@ -14093,6 +15163,37 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/dto.KhachHangItem"
                     }
+                }
+            }
+        },
+        "dto.KyHopDongRequest": {
+            "type": "object",
+            "required": [
+                "ma_cua_hang",
+                "plan_id"
+            ],
+            "properties": {
+                "ghi_chu": {
+                    "type": "string",
+                    "maxLength": 500
+                },
+                "ma_cua_hang": {
+                    "description": "MaCuaHang phải là cửa hàng đã có ở data plane và CHƯA có hợp đồng còn hiệu\nlực cho phần mềm này — xem GET /platform/cua-hang-chua-ky.",
+                    "type": "string",
+                    "maxLength": 30,
+                    "example": "quochuy"
+                },
+                "plan_id": {
+                    "description": "PlanID là DÒNG bảng giá (gói × chu kỳ), lấy từ GET /platform/plans.",
+                    "type": "integer",
+                    "example": 2
+                },
+                "so_thang": {
+                    "description": "SoThang là độ dài hợp đồng. Bỏ trống = một chu kỳ của gói (1 tháng cho gói\ntheo tháng, 12 tháng cho gói theo năm) — con số người ta muốn trong hầu hết\ntrường hợp, nên không bắt gõ lại.",
+                    "type": "integer",
+                    "maximum": 60,
+                    "minimum": 1,
+                    "example": 12
                 }
             }
         },
@@ -15129,6 +16230,28 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.QuanTriItem": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string",
+                    "example": "admin@quochuy.local"
+                },
+                "ho_ten": {
+                    "type": "string",
+                    "example": "Nguyễn Quốc Huy"
+                },
+                "ten_dang_nhap": {
+                    "type": "string",
+                    "example": "admin"
+                },
+                "trang_thai": {
+                    "description": "TrangThai: active | inactive. In ra để người sắp đặt lại mật khẩu thấy tài\nkhoản đang bị khoá — đặt lại mật khẩu KHÔNG mở khoá hộ.",
+                    "type": "string",
+                    "example": "active"
+                }
+            }
+        },
         "dto.RefreshRequest": {
             "type": "object",
             "required": [
@@ -15590,6 +16713,89 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.SuaGoiRequest": {
+            "type": "object",
+            "required": [
+                "name",
+                "status"
+            ],
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "example": "Cửa hàng"
+                },
+                "price": {
+                    "description": "Price NULL = \"Liên hệ\" (chưa công bố giá), KHÁC 0 là miễn phí — nên nó là\ncon trỏ, và màn hình phải gửi ` + "`" + `null` + "`" + ` chứ không phải chuỗi rỗng khi muốn\n\"Liên hệ\".\n\nTrần 1 tỷ: cột dưới database là DECIMAL(12,2) nên còn xa mới tràn, nhưng\nđây là GIÁ BÁN — gõ thừa một chữ số là một con số không ai định bán hiện\nlên landing, và không có gì phía sau chặn lại.",
+                    "type": "number",
+                    "maximum": 1000000000,
+                    "minimum": 0,
+                    "example": 499000
+                },
+                "status": {
+                    "description": "Status: active | retired. retired là NGỪNG BÁN MỚI, không xoá dòng — khách\nđang dùng gói đó không bị ảnh hưởng.",
+                    "type": "string",
+                    "enum": [
+                        "active",
+                        "retired"
+                    ],
+                    "example": "active"
+                },
+                "tagline": {
+                    "type": "string",
+                    "maxLength": 255,
+                    "example": "Cho một cửa hàng bán đều tay"
+                },
+                "trial_days": {
+                    "type": "integer",
+                    "maximum": 365,
+                    "example": 14
+                }
+            }
+        },
+        "dto.SuaHopDongRequest": {
+            "type": "object",
+            "required": [
+                "ten_cua_hang"
+            ],
+            "properties": {
+                "dien_thoai": {
+                    "type": "string",
+                    "maxLength": 20,
+                    "example": "0901234567"
+                },
+                "email": {
+                    "type": "string",
+                    "maxLength": 150,
+                    "example": "huy@quochuy.vn"
+                },
+                "ghi_chu_hop_dong": {
+                    "type": "string",
+                    "maxLength": 500
+                },
+                "ghi_chu_khach": {
+                    "description": "GhiChuKhach đi theo KHÁCH (sổ khách hàng), GhiChuHopDong chết cùng hợp đồng.",
+                    "type": "string",
+                    "maxLength": 500
+                },
+                "het_han": {
+                    "description": "HetHan nhận HAI dạng, và cả hai đều có lý do tồn tại:\n\n  · ` + "`" + `2006-01-02T15:04` + "`" + `  — có giờ. Đây là thứ ô \u003cinput type=\"datetime-local\"\u003e\n    gửi lên, và là dạng dùng khi cần chốt giờ chính xác (\"hết hạn 9h sáng\n    mai, trước cuộc hẹn lúc 10h\").\n  · ` + "`" + `2006-01-02` + "`" + `        — ngày trần. Máy chủ tự lấy CUỐI ngày đó\n    (23:59:59), vì \"hết hạn ngày 30\" trong đầu người nói nghĩa là hết ngày\n    30 chứ không phải 0 giờ ngày 30 — hiểu theo cách kia là cắt của khách\n    trọn một ngày.\n\nBỏ trống = GIỮ NGUYÊN hạn hiện tại, khác mọi ô khác ở trên: \"xoá ngày hết\nhạn\" không phải một trạng thái tồn tại được.\n\nChỉ nhận khi hợp đồng đang DÙNG THỬ. Hợp đồng đã trả tiền muốn dài thêm thì\nđi đường gia hạn, để đường tiền và đường hạn không tách khỏi nhau.",
+                    "type": "string",
+                    "maxLength": 25,
+                    "example": "2026-09-30T17:30"
+                },
+                "nguoi_lien_he": {
+                    "type": "string",
+                    "maxLength": 150,
+                    "example": "Anh Huy"
+                },
+                "ten_cua_hang": {
+                    "type": "string",
+                    "maxLength": 150,
+                    "example": "Cửa hàng Quốc Huy"
+                }
+            }
+        },
         "dto.SubscribeNewsletterRequest": {
             "type": "object",
             "required": [
@@ -15647,6 +16853,266 @@ const docTemplate = `{
                 "tax_code": {
                     "type": "string",
                     "maxLength": 30
+                }
+            }
+        },
+        "dto.TaoChinhThucRequest": {
+            "type": "object",
+            "required": [
+                "ma_cua_hang",
+                "mat_khau",
+                "plan_id",
+                "ten_cua_hang",
+                "ten_dang_nhap"
+            ],
+            "properties": {
+                "dien_thoai": {
+                    "type": "string",
+                    "maxLength": 20,
+                    "example": "0901234567"
+                },
+                "email_lien_he": {
+                    "description": "EmailLienHe là email THẬT của khách, để liên lạc. Khác hẳn ` + "`" + `users.email` + "`" + `\nnói ở trên — chép cái .local tự sinh sang đây thì sổ khách hàng đầy những\nđịa chỉ không gửi thư tới được, mà nhìn vẫn như email thật.",
+                    "type": "string",
+                    "maxLength": 150,
+                    "example": "huy@quochuy.vn"
+                },
+                "ghi_chu": {
+                    "description": "GhiChu vào chính hợp đồng — thoả thuận riêng, ai giới thiệu, hẹn gọi lại.",
+                    "type": "string",
+                    "maxLength": 500,
+                    "example": "khách anh Sơn giới thiệu"
+                },
+                "ho_ten": {
+                    "description": "HoTen của người quản trị. Bỏ trống thì lấy theo ` + "`" + `nguoi_lien_he` + "`" + `, không có\nnữa thì \"Quản trị viên\" — hai ô đó gần như luôn là một người.",
+                    "type": "string",
+                    "maxLength": 150,
+                    "example": "Nguyễn Quốc Huy"
+                },
+                "ma_cua_hang": {
+                    "description": "MaCuaHang là ô ĐẦU TIÊN của màn hình đăng nhập 3 ô. Chuẩn hoá về chữ thường\nở máy chủ — khách gõ lại ô này trên điện thoại, nơi bàn phím tự viết hoa.",
+                    "type": "string",
+                    "example": "quochuy"
+                },
+                "mat_khau": {
+                    "description": "MatKhau là ô THỨ BA. Tối thiểu 6 ký tự, khớp ràng buộc của UserRequest.",
+                    "type": "string",
+                    "minLength": 6,
+                    "example": "MatKhau@123"
+                },
+                "nguoi_lien_he": {
+                    "description": "Ba ô liên hệ ghi vào SỔ KHÁCH HÀNG (control plane), KHÔNG vào tài khoản\nđăng nhập: đây là người mình gọi khi hết hạn dùng thử, và họ thường không\nphải người ngồi gõ phần mềm.",
+                    "type": "string",
+                    "maxLength": 150,
+                    "example": "Anh Huy"
+                },
+                "plan_id": {
+                    "description": "PlanID lấy từ GET /platform/plans. Phần mềm suy ra từ chính dòng này, nên\nkhông có tham số ` + "`" + `app` + "`" + ` — gửi cả hai thì chúng mâu thuẫn được với nhau.",
+                    "type": "integer",
+                    "example": 2
+                },
+                "so_thang": {
+                    "description": "SoThang bỏ trống = một chu kỳ của gói (1 tháng, hoặc 12 nếu gói theo năm)\n— con số người ta muốn trong hầu hết trường hợp, nên không bắt gõ lại.",
+                    "type": "integer",
+                    "maximum": 60,
+                    "minimum": 1,
+                    "example": 12
+                },
+                "ten_cua_hang": {
+                    "description": "TenCuaHang hiển thị trong khu điều hành và làm tên chi nhánh mặc định.",
+                    "type": "string",
+                    "maxLength": 150,
+                    "example": "Cửa hàng Quốc Huy"
+                },
+                "ten_dang_nhap": {
+                    "description": "TenDangNhap là ô THỨ HAI của màn hình đăng nhập.",
+                    "type": "string",
+                    "example": "admin"
+                }
+            }
+        },
+        "dto.TaoDungThuRequest": {
+            "type": "object",
+            "required": [
+                "ma_cua_hang",
+                "mat_khau",
+                "plan_id",
+                "ten_cua_hang",
+                "ten_dang_nhap"
+            ],
+            "properties": {
+                "dien_thoai": {
+                    "type": "string",
+                    "maxLength": 20,
+                    "example": "0901234567"
+                },
+                "email_lien_he": {
+                    "description": "EmailLienHe là email THẬT của khách, để liên lạc. Khác hẳn ` + "`" + `users.email` + "`" + `\nnói ở trên — chép cái .local tự sinh sang đây thì sổ khách hàng đầy những\nđịa chỉ không gửi thư tới được, mà nhìn vẫn như email thật.",
+                    "type": "string",
+                    "maxLength": 150,
+                    "example": "huy@quochuy.vn"
+                },
+                "ghi_chu": {
+                    "description": "GhiChu vào chính hợp đồng — thoả thuận riêng, ai giới thiệu, hẹn gọi lại.",
+                    "type": "string",
+                    "maxLength": 500,
+                    "example": "khách anh Sơn giới thiệu"
+                },
+                "ho_ten": {
+                    "description": "HoTen của người quản trị. Bỏ trống thì lấy theo ` + "`" + `nguoi_lien_he` + "`" + `, không có\nnữa thì \"Quản trị viên\" — hai ô đó gần như luôn là một người.",
+                    "type": "string",
+                    "maxLength": 150,
+                    "example": "Nguyễn Quốc Huy"
+                },
+                "ma_cua_hang": {
+                    "description": "MaCuaHang là ô ĐẦU TIÊN của màn hình đăng nhập 3 ô. Chuẩn hoá về chữ thường\nở máy chủ — khách gõ lại ô này trên điện thoại, nơi bàn phím tự viết hoa.",
+                    "type": "string",
+                    "example": "quochuy"
+                },
+                "mat_khau": {
+                    "description": "MatKhau là ô THỨ BA. Tối thiểu 6 ký tự, khớp ràng buộc của UserRequest.",
+                    "type": "string",
+                    "minLength": 6,
+                    "example": "MatKhau@123"
+                },
+                "nguoi_lien_he": {
+                    "description": "Ba ô liên hệ ghi vào SỔ KHÁCH HÀNG (control plane), KHÔNG vào tài khoản\nđăng nhập: đây là người mình gọi khi hết hạn dùng thử, và họ thường không\nphải người ngồi gõ phần mềm.",
+                    "type": "string",
+                    "maxLength": 150,
+                    "example": "Anh Huy"
+                },
+                "plan_id": {
+                    "description": "PlanID lấy từ GET /platform/plans. Phần mềm suy ra từ chính dòng này, nên\nkhông có tham số ` + "`" + `app` + "`" + ` — gửi cả hai thì chúng mâu thuẫn được với nhau.",
+                    "type": "integer",
+                    "example": 2
+                },
+                "so_ngay_dung_thu": {
+                    "description": "SoNgayDungThu bỏ trống (null) = lấy ` + "`" + `trial_days` + "`" + ` của dòng bảng giá. Gửi số\nlà ghi đè cho riêng khách này. Gửi 0 bị từ chối: \"dùng thử 0 ngày\" tạo ra\nmột hợp đồng quá hạn ngay từ giây đầu.",
+                    "type": "integer",
+                    "example": 14
+                },
+                "ten_cua_hang": {
+                    "description": "TenCuaHang hiển thị trong khu điều hành và làm tên chi nhánh mặc định.",
+                    "type": "string",
+                    "maxLength": 150,
+                    "example": "Cửa hàng Quốc Huy"
+                },
+                "ten_dang_nhap": {
+                    "description": "TenDangNhap là ô THỨ HAI của màn hình đăng nhập.",
+                    "type": "string",
+                    "example": "admin"
+                }
+            }
+        },
+        "dto.TaoDungThuResponse": {
+            "type": "object",
+            "properties": {
+                "goi": {
+                    "type": "string",
+                    "example": "Cửa hàng"
+                },
+                "het_han": {
+                    "description": "HetHan cũng chính là ngày hết dùng thử: hạn hợp đồng thử KHÔNG đẩy ra xa\nhơn ngày đó.",
+                    "type": "string"
+                },
+                "hop_dong_id": {
+                    "type": "integer",
+                    "example": 12
+                },
+                "ma_cua_hang": {
+                    "type": "string",
+                    "example": "quochuy"
+                },
+                "nguon_dieu_khoan": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "ten_cua_hang": {
+                    "type": "string",
+                    "example": "Cửa hàng Quốc Huy"
+                },
+                "ten_dang_nhap": {
+                    "type": "string",
+                    "example": "admin"
+                },
+                "tenant_id": {
+                    "type": "integer",
+                    "example": 7
+                },
+                "trang_thai": {
+                    "description": "TrangThai của hợp đồng vừa ghi: ` + "`" + `trial` + "`" + ` hay ` + "`" + `active` + "`" + `. Có mặt vì cùng một\nkiểu này phục vụ CẢ HAI đường tạo khách — nơi hiển thị đọc nó để biết vừa\nmở một kỳ dùng thử hay vừa bán một hợp đồng.",
+                    "type": "string",
+                    "example": "trial"
+                }
+            }
+        },
+        "dto.ThuTienRequest": {
+            "type": "object",
+            "properties": {
+                "ghi_chu": {
+                    "type": "string",
+                    "maxLength": 500
+                },
+                "hinh_thuc": {
+                    "description": "HinhThuc: chuyen_khoan | tien_mat | khac. Bỏ trống = chuyen_khoan.",
+                    "type": "string",
+                    "enum": [
+                        "chuyen_khoan",
+                        "tien_mat",
+                        "khac"
+                    ],
+                    "example": "chuyen_khoan"
+                },
+                "ky_den": {
+                    "type": "string",
+                    "example": "2027-08-14"
+                },
+                "ky_tu": {
+                    "description": "KyTu / KyDen dạng 2006-01-02, bỏ trống = MÁY CHỦ TỰ TÍNH: từ điểm cuối của\nkỳ đã trả gần nhất (hoặc ngày bắt đầu hợp đồng nếu chưa trả lần nào) tới\nhạn hiện tại. Nhờ vậy hai lần thu liên tiếp không chồng lấn và cũng không\nđể hở khoảng nào ở giữa.\n\nChỉ khai tay khi thu cho một kỳ KHÁC với kỳ máy chủ tính ra.",
+                    "type": "string",
+                    "example": "2026-08-14"
+                },
+                "ma_giao_dich": {
+                    "description": "MaGiaoDich là mã giao dịch ngân hàng hoặc số phiếu thu — thứ dùng để đối\nchiếu với sao kê. Không bắt buộc, nhưng thiếu nó thì lần thu này không tra\nngược lại được từ sổ ngân hàng.",
+                    "type": "string",
+                    "maxLength": 100,
+                    "example": "FT26081412345"
+                },
+                "so_tien": {
+                    "description": "SoTien bỏ trống (0) = lấy ĐÚNG GIÁ HỢP ĐỒNG. Khai số khác khi thu thiếu,\nthu gộp, hoặc có chiết khấu một lần — số ở đây là tiền THẬT đã nhận, và\nnó được phép khác giá đã ký.",
+                    "type": "number",
+                    "minimum": 0,
+                    "example": 990000
+                }
+            }
+        },
+        "dto.ThuTienResponse": {
+            "type": "object",
+            "properties": {
+                "hinh_thuc": {
+                    "type": "string",
+                    "example": "chuyen_khoan"
+                },
+                "ky_den": {
+                    "type": "string"
+                },
+                "ky_tu": {
+                    "type": "string"
+                },
+                "so_lan_thu": {
+                    "type": "integer",
+                    "example": 2
+                },
+                "so_tien": {
+                    "type": "number",
+                    "example": 990000
+                },
+                "tong_da_thu": {
+                    "description": "TongDaThu là tổng tiền đã thu của hợp đồng này SAU lần ghi vừa rồi — để\nmàn hình khỏi phải gọi thêm một lượt chỉ để cập nhật một con số.",
+                    "type": "number",
+                    "example": 1980000
                 }
             }
         },

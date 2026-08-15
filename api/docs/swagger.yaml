@@ -1790,6 +1790,28 @@ definitions:
     - content
     - full_name
     type: object
+  dto.CuaHangCoSanItem:
+    properties:
+      ma:
+        example: quochuy
+        type: string
+      ten:
+        example: Cửa hàng Quốc Huy
+        type: string
+      trang_thai:
+        description: |-
+          TrangThai: active | suspended. Cửa hàng đang khoá vẫn ký được (ký xong mở
+          khoá), nhưng người ký phải nhìn thấy mình đang ký cho cái gì.
+        example: active
+        type: string
+    type: object
+  dto.CuaHangCoSanResponse:
+    properties:
+      cua_hang:
+        items:
+          $ref: '#/definitions/dto.CuaHangCoSanItem'
+        type: array
+    type: object
   dto.CustomerPasswordRequest:
     properties:
       password:
@@ -1925,6 +1947,16 @@ definitions:
         example: 29970000
         type: number
     type: object
+  dto.DoiMatKhauRequest:
+    properties:
+      mat_khau:
+        example: MatKhauMoi@123
+        maxLength: 100
+        minLength: 6
+        type: string
+    required:
+    - mat_khau
+    type: object
   dto.FacebookLoginRequest:
     properties:
       code:
@@ -1945,6 +1977,20 @@ definitions:
     required:
     - email
     type: object
+  dto.GiaHanRequest:
+    properties:
+      so_thang:
+        description: |-
+          SoThang cộng vào GREATEST(ends_at, NOW()), không phải vào ends_at: hợp đồng
+          đã quá hạn ba tháng mà cộng dồn từ ngày cũ thì khách trả tiền xong vẫn còn
+          quá hạn.
+        example: 12
+        maximum: 60
+        minimum: 1
+        type: integer
+    required:
+    - so_thang
+    type: object
   dto.GoogleLoginRequest:
     properties:
       code:
@@ -1957,6 +2003,130 @@ definitions:
     required:
     - code
     - redirect_uri
+    type: object
+  dto.HopDongChiTiet:
+    properties:
+      bat_dau:
+        type: string
+      chi_nhanh:
+        example: 5
+        type: integer
+      chu_ky:
+        description: 'ChuKy: thang | nam'
+        example: thang
+        type: string
+      con_lai_ngay:
+        description: ConLaiNgay âm = ĐÃ QUÁ HẠN.
+        example: 41
+        type: integer
+      dien_thoai:
+        example: "0901234567"
+        type: string
+      email:
+        example: huy@quochuy.vn
+        type: string
+      ghi_chu_hop_dong:
+        description: GhiChuHopDong là điều khoản riêng đã thoả thuận, cộng lịch sử
+          huỷ nếu có.
+        example: khách anh Sơn giới thiệu
+        type: string
+      ghi_chu_khach:
+        description: |-
+          GhiChuKhach là ghi chú về KHÁCH trong sổ khách hàng — khác ghi chú hợp đồng:
+          một cái đi theo khách qua nhiều hợp đồng, một cái chết cùng hợp đồng.
+        example: khách quen, trả đúng hạn
+        type: string
+      gia:
+        example: 9990000
+        type: number
+      goi:
+        description: Goi là MÃ gói đã chốt trong hợp đồng — thứ không đổi.
+        example: chuoi
+        type: string
+      het_dung_thu:
+        description: |-
+          BatDauDungThu / HetDungThu là hai mốc của KỲ DÙNG THỬ. HetDungThu rỗng khi
+          hợp đồng không có giai đoạn thử, hoặc đã chuyển sang chính thức — lúc gia
+          hạn, mốc này bị xoá.
+        type: string
+      het_han:
+        type: string
+      id:
+        example: 12
+        type: integer
+      ma_app:
+        example: order
+        type: string
+      ma_cua_hang:
+        example: quochuy
+        type: string
+      ngay_vao_so:
+        description: |-
+          NgayVaoSo là ngày khách được ghi vào sổ nền tảng, không phải ngày ký hợp
+          đồng này — khách cũ ký hợp đồng mới thì hai ngày đó cách nhau rất xa.
+        type: string
+      nguoi_lien_he:
+        description: |-
+          Ba ô liên lạc lấy từ SỔ KHÁCH HÀNG (tenants của control plane), không phải
+          từ hợp đồng: người gọi khách lúc sắp hết hạn cần số điện thoại ngay trên
+          dòng đó, chứ không phải mở thêm màn hình khác để tra. Rỗng = chưa ai điền.
+        example: Anh Huy
+        type: string
+      quan_tri:
+        allOf:
+        - $ref: '#/definitions/dto.QuanTriItem'
+        description: |-
+          QuanTri là TÀI KHOẢN ĐĂNG NHẬP của khách — ô thứ hai của màn hình đăng nhập
+          3 ô. Đọc từ DATA PLANE, nên nó vắng mặt (nil) khi cửa hàng không còn tài
+          khoản quản trị nào, hoặc khi lượt đọc bên đó hỏng.
+
+          nil KHÔNG được hiểu là "cửa hàng hỏng": danh sách và điều khoản vẫn đúng,
+          chỉ là chưa biết ai đang quản trị. Màn hình phải nói ra điều đó thay vì
+          giấu đi cả khối.
+      san_pham:
+        example: 0
+        type: integer
+      sua_duoc_han:
+        description: |-
+          SuaDuocHan cho màn hình biết có được hiện ô đổi ngày hết hạn không. Máy chủ
+          quyết, không phải giao diện tự suy: luật "chỉ hợp đồng dùng thử mới đổi hạn
+          trực tiếp" nằm ở service, và chép nó lên Blade là để hai bên lệch nhau.
+        example: true
+        type: boolean
+      tai_khoan:
+        example: 0
+        type: integer
+      ten_app:
+        example: Sellio Order
+        type: string
+      ten_cua_hang:
+        example: Quốc Huy
+        type: string
+      ten_goi:
+        description: |-
+          TenGoi là tên hiển thị tra từ bảng giá ("Chuỗi cửa hàng"). Rơi về `Goi` khi
+          hợp đồng không sinh từ dòng bảng giá nào, nên nơi hiển thị KHÔNG bao giờ
+          nhận chuỗi rỗng và không phải tự nghĩ ra chỗ dự phòng.
+        example: Chuỗi cửa hàng
+        type: string
+      ten_mien_rieng:
+        example: true
+        type: boolean
+      trang_thai:
+        description: 'TrangThai: trial | active | past_due | canceled'
+        example: active
+        type: string
+      trang_thai_cua_hang:
+        description: |-
+          TrangThaiCuaHang: active | suspended. KHÁC trạng thái hợp đồng, và hai thứ
+          đó rời nhau — cửa hàng vẫn mở mà hợp đồng đã hết hạn là chuyện có thật.
+        example: active
+        type: string
+    type: object
+  dto.HopDongChiTietResponse:
+    properties:
+      hop_dong:
+        $ref: '#/definitions/dto.HopDongChiTiet'
     type: object
   dto.HopDongItem:
     properties:
@@ -1973,10 +2143,17 @@ definitions:
         description: ConLaiNgay âm = ĐÃ QUÁ HẠN.
         example: 41
         type: integer
+      dien_thoai:
+        example: "0901234567"
+        type: string
+      email:
+        example: huy@quochuy.vn
+        type: string
       gia:
         example: 9990000
         type: number
       goi:
+        description: Goi là MÃ gói đã chốt trong hợp đồng — thứ không đổi.
         example: chuoi
         type: string
       het_han:
@@ -1990,6 +2167,13 @@ definitions:
       ma_cua_hang:
         example: quochuy
         type: string
+      nguoi_lien_he:
+        description: |-
+          Ba ô liên lạc lấy từ SỔ KHÁCH HÀNG (tenants của control plane), không phải
+          từ hợp đồng: người gọi khách lúc sắp hết hạn cần số điện thoại ngay trên
+          dòng đó, chứ không phải mở thêm màn hình khác để tra. Rỗng = chưa ai điền.
+        example: Anh Huy
+        type: string
       san_pham:
         example: 0
         type: integer
@@ -2002,6 +2186,13 @@ definitions:
       ten_cua_hang:
         example: Quốc Huy
         type: string
+      ten_goi:
+        description: |-
+          TenGoi là tên hiển thị tra từ bảng giá ("Chuỗi cửa hàng"). Rơi về `Goi` khi
+          hợp đồng không sinh từ dòng bảng giá nào, nên nơi hiển thị KHÔNG bao giờ
+          nhận chuỗi rỗng và không phải tự nghĩ ra chỗ dự phòng.
+        example: Chuỗi cửa hàng
+        type: string
       ten_mien_rieng:
         example: true
         type: boolean
@@ -2010,12 +2201,27 @@ definitions:
         example: active
         type: string
     type: object
+  dto.HopDongMotItem:
+    properties:
+      hop_dong:
+        $ref: '#/definitions/dto.HopDongItem'
+    type: object
   dto.HopDongResponse:
     properties:
       hop_dong:
         items:
           $ref: '#/definitions/dto.HopDongItem'
         type: array
+    type: object
+  dto.HuyRequest:
+    properties:
+      ly_do:
+        description: |-
+          LyDo nối vào `note` của hợp đồng, không ghi đè: note đang giữ điều khoản
+          riêng đã thoả thuận với khách.
+        example: khách đổi sang gói Chuỗi
+        maxLength: 300
+        type: string
     type: object
   dto.ImageRequest:
     properties:
@@ -2158,6 +2364,35 @@ definitions:
         items:
           $ref: '#/definitions/dto.KhachHangItem'
         type: array
+    type: object
+  dto.KyHopDongRequest:
+    properties:
+      ghi_chu:
+        maxLength: 500
+        type: string
+      ma_cua_hang:
+        description: |-
+          MaCuaHang phải là cửa hàng đã có ở data plane và CHƯA có hợp đồng còn hiệu
+          lực cho phần mềm này — xem GET /platform/cua-hang-chua-ky.
+        example: quochuy
+        maxLength: 30
+        type: string
+      plan_id:
+        description: PlanID là DÒNG bảng giá (gói × chu kỳ), lấy từ GET /platform/plans.
+        example: 2
+        type: integer
+      so_thang:
+        description: |-
+          SoThang là độ dài hợp đồng. Bỏ trống = một chu kỳ của gói (1 tháng cho gói
+          theo tháng, 12 tháng cho gói theo năm) — con số người ta muốn trong hầu hết
+          trường hợp, nên không bắt gõ lại.
+        example: 12
+        maximum: 60
+        minimum: 1
+        type: integer
+    required:
+    - ma_cua_hang
+    - plan_id
     type: object
   dto.LoginRequest:
     properties:
@@ -2932,6 +3167,24 @@ definitions:
     - items
     - supplier_id
     type: object
+  dto.QuanTriItem:
+    properties:
+      email:
+        example: admin@quochuy.local
+        type: string
+      ho_ten:
+        example: Nguyễn Quốc Huy
+        type: string
+      ten_dang_nhap:
+        example: admin
+        type: string
+      trang_thai:
+        description: |-
+          TrangThai: active | inactive. In ra để người sắp đặt lại mật khẩu thấy tài
+          khoản đang bị khoá — đặt lại mật khẩu KHÔNG mở khoá hộ.
+        example: active
+        type: string
+    type: object
   dto.RefreshRequest:
     properties:
       refresh_token:
@@ -3283,6 +3536,95 @@ definitions:
     - shop_code
     - username
     type: object
+  dto.SuaGoiRequest:
+    properties:
+      name:
+        example: Cửa hàng
+        maxLength: 100
+        type: string
+      price:
+        description: |-
+          Price NULL = "Liên hệ" (chưa công bố giá), KHÁC 0 là miễn phí — nên nó là
+          con trỏ, và màn hình phải gửi `null` chứ không phải chuỗi rỗng khi muốn
+          "Liên hệ".
+
+          Trần 1 tỷ: cột dưới database là DECIMAL(12,2) nên còn xa mới tràn, nhưng
+          đây là GIÁ BÁN — gõ thừa một chữ số là một con số không ai định bán hiện
+          lên landing, và không có gì phía sau chặn lại.
+        example: 499000
+        maximum: 1000000000
+        minimum: 0
+        type: number
+      status:
+        description: |-
+          Status: active | retired. retired là NGỪNG BÁN MỚI, không xoá dòng — khách
+          đang dùng gói đó không bị ảnh hưởng.
+        enum:
+        - active
+        - retired
+        example: active
+        type: string
+      tagline:
+        example: Cho một cửa hàng bán đều tay
+        maxLength: 255
+        type: string
+      trial_days:
+        example: 14
+        maximum: 365
+        type: integer
+    required:
+    - name
+    - status
+    type: object
+  dto.SuaHopDongRequest:
+    properties:
+      dien_thoai:
+        example: "0901234567"
+        maxLength: 20
+        type: string
+      email:
+        example: huy@quochuy.vn
+        maxLength: 150
+        type: string
+      ghi_chu_hop_dong:
+        maxLength: 500
+        type: string
+      ghi_chu_khach:
+        description: GhiChuKhach đi theo KHÁCH (sổ khách hàng), GhiChuHopDong chết
+          cùng hợp đồng.
+        maxLength: 500
+        type: string
+      het_han:
+        description: |-
+          HetHan nhận HAI dạng, và cả hai đều có lý do tồn tại:
+
+            · `2006-01-02T15:04`  — có giờ. Đây là thứ ô <input type="datetime-local">
+              gửi lên, và là dạng dùng khi cần chốt giờ chính xác ("hết hạn 9h sáng
+              mai, trước cuộc hẹn lúc 10h").
+            · `2006-01-02`        — ngày trần. Máy chủ tự lấy CUỐI ngày đó
+              (23:59:59), vì "hết hạn ngày 30" trong đầu người nói nghĩa là hết ngày
+              30 chứ không phải 0 giờ ngày 30 — hiểu theo cách kia là cắt của khách
+              trọn một ngày.
+
+          Bỏ trống = GIỮ NGUYÊN hạn hiện tại, khác mọi ô khác ở trên: "xoá ngày hết
+          hạn" không phải một trạng thái tồn tại được.
+
+          Chỉ nhận khi hợp đồng đang DÙNG THỬ. Hợp đồng đã trả tiền muốn dài thêm thì
+          đi đường gia hạn, để đường tiền và đường hạn không tách khỏi nhau.
+        example: 2026-09-30T17:30
+        maxLength: 25
+        type: string
+      nguoi_lien_he:
+        example: Anh Huy
+        maxLength: 150
+        type: string
+      ten_cua_hang:
+        example: Cửa hàng Quốc Huy
+        maxLength: 150
+        type: string
+    required:
+    - ten_cua_hang
+    type: object
   dto.SubscribeNewsletterRequest:
     properties:
       email:
@@ -3326,6 +3668,261 @@ definitions:
         type: string
     required:
     - name
+    type: object
+  dto.TaoChinhThucRequest:
+    properties:
+      dien_thoai:
+        example: "0901234567"
+        maxLength: 20
+        type: string
+      email_lien_he:
+        description: |-
+          EmailLienHe là email THẬT của khách, để liên lạc. Khác hẳn `users.email`
+          nói ở trên — chép cái .local tự sinh sang đây thì sổ khách hàng đầy những
+          địa chỉ không gửi thư tới được, mà nhìn vẫn như email thật.
+        example: huy@quochuy.vn
+        maxLength: 150
+        type: string
+      ghi_chu:
+        description: GhiChu vào chính hợp đồng — thoả thuận riêng, ai giới thiệu,
+          hẹn gọi lại.
+        example: khách anh Sơn giới thiệu
+        maxLength: 500
+        type: string
+      ho_ten:
+        description: |-
+          HoTen của người quản trị. Bỏ trống thì lấy theo `nguoi_lien_he`, không có
+          nữa thì "Quản trị viên" — hai ô đó gần như luôn là một người.
+        example: Nguyễn Quốc Huy
+        maxLength: 150
+        type: string
+      ma_cua_hang:
+        description: |-
+          MaCuaHang là ô ĐẦU TIÊN của màn hình đăng nhập 3 ô. Chuẩn hoá về chữ thường
+          ở máy chủ — khách gõ lại ô này trên điện thoại, nơi bàn phím tự viết hoa.
+        example: quochuy
+        type: string
+      mat_khau:
+        description: MatKhau là ô THỨ BA. Tối thiểu 6 ký tự, khớp ràng buộc của UserRequest.
+        example: MatKhau@123
+        minLength: 6
+        type: string
+      nguoi_lien_he:
+        description: |-
+          Ba ô liên hệ ghi vào SỔ KHÁCH HÀNG (control plane), KHÔNG vào tài khoản
+          đăng nhập: đây là người mình gọi khi hết hạn dùng thử, và họ thường không
+          phải người ngồi gõ phần mềm.
+        example: Anh Huy
+        maxLength: 150
+        type: string
+      plan_id:
+        description: |-
+          PlanID lấy từ GET /platform/plans. Phần mềm suy ra từ chính dòng này, nên
+          không có tham số `app` — gửi cả hai thì chúng mâu thuẫn được với nhau.
+        example: 2
+        type: integer
+      so_thang:
+        description: |-
+          SoThang bỏ trống = một chu kỳ của gói (1 tháng, hoặc 12 nếu gói theo năm)
+          — con số người ta muốn trong hầu hết trường hợp, nên không bắt gõ lại.
+        example: 12
+        maximum: 60
+        minimum: 1
+        type: integer
+      ten_cua_hang:
+        description: TenCuaHang hiển thị trong khu điều hành và làm tên chi nhánh
+          mặc định.
+        example: Cửa hàng Quốc Huy
+        maxLength: 150
+        type: string
+      ten_dang_nhap:
+        description: TenDangNhap là ô THỨ HAI của màn hình đăng nhập.
+        example: admin
+        type: string
+    required:
+    - ma_cua_hang
+    - mat_khau
+    - plan_id
+    - ten_cua_hang
+    - ten_dang_nhap
+    type: object
+  dto.TaoDungThuRequest:
+    properties:
+      dien_thoai:
+        example: "0901234567"
+        maxLength: 20
+        type: string
+      email_lien_he:
+        description: |-
+          EmailLienHe là email THẬT của khách, để liên lạc. Khác hẳn `users.email`
+          nói ở trên — chép cái .local tự sinh sang đây thì sổ khách hàng đầy những
+          địa chỉ không gửi thư tới được, mà nhìn vẫn như email thật.
+        example: huy@quochuy.vn
+        maxLength: 150
+        type: string
+      ghi_chu:
+        description: GhiChu vào chính hợp đồng — thoả thuận riêng, ai giới thiệu,
+          hẹn gọi lại.
+        example: khách anh Sơn giới thiệu
+        maxLength: 500
+        type: string
+      ho_ten:
+        description: |-
+          HoTen của người quản trị. Bỏ trống thì lấy theo `nguoi_lien_he`, không có
+          nữa thì "Quản trị viên" — hai ô đó gần như luôn là một người.
+        example: Nguyễn Quốc Huy
+        maxLength: 150
+        type: string
+      ma_cua_hang:
+        description: |-
+          MaCuaHang là ô ĐẦU TIÊN của màn hình đăng nhập 3 ô. Chuẩn hoá về chữ thường
+          ở máy chủ — khách gõ lại ô này trên điện thoại, nơi bàn phím tự viết hoa.
+        example: quochuy
+        type: string
+      mat_khau:
+        description: MatKhau là ô THỨ BA. Tối thiểu 6 ký tự, khớp ràng buộc của UserRequest.
+        example: MatKhau@123
+        minLength: 6
+        type: string
+      nguoi_lien_he:
+        description: |-
+          Ba ô liên hệ ghi vào SỔ KHÁCH HÀNG (control plane), KHÔNG vào tài khoản
+          đăng nhập: đây là người mình gọi khi hết hạn dùng thử, và họ thường không
+          phải người ngồi gõ phần mềm.
+        example: Anh Huy
+        maxLength: 150
+        type: string
+      plan_id:
+        description: |-
+          PlanID lấy từ GET /platform/plans. Phần mềm suy ra từ chính dòng này, nên
+          không có tham số `app` — gửi cả hai thì chúng mâu thuẫn được với nhau.
+        example: 2
+        type: integer
+      so_ngay_dung_thu:
+        description: |-
+          SoNgayDungThu bỏ trống (null) = lấy `trial_days` của dòng bảng giá. Gửi số
+          là ghi đè cho riêng khách này. Gửi 0 bị từ chối: "dùng thử 0 ngày" tạo ra
+          một hợp đồng quá hạn ngay từ giây đầu.
+        example: 14
+        type: integer
+      ten_cua_hang:
+        description: TenCuaHang hiển thị trong khu điều hành và làm tên chi nhánh
+          mặc định.
+        example: Cửa hàng Quốc Huy
+        maxLength: 150
+        type: string
+      ten_dang_nhap:
+        description: TenDangNhap là ô THỨ HAI của màn hình đăng nhập.
+        example: admin
+        type: string
+    required:
+    - ma_cua_hang
+    - mat_khau
+    - plan_id
+    - ten_cua_hang
+    - ten_dang_nhap
+    type: object
+  dto.TaoDungThuResponse:
+    properties:
+      goi:
+        example: Cửa hàng
+        type: string
+      het_han:
+        description: |-
+          HetHan cũng chính là ngày hết dùng thử: hạn hợp đồng thử KHÔNG đẩy ra xa
+          hơn ngày đó.
+        type: string
+      hop_dong_id:
+        example: 12
+        type: integer
+      ma_cua_hang:
+        example: quochuy
+        type: string
+      nguon_dieu_khoan:
+        additionalProperties:
+          type: string
+        type: object
+      ten_cua_hang:
+        example: Cửa hàng Quốc Huy
+        type: string
+      ten_dang_nhap:
+        example: admin
+        type: string
+      tenant_id:
+        example: 7
+        type: integer
+      trang_thai:
+        description: |-
+          TrangThai của hợp đồng vừa ghi: `trial` hay `active`. Có mặt vì cùng một
+          kiểu này phục vụ CẢ HAI đường tạo khách — nơi hiển thị đọc nó để biết vừa
+          mở một kỳ dùng thử hay vừa bán một hợp đồng.
+        example: trial
+        type: string
+    type: object
+  dto.ThuTienRequest:
+    properties:
+      ghi_chu:
+        maxLength: 500
+        type: string
+      hinh_thuc:
+        description: 'HinhThuc: chuyen_khoan | tien_mat | khac. Bỏ trống = chuyen_khoan.'
+        enum:
+        - chuyen_khoan
+        - tien_mat
+        - khac
+        example: chuyen_khoan
+        type: string
+      ky_den:
+        example: "2027-08-14"
+        type: string
+      ky_tu:
+        description: |-
+          KyTu / KyDen dạng 2006-01-02, bỏ trống = MÁY CHỦ TỰ TÍNH: từ điểm cuối của
+          kỳ đã trả gần nhất (hoặc ngày bắt đầu hợp đồng nếu chưa trả lần nào) tới
+          hạn hiện tại. Nhờ vậy hai lần thu liên tiếp không chồng lấn và cũng không
+          để hở khoảng nào ở giữa.
+
+          Chỉ khai tay khi thu cho một kỳ KHÁC với kỳ máy chủ tính ra.
+        example: "2026-08-14"
+        type: string
+      ma_giao_dich:
+        description: |-
+          MaGiaoDich là mã giao dịch ngân hàng hoặc số phiếu thu — thứ dùng để đối
+          chiếu với sao kê. Không bắt buộc, nhưng thiếu nó thì lần thu này không tra
+          ngược lại được từ sổ ngân hàng.
+        example: FT26081412345
+        maxLength: 100
+        type: string
+      so_tien:
+        description: |-
+          SoTien bỏ trống (0) = lấy ĐÚNG GIÁ HỢP ĐỒNG. Khai số khác khi thu thiếu,
+          thu gộp, hoặc có chiết khấu một lần — số ở đây là tiền THẬT đã nhận, và
+          nó được phép khác giá đã ký.
+        example: 990000
+        minimum: 0
+        type: number
+    type: object
+  dto.ThuTienResponse:
+    properties:
+      hinh_thuc:
+        example: chuyen_khoan
+        type: string
+      ky_den:
+        type: string
+      ky_tu:
+        type: string
+      so_lan_thu:
+        example: 2
+        type: integer
+      so_tien:
+        example: 990000
+        type: number
+      tong_da_thu:
+        description: |-
+          TongDaThu là tổng tiền đã thu của hợp đồng này SAU lần ghi vừa rồi — để
+          màn hình khỏi phải gọi thêm một lượt chỉ để cập nhật một con số.
+        example: 1980000
+        type: number
     type: object
   dto.UpdateContactStatusRequest:
     properties:
@@ -10504,6 +11101,98 @@ paths:
       summary: Danh mục phần mềm của nền tảng
       tags:
       - Platform - Apps
+  /platform/chinh-thuc:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Dựng TRỌN GÓI một khách hàng mới — cửa hàng + chi nhánh mặc định + tài
+        khoản quản trị (data plane) + hợp đồng (control plane) — y hệt
+        POST /platform/dung-thu, khác đúng một chỗ: hợp đồng ra `active` ngay và
+        KHÔNG có giai đoạn dùng thử. Thời hạn tính bằng THÁNG.
+        `so_thang` bỏ trống = một chu kỳ của gói (1 tháng, hoặc 12 nếu gói theo năm).
+        Giá và ba hạn mức CHÉP từ bảng giá lúc ký rồi sống độc lập — không có ô
+        nào khai tay. Bảng giá thiếu hạn mức thì lượt tạo bị TỪ CHỐI (422).
+        Việc này KHÔNG ghi tiền vào sổ thu; thu tiền là đường riêng.
+      parameters:
+      - description: Cửa hàng, tài khoản quản trị và dòng bảng giá
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.TaoChinhThucRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.TaoDungThuResponse'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Body'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.Body'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Thêm khách mới kèm hợp đồng chính thức
+      tags:
+      - Platform - Khách hàng
+  /platform/cua-hang-chua-ky:
+    get:
+      description: |-
+        Ứng viên để KÝ HỢP ĐỒNG CHÍNH THỨC: cửa hàng đã tồn tại ở database bán
+        hàng nhưng chưa có hợp đồng còn hiệu lực cho phần mềm này.
+        Phép trừ làm ở tầng Go vì hai danh sách nằm ở hai database khác nhau —
+        không câu truy vấn nào JOIN được chúng.
+        "Còn hiệu lực" gồm cả `trial` và `past_due`, không riêng `active`: cả hai
+        đều đang giữ chỗ của khoá "mỗi khách mỗi phần mềm một hợp đồng".
+      parameters:
+      - description: Mã phần mềm; bỏ trống = mọi phần mềm được giao
+        in: query
+        name: app
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.CuaHangCoSanResponse'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Cửa hàng đã có nhưng chưa ký hợp đồng
+      tags:
+      - Platform - Khách hàng
   /platform/doanh-thu:
     get:
       description: |-
@@ -10554,6 +11243,110 @@ paths:
       summary: Doanh thu theo quán
       tags:
       - Platform - Khách hàng
+  /platform/dung-thu:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Dựng TRỌN GÓI một khách hàng mới: cửa hàng + chi nhánh mặc định + tài
+        khoản quản trị (data plane), rồi ký hợp đồng dùng thử (control plane).
+        Bản HTTP của `cmd/thue-bao ky --dung-thu`, khác một điểm: KHÔNG cho khai
+        tay giá và hạn mức — hợp đồng thử chạy đúng theo gói đang bán. Thoả thuận
+        riêng vẫn đi qua công cụ dòng lệnh.
+        Điều khoản CHÉP từ bảng giá lúc ký rồi sống độc lập: sửa bảng giá sau đó
+        không đụng tới khách này. Bảng giá không quy định một hạn mức nào thì lượt
+        ký bị TỪ CHỐI (422) chứ không đoán hộ con số.
+      parameters:
+      - description: Cửa hàng, tài khoản quản trị và dòng bảng giá
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.TaoDungThuRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.TaoDungThuResponse'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Body'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.Body'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Mở tài khoản dùng thử cho khách mới
+      tags:
+      - Platform - Khách hàng
+  /platform/hop-dong:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Ghi một hợp đồng `active` cho cửa hàng ĐÃ TỒN TẠI. Khác POST /platform/dung-thu
+        ở chỗ không dựng gì bên database bán hàng — cửa hàng và tài khoản đăng
+        nhập đã có sẵn, nên đường này không bắc qua hai database.
+        Giá và ba hạn mức CHÉP từ bảng giá lúc ký rồi sống độc lập; không có ô nào
+        khai tay. Thoả thuận riêng vẫn đi qua `cmd/thue-bao ky`.
+        `so_thang` bỏ trống = một chu kỳ của gói (1 tháng, hoặc 12 nếu gói theo năm).
+      parameters:
+      - description: Cửa hàng và dòng bảng giá
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.KyHopDongRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.HopDongMotItem'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Body'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.Body'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Ký hợp đồng chính thức cho cửa hàng đã có
+      tags:
+      - Platform - Khách hàng
   /platform/plans:
     get:
       description: |-
@@ -10594,6 +11387,69 @@ paths:
       security:
       - BearerAuth: []
       summary: Bảng giá của nền tảng
+      tags:
+      - Platform - Plans
+  /platform/plans/{id}:
+    put:
+      consumes:
+      - application/json
+      description: |-
+        Ghi phần THƯƠNG MẠI của một dòng bảng giá: tên, mô tả, giá, số ngày dùng
+        thử, còn bán hay không. Mã gói, app và chu kỳ KHÔNG sửa được — bộ ba đó là
+        danh tính của dòng và hợp đồng đã ký tra tên gói về đây theo mã; muốn một
+        mức giá khác thì thêm dòng mới.
+        `price` gửi `null` nghĩa là "Liên hệ" (chưa công bố giá), KHÁC hẳn gửi 0
+        (miễn phí). `status` = retired là ngừng bán mới, không xoá dòng.
+        CHỈ vai trò owner/operator của khu điều hành ghi được; support chỉ đọc.
+        Sửa ở đây KHÔNG đụng tới khách đang dùng: thuê bao chép giá ra lúc ký và
+        sống độc lập với bảng giá.
+      parameters:
+      - description: ID dòng bảng giá
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Nội dung mới của mức giá
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.SuaGoiRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.PlanFeaturesResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.Body'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Body'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Sửa một mức giá
       tags:
       - Platform - Plans
   /platform/plans/{id}/features:
@@ -10737,6 +11593,336 @@ paths:
       security:
       - BearerAuth: []
       summary: Hợp đồng đã ký
+      tags:
+      - Platform - Khách hàng
+  /platform/subscriptions/{id}:
+    get:
+      description: |-
+        Trọn hợp đồng kèm hồ sơ khách đứng sau nó: điều khoản đã chốt, hai mốc
+        của kỳ dùng thử, ghi chú hợp đồng và ghi chú khách, ngày vào sổ.
+        `sua_duoc_han` nói màn hình có được hiện ô đổi ngày hết hạn không —
+        luật do máy chủ quyết, giao diện chỉ đọc cờ.
+        Chỉ phần mềm người gọi được phụ trách.
+      parameters:
+      - description: ID hợp đồng
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.HopDongChiTietResponse'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Body'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Chi tiết một hợp đồng
+      tags:
+      - Platform - Khách hàng
+    put:
+      consumes:
+      - application/json
+      description: |-
+        Sửa THÔNG TIN, không sửa ĐIỀU KHOẢN. Gói, chu kỳ, giá và ba hạn mức
+        không có ô nào ở đây: chúng đã chốt lúc ký và cả hệ thống dựng trên
+        nguyên tắc chúng không đổi. Bán thêm quyền lợi cho một khách vẫn là việc
+        của `cmd/thue-bao`.
+        `het_han` chỉ nhận khi hợp đồng đang dùng thử — hạn của kỳ thử là quyết
+        định bán hàng, còn hạn của hợp đồng đã trả tiền thì đi đường Gia hạn để
+        đường tiền và đường hạn không tách nhau. Bỏ trống = giữ nguyên.
+        Hợp đồng đã huỷ không sửa được: đó là bản ghi lịch sử.
+      parameters:
+      - description: ID hợp đồng
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Thông tin khách và ghi chú
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.SuaHopDongRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.HopDongChiTietResponse'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Body'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.Body'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Sửa thông tin khách và ghi chú của hợp đồng
+      tags:
+      - Platform - Khách hàng
+  /platform/subscriptions/{id}/doi-mat-khau:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Đặt lại mật khẩu cho tài khoản quản trị (super_admin cũ nhất) của cửa
+        hàng đứng sau hợp đồng này.
+        Có đường này vì tài khoản quản trị cửa hàng KHÔNG có cách tự khôi phục:
+        quên-mật-khẩu-qua-email chỉ tồn tại trong cụm storefront dành cho khách
+        mua sắm. Khách quên mật khẩu thì gọi nhà cung cấp, và đây là chỗ nhà cung
+        cấp làm được việc đó.
+        CHỈ đổi mật khẩu — tài khoản đang bị khoá thì vẫn khoá sau khi đổi.
+        Câu trả lời kèm tên đăng nhập để đọc lại cho khách nghe.
+      parameters:
+      - description: ID hợp đồng
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Mật khẩu mới
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.DoiMatKhauRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.QuanTriItem'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Body'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Đặt lại mật khẩu tài khoản quản trị của khách
+      tags:
+      - Platform - Khách hàng
+  /platform/subscriptions/{id}/gia-han:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Đẩy hạn thêm `so_thang` tháng tính từ GREATEST(ngày hết hạn, hôm nay) —
+        hợp đồng đã quá hạn ba tháng mà cộng dồn từ ngày cũ thì khách trả tiền
+        xong vẫn còn quá hạn.
+        Trạng thái chuyển sang `active` và mốc hết dùng thử bị xoá, nên gọi trên
+        một hợp đồng `trial` CHÍNH LÀ chuyển khách sang chính thức. Không có
+        endpoint riêng cho việc đó: hai việc là một.
+        KHÔNG ghi vào sổ thu — tiền vào là `cmd/thue-bao thu-tien`, việc khác.
+      parameters:
+      - description: ID hợp đồng
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Số tháng gia hạn
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.GiaHanRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.HopDongMotItem'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Body'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Gia hạn hợp đồng (cũng là chuyển dùng thử sang chính thức)
+      tags:
+      - Platform - Khách hàng
+  /platform/subscriptions/{id}/huy:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Đóng hợp đồng và nối lý do vào `note` — KHÔNG xoá dòng: khách cũ vẫn phải
+        tra được mình đã dùng gì, và báo cáo doanh thu của những tháng đã qua vẫn
+        phải đứng nguyên.
+        Huỷ xong là khoá "mỗi khách mỗi phần mềm một hợp đồng" được nhả ra, nên
+        đây cũng là bước bắt buộc trước khi ký lại cho khách đổi gói.
+      parameters:
+      - description: ID hợp đồng
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Lý do huỷ
+        in: body
+        name: body
+        schema:
+          $ref: '#/definitions/dto.HuyRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Body'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Body'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Huỷ hợp đồng
+      tags:
+      - Platform - Khách hàng
+  /platform/subscriptions/{id}/thu-tien:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Ghi MỘT LẦN TIỀN VÀO sổ thu, KHÔNG đẩy hạn hợp đồng. Hai việc đó cố ý
+        tách rời: gộp lại thì mỗi lần gia hạn báo một khoản doanh thu chưa ai
+        trả, và khách trả trước mà chưa muốn đẩy hạn thì không ghi vào đâu được.
+        Chu kỳ bỏ trống thì máy chủ tự tính: từ điểm cuối của kỳ đã trả gần nhất
+        (hoặc ngày bắt đầu hợp đồng) tới hạn hiện tại — nhờ vậy hai lần thu liên
+        tiếp không chồng lấn và cũng không để hở khoảng nào.
+        Số tiền bỏ trống = giá đã ký của hợp đồng.
+        Một hợp đồng · một chu kỳ · một lần thu (409 nếu ghi trùng kỳ).
+      parameters:
+      - description: ID hợp đồng
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Số tiền, hình thức, chu kỳ
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.ThuTienRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.ThuTienResponse'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Body'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.Body'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Ghi nhận một lần tiền vào
       tags:
       - Platform - Khách hàng
   /platform/tenants:

@@ -139,6 +139,13 @@ type PlanService interface {
 	Features(ctx context.Context, quyen domain.QuyenApp, planID uint) (dto.PlanFeaturesResponse, error)
 	// UpdateFeatures ghi các khoá gửi lên; giá trị rỗng là XOÁ dòng.
 	UpdateFeatures(ctx context.Context, quyen domain.QuyenApp, planID uint, items map[string]string) (dto.PlanFeaturesResponse, error)
+	// Sua ghi phần thương mại của một dòng bảng giá: tên, mô tả, GIÁ, số ngày
+	// dùng thử, còn bán hay không.
+	//
+	// Cùng lời cảnh báo như cả service này: đây là BẢNG GIÁ. Hạ giá gói ở đây
+	// KHÔNG hạ tiền của khách đang dùng — thuê bao chép giá ra lúc ký. Ai muốn
+	// đổi giá của MỘT khách thì sửa hợp đồng của khách đó.
+	Sua(ctx context.Context, quyen domain.QuyenApp, planID uint, req dto.SuaGoiRequest) (dto.PlanFeaturesResponse, error)
 }
 
 type planService struct {
@@ -269,6 +276,50 @@ func (s *planService) UpdateFeatures(ctx context.Context, quyen domain.QuyenApp,
 
 	// Đọc lại từ database chứ không dựng câu trả lời từ payload: bảo đảm màn hình
 	// hiện đúng thứ đã ghi xuống, kể cả khi một khoá bị xoá hay bị chuẩn hoá.
+	return s.Features(ctx, quyen, planID)
+}
+
+func (s *planService) Sua(
+	ctx context.Context, quyen domain.QuyenApp, planID uint, req dto.SuaGoiRequest,
+) (dto.PlanFeaturesResponse, error) {
+	// Tra gói TRƯỚC, y hệt UpdateFeatures: sửa một dòng không tồn tại phải là
+	// 404, và phân công phải xét xong trước khi ghi bất cứ thứ gì.
+	plan, err := s.repo.Find(ctx, planID)
+	if err != nil {
+		return dto.PlanFeaturesResponse{}, err
+	}
+	if !quyen.ChoPhep(plan.AppCode) {
+		return dto.PlanFeaturesResponse{}, domain.ErrKhongPhuTrachApp
+	}
+
+	fields := map[string]string{}
+	name := strings.TrimSpace(req.Name)
+	// binding `required` đã chặn chuỗi rỗng, nhưng KHÔNG chặn chuỗi toàn dấu
+	// cách — mà đó lại đúng là thứ lọt qua: tên gói thành rỗng sau khi cắt, và
+	// mọi hợp đồng ký sau đó hiện một ô trắng ở cột Gói.
+	if name == "" {
+		fields["name"] = "Tên gói không được để trống"
+	}
+	if req.Status != domain.PlanStatusActive && req.Status != domain.PlanStatusRetired {
+		fields["status"] = "Trạng thái chỉ nhận đang bán hoặc ngừng bán"
+	}
+	if len(fields) > 0 {
+		return dto.PlanFeaturesResponse{}, &PlanFeatureValidationError{Fields: fields}
+	}
+
+	err = s.repo.Sua(ctx, planID, domain.SuaPlan{
+		Name:      name,
+		Tagline:   req.Tagline,
+		Price:     req.Price,
+		TrialDays: req.TrialDays,
+		Status:    req.Status,
+	})
+	if err != nil {
+		return dto.PlanFeaturesResponse{}, err
+	}
+
+	// Đọc lại từ database, cùng lý do như UpdateFeatures: màn hình phải hiện
+	// đúng thứ đã ghi xuống, kể cả khi giá trị bị cắt hay chuẩn hoá.
 	return s.Features(ctx, quyen, planID)
 }
 

@@ -189,4 +189,68 @@ var (
 	ErrStockNoChange = errors.New("số lượng chỉnh kho không hợp lệ")
 	// Kiểm kê nhập số âm — tồn kho không bao giờ được âm.
 	ErrStockNegative = errors.New("tồn kho không được là số âm")
+
+	// --- Ký hợp đồng từ khu điều hành ---
+	//
+	// Nhóm này là bản dịch sang lỗi Go của những câu mà `cmd/thue-bao ky` in ra
+	// màn hình. Công cụ dòng lệnh có chỗ để giải thích dài; một endpoint thì
+	// không, nên mỗi tình huống phải là một lỗi RIÊNG — người bấm nút cần biết
+	// nên sửa ô nào, chứ "không ký được" thì không sửa được gì.
+
+	// ErrCuaHangDaCo — mã cửa hàng đã có người dùng bên data plane.
+	//
+	// Màn hình "Thêm tài khoản dùng thử" chỉ tạo KHÁCH MỚI, nên trùng mã là dừng
+	// hẳn chứ không ghi đè: đằng sau cái mã đó là một cửa hàng đang chạy với dữ
+	// liệu thật, và "tạo tài khoản dùng thử" không phải là lý do để đụng vào nó.
+	ErrCuaHangDaCo = errors.New("mã cửa hàng này đã có người dùng")
+
+	// ErrHopDongDangChay — khách đã có hợp đồng còn hiệu lực cho phần mềm này.
+	//
+	// Do khoá uq_subscriptions_current dưới database giữ, không phải do tầng Go
+	// tự nhớ. Mỗi khách mỗi phần mềm đúng một hợp đồng còn sống: muốn đổi gói thì
+	// huỷ cái cũ trước, muốn dài thêm thì gia hạn.
+	ErrHopDongDangChay = errors.New("cửa hàng này đã có hợp đồng còn hiệu lực cho phần mềm đó")
+
+	// ErrGoiNgungBan — gói đang ở trạng thái 'retired'.
+	//
+	// Tra ra được nhưng không ký MỚI được: dòng bảng giá không bị xoá vì hợp đồng
+	// cũ còn tra tên gói ở đó. Khách cũ dùng tiếp, đó là ý nghĩa của 'retired'.
+	ErrGoiNgungBan = errors.New("gói này đã ngừng bán, không ký mới được")
+
+	// ErrAppChuaBan — phần mềm chưa ở trạng thái 'active'.
+	ErrAppChuaBan = errors.New("phần mềm này chưa bán được")
+
+	// ErrBangGiaChuaCoGia — dòng bảng giá ghi NULL ("Liên hệ").
+	//
+	// Không có số để chép sang hợp đồng, và đoán hộ một con số tiền là việc không
+	// ai được phép làm. Người ký phải tự khai giá đã thoả thuận.
+	ErrBangGiaChuaCoGia = errors.New("bảng giá ghi \"Liên hệ\" cho gói này nên chưa có giá để chép")
+
+	// ErrBangGiaThieuHanMuc — bảng giá không quy định một hạn mức nào đó.
+	//
+	// Trạng thái thứ ba của PlanFeature ("không có dòng"), và là lý do lỗi này
+	// tồn tại: chép 0 sang hợp đồng nghĩa là bán KHÔNG GIỚI HẠN cho một gói mà
+	// bảng giá còn chưa nói gì. err kèm tên hạn mức thiếu.
+	ErrBangGiaThieuHanMuc = errors.New("bảng giá không quy định hạn mức")
+
+	// ErrDaThuKyNay — sổ thu đã có một dòng cho đúng kỳ này.
+	//
+	// Do khoá uq_invoices_ky (subscription_id, period_start) giữ. Ghi trùng một
+	// kỳ là cách dễ nhất để doanh thu tháng đó phồng gấp đôi mà không ai thấy
+	// sai: nhìn vào sổ chỉ thấy hai dòng giống nhau, và không có gì nói dòng nào
+	// là dòng thừa.
+	ErrDaThuKyNay = errors.New("kỳ này đã có một lần thu ghi trong sổ")
+
+	// ErrKhongConKyDeThu — hợp đồng đã được trả tiền tới đúng hạn hiện tại.
+	//
+	// Tách khỏi ErrDaThuKyNay vì cách chữa khác hẳn: cái kia là ghi trùng, còn
+	// cái này nghĩa là phải GIA HẠN trước rồi mới có kỳ mới để thu.
+	ErrKhongConKyDeThu = errors.New("hợp đồng đã trả tiền tới hết hạn hiện tại, chưa có kỳ mới để thu")
+
+	// ErrHopDongDaHuy — thao tác trên một hợp đồng đã huỷ.
+	//
+	// Gia hạn một hợp đồng đã huỷ sẽ hồi sinh nó và có thể đụng khoá
+	// uq_subscriptions_current với hợp đồng đang chạy của cùng khách. Ký lại là
+	// một hợp đồng MỚI, không phải là mở lại cái cũ.
+	ErrHopDongDaHuy = errors.New("hợp đồng này đã huỷ")
 )

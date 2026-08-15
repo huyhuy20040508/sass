@@ -93,6 +93,21 @@ class ApiClient
         // nên bị từ chối hết).
         session()->forget('api');
 
+        // GIỮ LẠI LÝ DO API vừa nói, và đây không phải chi tiết trang trí.
+        //
+        // Go API trả về ba câu khác nhau cho ba tình huống khác hẳn nhau: "cửa
+        // hàng đang tạm khoá, liên hệ nhà cung cấp phần mềm" (hết hạn hợp đồng),
+        // "tài khoản đang không hoạt động, liên hệ cửa hàng", "token đã hết hạn".
+        // Vứt hết đi rồi hiện câu chung "vui lòng đăng nhập bằng tài khoản quản
+        // trị" thì người bị khoá vì hết hạn sẽ ngồi gõ lại mật khẩu — và gõ đúng
+        // vẫn không vào được, vì mật khẩu chưa bao giờ là vấn đề. Xem
+        // EnsureAdminAuthenticated, nơi câu này được đọc ra.
+        //
+        // Đặt NGOÀI khoá 'api' để nó sống sót qua lượt forget ngay trên.
+        if ($lyDo = trim((string) $res->json('message'))) {
+            session(['phien.ly_do_thoat' => $lyDo]);
+        }
+
         return $res;
     }
 

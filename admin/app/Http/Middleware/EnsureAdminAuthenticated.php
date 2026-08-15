@@ -32,16 +32,22 @@ class EnsureAdminAuthenticated
         if (! $token || ! in_array($role, $this->allowedRoles, true)) {
             session()->forget('api');
 
+            // LÝ DO THẬT nếu phiên vừa bị API từ chối (ApiClient ghi lại trước khi
+            // xoá session). Hay gặp nhất: hợp đồng hết hạn nên cửa hàng bị khoá —
+            // và câu chung "vui lòng đăng nhập bằng tài khoản quản trị" đẩy người
+            // ta đi gõ lại mật khẩu cho một việc mật khẩu không chữa được.
+            //
+            // pull() chứ không get(): đọc một lần rồi bỏ. Để lại thì lần đăng nhập
+            // hỏng tiếp theo — vì bất kỳ lý do gì — vẫn hiện câu của lần trước.
+            $lyDo = trim((string) session()->pull('phien.ly_do_thoat', ''));
+            $message = $lyDo !== '' ? $lyDo : 'Vui lòng đăng nhập bằng tài khoản quản trị.';
+
             // Nếu request mong đợi JSON (AJAX) -> trả về 401 JSON
             if ($request->expectsJson() || $request->ajax() || $request->wantsJson()) {
-                return response()->json([
-                    'message' => 'Vui lòng đăng nhập bằng tài khoản quản trị.',
-                ], Response::HTTP_UNAUTHORIZED);
+                return response()->json(['message' => $message], Response::HTTP_UNAUTHORIZED);
             }
 
-            return redirect()
-                ->route('login')
-                ->with('error', 'Vui lòng đăng nhập bằng tài khoản quản trị.');
+            return redirect()->route('login')->with('error', $message);
         }
 
         return $next($request);

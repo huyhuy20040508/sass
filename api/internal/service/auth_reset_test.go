@@ -85,6 +85,16 @@ func (r *fakeTenantRepo) FindByCode(_ context.Context, code string) (*domain.Ten
 	return nil, domain.ErrNotFound
 }
 
+// TrangThaiTheoID phục vụ đường làm mới token: nó tra lại cửa hàng còn mở không.
+func (r *fakeTenantRepo) TrangThaiTheoID(_ context.Context, id uint) (string, error) {
+	for _, t := range r.tenants {
+		if t.ID == id {
+			return t.Status, nil
+		}
+	}
+	return "", domain.ErrNotFound
+}
+
 // fakeMailer ghi lại thư đã gửi thay vì mở kết nối SMTP.
 type fakeMailer struct {
 	subjects []string

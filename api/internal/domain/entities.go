@@ -159,6 +159,13 @@ func (Tenant) TableName() string { return "tenants" }
 // TenantActive là trạng thái duy nhất cho phép đăng nhập vào cửa hàng.
 const TenantActive = "active"
 
+// TenantSuspended là cửa hàng bị khoá: hết hạn hợp đồng hoặc ngừng trả tiền.
+//
+// KHÔNG xoá dữ liệu gì cả — đóng tiền lại là mở. Đây là thứ mà lượt quét hợp
+// đồng quá hạn ghi xuống (xem service.QuetHanService), và cũng là thứ
+// authService.LoginShop cùng middleware.JWTAuth đọc để đá người dùng ra.
+const TenantSuspended = "suspended"
+
 type User struct {
 	ID uint `json:"id" gorm:"primaryKey"`
 	TenantOwned

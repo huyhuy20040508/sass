@@ -94,6 +94,11 @@ func main() {
 		nguoiDieuHanhRepo domain.PlatformUserRepository
 		planHandler       *handler.PlanHandler
 		khachHangHandler  *handler.KhachHangHandler
+		dungThuHandler    *handler.DungThuHandler
+		// quetHan là lượt quét nền khoá cửa hàng của hợp đồng đã hết hạn. Còn nil
+		// nghĩa là chưa nối được control plane — và khi đó KHÔNG có hợp đồng nào
+		// đọc được, nên cũng không có gì để quét.
+		quetHan service.QuetHanService
 	)
 
 	platformDB, err := repository.NewPlatformDB(cfg.Platform, cfg.App.IsProduction())
@@ -147,6 +152,27 @@ func main() {
 			khachHangHandler = handler.NewKhachHangHandler(service.NewKhachHangService(
 				repository.NewKhachHangRepository(platformDB),
 			))
+
+			// Ba đường GHI trên vòng đời hợp đồng. Đây là chỗ DUY NHẤT hai kết nối
+			// gặp nhau trong một service: mở tài khoản dùng thử nghĩa là dựng cửa
+			// hàng + tài khoản đăng nhập bên `db` (data plane) rồi ký hợp đồng bên
+			// `platformDB`. Không có giao dịch nào bao được cả hai — thứ tự và phần
+			// hụt được nói rõ trong service.DungThuService.
+			dungThuHandler = handler.NewDungThuHandler(service.NewDungThuService(
+				repository.NewPlanRepository(platformDB),
+				repository.NewHopDongRepository(platformDB),
+				repository.NewCuaHangMoiRepository(db),
+				repository.NewTaiKhoanCuaHangRepository(db),
+			))
+
+			// Lượt quét hạn: cầm đúng cặp repository của DungThuService, và cũng bắc
+			// qua hai plane. Nó là mảnh còn thiếu của cơ chế chặn khách hết hạn —
+			// `tenants.status` từ trước tới nay chỉ có người ghi bằng tay, nên hợp
+			// đồng dùng thử hết hạn không đá được ai ra khỏi phần mềm.
+			quetHan = service.NewQuetHanService(
+				repository.NewHopDongRepository(platformDB),
+				repository.NewCuaHangMoiRepository(db),
+			)
 		}
 
 		// Kết nối này giờ ĐANG được repository trên cầm, nhưng vẫn đóng lúc thoát:
@@ -317,10 +343,17 @@ func main() {
 		Contact:   handler.NewContactHandler(contactSvc),
 		Plan:      planHandler,
 		KhachHang: khachHangHandler,
+		DungThu:   dungThuHandler,
 	}
 
 	// 8. Router + HTTP server
-	r := router.New(cfg, jwtMgr, tenMienRepo, nguoiDieuHanhRepo, handlers)
+	//
+	// NewPhienRepository là lượt tra "tài khoản và cửa hàng của token này còn dùng
+	// được không", chạy ở mọi request đã đăng nhập. Không có nó thì khoá hay xoá
+	// một cửa hàng chỉ chặn được lượt ĐĂNG NHẬP MỚI — ai đang mở phiên vẫn dùng
+	// tiếp cho tới khi access token hết hạn. Xem middleware.JWTAuth.
+	r := router.New(cfg, jwtMgr, tenMienRepo, nguoiDieuHanhRepo,
+		repository.NewPhienRepository(db), handlers)
 	srv := &http.Server{
 		Addr:        announcedAddr(cfg.App.Port),
 		Handler:     r,
@@ -330,6 +363,19 @@ func main() {
 		// (/events) đúng sau chừng ấy giây. IdleTimeout vẫn dọn kết nối keep-alive
 		// không dùng tới, còn kết nối SSE chết được phát hiện qua nhịp ping.
 		IdleTimeout: 60 * time.Second,
+	}
+
+	// 8b. Lượt quét hợp đồng quá hạn, chạy nền suốt vòng đời máy chủ.
+	//
+	// Không có nó thì hợp đồng hết hạn chỉ là một dòng đỏ trong khu điều hành:
+	// khách dùng thử hết hạn vẫn đăng nhập và bán hàng bình thường, vì
+	// `tenants.status` — cột mà cả đường đăng nhập lẫn middleware đều đọc — không
+	// có ai ghi xuống. Xem service.QuetHanService.
+	ngungQuet := func() {}
+	if quetHan != nil {
+		ctxQuet, huyQuet := context.WithCancel(context.Background())
+		ngungQuet = huyQuet
+		go quetHan.Chay(ctxQuet, service.NhipQuetMacDinh)
 	}
 
 	// 9. Chạy server (goroutine) + graceful shutdown
@@ -344,6 +390,11 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 	logger.Info("đang tắt server...")
+
+	// Dừng lượt quét TRƯỚC khi đóng kết nối: một câu UPDATE đang chạy dở trên
+	// một kết nối vừa bị đóng thì chỉ để lại một dòng lỗi khó hiểu trong nhật ký
+	// tắt máy.
+	ngungQuet()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

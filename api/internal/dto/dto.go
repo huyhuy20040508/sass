@@ -1266,6 +1266,28 @@ type PlanFeaturesUpdateRequest struct {
 	Items map[string]string `json:"items" binding:"required,min=1,max=30"`
 }
 
+// SuaGoiRequest — sửa phần THƯƠNG MẠI của một dòng bảng giá.
+//
+// KHÔNG có mã gói, app và chu kỳ: bộ ba đó là danh tính của dòng và hợp đồng đã
+// ký tra tên gói về đây theo mã (xem domain.SuaPlan). Muốn một mức giá khác thì
+// thêm dòng mới chứ không sửa mã dòng cũ.
+type SuaGoiRequest struct {
+	Name    string `json:"name" binding:"required,max=100" example:"Cửa hàng"`
+	Tagline string `json:"tagline" binding:"max=255" example:"Cho một cửa hàng bán đều tay"`
+	// Price NULL = "Liên hệ" (chưa công bố giá), KHÁC 0 là miễn phí — nên nó là
+	// con trỏ, và màn hình phải gửi `null` chứ không phải chuỗi rỗng khi muốn
+	// "Liên hệ".
+	//
+	// Trần 1 tỷ: cột dưới database là DECIMAL(12,2) nên còn xa mới tràn, nhưng
+	// đây là GIÁ BÁN — gõ thừa một chữ số là một con số không ai định bán hiện
+	// lên landing, và không có gì phía sau chặn lại.
+	Price     *float64 `json:"price" binding:"omitempty,min=0,max=1000000000" example:"499000"`
+	TrialDays uint     `json:"trial_days" binding:"max=365" example:"14"`
+	// Status: active | retired. retired là NGỪNG BÁN MỚI, không xoá dòng — khách
+	// đang dùng gói đó không bị ảnh hưởng.
+	Status string `json:"status" binding:"required,oneof=active retired" example:"active"`
+}
+
 // AppItem là một phần mềm trong danh mục của nền tảng.
 //
 // `so_goi_dang_ban` tách khỏi `status` vì hai thứ độc lập: app 'active' mà 0
@@ -1326,7 +1348,12 @@ type HopDongItem struct {
 	TenCuaHang string `json:"ten_cua_hang" example:"Quốc Huy"`
 	MaApp      string `json:"ma_app" example:"order"`
 	TenApp     string `json:"ten_app" example:"Sellio Order"`
-	Goi        string `json:"goi" example:"chuoi"`
+	// Goi là MÃ gói đã chốt trong hợp đồng — thứ không đổi.
+	Goi string `json:"goi" example:"chuoi"`
+	// TenGoi là tên hiển thị tra từ bảng giá ("Chuỗi cửa hàng"). Rơi về `Goi` khi
+	// hợp đồng không sinh từ dòng bảng giá nào, nên nơi hiển thị KHÔNG bao giờ
+	// nhận chuỗi rỗng và không phải tự nghĩ ra chỗ dự phòng.
+	TenGoi string `json:"ten_goi" example:"Chuỗi cửa hàng"`
 	// TrangThai: trial | active | past_due | canceled
 	TrangThai string `json:"trang_thai" example:"active"`
 	// ChuKy: thang | nam
@@ -1340,11 +1367,311 @@ type HopDongItem struct {
 	HetHan       time.Time `json:"het_han"`
 	// ConLaiNgay âm = ĐÃ QUÁ HẠN.
 	ConLaiNgay int `json:"con_lai_ngay" example:"41"`
+	// Ba ô liên lạc lấy từ SỔ KHÁCH HÀNG (tenants của control plane), không phải
+	// từ hợp đồng: người gọi khách lúc sắp hết hạn cần số điện thoại ngay trên
+	// dòng đó, chứ không phải mở thêm màn hình khác để tra. Rỗng = chưa ai điền.
+	NguoiLienHe string `json:"nguoi_lien_he" example:"Anh Huy"`
+	DienThoai   string `json:"dien_thoai" example:"0901234567"`
+	Email       string `json:"email" example:"huy@quochuy.vn"`
 }
 
 // HopDongResponse — GET /platform/subscriptions.
 type HopDongResponse struct {
 	HopDong []HopDongItem `json:"hop_dong"`
+}
+
+// HopDongChiTiet — GET /platform/subscriptions/{id}.
+//
+// Bọc HopDongItem rồi thêm những ô chỉ màn hình chi tiết cần. Nhúng thay vì khai
+// lại từ đầu: danh sách và chi tiết phải nói CÙNG một con số cho cùng một cột,
+// và cách chắc chắn nhất là chúng dùng chung một kiểu.
+type HopDongChiTiet struct {
+	HopDongItem
+	// BatDauDungThu / HetDungThu là hai mốc của KỲ DÙNG THỬ. HetDungThu rỗng khi
+	// hợp đồng không có giai đoạn thử, hoặc đã chuyển sang chính thức — lúc gia
+	// hạn, mốc này bị xoá.
+	HetDungThu *time.Time `json:"het_dung_thu"`
+	// GhiChuHopDong là điều khoản riêng đã thoả thuận, cộng lịch sử huỷ nếu có.
+	GhiChuHopDong string `json:"ghi_chu_hop_dong" example:"khách anh Sơn giới thiệu"`
+	// GhiChuKhach là ghi chú về KHÁCH trong sổ khách hàng — khác ghi chú hợp đồng:
+	// một cái đi theo khách qua nhiều hợp đồng, một cái chết cùng hợp đồng.
+	GhiChuKhach string `json:"ghi_chu_khach" example:"khách quen, trả đúng hạn"`
+	// NgayVaoSo là ngày khách được ghi vào sổ nền tảng, không phải ngày ký hợp
+	// đồng này — khách cũ ký hợp đồng mới thì hai ngày đó cách nhau rất xa.
+	NgayVaoSo time.Time `json:"ngay_vao_so"`
+	// TrangThaiCuaHang: active | suspended. KHÁC trạng thái hợp đồng, và hai thứ
+	// đó rời nhau — cửa hàng vẫn mở mà hợp đồng đã hết hạn là chuyện có thật.
+	TrangThaiCuaHang string `json:"trang_thai_cua_hang" example:"active"`
+	// SuaDuocHan cho màn hình biết có được hiện ô đổi ngày hết hạn không. Máy chủ
+	// quyết, không phải giao diện tự suy: luật "chỉ hợp đồng dùng thử mới đổi hạn
+	// trực tiếp" nằm ở service, và chép nó lên Blade là để hai bên lệch nhau.
+	SuaDuocHan bool `json:"sua_duoc_han" example:"true"`
+	// QuanTri là TÀI KHOẢN ĐĂNG NHẬP của khách — ô thứ hai của màn hình đăng nhập
+	// 3 ô. Đọc từ DATA PLANE, nên nó vắng mặt (nil) khi cửa hàng không còn tài
+	// khoản quản trị nào, hoặc khi lượt đọc bên đó hỏng.
+	//
+	// nil KHÔNG được hiểu là "cửa hàng hỏng": danh sách và điều khoản vẫn đúng,
+	// chỉ là chưa biết ai đang quản trị. Màn hình phải nói ra điều đó thay vì
+	// giấu đi cả khối.
+	QuanTri *QuanTriItem `json:"quan_tri"`
+}
+
+// QuanTriItem là tài khoản quản trị của một cửa hàng. KHÔNG có mật khẩu, kể cả
+// bản băm — đường duy nhất chạm tới mật khẩu khách là đặt lại, và nó chỉ ghi.
+type QuanTriItem struct {
+	TenDangNhap string `json:"ten_dang_nhap" example:"admin"`
+	HoTen       string `json:"ho_ten" example:"Nguyễn Quốc Huy"`
+	Email       string `json:"email" example:"admin@quochuy.local"`
+	// TrangThai: active | inactive. In ra để người sắp đặt lại mật khẩu thấy tài
+	// khoản đang bị khoá — đặt lại mật khẩu KHÔNG mở khoá hộ.
+	TrangThai string `json:"trang_thai" example:"active"`
+}
+
+// CuaHangCoSanItem là một cửa hàng CHƯA có hợp đồng cho phần mềm đang xét —
+// ứng viên để ký mới.
+type CuaHangCoSanItem struct {
+	Ma  string `json:"ma" example:"quochuy"`
+	Ten string `json:"ten" example:"Cửa hàng Quốc Huy"`
+	// TrangThai: active | suspended. Cửa hàng đang khoá vẫn ký được (ký xong mở
+	// khoá), nhưng người ký phải nhìn thấy mình đang ký cho cái gì.
+	TrangThai string `json:"trang_thai" example:"active"`
+}
+
+// CuaHangCoSanResponse — GET /platform/cua-hang-chua-ky.
+type CuaHangCoSanResponse struct {
+	CuaHang []CuaHangCoSanItem `json:"cua_hang"`
+}
+
+// KyHopDongRequest — POST /platform/hop-dong.
+//
+// Ký hợp đồng CHÍNH THỨC cho một cửa hàng ĐÃ TỒN TẠI. Khác TaoDungThuRequest ở
+// chỗ không dựng gì bên data plane: cửa hàng và tài khoản đăng nhập đã có sẵn,
+// việc duy nhất ở đây là ghi hợp đồng bên control plane.
+//
+// Giá và ba hạn mức KHÔNG có ô nào — chép từ bảng giá lúc ký, hệt như đường mở
+// tài khoản dùng thử. Thoả thuận riêng vẫn đi qua `cmd/thue-bao ky`, nơi có
+// bảng đối chiếu in ra trước mắt người ký.
+type KyHopDongRequest struct {
+	// PlanID là DÒNG bảng giá (gói × chu kỳ), lấy từ GET /platform/plans.
+	PlanID uint `json:"plan_id" binding:"required" example:"2"`
+	// MaCuaHang phải là cửa hàng đã có ở data plane và CHƯA có hợp đồng còn hiệu
+	// lực cho phần mềm này — xem GET /platform/cua-hang-chua-ky.
+	MaCuaHang string `json:"ma_cua_hang" binding:"required,max=30" example:"quochuy"`
+	// SoThang là độ dài hợp đồng. Bỏ trống = một chu kỳ của gói (1 tháng cho gói
+	// theo tháng, 12 tháng cho gói theo năm) — con số người ta muốn trong hầu hết
+	// trường hợp, nên không bắt gõ lại.
+	SoThang int    `json:"so_thang" binding:"omitempty,min=1,max=60" example:"12"`
+	GhiChu  string `json:"ghi_chu" binding:"max=500"`
+}
+
+// ThuTienRequest — POST /platform/subscriptions/{id}/thu-tien.
+//
+// Ghi MỘT LẦN TIỀN VÀO, không phải "gia hạn". Hai việc đó cố ý tách rời: gia
+// hạn đẩy hạn hợp đồng, còn đây ghi nhận tiền thật đã nhận. Gộp lại thì mỗi lần
+// gia hạn sẽ báo một khoản doanh thu chưa ai trả — và ngược lại, khách trả
+// trước mà chưa muốn đẩy hạn thì không ghi vào đâu được.
+type ThuTienRequest struct {
+	// SoTien bỏ trống (0) = lấy ĐÚNG GIÁ HỢP ĐỒNG. Khai số khác khi thu thiếu,
+	// thu gộp, hoặc có chiết khấu một lần — số ở đây là tiền THẬT đã nhận, và
+	// nó được phép khác giá đã ký.
+	SoTien float64 `json:"so_tien" binding:"omitempty,min=0" example:"990000"`
+	// HinhThuc: chuyen_khoan | tien_mat | khac. Bỏ trống = chuyen_khoan.
+	HinhThuc string `json:"hinh_thuc" binding:"omitempty,oneof=chuyen_khoan tien_mat khac" example:"chuyen_khoan"`
+	// MaGiaoDich là mã giao dịch ngân hàng hoặc số phiếu thu — thứ dùng để đối
+	// chiếu với sao kê. Không bắt buộc, nhưng thiếu nó thì lần thu này không tra
+	// ngược lại được từ sổ ngân hàng.
+	MaGiaoDich string `json:"ma_giao_dich" binding:"max=100" example:"FT26081412345"`
+	GhiChu     string `json:"ghi_chu" binding:"max=500"`
+	// KyTu / KyDen dạng 2006-01-02, bỏ trống = MÁY CHỦ TỰ TÍNH: từ điểm cuối của
+	// kỳ đã trả gần nhất (hoặc ngày bắt đầu hợp đồng nếu chưa trả lần nào) tới
+	// hạn hiện tại. Nhờ vậy hai lần thu liên tiếp không chồng lấn và cũng không
+	// để hở khoảng nào ở giữa.
+	//
+	// Chỉ khai tay khi thu cho một kỳ KHÁC với kỳ máy chủ tính ra.
+	KyTu  string `json:"ky_tu" binding:"omitempty,datetime=2006-01-02" example:"2026-08-14"`
+	KyDen string `json:"ky_den" binding:"omitempty,datetime=2006-01-02" example:"2027-08-14"`
+}
+
+// ThuTienResponse — biên nhận của lần thu vừa ghi.
+type ThuTienResponse struct {
+	SoTien   float64   `json:"so_tien" example:"990000"`
+	HinhThuc string    `json:"hinh_thuc" example:"chuyen_khoan"`
+	KyTu     time.Time `json:"ky_tu"`
+	KyDen    time.Time `json:"ky_den"`
+	// TongDaThu là tổng tiền đã thu của hợp đồng này SAU lần ghi vừa rồi — để
+	// màn hình khỏi phải gọi thêm một lượt chỉ để cập nhật một con số.
+	TongDaThu float64 `json:"tong_da_thu" example:"1980000"`
+	SoLanThu  int     `json:"so_lan_thu" example:"2"`
+}
+
+// DoiMatKhauRequest — POST /platform/subscriptions/{id}/doi-mat-khau.
+//
+// Chỉ MỘT ô. Ô "xác nhận mật khẩu" là lưới chặn gõ nhầm ở giao diện, nên nó ở
+// lại giao diện: gửi cả hai lên rồi so ở máy chủ chỉ thêm một đường để chúng
+// lệch nhau, mà người gọi API thẳng thì không gõ nhầm hai lần giống nhau được.
+type DoiMatKhauRequest struct {
+	MatKhau string `json:"mat_khau" binding:"required,min=6,max=100" example:"MatKhauMoi@123"`
+}
+
+// HopDongChiTietResponse — GET /platform/subscriptions/{id}.
+type HopDongChiTietResponse struct {
+	HopDong HopDongChiTiet `json:"hop_dong"`
+}
+
+// SuaHopDongRequest — PUT /platform/subscriptions/{id}.
+//
+// DANH SÁCH Ô CỐ TÌNH NGẮN. Không có gói, chu kỳ, giá hay ba hạn mức: đó là điều
+// khoản đã ký, và cả hệ thống dựng trên nguyên tắc chúng không đổi sau lúc ký.
+// Bán thêm quyền lợi cho một khách là việc của `cmd/thue-bao`, nơi có bảng đối
+// chiếu in ra trước mắt người ký.
+//
+// Mọi ô đều GHI ĐÈ, kể cả khi để trống — form gửi lên trọn bộ, và ô trống nghĩa
+// là "xoá nội dung ô đó" chứ không phải "giữ nguyên". Trừ HetHan, xem dưới.
+type SuaHopDongRequest struct {
+	TenCuaHang  string `json:"ten_cua_hang" binding:"required,max=150" example:"Cửa hàng Quốc Huy"`
+	NguoiLienHe string `json:"nguoi_lien_he" binding:"max=150" example:"Anh Huy"`
+	DienThoai   string `json:"dien_thoai" binding:"max=20" example:"0901234567"`
+	Email       string `json:"email" binding:"omitempty,email,max=150" example:"huy@quochuy.vn"`
+	// GhiChuKhach đi theo KHÁCH (sổ khách hàng), GhiChuHopDong chết cùng hợp đồng.
+	GhiChuKhach   string `json:"ghi_chu_khach" binding:"max=500"`
+	GhiChuHopDong string `json:"ghi_chu_hop_dong" binding:"max=500"`
+	// HetHan nhận HAI dạng, và cả hai đều có lý do tồn tại:
+	//
+	//   · `2006-01-02T15:04`  — có giờ. Đây là thứ ô <input type="datetime-local">
+	//     gửi lên, và là dạng dùng khi cần chốt giờ chính xác ("hết hạn 9h sáng
+	//     mai, trước cuộc hẹn lúc 10h").
+	//   · `2006-01-02`        — ngày trần. Máy chủ tự lấy CUỐI ngày đó
+	//     (23:59:59), vì "hết hạn ngày 30" trong đầu người nói nghĩa là hết ngày
+	//     30 chứ không phải 0 giờ ngày 30 — hiểu theo cách kia là cắt của khách
+	//     trọn một ngày.
+	//
+	// Bỏ trống = GIỮ NGUYÊN hạn hiện tại, khác mọi ô khác ở trên: "xoá ngày hết
+	// hạn" không phải một trạng thái tồn tại được.
+	//
+	// Chỉ nhận khi hợp đồng đang DÙNG THỬ. Hợp đồng đã trả tiền muốn dài thêm thì
+	// đi đường gia hạn, để đường tiền và đường hạn không tách khỏi nhau.
+	HetHan string `json:"het_han" binding:"max=25" example:"2026-09-30T17:30"`
+}
+
+// KhachHangMoiChung là bộ ô DÙNG CHUNG của hai đường tạo khách mới
+// (/platform/dung-thu và /platform/chinh-thuc).
+//
+// Một lượt gọi dựng CẢ BA thứ: cửa hàng bên data plane, tài khoản quản trị đầu
+// tiên của họ, và hợp đồng dùng thử bên control plane. Tách thành ba đường thì
+// người bán phải bấm ba lần và lần thứ hai hỏng sẽ để lại một nửa khách hàng.
+//
+// PlanID là DÒNG bảng giá (gói × chu kỳ), không phải mã gói: gói "Cửa hàng" bán
+// theo tháng và theo năm là hai dòng, hai giá, hai bộ hạn mức. Gửi mã gói lên
+// thì máy chủ vẫn phải hỏi lại chu kỳ, và câu hỏi đó không có chỗ nào để hỏi.
+type KhachHangMoiChung struct {
+	// PlanID lấy từ GET /platform/plans. Phần mềm suy ra từ chính dòng này, nên
+	// không có tham số `app` — gửi cả hai thì chúng mâu thuẫn được với nhau.
+	PlanID uint `json:"plan_id" binding:"required" example:"2"`
+	// MaCuaHang là ô ĐẦU TIÊN của màn hình đăng nhập 3 ô. Chuẩn hoá về chữ thường
+	// ở máy chủ — khách gõ lại ô này trên điện thoại, nơi bàn phím tự viết hoa.
+	MaCuaHang string `json:"ma_cua_hang" binding:"required" example:"quochuy"`
+	// TenCuaHang hiển thị trong khu điều hành và làm tên chi nhánh mặc định.
+	TenCuaHang string `json:"ten_cua_hang" binding:"required,max=150" example:"Cửa hàng Quốc Huy"`
+	// TenDangNhap là ô THỨ HAI của màn hình đăng nhập.
+	TenDangNhap string `json:"ten_dang_nhap" binding:"required" example:"admin"`
+	// MatKhau là ô THỨ BA. Tối thiểu 6 ký tự, khớp ràng buộc của UserRequest.
+	MatKhau string `json:"mat_khau" binding:"required,min=6" example:"MatKhau@123"`
+	// HoTen của người quản trị. Bỏ trống thì lấy theo `nguoi_lien_he`, không có
+	// nữa thì "Quản trị viên" — hai ô đó gần như luôn là một người.
+	HoTen string `json:"ho_ten" binding:"max=150" example:"Nguyễn Quốc Huy"`
+	// KHÔNG CÓ ô email cho tài khoản đăng nhập, và đó là chủ ý.
+	//
+	// Khách đăng nhập Sellio Order bằng ĐÚNG BA Ô (/auth/shop-login): mã cửa
+	// hàng, tên đăng nhập, mật khẩu. Đăng nhập bằng email (/auth/login) là đường
+	// của KHÁCH MUA SẮM ở storefront, và quên mật khẩu qua email cũng chỉ có
+	// trong cụm đó — cụm đang tắt mặc định. Cột `users.email` vì thế không phải
+	// một thông tin đăng nhập; nó chỉ là cột NOT NULL của lược đồ, và máy chủ tự
+	// đặt <tên đăng nhập>@<mã cửa hàng>.local đúng như `cmd/tao-admin`.
+	//
+	// Hỏi người bán một địa chỉ email cho ô đó là hỏi một thứ không dùng vào
+	// việc gì, rồi ghi nó xuống như thể khách đăng nhập được bằng nó.
+
+	// Ba ô liên hệ ghi vào SỔ KHÁCH HÀNG (control plane), KHÔNG vào tài khoản
+	// đăng nhập: đây là người mình gọi khi hết hạn dùng thử, và họ thường không
+	// phải người ngồi gõ phần mềm.
+	NguoiLienHe string `json:"nguoi_lien_he" binding:"max=150" example:"Anh Huy"`
+	DienThoai   string `json:"dien_thoai" binding:"max=20" example:"0901234567"`
+	// EmailLienHe là email THẬT của khách, để liên lạc. Khác hẳn `users.email`
+	// nói ở trên — chép cái .local tự sinh sang đây thì sổ khách hàng đầy những
+	// địa chỉ không gửi thư tới được, mà nhìn vẫn như email thật.
+	EmailLienHe string `json:"email_lien_he" binding:"omitempty,email,max=150" example:"huy@quochuy.vn"`
+	// GhiChu vào chính hợp đồng — thoả thuận riêng, ai giới thiệu, hẹn gọi lại.
+	GhiChu string `json:"ghi_chu" binding:"max=500" example:"khách anh Sơn giới thiệu"`
+}
+
+// TaoDungThuRequest — POST /platform/dung-thu. Khách mới + hợp đồng DÙNG THỬ.
+type TaoDungThuRequest struct {
+	KhachHangMoiChung
+	// SoNgayDungThu bỏ trống (null) = lấy `trial_days` của dòng bảng giá. Gửi số
+	// là ghi đè cho riêng khách này. Gửi 0 bị từ chối: "dùng thử 0 ngày" tạo ra
+	// một hợp đồng quá hạn ngay từ giây đầu.
+	SoNgayDungThu *uint `json:"so_ngay_dung_thu" binding:"omitempty" example:"14"`
+}
+
+// TaoChinhThucRequest — POST /platform/chinh-thuc. Khách mới + hợp đồng CHÍNH
+// THỨC (`active`), không qua giai đoạn dùng thử.
+//
+// Cùng bộ ô với đường dùng thử, khác đúng MỘT chỗ: thời hạn tính bằng THÁNG chứ
+// không phải ngày, và hợp đồng ra `active` ngay. Dùng khi khách trả tiền từ đầu,
+// không cần thử.
+type TaoChinhThucRequest struct {
+	KhachHangMoiChung
+	// SoThang bỏ trống = một chu kỳ của gói (1 tháng, hoặc 12 nếu gói theo năm)
+	// — con số người ta muốn trong hầu hết trường hợp, nên không bắt gõ lại.
+	SoThang int `json:"so_thang" binding:"omitempty,min=1,max=60" example:"12"`
+}
+
+// TaoDungThuResponse — biên bản của lượt ký, đủ để màn hình đọc lại cho người
+// bán mà không phải tải lại danh sách.
+//
+// NguonDieuKhoan nói mỗi con số đến từ đâu ("bảng giá" / "bảng giá: không giới
+// hạn"), giống bảng đối chiếu `cmd/thue-bao ky` in ra. Ghi một hợp đồng mà không
+// nói được con số ở đâu ra là thứ không ai kiểm lại được.
+type TaoDungThuResponse struct {
+	TenantID    uint   `json:"tenant_id" example:"7"`
+	HopDongID   uint   `json:"hop_dong_id" example:"12"`
+	MaCuaHang   string `json:"ma_cua_hang" example:"quochuy"`
+	TenCuaHang  string `json:"ten_cua_hang" example:"Cửa hàng Quốc Huy"`
+	TenDangNhap string `json:"ten_dang_nhap" example:"admin"`
+	Goi         string `json:"goi" example:"Cửa hàng"`
+	// TrangThai của hợp đồng vừa ghi: `trial` hay `active`. Có mặt vì cùng một
+	// kiểu này phục vụ CẢ HAI đường tạo khách — nơi hiển thị đọc nó để biết vừa
+	// mở một kỳ dùng thử hay vừa bán một hợp đồng.
+	TrangThai string `json:"trang_thai" example:"trial"`
+	// HetHan cũng chính là ngày hết dùng thử: hạn hợp đồng thử KHÔNG đẩy ra xa
+	// hơn ngày đó.
+	HetHan         time.Time         `json:"het_han"`
+	NguonDieuKhoan map[string]string `json:"nguon_dieu_khoan"`
+}
+
+// GiaHanRequest — POST /platform/subscriptions/{id}/gia-han.
+//
+// Cũng là đường CHUYỂN DÙNG THỬ SANG CHÍNH THỨC: gia hạn đưa hợp đồng về
+// 'active' và xoá mốc hết dùng thử. Hai việc đó là một, nên không có endpoint
+// riêng cho việc chuyển — bản thứ hai sẽ quên một trong hai vế.
+type GiaHanRequest struct {
+	// SoThang cộng vào GREATEST(ends_at, NOW()), không phải vào ends_at: hợp đồng
+	// đã quá hạn ba tháng mà cộng dồn từ ngày cũ thì khách trả tiền xong vẫn còn
+	// quá hạn.
+	SoThang int `json:"so_thang" binding:"required,min=1,max=60" example:"12"`
+}
+
+// HuyRequest — POST /platform/subscriptions/{id}/huy.
+type HuyRequest struct {
+	// LyDo nối vào `note` của hợp đồng, không ghi đè: note đang giữ điều khoản
+	// riêng đã thoả thuận với khách.
+	LyDo string `json:"ly_do" binding:"max=300" example:"khách đổi sang gói Chuỗi"`
+}
+
+// HopDongMotItem bọc một dòng hợp đồng — câu trả lời của hai đường ghi ở trên,
+// để màn hình cập nhật đúng dòng vừa đổi thay vì tải lại cả bảng.
+type HopDongMotItem struct {
+	HopDong HopDongItem `json:"hop_dong"`
 }
 
 // DoanhThuItem là tổng tiền ĐÃ THU của một cửa hàng.

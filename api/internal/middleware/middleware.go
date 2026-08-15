@@ -67,8 +67,28 @@ func RequestLogger() gin.HandlerFunc {
 	}
 }
 
-// JWTAuth bắt buộc có access token hợp lệ.
-func JWTAuth(mgr *jwt.Manager) gin.HandlerFunc {
+// JWTAuth bắt buộc có access token hợp lệ VÀ tài khoản/cửa hàng còn dùng được.
+//
+// VẾ THỨ HAI LÀ MỘT LƯỢT ĐỌC DATABASE Ở MỖI REQUEST, và đó là chủ ý. Trước đây
+// hàm này chỉ kiểm chữ ký, nên xoá một cửa hàng hay khoá nó
+// (`status = 'suspended'`) KHÔNG đá được ai đang mở phiên: token tự chứa danh
+// tính, không chỗ nào tra lại, và người bị khoá vẫn dùng tiếp cho tới khi access
+// token hết hạn. Với JWT_ACCESS_TTL từng bị đặt nhầm thành 268h thì "cho tới khi
+// hết hạn" là mười một ngày.
+//
+// Cùng cách làm với XacThucNenTang của khu điều hành, và cùng lý do được ghi ở
+// đó: khoá một người phải có hiệu lực NGAY, không phải chờ token cũ chết.
+//
+// KHÔNG CACHE. Câu truy vấn là một lượt tra khoá chính kèm một LEFT JOIN cũng
+// theo khoá chính — rẻ hơn hầu hết handler mà nó đứng trước. Cache dù chỉ vài
+// giây cũng biến "có hiệu lực ngay" thành "có hiệu lực gần như ngay", mà đó
+// đúng là thứ vừa phải sửa. Ngày nào đo được nó thành điểm nghẽn thì chỗ thêm
+// cache là ở đây, kèm một con số đo được.
+//
+// phien = nil thì bỏ qua vế thứ hai (chỉ kiểm chữ ký, y như trước). Có mặt để
+// bài kiểm thử dựng middleware mà không cần database; ĐỪNG truyền nil ở
+// cmd/api.
+func JWTAuth(mgr *jwt.Manager, phien domain.PhienRepository) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		token := extractBearer(c)
 		if token == "" {
@@ -91,9 +111,72 @@ func JWTAuth(mgr *jwt.Manager) gin.HandlerFunc {
 			response.Error(c, 401, "Phiên đăng nhập đã cũ, vui lòng đăng nhập lại")
 			return
 		}
+		if !phienConSong(c, phien, claims) {
+			return
+		}
 		applyIdentity(c, claims)
 		c.Next()
 	}
+}
+
+// phienConSong tra lại tài khoản và cửa hàng của token. false = đã trả lời xong.
+//
+// Lỗi database KHÔNG đá người dùng ra: mất kết nối MySQL một giây mà đăng xuất
+// cả hệ thống thì cách chữa còn tệ hơn bệnh. Trả 503 — người dùng thử lại, phiên
+// còn nguyên.
+//
+// Ba câu trả lời khác nhau cho ba tình huống, cố ý không gộp: người bị khoá cửa
+// hàng cần gọi cho nhà cung cấp phần mềm, người bị khoá tài khoản cần gọi cho
+// quản lý của họ. Một câu "phiên hết hiệu lực" chung chung đẩy cả hai đi hỏi
+// nhầm chỗ.
+func phienConSong(c *gin.Context, phien domain.PhienRepository, claims *jwt.Claims) bool {
+	if phien == nil {
+		return true
+	}
+
+	tt, err := phien.KiemPhien(c.Request.Context(), claims.UserID, claims.TenantID)
+	if err != nil {
+		logger.Error("không kiểm được phiên đăng nhập",
+			zap.Uint("user_id", claims.UserID), zap.Uint("tenant_id", claims.TenantID), zap.Error(err))
+		response.Error(c, 503, "Máy chủ đang bận, vui lòng thử lại")
+
+		return false
+	}
+
+	// CẢ BA đều trả 401, không phải 403 — và đó là điểm mấu chốt của cả cơ chế này.
+	//
+	// 403 nghĩa là "bạn là ai thì đúng rồi, nhưng không được làm việc này", và ứng
+	// dụng phía trước xử lý nó bằng cách hiện một câu lỗi rồi để nguyên phiên —
+	// đúng như vậy, vì bấm nhầm một nút ngoài quyền hạn thì không đáng bị đăng
+	// xuất. Ba trường hợp dưới đây khác hẳn: chính DANH TÍNH trong token đã hết
+	// hiệu lực. Trả 403 thì Shop Admin giữ nguyên session và mọi trang chỉ hiện
+	// lỗi mà không ai bị đá ra — đúng cái đang phải sửa.
+	//
+	// Với 401, ApiClient của Shop Admin đi đúng đường đã có sẵn: thử làm mới
+	// token; /auth/refresh cũng từ chối (nó tra lại cửa hàng và tài khoản), nên
+	// session bị xoá và lượt vào trang tiếp theo rơi về màn hình đăng nhập. Ở đó
+	// /auth/shop-login mới là chỗ nói lý do cho đúng lúc — người đọc đang đứng
+	// trước ô đăng nhập chứ không phải giữa một trang dở dang.
+	switch {
+	case !tt.CuaHangHoatDong:
+		// Gồm cả cửa hàng ĐÃ BỊ XOÁ: không còn dòng nào thì cũng không còn hoạt
+		// động. Không tách hai câu — với người đang ngồi trước màn hình thì "cửa
+		// hàng bị khoá" và "cửa hàng không còn" dẫn tới cùng một việc: gọi cho
+		// nhà cung cấp.
+		response.Error(c, 401, "Cửa hàng đang tạm khoá, vui lòng liên hệ nhà cung cấp phần mềm")
+
+		return false
+	case !tt.CoNguoiDung:
+		response.Error(c, 401, "Tài khoản không còn tồn tại, vui lòng đăng nhập lại")
+
+		return false
+	case !tt.NguoiDungHoatDong:
+		response.Error(c, 401, "Tài khoản đang không hoạt động, vui lòng liên hệ cửa hàng")
+
+		return false
+	}
+
+	return true
 }
 
 // applyIdentity gắn danh tính vừa xác minh vào cả gin.Context (cho handler đọc)

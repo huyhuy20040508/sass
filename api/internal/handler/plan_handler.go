@@ -153,6 +153,57 @@ func (h *PlanHandler) UpdateFeatures(c *gin.Context) {
 	response.OKMessage(c, "Đã lưu tính năng gói", res)
 }
 
+// Sua godoc
+//
+//	@Summary		Sửa một mức giá
+//	@Description	Ghi phần THƯƠNG MẠI của một dòng bảng giá: tên, mô tả, giá, số ngày dùng
+//	@Description	thử, còn bán hay không. Mã gói, app và chu kỳ KHÔNG sửa được — bộ ba đó là
+//	@Description	danh tính của dòng và hợp đồng đã ký tra tên gói về đây theo mã; muốn một
+//	@Description	mức giá khác thì thêm dòng mới.
+//	@Description	`price` gửi `null` nghĩa là "Liên hệ" (chưa công bố giá), KHÁC hẳn gửi 0
+//	@Description	(miễn phí). `status` = retired là ngừng bán mới, không xoá dòng.
+//	@Description	CHỈ vai trò owner/operator của khu điều hành ghi được; support chỉ đọc.
+//	@Description	Sửa ở đây KHÔNG đụng tới khách đang dùng: thuê bao chép giá ra lúc ký và
+//	@Description	sống độc lập với bảng giá.
+//	@Tags			Platform - Plans
+//	@Accept			json
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			id		path		int					true	"ID dòng bảng giá"
+//	@Param			body	body		dto.SuaGoiRequest	true	"Nội dung mới của mức giá"
+//	@Success		200		{object}	response.Body{data=dto.PlanFeaturesResponse}
+//	@Failure		400		{object}	response.Body
+//	@Failure		401		{object}	response.Body
+//	@Failure		403		{object}	response.Body
+//	@Failure		404		{object}	response.Body
+//	@Failure		422		{object}	response.Body
+//	@Router			/platform/plans/{id} [put]
+func (h *PlanHandler) Sua(c *gin.Context) {
+	// Vai trò xét ở handler, cùng lý do như UpdateFeatures: nhóm này có cả đường
+	// đọc lẫn đường ghi, chặn cả nhóm bằng middleware là đóng luôn phần `support`
+	// cần để trực hỗ trợ.
+	if !domain.PlatformRoleGhiDuoc(middleware.PlatformRole(c)) {
+		response.Error(c, 403, "Vai trò của bạn trong khu điều hành chỉ được xem, không sửa được bảng giá")
+		return
+	}
+
+	id, ok := parseUintParam(c, "id")
+	if !ok {
+		return
+	}
+	var req dto.SuaGoiRequest
+	if !bindJSON(c, &req) {
+		return
+	}
+
+	res, err := h.svc.Sua(c.Request.Context(), middleware.PlatformApps(c), id, req)
+	if err != nil {
+		handlePlanError(c, err)
+		return
+	}
+	response.OKMessage(c, "Đã lưu mức giá", res)
+}
+
 // handlePlanError trả 422 kèm lỗi từng khoá khi payload không hợp lệ, còn lại
 // nhường cho bộ ánh xạ lỗi dùng chung.
 func handlePlanError(c *gin.Context, err error) {

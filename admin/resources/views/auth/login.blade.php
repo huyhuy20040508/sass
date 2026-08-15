@@ -213,7 +213,7 @@
         </form>
 
         <div class="login-foot">
-            Hỗ trợ: <a href="mailto:hello@selliotech.store">hello@selliotech.store</a>
+            Hỗ trợ: <a href="mailto:nhuy08052004@gmail.com">nhuy08052004@gmail.com</a>
         </div>
     </div>
 
