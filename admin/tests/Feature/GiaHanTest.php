@@ -233,6 +233,30 @@ class GiaHanTest extends TestCase
         Http::assertNotSent(fn ($req) => str_contains($req->url(), '/admin/goi-dich-vu/dat'));
     }
 
+    /**
+     * CHƯA CÓ HỢP ĐỒNG: không hiện nút trả tiền — API cần một hợp đồng sẵn có để
+     * cộng hạn vào, nên nút đó bấm là lỗi. Thay bằng đường liên hệ để được ký.
+     */
+    public function test_chua_co_hop_dong_thi_khong_co_nut_tra_tien(): void
+    {
+        Http::fake(['*/admin/goi-dich-vu' => Http::response(['success' => true, 'data' => [
+            'hop_dong' => null,
+            'bang_gia' => [
+                ['id' => 2, 'code' => 'cua_hang', 'name' => 'Cửa hàng', 'tagline' => '',
+                    'billing_cycle' => 'thang', 'price' => 499000, 'trial_days' => 14,
+                    'status' => 'active', 'features' => []],
+            ],
+            'fields' => [],
+        ]], 200), '*' => Http::response(['success' => true, 'data' => []], 200)]);
+
+        $res = $this->withSession($this->phien())->get('/admin/goi-dich-vu');
+
+        $res->assertOk();
+        $res->assertDontSee('Chuyển gói');
+        $res->assertDontSee(route('admin.goi-dich-vu.gia-han'));
+        $res->assertSee('Liên hệ đăng ký gói này');
+    }
+
     /** Trang gói dịch vụ có nút trả tiền cho gói CÓ GIÁ, và không có cho gói "Liên hệ". */
     public function test_bang_gia_chi_hien_nut_tra_tien_cho_goi_co_gia(): void
     {

@@ -359,7 +359,15 @@
                                  gói "Liên hệ" chưa có số nào để thu, và API cũng từ
                                  chối đặt đơn cho nó — mời bấm một nút chắc chắn bị từ
                                  chối là mời người dùng đi vào ngõ cụt. --}}
-                            @if(! $ngungBan && $goi['price'] !== null && (float) $goi['price'] > 0)
+                            {{-- Nút trả tiền CHỈ hiện khi có hợp đồng để đẩy hạn.
+
+                                 Cửa hàng chưa có hợp đồng trong sổ nền tảng (dựng tay
+                                 trước khi có control plane) mà vẫn chìa nút thì mỗi
+                                 lượt bấm là một lỗi "không tìm thấy dữ liệu" — API cần
+                                 một hợp đồng sẵn có để cộng hạn vào. Với họ, đường đúng
+                                 là nhà cung cấp ký hợp đồng trước, nên chỗ này thành
+                                 nút liên hệ. --}}
+                            @if($hopDong && ! $ngungBan && $goi['price'] !== null && (float) $goi['price'] > 0)
                                 <form method="POST" action="{{ route('admin.goi-dich-vu.gia-han') }}" class="gdv-buy">
                                     @csrf
                                     <input type="hidden" name="plan_id" value="{{ $goi['id'] }}">
@@ -389,9 +397,13 @@
                                     </button>
                                 </form>
                             @elseif(! $dangDung && ! $ngungBan)
-                                {{-- Gói "Liên hệ": không tự mua được, nên đường duy nhất
-                                     là email — nói thẳng thay vì một nút bấm vào báo lỗi. --}}
-                                <a class="gdv-btn-ghost" href="{{ $mailto }}">Liên hệ báo giá</a>
+                                {{-- Hai đường cùng về email nhưng nói hai câu khác nhau:
+                                     gói "Liên hệ" thì chưa có giá công khai, còn cửa hàng
+                                     chưa có hợp đồng thì cần được ký trước — nút bấm vào
+                                     báo lỗi không thay được câu nào trong hai câu đó. --}}
+                                <a class="gdv-btn-ghost" href="{{ $mailto }}">
+                                    {{ $goi['price'] === null ? 'Liên hệ báo giá' : 'Liên hệ đăng ký gói này' }}
+                                </a>
                             @endif
                         </div>
                     </div>
