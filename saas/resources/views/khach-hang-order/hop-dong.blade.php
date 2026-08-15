@@ -239,6 +239,19 @@
                             // trên nó (ErrHopDongDaHuy), nên hai nút đó phải biến
                             // mất chứ không phải hiện ra rồi báo lỗi khi bấm.
                             $da_huy = data_get($hd, 'trang_thai') === 'canceled';
+                            // Còn kỳ nào để thu không — MÁY CHỦ trả lời, giao
+                            // diện không tự suy. Sổ thu chỉ nhận một lần thu cho
+                            // một kỳ, nên hợp đồng đã trả tới đúng hạn hiện tại
+                            // thì lượt thu tiếp theo chắc chắn ăn lỗi "không còn
+                            // kỳ để thu" — nút phải biến mất, cùng lý do với hợp
+                            // đồng đã huỷ ngay trên.
+                            //
+                            // Mặc định TRUE khi API chưa có ô này: máy chủ có thể
+                            // cũ hơn giao diện, và giấu mất nút Thu tiền của mọi
+                            // dòng thì hỏng nặng hơn là chìa ra một nút thỉnh
+                            // thoảng báo lỗi.
+                            $con_ky_thu = (bool) data_get($hd, 'con_ky_de_thu', true);
+                            $thu_den = data_get($hd, 'da_thu_den');
                             $het_han = data_get($hd, 'het_han');
                             $bat_dau = data_get($hd, 'bat_dau');
                             // Ép chuỗi: cả hai ô đều rỗng được, và mb_substr(null)
@@ -352,6 +365,21 @@
                                              tiền trông y hệt khách được miễn phí. --}}
                                         <span class="muted">Chưa thu</span>
                                     @endif
+
+                                    {{-- Dòng này là LỜI GIẢI THÍCH cho cái nút vắng
+                                         mặt ở cột cuối: khách đã trả tiền tới đúng
+                                         hạn hợp đồng nên không còn kỳ nào để thu.
+                                         Bỏ nút đi mà không nói gì thì người thu tiền
+                                         đi tìm nó, rồi tưởng màn hình hỏng.
+
+                                         Không in cho hợp đồng đã huỷ: ở đó nút vắng
+                                         mặt vì một lý do khác, và cột "Còn lại" đã
+                                         nói ra lý do ấy. --}}
+                                    @if ($thu_den && ! $con_ky_thu && ! $da_huy)
+                                        <div class="s">
+                                            Đủ tới {{ \Illuminate\Support\Carbon::parse($thu_den)->format('d/m/Y') }}
+                                        </div>
+                                    @endif
                                 </td>
                             @endif
                             {{-- Cột hạn sắp theo con_lai_ngay chứ không theo chuỗi
@@ -408,10 +436,17 @@
                                 </a>
 
                                 @if ($ghiDuoc && ! $da_huy)
-                                    @unless ($la_dung_thu)
+                                    @if (! $la_dung_thu && $con_ky_thu)
                                         {{-- Chỉ khách trả tiền mới có nút này. Ghi
                                              nhận TIỀN, không đẩy HẠN — hai việc
-                                             tách rời, xem hộp thoại. --}}
+                                             tách rời, xem hộp thoại.
+
+                                             Và chỉ khi CÒN KỲ ĐỂ THU: khách đã trả
+                                             tới đúng hạn hợp đồng thì lượt thu tiếp
+                                             theo bị API từ chối, nên nút biến mất
+                                             chứ không hiện ra rồi báo lỗi lúc bấm.
+                                             Muốn thu tiếp thì gia hạn trước — hạn
+                                             dài ra là có kỳ mới. --}}
                                         <button type="button" class="btn-mini"
                                                 data-mo="sheet-thutien"
                                                 data-id="{{ data_get($hd, 'id') }}"
@@ -419,7 +454,7 @@
                                                 data-gia="{{ (int) data_get($hd, 'gia') }}">
                                             Thu tiền
                                         </button>
-                                    @endunless
+                                    @endif
 
                                     {{-- Hai nút mở CHUNG một hộp thoại, chỉ nạp id
                                          và tên khách vào. Dựng một hộp cho mỗi dòng

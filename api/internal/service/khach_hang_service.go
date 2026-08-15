@@ -164,7 +164,31 @@ func hopDongItem(row domain.HopDongDayDu, homNay time.Time) dto.HopDongItem {
 		NguoiLienHe:  string(row.NguoiLienHe),
 		DienThoai:    string(row.DienThoai),
 		Email:        string(row.Email),
+		DaThuDen:     row.DaThuDen,
+		ConKyDeThu:   conKyDeThu(row),
 	}
+}
+
+// conKyDeThu trả lời đúng câu mà DungThuService.ThuTien sẽ trả lời khi có người
+// bấm nút — và phải trả lời GIỐNG NÓ.
+//
+// Hai nhánh, đúng hai nhánh từ chối của bên ghi:
+//   - hợp đồng đã huỷ không nhận thêm tiền (ErrHopDongDaHuy);
+//   - đã trả tới đúng hạn hiện tại thì kỳ tiếp theo rỗng (ErrKhongConKyDeThu),
+//     và sổ thu chỉ nhận một lần thu cho một kỳ (uq_invoices_ky).
+//
+// CẮT VỀ NGÀY trước khi so, cùng lý do như bên ThuTien: `period_end` dưới
+// database là DATE còn `ends_at` là DATETIME, nên so nguyên vẹn thì một hợp đồng
+// đã trả đủ vẫn "còn kỳ" chỉ vì lệch nhau vài giờ trong ngày.
+func conKyDeThu(row domain.HopDongDayDu) bool {
+	if row.Status == domain.SubscriptionCanceled {
+		return false
+	}
+	if row.DaThuDen == nil {
+		return true
+	}
+
+	return catNgay(*row.DaThuDen).Before(catNgay(row.EndsAt))
 }
 
 func (s *khachHangService) DoanhThu(ctx context.Context, quyen domain.QuyenApp, maApp string, tu, den *time.Time) (dto.DoanhThuResponse, error) {

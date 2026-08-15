@@ -15306,10 +15306,19 @@ const docTemplate = `{
                     "type": "string",
                     "example": "thang"
                 },
+                "con_ky_de_thu": {
+                    "description": "ConKyDeThu = hợp đồng này còn nhận thêm được một lần thu không.\n\nMÁY CHỦ QUYẾT, không phải giao diện tự suy — cùng lý do như SuaDuocHan:\nluật nằm ở DungThuService.ThuTien (đã huỷ thì từ chối; đã trả tới đúng hạn\nhiện tại thì hết kỳ để thu, ErrKhongConKyDeThu), và chép nó lên Blade là\nđể hai bên lệch nhau ngay lần sửa luật đầu tiên.\n\nfalse = phải GIẤU nút Thu tiền đi. Hiện ra rồi báo lỗi lúc bấm là bắt người\nthu tiền tự đoán vì sao — mà câu trả lời (\"khách trả đủ tới hạn rồi\") thì\nđằng nào cũng phải nói.",
+                    "type": "boolean",
+                    "example": true
+                },
                 "con_lai_ngay": {
                     "description": "ConLaiNgay âm = ĐÃ QUÁ HẠN.",
                     "type": "integer",
                     "example": 41
+                },
+                "da_thu_den": {
+                    "description": "DaThuDen là ngày CUỐI của kỳ đã trả tiền xa nhất trong sổ thu của hợp đồng\nnày. nil = chưa thu lần nào.\n\nKHÁC hẳn ` + "`" + `lan_cuoi` + "`" + ` của /platform/doanh-thu: bên đó là NGÀY TIỀN VÀO và\ngộp theo cửa hàng, ở đây là KỲ ĐƯỢC TRẢ CHO của đúng hợp đồng này. Khách\ntrả trước ba tháng thì hai con số ấy cách nhau ba tháng.",
+                    "type": "string"
                 },
                 "dien_thoai": {
                     "type": "string",
@@ -15508,10 +15517,19 @@ const docTemplate = `{
                     "type": "string",
                     "example": "thang"
                 },
+                "con_ky_de_thu": {
+                    "description": "ConKyDeThu = hợp đồng này còn nhận thêm được một lần thu không.\n\nMÁY CHỦ QUYẾT, không phải giao diện tự suy — cùng lý do như SuaDuocHan:\nluật nằm ở DungThuService.ThuTien (đã huỷ thì từ chối; đã trả tới đúng hạn\nhiện tại thì hết kỳ để thu, ErrKhongConKyDeThu), và chép nó lên Blade là\nđể hai bên lệch nhau ngay lần sửa luật đầu tiên.\n\nfalse = phải GIẤU nút Thu tiền đi. Hiện ra rồi báo lỗi lúc bấm là bắt người\nthu tiền tự đoán vì sao — mà câu trả lời (\"khách trả đủ tới hạn rồi\") thì\nđằng nào cũng phải nói.",
+                    "type": "boolean",
+                    "example": true
+                },
                 "con_lai_ngay": {
                     "description": "ConLaiNgay âm = ĐÃ QUÁ HẠN.",
                     "type": "integer",
                     "example": 41
+                },
+                "da_thu_den": {
+                    "description": "DaThuDen là ngày CUỐI của kỳ đã trả tiền xa nhất trong sổ thu của hợp đồng\nnày. nil = chưa thu lần nào.\n\nKHÁC hẳn ` + "`" + `lan_cuoi` + "`" + ` của /platform/doanh-thu: bên đó là NGÀY TIỀN VÀO và\ngộp theo cửa hàng, ở đây là KỲ ĐƯỢC TRẢ CHO của đúng hợp đồng này. Khách\ntrả trước ba tháng thì hai con số ấy cách nhau ba tháng.",
+                    "type": "string"
                 },
                 "dien_thoai": {
                     "type": "string",

@@ -536,6 +536,18 @@ type HopDongDayDu struct {
 	GhiChuKhach      StringOrNull `json:"ghi_chu_khach"`
 	NgayVaoSo        time.Time    `json:"ngay_vao_so"`
 	TrangThaiCuaHang string       `json:"trang_thai_cua_hang"`
+	// DaThuDen là `period_end` XA NHẤT trong sổ thu của CHÍNH hợp đồng này —
+	// cùng con số KyCuoiDaThu đọc, chỉ là lấy kèm ngay trong câu truy vấn danh
+	// sách thay vì một lượt đọc cho mỗi dòng.
+	//
+	// nil = chưa thu lần nào, và đó là câu trả lời hợp lệ chứ không phải lỗi.
+	//
+	// CÓ MẶT ĐỂ MÀN HÌNH BIẾT CÒN KỲ NÀO ĐỂ THU KHÔNG. Sổ thu chỉ nhận một lần
+	// thu cho một kỳ (uq_invoices_ky), nên hợp đồng đã trả tới đúng hạn hiện tại
+	// thì lượt thu tiếp theo chắc chắn bị từ chối — xem ErrKhongConKyDeThu. Cột
+	// "Đã thu" gộp theo CỬA HÀNG không nói được điều đó: nó cộng tiền của mọi
+	// hợp đồng và không mang theo kỳ nào cả.
+	DaThuDen *time.Time `json:"da_thu_den"`
 }
 
 // SuaHopDong là phần SỬA ĐƯỢC của một hợp đồng và của khách đứng sau nó.

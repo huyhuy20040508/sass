@@ -243,6 +243,47 @@ func TestDoanhThu_LocTheoKhoangNgay(t *testing.T) {
 	}
 }
 
+// TestHopDong_ConKyDeThu — ô quyết định màn hình có chìa nút "Thu tiền" ra không.
+//
+// Sổ thu chỉ nhận MỘT lần thu cho một kỳ (uq_invoices_ky), nên hợp đồng đã trả
+// tiền tới đúng hạn hiện tại thì lượt thu tiếp theo chắc chắn bị từ chối
+// (ErrKhongConKyDeThu). Bài này canh việc danh sách nói ra điều đó TRƯỚC khi có
+// người bấm — chứ không phải chìa nút ra rồi báo lỗi.
+//
+// Ba tình huống, và tình huống thứ ba là chỗ dễ làm ẩu nhất: trả THIẾU vẫn còn
+// kỳ để thu. Ai đó rút gọn thành "có dòng nào trong sổ thu chưa" thì bài đỏ ở
+// đúng chỗ đó — và cái sai ấy sẽ khoá luôn đường thu nốt phần còn lại của khách.
+func TestHopDong_ConKyDeThu(t *testing.T) {
+	k := dungKhuDieuHanh(t, domain.PlatformRoleOperator)
+
+	// Hợp đồng gieo ra: bắt đầu hôm nay, hết hạn sau 30 ngày.
+	duKy := gieoKhachVaHopDong(t, k, idKhachA, "khach-tra-du", appDieuHanh, domain.SubscriptionActive, 500000)
+	thieuKy := gieoKhachVaHopDong(t, k, idKhachB, "khach-tra-thieu-ky", appDieuHanh, domain.SubscriptionActive, 500000)
+
+	// 1. Chưa thu lần nào — còn nguyên kỳ đầu tiên.
+	hd := timHopDong(t, k.docHopDong(t, ""), "khach-tra-du")
+	if !hd.ConKyDeThu || hd.DaThuDen != nil {
+		t.Fatalf("hợp đồng chưa thu đồng nào phải còn kỳ để thu: %+v", hd)
+	}
+
+	// 2. Đã trả trọn kỳ (period_end = hạn hợp đồng) — hết kỳ để thu.
+	gieoLanThu(t, k, duKy.hopDong, 500000, time.Now())
+	hd = timHopDong(t, k.docHopDong(t, ""), "khach-tra-du")
+	if hd.ConKyDeThu {
+		t.Fatalf("khách đã trả tới đúng hạn mà vẫn báo còn kỳ để thu — màn hình sẽ chìa nút Thu tiền ra rồi ăn lỗi: %+v", hd)
+	}
+	if hd.DaThuDen == nil {
+		t.Fatalf("thu rồi mà không trả về kỳ đã thu tới đâu: %+v", hd)
+	}
+
+	// 3. Mới trả tới GIỮA kỳ — vẫn thu tiếp được phần còn lại.
+	gieoLanThu(t, k, thieuKy.hopDong, 200000, time.Now().AddDate(0, 0, -20))
+	hd = timHopDong(t, k.docHopDong(t, ""), "khach-tra-thieu-ky")
+	if !hd.ConKyDeThu {
+		t.Fatalf("khách mới trả tới giữa kỳ mà đã tắt đường thu nốt phần còn lại: %+v", hd)
+	}
+}
+
 // TestKhachHang_ChuaGiaoPhanMemNaoThiRong — người mới thêm vào sổ điều hành
 // đăng nhập được nhưng chưa thấy gì, và đó là câu trả lời ĐÚNG.
 func TestKhachHang_ChuaGiaoPhanMemNaoThiRong(t *testing.T) {
@@ -268,11 +309,27 @@ func TestKhachHang_ChuaGiaoPhanMemNaoThiRong(t *testing.T) {
 // ---------- phụ trợ ----------
 
 type hopDongThu struct {
-	MaCuaHang  string `json:"ma_cua_hang"`
-	TrangThai  string `json:"trang_thai"`
-	TaiKhoan   uint   `json:"tai_khoan"`
-	SanPham    uint   `json:"san_pham"`
-	ConLaiNgay int    `json:"con_lai_ngay"`
+	MaCuaHang  string  `json:"ma_cua_hang"`
+	TrangThai  string  `json:"trang_thai"`
+	TaiKhoan   uint    `json:"tai_khoan"`
+	SanPham    uint    `json:"san_pham"`
+	ConLaiNgay int     `json:"con_lai_ngay"`
+	ConKyDeThu bool    `json:"con_ky_de_thu"`
+	DaThuDen   *string `json:"da_thu_den"`
+}
+
+// timHopDong nhặt đúng dòng của một cửa hàng trong danh sách.
+func timHopDong(t *testing.T, ds []hopDongThu, ma string) hopDongThu {
+	t.Helper()
+
+	for _, hd := range ds {
+		if hd.MaCuaHang == ma {
+			return hd
+		}
+	}
+	t.Fatalf("không thấy hợp đồng của %s trong danh sách: %+v", ma, ds)
+
+	return hopDongThu{}
 }
 
 func (k *khuDieuHanh) docHopDong(t *testing.T, truyVan string) []hopDongThu {

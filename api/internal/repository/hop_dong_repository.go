@@ -115,12 +115,18 @@ func (r *hopDongRepository) Tim(ctx context.Context, id uint) (*domain.HopDongDa
 		// LEFT JOIN chỉ để lấy TÊN gói — xem chú thích cùng câu bên
 		// khachHangRepository.HopDong.
 		Joins("LEFT JOIN plans p ON p.id = s.plan_id").
+		// `da_thu_den` đọc kèm để MỘT hợp đồng trả lời giống hệt khi nó nằm trong
+		// danh sách và khi nó đứng một mình — xem chú thích cùng câu bên
+		// khachHangRepository.HopDong. Thiếu nó ở đây thì trang chi tiết và câu trả
+		// lời của lượt gia hạn sẽ nói "còn kỳ để thu" cho một hợp đồng đã trả đủ.
 		Select(`s.*, t.code AS ma_cua_hang, t.name AS ten_cua_hang,
 		        t.contact_name AS nguoi_lien_he, t.contact_phone AS dien_thoai,
 		        t.contact_email AS email,
 		        a.code AS ma_app, a.name AS ten_app, p.name AS ten_goi,
 		        t.note AS ghi_chu_khach, t.created_at AS ngay_vao_so,
-		        t.status AS trang_thai_cua_hang`).
+		        t.status AS trang_thai_cua_hang,
+		        (SELECT MAX(i.period_end) FROM invoices i
+		          WHERE i.subscription_id = s.id) AS da_thu_den`).
 		Where("s.id = ?", id).
 		Take(&hd).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {

@@ -94,12 +94,21 @@ func (r *khachHangRepository) HopDong(ctx context.Context, loc domain.LocKhuDieu
 		// làm biến mất một hợp đồng khỏi danh sách. Giá và hạn mức vẫn đọc ở `s.*`,
 		// không bao giờ ở đây.
 		Joins("LEFT JOIN plans p ON p.id = s.plan_id").
+		// Câu con `da_thu_den` gộp trên `invoices` CỦA TỪNG HỢP ĐỒNG — khác hẳn
+		// hàm DoanhThu ngay dưới, nơi sổ thu được gộp theo CỬA HÀNG. Ở đây câu hỏi
+		// là "hợp đồng này đã trả tiền tới ngày nào", và nó quyết định màn hình có
+		// còn chìa nút Thu tiền ra hay không.
+		//
+		// Đọc kèm ở đây thay vì gọi KyCuoiDaThu cho từng dòng: một danh sách 50
+		// khách sẽ thành 51 lượt đi database, và cột này thì không đáng giá bằng đó.
 		Select(`s.*, t.code AS ma_cua_hang, t.name AS ten_cua_hang,
 		        t.contact_name AS nguoi_lien_he, t.contact_phone AS dien_thoai,
 		        t.contact_email AS email,
 		        a.code AS ma_app, a.name AS ten_app, p.name AS ten_goi,
 		        t.note AS ghi_chu_khach, t.created_at AS ngay_vao_so,
-		        t.status AS trang_thai_cua_hang`).
+		        t.status AS trang_thai_cua_hang,
+		        (SELECT MAX(i.period_end) FROM invoices i
+		          WHERE i.subscription_id = s.id) AS da_thu_den`).
 		// Hợp đồng sắp hết hạn phải nằm gần đầu: đó là danh sách người ta mở màn
 		// hình này để xem.
 		//

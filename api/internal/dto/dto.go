@@ -1381,6 +1381,24 @@ type HopDongItem struct {
 	NguoiLienHe string `json:"nguoi_lien_he" example:"Anh Huy"`
 	DienThoai   string `json:"dien_thoai" example:"0901234567"`
 	Email       string `json:"email" example:"huy@quochuy.vn"`
+	// DaThuDen là ngày CUỐI của kỳ đã trả tiền xa nhất trong sổ thu của hợp đồng
+	// này. nil = chưa thu lần nào.
+	//
+	// KHÁC hẳn `lan_cuoi` của /platform/doanh-thu: bên đó là NGÀY TIỀN VÀO và
+	// gộp theo cửa hàng, ở đây là KỲ ĐƯỢC TRẢ CHO của đúng hợp đồng này. Khách
+	// trả trước ba tháng thì hai con số ấy cách nhau ba tháng.
+	DaThuDen *time.Time `json:"da_thu_den"`
+	// ConKyDeThu = hợp đồng này còn nhận thêm được một lần thu không.
+	//
+	// MÁY CHỦ QUYẾT, không phải giao diện tự suy — cùng lý do như SuaDuocHan:
+	// luật nằm ở DungThuService.ThuTien (đã huỷ thì từ chối; đã trả tới đúng hạn
+	// hiện tại thì hết kỳ để thu, ErrKhongConKyDeThu), và chép nó lên Blade là
+	// để hai bên lệch nhau ngay lần sửa luật đầu tiên.
+	//
+	// false = phải GIẤU nút Thu tiền đi. Hiện ra rồi báo lỗi lúc bấm là bắt người
+	// thu tiền tự đoán vì sao — mà câu trả lời ("khách trả đủ tới hạn rồi") thì
+	// đằng nào cũng phải nói.
+	ConKyDeThu bool `json:"con_ky_de_thu" example:"true"`
 }
 
 // HopDongResponse — GET /platform/subscriptions.
