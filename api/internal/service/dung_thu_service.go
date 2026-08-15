@@ -189,6 +189,24 @@ func (s *dungThuService) taoKhachHangMoi(
 		return rong, domain.ErrCuaHangDaCo
 	}
 
+	// ... và mã đó còn trống BÊN SỔ NỀN TẢNG nữa không.
+	//
+	// Hai lược đồ giữ mã cửa hàng ở hai bảng `tenants` riêng, mỗi bảng một khoá
+	// UNIQUE(code) riêng. Mã trống bên data plane KHÔNG có nghĩa là trống bên sổ:
+	// xoá một khách ở khu order mà bỏ sót dòng trong sổ là đủ để lệch. Lúc đó
+	// lượt chép khách ở bước 6 sẽ đụng uq_tenants_code bên sổ, và hỏng theo kiểu
+	// im lặng — xem domain.ErrMaConTrongSoNenTang.
+	//
+	// Kiểm ở ĐÂY chứ không phó mặc cho bước 6 tự phát hiện: bước 6 chạy sau khi
+	// cửa hàng đã dựng xong, nên mỗi lần thử là để lại một cửa hàng mồ côi và
+	// chiếm luôn cái mã, khiến lần thử thứ hai đổi sang báo "mã đã có người dùng"
+	// — một câu chẳng dính gì tới lỗi thật.
+	if idKhac, err := s.hopDong.AiDangMangMa(ctx, moi.Ma, 0); err != nil {
+		return rong, err
+	} else if idKhac != 0 {
+		return rong, domain.ErrMaConTrongSoNenTang
+	}
+
 	bam, err := hash.Hash(req.MatKhau)
 	if err != nil {
 		return rong, err

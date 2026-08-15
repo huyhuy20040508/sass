@@ -204,6 +204,20 @@ var (
 	// liệu thật, và "tạo tài khoản dùng thử" không phải là lý do để đụng vào nó.
 	ErrCuaHangDaCo = errors.New("mã cửa hàng này đã có người dùng")
 
+	// ErrMaConTrongSoNenTang — mã cửa hàng còn nằm trong SỔ NỀN TẢNG dưới một id
+	// khác, dù bên data plane mã đó đang trống.
+	//
+	// Nghĩa là hai lược đồ đã lệch nhau: khách cũ mang mã này bị xoá ở khu order
+	// mà dòng trong sổ còn nguyên. Ghi tiếp là hỏng THẬT chứ không phải phiền
+	// phức — `tenants` bên sổ có UNIQUE(code), nên lượt chép khách mới sẽ đụng
+	// khoá đó và MySQL đi CẬP NHẬT DÒNG CŨ (id khác hẳn) rồi báo thành công. Kết
+	// quả: khách mới không bao giờ vào sổ, hợp đồng của họ trỏ vào một id không
+	// tồn tại, còn hồ sơ của khách cũ thì bị ghi đè tên.
+	//
+	// Cách gỡ nằm ở khu điều hành chứ không ở màn hình đang gõ: xoá hoặc đổi mã
+	// dòng cũ trong sổ, rồi tạo lại.
+	ErrMaConTrongSoNenTang = errors.New("mã cửa hàng này còn trong sổ nền tảng dưới một khách khác")
+
 	// ErrHopDongDangChay — khách đã có hợp đồng còn hiệu lực cho phần mềm này.
 	//
 	// Do khoá uq_subscriptions_current dưới database giữ, không phải do tầng Go

@@ -51,6 +51,9 @@ func (f *fakeHopDongQuet) DoiTrangThaiKhach(_ context.Context, ids []uint, tt st
 }
 
 func (f *fakeHopDongQuet) UpsertKhachHang(context.Context, domain.PlatformTenant) error { return nil }
+func (f *fakeHopDongQuet) AiDangMangMa(context.Context, string, uint) (uint, error) {
+	return 0, nil
+}
 func (f *fakeHopDongQuet) Tao(context.Context, *domain.Subscription) error              { return nil }
 func (f *fakeHopDongQuet) Tim(context.Context, uint) (*domain.HopDongDayDu, error)      { return nil, nil }
 func (f *fakeHopDongQuet) GiaHan(context.Context, uint, int) error                      { return nil }

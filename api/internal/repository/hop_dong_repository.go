@@ -47,14 +47,49 @@ func (r *hopDongRepository) UpsertKhachHang(ctx context.Context, kh domain.Platf
 		return errors.New("upsert khách hàng vào sổ nền tảng mà thiếu id của data plane")
 	}
 
-	return r.db.WithContext(ctx).
-		Clauses(clause.OnConflict{
+	// Kiểm mã TRƯỚC khi ghi, trong cùng một giao dịch với lượt ghi.
+	//
+	// `ON DUPLICATE KEY UPDATE` của MySQL không nhận danh sách cột xung đột: nó
+	// nổ khi ĐỤNG BẤT KỲ khoá duy nhất nào. Bảng này có hai khoá — PRIMARY(id) và
+	// uq_tenants_code(code) — nên một dòng cũ mang cùng `code` mà khác `id` sẽ
+	// nuốt trọn lượt ghi: MySQL đi cập nhật DÒNG CŨ, câu lệnh báo thành công, còn
+	// dòng của khách mới thì không bao giờ ra đời. Hợp đồng ghi ngay sau đó trỏ
+	// vào một id không có trong sổ và vỡ khoá ngoại — đúng cảnh đã xảy ra trên
+	// prod ngày 15/08/2026, khi một mã cửa hàng cũ còn sót trong sổ được dùng lại.
+	//
+	// FOR UPDATE để hai lượt tạo cùng mã không cùng đọc thấy "mã trống": mã chưa
+	// có dòng nào thì InnoDB khoá KHOẢNG TRỐNG trên uq_tenants_code, nên lượt thứ
+	// hai phải đợi lượt đầu xong mới đọc.
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var cua uint
+		err := tx.Model(&domain.PlatformTenant{}).
+			Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("code = ? AND id <> ?", kh.Code, kh.ID).
+			Limit(1).Pluck("id", &cua).Error
+		if err != nil {
+			return err
+		}
+		if cua != 0 {
+			return domain.ErrMaConTrongSoNenTang
+		}
+
+		return tx.Clauses(clause.OnConflict{
 			Columns: []clause.Column{{Name: "id"}},
 			DoUpdates: clause.AssignmentColumns([]string{
 				"code", "name", "contact_name", "contact_phone", "contact_email", "updated_at",
 			}),
-		}).
-		Create(&kh).Error
+		}).Create(&kh).Error
+	})
+}
+
+// AiDangMangMa — xem domain.HopDongRepository.
+func (r *hopDongRepository) AiDangMangMa(ctx context.Context, ma string, ngoaiTru uint) (uint, error) {
+	var id uint
+	err := r.db.WithContext(ctx).Model(&domain.PlatformTenant{}).
+		Where("code = ? AND id <> ?", ma, ngoaiTru).
+		Limit(1).Pluck("id", &id).Error
+
+	return id, err
 }
 
 func (r *hopDongRepository) Tao(ctx context.Context, s *domain.Subscription) error {

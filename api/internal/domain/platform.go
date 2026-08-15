@@ -607,7 +607,18 @@ type HopDongRepository interface {
 	// ID KHÔNG tự tăng ở bảng này: nó là số chung với data plane, nên nơi gọi
 	// phải truyền id đã có bên kia. Upsert chứ không insert vì khách có thể đã
 	// nằm sẵn trong sổ từ một hợp đồng của phần mềm khác.
+	//
+	// Trả ErrMaConTrongSoNenTang khi `code` đang thuộc về một id KHÁC. Xem lỗi
+	// đó về việc vì sao im lặng ghi tiếp lại hỏng nặng hơn là dừng.
 	UpsertKhachHang(ctx context.Context, kh PlatformTenant) error
+	// AiDangMangMa trả id của khách trong sổ đang mang mã này, 0 nếu mã còn
+	// trống. `ngoaiTru` là id được phép mang mã đó (chính khách đang ghi); truyền
+	// 0 khi chưa có id — lúc dựng khách mới, mọi dòng mang mã này đều là xung đột.
+	//
+	// Có mặt để chặn TRƯỚC khi dựng cửa hàng. Để lượt chép khách tự phát hiện thì
+	// vẫn đúng, nhưng lúc đó cửa hàng đã dựng xong và mã đã bị chiếm ở data plane
+	// — người bấm nút phải đi dọn một cửa hàng mồ côi trước khi thử lại.
+	AiDangMangMa(ctx context.Context, ma string, ngoaiTru uint) (uint, error)
 	// Tao ghi một hợp đồng mới. Đụng khoá uq_subscriptions_current thì trả về
 	// ErrHopDongDangChay chứ không phải lỗi thô của MySQL.
 	Tao(ctx context.Context, s *Subscription) error

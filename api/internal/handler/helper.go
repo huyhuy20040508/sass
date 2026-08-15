@@ -177,6 +177,13 @@ func handleServiceError(c *gin.Context, err error) {
 		response.ValidationError(c, map[string]string{
 			"ma_cua_hang": "Mã cửa hàng này đã có người dùng, vui lòng đặt mã khác",
 		})
+	case errors.Is(err, domain.ErrMaConTrongSoNenTang):
+		// Gắn vào ô `ma_cua_hang` như lỗi trùng mã thường, nhưng nói RÕ là dòng cũ
+		// nằm ở sổ nền tảng: người bấm nút bên khu order sẽ tìm mã đó trong danh
+		// sách khách và không thấy gì, rồi tưởng máy chủ hỏng.
+		response.ValidationError(c, map[string]string{
+			"ma_cua_hang": "Mã này còn trong sổ nền tảng dưới một khách cũ — xoá hẳn khách đó rồi tạo lại, hoặc đặt mã khác",
+		})
 	case errors.Is(err, domain.ErrHopDongDangChay):
 		response.Error(c, 409, "Cửa hàng này đã có hợp đồng còn hiệu lực cho phần mềm đó — gia hạn hợp đồng cũ, hoặc huỷ nó trước rồi ký lại")
 	case errors.Is(err, domain.ErrGoiNgungBan):
