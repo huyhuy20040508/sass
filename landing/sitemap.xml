@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Một địa chỉ duy nhất, và đó là chủ ý: các mục #tinh-nang, #bang-gia... là
+     neo trong cùng trang, khai chúng thành URL riêng là tự tạo nội dung trùng.
+     Khi có trang blog/hướng dẫn thì thêm vào đây. -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://selliotech.store/</loc>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+</urlset>

@@ -4,7 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Sellio — Phần mềm quản lý bán hàng cho cửa hàng Việt</title>
-<meta name="description" content="Sellio gom đơn hàng, tồn kho, nhập hàng, khách hàng và báo cáo của cửa hàng về một chỗ. Mở máy là biết hôm nay bán được gì, còn gì phải làm.">
+<meta name="description" content="Sellio gom đơn hàng, tồn kho, nhập hàng, khách hàng và báo cáo của cửa hàng về một chỗ. Mở máy là biết hôm nay bán được gì, còn gì phải làm. Dùng thử 14 ngày miễn phí.">
+<!-- max-image-preview:large — cho Google hiện ảnh to trong kết quả tìm kiếm.
+     Không khai thì ảnh chỉ được hiện cỡ nhỏ, và ô kết quả kém bắt mắt hơn hẳn
+     đối thủ có khai (mọi trang phần mềm bán hàng lớn đều khai). -->
+<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">
 <meta name="theme-color" content="#2A0E4A">
 
 <!-- Trang nhận cả selliotech.store lẫn www.selliotech.store; dòng này nói cho
@@ -19,12 +23,98 @@
 <meta property="og:title" content="Sellio — Phần mềm quản lý bán hàng cho cửa hàng Việt">
 <meta property="og:description" content="Chốt sổ cuối ngày trong một phút. Đơn hàng, kho, khách hàng và báo cáo về chung một chỗ.">
 <meta property="og:url" content="https://selliotech.store/">
-<meta property="og:image" content="https://selliotech.store/assets/sellio-favicon.svg">
+<!-- PNG 1200×630, KHÔNG phải SVG: Facebook và Zalo không dựng được SVG, nên
+     og:image trỏ vào favicon.svg nghĩa là mọi lượt chia sẻ trang này hiện ô
+     xám trống — người ta chia sẻ giúp mình mà cái link nhìn như trang hỏng. -->
+<meta property="og:image" content="https://selliotech.store/assets/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://selliotech.store/assets/og-image.png">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100..125,400..800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+
+<!-- Dữ liệu có cấu trúc cho công cụ tìm kiếm.
+
+     FAQPage là khối đáng giá nhất: 6 câu hỏi bên dưới là nội dung THẬT đã có
+     trên trang, và Google có thể hiện thẳng chúng trong kết quả tìm kiếm —
+     chiếm nhiều chỗ hơn và trả lời được người tìm trước cả khi họ bấm vào.
+
+     KHÔNG khai AggregateRating hay số lượng khách hàng: chưa có số thật thì
+     không khai — khai bịa là loại rich result bị Google phạt thẳng tay nhất. -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "name": "Selliotech",
+  "url": "https://selliotech.store/",
+  "logo": "https://selliotech.store/assets/og-image.png",
+  "contactPoint": {
+    "@type": "ContactPoint",
+    "email": "nhuy08052004@gmail.com",
+    "contactType": "customer service",
+    "availableLanguage": "Vietnamese"
+  }
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Sellio",
+  "applicationCategory": "BusinessApplication",
+  "operatingSystem": "Web",
+  "description": "Phần mềm quản lý bán hàng cho cửa hàng: đơn hàng, tồn kho, nhập hàng, khách hàng và báo cáo về chung một chỗ.",
+  "url": "https://selliotech.store/",
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "VND",
+    "description": "Dùng thử 14 ngày miễn phí, không cần thẻ ngân hàng"
+  }
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "Dữ liệu đang nằm trong Excel, chuyển sang được không?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Được. Tải file mẫu trong phần Sản phẩm, Tồn kho hoặc Khách hàng, dán dữ liệu cũ vào đúng cột rồi tải lên. Phần mềm báo dòng nào sai trước khi ghi. Từ hai nghìn dòng trở lên thì gửi file cho chúng tôi, chúng tôi làm giúp." }
+    },
+    {
+      "@type": "Question",
+      "name": "Dùng trên điện thoại được không?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Được, phần mềm chạy trong trình duyệt và co lại vừa màn hình điện thoại. Xem đơn, xác nhận đơn, tra tồn kho làm trên điện thoại thoải mái." }
+    },
+    {
+      "@type": "Question",
+      "name": "Nhân viên có nhìn thấy giá vốn và lãi không?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Không, trừ khi bạn cho phép. Mỗi tài khoản gắn một vai trò, và vai trò quyết định thấy được menu nào. Vai trò bán hàng mặc định không mở được Báo cáo và Giá vốn." }
+    },
+    {
+      "@type": "Question",
+      "name": "Mất mạng thì sao?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Phần mềm cần mạng để chạy. Mất mạng thì vẫn bán được bằng cách ghi tay, có mạng lại nhập đơn vào sau — đơn cho phép chọn lại ngày giờ." }
+    },
+    {
+      "@type": "Question",
+      "name": "Ngừng dùng thì dữ liệu của tôi đi đâu?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Vẫn là của bạn. Trước khi ngừng, xuất Excel toàn bộ sản phẩm, đơn hàng, khách hàng và tồn kho. Chúng tôi giữ dữ liệu thêm 90 ngày phòng khi bạn quay lại, sau đó xoá." }
+    },
+    {
+      "@type": "Question",
+      "name": "Có mất phí cài đặt ban đầu không?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Không. Bạn tự tạo tài khoản và dùng được ngay. Nếu muốn chúng tôi dựng danh mục, nhập tồn đầu kỳ và tập huấn nhân viên thì có gói dịch vụ riêng." }
+    }
+  ]
+}
+</script>
+
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -41,6 +131,7 @@
       <a href="#tinh-nang">Tính năng</a>
       <a href="#mot-ngay">Cách dùng</a>
       <a href="#bang-gia">Các gói</a>
+      <a href="#an-toan">An toàn</a>
       <a href="#cau-hoi">Câu hỏi</a>
     </nav>
 
@@ -60,7 +151,10 @@
     <div class="wrap hero__grid">
 
       <div class="hero__text">
-        <p class="eyebrow">Phần mềm quản lý bán hàng</p>
+        <!-- Eyebrow là chỗ DUY NHẤT trong hero mang từ khoá tìm kiếm — h1 giữ
+             câu móc riêng ("chốt sổ trong một phút"), và hai vai không đổi chỗ
+             cho nhau: từ khoá không móc được ai, câu móc không xếp hạng được. -->
+        <p class="eyebrow">Phần mềm quản lý bán hàng cho cửa hàng &amp; chuỗi</p>
         <h1 class="h1">Chốt sổ cuối ngày<br>trong một phút.</h1>
         <p class="lede">
           Sellio gom đơn hàng, tồn kho, nhập hàng, khách hàng và thu chi của
@@ -394,6 +488,55 @@
     </div>
   </section>
 
+
+  <!-- ── AN TOÀN DỮ LIỆU ─────────────────────────────────────────── -->
+  <!-- Trang đối thủ nào cũng có khối "an toàn, bảo mật" — vì đây là câu chủ
+       tiệm hỏi thật trước khi đưa sổ sách lên mạng. Chỉ ghi những điều ĐANG
+       LÀM THẬT: không huy hiệu chứng chỉ chưa có, không "chuẩn quốc tế" suông.
+       Một dòng bịa bị hỏi lại là mất cả khối. -->
+  <section class="sec" id="an-toan">
+    <div class="wrap">
+      <header class="sec__head">
+        <p class="eyebrow">An toàn dữ liệu</p>
+        <h2 class="h2">Sổ sách của bạn, chúng tôi giữ như tiền của mình</h2>
+      </header>
+
+      <div class="minis">
+        <article class="mini">
+          <h3 class="mini__title">Mỗi cửa hàng một ngăn riêng</h3>
+          <p>Dữ liệu của từng cửa hàng tách biệt từ tầng thấp nhất của hệ thống.
+             Không nhân viên tiệm nào nhìn thấy số liệu của tiệm khác — kể cả chúng tôi
+             cũng chỉ vào khi bạn yêu cầu hỗ trợ.</p>
+        </article>
+        <article class="mini">
+          <h3 class="mini__title">Sao lưu mỗi ngày</h3>
+          <p>Toàn bộ dữ liệu được sao lưu tự động hằng ngày. Lỡ tay xoá nhầm
+             hàng loạt thì gọi chúng tôi — khôi phục được về bản gần nhất.</p>
+        </article>
+        <article class="mini">
+          <h3 class="mini__title">Mật khẩu băm một chiều</h3>
+          <p>Mật khẩu lưu dạng băm bcrypt — chính chúng tôi cũng không đọc được.
+             Quên mật khẩu là đặt lại, không phải "xin cấp lại".</p>
+        </article>
+        <article class="mini">
+          <h3 class="mini__title">Kết nối mã hoá HTTPS</h3>
+          <p>Mọi thứ đi giữa máy bạn và máy chủ đều được mã hoá. Ngồi mạng
+             quán cà phê cũng không ai đọc trộm được đơn hàng của bạn.</p>
+        </article>
+        <article class="mini">
+          <h3 class="mini__title">Dữ liệu là của bạn</h3>
+          <p>Xuất Excel toàn bộ bất cứ lúc nào, nút nằm sẵn ở từng trang.
+             Ngừng dùng thì dữ liệu được giữ thêm 90 ngày rồi xoá hẳn.</p>
+        </article>
+        <article class="mini">
+          <h3 class="mini__title">Máy chủ đặt tại Việt Nam</h3>
+          <p>Truy cập nhanh từ mọi nhà mạng trong nước, và dữ liệu kinh doanh
+             của bạn nằm trong lãnh thổ Việt Nam.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
   <!-- ── CÂU HỎI ──────────────────────────────────────────────────── -->
   <section class="sec" id="cau-hoi">
     <div class="wrap wrap--narrow">
@@ -570,8 +713,10 @@
 
     <div class="foot__col">
       <p class="foot__head">Liên hệ</p>
-      <a href="mailto:hello@selliotech.store">hello@selliotech.store</a>
-      <a href="tel:+84900000000">0900 000 000</a>
+      <!-- CHỈ những kênh có người trực thật. Số điện thoại bịa "0900 000 000"
+           từng đứng ở đây — một khách gọi vào số không ai nghe là mất khách,
+           và mất luôn niềm tin vào mọi con số khác trên trang. -->
+      <a href="mailto:nhuy08052004@gmail.com">nhuy08052004@gmail.com</a>
     </div>
   </div>
 
