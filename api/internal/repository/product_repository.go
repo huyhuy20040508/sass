@@ -125,6 +125,21 @@ func (r *productRepository) ExistsBySKU(ctx context.Context, sku string, exclude
 	return r.existsByColumn(ctx, "sku", sku, excludeID)
 }
 
+// Count đếm sản phẩm của cửa hàng cho lượt xét hạn mức hợp đồng.
+//
+// KHÔNG Unscoped: sản phẩm đã xoá mềm không còn hiện ở đâu và không chiếm chỗ
+// của ai, nên tính chúng vào nghĩa là khách xoá bớt hàng mà hạn mức không nhả
+// ra — một cái trần chỉ đi lên, không bao giờ đi xuống.
+//
+// Không lọc gì thêm: bộ lọc tenant tự chèn `tenant_id`, và đó là điều kiện duy
+// nhất đúng ở đây.
+func (r *productRepository) Count(ctx context.Context) (int64, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Model(&domain.Product{}).Count(&count).Error
+
+	return count, err
+}
+
 // existsByColumn dùng chung cho hai cột có UNIQUE index (slug, sku).
 //
 // KHÔNG Unscoped: từ khi products có cột deleted_mark, hai UNIQUE key là

@@ -1090,6 +1090,36 @@ class ApiClient
         return $this->delete("/admin/users/{$id}");
     }
 
+    // ---------- Chi nhánh (điểm bán của cửa hàng) ----------
+    //
+    // "Chi nhánh" là bảng `shops` bên API: các điểm bán NẰM TRONG cửa hàng của
+    // mình, không phải khách hàng của nhà cung cấp. Số lượng bị hạn mức
+    // `max_shops` của hợp đồng chặn — mở quá thì API trả 409 kèm câu giải thích.
+
+    /** Danh sách chi nhánh. $onlyActive = true để bỏ chi nhánh đã đóng. */
+    public function chiNhanh(bool $onlyActive = false): Response
+    {
+        return $this->get('/admin/chi-nhanh', $onlyActive ? ['active' => 'true'] : []);
+    }
+
+    /** Mở thêm một chi nhánh. Bỏ trống `code` thì API tự đặt mã. */
+    public function taoChiNhanh(array $data): Response
+    {
+        return $this->post('/admin/chi-nhanh', $data);
+    }
+
+    /** Sửa thông tin một chi nhánh. */
+    public function suaChiNhanh(int $id, array $data): Response
+    {
+        return $this->put("/admin/chi-nhanh/{$id}", $data);
+    }
+
+    /** Xoá (mềm) một chi nhánh. */
+    public function xoaChiNhanh(int $id): Response
+    {
+        return $this->delete("/admin/chi-nhanh/{$id}");
+    }
+
     /** Danh sách vai trò kèm số tài khoản đang mang vai trò đó. */
     public function roles(): Response
     {

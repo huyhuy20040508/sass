@@ -52,10 +52,13 @@ type UserService interface {
 type userService struct {
 	users domain.UserRepository
 	roles domain.RoleRepository
+	// hanMuc xét hạn mức tài khoản của hợp đồng. nil = máy chủ chưa nối được
+	// control plane, khi đó không có hợp đồng nào đọc được nên không ép gì cả.
+	hanMuc HanMucService
 }
 
-func NewUserService(users domain.UserRepository, roles domain.RoleRepository) UserService {
-	return &userService{users: users, roles: roles}
+func NewUserService(users domain.UserRepository, roles domain.RoleRepository, hanMuc HanMucService) UserService {
+	return &userService{users: users, roles: roles, hanMuc: hanMuc}
 }
 
 func (s *userService) List(ctx context.Context, filter domain.InternalUserFilter) ([]dto.UserResponse, int64, error) {
@@ -110,6 +113,14 @@ func (s *userService) Create(ctx context.Context, req *dto.UserRequest, actor Ac
 
 	username, err := s.resolveUsername(ctx, req.Username, 0)
 	if err != nil {
+		return nil, err
+	}
+
+	// Hạn mức xét sau mọi kiểm tra dữ liệu, ngay trước lượt ghi — cùng lý do với
+	// ProductService.Create. Chỉ tài khoản NỘI BỘ mới tính: canAssignRole ở trên
+	// đã chặn mọi vai trò ngoài danh sách đó, nên phép đếm bên
+	// UserRepository.InternalStats và phép chặn ở đây nói về cùng một tập người.
+	if err := conChoTao(ctx, s.hanMuc, domain.HanMucTaiKhoan); err != nil {
 		return nil, err
 	}
 

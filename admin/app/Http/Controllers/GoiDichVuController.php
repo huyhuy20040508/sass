@@ -40,6 +40,11 @@ class GoiDichVuController extends Controller
         $hopDong = null;
         $bangGia = [];
         $fields = [];
+        // Số ĐANG DÙNG của từng hạn mức. null = chưa có hợp đồng để so, hoặc máy
+        // chủ vừa không đếm được — màn hình rơi về câu chữ của hạn mức chứ đừng
+        // in số 0, vì "đang dùng 0/20" là một câu SAI ngay trên trang khách mở ra
+        // để yên tâm.
+        $daDung = null;
         $error = null;
 
         try {
@@ -48,6 +53,7 @@ class GoiDichVuController extends Controller
                 $hopDong = $res->json('data.hop_dong');
                 $bangGia = $res->json('data.bang_gia') ?? [];
                 $fields = $res->json('data.fields') ?? [];
+                $daDung = $res->json('data.da_dung');
                 // Mốc hết hạn vừa đọc được là bản mới nhất — cất vào session để
                 // mọi trang khác khoá đúng giây hợp đồng chết, không phải chờ lượt
                 // quét nền của máy chủ. Xem HanSuDung.
@@ -68,7 +74,7 @@ class GoiDichVuController extends Controller
             $error = 'Không tải được thông tin gói dịch vụ. Kiểm tra kết nối API.';
         }
 
-        $view = view('goi-dich-vu.index', compact('hopDong', 'bangGia', 'fields'));
+        $view = view('goi-dich-vu.index', compact('hopDong', 'bangGia', 'fields', 'daDung'));
 
         return $error ? $view->with('error', $error) : $view;
     }

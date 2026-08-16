@@ -55,6 +55,10 @@ var bangDanhSach = []khoDoc{
 	{"lien-he", "/api/v1/admin/contact-requests?page_size=100", 1},
 	{"nhan-tin", "/api/v1/admin/newsletter?page_size=100", 1},
 	{"tai-khoan", "/api/v1/admin/users?page_size=100", 2},
+	// Chi nhánh: mã 'mac-dinh' là mã của CẢ HAI cửa hàng giả (chỉ duy nhất trong
+	// một tenant). Câu truy vấn quên lọc tenant sẽ trả về hai dòng cùng mã, và
+	// con số dưới đây bắt đúng cái đó.
+	{"chi-nhanh", "/api/v1/admin/chi-nhanh", -1},
 
 	// Cấu hình: mỗi cửa hàng một bộ. Đây là bảng chứa SỐ TÀI KHOẢN NGÂN HÀNG, nên
 	// lẫn ở đây nghĩa là email xác nhận đơn của cửa hàng này in số tài khoản của

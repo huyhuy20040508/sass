@@ -181,6 +181,7 @@ func (h *ProductHandler) Get(c *gin.Context) {
 //
 //	@Summary		Tạo sản phẩm
 //	@Description	Biến thể chỉ khai size + màu. Tồn kho của biến thể mới luôn bằng 0 — muốn có hàng bán phải qua nghiệp vụ kho (`POST /admin/purchases` rồi nhận hàng, hoặc `POST /admin/inventory/adjust`).
+//	@Description	Trả 409 khi cửa hàng đã dùng hết hạn mức sản phẩm của hợp đồng (`max_products`); thông báo kèm số đang dùng và trần.
 //	@Tags			Admin - Products
 //	@Accept			json
 //	@Produce		json
@@ -336,6 +337,7 @@ func (h *ProductHandler) Delete(c *gin.Context) {
 // Duplicate godoc
 // @Summary      Sao chép sản phẩm
 // @Description  Tạo một bản sao mới của sản phẩm (bao gồm các biến thể & thư viện ảnh) với trạng thái tạm ẩn.
+// @Description  Bản sao cũng ăn một chỗ của hạn mức sản phẩm — hết chỗ thì trả 409.
 // @Tags         Admin - Products
 // @Accept       json
 // @Produce      json
@@ -345,6 +347,7 @@ func (h *ProductHandler) Delete(c *gin.Context) {
 // @Failure      400  {object}  response.Body
 // @Failure      401  {object}  response.Body
 // @Failure      404  {object}  response.Body
+// @Failure      409  {object}  response.Body
 // @Router       /admin/products/{id}/duplicate [post]
 func (h *ProductHandler) Duplicate(c *gin.Context) {
 	id, ok := parseUintParam(c, "id")

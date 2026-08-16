@@ -3,6 +3,9 @@ package repository
 
 import (
 	"fmt"
+	"log"
+	"os"
+	"time"
 
 	"sass-api/config"
 
@@ -53,8 +56,26 @@ func open(cfg config.DatabaseConfig, production bool) (*gorm.DB, error) {
 		logLevel = gormlogger.Warn
 	}
 
+	// Nhật ký GORM: giống bản mặc định, khác đúng MỘT ô — IgnoreRecordNotFoundError.
+	//
+	// "Không tìm thấy dòng nào" KHÔNG phải lỗi hệ thống, nhưng bản mặc định ghi nó
+	// ra ở mức ERROR kèm nguyên câu SQL. Từ khi mỗi lượt tạo sản phẩm / tài khoản /
+	// chi nhánh đều tra hợp đồng để xét hạn mức (xem service.HanMucService), mọi
+	// cửa hàng CHƯA CÓ hợp đồng trong sổ sẽ đẻ ra một dòng đỏ cho mỗi lượt tạo —
+	// trong khi đó là trạng thái hợp lệ mà service đã xử lý đúng. Nhật ký đầy lỗi
+	// giả là nhật ký không ai còn đọc, và lỗi thật thì chìm trong đó.
+	ghiNhatKy := gormlogger.New(
+		log.New(os.Stdout, "\r\n", log.LstdFlags),
+		gormlogger.Config{
+			SlowThreshold:             200 * time.Millisecond,
+			LogLevel:                  logLevel,
+			IgnoreRecordNotFoundError: true,
+			Colorful:                  true,
+		},
+	)
+
 	db, err := gorm.Open(mysql.Open(cfg.DSN()), &gorm.Config{
-		Logger:                 gormlogger.Default.LogMode(logLevel),
+		Logger:                 ghiNhatKy,
 		SkipDefaultTransaction: true,
 		TranslateError:         true, // 1062 -> gorm.ErrDuplicatedKey, 1451/1452 -> gorm.ErrForeignKeyViolated
 	})

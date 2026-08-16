@@ -293,6 +293,23 @@ var bangTuyen = []buoc{
 	{"nhan-tin", "PUT /admin/newsletter/{id}/unsubscribe", http.MethodPut,
 		func(c *cuaHang) string { return fmt.Sprintf("/api/v1/admin/newsletter/%d/unsubscribe", c.nhanTin) }, nil, phaSua},
 
+	// --- Chi nhánh (điểm bán trong một cửa hàng) ---
+	//
+	// Nhóm này nguy hiểm theo kiểu riêng: hai cửa hàng khác nhau được phép có chi
+	// nhánh TRÙNG MÃ ('mac-dinh'), nên một câu truy vấn quên lọc tenant vẫn tra ra
+	// đúng một dòng và trả 200 như thường.
+	//
+	// Lượt xoá của CHÍNH CHỦ trả 409 (chi nhánh hoạt động cuối cùng) chứ không
+	// phải 2xx — lượt đối chứng chỉ đòi "không 404", nên đó là câu trả lời hợp lệ,
+	// và tiện thể nó kiểm luôn cái chốt chặn ấy.
+	{"chi-nhanh", "GET /admin/chi-nhanh/{id}", http.MethodGet,
+		func(c *cuaHang) string { return fmt.Sprintf("/api/v1/admin/chi-nhanh/%d", c.chiNhanh) }, nil, phaDoc},
+	{"chi-nhanh", "PUT /admin/chi-nhanh/{id}", http.MethodPut,
+		func(c *cuaHang) string { return fmt.Sprintf("/api/v1/admin/chi-nhanh/%d", c.chiNhanh) },
+		func(c *cuaHang) any { return map[string]any{"name": "Chi nhánh " + c.vet} }, phaSua},
+	{"chi-nhanh", "DELETE /admin/chi-nhanh/{id}", http.MethodDelete,
+		func(c *cuaHang) string { return fmt.Sprintf("/api/v1/admin/chi-nhanh/%d", c.chiNhanh) }, nil, phaXoa},
+
 	// --- Tài khoản nội bộ ---
 	{"tai-khoan", "GET /admin/users/{id}", http.MethodGet,
 		func(c *cuaHang) string { return fmt.Sprintf("/api/v1/admin/users/%d", c.nhanVien) }, nil, phaDoc},

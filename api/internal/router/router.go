@@ -54,6 +54,10 @@ type Handlers struct {
 	PReturn  *handler.PurchaseReturnHandler
 	Setting  *handler.SettingHandler
 	User     *handler.UserHandler
+	// ChiNhanh là các ĐIỂM BÁN của chính cửa hàng (bảng `shops`), không phải
+	// khách hàng của nền tảng — xem domain.ChiNhanh. Luôn có mặt: đây là dữ liệu
+	// data plane, không phụ thuộc control plane.
+	ChiNhanh *handler.ChiNhanhHandler
 	Payment  *handler.PaymentHandler
 	Banner   *handler.BannerHandler
 	Report   *handler.ReportHandler
@@ -545,6 +549,16 @@ func New(
 			// Khách hàng KHÔNG đi đường này — họ có /admin/customers riêng, và
 			// service ở đây trả 404 nếu id trỏ vào một khách hàng.
 			// "stats" phải đứng trước /:id, nếu không nó bị hiểu là id tài khoản.
+			// Chi nhánh — mở/đóng điểm bán. Ở nhóm `manage` (nhân viên KHÔNG vào)
+			// cùng mức với Người dùng và Cài đặt: mở thêm một điểm bán ăn thẳng vào
+			// hạn mức `max_shops` của hợp đồng, tức là một quyết định có tiền đứng
+			// sau chứ không phải việc hằng ngày.
+			manage.GET("/chi-nhanh", h.ChiNhanh.List)
+			manage.POST("/chi-nhanh", h.ChiNhanh.Create)
+			manage.GET("/chi-nhanh/:id", h.ChiNhanh.Get)
+			manage.PUT("/chi-nhanh/:id", h.ChiNhanh.Update)
+			manage.DELETE("/chi-nhanh/:id", h.ChiNhanh.Delete)
+
 			manage.GET("/users", h.User.List)
 			manage.POST("/users", h.User.Create)
 			manage.GET("/users/stats", h.User.Stats)

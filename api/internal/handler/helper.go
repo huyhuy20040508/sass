@@ -144,6 +144,25 @@ func handleServiceError(c *gin.Context, err error) {
 		response.ValidationError(c, map[string]string{"current_password": "Mật khẩu hiện tại không đúng"})
 	case errors.Is(err, domain.ErrPasswordSame):
 		response.ValidationError(c, map[string]string{"new_password": "Mật khẩu mới trùng với mật khẩu đang dùng"})
+	// 409 chứ không phải 422: dữ liệu gửi lên không có gì sai, form không có ô
+	// nào để tô đỏ — cửa hàng chỉ đơn giản là hết chỗ trong gói. err đã kèm tên
+	// hạn mức và cặp "đang dùng/trần", in nguyên ra vì người đọc cần biết trần
+	// là bao nhiêu mới quyết được nên dọn bớt hay nâng gói.
+	case errors.Is(err, domain.ErrVuotHanMuc):
+		response.Error(c, 409, "Gói dịch vụ của cửa hàng đã hết chỗ ("+
+			strings.TrimPrefix(err.Error(), domain.ErrVuotHanMuc.Error()+": ")+
+			"). Xoá bớt hoặc liên hệ nhà cung cấp để nâng gói.")
+	// Chi nhánh. Ba lỗi, ba cách chữa khác hẳn nhau — nên không gộp làm một.
+	case errors.Is(err, domain.ErrMaChiNhanhDaCo):
+		response.ValidationError(c, map[string]string{
+			"code": "Mã này đã có chi nhánh khác dùng, vui lòng đặt mã khác",
+		})
+	case errors.Is(err, domain.ErrMaChiNhanhInvalid):
+		response.ValidationError(c, map[string]string{
+			"code": "Mã chi nhánh chỉ gồm chữ thường không dấu, số, dấu chấm, gạch ngang hoặc gạch dưới (2–30 ký tự)",
+		})
+	case errors.Is(err, domain.ErrChiNhanhCuoiCung):
+		response.Error(c, 409, "Đây là chi nhánh đang hoạt động cuối cùng — đóng nó xong thì cửa hàng không còn điểm bán nào để ghi đơn hàng hay tồn kho")
 	case errors.Is(err, domain.ErrLastSuperAdmin):
 		response.Error(c, 409, "Đây là super admin đang hoạt động cuối cùng — khoá hoặc xoá xong sẽ không còn ai quản trị được hệ thống")
 	case errors.Is(err, domain.ErrEmailNotVerified):

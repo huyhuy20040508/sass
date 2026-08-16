@@ -1007,6 +1007,38 @@ type UserRepository interface {
 	CountActiveByRole(ctx context.Context, roleID, excludeID uint) (int64, error)
 }
 
+// ChiNhanhRepository — truy cập bảng `shops`, các ĐIỂM BÁN của một tenant.
+//
+// CHẠY TRÊN DATA PLANE: mọi hàm dưới đây đi qua bộ lọc tenant, nên chúng chỉ
+// nhìn thấy chi nhánh của cửa hàng trong ctx. Đừng thêm hàm nào nhận tenantID
+// làm tham số — đó là dấu hiệu của một đường đọc xuyên khách hàng, và đường đó
+// thuộc về khu điều hành chứ không phải ở đây.
+type ChiNhanhRepository interface {
+	// List trả về chi nhánh của cửa hàng, sắp theo mã. onlyActive = true thì bỏ
+	// chi nhánh đã ngừng hoạt động.
+	List(ctx context.Context, onlyActive bool) ([]ChiNhanh, error)
+	FindByID(ctx context.Context, id uint) (*ChiNhanh, error)
+	// ExistsByCode tính CẢ chi nhánh đã xoá mềm: mã của chúng vẫn giữ chỗ trong
+	// uq_shops_tenant_code, nên báo trùng ở đây dễ hiểu hơn là để MySQL ném lỗi
+	// khoá lúc ghi.
+	ExistsByCode(ctx context.Context, code string, excludeID uint) (bool, error)
+	Create(ctx context.Context, cn *ChiNhanh) error
+	Update(ctx context.Context, cn *ChiNhanh) error
+	// Delete xoá mềm. Nơi gọi phải tự bảo đảm không xoá chi nhánh cuối cùng —
+	// xem ChiNhanhService.
+	Delete(ctx context.Context, id uint) error
+	// Count đếm chi nhánh còn trong sổ (kể cả đang ngừng hoạt động) — con số của
+	// hạn mức `max_shops`.
+	Count(ctx context.Context) (int64, error)
+	// CountActiveExcept đếm chi nhánh ĐANG HOẠT ĐỘNG, bỏ qua excludeID (0 =
+	// không bỏ ai).
+	//
+	// Có mặt để chặn thao tác làm biến mất chi nhánh hoạt động cuối cùng: một cửa
+	// hàng không còn điểm bán nào là thứ mọi bảng giao dịch mang `shop_id` sẽ
+	// không có chỗ để trỏ tới.
+	CountActiveExcept(ctx context.Context, excludeID uint) (int64, error)
+}
+
 // CategoryRepository — truy cập bảng categories.
 type CategoryRepository interface {
 	List(ctx context.Context, onlyActive bool) ([]Category, error)
@@ -1027,6 +1059,13 @@ type ProductRepository interface {
 	// ExistsBySKU — cặp với ExistsBySlug. Bảng products có UNIQUE trên sku, không
 	// kiểm tra ở đây thì lỗi rơi xuống tận MySQL và trả về một câu vô nghĩa.
 	ExistsBySKU(ctx context.Context, sku string, excludeID uint) (bool, error)
+	// Count đếm MỌI sản phẩm còn trong sổ của cửa hàng — kể cả đang ẩn, ngừng
+	// bán, chưa gắn danh mục. Cố ý KHÔNG nhận ProductFilter: nó phục vụ hạn mức
+	// hợp đồng (xem LoaiHanMuc), mà hạn mức đếm chỗ đang chiếm chứ không đếm hàng
+	// đang bày. Nhận bộ lọc ở đây là mở đường cho một nơi gọi lỡ tay đếm mỗi hàng
+	// đang bán, và khi đó tắt hiển thị một sản phẩm trở thành cách lách hạn mức
+	// bằng một cú bấm.
+	Count(ctx context.Context) (int64, error)
 	Create(ctx context.Context, p *Product) error
 	Update(ctx context.Context, p *Product) error
 	// SetStatus cập nhật trạng thái kinh doanh + cờ hiển thị, không đụng biến thể/ảnh.

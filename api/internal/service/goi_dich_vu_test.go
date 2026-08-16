@@ -73,7 +73,7 @@ func goi(id uint, code, status string) domain.PlanWithApp {
 func TestGoiDichVuCuaToi_LocTheoDungCuaHangVaApp(t *testing.T) {
 	thueBao := &fakeThueBaoCuaKhach{loi: domain.ErrNotFound}
 	bangGia := &fakeBangGia{}
-	svc := NewGoiDichVuService(thueBao, bangGia, domain.AppOrder)
+	svc := NewGoiDichVuService(thueBao, bangGia, nil, domain.AppOrder)
 
 	if _, err := svc.CuaToi(context.Background(), 7); err != nil {
 		t.Fatalf("không mong có lỗi: %v", err)
@@ -91,7 +91,7 @@ func TestGoiDichVuCuaToi_LocTheoDungCuaHangVaApp(t *testing.T) {
 // hợp lệ.
 func TestGoiDichVuCuaToi_KhongCoCuaHangThiTuChoi(t *testing.T) {
 	thueBao := &fakeThueBaoCuaKhach{}
-	svc := NewGoiDichVuService(thueBao, &fakeBangGia{}, domain.AppOrder)
+	svc := NewGoiDichVuService(thueBao, &fakeBangGia{}, nil, domain.AppOrder)
 
 	_, err := svc.CuaToi(context.Background(), 0)
 	if !errors.Is(err, domain.ErrForbidden) {
@@ -108,7 +108,7 @@ func TestGoiDichVuCuaToi_ChuaCoHopDongVanTraBangGia(t *testing.T) {
 		goi(1, "khoi_dau", domain.PlanStatusActive),
 		goi(2, "cua_hang", domain.PlanStatusActive),
 	}}
-	svc := NewGoiDichVuService(&fakeThueBaoCuaKhach{loi: domain.ErrNotFound}, bangGia, domain.AppOrder)
+	svc := NewGoiDichVuService(&fakeThueBaoCuaKhach{loi: domain.ErrNotFound}, bangGia, nil, domain.AppOrder)
 
 	res, err := svc.CuaToi(context.Background(), 7)
 	if err != nil {
@@ -137,7 +137,7 @@ func TestGoiDichVuCuaToi_GiuLaiGoiDangDungDuDaNgungBan(t *testing.T) {
 	thueBao := &fakeThueBaoCuaKhach{hopDong: &domain.HopDongDayDu{
 		Subscription: domain.Subscription{PlanID: &dangDungID, Plan: "cua_hang_cu"},
 	}}
-	svc := NewGoiDichVuService(thueBao, bangGia, domain.AppOrder)
+	svc := NewGoiDichVuService(thueBao, bangGia, nil, domain.AppOrder)
 
 	res, err := svc.CuaToi(context.Background(), 7)
 	if err != nil {

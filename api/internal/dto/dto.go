@@ -531,6 +531,25 @@ type CustomerRequest struct {
 	Password string `json:"password" binding:"omitempty,min=6,max=72"`
 }
 
+// ---------- Chi nhánh ----------
+
+// ChiNhanhRequest — payload tạo/sửa MỘT CHI NHÁNH (điểm bán) của cửa hàng.
+//
+// "Chi nhánh" ở đây là bảng `shops`, KHÔNG phải cửa hàng (tenant) — xem
+// domain.ChiNhanh về cái bẫy tên gọi này.
+type ChiNhanhRequest struct {
+	// Code bỏ trống khi TẠO = hệ thống tự sinh (chi-nhanh-2, chi-nhanh-3…). Bỏ
+	// trống khi SỬA = giữ nguyên mã cũ: mã đã đi vào chứng từ, tự đổi là hồ sơ
+	// hai bên lệch nhau.
+	Code string `json:"code" binding:"omitempty,max=30" example:"kho-mien-bac"`
+	Name string `json:"name" binding:"required,max=150" example:"Kho miền Bắc"`
+	// Phone/Address bỏ trống ghi xuống NULL, không phải chuỗi rỗng.
+	Phone   string `json:"phone" binding:"omitempty,max=20" example:"0912345678"`
+	Address string `json:"address" binding:"omitempty,max=255"`
+	// IsActive bỏ trống = true (chi nhánh mới mặc định đang hoạt động).
+	IsActive *bool `json:"is_active"`
+}
+
 // ---------- Tài khoản nội bộ & vai trò ----------
 
 // UserRequest — payload tạo/sửa tài khoản NỘI BỘ (quản trị & nhân viên).
@@ -1783,9 +1802,27 @@ type HopDongCuaToi struct {
 // BangGia chỉ gồm gói ĐANG BÁN của phần mềm này, cộng thêm đúng dòng gói mà hợp
 // đồng hiện tại đang dùng — kể cả khi nó đã ngừng bán. Thiếu vế sau thì khách
 // đang dùng một gói cũ mở trang ra và không thấy gói của mình đâu cả.
+// DaDungHanMuc là số thứ cửa hàng ĐANG CÓ, để màn hình đặt cạnh trần đã ký.
+//
+// Đây là vế còn thiếu của một hạn mức: "tối đa 20 tài khoản" không nói được còn
+// mấy chỗ, và người dùng chỉ biết mình đụng trần vào đúng lúc bị từ chối. Con số
+// đếm bằng CHÍNH cửa mà lượt chặn dùng, nên hai chỗ không nói hai câu khác nhau.
+//
+// Đủ cả ba hạn mức của hợp đồng. Chi nhánh luôn >= 1: mỗi cửa hàng được dựng
+// kèm một chi nhánh 'mac-dinh' lúc mở tài khoản.
+type DaDungHanMuc struct {
+	ChiNhanh int64 `json:"chi_nhanh" example:"1"`
+	TaiKhoan int64 `json:"tai_khoan" example:"4"`
+	SanPham  int64 `json:"san_pham" example:"128"`
+}
+
 type GoiDichVuCuaToiResponse struct {
 	HopDong *HopDongCuaToi `json:"hop_dong"`
-	BangGia []PlanItem     `json:"bang_gia"`
+	// DaDung nil = chưa có hợp đồng để so, hoặc lượt đếm vừa hỏng. Màn hình rơi
+	// về câu chữ của hạn mức chứ đừng in số 0 — "đang dùng 0/20" là một câu SAI,
+	// và nó sai ngay trên màn hình khách mở ra để yên tâm.
+	DaDung  *DaDungHanMuc `json:"da_dung"`
+	BangGia []PlanItem    `json:"bang_gia"`
 	// Fields là siêu dữ liệu của từng khoá hạn mức (nhãn, đơn vị, giá trị khi gói
 	// không khai). Trả kèm để màn hình khỏi chép lại bảng khoá lần thứ hai —
 	// thêm một hạn mức mới ở registry là trang này tự có thêm dòng.

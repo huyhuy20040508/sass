@@ -27,6 +27,7 @@ type cuaHang struct {
 	nhanVien uint
 	khach    uint // khách hàng (vai trò customer)
 
+	chiNhanh   uint // điểm bán (bảng shops), KHÔNG phải cửa hàng
 	danhMuc    uint
 	thuongHieu uint
 	sanPham    uint
@@ -61,6 +62,11 @@ type cuaHang struct {
 // kiểm là kiểm ĐƯỜNG ĐỌC, nên đường ghi phải là con đường ngắn nhất và chắc
 // chắn nhất. Bộ lọc tenant tự điền tenant_id cho mọi dòng ở đây — đó cũng là
 // điều tenant_scope_test đã kiểm riêng.
+// maChiNhanhGoc là mã chi nhánh đầu tiên của mọi cửa hàng — khớp hằng số cùng
+// nghĩa bên repository. Chỉ duy nhất TRONG một tenant, nên hai cửa hàng giả cùng
+// mang mã này là chuyện đúng, và cũng chính là thứ đáng kiểm.
+const maChiNhanhGoc = "mac-dinh"
+
 func gieo(t *testing.T, db *gorm.DB, ma string) *cuaHang {
 	t.Helper()
 
@@ -118,6 +124,17 @@ func gieo(t *testing.T, db *gorm.DB, ma string) *cuaHang {
 	}
 	tao(t, db, ctx, khach)
 	c.khach = khach.ID
+
+	// --- điểm bán ---
+	//
+	// Cửa hàng thật luôn được dựng kèm đúng một chi nhánh 'mac-dinh' (xem
+	// CuaHangMoiRepository.Tao). Gieo lại đúng như vậy để bài kiểm danh sách so
+	// được một con số có nghĩa, thay vì so hai danh sách cùng rỗng.
+	chiNhanh := &domain.ChiNhanh{
+		Code: maChiNhanhGoc, Name: "Chi nhánh " + c.vet, IsActive: true,
+	}
+	tao(t, db, ctx, chiNhanh)
+	c.chiNhanh = chiNhanh.ID
 
 	// --- hàng hoá ---
 	danhMuc := &domain.Category{Name: "Danh mục " + c.vet, Slug: "dm-" + c.vet, IsActive: true}

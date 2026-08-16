@@ -60,7 +60,30 @@
         // Hạn mức ĐÃ KÝ: 0 nghĩa là không giới hạn (bản dịch của 'vo_han' bên bảng
         // giá) — in số 0 ra thì khách đọc thành "không được cái nào".
         $hanMuc = fn ($so) => ((int) $so) === 0 ? 'Không giới hạn' : number_format((int) $so, 0, ',', '.');
-        $hanMucPhu = fn ($so, $donVi) => ((int) $so) === 0 ? 'Gói không giới hạn' : $donVi;
+
+        // Dòng phụ dưới mỗi hạn mức. Vế đáng giá nhất ở đây là SỐ ĐANG DÙNG:
+        // "tối đa 20 tài khoản" không nói được còn mấy chỗ, và người dùng chỉ
+        // biết mình đụng trần vào đúng lúc bị từ chối tạo.
+        //
+        // $khoa null = hạn mức chưa có chỗ đếm. Khi đó in đúng câu cũ; đoán một
+        // con số cho nó là bịa ra thông tin trên màn hình hợp đồng.
+        $so = fn ($n) => number_format((int) $n, 0, ',', '.');
+        $soDangDung = $daDung ?? null;
+        $hanMucPhu = function ($tran, $donVi, $khoa = null) use ($soDangDung, $so) {
+            $dung = ($khoa !== null && isset($soDangDung[$khoa])) ? (int) $soDangDung[$khoa] : null;
+
+            // 0 = 'vo_han' bên bảng giá. Không có trần để so, nhưng số đang dùng
+            // vẫn đáng in: nó là câu trả lời cho "tiệm mình đang có bao nhiêu".
+            if (((int) $tran) === 0) {
+                return $dung === null
+                    ? 'Gói không giới hạn'
+                    : 'Đang dùng '.$so($dung).' — gói không giới hạn';
+            }
+
+            return $dung === null
+                ? $donVi
+                : 'Đang dùng '.$so($dung).' / '.$so($tran).' '.$donVi;
+        };
 
         // ĐÃ HẾT HẠN CHƯA — hỏi DỮ LIỆU, không hỏi con số ngày.
         //
@@ -230,11 +253,11 @@
                  của bạn là những con số này, kể cả khi bảng giá hôm nay ghi khác. --}}
             <div class="gdv-tiles">
                 @foreach([
-                    ['Chi nhánh', $hanMuc($hopDong['chi_nhanh']), $hanMucPhu($hopDong['chi_nhanh'], 'cửa hàng'), 'blue',
+                    ['Chi nhánh', $hanMuc($hopDong['chi_nhanh']), $hanMucPhu($hopDong['chi_nhanh'], 'điểm bán', 'chi_nhanh'), 'blue',
                         '<path d="M3 21h18"/><path d="M5 21V8l7-5 7 5v13"/><path d="M9.5 21v-6h5v6"/>'],
-                    ['Tài khoản', $hanMuc($hopDong['tai_khoan']), $hanMucPhu($hopDong['tai_khoan'], 'người dùng'), 'violet',
+                    ['Tài khoản', $hanMuc($hopDong['tai_khoan']), $hanMucPhu($hopDong['tai_khoan'], 'người dùng', 'tai_khoan'), 'violet',
                         '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20v-1a6.5 6.5 0 0 1 13 0v1"/><path d="M16.5 5.2a3.5 3.5 0 0 1 0 6.6"/><path d="M17 13.5a5.5 5.5 0 0 1 4.5 5.4v1.1"/>'],
-                    ['Sản phẩm', $hanMuc($hopDong['san_pham']), $hanMucPhu($hopDong['san_pham'], 'mặt hàng'), 'teal',
+                    ['Sản phẩm', $hanMuc($hopDong['san_pham']), $hanMucPhu($hopDong['san_pham'], 'mặt hàng', 'san_pham'), 'teal',
                         '<path d="M3.5 7.5 12 3l8.5 4.5v9L12 21l-8.5-4.5Z"/><path d="M3.5 7.5 12 12l8.5-4.5M12 12v9"/>'],
                     ['Tên miền riêng', ($hopDong['ten_mien_rieng'] ?? false) ? 'Có' : 'Không',
                         ($hopDong['ten_mien_rieng'] ?? false) ? 'Đã bao gồm trong gói' : 'Không có trong gói', 'green',

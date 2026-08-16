@@ -114,6 +114,16 @@ func main() {
 		quetHan         service.QuetHanService
 		quetHopDongRepo domain.HopDongRepository
 		quetCuaHangRepo domain.CuaHangMoiRepository
+		// Hai sổ mà TRANG GÓI DỊCH VỤ và CỬA XÉT HẠN MỨC cùng đọc. Giữ lại ở đây
+		// thay vì dựng tại chỗ vì cả hai thứ dùng chúng đều phải đợi tới mục 6:
+		// chúng cần thêm repository của data plane (đếm sản phẩm, đếm tài khoản)
+		// để nói được "đang dùng bao nhiêu trên bao nhiêu".
+		//
+		// Còn nil = chưa nối được control plane, và khi đó KHÔNG ép hạn mức nào cả:
+		// không đọc được hợp đồng thì không biết trần của ai là bao nhiêu, mà chặn
+		// theo phỏng đoán là khoá nhầm cửa hàng của người đang trả tiền.
+		thueBaoRepo domain.ThueBaoCuaKhachRepository
+		bangGiaRepo domain.PlanRepository
 	)
 
 	platformDB, err := repository.NewPlatformDB(cfg.Platform, cfg.App.IsProduction())
@@ -208,14 +218,15 @@ func main() {
 				repository.NewTaiKhoanCuaHangRepository(db),
 			))
 
-			// Trang gói dịch vụ của Shop Admin. Cùng bảng giá với khu điều hành,
-			// nhưng đọc qua một cửa hẹp hơn hẳn: đúng một khách, đúng phần mềm mà
-			// tiến trình này phục vụ (cfg.App.Code) — xem service.GoiDichVuService.
-			goiDichVuHandler = handler.NewGoiDichVuHandler(service.NewGoiDichVuService(
-				repository.NewThueBaoCuaKhachRepository(platformDB),
-				repository.NewPlanRepository(platformDB),
-				cfg.App.Code,
-			))
+			// Hai sổ của control plane mà TRANG GÓI DỊCH VỤ và CỬA XÉT HẠN MỨC cùng
+			// đọc: hợp đồng của đúng một khách, và bảng giá. Cửa hẹp hơn hẳn khu
+			// điều hành — đúng một khách, đúng phần mềm mà tiến trình này phục vụ
+			// (cfg.App.Code), xem service.GoiDichVuService.
+			//
+			// Hai thứ dùng chúng đều dựng Ở MỤC 6 chứ không ở đây, vì cả hai còn cần
+			// repository của data plane để đếm số đang dùng.
+			thueBaoRepo = repository.NewThueBaoCuaKhachRepository(platformDB)
+			bangGiaRepo = repository.NewPlanRepository(platformDB)
 
 			// Lượt quét hạn: cầm đúng cặp repository của DungThuService, và cũng bắc
 			// qua hai plane. Nó là mảnh còn thiếu của cơ chế chặn khách hết hạn —
@@ -305,6 +316,7 @@ func main() {
 	reportRepo := repository.NewReportRepository(db)
 	promotionRepo := repository.NewPromotionRepository(db)
 	voucherRepo := repository.NewVoucherRepository(db)
+	chiNhanhRepo := repository.NewChiNhanhRepository(db)
 	contactRepo := repository.NewContactRepository(db)
 	newsletterRepo := repository.NewNewsletterRepository(db)
 
@@ -327,7 +339,31 @@ func main() {
 	categorySvc := service.NewCategoryService(categoryRepo)
 	brandSvc := service.NewBrandService(brandRepo)
 	bannerSvc := service.NewBannerService(bannerRepo)
-	productSvc := service.NewProductService(productRepo, categoryRepo, brandRepo)
+	// Cửa xét HẠN MỨC HỢP ĐỒNG — chỗ ba con số đã ký (chi nhánh / tài khoản /
+	// sản phẩm) lần đầu có hiệu lực thật, thay vì chỉ được in ra màn hình.
+	//
+	// Còn nil khi chưa nối được control plane, và mọi service nhận nó đều hiểu
+	// nil là "không ép gì cả": không đọc được hợp đồng thì không biết trần của
+	// khách nào là bao nhiêu, mà chặn theo phỏng đoán là khoá nhầm cửa hàng của
+	// người đang trả tiền. Xem service.HanMucService.
+	var hanMucSvc service.HanMucService
+	if thueBaoRepo != nil {
+		hanMucSvc = service.NewHanMucService(
+			thueBaoRepo, productRepo, userRepo, chiNhanhRepo, cfg.App.Code)
+
+		// Trang "Các gói dịch vụ" của Shop Admin dựng ở đây vì nó in kèm số ĐANG
+		// DÙNG cạnh mỗi hạn mức — con số đó đọc bằng đúng cửa đếm mà lượt chặn ở
+		// trên dùng, nên hai chỗ không bao giờ nói hai câu khác nhau.
+		goiDichVuHandler = handler.NewGoiDichVuHandler(service.NewGoiDichVuService(
+			thueBaoRepo, bangGiaRepo, hanMucSvc, cfg.App.Code,
+		))
+	}
+
+	productSvc := service.NewProductService(productRepo, categoryRepo, brandRepo, hanMucSvc)
+	// Chi nhánh: các ĐIỂM BÁN trong một cửa hàng. Đây là thứ gói Chuỗi bán, và
+	// cũng là nơi hạn mức `max_shops` lần đầu có việc để làm — trước nó, con số
+	// ấy canh một thao tác mà không màn hình nào làm được.
+	chiNhanhSvc := service.NewChiNhanhService(chiNhanhRepo, hanMucSvc)
 	// Chương trình khuyến mãi: vừa là module quản trị, vừa là thứ tính giá sau giảm
 	// cho cả trang bán hàng lẫn lúc đặt hàng. categoryRepo để chương trình khai ở
 	// danh mục cha phủ được tới sản phẩm nằm trong danh mục cháu.
@@ -338,7 +374,7 @@ func main() {
 	customerSvc := service.NewCustomerService(userRepo)
 	// Tài khoản nội bộ (quản trị & nhân viên) + vai trò — dùng chung userRepo với
 	// khách hàng nhưng lọc ngược vai trò nên hai luồng không thấy dữ liệu của nhau.
-	userSvc := service.NewUserService(userRepo, roleRepo)
+	userSvc := service.NewUserService(userRepo, roleRepo, hanMucSvc)
 	// Hub SSE + service thông báo: đơn mới hiện ngay trên trang admin và trạng thái
 	// đơn hiện ngay ở trang tài khoản của khách, không cần tải lại trang.
 	hub := realtime.NewHub()
@@ -396,6 +432,7 @@ func main() {
 		PReturn:   handler.NewPurchaseReturnHandler(pReturnSvc),
 		Setting:   handler.NewSettingHandler(settingSvc),
 		User:      handler.NewUserHandler(userSvc),
+		ChiNhanh:  handler.NewChiNhanhHandler(chiNhanhSvc),
 		Payment:   handler.NewPaymentHandler(paymentSvc),
 		Banner:    handler.NewBannerHandler(bannerSvc),
 		Report:    handler.NewReportHandler(reportSvc),

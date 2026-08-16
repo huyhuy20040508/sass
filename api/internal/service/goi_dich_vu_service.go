@@ -34,15 +34,21 @@ type GoiDichVuService interface {
 type goiDichVuService struct {
 	thueBao domain.ThueBaoCuaKhachRepository
 	plans   domain.PlanRepository
-	maApp   string
+	// hanMuc cấp số ĐANG DÙNG để in cạnh trần đã ký. Cùng cửa đếm mà lượt chặn
+	// lúc tạo sản phẩm/tài khoản dùng — xem HanMucService.DangDung.
+	hanMuc HanMucService
+	maApp  string
 }
 
 // NewGoiDichVuService dựng service cho MỘT phần mềm — maApp là mã app của chính
 // tiến trình đang chạy (cfg.App.Code).
 func NewGoiDichVuService(
-	thueBao domain.ThueBaoCuaKhachRepository, plans domain.PlanRepository, maApp string,
+	thueBao domain.ThueBaoCuaKhachRepository,
+	plans domain.PlanRepository,
+	hanMuc HanMucService,
+	maApp string,
 ) GoiDichVuService {
-	return &goiDichVuService{thueBao: thueBao, plans: plans, maApp: maApp}
+	return &goiDichVuService{thueBao: thueBao, plans: plans, hanMuc: hanMuc, maApp: maApp}
 }
 
 func (s *goiDichVuService) CuaToi(ctx context.Context, tenantID uint) (dto.GoiDichVuCuaToiResponse, error) {
@@ -73,6 +79,10 @@ func (s *goiDichVuService) CuaToi(ctx context.Context, tenantID uint) (dto.GoiDi
 
 	if hopDong != nil {
 		res.HopDong = hopDongCuaToi(*hopDong, time.Now())
+		// Số đang dùng chỉ có nghĩa khi có hợp đồng để so: không hợp đồng thì màn
+		// hình đang nói "chưa gắn gói nào", và một dòng "đang dùng 12" đứng một
+		// mình ở đó không trả lời câu hỏi nào cả.
+		res.DaDung = s.daDung(ctx)
 	}
 
 	rows, err := s.plans.List(ctx, s.maApp)
@@ -101,6 +111,23 @@ func (s *goiDichVuService) CuaToi(ctx context.Context, tenantID uint) (dto.GoiDi
 	}
 
 	return res, nil
+}
+
+// daDung đọc số đang dùng, trả nil khi không đọc được.
+//
+// KHÔNG làm hỏng cả trang vì một câu đếm: con số này là phần phụ, còn thứ người
+// ta mở trang này ra để xem là hạn hợp đồng. Thiếu nó thì màn hình rơi về câu
+// chữ của hạn mức ("tối đa 20 tài khoản") — vẫn đọc được, chỉ là bớt một vế.
+func (s *goiDichVuService) daDung(ctx context.Context) *dto.DaDungHanMuc {
+	if s.hanMuc == nil {
+		return nil
+	}
+	so, err := s.hanMuc.DangDung(ctx)
+	if err != nil {
+		return nil
+	}
+
+	return &dto.DaDungHanMuc{ChiNhanh: so.ChiNhanh, TaiKhoan: so.TaiKhoan, SanPham: so.SanPham}
 }
 
 // dangDung cho biết một dòng bảng giá có phải dòng mà hợp đồng hiện tại đã ký

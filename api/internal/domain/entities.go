@@ -166,6 +166,42 @@ const TenantActive = "active"
 // authService.LoginShop cùng middleware.JWTAuth đọc để đá người dùng ra.
 const TenantSuspended = "suspended"
 
+// ChiNhanh là MỘT ĐIỂM BÁN của một khách hàng — bảng `shops`.
+//
+// ĐỌC KỸ HAI CHỮ NÀY TRƯỚC KHI VIẾT TIẾP, chúng là cái bẫy lớn nhất của lược đồ
+// này: "cửa hàng" trong cả dự án nghĩa là TENANT (một khách đã mua phần mềm,
+// bảng `tenants`), còn `shops` là chi nhánh NẰM TRONG một tenant. Vì vậy thực
+// thể này mang tên tiếng Việt: một struct tên `Shop` đứng cạnh `Tenant` sẽ được
+// người đọc sau hiểu ngược, và cái hiểu ngược đó ghi thẳng xuống database.
+//
+// Mỗi tenant có ÍT NHẤT một chi nhánh — dòng 'mac-dinh' dựng cùng lúc mở tài
+// khoản (xem CuaHangMoiRepository.Tao). Chi nhánh thứ hai trở đi là quyền lợi
+// của gói Chuỗi, và số lượng bị hạn mức `max_shops` của hợp đồng chặn (xem
+// LoaiHanMuc).
+//
+// Code chỉ cần duy nhất TRONG MỘT TENANT (uq_shops_tenant_code), khác `Tenant.Code`
+// vốn duy nhất toàn hệ thống — hai tiệm khác nhau cùng có chi nhánh "kho-1" là
+// chuyện bình thường.
+type ChiNhanh struct {
+	ID uint `json:"id" gorm:"primaryKey"`
+	TenantOwned
+	Code string `json:"code"`
+	Name string `json:"name"`
+	// Phone/Address NULL được dưới database. Dùng StringOrNull để đọc NULL không
+	// vỡ ở tầng driver, và để ô bỏ trống ghi xuống NULL chứ không phải chuỗi rỗng.
+	Phone   StringOrNull `json:"phone"`
+	Address StringOrNull `json:"address"`
+	// IsActive = false: chi nhánh ngừng hoạt động nhưng dữ liệu cũ vẫn tra được.
+	// VẪN TÍNH vào hạn mức — nó còn giữ mã và còn đứng trong danh sách, y như tài
+	// khoản bị khoá vẫn chiếm một chỗ.
+	IsActive  bool           `json:"is_active"`
+	CreatedAt time.Time      `json:"created_at"`
+	UpdatedAt time.Time      `json:"updated_at"`
+	DeletedAt gorm.DeletedAt `json:"-" gorm:"index"`
+}
+
+func (ChiNhanh) TableName() string { return "shops" }
+
 type User struct {
 	ID uint `json:"id" gorm:"primaryKey"`
 	TenantOwned

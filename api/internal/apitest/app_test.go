@@ -263,6 +263,7 @@ func dungHeThongVoi(t *testing.T, banHang, dieuHanh bool) *heThong {
 	reportRepo := repository.NewReportRepository(db)
 	promotionRepo := repository.NewPromotionRepository(db)
 	voucherRepo := repository.NewVoucherRepository(db)
+	chiNhanhRepo := repository.NewChiNhanhRepository(db)
 	contactRepo := repository.NewContactRepository(db)
 	newsletterRepo := repository.NewNewsletterRepository(db)
 
@@ -272,11 +273,22 @@ func dungHeThongVoi(t *testing.T, banHang, dieuHanh bool) *heThong {
 	categorySvc := service.NewCategoryService(categoryRepo)
 	brandSvc := service.NewBrandService(brandRepo)
 	bannerSvc := service.NewBannerService(bannerRepo)
-	productSvc := service.NewProductService(productRepo, categoryRepo, brandRepo)
+	// Cửa xét hạn mức hợp đồng chỉ có khi có control plane, y như main.go. Bộ
+	// kiểm này gieo dữ liệu THẲNG QUA GORM chứ không qua service, nên hạn mức
+	// không đứng chắn đường bài kiểm nào; nó có mặt ở đây để bản nối dây không
+	// lệch với main.go — nếu lệch thì bài kiểm đang kiểm một hệ thống khác.
+	var hanMucSvc service.HanMucService
+	if nenTang != nil {
+		hanMucSvc = service.NewHanMucService(
+			repository.NewThueBaoCuaKhachRepository(nenTang),
+			productRepo, userRepo, chiNhanhRepo, cfg.App.Code)
+	}
+
+	productSvc := service.NewProductService(productRepo, categoryRepo, brandRepo, hanMucSvc)
 	promotionSvc := service.NewPromotionService(promotionRepo, categoryRepo)
 	voucherSvc := service.NewVoucherService(voucherRepo)
 	customerSvc := service.NewCustomerService(userRepo)
-	userSvc := service.NewUserService(userRepo, roleRepo)
+	userSvc := service.NewUserService(userRepo, roleRepo, hanMucSvc)
 	hub := realtime.NewHub()
 	notifSvc := service.NewNotificationService(notifRepo, hub)
 	paymentSvc := service.NewPaymentService(paymentRepo, orderRepo, payosClient, cfg.PayOS, sepayClient, notifSvc)
@@ -307,6 +319,7 @@ func dungHeThongVoi(t *testing.T, banHang, dieuHanh bool) *heThong {
 		PReturn:   handler.NewPurchaseReturnHandler(pReturnSvc),
 		Setting:   handler.NewSettingHandler(settingSvc),
 		User:      handler.NewUserHandler(userSvc),
+		ChiNhanh:  handler.NewChiNhanhHandler(service.NewChiNhanhService(chiNhanhRepo, hanMucSvc)),
 		Payment:   handler.NewPaymentHandler(paymentSvc),
 		Banner:    handler.NewBannerHandler(bannerSvc),
 		Report:    handler.NewReportHandler(reportSvc),

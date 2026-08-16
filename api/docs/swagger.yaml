@@ -1,5 +1,31 @@
 basePath: /api/v1
 definitions:
+  domain.ChiNhanh:
+    properties:
+      address:
+        type: string
+      code:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: integer
+      is_active:
+        description: |-
+          IsActive = false: chi nhánh ngừng hoạt động nhưng dữ liệu cũ vẫn tra được.
+          VẪN TÍNH vào hạn mức — nó còn giữ mã và còn đứng trong danh sách, y như tài
+          khoản bị khoá vẫn chiếm một chỗ.
+        type: boolean
+      name:
+        type: string
+      phone:
+        description: |-
+          Phone/Address NULL được dưới database. Dùng StringOrNull để đọc NULL không
+          vỡ ở tầng driver, và để ô bỏ trống ghi xuống NULL chứ không phải chuỗi rỗng.
+        type: string
+      updated_at:
+        type: string
+    type: object
   domain.CustomerBucket:
     properties:
       label:
@@ -1801,6 +1827,34 @@ definitions:
       voucher_code:
         type: string
     type: object
+  dto.ChiNhanhRequest:
+    properties:
+      address:
+        maxLength: 255
+        type: string
+      code:
+        description: |-
+          Code bỏ trống khi TẠO = hệ thống tự sinh (chi-nhanh-2, chi-nhanh-3…). Bỏ
+          trống khi SỬA = giữ nguyên mã cũ: mã đã đi vào chứng từ, tự đổi là hồ sơ
+          hai bên lệch nhau.
+        example: kho-mien-bac
+        maxLength: 30
+        type: string
+      is_active:
+        description: IsActive bỏ trống = true (chi nhánh mới mặc định đang hoạt động).
+        type: boolean
+      name:
+        example: Kho miền Bắc
+        maxLength: 150
+        type: string
+      phone:
+        description: Phone/Address bỏ trống ghi xuống NULL, không phải chuỗi rỗng.
+        example: "0912345678"
+        maxLength: 20
+        type: string
+    required:
+    - name
+    type: object
   dto.ContactRequestResponse:
     properties:
       address:
@@ -1997,6 +2051,18 @@ definitions:
     required:
     - status
     type: object
+  dto.DaDungHanMuc:
+    properties:
+      chi_nhanh:
+        example: 1
+        type: integer
+      san_pham:
+        example: 128
+        type: integer
+      tai_khoan:
+        example: 4
+        type: integer
+    type: object
   dto.DatGiaHanRequest:
     properties:
       plan_id:
@@ -2187,6 +2253,13 @@ definitions:
         items:
           $ref: '#/definitions/dto.PlanItem'
         type: array
+      da_dung:
+        allOf:
+        - $ref: '#/definitions/dto.DaDungHanMuc'
+        description: |-
+          DaDung nil = chưa có hợp đồng để so, hoặc lượt đếm vừa hỏng. Màn hình rơi
+          về câu chữ của hạn mức chứ đừng in số 0 — "đang dùng 0/20" là một câu SAI,
+          và nó sai ngay trên màn hình khách mở ra để yên tâm.
       fields:
         description: |-
           Fields là siêu dữ liệu của từng khoá hạn mức (nhãn, đơn vị, giá trị khi gói
@@ -5489,6 +5562,228 @@ paths:
       summary: Cập nhật danh mục
       tags:
       - Admin - Categories
+  /admin/chi-nhanh:
+    get:
+      description: |-
+        Các điểm bán của chính cửa hàng đang đăng nhập, sắp theo mã.
+        Đặt `active=true` để bỏ chi nhánh đã ngừng hoạt động (các ô chọn nơi bán dùng tham số này).
+      parameters:
+      - description: true = chỉ chi nhánh đang hoạt động
+        in: query
+        name: active
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/domain.ChiNhanh'
+                  type: array
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Danh sách chi nhánh
+      tags:
+      - Admin - Chi nhánh
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Bỏ trống `code` thì hệ thống tự đặt (chi-nhanh-2, chi-nhanh-3…).
+        Trả 409 khi cửa hàng đã dùng hết hạn mức chi nhánh của hợp đồng (`max_shops`) —
+        đây chính là quyền lợi phân biệt gói Chuỗi với hai gói còn lại.
+      parameters:
+      - description: Thông tin chi nhánh
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.ChiNhanhRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/domain.ChiNhanh'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.Body'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Body'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.Body'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Mở thêm chi nhánh
+      tags:
+      - Admin - Chi nhánh
+  /admin/chi-nhanh/{id}:
+    delete:
+      description: |-
+        Xoá MỀM: dữ liệu cũ phát sinh tại chi nhánh này vẫn tra lại được.
+        Trả 409 khi đây là chi nhánh đang hoạt động cuối cùng — cửa hàng phải luôn còn một điểm bán.
+      parameters:
+      - description: ID chi nhánh
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Body'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Body'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Xoá chi nhánh
+      tags:
+      - Admin - Chi nhánh
+    get:
+      parameters:
+      - description: ID chi nhánh
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/domain.ChiNhanh'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Body'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Chi tiết một chi nhánh
+      tags:
+      - Admin - Chi nhánh
+    put:
+      consumes:
+      - application/json
+      description: |-
+        Bỏ trống `code` = giữ nguyên mã cũ (mã đã đi vào chứng từ của chi nhánh này).
+        Trả 409 khi đây là chi nhánh đang hoạt động cuối cùng mà lượt sửa lại tắt nó đi.
+      parameters:
+      - description: ID chi nhánh
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Thông tin chi nhánh
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.ChiNhanhRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/domain.ChiNhanh'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.Body'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Body'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.Body'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Sửa chi nhánh
+      tags:
+      - Admin - Chi nhánh
   /admin/contact-requests:
     get:
       consumes:
@@ -7166,9 +7461,9 @@ paths:
     post:
       consumes:
       - application/json
-      description: Biến thể chỉ khai size + màu. Tồn kho của biến thể mới luôn bằng
-        0 — muốn có hàng bán phải qua nghiệp vụ kho (`POST /admin/purchases` rồi nhận
-        hàng, hoặc `POST /admin/inventory/adjust`).
+      description: |-
+        Biến thể chỉ khai size + màu. Tồn kho của biến thể mới luôn bằng 0 — muốn có hàng bán phải qua nghiệp vụ kho (`POST /admin/purchases` rồi nhận hàng, hoặc `POST /admin/inventory/adjust`).
+        Trả 409 khi cửa hàng đã dùng hết hạn mức sản phẩm của hợp đồng (`max_products`); thông báo kèm số đang dùng và trần.
       parameters:
       - description: Dữ liệu sản phẩm
         in: body
@@ -7335,8 +7630,9 @@ paths:
     post:
       consumes:
       - application/json
-      description: Tạo một bản sao mới của sản phẩm (bao gồm các biến thể & thư viện
-        ảnh) với trạng thái tạm ẩn.
+      description: |-
+        Tạo một bản sao mới của sản phẩm (bao gồm các biến thể & thư viện ảnh) với trạng thái tạm ẩn.
+        Bản sao cũng ăn một chỗ của hạn mức sản phẩm — hết chỗ thì trả 409.
       parameters:
       - description: ID sản phẩm
         in: path
@@ -7360,6 +7656,10 @@ paths:
             $ref: '#/definitions/response.Body'
         "404":
           description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+        "409":
+          description: Conflict
           schema:
             $ref: '#/definitions/response.Body'
       security:
@@ -9699,6 +9999,8 @@ paths:
         Tạo tài khoản quản trị hoặc nhân viên. Bỏ trống `password` thì hệ thống cấp
         mật khẩu mặc định. Chỉ super admin mới tạo được tài khoản super admin;
         `role_id` là vai trò khách hàng sẽ bị từ chối.
+        Trả 409 khi cửa hàng đã dùng hết hạn mức tài khoản của hợp đồng (`max_users`) —
+        tài khoản đang khoá vẫn tính là một chỗ.
       parameters:
       - description: Thông tin tài khoản
         in: body

@@ -184,6 +184,39 @@ var (
 	// Ngày kết thúc đứng trước ngày bắt đầu — banner sẽ không hiện ngày nào.
 	ErrBannerScheduleInvalid = errors.New("lịch chạy banner không hợp lệ")
 
+	// --- Chi nhánh (bảng `shops`) ---
+
+	// ErrMaChiNhanhDaCo — mã này đã có chi nhánh khác của CÙNG cửa hàng dùng.
+	//
+	// Tính cả chi nhánh đã xoá mềm: mã của chúng vẫn giữ chỗ trong
+	// uq_shops_tenant_code, nên "mã còn trống" theo mắt người dùng vẫn có thể là
+	// mã ghi xuống không được.
+	ErrMaChiNhanhDaCo = errors.New("mã chi nhánh này đã có người dùng")
+
+	// ErrMaChiNhanhInvalid — mã có dấu, có khoảng trắng hoặc ký tự lạ.
+	//
+	// Mã chi nhánh đi vào chứng từ và (về sau) vào đường dẫn, nên nó phải là thứ
+	// gõ được ở mọi bàn phím — cùng luật với tên đăng nhập của nhân viên.
+	ErrMaChiNhanhInvalid = errors.New("mã chi nhánh chỉ gồm chữ thường không dấu, số, dấu chấm, gạch ngang hoặc gạch dưới (2–30 ký tự)")
+
+	// ErrChiNhanhCuoiCung — xoá (hoặc tắt) chi nhánh HOẠT ĐỘNG cuối cùng.
+	//
+	// Mọi bảng giao dịch đều mang `shop_id`: đơn hàng, phiếu nhập, tồn kho đều
+	// phát sinh TẠI một chi nhánh. Cửa hàng không còn chi nhánh nào đang hoạt
+	// động là cửa hàng không bán được gì nữa, và không có màn hình nào nói ra lý
+	// do — nên chặn ngay tại đây, lúc người dùng còn hiểu mình vừa bấm gì.
+	ErrChiNhanhCuoiCung = errors.New("phải còn ít nhất một chi nhánh đang hoạt động")
+
+	// ErrVuotHanMuc — cửa hàng đã dùng hết một hạn mức của hợp đồng (xem
+	// han_muc.go). err được bọc kèm tên hạn mức và cặp số đang dùng / trần, vì
+	// người đọc cần biết mình đang đụng trần nào và trần đó là bao nhiêu — "không
+	// tạo được" thì không sửa được gì.
+	//
+	// KHÔNG phải lỗi của dữ liệu vừa gửi lên: form điền đúng hết, chỉ là gói hết
+	// chỗ. Nên câu trả lời phải chỉ sang việc nâng gói, không phải chỉ vào một ô
+	// nhập nào cả.
+	ErrVuotHanMuc = errors.New("đã đạt hạn mức của gói dịch vụ")
+
 	// Tồn kho
 	// Chỉnh kho không làm tồn thay đổi, hoặc chế độ chỉnh không hợp lệ.
 	ErrStockNoChange = errors.New("số lượng chỉnh kho không hợp lệ")

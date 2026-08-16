@@ -4,6 +4,7 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BannerController;
 use App\Http\Controllers\BrandController;
 use App\Http\Controllers\CategoryController;
+use App\Http\Controllers\ChiNhanhController;
 use App\Http\Controllers\ContactController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\DashboardController;
@@ -274,6 +275,17 @@ Route::middleware(['admin.auth', 'admin.khoa'])->prefix('admin')->name('admin.')
         Route::delete('/users/{id}', [UserController::class, 'destroy'])->whereNumber('id')->name('users.destroy');
 
         Route::put('/roles/{id}', [UserController::class, 'updateRole'])->whereNumber('id')->name('roles.update');
+
+        // Chi nhánh — các ĐIỂM BÁN của chính cửa hàng này (bảng `shops` bên API),
+        // không phải khách hàng của nhà cung cấp.
+        //
+        // Cùng nhóm quyền với Người dùng: mở thêm một điểm bán ăn thẳng vào hạn
+        // mức `max_shops` của hợp đồng, tức là quyết định của chủ tiệm chứ không
+        // phải việc hằng ngày của nhân viên. API chặn đúng như vậy.
+        Route::get('/chi-nhanh', [ChiNhanhController::class, 'index'])->name('chi-nhanh.index');
+        Route::post('/chi-nhanh', [ChiNhanhController::class, 'store'])->name('chi-nhanh.store');
+        Route::put('/chi-nhanh/{id}', [ChiNhanhController::class, 'update'])->whereNumber('id')->name('chi-nhanh.update');
+        Route::delete('/chi-nhanh/{id}', [ChiNhanhController::class, 'destroy'])->whereNumber('id')->name('chi-nhanh.destroy');
 
         // Khách hàng
         Route::get('/customers', [CustomerController::class, 'index'])->name('customers.index');

@@ -167,6 +167,14 @@
                             'label' => \App\Http\Controllers\UserController::TITLE,
                             'active' => request()->routeIs('admin.users.*') || request()->routeIs('admin.roles.*'),
                         ],
+                        // Chi nhánh: các ĐIỂM BÁN của cửa hàng này. Nằm trong Cài đặt
+                        // cạnh Người dùng vì cùng một loại việc — dựng bộ khung của
+                        // tiệm, không phải bán hàng hằng ngày.
+                        [
+                            'href' => route('admin.chi-nhanh.index'),
+                            'label' => \App\Http\Controllers\ChiNhanhController::TITLE,
+                            'active' => request()->routeIs('admin.chi-nhanh.*'),
+                        ],
                     ],
                 ]] : []),
             ],

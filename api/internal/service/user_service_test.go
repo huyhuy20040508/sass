@@ -194,7 +194,7 @@ func staff(id uint, roleID uint, status string) *domain.User {
 
 func newUserSvc(users ...*domain.User) (UserService, *fakeUserRepo) {
 	repo := newFakeUserRepo(users...)
-	return NewUserService(repo, fakeRoleRepo{}), repo
+	return NewUserService(repo, fakeRoleRepo{}, nil), repo
 }
 
 // Khoá / xoá / hạ vai trò người super admin đang hoạt động CUỐI CÙNG là tự nhốt

@@ -27,10 +27,18 @@ type productService struct {
 	repo         domain.ProductRepository
 	categoryRepo domain.CategoryRepository
 	brandRepo    domain.BrandRepository
+	// hanMuc xét hạn mức sản phẩm của hợp đồng. nil = máy chủ chưa nối được
+	// control plane, khi đó không có hợp đồng nào đọc được nên không ép gì cả.
+	hanMuc HanMucService
 }
 
-func NewProductService(repo domain.ProductRepository, categoryRepo domain.CategoryRepository, brandRepo domain.BrandRepository) ProductService {
-	return &productService{repo: repo, categoryRepo: categoryRepo, brandRepo: brandRepo}
+func NewProductService(
+	repo domain.ProductRepository,
+	categoryRepo domain.CategoryRepository,
+	brandRepo domain.BrandRepository,
+	hanMuc HanMucService,
+) ProductService {
+	return &productService{repo: repo, categoryRepo: categoryRepo, brandRepo: brandRepo, hanMuc: hanMuc}
 }
 
 func (s *productService) List(ctx context.Context, f domain.ProductFilter) ([]domain.Product, int64, error) {
@@ -91,6 +99,12 @@ func (s *productService) Create(ctx context.Context, req dto.ProductRequest) (*d
 		return nil, err
 	}
 	if err := s.checkUnique(ctx, req, 0); err != nil {
+		return nil, err
+	}
+	// Hạn mức xét SAU cùng, ngay trước lượt ghi: người dùng phải biết form của
+	// mình sai chỗ nào trước đã. Báo "hết hạn mức" cho một request lẽ ra bị từ
+	// chối vì trùng SKU là đẩy họ đi nâng gói để sửa một lỗi gõ nhầm.
+	if err := conChoTao(ctx, s.hanMuc, domain.HanMucSanPham); err != nil {
 		return nil, err
 	}
 	p := &domain.Product{}
@@ -237,6 +251,12 @@ func buildVariants(reqs []dto.VariantRequest) []domain.ProductVariant {
 func (s *productService) Duplicate(ctx context.Context, id uint) (*domain.Product, error) {
 	orig, err := s.repo.FindByID(ctx, id)
 	if err != nil {
+		return nil, err
+	}
+	// Nhân bản cũng là một sản phẩm mới trong sổ, nên cũng ăn một chỗ của hạn
+	// mức. Đây là đường dễ quên nhất: nó không đi qua Create ở trên, và cái nút
+	// "Nhân bản" là cách nhanh nhất để thêm hàng loạt.
+	if err := conChoTao(ctx, s.hanMuc, domain.HanMucSanPham); err != nil {
 		return nil, err
 	}
 

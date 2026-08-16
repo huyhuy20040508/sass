@@ -140,6 +140,8 @@ func (h *UserHandler) Get(c *gin.Context) {
 //	@Description	Tạo tài khoản quản trị hoặc nhân viên. Bỏ trống `password` thì hệ thống cấp
 //	@Description	mật khẩu mặc định. Chỉ super admin mới tạo được tài khoản super admin;
 //	@Description	`role_id` là vai trò khách hàng sẽ bị từ chối.
+//	@Description	Trả 409 khi cửa hàng đã dùng hết hạn mức tài khoản của hợp đồng (`max_users`) —
+//	@Description	tài khoản đang khoá vẫn tính là một chỗ.
 //	@Tags			Admin - Users
 //	@Accept			json
 //	@Produce		json

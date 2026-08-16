@@ -848,6 +848,356 @@
                 }
             }
         },
+        "/admin/chi-nhanh": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Các điểm bán của chính cửa hàng đang đăng nhập, sắp theo mã.\nĐặt `active=true` để bỏ chi nhánh đã ngừng hoạt động (các ô chọn nơi bán dùng tham số này).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Chi nhánh"
+                ],
+                "summary": "Danh sách chi nhánh",
+                "parameters": [
+                    {
+                        "type": "boolean",
+                        "description": "true = chỉ chi nhánh đang hoạt động",
+                        "name": "active",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/domain.ChiNhanh"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Bỏ trống `code` thì hệ thống tự đặt (chi-nhanh-2, chi-nhanh-3…).\nTrả 409 khi cửa hàng đã dùng hết hạn mức chi nhánh của hợp đồng (`max_shops`) —\nđây chính là quyền lợi phân biệt gói Chuỗi với hai gói còn lại.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Chi nhánh"
+                ],
+                "summary": "Mở thêm chi nhánh",
+                "parameters": [
+                    {
+                        "description": "Thông tin chi nhánh",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.ChiNhanhRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/domain.ChiNhanh"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/chi-nhanh/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Chi nhánh"
+                ],
+                "summary": "Chi tiết một chi nhánh",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID chi nhánh",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/domain.ChiNhanh"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Bỏ trống `code` = giữ nguyên mã cũ (mã đã đi vào chứng từ của chi nhánh này).\nTrả 409 khi đây là chi nhánh đang hoạt động cuối cùng mà lượt sửa lại tắt nó đi.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Chi nhánh"
+                ],
+                "summary": "Sửa chi nhánh",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID chi nhánh",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Thông tin chi nhánh",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.ChiNhanhRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/domain.ChiNhanh"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Xoá MỀM: dữ liệu cũ phát sinh tại chi nhánh này vẫn tra lại được.\nTrả 409 khi đây là chi nhánh đang hoạt động cuối cùng — cửa hàng phải luôn còn một điểm bán.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Chi nhánh"
+                ],
+                "summary": "Xoá chi nhánh",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID chi nhánh",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/contact-requests": {
             "get": {
                 "security": [
@@ -3494,7 +3844,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Biến thể chỉ khai size + màu. Tồn kho của biến thể mới luôn bằng 0 — muốn có hàng bán phải qua nghiệp vụ kho (`POST /admin/purchases` rồi nhận hàng, hoặc `POST /admin/inventory/adjust`).",
+                "description": "Biến thể chỉ khai size + màu. Tồn kho của biến thể mới luôn bằng 0 — muốn có hàng bán phải qua nghiệp vụ kho (`POST /admin/purchases` rồi nhận hàng, hoặc `POST /admin/inventory/adjust`).\nTrả 409 khi cửa hàng đã dùng hết hạn mức sản phẩm của hợp đồng (`max_products`); thông báo kèm số đang dùng và trần.",
                 "consumes": [
                     "application/json"
                 ],
@@ -3813,7 +4163,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Tạo một bản sao mới của sản phẩm (bao gồm các biến thể \u0026 thư viện ảnh) với trạng thái tạm ẩn.",
+                "description": "Tạo một bản sao mới của sản phẩm (bao gồm các biến thể \u0026 thư viện ảnh) với trạng thái tạm ẩn.\nBản sao cũng ăn một chỗ của hạn mức sản phẩm — hết chỗ thì trả 409.",
                 "consumes": [
                     "application/json"
                 ],
@@ -3854,6 +4204,12 @@
                     },
                     "404": {
                         "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
@@ -7449,7 +7805,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Tạo tài khoản quản trị hoặc nhân viên. Bỏ trống `password` thì hệ thống cấp\nmật khẩu mặc định. Chỉ super admin mới tạo được tài khoản super admin;\n`role_id` là vai trò khách hàng sẽ bị từ chối.",
+                "description": "Tạo tài khoản quản trị hoặc nhân viên. Bỏ trống `password` thì hệ thống cấp\nmật khẩu mặc định. Chỉ super admin mới tạo được tài khoản super admin;\n`role_id` là vai trò khách hàng sẽ bị từ chối.\nTrả 409 khi cửa hàng đã dùng hết hạn mức tài khoản của hợp đồng (`max_users`) —\ntài khoản đang khoá vẫn tính là một chỗ.",
                 "consumes": [
                     "application/json"
                 ],
@@ -12291,6 +12647,37 @@
         }
     },
     "definitions": {
+        "domain.ChiNhanh": {
+            "type": "object",
+            "properties": {
+                "address": {
+                    "type": "string"
+                },
+                "code": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "is_active": {
+                    "description": "IsActive = false: chi nhánh ngừng hoạt động nhưng dữ liệu cũ vẫn tra được.\nVẪN TÍNH vào hạn mức — nó còn giữ mã và còn đứng trong danh sách, y như tài\nkhoản bị khoá vẫn chiếm một chỗ.",
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "phone": {
+                    "description": "Phone/Address NULL được dưới database. Dùng StringOrNull để đọc NULL không\nvỡ ở tầng driver, và để ô bỏ trống ghi xuống NULL chứ không phải chuỗi rỗng.",
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
         "domain.CustomerBucket": {
             "type": "object",
             "properties": {
@@ -14772,6 +15159,39 @@
                 }
             }
         },
+        "dto.ChiNhanhRequest": {
+            "type": "object",
+            "required": [
+                "name"
+            ],
+            "properties": {
+                "address": {
+                    "type": "string",
+                    "maxLength": 255
+                },
+                "code": {
+                    "description": "Code bỏ trống khi TẠO = hệ thống tự sinh (chi-nhanh-2, chi-nhanh-3…). Bỏ\ntrống khi SỬA = giữ nguyên mã cũ: mã đã đi vào chứng từ, tự đổi là hồ sơ\nhai bên lệch nhau.",
+                    "type": "string",
+                    "maxLength": 30,
+                    "example": "kho-mien-bac"
+                },
+                "is_active": {
+                    "description": "IsActive bỏ trống = true (chi nhánh mới mặc định đang hoạt động).",
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 150,
+                    "example": "Kho miền Bắc"
+                },
+                "phone": {
+                    "description": "Phone/Address bỏ trống ghi xuống NULL, không phải chuỗi rỗng.",
+                    "type": "string",
+                    "maxLength": 20,
+                    "example": "0912345678"
+                }
+            }
+        },
         "dto.ContactRequestResponse": {
             "type": "object",
             "properties": {
@@ -15041,6 +15461,23 @@
                 }
             }
         },
+        "dto.DaDungHanMuc": {
+            "type": "object",
+            "properties": {
+                "chi_nhanh": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "san_pham": {
+                    "type": "integer",
+                    "example": 128
+                },
+                "tai_khoan": {
+                    "type": "integer",
+                    "example": 4
+                }
+            }
+        },
         "dto.DatGiaHanRequest": {
             "type": "object",
             "required": [
@@ -15260,6 +15697,14 @@
                     "items": {
                         "$ref": "#/definitions/dto.PlanItem"
                     }
+                },
+                "da_dung": {
+                    "description": "DaDung nil = chưa có hợp đồng để so, hoặc lượt đếm vừa hỏng. Màn hình rơi\nvề câu chữ của hạn mức chứ đừng in số 0 — \"đang dùng 0/20\" là một câu SAI,\nvà nó sai ngay trên màn hình khách mở ra để yên tâm.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/dto.DaDungHanMuc"
+                        }
+                    ]
                 },
                 "fields": {
                     "description": "Fields là siêu dữ liệu của từng khoá hạn mức (nhãn, đơn vị, giá trị khi gói\nkhông khai). Trả kèm để màn hình khỏi chép lại bảng khoá lần thứ hai —\nthêm một hạn mức mới ở registry là trang này tự có thêm dòng.",
