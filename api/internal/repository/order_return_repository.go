@@ -285,6 +285,11 @@ func (r *orderReturnRepository) Create(
 		}
 
 		rt, err := build(&o, remain)
+		if rt != nil {
+			// Phiếu trả thuộc về chi nhánh của ĐƠN GỐC, không phải chi nhánh người
+			// đang duyệt: hàng quay về đúng kho đã xuất nó ra.
+			rt.ShopID = o.ShopID
+		}
 		if err != nil {
 			return err
 		}
@@ -446,24 +451,35 @@ func restockReturn(tx *gorm.DB, rt *domain.OrderReturn) error {
 		found[v.ID] = v
 	}
 
+	// Hàng quay về ĐÚNG KHO ĐÃ XUẤT NÓ RA, tức chi nhánh của phiếu trả (chép từ
+	// đơn gốc lúc lập phiếu). Cộng vào kho của người đang duyệt thì hai chi nhánh
+	// cùng lệch: nơi bán thiếu mãi, nơi duyệt thừa ra một món chưa từng nhập.
+	shopID := rt.ShopID
+	if shopID == 0 {
+		var err error
+		if shopID, err = chiNhanhCuaRequest(tx.Statement.Context, tx); err != nil {
+			return err
+		}
+	}
+
 	for _, vid := range ids {
-		v, ok := found[vid]
+		_, ok := found[vid]
 		if !ok {
 			// Biến thể đã bị xoá cứng: không còn chỗ nào để cộng tồn kho. Bỏ qua
 			// dòng này thay vì chặn cả phiếu — hàng thực tế đã nằm trong kho rồi.
 			continue
 		}
-		before := v.StockQuantity
-		after := before + qty[vid]
-
-		if err := tx.Unscoped().Model(&domain.ProductVariant{}).
-			Where("id = ?", vid).
-			Update("stock_quantity", after).Error; err != nil {
+		// choPhepAm = true: đây là lượt hàng VÀO (qty > 0) nên không chạm mốc 0,
+		// nhưng kho đang âm sẵn từ dữ liệu cũ thì lượt trả hàng vẫn phải chạy —
+		// chặn nó lại là giữ hàng thật ngoài sổ.
+		before, after, err := ghiTonChiNhanh(tx, shopID, vid, qty[vid], true)
+		if err != nil {
 			return err
 		}
 
 		returnID := rt.ID
 		if err := tx.Create(&domain.InventoryTransaction{
+			ShopID:           shopID,
 			ProductVariantID: vid,
 			Type:             "return",
 			Quantity:         qty[vid],

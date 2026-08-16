@@ -30,6 +30,21 @@ import (
 type DungThuService interface {
 	// Tao mở một khách hàng mới: cửa hàng + tài khoản quản trị + hợp đồng dùng thử.
 	Tao(ctx context.Context, quyen domain.QuyenApp, req dto.TaoDungThuRequest) (dto.TaoDungThuResponse, error)
+	// DangKy là ĐƯỜNG CÔNG KHAI: khách tự mở tài khoản dùng thử từ trang giới
+	// thiệu, không qua khu điều hành và không qua công cụ dòng lệnh.
+	//
+	// KHÁC Tao ở hai chỗ, và cả hai đều là chốt chặn chứ không phải tiện lợi:
+	//
+	//   - KHÔNG nhận quyen: không có người điều hành nào đứng sau lượt gọi này.
+	//   - KHÔNG nhận plan_id: gói do máy chủ chọn (Khởi đầu, chu kỳ tháng, đang
+	//     bán). Nhận mã gói từ trình duyệt nghĩa là ai cũng tự cấp cho mình một
+	//     kỳ dùng thử gói cao nhất.
+	//
+	// Phần còn lại đi CHUNG một đường với hai hàm kia (taoKhachHangMoi): dựng
+	// cửa hàng, tài khoản quản trị, hợp đồng — ba việc bắc qua hai database mà
+	// không giao dịch nào bao được, nên chép ra một bản thứ ba là chép luôn cả
+	// phần xử lý hụt.
+	DangKy(ctx context.Context, req dto.DangKyRequest) (dto.DangKyResponse, error)
 	// TaoChinhThuc cũng dựng khách mới trọn gói, nhưng hợp đồng ra `active` ngay
 	// và không có giai đoạn dùng thử. Dùng khi khách trả tiền từ đầu.
 	//
@@ -91,6 +106,12 @@ type dungThuService struct {
 	hopDong  domain.HopDongRepository
 	cuaHang  domain.CuaHangMoiRepository
 	taiKhoan domain.TaiKhoanCuaHangRepository
+	// maApp và shopAdminURL chỉ đường ĐĂNG KÝ CÔNG KHAI dùng tới: chọn gói của
+	// đúng phần mềm mà tiến trình này phục vụ, và chỉ cho người vừa đăng ký biết
+	// vào đâu để đăng nhập. Hai đường của khu điều hành không cần chúng — bên đó
+	// người điều hành tự chọn gói và tự biết địa chỉ.
+	maApp        string
+	shopAdminURL string
 }
 
 func NewDungThuService(
@@ -98,8 +119,13 @@ func NewDungThuService(
 	hopDong domain.HopDongRepository,
 	cuaHang domain.CuaHangMoiRepository,
 	taiKhoan domain.TaiKhoanCuaHangRepository,
+	maApp string,
+	shopAdminURL string,
 ) DungThuService {
-	return &dungThuService{plan: plan, hopDong: hopDong, cuaHang: cuaHang, taiKhoan: taiKhoan}
+	return &dungThuService{
+		plan: plan, hopDong: hopDong, cuaHang: cuaHang, taiKhoan: taiKhoan,
+		maApp: maApp, shopAdminURL: shopAdminURL,
+	}
 }
 
 // maCuaHangRe khớp `cmd/tao-admin` và ô đầu tiên của màn hình đăng nhập 3 ô.
@@ -320,6 +346,84 @@ func (s *dungThuService) Tao(ctx context.Context, quyen domain.QuyenApp, req dto
 
 			return domain.SubscriptionTrial, ketThuc, &ketThuc, nil
 		})
+}
+
+// maGoiTuDangKy là gói mà người tự đăng ký nhận được.
+//
+// Cố định ở gói thấp nhất, và cố ý: kỳ dùng thử là để khách xem phần mềm có hợp
+// không, không phải để họ tự chọn quyền lợi. Ai cần gói cao hơn thì nâng ở trang
+// Gói dịch vụ — nơi đã có nút trả tiền.
+const maGoiTuDangKy = domain.PlanKhoiDau
+
+func (s *dungThuService) DangKy(ctx context.Context, req dto.DangKyRequest) (dto.DangKyResponse, error) {
+	var rong dto.DangKyResponse
+
+	// Bẫy ô ẩn: người thật không thấy ô này nên luôn để trống. Trả về đúng câu
+	// lỗi chung chung, không nói "bạn bị coi là máy" — nói ra là chỉ luôn cách
+	// vượt qua.
+	if strings.TrimSpace(req.Website) != "" {
+		return rong, loiO(map[string]string{"ma_cua_hang": "Không đăng ký được, vui lòng thử lại"})
+	}
+
+	bg, err := s.goiTuDangKy(ctx)
+	if err != nil {
+		return rong, err
+	}
+
+	res, err := s.Tao(ctx,
+		// Quyền TOÀN BỘ vì không có người điều hành nào ở đây để xét: mô hình
+		// QuyenApp trả lời "người này phụ trách phần mềm nào", mà lượt đăng ký công
+		// khai thì không có "người này". Chốt chặn tương đương nằm ở chỗ khác và
+		// chặt hơn: gói do máy chủ chọn ngay bên trên, không nhận từ request.
+		domain.QuyenApp{ToanQuyen: true},
+		dto.TaoDungThuRequest{
+			KhachHangMoiChung: dto.KhachHangMoiChung{
+				PlanID:      bg.ID,
+				MaCuaHang:   req.MaCuaHang,
+				TenCuaHang:  req.TenCuaHang,
+				TenDangNhap: req.TenDangNhap,
+				MatKhau:     req.MatKhau,
+				HoTen:       req.NguoiLienHe,
+				NguoiLienHe: req.NguoiLienHe,
+				DienThoai:   req.DienThoai,
+				EmailLienHe: req.Email,
+				GhiChu:      "khách tự đăng ký từ trang giới thiệu",
+			},
+		})
+	if err != nil {
+		return rong, err
+	}
+
+	return dto.DangKyResponse{
+		MaCuaHang:      res.MaCuaHang,
+		TenDangNhap:    res.TenDangNhap,
+		Goi:            res.Goi,
+		HetHan:         res.HetHan,
+		DiaChiDangNhap: s.shopAdminURL,
+	}, nil
+}
+
+// goiTuDangKy tra dòng bảng giá dành cho người tự đăng ký.
+//
+// Tra theo MÃ GÓI chứ không nhớ một id: id là số tự sinh của một database, chép
+// cấu hình sang máy khác là trỏ vào gói khác. Không tìm thấy thì TỪ CHỐI hẳn —
+// rơi về "gói nào cũng được" là mở đúng cái cửa mà hàm này sinh ra để đóng.
+func (s *dungThuService) goiTuDangKy(ctx context.Context) (*domain.PlanWithApp, error) {
+	rows, err := s.plan.List(ctx, s.maApp)
+	if err != nil {
+		return nil, err
+	}
+	for i := range rows {
+		r := rows[i]
+		if r.Code == maGoiTuDangKy && r.BillingCycle == domain.CycleThang &&
+			r.Status == domain.PlanStatusActive && r.TrialDays > 0 {
+			return &r, nil
+		}
+	}
+
+	// Bảng giá chưa có gói dùng thử nào bán được: đăng ký công khai phải đóng
+	// lại, chứ không dựng cửa hàng rồi treo đó không hợp đồng.
+	return nil, domain.ErrGoiNgungBan
 }
 
 // TaoChinhThuc dựng khách mới kèm hợp đồng CHÍNH THỨC — không qua dùng thử.

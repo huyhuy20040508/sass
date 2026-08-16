@@ -184,7 +184,19 @@ func (r *purchaseReturnRepository) Returnable(ctx context.Context, purchaseOrder
 	err := r.db.WithContext(ctx).
 		Table("purchase_order_items AS i").
 		Joins("JOIN purchase_orders po ON po.id = i.purchase_order_id AND po.deleted_at IS NULL").
-		Joins("LEFT JOIN product_variants v ON v.id = i.product_variant_id").
+		// KHÔNG còn JOIN product_variants: cột duy nhất lấy từ đó là `stock_quantity`,
+		// mà từ 0005 nó là bản cộng của mọi chi nhánh — không phải con số màn hình
+		// này cần.
+		//
+		// Tồn hiển thị phải là tồn CỦA KHO ĐÃ NHẬN HÀNG (po.shop_id) — đúng kho mà
+		// lượt chốt phiếu sẽ trừ đi (xem Create + nơi gọi ghiTonChiNhanh).
+		//
+		// Đây là chỗ lệch tốn kém nhất nếu đọc bản cộng cả cửa hàng: người lập
+		// phiếu đứng ở Quận 7 nhìn thấy "còn 10", trả 8, rồi lượt chốt vỡ vì kho
+		// Quận 1 — nơi lô hàng thực sự nằm — chỉ còn 2. Phiếu đã gửi cho nhà cung
+		// cấp trước đó rồi.
+		Joins(`LEFT JOIN variant_stocks vs ON vs.product_variant_id = i.product_variant_id
+			AND vs.shop_id = po.shop_id`).
 		Where("i.purchase_order_id = ? AND i.received_quantity > 0", purchaseOrderID).
 		Select(`i.id AS purchase_order_item_id, i.product_id, i.product_variant_id,
 			i.product_name, COALESCE(i.variant_sku, '') AS variant_sku,
@@ -197,7 +209,7 @@ func (r *purchaseReturnRepository) Returnable(ctx context.Context, purchaseOrder
 					AND rt.deleted_at IS NULL AND rt.status IN (?)
 				WHERE ri.purchase_order_item_id = i.id
 			), 0) AS returned,
-			COALESCE(v.stock_quantity, 0) AS stock`, purchaseReturnLiveStatuses).
+			COALESCE(vs.quantity, 0) AS stock`, purchaseReturnLiveStatuses).
 		Order("i.id ASC").
 		Scan(&rows).Error
 	if err != nil {
@@ -211,6 +223,23 @@ func (r *purchaseReturnRepository) Returnable(ctx context.Context, purchaseOrder
 }
 
 func (r *purchaseReturnRepository) Create(ctx context.Context, rt *domain.PurchaseReturn) error {
+	// Chi nhánh của phiếu trả LẤY THEO PHIẾU ĐẶT GỐC: hàng phải ra khỏi đúng kho
+	// đã nhận nó. Người lập phiếu trả có thể đang đứng ở chi nhánh khác.
+	if rt.ShopID == 0 {
+		var shopID uint
+		if err := r.db.WithContext(ctx).Model(&domain.PurchaseOrder{}).
+			Where("id = ?", rt.PurchaseOrderID).Select("shop_id").Scan(&shopID).Error; err != nil {
+			return err
+		}
+		if shopID == 0 {
+			var err error
+			if shopID, err = chiNhanhCuaRequest(ctx, r.db); err != nil {
+				return err
+			}
+		}
+		rt.ShopID = shopID
+	}
+
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		items := rt.Items
 		rt.Items = nil
@@ -419,29 +448,33 @@ func returnOutOfStock(
 	returnID := rt.ID
 	actor := actorRef(actorID)
 
+	shopID := rt.ShopID
+	if shopID == 0 {
+		var err error
+		if shopID, err = chiNhanhCuaRequest(tx.Statement.Context, tx); err != nil {
+			return err
+		}
+	}
+
 	for _, vid := range ids {
-		v, ok := found[vid]
+		_, ok := found[vid]
 		if !ok {
 			// Biến thể đã bị xoá cứng: không còn chỗ nào để trừ. Bỏ qua dòng này thay
 			// vì chặn cả phiếu — hàng thực tế đã ra khỏi cửa hàng rồi.
 			continue
 		}
 
-		before := v.StockQuantity
-		after := before - byVariant[vid]
-		if after < 0 {
-			// Kho không được âm: sổ kho là nguồn sự thật cho hàng đang có thật.
-			return domain.ErrOutOfStock
-		}
-
-		if err := tx.Unscoped().Model(&domain.ProductVariant{}).
-			Where("id = ?", vid).
-			Update("stock_quantity", after).Error; err != nil {
+		// Hàng ra khỏi ĐÚNG KHO ĐÃ NHẬN NÓ (chi nhánh của phiếu trả, chép từ phiếu
+		// đặt gốc). Trừ vào kho của người đang thao tác thì kho kia còn treo một
+		// món hàng đã trả lại nhà cung cấp từ lâu.
+		before, after, err := ghiTonChiNhanh(tx, shopID, vid, -byVariant[vid], false)
+		if err != nil {
 			return err
 		}
 
 		unitCost := costOf[vid]
 		if err := tx.Create(&domain.InventoryTransaction{
+			ShopID:           shopID,
 			ProductVariantID: vid,
 			Type:             "export",
 			// Quantity là số THAY ĐỔI, âm khi hàng ra khỏi kho (cùng quy ước với

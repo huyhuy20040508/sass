@@ -107,6 +107,10 @@ func New(
 	tenMien domain.TenantDomainRepository,
 	nguoiDieuHanh domain.PlatformUserRepository,
 	phien domain.PhienRepository,
+	// chiNhanhRepo để xác minh chi nhánh mà trình duyệt khai trên header — xem
+	// middleware.ChiNhanhDangLam. nil = không xác minh được ai nên không gắn chi
+	// nhánh nào, và mọi lượt ghi kho rơi về chi nhánh bán online.
+	chiNhanhRepo domain.ChiNhanhRepository,
 	h Handlers,
 ) *gin.Engine {
 	if cfg.App.IsProduction() {
@@ -192,6 +196,26 @@ func New(
 				middleware.TenantFromHost(tenMien),
 				middleware.TenantRequired(),
 			)
+		}
+
+		// ĐĂNG KÝ CÔNG KHAI: khách tự mở tài khoản dùng thử từ trang giới thiệu.
+		//
+		// Đây là đường DUY NHẤT không cần token mà TẠO RA dữ liệu thật ở cả hai
+		// database (cửa hàng + tài khoản đăng nhập bên data plane, hợp đồng bên sổ
+		// nền tảng), nên nó có hai lớp chặn mà các đường công khai khác không cần:
+		//
+		//   - giới hạn tần suất theo IP ngay tại đây, chặt hơn hẳn mức chung: mở
+		//     cửa hàng là việc người ta làm MỘT LẦN, nên vài lượt một giờ đã là
+		//     rộng rãi. Số này cố ý không đọc từ cấu hình — một ô cấu hình lỡ tay
+		//     đặt thành 0 sẽ TẮT chốt chặn mà không ai thấy (xem RateLimit).
+		//   - ô bẫy `website` trong payload, chặn ở tầng service.
+		//
+		// Chỉ đăng ký khi h.DungThu có thật: thiếu control plane thì không có bảng
+		// giá để chọn gói và không có sổ để ghi hợp đồng — trả 404 đúng sự thật là
+		// máy chủ này chưa mở đường đăng ký, thay vì nhận form rồi hỏng giữa chừng
+		// sau khi đã dựng xong cửa hàng.
+		if h.DungThu != nil {
+			v1.POST("/dang-ky", middleware.RateLimit("dang-ky", 5, time.Hour), h.DungThu.DangKy)
 		}
 
 		auth := v1.Group("/auth")
@@ -380,6 +404,14 @@ func New(
 		), middleware.RequireRoles(
 			domain.RoleSuperAdmin, domain.RoleAdmin, domain.RoleStaff,
 		))
+		// Chi nhánh đang làm việc: đọc từ header ở MỌI đường của khu quản trị, kể
+		// cả nhóm nghiệp vụ hằng ngày — nhân viên bán hàng và thủ kho mới là người
+		// đứng ở một chi nhánh cụ thể, còn quản trị viên thì đổi qua lại.
+		//
+		// Đặt sau JWTAuth vì lượt tra chi nhánh chạy bằng ctx đã mang tenant: đó
+		// chính là thứ ngăn một cửa hàng gửi lên id chi nhánh của cửa hàng khác.
+		admin.Use(middleware.ChiNhanhDangLam(chiNhanhRepo))
+
 		manage := admin.Group("")
 		manage.Use(middleware.RequireRoles(domain.RoleSuperAdmin, domain.RoleAdmin))
 		{

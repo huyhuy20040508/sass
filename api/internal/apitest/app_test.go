@@ -302,7 +302,7 @@ func dungHeThongVoi(t *testing.T, banHang, dieuHanh bool) *heThong {
 	pReturnSvc := service.NewPurchaseReturnService(pReturnRepo, purchaseRepo)
 	reportSvc := service.NewReportService(reportRepo)
 
-	r := router.New(cfg, jwtMgr, tenMienRepo, nguoiDieuHanhRepo, nil, router.Handlers{
+	r := router.New(cfg, jwtMgr, tenMienRepo, nguoiDieuHanhRepo, nil, chiNhanhRepo, router.Handlers{
 		Health:    handler.NewHealthHandler("test"),
 		Auth:      handler.NewAuthHandler(authSvc),
 		Category:  handler.NewCategoryHandler(categorySvc),
@@ -360,7 +360,25 @@ func (h *heThong) goi(t *testing.T, token, method, duong string, body any) traLo
 // Host là thứ quyết định cửa hàng cho khách vãng lai (middleware.TenantFromHost),
 // nên nó phải đặt được từ bài kiểm — không có nó thì cụm bán hàng cho khách chỉ
 // kiểm được bằng token, tức là kiểm đúng cái đường đã có sẵn từ trước.
+// goiVoiHeader gọi API kèm header tự khai — dùng cho những thứ trình duyệt gửi
+// lên ngoài token, hôm nay là chi nhánh đang làm việc.
+func (h *heThong) goiVoiHeader(
+	t *testing.T, token, method, duong string, body any, headers map[string]string,
+) traLoi {
+	t.Helper()
+
+	return h.goiDayDu(t, hostKhongCoTrongSo, token, method, duong, body, headers)
+}
+
 func (h *heThong) goiTuHost(t *testing.T, host, token, method, duong string, body any) traLoi {
+	t.Helper()
+
+	return h.goiDayDu(t, host, token, method, duong, body, nil)
+}
+
+func (h *heThong) goiDayDu(
+	t *testing.T, host, token, method, duong string, body any, headers map[string]string,
+) traLoi {
 	t.Helper()
 
 	var doc io.Reader
@@ -379,6 +397,9 @@ func (h *heThong) goiTuHost(t *testing.T, host, token, method, duong string, bod
 	}
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	for k, v := range headers {
+		req.Header.Set(k, v)
 	}
 
 	w := httptest.NewRecorder()

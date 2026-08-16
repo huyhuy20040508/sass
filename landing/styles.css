@@ -920,3 +920,16 @@ p { margin: 0; }
     transition-duration: .001ms !important;
   }
 }
+
+/* Ô BẪY chống máy tự điền form.
+   Ẩn khỏi mắt người NHƯNG vẫn nằm trong luồng tài liệu và vẫn có thể focus theo
+   cách thông thường — nhiều bot bỏ qua `display:none` và `type=hidden`, nên cách
+   ẩn này bắt được nhiều hơn. Người thật không bao giờ chạm tới nó (aria-hidden +
+   tabindex=-1 ở HTML), và điền vào là máy chủ từ chối. */
+.o--bay {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}

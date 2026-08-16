@@ -161,9 +161,19 @@ func TestPurchaseReturnTruKhoDungMotLan(t *testing.T) {
 		t.Fatalf("lập phiếu trả thứ hai lỗi: %v", err)
 	}
 	// Bán bớt 1 cái để kho chỉ còn 4 < 5 của phiếu.
+	//
+	// Ghi vào variant_stocks chứ KHÔNG vào product_variants.stock_quantity: từ
+	// migration 0005, cột kia chỉ là bản cộng sẵn của mọi chi nhánh, còn phép
+	// kiểm "đủ hàng để trả không" thì đọc tồn của chính chi nhánh giữ hàng. Ghi
+	// nhầm chỗ thì bài kiểm dựng lên một tình huống không có thật: màn hình báo
+	// còn 4 mà kho chi nhánh vẫn đủ 5, nên lượt chốt không bị chặn.
+	if err := db.WithContext(ctxTest()).Model(&domain.TonKhoChiNhanh{}).
+		Where("product_variant_id = ?", v.ID).Update("quantity", 4).Error; err != nil {
+		t.Fatalf("không đặt được tồn kho chi nhánh: %v", err)
+	}
 	if err := db.WithContext(ctxTest()).Model(&domain.ProductVariant{}).Where("id = ?", v.ID).
 		Update("stock_quantity", 4).Error; err != nil {
-		t.Fatalf("không đặt được tồn kho: %v", err)
+		t.Fatalf("không dựng lại bản cộng tồn kho: %v", err)
 	}
 	if _, err := repo.MarkReturned(ctx, over.ID, 0); err != domain.ErrOutOfStock {
 		t.Fatalf("kho không đủ phải trả ErrOutOfStock, nhận %v", err)

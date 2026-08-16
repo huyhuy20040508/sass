@@ -3,12 +3,14 @@ package middleware
 
 import (
 	"errors"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
+	"sass-api/internal/chinhanh"
 	"sass-api/internal/domain"
 	"sass-api/internal/tenant"
 	"sass-api/pkg/jwt"
@@ -16,11 +18,21 @@ import (
 	"sass-api/pkg/response"
 )
 
+// HeaderChiNhanh là tên header mang chi nhánh đang làm việc.
+//
+// Đặt tên có tiền tố X- theo lối cũ và giữ chữ tiếng Việt cho khớp với phần còn
+// lại của hệ thống: người đọc nhật ký nginx thấy nó là hiểu ngay đang nói về
+// cái gì, không phải tra tài liệu.
+const HeaderChiNhanh = "X-Chi-Nhanh"
+
 // Khóa lưu trong gin.Context.
 const (
 	CtxUserID   = "ctx_user_id"
 	CtxRole     = "ctx_role"
 	CtxTenantID = "ctx_tenant_id"
+	// CtxChiNhanhID là chi nhánh đang làm việc của request — chỉ có mặt khi
+	// trình duyệt gửi header HeaderChiNhanh và nó tra ra hợp lệ.
+	CtxChiNhanhID = "ctx_chi_nhanh_id"
 	// CtxPlatformRole là vai trò trong KHU ĐIỀU HÀNH (owner | operator |
 	// support), do XacThucNenTang đặt. Khác CtxRole — vai trò trong một cửa hàng.
 	CtxPlatformRole = "ctx_platform_role"
@@ -557,4 +569,64 @@ func extractBearer(c *gin.Context) string {
 		return token
 	}
 	return ""
+}
+
+// ChiNhanhDangLam đọc CHI NHÁNH ĐANG LÀM VIỆC từ header và gắn vào ctx.
+//
+// Vì sao là HEADER chứ không phải một trường trong token: chi nhánh đổi trong
+// lúc đang làm (Shop Admin có ô chọn ở thanh trên cùng), mà token thì chỉ đổi
+// khi đăng nhập lại. Nhét vào token nghĩa là đổi kho phải đăng xuất — hoặc tệ
+// hơn, phải cấp token mới sau mỗi lần bấm.
+//
+// Vì sao PHẢI TRA SỔ trước khi tin: con số này do trình duyệt gửi lên. Không đối
+// chiếu thì chủ tiệm A gõ một id bất kỳ và ghi hàng vào kho của tiệm B — bộ lọc
+// tenant không đỡ được, vì nó chỉ canh cột `tenant_id` chứ không biết `shop_id`
+// vừa nhận có thuộc cửa hàng đó không. Lượt tra dưới đây chạy bằng ctx đã mang
+// tenant, nên chi nhánh của tiệm khác đơn giản là không tra ra.
+//
+// Header thiếu / rỗng / không tra ra = KHÔNG gắn gì, và request chạy tiếp bình
+// thường: nơi cần chi nhánh sẽ rơi về chi nhánh bán online (xem
+// repository.chiNhanhCuaRequest). Đó là đường đi của mọi cửa hàng một chi nhánh
+// — tức gần như mọi khách hôm nay — nên nó phải êm, không phải một lỗi.
+//
+// TỪ CHỐI khi header trỏ vào chi nhánh KHÔNG thuộc cửa hàng: đó không phải
+// "thiếu thông tin" mà là một yêu cầu sai, và trả 403 ở đây làm lộ ra ngay lỗi
+// lập trình phía giao diện thay vì âm thầm ghi vào kho khác.
+func ChiNhanhDangLam(repo domain.ChiNhanhRepository) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if repo == nil {
+			c.Next()
+
+			return
+		}
+
+		raw := strings.TrimSpace(c.GetHeader(HeaderChiNhanh))
+		if raw == "" {
+			c.Next()
+
+			return
+		}
+
+		id, err := strconv.ParseUint(raw, 10, 64)
+		if err != nil || id == 0 {
+			response.Error(c, 400, "Mã chi nhánh trên header không hợp lệ")
+			c.Abort()
+
+			return
+		}
+
+		cn, err := repo.FindByID(c.Request.Context(), uint(id))
+		if err != nil {
+			// ErrNotFound ở đây nghĩa là chi nhánh không thuộc cửa hàng đang đăng
+			// nhập (lượt tra đã lọc theo tenant) — hoặc đã bị xoá.
+			response.Error(c, 403, "Chi nhánh không thuộc cửa hàng này")
+			c.Abort()
+
+			return
+		}
+
+		c.Set(CtxChiNhanhID, cn.ID)
+		c.Request = c.Request.WithContext(chinhanh.WithID(c.Request.Context(), cn.ID))
+		c.Next()
+	}
 }

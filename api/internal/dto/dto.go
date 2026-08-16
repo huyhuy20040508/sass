@@ -1671,6 +1671,47 @@ type TaoChinhThucRequest struct {
 	SoThang int `json:"so_thang" binding:"omitempty,min=1,max=60" example:"12"`
 }
 
+// DangKyRequest — POST /dang-ky, ĐƯỜNG CÔNG KHAI khách tự mở tài khoản từ trang
+// giới thiệu.
+//
+// KHÁC TaoDungThuRequest ở đúng chỗ nguy hiểm nhất: KHÔNG có `plan_id`. Gói do
+// MÁY CHỦ chọn (Khởi đầu, chu kỳ tháng, đang bán) chứ không nhận từ trình duyệt
+// — để khách gửi lên mã gói nghĩa là ai cũng tự cấp cho mình một kỳ dùng thử
+// gói Chuỗi, và không có màn hình nào của mình nói ra điều đó.
+//
+// Cũng không có `so_ngay_dung_thu`: số ngày lấy theo bảng giá. Cho khách tự khai
+// là cho họ tự đặt hạn hợp đồng của chính mình.
+type DangKyRequest struct {
+	MaCuaHang   string `json:"ma_cua_hang" binding:"required" example:"quochuy"`
+	TenCuaHang  string `json:"ten_cua_hang" binding:"required,max=150" example:"Cửa hàng Quốc Huy"`
+	TenDangNhap string `json:"ten_dang_nhap" binding:"required" example:"admin"`
+	MatKhau     string `json:"mat_khau" binding:"required,min=6" example:"MatKhau@123"`
+	NguoiLienHe string `json:"nguoi_lien_he" binding:"required,max=150" example:"Nguyễn Quốc Huy"`
+	DienThoai   string `json:"dien_thoai" binding:"required,max=20" example:"0901234567"`
+	Email       string `json:"email" binding:"omitempty,email,max=191" example:"huy@example.com"`
+	// Website là BẪY: một ô ẩn trong form, người thật không nhìn thấy nên luôn để
+	// trống, còn máy tự điền form thì điền hết mọi ô. Điền vào đây là bị từ chối.
+	//
+	// Rẻ và không phiền ai — khác hẳn captcha, thứ bắt mọi khách thật giải câu đố
+	// để chặn một nhóm nhỏ không phải khách. Nó không chặn được kẻ nhắm riêng vào
+	// mình, và không cố tỏ ra như vậy: chốt chặn thứ hai là giới hạn tần suất
+	// theo IP ở tầng route.
+	Website string `json:"website" binding:"omitempty,max=200"`
+}
+
+// DangKyResponse — thứ trang giới thiệu in ra ngay sau khi đăng ký xong.
+//
+// Có đủ BA Ô ĐĂNG NHẬP (trừ mật khẩu — khách vừa tự đặt) và địa chỉ Shop Admin:
+// người vừa đăng ký phải đi thẳng vào phần mềm được, không phải chờ email nào cả.
+type DangKyResponse struct {
+	MaCuaHang   string    `json:"ma_cua_hang" example:"quochuy"`
+	TenDangNhap string    `json:"ten_dang_nhap" example:"admin"`
+	Goi         string    `json:"goi" example:"Khởi đầu"`
+	HetHan      time.Time `json:"het_han"`
+	// DiaChiDangNhap là URL Shop Admin của chính tiến trình này (cfg.App.ShopAdminURL).
+	DiaChiDangNhap string `json:"dia_chi_dang_nhap" example:"https://order.selliotech.store"`
+}
+
 // TaoDungThuResponse — biên bản của lượt ký, đủ để màn hình đọc lại cho người
 // bán mà không phải tải lại danh sách.
 //

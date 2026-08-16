@@ -3,12 +3,14 @@ package repository
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
+	"sass-api/internal/chinhanh"
 	"sass-api/internal/domain"
 )
 
@@ -40,21 +42,67 @@ const effectiveCostExpr = `COALESCE(v.cost_price, p.cost_price)`
 // góp 0₫ và được đếm riêng qua missing_cost để giao diện nói rõ tổng đang thiếu.
 //
 // GREATEST(stock, 0): tồn âm (dữ liệu lệch) không được kéo tổng xuống thành số âm.
-const stockValueExpr = `COALESCE(` + effectiveCostExpr + `, 0) * GREATEST(v.stock_quantity, 0)`
+func stockValueExpr(ton string) string {
+	return "COALESCE(" + effectiveCostExpr + ", 0) * GREATEST(" + ton + ", 0)"
+}
+
+// tonChiNhanhExpr là TỒN ĐANG XÉT của trang tồn kho.
+//
+// Có chi nhánh đang làm việc thì đó là tồn CỦA CHI NHÁNH ĐÓ (bảng variant_stocks,
+// nguồn sự thật từ migration 0005). Không có thì rơi về bản cộng của cả cửa hàng
+// — đúng thứ cửa hàng một chi nhánh cần, và cũng đúng nghĩa "xem gộp mọi chi
+// nhánh" của khách chuỗi khi họ chưa chọn kho nào.
+//
+// Cả trang tồn kho phải dùng CHUNG một biểu thức này: bộ lọc "sắp hết hàng", cột
+// số lượng, phép sắp xếp và ô tổng giá trị kho mà đọc hai nguồn khác nhau thì
+// người dùng lọc ra một danh sách rồi thấy số trong danh sách không khớp với
+// điều kiện vừa lọc.
+const (
+	tonTheoChiNhanh = "COALESCE(vs.quantity, 0)"
+	tonCaCuaHang    = "v.stock_quantity"
+)
+
+// tonExpr chọn biểu thức tồn theo ctx, và baseQuery gắn JOIN tương ứng.
+func tonExpr(ctx context.Context) string {
+	if _, ok := chinhanh.ID(ctx); ok {
+		return tonTheoChiNhanh
+	}
+
+	return tonCaCuaHang
+}
 
 // baseQuery dựng phần FROM/JOIN dùng chung cho cả danh sách lẫn đếm.
 //
 // Sản phẩm đã xoá mềm bị loại hẳn: hàng của chúng không còn bán được nên đưa vào
 // bảng tồn kho chỉ làm nhiễu con số.
 func (r *inventoryRepository) baseQuery(ctx context.Context) *gorm.DB {
-	return r.db.WithContext(ctx).
+	q := r.db.WithContext(ctx).
 		Table("product_variants AS v").
 		Joins("JOIN products p ON p.id = v.product_id AND p.deleted_at IS NULL").
 		Where("v.deleted_at IS NULL")
+
+	// LEFT JOIN chứ không JOIN: biến thể chưa từng có hàng ở chi nhánh này thì
+	// KHÔNG có dòng trong variant_stocks, và nó vẫn phải hiện ra với số 0 — đó
+	// đúng là thứ người quản kho cần thấy để biết mà nhập về.
+	if shopID, ok := chinhanh.ID(ctx); ok {
+		// Ghép thẳng con số vào chuỗi thay vì dùng `?`: các truy vấn của trang này
+		// gắn tham số ở CẢ Select (ngưỡng sắp hết hàng) lẫn Where, và GORM xếp
+		// tham số theo thứ tự mệnh đề được THÊM chứ không theo thứ tự chúng xuất
+		// hiện trong SQL — trộn vào là một tham số trôi sang chỗ khác, câu lệnh vẫn
+		// chạy và trả về số 0 thay vì báo lỗi.
+		//
+		// An toàn vì shopID là uint đã qua middleware.ChiNhanhDangLam (đã tra sổ,
+		// đã đối chiếu với cửa hàng): %d của một uint không sinh ra được ký tự nào
+		// ngoài chữ số.
+		q = q.Joins(fmt.Sprintf(
+			"LEFT JOIN variant_stocks vs ON vs.product_variant_id = v.id AND vs.shop_id = %d", shopID))
+	}
+
+	return q
 }
 
 // applyFilter gắn các điều kiện lọc lên một truy vấn đã có sẵn FROM/JOIN.
-func applyInventoryFilter(q *gorm.DB, f domain.InventoryFilter) *gorm.DB {
+func applyInventoryFilter(q *gorm.DB, f domain.InventoryFilter, ton string) *gorm.DB {
 	if kw := strings.TrimSpace(f.Keyword); kw != "" {
 		like := "%" + kw + "%"
 		q = q.Where("(p.name LIKE ? OR v.sku LIKE ? OR p.sku LIKE ?)", like, like, like)
@@ -71,11 +119,11 @@ func applyInventoryFilter(q *gorm.DB, f domain.InventoryFilter) *gorm.DB {
 
 	switch f.Stock {
 	case "out":
-		q = q.Where("v.stock_quantity <= 0")
+		q = q.Where(ton + " <= 0")
 	case "low":
-		q = q.Where("v.stock_quantity > 0 AND v.stock_quantity <= ?", f.LowStock)
+		q = q.Where(ton+" > 0 AND "+ton+" <= ?", f.LowStock)
 	case "in":
-		q = q.Where("v.stock_quantity > ?", f.LowStock)
+		q = q.Where(ton+" > ?", f.LowStock)
 	}
 
 	switch f.Cost {
@@ -92,10 +140,10 @@ func applyInventoryFilter(q *gorm.DB, f domain.InventoryFilter) *gorm.DB {
 // Mọi nhánh đều kết thúc bằng v.id để thứ tự ổn định giữa các trang — thiếu nó,
 // hai biến thể cùng tồn kho có thể đổi chỗ khi lật trang và người dùng thấy dòng
 // lặp lại hoặc biến mất.
-func inventoryOrder(sort string) string {
+func inventoryOrder(sort, ton string) string {
 	switch sort {
 	case "stock_desc":
-		return "v.stock_quantity DESC, v.id DESC"
+		return ton + " DESC, v.id DESC"
 	case "name_asc":
 		return "p.name ASC, v.id ASC"
 	case "name_desc":
@@ -105,13 +153,14 @@ func inventoryOrder(sort string) string {
 	case "newest":
 		return "v.id DESC"
 	default: // stock_asc — mặc định đẩy hàng sắp hết lên đầu, đó mới là việc cần làm
-		return "v.stock_quantity ASC, v.id ASC"
+		return ton + " ASC, v.id ASC"
 	}
 }
 
 func (r *inventoryRepository) List(ctx context.Context, f domain.InventoryFilter) ([]domain.InventoryItem, int64, error) {
 	var total int64
-	countQ := applyInventoryFilter(r.baseQuery(ctx), f)
+	ton := tonExpr(ctx)
+	countQ := applyInventoryFilter(r.baseQuery(ctx), f, ton)
 	if err := countQ.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
@@ -119,20 +168,20 @@ func (r *inventoryRepository) List(ctx context.Context, f domain.InventoryFilter
 		return []domain.InventoryItem{}, 0, nil
 	}
 
-	q := applyInventoryFilter(r.baseQuery(ctx), f).
+	q := applyInventoryFilter(r.baseQuery(ctx), f, ton).
 		Joins("LEFT JOIN categories c ON c.id = p.category_id").
 		Joins("LEFT JOIN brands b ON b.id = p.brand_id").
 		Select(`v.id AS variant_id, v.product_id, p.name AS product_name, p.slug,
 			COALESCE(NULLIF(v.image, ''), NULLIF(p.thumbnail, ''), '') AS thumbnail,
 			v.sku, v.size, v.color, COALESCE(p.kit_type, '') AS kit_type,
 			COALESCE(c.name, '') AS category_name, COALESCE(b.name, '') AS brand_name,
-			v.stock_quantity, v.is_active, p.is_active AS product_active,
+			` + ton + ` AS stock_quantity, v.is_active, p.is_active AS product_active,
 			` + effectivePriceExpr + ` AS price,
 			` + effectiveCostExpr + ` AS cost_price,
-			` + stockValueExpr + ` AS stock_value,
+			` + stockValueExpr(ton) + ` AS stock_value,
 			(SELECT MAX(t.created_at) FROM inventory_transactions t
 			  WHERE t.product_variant_id = v.id) AS last_moved_at`).
-		Order(inventoryOrder(f.Sort)).
+		Order(inventoryOrder(f.Sort, ton)).
 		Limit(f.PageSize).
 		Offset((f.Page - 1) * f.PageSize)
 
@@ -145,15 +194,16 @@ func (r *inventoryRepository) List(ctx context.Context, f domain.InventoryFilter
 
 func (r *inventoryRepository) Stats(ctx context.Context, lowStock int) (domain.InventoryStats, error) {
 	var s domain.InventoryStats
+	ton := tonExpr(ctx)
 	err := r.baseQuery(ctx).
 		Select(`COUNT(*) AS total_variants,
-			COALESCE(SUM(GREATEST(v.stock_quantity, 0)), 0) AS total_quantity,
-			COALESCE(SUM(CASE WHEN v.stock_quantity > ? THEN 1 ELSE 0 END), 0) AS in_stock,
-			COALESCE(SUM(CASE WHEN v.stock_quantity > 0 AND v.stock_quantity <= ? THEN 1 ELSE 0 END), 0) AS low_stock,
-			COALESCE(SUM(CASE WHEN v.stock_quantity <= 0 THEN 1 ELSE 0 END), 0) AS out_of_stock,
-			COALESCE(SUM(`+stockValueExpr+`), 0) AS stock_value,
+			COALESCE(SUM(GREATEST(`+ton+`, 0)), 0) AS total_quantity,
+			COALESCE(SUM(CASE WHEN `+ton+` > ? THEN 1 ELSE 0 END), 0) AS in_stock,
+			COALESCE(SUM(CASE WHEN `+ton+` > 0 AND `+ton+` <= ? THEN 1 ELSE 0 END), 0) AS low_stock,
+			COALESCE(SUM(CASE WHEN `+ton+` <= 0 THEN 1 ELSE 0 END), 0) AS out_of_stock,
+			COALESCE(SUM(`+stockValueExpr(ton)+`), 0) AS stock_value,
 			COALESCE(SUM(CASE WHEN `+effectiveCostExpr+` IS NULL THEN 1 ELSE 0 END), 0) AS missing_cost,
-			COALESCE(SUM(CASE WHEN `+effectiveCostExpr+` IS NULL AND v.stock_quantity > 0
+			COALESCE(SUM(CASE WHEN `+effectiveCostExpr+` IS NULL AND `+ton+` > 0
 			    THEN 1 ELSE 0 END), 0) AS missing_cost_in_stock`,
 			lowStock, lowStock).
 		Scan(&s).Error
@@ -161,6 +211,7 @@ func (r *inventoryRepository) Stats(ctx context.Context, lowStock int) (domain.I
 }
 
 func (r *inventoryRepository) FindItem(ctx context.Context, variantID uint) (*domain.InventoryItem, error) {
+	ton := tonExpr(ctx)
 	var items []domain.InventoryItem
 	err := r.baseQuery(ctx).
 		Joins("LEFT JOIN categories c ON c.id = p.category_id").
@@ -170,10 +221,10 @@ func (r *inventoryRepository) FindItem(ctx context.Context, variantID uint) (*do
 			COALESCE(NULLIF(v.image, ''), NULLIF(p.thumbnail, ''), '') AS thumbnail,
 			v.sku, v.size, v.color, COALESCE(p.kit_type, '') AS kit_type,
 			COALESCE(c.name, '') AS category_name, COALESCE(b.name, '') AS brand_name,
-			v.stock_quantity, v.is_active, p.is_active AS product_active,
+			` + ton + ` AS stock_quantity, v.is_active, p.is_active AS product_active,
 			` + effectivePriceExpr + ` AS price,
 			` + effectiveCostExpr + ` AS cost_price,
-			` + stockValueExpr + ` AS stock_value,
+			` + stockValueExpr(ton) + ` AS stock_value,
 			(SELECT MAX(t.created_at) FROM inventory_transactions t
 			  WHERE t.product_variant_id = v.id) AS last_moved_at`).
 		Limit(1).Scan(&items).Error
@@ -306,7 +357,16 @@ func (r *inventoryRepository) Adjust(ctx context.Context, items []domain.Invento
 
 	results := make([]domain.InventoryAdjustResult, 0, len(order))
 
-	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	// Chỉnh kho luôn là việc của MỘT chi nhánh cụ thể: người bấm nút đang đứng ở
+	// một kho và đếm hàng trong kho đó. Không xác định được chi nhánh thì dừng —
+	// cộng số hàng vừa đếm vào một kho do máy đoán là cách nhanh nhất để sổ và
+	// hàng thật lệch nhau.
+	shopID, err := chiNhanhCuaRequest(ctx, r.db)
+	if err != nil {
+		return nil, err
+	}
+
+	err = r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var variants []domain.ProductVariant
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
 			Where("id IN ?", ids).Order("id ASC").Find(&variants).Error; err != nil {
@@ -323,7 +383,14 @@ func (r *inventoryRepository) Adjust(ctx context.Context, items []domain.Invento
 				return domain.ErrNotFound
 			}
 
-			before := v.StockQuantity
+			// before/after ĐỌC THEO CHI NHÁNH, không theo bản cộng của cả cửa hàng:
+			// người dùng vừa đếm kho của mình, nên con số họ thấy phải là con số kho
+			// đó — xem ghiTonChiNhanh.
+			before, _, err := ghiTonChiNhanh(tx, shopID, vid, 0, true)
+			if err != nil {
+				return err
+			}
+
 			current := before
 			for _, adj := range byID[vid] {
 				next := current + adj.Quantity
@@ -337,7 +404,11 @@ func (r *inventoryRepository) Adjust(ctx context.Context, items []domain.Invento
 				}
 
 				change := next - current
+				if _, _, err := ghiTonChiNhanh(tx, shopID, vid, change, false); err != nil {
+					return err
+				}
 				if err := tx.Create(&domain.InventoryTransaction{
+					ShopID:           shopID,
 					ProductVariantID: vid,
 					Type:             adj.Type,
 					Quantity:         change,
@@ -351,14 +422,6 @@ func (r *inventoryRepository) Adjust(ctx context.Context, items []domain.Invento
 					return err
 				}
 				current = next
-			}
-
-			if current != before {
-				if err := tx.Model(&domain.ProductVariant{}).
-					Where("id = ?", vid).
-					Update("stock_quantity", current).Error; err != nil {
-					return err
-				}
 			}
 
 			results = append(results, domain.InventoryAdjustResult{

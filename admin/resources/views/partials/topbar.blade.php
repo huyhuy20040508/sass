@@ -33,6 +33,30 @@
         <input id="jhTbSearch" type="text" placeholder="Tìm kiếm (Ctrl + K)">
     </div>
 
+    {{-- Chi nhánh ĐANG LÀM VIỆC.
+         Chỉ hiện khi cửa hàng có từ HAI chi nhánh trở lên: tiệm một chi nhánh
+         không có gì để chọn, và một ô select chỉ có đúng một dòng là thứ chiếm
+         chỗ mà không trả lời câu hỏi nào.
+         Mọi thao tác kho/đơn từ đây trở đi ăn theo chi nhánh đang chọn — xem
+         ApiClient::KHOA_CHI_NHANH. --}}
+    @php($cnDangLam = \App\Services\ChiNhanhDangLam::danhSach())
+    @if(count($cnDangLam['ds']) > 1)
+        <form method="POST" action="{{ route('admin.chi-nhanh.dangLam') }}" class="jh-tb-chinhanh" id="jhCnForm">
+            @csrf
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V8l7-5 7 5v13"/><path d="M9.5 21v-6h5v6"/></svg>
+            <select name="id" onchange="document.getElementById('jhCnForm').submit()" aria-label="Chi nhánh đang làm việc">
+                {{-- 0 = xem gộp cả cửa hàng: đúng thứ chủ tiệm cần khi muốn nhìn
+                     tổng kho, và cũng là trạng thái mặc định. --}}
+                <option value="0" {{ $cnDangLam['dangChon'] ? '' : 'selected' }}>Tất cả chi nhánh</option>
+                @foreach($cnDangLam['ds'] as $cn)
+                    <option value="{{ $cn['id'] }}" {{ $cnDangLam['dangChon'] === (int) $cn['id'] ? 'selected' : '' }}>
+                        {{ $cn['name'] }}
+                    </option>
+                @endforeach
+            </select>
+        </form>
+    @endif
+
     {{-- Right actions --}}
     <div class="jh-tb-actions">
         <button type="button" class="jh-tb-iconbtn" aria-label="Trợ giúp">
@@ -139,6 +163,16 @@
 </header>
 
 <style>
+    .jh-tb-chinhanh {
+        display: inline-flex; align-items: center; gap: 6px; margin-left: 12px;
+        height: 34px; padding: 0 10px; border: 1px solid #e5e7eb; border-radius: 6px;
+        background: #fff; color: #374151;
+    }
+    .jh-tb-chinhanh select {
+        border: 0; outline: none; background: none; font-size: 13px; font-weight: 600;
+        color: #111827; max-width: 180px; cursor: pointer;
+    }
+
     .jh-topbar {
         position: sticky; top: 0; z-index: 20;
         display: flex; align-items: center; gap: 16px;

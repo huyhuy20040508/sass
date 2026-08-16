@@ -253,6 +253,12 @@ Route::middleware(['admin.auth', 'admin.khoa'])->prefix('admin')->name('admin.')
     // Nhân viên đăng nhập được trang quản trị để làm đơn hàng và kho, nhưng hồ sơ
     // khách hàng, tài khoản người dùng và cấu hình cửa hàng thì không. API cũng
     // chặn đúng các nhóm endpoint này, middleware ở đây chỉ để báo sớm và ẩn menu.
+    // Đổi chi nhánh đang làm việc — CỐ Ý nằm ngoài nhóm `admin.manage`: nhân
+    // viên bán hàng và thủ kho là những người đứng ở một kho cụ thể và phải đổi
+    // được, dù họ không được quản lý danh sách chi nhánh. Đường này chỉ ghi vào
+    // phiên; API vẫn tra sổ và từ chối chi nhánh của cửa hàng khác.
+    Route::post('/chi-nhanh/dang-lam', [ChiNhanhController::class, 'dangLam'])->name('chi-nhanh.dangLam');
+
     Route::middleware('admin.manage')->group(function () {
         // Cấu hình hệ thống — key-value do API giữ. MỖI nhóm là một trang riêng
         // (cửa hàng / vận chuyển / kho), xem SettingController::GROUPS.

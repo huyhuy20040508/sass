@@ -598,7 +598,8 @@
       <p class="eyebrow">Bắt đầu</p>
       <h2 class="h2 cta__title">Mở cửa hàng trên Sellio sáng nay, chiều đã bán được đơn đầu tiên.</h2>
       <p class="cta__sub">
-        Điền phiếu rồi đưa vào máy. Chúng tôi gọi lại trong giờ làm việc và mở tài khoản dùng thử cùng bạn.
+        Điền phiếu rồi đưa vào máy. Tài khoản mở ngay tại chỗ — đăng nhập được trong vòng một phút,
+        không cần chờ ai gọi lại, không cần thẻ ngân hàng.
       </p>
 
       <div class="may" id="may">
@@ -630,12 +631,47 @@
             </label>
 
             <label class="o">
+              <span class="o__nhan">Mã cửa hàng</span>
+              <span class="o__khung">
+                <input class="o__nhap" type="text" name="code" required
+                       autocomplete="off" placeholder="minhanh">
+                <span class="o__dau" aria-hidden="true">✓</span>
+              </span>
+            </label>
+
+            <label class="o">
+              <span class="o__nhan">Người liên hệ</span>
+              <span class="o__khung">
+                <input class="o__nhap" type="text" name="contact" required
+                       autocomplete="name" placeholder="Nguyễn Minh Anh">
+                <span class="o__dau" aria-hidden="true">✓</span>
+              </span>
+            </label>
+
+                        <!-- Ô BẪY: người thật không nhìn thấy nên luôn để trống; máy tự điền
+                 form thì điền hết mọi ô và bị máy chủ từ chối. Ẩn bằng CSS chứ
+                 không dùng type=hidden — nhiều bot bỏ qua ô hidden. -->
+                        <label class="o">
               <span class="o__nhan">Số điện thoại</span>
               <span class="o__khung">
                 <input class="o__nhap" type="tel" name="phone" required inputmode="tel"
                        autocomplete="tel" placeholder="09xx xxx xxx">
                 <span class="o__dau" aria-hidden="true">✓</span>
               </span>
+            </label>
+
+<label class="o">
+              <span class="o__nhan">Mật khẩu</span>
+              <span class="o__khung">
+                <input class="o__nhap" type="password" name="pass" required minlength="6"
+                       autocomplete="new-password" placeholder="tối thiểu 6 ký tự">
+                <span class="o__dau" aria-hidden="true">✓</span>
+              </span>
+            </label>
+
+<label class="o o--bay" aria-hidden="true">
+              <span class="o__nhan">Website</span>
+              <input class="o__nhap" type="text" name="website" tabindex="-1" autocomplete="off">
             </label>
 
             <button class="btn btn--full nut" type="submit">
@@ -654,14 +690,18 @@
               <p class="rc-kind">BIÊN NHẬN ĐĂNG KÝ</p>
 
               <div class="rc-rule"></div>
-              <p class="rc-line"><span>Mã phiếu</span><span id="bl-ma">—</span></p>
               <p class="rc-line"><span>Cửa hàng</span><span id="bl-shop">—</span></p>
-              <p class="rc-line"><span>Gọi lại số</span><span id="bl-phone">—</span></p>
+              <p class="rc-line"><span>Mã cửa hàng</span><span id="bl-ma">—</span></p>
+              <p class="rc-line"><span>Tên đăng nhập</span><span id="bl-user">—</span></p>
+              <p class="rc-line"><span>Gói</span><span id="bl-goi">—</span></p>
+              <p class="rc-line"><span>Dùng thử tới</span><span id="bl-han">—</span></p>
               <p class="rc-line"><span>Nhận lúc</span><span id="bl-luc">—</span></p>
               <div class="rc-rule"></div>
 
+              <a class="btn btn--full" id="bl-vao" href="#" hidden>Vào phần mềm ngay</a>
+
               <p class="bienlai__loi" id="bl-loi">
-                Đã nhận. Chúng tôi gọi lại trong giờ làm việc để mở tài khoản cùng bạn.
+                Tài khoản đã mở. Đăng nhập bằng mã cửa hàng, tên đăng nhập ở trên và mật khẩu bạn vừa đặt.
               </p>
 
               <svg class="rc-barcode" viewBox="0 0 200 36" preserveAspectRatio="none" aria-hidden="true">

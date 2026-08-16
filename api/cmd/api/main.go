@@ -216,6 +216,8 @@ func main() {
 				repository.NewHopDongRepository(platformDB),
 				repository.NewCuaHangMoiRepository(db),
 				repository.NewTaiKhoanCuaHangRepository(db),
+				cfg.App.Code,
+				cfg.App.ShopAdminURL,
 			))
 
 			// Hai sổ của control plane mà TRANG GÓI DỊCH VỤ và CỬA XÉT HẠN MỨC cùng
@@ -454,7 +456,7 @@ func main() {
 	// một cửa hàng chỉ chặn được lượt ĐĂNG NHẬP MỚI — ai đang mở phiên vẫn dùng
 	// tiếp cho tới khi access token hết hạn. Xem middleware.JWTAuth.
 	r := router.New(cfg, jwtMgr, tenMienRepo, nguoiDieuHanhRepo,
-		repository.NewPhienRepository(db), handlers)
+		repository.NewPhienRepository(db), chiNhanhRepo, handlers)
 	srv := &http.Server{
 		Addr:        announcedAddr(cfg.App.Port),
 		Handler:     r,

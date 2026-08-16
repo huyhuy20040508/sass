@@ -120,30 +120,46 @@ func syncOrderStock(tx *gorm.DB, o *domain.Order, desired map[uint]int, txType, 
 		return domain.ErrVariantNotFound
 	}
 
+	// Kho bị trừ là kho của CHI NHÁNH BÁN ĐƠN NÀY, chốt lúc đặt (xem
+	// domain.Order.ShopID). Không lấy theo chi nhánh người đang thao tác: một
+	// quản trị viên đứng ở kho Quận 7 mở lại đơn của Quận 1 để sửa thì hàng phải
+	// đi ra khỏi Quận 1, nếu không hai kho cùng lệch.
+	//
+	// Đơn cũ (trước 0005) có shop_id do migration dồn về chi nhánh gốc, nên nhánh
+	// 0 dưới đây chỉ xảy ra với dòng dựng bằng tay — rơi về chi nhánh của request
+	// vẫn đúng cửa hàng, và tổng kho không sai.
+	shopID := o.ShopID
+	if shopID == 0 {
+		var err error
+		if shopID, err = chiNhanhCuaRequest(tx.Statement.Context, tx); err != nil {
+			return err
+		}
+	}
+
 	for _, v := range variants {
 		delta := deltas[v.ID]
-		before := v.StockQuantity
-		after := before + delta
 		// Nhưng không cho LẤY THÊM hàng từ biến thể đã ngừng bán.
 		if delta < 0 && v.DeletedAt.Valid {
 			return domain.ErrVariantNotFound
 		}
-		if after < 0 {
-			name, err := variantLabel(tx, v)
-			if err != nil {
-				return err
-			}
-			return fmt.Errorf("%w: %s (còn %d, cần thêm %d)", domain.ErrOutOfStock, name, before, -delta-before)
-		}
 
-		if err := tx.Unscoped().Model(&domain.ProductVariant{}).
-			Where("id = ?", v.ID).
-			Update("stock_quantity", after).Error; err != nil {
+		before, after, err := ghiTonChiNhanh(tx, shopID, v.ID, delta, false)
+		if err != nil {
+			if errors.Is(err, domain.ErrOutOfStock) {
+				name, lerr := variantLabel(tx, v)
+				if lerr != nil {
+					return lerr
+				}
+
+				return fmt.Errorf("%w: %s (còn %d, cần thêm %d)", domain.ErrOutOfStock, name, before, -delta-before)
+			}
+
 			return err
 		}
 
 		orderID := o.ID
 		if err := tx.Create(&domain.InventoryTransaction{
+			ShopID:           shopID,
 			ProductVariantID: v.ID,
 			Type:             txType,
 			Quantity:         delta,
@@ -345,6 +361,16 @@ func (r *orderRepository) UserExists(ctx context.Context, id uint) (bool, error)
 // tránh đụng ràng buộc UNIQUE khi insert, sau đó đổi thành mã hiển thị theo ID.
 // Kho bị trừ ngay trong transaction này — thiếu hàng thì cả đơn bị huỷ bỏ.
 func (r *orderRepository) Create(ctx context.Context, o *domain.Order) error {
+	// Chi nhánh bán đơn này, chốt NGAY LÚC ĐẶT và không đổi nữa: người bán đang
+	// đứng ở đâu (đơn tại quầy), hoặc chi nhánh bán online (đơn của khách vãng
+	// lai — ctx của họ không mang chi nhánh nào). Mọi lượt trừ/hoàn kho về sau
+	// đều đọc con số này, nên nó phải đúng từ dòng đầu tiên.
+	shopID, err := chiNhanhCuaRequest(ctx, r.db)
+	if err != nil {
+		return err
+	}
+	o.ShopID = shopID
+
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		o.OrderCode = fmt.Sprintf("TMP%d", time.Now().UnixNano())
 		if err := tx.Create(o).Error; err != nil {
@@ -424,6 +450,22 @@ func loadCheckoutVariants(tx *gorm.DB, lines []domain.CheckoutLine, lock bool) (
 		return nil, err
 	}
 
+	// Tồn đọc theo CHI NHÁNH SẼ BÁN ĐƠN NÀY, không phải bản cộng của cả cửa hàng.
+	//
+	// Phải là ĐÚNG chi nhánh mà Create sẽ trừ kho (cùng một hàm chọn), nếu không
+	// hai đầu nói hai con số: tiệm hai kho mỗi bên 5 cái thì bản cộng là 10, màn
+	// hình nhận đơn 8 — rồi lượt trừ kho vỡ vì chi nhánh bán chỉ có 5. Với tiệm
+	// một chi nhánh (gần như mọi khách hôm nay) hai con số bằng nhau, nên nhánh
+	// này không đổi gì đối với họ.
+	shopID, err := chiNhanhCuaRequest(tx.Statement.Context, tx)
+	if err != nil {
+		return nil, err
+	}
+	tonChiNhanh, err := tonCuaChiNhanh(tx, shopID, ids)
+	if err != nil {
+		return nil, err
+	}
+
 	// Ghép thêm thông tin sản phẩm để snapshot vào đơn / hiển thị cho khách
 	type prodRow struct {
 		ID         uint
@@ -473,7 +515,7 @@ func loadCheckoutVariants(tx *gorm.DB, lines []domain.CheckoutLine, lock bool) (
 			// Danh mục + thương hiệu đi kèm để tầng service đối chiếu phạm vi
 			// chương trình khuyến mãi mà không phải hỏi lại bảng products.
 			CategoryID: p.CategoryID, BrandID: p.BrandID,
-			Price: price, Stock: v.StockQuantity,
+			Price: price, Stock: tonChiNhanh[v.ID],
 		}
 	}
 	return resolved, nil

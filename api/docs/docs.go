@@ -9823,6 +9823,105 @@ const docTemplate = `{
                 }
             }
         },
+        "/dang-ky": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Dựng TRỌN GÓI một khách hàng mới: cửa hàng + chi nhánh mặc định + tài\nkhoản quản trị (data plane), rồi ký hợp đồng dùng thử (control plane).\nBản HTTP của ` + "`" + `cmd/thue-bao ky --dung-thu` + "`" + `, khác một điểm: KHÔNG cho khai\ntay giá và hạn mức — hợp đồng thử chạy đúng theo gói đang bán. Thoả thuận\nriêng vẫn đi qua công cụ dòng lệnh.\nĐiều khoản CHÉP từ bảng giá lúc ký rồi sống độc lập: sửa bảng giá sau đó\nkhông đụng tới khách này. Bảng giá không quy định một hạn mức nào thì lượt\nký bị TỪ CHỐI (422) chứ không đoán hộ con số.\nĐƯỜNG CÔNG KHAI, không cần token: form đăng ký trên trang giới thiệu gọi thẳng vào đây.\nGói do máy chủ chọn (Khởi đầu, chu kỳ tháng) — payload KHÔNG có ` + "`" + `plan_id` + "`" + `, gửi lên cũng bị bỏ qua.\nChặn lạm dụng bằng giới hạn tần suất theo IP ở tầng route và một ô bẫy (` + "`" + `website` + "`" + `) trong form.",
+                "consumes": [
+                    "application/json",
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json",
+                    "application/json"
+                ],
+                "tags": [
+                    "Platform - Khách hàng",
+                    "Đăng ký"
+                ],
+                "summary": "Khách tự mở tài khoản dùng thử",
+                "parameters": [
+                    {
+                        "description": "Cửa hàng, tài khoản quản trị và dòng bảng giá",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.TaoDungThuRequest"
+                        }
+                    },
+                    {
+                        "description": "Thông tin cửa hàng mới",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.DangKyRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.DangKyResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
         "/events": {
             "get": {
                 "security": [
@@ -10939,17 +11038,20 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Dựng TRỌN GÓI một khách hàng mới: cửa hàng + chi nhánh mặc định + tài\nkhoản quản trị (data plane), rồi ký hợp đồng dùng thử (control plane).\nBản HTTP của ` + "`" + `cmd/thue-bao ky --dung-thu` + "`" + `, khác một điểm: KHÔNG cho khai\ntay giá và hạn mức — hợp đồng thử chạy đúng theo gói đang bán. Thoả thuận\nriêng vẫn đi qua công cụ dòng lệnh.\nĐiều khoản CHÉP từ bảng giá lúc ký rồi sống độc lập: sửa bảng giá sau đó\nkhông đụng tới khách này. Bảng giá không quy định một hạn mức nào thì lượt\nký bị TỪ CHỐI (422) chứ không đoán hộ con số.",
+                "description": "Dựng TRỌN GÓI một khách hàng mới: cửa hàng + chi nhánh mặc định + tài\nkhoản quản trị (data plane), rồi ký hợp đồng dùng thử (control plane).\nBản HTTP của ` + "`" + `cmd/thue-bao ky --dung-thu` + "`" + `, khác một điểm: KHÔNG cho khai\ntay giá và hạn mức — hợp đồng thử chạy đúng theo gói đang bán. Thoả thuận\nriêng vẫn đi qua công cụ dòng lệnh.\nĐiều khoản CHÉP từ bảng giá lúc ký rồi sống độc lập: sửa bảng giá sau đó\nkhông đụng tới khách này. Bảng giá không quy định một hạn mức nào thì lượt\nký bị TỪ CHỐI (422) chứ không đoán hộ con số.\nĐƯỜNG CÔNG KHAI, không cần token: form đăng ký trên trang giới thiệu gọi thẳng vào đây.\nGói do máy chủ chọn (Khởi đầu, chu kỳ tháng) — payload KHÔNG có ` + "`" + `plan_id` + "`" + `, gửi lên cũng bị bỏ qua.\nChặn lạm dụng bằng giới hạn tần suất theo IP ở tầng route và một ô bẫy (` + "`" + `website` + "`" + `) trong form.",
                 "consumes": [
+                    "application/json",
                     "application/json"
                 ],
                 "produces": [
+                    "application/json",
                     "application/json"
                 ],
                 "tags": [
-                    "Platform - Khách hàng"
+                    "Platform - Khách hàng",
+                    "Đăng ký"
                 ],
-                "summary": "Mở tài khoản dùng thử cho khách mới",
+                "summary": "Khách tự mở tài khoản dùng thử",
                 "parameters": [
                     {
                         "description": "Cửa hàng, tài khoản quản trị và dòng bảng giá",
@@ -10958,6 +11060,15 @@ const docTemplate = `{
                         "required": true,
                         "schema": {
                             "$ref": "#/definitions/dto.TaoDungThuRequest"
+                        }
+                    },
+                    {
+                        "description": "Thông tin cửa hàng mới",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.DangKyRequest"
                         }
                     }
                 ],
@@ -10973,7 +11084,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/dto.TaoDungThuResponse"
+                                            "$ref": "#/definitions/dto.DangKyResponse"
                                         }
                                     }
                                 }
@@ -11000,6 +11111,18 @@ const docTemplate = `{
                     },
                     "422": {
                         "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
@@ -13244,6 +13367,10 @@ const docTemplate = `{
                 "shipping_ward": {
                     "type": "string"
                 },
+                "shop_id": {
+                    "description": "ShopID là CHI NHÁNH phát sinh đơn này: chi nhánh người bán đang làm việc\n(đơn tại quầy), hoặc chi nhánh bán online (đơn từ storefront — xem\nChiNhanhRepository.BanOnline). Đây cũng là kho bị trừ hàng.",
+                    "type": "integer"
+                },
                 "status": {
                     "type": "string"
                 },
@@ -13883,6 +14010,10 @@ const docTemplate = `{
                 },
                 "returned_at": {
                     "type": "string"
+                },
+                "shop_id": {
+                    "description": "ShopID là chi nhánh trả hàng lại nhà cung cấp — lấy theo phiếu đặt gốc,\ncùng lý do với OrderReturn.",
+                    "type": "integer"
                 },
                 "status": {
                     "type": "string"
@@ -15477,6 +15608,82 @@ const docTemplate = `{
                 "tai_khoan": {
                     "type": "integer",
                     "example": 4
+                }
+            }
+        },
+        "dto.DangKyRequest": {
+            "type": "object",
+            "required": [
+                "dien_thoai",
+                "ma_cua_hang",
+                "mat_khau",
+                "nguoi_lien_he",
+                "ten_cua_hang",
+                "ten_dang_nhap"
+            ],
+            "properties": {
+                "dien_thoai": {
+                    "type": "string",
+                    "maxLength": 20,
+                    "example": "0901234567"
+                },
+                "email": {
+                    "type": "string",
+                    "maxLength": 191,
+                    "example": "huy@example.com"
+                },
+                "ma_cua_hang": {
+                    "type": "string",
+                    "example": "quochuy"
+                },
+                "mat_khau": {
+                    "type": "string",
+                    "minLength": 6,
+                    "example": "MatKhau@123"
+                },
+                "nguoi_lien_he": {
+                    "type": "string",
+                    "maxLength": 150,
+                    "example": "Nguyễn Quốc Huy"
+                },
+                "ten_cua_hang": {
+                    "type": "string",
+                    "maxLength": 150,
+                    "example": "Cửa hàng Quốc Huy"
+                },
+                "ten_dang_nhap": {
+                    "type": "string",
+                    "example": "admin"
+                },
+                "website": {
+                    "description": "Website là BẪY: một ô ẩn trong form, người thật không nhìn thấy nên luôn để\ntrống, còn máy tự điền form thì điền hết mọi ô. Điền vào đây là bị từ chối.\n\nRẻ và không phiền ai — khác hẳn captcha, thứ bắt mọi khách thật giải câu đố\nđể chặn một nhóm nhỏ không phải khách. Nó không chặn được kẻ nhắm riêng vào\nmình, và không cố tỏ ra như vậy: chốt chặn thứ hai là giới hạn tần suất\ntheo IP ở tầng route.",
+                    "type": "string",
+                    "maxLength": 200
+                }
+            }
+        },
+        "dto.DangKyResponse": {
+            "type": "object",
+            "properties": {
+                "dia_chi_dang_nhap": {
+                    "description": "DiaChiDangNhap là URL Shop Admin của chính tiến trình này (cfg.App.ShopAdminURL).",
+                    "type": "string",
+                    "example": "https://order.selliotech.store"
+                },
+                "goi": {
+                    "type": "string",
+                    "example": "Khởi đầu"
+                },
+                "het_han": {
+                    "type": "string"
+                },
+                "ma_cua_hang": {
+                    "type": "string",
+                    "example": "quochuy"
+                },
+                "ten_dang_nhap": {
+                    "type": "string",
+                    "example": "admin"
                 }
             }
         },
@@ -18806,6 +19013,10 @@ const docTemplate = `{
                 "shipping_ward": {
                     "type": "string"
                 },
+                "shop_id": {
+                    "description": "ShopID là CHI NHÁNH phát sinh đơn này: chi nhánh người bán đang làm việc\n(đơn tại quầy), hoặc chi nhánh bán online (đơn từ storefront — xem\nChiNhanhRepository.BanOnline). Đây cũng là kho bị trừ hàng.",
+                    "type": "integer"
+                },
                 "status": {
                     "type": "string"
                 },
@@ -18910,6 +19121,10 @@ const docTemplate = `{
                 "shipping_fee": {
                     "type": "number"
                 },
+                "shop_id": {
+                    "description": "ShopID là chi nhánh ĐẶT hàng, và cũng là kho hàng sẽ về khi nhận. Chốt lúc\nlập phiếu chứ không lúc nhận: người nhận hàng có thể đang đứng ở chi nhánh\nkhác, mà hàng thì về đúng nơi đã đặt.",
+                    "type": "integer"
+                },
                 "status": {
                     "type": "string"
                 },
@@ -19007,6 +19222,10 @@ const docTemplate = `{
                 },
                 "returned_at": {
                     "type": "string"
+                },
+                "shop_id": {
+                    "description": "ShopID là chi nhánh trả hàng lại nhà cung cấp — lấy theo phiếu đặt gốc,\ncùng lý do với OrderReturn.",
+                    "type": "integer"
                 },
                 "status": {
                     "type": "string"
@@ -19125,6 +19344,10 @@ const docTemplate = `{
                 },
                 "shipping_fee": {
                     "type": "number"
+                },
+                "shop_id": {
+                    "description": "ShopID là chi nhánh nhận hàng trả về — LUÔN lấy theo đơn gốc, không lấy\ntheo chi nhánh người duyệt đang đứng: hàng quay về đúng kho đã xuất nó ra,\nnếu không thì hai kho cùng lệch, một bên thừa một bên thiếu.",
+                    "type": "integer"
                 },
                 "status": {
                     "type": "string"

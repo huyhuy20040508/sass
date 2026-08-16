@@ -202,6 +202,38 @@ type ChiNhanh struct {
 
 func (ChiNhanh) TableName() string { return "shops" }
 
+// TonKhoChiNhanh là số hàng của MỘT biến thể ĐANG NẰM TẠI một chi nhánh — bảng
+// `variant_stocks`, và từ migration 0005 là NGUỒN SỰ THẬT của tồn kho.
+//
+// ĐỌC KỸ QUAN HỆ VỚI ProductVariant.StockQuantity: cột kia không còn là nguồn
+// sự thật nữa mà là BẢN CỘNG SẴN của mọi chi nhánh, do repository ghi lại ngay
+// sau mỗi lần đụng vào bảng này (xem ghiTonChiNhanh). Nó vẫn còn vì hàng chục
+// đường đọc dựa vào — trang bán hàng cho khách vãng lai, danh sách sản phẩm,
+// báo cáo giá trị kho — và tất cả đều hỏi đúng một câu: "cả cửa hàng còn bao
+// nhiêu".
+//
+// Vì vậy có đúng MỘT luật cho mọi người viết code sau: muốn ĐỔI tồn kho thì ghi
+// vào đây và để repository dựng lại bản cộng; tuyệt đối không ghi thẳng
+// `stock_quantity` nữa. Ghi thẳng thì hai bảng nói hai con số khác nhau, và cái
+// sai đó không nổi lên ở đâu cho tới lúc có người đếm hàng thật trong kho.
+//
+// Không có dòng = chi nhánh đó chưa từng có hàng của biến thể này, KHÁC "có
+// dòng, quantity = 0" (đã từng có, giờ hết). Nơi ghi phải upsert; nơi đọc phải
+// coi thiếu dòng là 0.
+type TonKhoChiNhanh struct {
+	ID uint `json:"id" gorm:"primaryKey"`
+	TenantOwned
+	// ShopID là chi nhánh giữ số hàng này. Cặp (ShopID, ProductVariantID) là khoá
+	// duy nhất uq_variant_stocks_shop_variant.
+	ShopID           uint      `json:"shop_id"`
+	ProductVariantID uint      `json:"product_variant_id"`
+	Quantity         int       `json:"quantity"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
+}
+
+func (TonKhoChiNhanh) TableName() string { return "variant_stocks" }
+
 type User struct {
 	ID uint `json:"id" gorm:"primaryKey"`
 	TenantOwned
@@ -642,6 +674,10 @@ type PromotionTarget struct {
 type Order struct {
 	ID uint `json:"id" gorm:"primaryKey"`
 	TenantOwned
+	// ShopID là CHI NHÁNH phát sinh đơn này: chi nhánh người bán đang làm việc
+	// (đơn tại quầy), hoặc chi nhánh bán online (đơn từ storefront — xem
+	// ChiNhanhRepository.BanOnline). Đây cũng là kho bị trừ hàng.
+	ShopID           uint           `json:"shop_id"`
 	OrderCode        string         `json:"order_code"`
 	UserID           *uint          `json:"user_id"`
 	VoucherID        *uint          `json:"voucher_id"`
@@ -747,6 +783,10 @@ type OrderStatusHistory struct {
 type OrderReturn struct {
 	ID uint `json:"id" gorm:"primaryKey"`
 	TenantOwned
+	// ShopID là chi nhánh nhận hàng trả về — LUÔN lấy theo đơn gốc, không lấy
+	// theo chi nhánh người duyệt đang đứng: hàng quay về đúng kho đã xuất nó ra,
+	// nếu không thì hai kho cùng lệch, một bên thừa một bên thiếu.
+	ShopID      uint   `json:"shop_id"`
 	ReturnCode  string `json:"return_code"`
 	OrderID     uint   `json:"order_id"`
 	UserID      *uint  `json:"user_id"`
@@ -879,6 +919,10 @@ type Supplier struct {
 type PurchaseOrder struct {
 	ID uint `json:"id" gorm:"primaryKey"`
 	TenantOwned
+	// ShopID là chi nhánh ĐẶT hàng, và cũng là kho hàng sẽ về khi nhận. Chốt lúc
+	// lập phiếu chứ không lúc nhận: người nhận hàng có thể đang đứng ở chi nhánh
+	// khác, mà hàng thì về đúng nơi đã đặt.
+	ShopID     uint   `json:"shop_id"`
 	POCode     string `json:"po_code" gorm:"column:po_code"`
 	SupplierID *uint  `json:"supplier_id"`
 	// SupplierName là tên chụp lại lúc đặt — nhà cung cấp đổi tên hoặc bị xoá thì
@@ -1029,6 +1073,10 @@ const (
 type InventoryTransaction struct {
 	ID uint `json:"id" gorm:"primaryKey"`
 	TenantOwned
+	// ShopID là chi nhánh mà bút toán này phát sinh. Bắt buộc điền: một dòng sổ
+	// kho không nói được hàng vào/ra ở đâu thì không đối chiếu lại được với kho
+	// thật của bất kỳ chi nhánh nào.
+	ShopID           uint      `json:"shop_id"`
 	ProductVariantID uint      `json:"product_variant_id"`
 	Type             string    `json:"type"`
 	Quantity         int       `json:"quantity"`
@@ -1053,6 +1101,9 @@ type InventoryTransaction struct {
 type PurchaseReturn struct {
 	ID uint `json:"id" gorm:"primaryKey"`
 	TenantOwned
+	// ShopID là chi nhánh trả hàng lại nhà cung cấp — lấy theo phiếu đặt gốc,
+	// cùng lý do với OrderReturn.
+	ShopID     uint   `json:"shop_id"`
 	ReturnCode string `json:"return_code"`
 	// PurchaseOrderID có thể NULL nếu phiếu đặt gốc bị xoá; POCode/SupplierName là
 	// bản chụp lúc lập phiếu nên phiếu cũ vẫn đọc được nguyên trạng.

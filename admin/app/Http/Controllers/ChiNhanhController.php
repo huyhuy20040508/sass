@@ -69,6 +69,33 @@ class ChiNhanhController extends Controller
         return $this->send(fn () => $this->api->suaChiNhanh($id, $this->validated($request)), 'Đã cập nhật chi nhánh.');
     }
 
+    /**
+     * Đổi CHI NHÁNH ĐANG LÀM VIỆC (ô chọn ở thanh trên cùng).
+     *
+     * Chỉ ghi vào phiên rồi quay lại đúng trang vừa đứng: từ lượt gọi API kế
+     * tiếp, ApiClient tự đính chi nhánh này vào mọi request (xem
+     * ApiClient::KHOA_CHI_NHANH), nên trang kho, trang đơn và mọi thao tác ghi
+     * đều đổi theo cùng một lúc.
+     *
+     * KHÔNG tự xác minh chi nhánh ở đây: API mới là nơi tra sổ và từ chối chi
+     * nhánh của cửa hàng khác (middleware.ChiNhanhDangLam). Chép luật sang đây
+     * là để hai bản lệch nhau, mà bản ở xa người dùng hơn mới là bản quyết định.
+     */
+    public function dangLam(Request $request)
+    {
+        $du = $request->validate(['id' => ['required', 'integer', 'min:0']]);
+
+        // 0 = xem GỘP mọi chi nhánh: bỏ hẳn khoá khỏi phiên thay vì ghi số 0, để
+        // ApiClient không gửi header nào cả.
+        if ((int) $du['id'] === 0) {
+            session()->forget(ApiClient::KHOA_CHI_NHANH);
+        } else {
+            session([ApiClient::KHOA_CHI_NHANH => (int) $du['id']]);
+        }
+
+        return back();
+    }
+
     /** Xoá một chi nhánh (xoá mềm bên API — dữ liệu cũ vẫn tra lại được). */
     public function destroy(int $id)
     {

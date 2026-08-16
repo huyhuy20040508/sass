@@ -97,6 +97,26 @@ func (r *chiNhanhRepository) Count(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+// BanOnline: chi nhánh đang mở có id nhỏ nhất — xem chú thích ở port.
+//
+// Sắp theo `id` chứ không theo `created_at`: hai chi nhánh dựng trong cùng một
+// mili giây (kịch bản gieo dữ liệu, hoặc một lượt nhập liệu tự động) sẽ cho thứ
+// tự không xác định, và "nơi bán online" đổi qua lại giữa hai lượt gọi là thứ
+// không ai gỡ ra được từ nhật ký.
+func (r *chiNhanhRepository) BanOnline(ctx context.Context) (*domain.ChiNhanh, error) {
+	var cn domain.ChiNhanh
+	err := r.db.WithContext(ctx).Model(&domain.ChiNhanh{}).
+		Where("is_active = ?", true).Order("id ASC").Take(&cn).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, domain.ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return &cn, nil
+}
+
 func (r *chiNhanhRepository) CountActiveExcept(ctx context.Context, excludeID uint) (int64, error) {
 	var count int64
 	q := r.db.WithContext(ctx).Model(&domain.ChiNhanh{}).Where("is_active = ?", true)

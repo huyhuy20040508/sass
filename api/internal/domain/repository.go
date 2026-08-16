@@ -1030,6 +1030,20 @@ type ChiNhanhRepository interface {
 	// Count đếm chi nhánh còn trong sổ (kể cả đang ngừng hoạt động) — con số của
 	// hạn mức `max_shops`.
 	Count(ctx context.Context) (int64, error)
+	// BanOnline trả về chi nhánh PHỤ TRÁCH BÁN ONLINE của cửa hàng: nơi đơn từ
+	// trang bán hàng trừ kho, và nơi mọi lượt ghi kho không nói rõ chi nhánh rơi
+	// về.
+	//
+	// Hôm nay là chi nhánh CÒN SỐNG có id nhỏ nhất — dòng 'mac-dinh' dựng cùng
+	// lúc mở tài khoản. Đây là một luật ngầm chứ chưa phải một ô cấu hình, và cố
+	// ý dừng ở đó: cửa hàng một chi nhánh (gần như mọi khách hôm nay) không có gì
+	// để chọn, còn khi có khách chuỗi thật muốn đổi nơi bán online thì đó là một
+	// ô trong trang Chi nhánh, không phải một luật khác trong code.
+	//
+	// ErrNotFound = cửa hàng không còn chi nhánh nào đang mở. Không được rơi về
+	// một id đoán bừa: ghi hàng vào một chi nhánh không tồn tại thì khoá ngoại từ
+	// chối, còn ghi vào chi nhánh của khách khác thì không ai từ chối cả.
+	BanOnline(ctx context.Context) (*ChiNhanh, error)
 	// CountActiveExcept đếm chi nhánh ĐANG HOẠT ĐỘNG, bỏ qua excludeID (0 =
 	// không bỏ ai).
 	//

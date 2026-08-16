@@ -161,6 +161,15 @@ func gieo(t *testing.T, db *gorm.DB, ma string) *cuaHang {
 	tao(t, db, ctx, bienThe)
 	c.bienThe = bienThe.ID
 
+	// Tồn kho phải gieo Ở CHI NHÁNH, không chỉ ở cột stock_quantity: từ migration
+	// 0005 cột kia là bản cộng sẵn, còn nguồn sự thật là variant_stocks. Gieo
+	// thiếu dòng này thì mọi bài kiểm nghiệp vụ kho chạy trên một cửa hàng "có
+	// hàng trên màn hình mà kho trống rỗng" — và chúng sẽ hỏng vì lý do chẳng
+	// liên quan gì tới điều đang kiểm.
+	tao(t, db, ctx, &domain.TonKhoChiNhanh{
+		ShopID: c.chiNhanh, ProductVariantID: bienThe.ID, Quantity: bienThe.StockQuantity,
+	})
+
 	// --- đơn hàng ---
 	c.maDonHang = "dh-" + c.vet
 	c.donHang = gieoDon(t, db, ctx, c, c.maDonHang, domain.OrderStatusConfirmed)
@@ -172,6 +181,7 @@ func gieo(t *testing.T, db *gorm.DB, ma string) *cuaHang {
 	}
 
 	traHang := &domain.OrderReturn{
+		ShopID:     c.chiNhanh,
 		ReturnCode: "th-" + c.vet, OrderID: c.donGiao, UserID: &khach.ID,
 		Status: domain.ReturnStatusPending, Reason: domain.ReturnReasonDefective,
 		ReasonNote: "Lý do " + c.vet, RequestedBy: "customer",
@@ -211,6 +221,7 @@ func gieo(t *testing.T, db *gorm.DB, ma string) *cuaHang {
 	// quan trọng: goods_receipt_repository gom bút toán theo mốc đứng sau chúng,
 	// nên ghi mốc trước thì đợt nhập hiện ra với 0 dòng hàng.
 	tao(t, db, ctx, &domain.InventoryTransaction{
+		ShopID:           c.chiNhanh,
 		ProductVariantID: c.bienThe, Type: "import", Quantity: 5,
 		QuantityBefore: 15, QuantityAfter: 20,
 		ReferenceType: "purchase_order", ReferenceID: &c.phieuNhan,
@@ -224,6 +235,7 @@ func gieo(t *testing.T, db *gorm.DB, ma string) *cuaHang {
 	c.maDotNhap = "pn-" + c.vet + "-N1"
 
 	traNhap := &domain.PurchaseReturn{
+		ShopID:     c.chiNhanh,
 		ReturnCode: "tn-" + c.vet, PurchaseOrderID: &c.phieuNhan, POCode: "pn-" + c.vet,
 		SupplierID: &nhaCungCap.ID, SupplierName: "Nhà cung cấp " + c.vet,
 		Status: domain.PurchaseReturnStatusDraft, Reason: domain.PurchaseReturnReasonDefect,
@@ -340,6 +352,7 @@ func boSung(t *testing.T, db *gorm.DB, c *cuaHang) {
 	// Đơn ĐÃ GIAO và ĐÃ TRẢ TIỀN: doanh thu, báo cáo và thống kê khách hàng chỉ
 	// đếm những đơn đi được tới đây.
 	don := &domain.Order{
+		ShopID:    c.chiNhanh,
 		OrderCode: "dh2-" + c.vet, UserID: &khach.ID,
 		RecipientName: "Người nhận " + hau, RecipientPhone: "0900000005",
 		ShippingAddress: "Địa chỉ của " + hau,
@@ -356,6 +369,7 @@ func boSung(t *testing.T, db *gorm.DB, c *cuaHang) {
 	tao(t, db, ctx, dong)
 
 	traHang := &domain.OrderReturn{
+		ShopID:     c.chiNhanh,
 		ReturnCode: "th2-" + c.vet, OrderID: don.ID, UserID: &khach.ID,
 		Status: domain.ReturnStatusPending, Reason: domain.ReturnReasonWrongSize,
 		RequestedBy: "customer", ItemsAmount: 200000, RefundAmount: 200000, Restock: true,
@@ -374,6 +388,7 @@ func boSung(t *testing.T, db *gorm.DB, c *cuaHang) {
 	tao(t, db, ctx, nhaCungCap)
 
 	phieu := &domain.PurchaseOrder{
+		ShopID: c.chiNhanh,
 		POCode: "pn2-" + c.vet, SupplierID: &nhaCungCap.ID, SupplierName: "Nhà cung cấp " + hau,
 		Status: domain.PurchaseStatusReceived, ItemsAmount: 240000, TotalAmount: 240000,
 		PaymentStatus: domain.PurchasePaymentUnpaid, OrderedAt: &now, ReceivedAt: &now,
@@ -387,6 +402,7 @@ func boSung(t *testing.T, db *gorm.DB, c *cuaHang) {
 	}
 	tao(t, db, ctx, dongPhieu)
 	tao(t, db, ctx, &domain.InventoryTransaction{
+		ShopID:           c.chiNhanh,
 		ProductVariantID: bienThe.ID, Type: "import", Quantity: 2,
 		QuantityBefore: 5, QuantityAfter: 7,
 		ReferenceType: "purchase_order", ReferenceID: &phieu.ID,
@@ -398,6 +414,7 @@ func boSung(t *testing.T, db *gorm.DB, c *cuaHang) {
 	})
 
 	traNhap := &domain.PurchaseReturn{
+		ShopID:     c.chiNhanh,
 		ReturnCode: "tn2-" + c.vet, PurchaseOrderID: &phieu.ID, POCode: phieu.POCode,
 		SupplierID: &nhaCungCap.ID, SupplierName: "Nhà cung cấp " + hau,
 		Status: domain.PurchaseReturnStatusDraft, Reason: domain.PurchaseReturnReasonDefect,
@@ -437,6 +454,7 @@ func gieoDon(t *testing.T, db *gorm.DB, ctx context.Context, c *cuaHang, ma, tra
 	now := time.Now()
 
 	don := &domain.Order{
+		ShopID:    c.chiNhanh,
 		OrderCode: ma, UserID: &c.khach,
 		RecipientName: "Người nhận " + c.vet, RecipientPhone: "0900000004",
 		RecipientEmail:  "nhan@" + c.vet + ".test",
@@ -465,6 +483,7 @@ func gieoPhieuDat(t *testing.T, db *gorm.DB, ctx context.Context, c *cuaHang, ma
 	now := time.Now()
 
 	phieu := &domain.PurchaseOrder{
+		ShopID: c.chiNhanh,
 		POCode: ma, SupplierID: &c.nhaCungCap, SupplierName: "Nhà cung cấp " + c.vet,
 		Status: trangThai, ItemsAmount: 300000, TotalAmount: 300000,
 		PaymentStatus: domain.PurchasePaymentUnpaid, Note: "Phiếu của " + c.vet,

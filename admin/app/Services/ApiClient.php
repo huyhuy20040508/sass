@@ -31,6 +31,16 @@ class ApiClient
      * Tạo request nền, tự đính kèm token (mặc định lấy từ session).
      * Truyền $token = false để chủ động bỏ qua token (vd: lúc đăng nhập).
      */
+    /**
+     * KHOA_CHI_NHANH — ô trong phiên giữ chi nhánh người dùng đang làm việc.
+     *
+     * Để trong PHIÊN chứ không trong token: đổi chi nhánh là chuyện xảy ra giữa
+     * ca làm (thủ kho sang kho khác đếm hàng), mà token thì chỉ đổi lúc đăng
+     * nhập. Cũng không để trong URL — mỗi trang lại phải mang theo một tham số,
+     * và quên một chỗ là ghi hàng vào kho khác.
+     */
+    public const KHOA_CHI_NHANH = 'chi_nhanh_dang_lam';
+
     public function request(string|false|null $token = null): PendingRequest
     {
         $req = Http::baseUrl($this->baseUrl)
@@ -43,6 +53,18 @@ class ApiClient
             if ($token) {
                 $req = $req->withToken($token);
             }
+        }
+
+        // Chi nhánh ĐANG LÀM VIỆC đi kèm MỌI lượt gọi, không phải chỉ mấy trang
+        // kho: đơn hàng, phiếu nhập và phiếu trả đều ghi lại chi nhánh phát sinh
+        // (xem domain.Order.ShopID bên API). Gắn ở đây — chỗ duy nhất mọi request
+        // đi qua — thay vì nhớ thêm tham số ở từng controller.
+        //
+        // Không có trong phiên thì KHÔNG gửi gì, và API tự rơi về chi nhánh bán
+        // online. Đó là đường đi của cửa hàng một chi nhánh: màn hình không có ô
+        // chọn nào cả.
+        if ($shopID = session(self::KHOA_CHI_NHANH)) {
+            $req = $req->withHeaders(['X-Chi-Nhanh' => (string) $shopID]);
         }
 
         return $req;

@@ -95,6 +95,18 @@ func (f *fakeChiNhanhRepo) Delete(_ context.Context, id uint) error {
 	return domain.ErrNotFound
 }
 
+func (f *fakeChiNhanhRepo) BanOnline(context.Context) (*domain.ChiNhanh, error) {
+	for i := range f.rows {
+		if f.rows[i].IsActive {
+			ban := f.rows[i]
+
+			return &ban, nil
+		}
+	}
+
+	return nil, domain.ErrNotFound
+}
+
 func (f *fakeChiNhanhRepo) Count(context.Context) (int64, error) {
 	return int64(len(f.rows)), nil
 }

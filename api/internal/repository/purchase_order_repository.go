@@ -179,15 +179,53 @@ func (r *purchaseOrderRepository) Histories(ctx context.Context, purchaseID uint
 // purchaseVariantSelect là các cột dùng chung khi tra biến thể để đưa vào phiếu.
 // Giá gợi ý là giá VỐN hiệu lực (biến thể ghi đè sản phẩm cha) chứ không phải giá
 // bán — đây là chiều mua vào.
-const purchaseVariantSelect = `v.id AS variant_id, v.product_id, p.name AS product_name,
+//
+// `ton` truyền vào chứ không ghi cứng `v.stock_quantity`: cột "còn" trên màn hình
+// lập phiếu phải là tồn CỦA KHO SẼ NHẬN HÀNG VỀ, xem tonPhieuNhap.
+func purchaseVariantSelect(ton string) string {
+	return `v.id AS variant_id, v.product_id, p.name AS product_name,
 	v.sku, v.size, v.color,
 	COALESCE(NULLIF(v.image, ''), NULLIF(p.thumbnail, ''), '') AS thumbnail,
 	` + effectiveCostExpr + ` AS cost_price,
-	v.stock_quantity AS stock`
+	` + ton + ` AS stock`
+}
+
+// tonPhieuNhap trả về mệnh đề JOIN và biểu thức tồn của ĐÚNG chi nhánh mà phiếu
+// nhập sẽ nhận hàng về.
+//
+// Chi nhánh chọn bằng chính hàm mà Create dùng để đóng dấu `purchase_orders.
+// shop_id` — người lập phiếu thấy "kho này còn 3 cái" thì lượt nhận hàng cũng
+// cộng vào đúng kho ấy. Đọc bản cộng của cả cửa hàng ở đây là mời người ta đặt
+// hàng theo con số của một kho khác.
+//
+// Trả về MẢNH GHÉP chứ không dựng sẵn cả truy vấn: hai đường gọi khác nhau ở chỗ
+// có loại sản phẩm đã xoá mềm hay không (xem LookupVariants), và gói cả JOIN
+// products vào đây thì một trong hai phải đi gỡ nó ra.
+func (r *purchaseOrderRepository) tonPhieuNhap(ctx context.Context) (joinTon, ton string, err error) {
+	shopID, err := chiNhanhCuaRequest(ctx, r.db)
+	if err != nil {
+		return "", "", err
+	}
+
+	// LEFT JOIN: biến thể chưa từng có hàng ở kho này vẫn phải tra ra được — đó
+	// chính là món người ta đang định đặt về.
+	//
+	// %d của một uint đã qua chiNhanhCuaRequest (tra sổ trong đúng cửa hàng của
+	// ctx) không sinh ra được ký tự nào ngoài chữ số — cùng lý do như bên
+	// inventoryRepository.baseQuery.
+	return fmt.Sprintf(
+		"LEFT JOIN variant_stocks vs ON vs.product_variant_id = v.id AND vs.shop_id = %d", shopID,
+	), tonTheoChiNhanh, nil
+}
 
 func (r *purchaseOrderRepository) SearchVariants(ctx context.Context, keyword string, limit int) ([]domain.PurchaseVariant, error) {
 	if limit < 1 {
 		limit = 20
+	}
+
+	joinTon, ton, err := r.tonPhieuNhap(ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	// Chỉ hàng còn bán được mới nhập thêm: sản phẩm/biến thể đã ẩn mà vẫn đặt hàng
@@ -195,6 +233,7 @@ func (r *purchaseOrderRepository) SearchVariants(ctx context.Context, keyword st
 	q := r.db.WithContext(ctx).
 		Table("product_variants AS v").
 		Joins("JOIN products p ON p.id = v.product_id AND p.deleted_at IS NULL").
+		Joins(joinTon).
 		Where("v.deleted_at IS NULL AND v.is_active = 1 AND p.is_active = 1")
 
 	if kw := strings.TrimSpace(keyword); kw != "" {
@@ -204,8 +243,12 @@ func (r *purchaseOrderRepository) SearchVariants(ctx context.Context, keyword st
 
 	out := make([]domain.PurchaseVariant, 0, limit)
 	// Hàng sắp hết lên đầu: đó chính là thứ người lập phiếu đang cần đặt thêm.
-	err := q.Select(purchaseVariantSelect).
-		Order("v.stock_quantity ASC, p.name ASC, v.id ASC").
+	//
+	// Sắp theo CÙNG biểu thức tồn đang hiển thị. Sắp theo bản cộng của cả cửa hàng
+	// trong khi cột "còn" in tồn của một kho thì danh sách đọc lên như bị xáo bậy:
+	// dòng ghi 0 nằm dưới dòng ghi 12.
+	err = q.Select(purchaseVariantSelect(ton)).
+		Order(ton + " ASC, p.name ASC, v.id ASC").
 		Limit(limit).
 		Scan(&out).Error
 	return out, err
@@ -222,12 +265,21 @@ func (r *purchaseOrderRepository) LookupVariants(ctx context.Context, ids []uint
 		return out, nil
 	}
 
+	joinTon, ton, err := r.tonPhieuNhap(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	var rows []domain.PurchaseVariant
-	err := r.db.WithContext(ctx).
+	// JOIN products KHÔNG kèm `deleted_at IS NULL` như bên SearchVariants: sản
+	// phẩm có thể bị xoá mềm sau khi phiếu đã lập, mà phiếu cũ thì vẫn phải mở ra
+	// đọc được.
+	err = r.db.WithContext(ctx).
 		Table("product_variants AS v").
 		Joins("JOIN products p ON p.id = v.product_id").
+		Joins(joinTon).
 		Where("v.id IN ?", ids).
-		Select(purchaseVariantSelect).
+		Select(purchaseVariantSelect(ton)).
 		Scan(&rows).Error
 	if err != nil {
 		return nil, err
@@ -245,6 +297,13 @@ func (r *purchaseOrderRepository) LookupVariants(ctx context.Context, ids []uint
 //
 // KHÔNG đụng tới tồn kho: hàng mới chỉ được đặt, chưa về tới kho.
 func (r *purchaseOrderRepository) Create(ctx context.Context, po *domain.PurchaseOrder) error {
+	// Chi nhánh ĐẶT hàng — cũng là kho hàng sẽ về khi nhận (xem nơi cộng tồn).
+	shopID, err := chiNhanhCuaRequest(ctx, r.db)
+	if err != nil {
+		return err
+	}
+	po.ShopID = shopID
+
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		items := po.Items
 		po.Items = nil
@@ -555,19 +614,27 @@ func receiveIntoStock(
 	poID := po.ID
 	actor := actorRef(rc.ActorID)
 
+	// Hàng về kho của CHI NHÁNH ĐÃ ĐẶT, chốt từ lúc lập phiếu — không phải kho
+	// của người đang bấm nút nhận. Thủ kho ở Quận 1 nhận giúp một đợt hàng đặt
+	// cho Quận 7 là chuyện thường; hàng vẫn phải vào sổ của Quận 7.
+	shopID := po.ShopID
+	if shopID == 0 {
+		var err error
+		if shopID, err = chiNhanhCuaRequest(tx.Statement.Context, tx); err != nil {
+			return err
+		}
+	}
+
 	for _, vid := range ids {
-		v, ok := found[vid]
+		_, ok := found[vid]
 		if !ok {
 			// Biến thể đã bị xoá cứng: không còn chỗ nào để cộng tồn kho. Bỏ qua dòng
 			// này thay vì chặn cả đợt nhận — hàng thực tế đã nằm trong kho rồi.
 			continue
 		}
 
-		before := v.StockQuantity
-		after := before + byVariant[vid]
-		if err := tx.Unscoped().Model(&domain.ProductVariant{}).
-			Where("id = ?", vid).
-			Update("stock_quantity", after).Error; err != nil {
+		before, after, err := ghiTonChiNhanh(tx, shopID, vid, byVariant[vid], true)
+		if err != nil {
 			return err
 		}
 
@@ -585,6 +652,7 @@ func receiveIntoStock(
 
 		unitCost := costOf[vid]
 		if err := tx.Create(&domain.InventoryTransaction{
+			ShopID:           shopID,
 			ProductVariantID: vid,
 			Type:             "import",
 			Quantity:         byVariant[vid],

@@ -127,7 +127,7 @@ func TestTaoKhachTuChoiKhiMaConTrongSoNenTang(t *testing.T) {
 	hopDong := &fakeHopDongSo{maCuaAi: map[string]uint{"test1": 3}}
 	cuaHang := &fakeCuaHangMoi{capID: 1}
 
-	svc := NewDungThuService(fakeBangGiaKy{}, hopDong, cuaHang, fakeTaiKhoanCuaHang{})
+	svc := NewDungThuService(fakeBangGiaKy{}, hopDong, cuaHang, fakeTaiKhoanCuaHang{}, domain.AppOrder, "http://localhost:8001")
 
 	_, err := svc.Tao(context.Background(), domain.QuyenApp{ToanQuyen: true}, donTaoKhach("test1"))
 	if !errors.Is(err, domain.ErrMaConTrongSoNenTang) {
@@ -150,7 +150,7 @@ func TestTaoKhachChayBinhThuongKhiSoNenTangSach(t *testing.T) {
 	hopDong := &fakeHopDongSo{maCuaAi: map[string]uint{}}
 	cuaHang := &fakeCuaHangMoi{capID: 1}
 
-	svc := NewDungThuService(fakeBangGiaKy{}, hopDong, cuaHang, fakeTaiKhoanCuaHang{})
+	svc := NewDungThuService(fakeBangGiaKy{}, hopDong, cuaHang, fakeTaiKhoanCuaHang{}, domain.AppOrder, "http://localhost:8001")
 
 	res, err := svc.Tao(context.Background(), domain.QuyenApp{ToanQuyen: true}, donTaoKhach("test1"))
 	if err != nil {

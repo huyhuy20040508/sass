@@ -49,6 +49,37 @@ func NewDungThuHandler(svc service.DungThuService) *DungThuHandler {
 //	@Failure		409		{object}	response.Body
 //	@Failure		422		{object}	response.Body
 //	@Router			/platform/dung-thu [post]
+// DangKy godoc
+//
+//	@Summary		Khách tự mở tài khoản dùng thử
+//	@Description	ĐƯỜNG CÔNG KHAI, không cần token: form đăng ký trên trang giới thiệu gọi thẳng vào đây.
+//	@Description	Gói do máy chủ chọn (Khởi đầu, chu kỳ tháng) — payload KHÔNG có `plan_id`, gửi lên cũng bị bỏ qua.
+//	@Description	Chặn lạm dụng bằng giới hạn tần suất theo IP ở tầng route và một ô bẫy (`website`) trong form.
+//	@Tags			Đăng ký
+//	@Accept			json
+//	@Produce		json
+//	@Param			body	body		dto.DangKyRequest	true	"Thông tin cửa hàng mới"
+//	@Success		201		{object}	response.Body{data=dto.DangKyResponse}
+//	@Failure		422		{object}	response.Body
+//	@Failure		429		{object}	response.Body
+//	@Failure		503		{object}	response.Body
+//	@Router			/dang-ky [post]
+func (h *DungThuHandler) DangKy(c *gin.Context) {
+	var req dto.DangKyRequest
+	if !bindJSON(c, &req) {
+		return
+	}
+
+	res, err := h.svc.DangKy(c.Request.Context(), req)
+	if err != nil {
+		handleDungThuError(c, err)
+
+		return
+	}
+
+	response.CreatedMessage(c, "Đã mở tài khoản dùng thử", res)
+}
+
 func (h *DungThuHandler) Tao(c *gin.Context) {
 	if !ghiDuoc(c) {
 		return

@@ -429,6 +429,12 @@ definitions:
         type: string
       shipping_ward:
         type: string
+      shop_id:
+        description: |-
+          ShopID là CHI NHÁNH phát sinh đơn này: chi nhánh người bán đang làm việc
+          (đơn tại quầy), hoặc chi nhánh bán online (đơn từ storefront — xem
+          ChiNhanhRepository.BanOnline). Đây cũng là kho bị trừ hàng.
+        type: integer
       status:
         type: string
       subtotal_amount:
@@ -869,6 +875,11 @@ definitions:
         type: string
       returned_at:
         type: string
+      shop_id:
+        description: |-
+          ShopID là chi nhánh trả hàng lại nhà cung cấp — lấy theo phiếu đặt gốc,
+          cùng lý do với OrderReturn.
+        type: integer
       status:
         type: string
       supplier_id:
@@ -2062,6 +2073,71 @@ definitions:
       tai_khoan:
         example: 4
         type: integer
+    type: object
+  dto.DangKyRequest:
+    properties:
+      dien_thoai:
+        example: "0901234567"
+        maxLength: 20
+        type: string
+      email:
+        example: huy@example.com
+        maxLength: 191
+        type: string
+      ma_cua_hang:
+        example: quochuy
+        type: string
+      mat_khau:
+        example: MatKhau@123
+        minLength: 6
+        type: string
+      nguoi_lien_he:
+        example: Nguyễn Quốc Huy
+        maxLength: 150
+        type: string
+      ten_cua_hang:
+        example: Cửa hàng Quốc Huy
+        maxLength: 150
+        type: string
+      ten_dang_nhap:
+        example: admin
+        type: string
+      website:
+        description: |-
+          Website là BẪY: một ô ẩn trong form, người thật không nhìn thấy nên luôn để
+          trống, còn máy tự điền form thì điền hết mọi ô. Điền vào đây là bị từ chối.
+
+          Rẻ và không phiền ai — khác hẳn captcha, thứ bắt mọi khách thật giải câu đố
+          để chặn một nhóm nhỏ không phải khách. Nó không chặn được kẻ nhắm riêng vào
+          mình, và không cố tỏ ra như vậy: chốt chặn thứ hai là giới hạn tần suất
+          theo IP ở tầng route.
+        maxLength: 200
+        type: string
+    required:
+    - dien_thoai
+    - ma_cua_hang
+    - mat_khau
+    - nguoi_lien_he
+    - ten_cua_hang
+    - ten_dang_nhap
+    type: object
+  dto.DangKyResponse:
+    properties:
+      dia_chi_dang_nhap:
+        description: DiaChiDangNhap là URL Shop Admin của chính tiến trình này (cfg.App.ShopAdminURL).
+        example: https://order.selliotech.store
+        type: string
+      goi:
+        example: Khởi đầu
+        type: string
+      het_han:
+        type: string
+      ma_cua_hang:
+        example: quochuy
+        type: string
+      ten_dang_nhap:
+        example: admin
+        type: string
     type: object
   dto.DatGiaHanRequest:
     properties:
@@ -4769,6 +4845,12 @@ definitions:
         type: string
       shipping_ward:
         type: string
+      shop_id:
+        description: |-
+          ShopID là CHI NHÁNH phát sinh đơn này: chi nhánh người bán đang làm việc
+          (đơn tại quầy), hoặc chi nhánh bán online (đơn từ storefront — xem
+          ChiNhanhRepository.BanOnline). Đây cũng là kho bị trừ hàng.
+        type: integer
       status:
         type: string
       subtotal_amount:
@@ -4841,6 +4923,12 @@ definitions:
         type: string
       shipping_fee:
         type: number
+      shop_id:
+        description: |-
+          ShopID là chi nhánh ĐẶT hàng, và cũng là kho hàng sẽ về khi nhận. Chốt lúc
+          lập phiếu chứ không lúc nhận: người nhận hàng có thể đang đứng ở chi nhánh
+          khác, mà hàng thì về đúng nơi đã đặt.
+        type: integer
       status:
         type: string
       supplier:
@@ -4912,6 +5000,11 @@ definitions:
         type: string
       returned_at:
         type: string
+      shop_id:
+        description: |-
+          ShopID là chi nhánh trả hàng lại nhà cung cấp — lấy theo phiếu đặt gốc,
+          cùng lý do với OrderReturn.
+        type: integer
       status:
         type: string
       supplier_id:
@@ -4994,6 +5087,12 @@ definitions:
         type: string
       shipping_fee:
         type: number
+      shop_id:
+        description: |-
+          ShopID là chi nhánh nhận hàng trả về — LUÔN lấy theo đơn gốc, không lấy
+          theo chi nhánh người duyệt đang đứng: hàng quay về đúng kho đã xuất nó ra,
+          nếu không thì hai kho cùng lệch, một bên thừa một bên thiếu.
+        type: integer
       status:
         type: string
       updated_at:
@@ -11312,6 +11411,79 @@ paths:
       summary: Gửi yêu cầu liên hệ / thu mua
       tags:
       - Contact
+  /dang-ky:
+    post:
+      consumes:
+      - application/json
+      - application/json
+      description: |-
+        Dựng TRỌN GÓI một khách hàng mới: cửa hàng + chi nhánh mặc định + tài
+        khoản quản trị (data plane), rồi ký hợp đồng dùng thử (control plane).
+        Bản HTTP của `cmd/thue-bao ky --dung-thu`, khác một điểm: KHÔNG cho khai
+        tay giá và hạn mức — hợp đồng thử chạy đúng theo gói đang bán. Thoả thuận
+        riêng vẫn đi qua công cụ dòng lệnh.
+        Điều khoản CHÉP từ bảng giá lúc ký rồi sống độc lập: sửa bảng giá sau đó
+        không đụng tới khách này. Bảng giá không quy định một hạn mức nào thì lượt
+        ký bị TỪ CHỐI (422) chứ không đoán hộ con số.
+        ĐƯỜNG CÔNG KHAI, không cần token: form đăng ký trên trang giới thiệu gọi thẳng vào đây.
+        Gói do máy chủ chọn (Khởi đầu, chu kỳ tháng) — payload KHÔNG có `plan_id`, gửi lên cũng bị bỏ qua.
+        Chặn lạm dụng bằng giới hạn tần suất theo IP ở tầng route và một ô bẫy (`website`) trong form.
+      parameters:
+      - description: Cửa hàng, tài khoản quản trị và dòng bảng giá
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.TaoDungThuRequest'
+      - description: Thông tin cửa hàng mới
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.DangKyRequest'
+      produces:
+      - application/json
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.DangKyResponse'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Body'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.Body'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Body'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/response.Body'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Khách tự mở tài khoản dùng thử
+      tags:
+      - Platform - Khách hàng
+      - Đăng ký
   /events:
     get:
       description: 'Giữ một kết nối mở và đẩy sự kiện xuống trình duyệt: `notification`
@@ -12089,6 +12261,7 @@ paths:
     post:
       consumes:
       - application/json
+      - application/json
       description: |-
         Dựng TRỌN GÓI một khách hàng mới: cửa hàng + chi nhánh mặc định + tài
         khoản quản trị (data plane), rồi ký hợp đồng dùng thử (control plane).
@@ -12098,6 +12271,9 @@ paths:
         Điều khoản CHÉP từ bảng giá lúc ký rồi sống độc lập: sửa bảng giá sau đó
         không đụng tới khách này. Bảng giá không quy định một hạn mức nào thì lượt
         ký bị TỪ CHỐI (422) chứ không đoán hộ con số.
+        ĐƯỜNG CÔNG KHAI, không cần token: form đăng ký trên trang giới thiệu gọi thẳng vào đây.
+        Gói do máy chủ chọn (Khởi đầu, chu kỳ tháng) — payload KHÔNG có `plan_id`, gửi lên cũng bị bỏ qua.
+        Chặn lạm dụng bằng giới hạn tần suất theo IP ở tầng route và một ô bẫy (`website`) trong form.
       parameters:
       - description: Cửa hàng, tài khoản quản trị và dòng bảng giá
         in: body
@@ -12105,7 +12281,14 @@ paths:
         required: true
         schema:
           $ref: '#/definitions/dto.TaoDungThuRequest'
+      - description: Thông tin cửa hàng mới
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.DangKyRequest'
       produces:
+      - application/json
       - application/json
       responses:
         "201":
@@ -12115,7 +12298,7 @@ paths:
             - $ref: '#/definitions/response.Body'
             - properties:
                 data:
-                  $ref: '#/definitions/dto.TaoDungThuResponse'
+                  $ref: '#/definitions/dto.DangKyResponse'
               type: object
         "401":
           description: Unauthorized
@@ -12133,11 +12316,20 @@ paths:
           description: Unprocessable Entity
           schema:
             $ref: '#/definitions/response.Body'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/response.Body'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/response.Body'
       security:
       - BearerAuth: []
-      summary: Mở tài khoản dùng thử cho khách mới
+      summary: Khách tự mở tài khoản dùng thử
       tags:
       - Platform - Khách hàng
+      - Đăng ký
   /platform/hop-dong:
     post:
       consumes:
