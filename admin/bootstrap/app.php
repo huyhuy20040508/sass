@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\EnsureAdminAuthenticated;
 use App\Http\Middleware\EnsureManagerRole;
+use App\Http\Middleware\GiuLoiNhanKhiGoiNen;
 use App\Http\Middleware\KhoaKhiHetHan;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -22,6 +23,13 @@ return Application::configure(basePath: dirname(__DIR__))
         // URL ảnh sản phẩm mà trang này ghi vào API lúc tải ảnh lên.
         // Nginx đứng cùng máy nên tin toàn bộ header X-Forwarded-* là an toàn.
         $middleware->trustProxies(at: '*');
+
+        // Lượt gọi nền (chuông thông báo) không được ăn mất lời nhắn dành cho
+        // trang đang tải — xem GiuLoiNhanKhiGoiNen. Gắn vào cả nhóm `web` chứ
+        // không vài route: nó phải phủ luôn những lượt gọi nền viết sau này.
+        $middleware->web(append: [
+            GiuLoiNhanKhiGoiNen::class,
+        ]);
 
         $middleware->alias([
             'admin.auth' => EnsureAdminAuthenticated::class,
