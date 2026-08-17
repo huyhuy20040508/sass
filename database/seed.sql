@@ -44,7 +44,7 @@
 -- INSERT IGNORE INTO roles (id, name, display_name, description, created_at, updated_at) VALUES
 --   (1, 'super_admin', 'Super Admin',   'Toàn quyền hệ thống',        NOW(3), NOW(3)),
 --   (2, 'admin',       'Quản trị viên', 'Quản lý sản phẩm, đơn hàng', NOW(3), NOW(3)),
---   (3, 'staff',       'Nhân viên',     'Xử lý đơn hàng, kho',        NOW(3), NOW(3)),
+--   (3, 'staff',       'Thu ngân',      'Bán tại quầy, đơn hàng, ca làm việc', NOW(3), NOW(3)),
 --   (4, 'customer',    'Khách hàng',    'Người dùng cuối',            NOW(3), NOW(3));
 
 -- -- ---------- Tài khoản quản trị đầu tiên ----------

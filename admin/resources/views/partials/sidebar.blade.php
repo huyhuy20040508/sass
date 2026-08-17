@@ -5,9 +5,11 @@
     - Icon inline SVG (line style) đúng như bản gốc.
 --}}
 @php
-    // Vai trò của người đang đăng nhập. Nhân viên (staff) vào được trang quản trị
-    // nhưng không mở được Khách hàng và Cài đặt — route đã chặn bằng middleware
-    // `admin.manage`, ở đây bỏ luôn khỏi menu để không mời bấm vào chỗ sẽ bị đá ra.
+    // Vai trò của người đang đăng nhập. Nhân viên (staff) là THU NGÂN: menu của họ
+    // chỉ còn Tổng quan và nhóm Đơn hàng (bán tại quầy, đơn hàng, ca làm việc).
+    // Sản phẩm, Marketing, Kho, Trả hàng, Khách hàng, Báo cáo và Cài đặt đều đã bị
+    // route chặn bằng middleware `admin.manage`, ở đây bỏ luôn khỏi menu để không
+    // mời bấm vào chỗ sẽ bị đá ra.
     $role = (string) data_get(session('api.user'), 'role.name', '');
     $canManage = in_array($role, ['super_admin', 'admin'], true);
 
@@ -25,8 +27,9 @@
                 ['href' => route('admin.dashboard'), 'label' => 'Tổng quan', 'icon' => 'dashboard', 'active' => request()->routeIs('admin.dashboard')],
                 [
                     // Trả hàng là module riêng (ReturnController) nhưng vẫn nằm trong
-                    // dropdown Đơn hàng: nhân viên xử lý đơn và xử lý phiếu trả là
-                    // cùng một người, gom chung một chỗ thì đỡ phải đi tìm.
+                    // dropdown Đơn hàng: người xử lý đơn và người lập phiếu trả nhìn
+                    // vào cùng một chỗ, gom chung thì đỡ phải đi tìm. Chỉ khác quyền —
+                    // trả hàng là tiền ra khỏi két nên chỉ quản trị viên thấy mục đó.
                     'label' => 'Đơn hàng', 'icon' => 'orders', 'count' => (int) ($pendingOrders ?? 0),
                     'children' => [
                         [
@@ -43,11 +46,11 @@
                             'label' => \App\Http\Controllers\OrderController::VIEWS['all']['label'],
                             'active' => request()->routeIs('admin.orders.*'),
                         ],
-                        [
+                        ...($canManage ? [[
                             'href' => route('admin.returns.index'),
                             'label' => \App\Http\Controllers\ReturnController::TITLE,
                             'active' => request()->routeIs('admin.returns.*'),
-                        ],
+                        ]] : []),
                         [
                             // Ca làm việc nằm trong nhóm Đơn hàng chứ không phải Báo
                             // cáo: nó là việc của người trực quầy (mở ca, ghi sổ quỹ,
@@ -58,21 +61,21 @@
                         ],
                     ],
                 ],
-                [
+                ...($canManage ? [[
                     'label' => 'Sản phẩm', 'icon' => 'products',
                     'children' => [
                         ['href' => route('admin.products.index'), 'label' => 'Danh sách sản phẩm', 'active' => request()->routeIs('admin.products.*')],
                         ['href' => route('admin.categories.index'), 'label' => 'Danh sách danh mục', 'active' => request()->routeIs('admin.categories.*')],
                         ['href' => route('admin.brands.index'), 'label' => 'Danh sách thương hiệu', 'active' => request()->routeIs('admin.brands.*')],
                     ],
-                ],
+                ]] : []),
                 // Marketing đứng ngay sau Sản phẩm: đây đều là thứ khách nhìn thấy
                 // ngoài cửa hàng, sửa xong thường xem lại trang chủ luôn.
                 //
                 // Khuyến mãi, Voucher và Banner đã có trang thật. Riêng "Bài viết" mới
                 // GOM SẴN CHỖ, chưa dựng gì — đánh dấu 'soon' nên bấm vào sẽ nói rõ là
                 // chưa làm, không im lặng (quy tắc trong CLAUDE.md).
-                [
+                ...($canManage ? [[
                     'label' => 'Marketing', 'icon' => 'marketing',
                     'children' => [
                         [
@@ -94,9 +97,7 @@
                             // Yêu cầu của khách nằm trong Marketing chứ không phải
                             // Khách hàng: nhóm Marketing gom đúng những thứ khách
                             // nhìn thấy / chạm vào ngoài storefront, mà hai form này
-                            // sinh ra từ đó. Đặt dưới Khách hàng thì nhân viên
-                            // không có quyền quản lý sẽ không mở được, trong khi họ
-                            // mới là người trả lời khách.
+                            // sinh ra từ đó.
                             'href' => route('admin.contacts.index'),
                             'label' => \App\Http\Controllers\ContactController::TITLE,
                             'active' => request()->routeIs('admin.contacts.*'),
@@ -110,11 +111,11 @@
                         ],
                         ['label' => 'Bài viết', 'soon' => true],
                     ],
-                ],
+                ]] : []),
                 ...($canManage ? [
                     ['href' => route('admin.customers.index'), 'label' => 'Khách hàng', 'icon' => 'customers', 'active' => request()->routeIs('admin.customers.*')],
                 ] : []),
-                [
+                ...($canManage ? [[
                     // Module kho gồm ĐÚNG 5 trang dưới đây, tất cả đã có route thật.
                     // Không còn mục 'soon' nào: "Chuyển kho" đã bỏ khỏi menu vì cửa hàng
                     // chỉ có MỘT kho — tồn kho là một số duy nhất trên product_variants,
@@ -144,7 +145,7 @@
                             'active' => request()->routeIs('admin.purchase-returns.*'),
                         ],
                     ],
-                ],
+                ]] : []),
                 // Báo cáo đứng sau các module nghiệp vụ và trước Cài đặt: nó chỉ ĐỌC
                 // lại những gì các module trên sinh ra, nên đọc menu từ trên xuống là
                 // đi đúng đường "làm việc → xem lại kết quả → chỉnh cấu hình".

@@ -177,7 +177,7 @@ func napVaiTroChuan(t *testing.T, db *gorm.DB) {
 	}{
 		{1, "super_admin", "Super Admin", "Toàn quyền hệ thống"},
 		{2, "admin", "Quản trị viên", "Quản lý sản phẩm, đơn hàng"},
-		{3, "staff", "Nhân viên", "Xử lý đơn hàng, kho"},
+		{3, "staff", "Thu ngân", "Bán tại quầy, đơn hàng, ca làm việc"},
 		{4, "customer", "Khách hàng", "Người dùng cuối"},
 	}
 
@@ -470,13 +470,25 @@ func (h *heThong) goiDayDu(
 func (h *heThong) dangNhap(t *testing.T, maCuaHang string) string {
 	t.Helper()
 
+	return h.dangNhapVoi(t, maCuaHang, "quantri")
+}
+
+// dangNhapVoi đăng nhập bằng MỘT tài khoản cụ thể của cửa hàng.
+//
+// Tách ra khỏi dangNhap để bài kiểm phân quyền lấy được token của "nhanvien" —
+// tài khoản vai trò staff mà gieo() dựng sẵn ở mọi cửa hàng. Phải là token đi
+// qua đúng luồng đăng nhập chứ không phải token tự ký: vai trò trong claims do
+// luồng đó rót vào, và đó chính là thứ chốt phân quyền đọc.
+func (h *heThong) dangNhapVoi(t *testing.T, maCuaHang, tenDangNhap string) string {
+	t.Helper()
+
 	res := h.goi(t, "", http.MethodPost, "/api/v1/auth/shop-login", map[string]any{
 		"shop_code": maCuaHang,
-		"username":  "quantri",
+		"username":  tenDangNhap,
 		"password":  matKhauTest,
 	})
 	if res.ma != http.StatusOK {
-		t.Fatalf("đăng nhập cửa hàng %s hỏng: %d %s", maCuaHang, res.ma, res.than)
+		t.Fatalf("đăng nhập %s vào cửa hàng %s hỏng: %d %s", tenDangNhap, maCuaHang, res.ma, res.than)
 	}
 
 	var body struct {

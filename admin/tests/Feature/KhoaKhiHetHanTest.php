@@ -87,7 +87,11 @@ class KhoaKhiHetHanTest extends TestCase
         $res->assertSee('Xem tuỳ chọn gia hạn');
         $res->assertSee('Thoát ra');
         // Thanh trái bỏ hẳn điều hướng: mọi mục trong đó đều quay về đây.
-        $res->assertDontSee('Quản lý kho');
+        //
+        // Mốc nhận biết là "Bán tại quầy" chứ không phải một mục quản lý: từ lượt
+        // siết quyền thu ngân, phần lớn menu chỉ hiện với quản trị viên, nên một
+        // mục quản lý vắng mặt KHÔNG còn chứng minh được là cả thanh đã bị bỏ.
+        $res->assertDontSee('Bán tại quầy');
     }
 
     /**
@@ -119,6 +123,7 @@ class KhoaKhiHetHanTest extends TestCase
 
         $res->assertOk();
         $res->assertDontSee('Phần mềm đã hết hạn');
-        $res->assertSee('Quản lý kho');
+        // Cùng mốc với bài trên, chiều ngược lại: còn hạn thì thanh trái còn nguyên.
+        $res->assertSee('Bán tại quầy');
     }
 }

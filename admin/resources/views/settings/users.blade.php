@@ -231,8 +231,8 @@
                     Bốn vai trò cố định của hệ thống. Sửa được tên hiển thị và mô tả;
                     mã vai trò thì không, vì đó là thứ hệ thống dựa vào để phân quyền.
                     Phân quyền theo từng chức năng chưa làm — hiện <b>Super Admin</b> và
-                    <b>Quản trị viên</b> vào được mọi trang, <b>Nhân viên</b> không vào được
-                    Cài đặt và Khách hàng.
+                    <b>Quản trị viên</b> vào được mọi trang, còn <b>Thu ngân</b> chỉ vào được
+                    Tổng quan, Bán tại quầy, Đơn hàng và Ca làm việc.
                 </p>
             </div>
 

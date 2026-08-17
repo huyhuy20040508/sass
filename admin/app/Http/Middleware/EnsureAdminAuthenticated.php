@@ -16,9 +16,10 @@ class EnsureAdminAuthenticated
     /**
      * Các vai trò được phép vào trang quản trị.
      *
-     * `staff` vào được để làm việc kho và đơn hàng, nhưng KHÔNG vào được các trang
-     * quản lý người và cấu hình — những trang đó gắn thêm middleware `admin.manage`
-     * (xem EnsureManagerRole), và API cũng chặn ở tầng của nó.
+     * `staff` (Thu ngân) vào được để đứng quầy — bán tại quầy, đơn hàng, ca làm
+     * việc — nhưng KHÔNG vào được hàng hoá, kho, mua vào, người dùng, khách hàng,
+     * báo cáo và cấu hình. Những trang đó gắn thêm middleware `admin.manage` (xem
+     * EnsureManagerRole), và API cũng chặn ở tầng của nó.
      */
     protected array $allowedRoles = ['super_admin', 'admin', 'staff'];
 
