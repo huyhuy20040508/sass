@@ -49,6 +49,7 @@ func NewDungThuHandler(svc service.DungThuService) *DungThuHandler {
 //	@Failure		409		{object}	response.Body
 //	@Failure		422		{object}	response.Body
 //	@Router			/platform/dung-thu [post]
+//
 // DangKy godoc
 //
 //	@Summary		Khách tự mở tài khoản dùng thử

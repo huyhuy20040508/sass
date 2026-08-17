@@ -1,0 +1,316 @@
+# Cổng kiểm tra + triển khai tự động cho Selliotech.
+#
+# Ba việc kiểm chạy song song trên mọi lượt push và mọi pull request:
+#
+#     api    — Go: gofmt, vet, build, rồi TOÀN BỘ test kể cả nhóm cần MySQL thật
+#     admin  — Shop Admin (Laravel): php artisan test
+#     saas   — SaaS Admin (Laravel): php artisan test
+#
+# Xong cả ba mà nhánh là main thì job `trien-khai` SSH vào VPS chạy đúng
+# deploy/scripts/02-trien-khai.sh — cùng một script vẫn gõ tay lâu nay, không có
+# đường triển khai thứ hai để hai bên lệch nhau.
+#
+# VÌ SAO PHẢI DỰNG DATABASE THẬT TRONG CI: nhóm test đáng giá nhất của dự án
+# (internal/apitest, internal/repository) tự BỎ QUA khi thiếu TEST_DB_DSN. Chạy
+# CI mà quên bước dựng MySQL thì mọi thứ vẫn xanh — xanh vì không kiểm gì cả,
+# đúng kiểu hỏng không ai nhìn ra cho tới hôm bộ lọc tenant thủng ngoài máy thật.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # Cho phép bấm chạy tay trong tab Actions. Trên main thì lượt bấm này triển
+  # khai luôn, dùng khi cần deploy lại mà không có commit mới (đổi .env trên máy
+  # chủ, gắn lại chứng chỉ, khởi động lại dịch vụ).
+  workflow_dispatch:
+
+# Push liên tiếp trên nhánh phụ thì huỷ lượt cũ cho đỡ tốn. Trên main thì KHÔNG
+# huỷ: lượt đang chạy có thể đã bước vào phần triển khai, cắt ngang nó là bỏ máy
+# chủ lại giữa chừng — binary đã đổi mà dịch vụ chưa khởi động lại.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  # -------------------------------------------------------------------
+  api:
+    name: API (Go)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      # mysql:8.0 — đúng dòng Ubuntu 24.04 cài trên máy chủ (apt mysql-server).
+      # Đừng đổi sang mariadb cho nhẹ: lược đồ ở database/ viết theo cú pháp
+      # MySQL 8, và cái CI cần chứng minh là nó chạy được trên thứ production
+      # đang chạy.
+      mysql:
+        image: mysql:8.0
+        env:
+          # Mật khẩu rỗng là CỐ Ý và chỉ an toàn ở đây: container này sống trong
+          # đúng một lượt chạy, không nghe ra ngoài máy ảo của runner. Nó cũng
+          # tránh luôn phần bắt tay caching_sha2_password của MySQL 8 — với mật
+          # khẩu rỗng, driver Go đi đường nhanh, không cần TLS hay trao khoá RSA.
+          MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          # Đọc thẳng dòng `go 1.25.0` trong go.mod. Ghi cứng số ở đây là tạo
+          # thêm một chỗ nữa phải nhớ sửa mỗi lần nâng Go.
+          go-version-file: api/go.mod
+          cache-dependency-path: api/go.sum
+
+      - name: gofmt
+        working-directory: api
+        run: |
+          lech="$(gofmt -l . | grep -v '^vendor/' || true)"
+          if [ -n "$lech" ]; then
+            echo "::error::Những tệp sau chưa chạy gofmt:"
+            echo "$lech"
+            gofmt -d $lech
+            exit 1
+          fi
+          echo "gofmt sạch"
+
+      - name: go vet
+        working-directory: api
+        run: go vet ./...
+
+      - name: Build
+        working-directory: api
+        # Build CẢ ./... chứ không riêng ./cmd/api: năm công cụ dòng lệnh trong
+        # cmd/ (migrate, tao-admin, thue-bao, ten-mien, nguoi-dieu-hanh) không
+        # có test nào, nên nếu không build chúng ở đây thì một lượt đổi chữ ký
+        # hàm trong domain/ sẽ chỉ lộ ra vào lúc triển khai trên máy chủ.
+        run: go build ./...
+
+      - name: Tạo database test
+        # Công cụ migrate CỐ Ý không tự tạo database bán hàng (xem
+        # taoDatabaseNeuThieu trong cmd/migrate): gõ sai DB_NAME mà nó tự dựng
+        # một database trắng rồi chạy hết migration vào đấy thì database thật
+        # nằm im bên cạnh, hỏng theo kiểu im lặng nhất. Nên CI phải tự khai.
+        #
+        # Collation utf8mb4_unicode_ci là BẮT BUỘC, không để MySQL 8 dùng mặc
+        # định utf8mb4_0900_ai_ci của nó: hai lược đồ so chuỗi khác nhau thì mã
+        # cửa hàng 'ABC' và 'abc' là một bên này mà là hai bên kia — CI xanh
+        # trong khi máy thật hỏng, đúng thứ CI sinh ra để chặn.
+        #
+        # Database control plane thì KHÔNG khai ở đây: công cụ migrate tự tạo
+        # nó, y như lúc chạy trên máy chủ.
+        run: |
+          mysql -h 127.0.0.1 -P 3306 -u root -e \
+            "CREATE DATABASE IF NOT EXISTS selliotech_tenant_test
+             CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+
+      - name: Nạp lược đồ vào database test
+        working-directory: api
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: "3306"
+          DB_USER: root
+          DB_PASSWORD: ""
+          DB_NAME: selliotech_tenant_test
+          # Tên control plane PHẢI là <tên data plane>_nen_tang: internal/apitest
+          # suy ra tên này từ TEST_DB_DSN chứ không đọc thêm biến nào.
+          PLATFORM_DB_NAME: selliotech_tenant_test_nen_tang
+          # config.Load() từ chối chạy khi JWT_SECRET rỗng, mà công cụ migrate
+          # cũng đi qua nó. Giá trị này chỉ để qua cửa kiểm — không ký gì thật.
+          JWT_SECRET: chuoi-gia-chi-dung-trong-ci-khong-ky-gi-that
+        run: |
+          go run ./cmd/migrate chay -y
+          go run ./cmd/migrate -nen-tang chay -y
+
+      - name: go test
+        working-directory: api
+        env:
+          # Đặt biến này là mở khoá internal/apitest và internal/repository —
+          # hai gói kiểm bộ lọc tenant trên MySQL thật. Thiếu nó thì cả hai tự
+          # bỏ qua và lượt CI này không còn ý nghĩa gì.
+          TEST_DB_DSN: "root:@tcp(127.0.0.1:3306)/selliotech_tenant_test?parseTime=true"
+        # -p 1: chạy từng gói MỘT, không song song.
+        #
+        # Mặc định `go test ./...` chạy nhiều gói cùng lúc, mà ở đây internal/apitest
+        # và internal/repository dùng CHUNG một database (đúng như thiết kế, ghi ở
+        # đầu app_test.go). Hai gói ghi đè lên nhau giữa chừng thì lỗi hiện ra ở
+        # một bài kiểm chẳng liên quan gì tới thay đổi vừa push, và lần chạy sau
+        # có thể lại xanh — loại đỏ ngắt quãng khiến người ta tập thói quen bấm
+        # "chạy lại" thay vì đọc.
+        run: go test -p 1 ./...
+
+  # -------------------------------------------------------------------
+  admin:
+    name: Shop Admin (Laravel)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          # 8.3 — đúng bản trên máy chủ (deploy/php-fpm/selliotech.conf).
+          php-version: "8.3"
+          # sqlite3 + pdo_sqlite cho database :memory: mà phpunit.xml khai;
+          # phần còn lại là yêu cầu chung của Laravel 12 và ImageStore (gd).
+          extensions: mbstring, xml, curl, zip, gd, intl, bcmath, sqlite3, pdo_sqlite
+          coverage: none
+
+      - name: Dựng thư mục runtime của Laravel
+        working-directory: admin
+        # Git KHÔNG lưu được thư mục rỗng, mà .gitignore lại loại sạch nội dung
+        # bên trong storage/ — nên bản vừa checkout thiếu chúng. Thiếu
+        # storage/framework/views là mọi test chạm view chết với đúng một câu
+        # "Please provide a valid cache path", không nhắc gì tới thư mục.
+        #
+        # Bước 5/10 của 02-trien-khai.sh tạo đúng danh sách này trên máy chủ vì
+        # cùng một lý do; sửa bên nào thì ngó sang bên kia.
+        run: |
+          mkdir -p storage/app/private storage/app/public \
+                   storage/framework/cache/data \
+                   storage/framework/sessions \
+                   storage/framework/views \
+                   storage/logs \
+                   bootstrap/cache
+
+      - name: Cache composer
+        uses: actions/cache@v4
+        with:
+          path: admin/vendor
+          key: composer-admin-php8.3-${{ hashFiles('admin/composer.lock') }}
+
+      - name: composer install
+        working-directory: admin
+        # CÓ dev-dependency ở đây (khác hẳn lúc triển khai, chỗ đó --no-dev):
+        # phpunit, faker và collision đều nằm trong nhóm dev.
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Dựng .env
+        working-directory: admin
+        # phpunit.xml đã ép sqlite/array cho database, cache, session — nhưng
+        # APP_KEY thì không ép được, mà thiếu nó là mọi test chạm session chết
+        # ngay ở lượt mã hoá cookie.
+        run: |
+          cp .env.example .env
+          php artisan key:generate --force
+
+      - name: php artisan test
+        working-directory: admin
+        run: php artisan test
+
+  # -------------------------------------------------------------------
+  saas:
+    name: SaaS Admin (Laravel)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          extensions: mbstring, xml, curl, zip, gd, intl, bcmath, sqlite3, pdo_sqlite
+          coverage: none
+
+      - name: Dựng thư mục runtime của Laravel
+        working-directory: saas
+        # Xem chú thích ở job admin.
+        run: |
+          mkdir -p storage/app/private storage/app/public \
+                   storage/framework/cache/data \
+                   storage/framework/sessions \
+                   storage/framework/views \
+                   storage/logs \
+                   bootstrap/cache
+
+      - name: Cache composer
+        uses: actions/cache@v4
+        with:
+          path: saas/vendor
+          key: composer-saas-php8.3-${{ hashFiles('saas/composer.lock') }}
+
+      - name: composer install
+        working-directory: saas
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Dựng .env
+        working-directory: saas
+        run: |
+          cp .env.example .env
+          php artisan key:generate --force
+
+      - name: php artisan test
+        working-directory: saas
+        run: php artisan test
+
+  # -------------------------------------------------------------------
+  trien-khai:
+    name: Triển khai lên VPS
+    needs: [api, admin, saas]
+    # Chỉ main, và không bao giờ từ pull request — kể cả PR nhắm vào main.
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    # Nhóm riêng, KHÔNG huỷ lượt đang chạy: hai lượt triển khai chồng lên nhau
+    # sẽ cùng ghi vào /var/www/selliotech và cùng đổi binary một lúc. Lượt sau
+    # xếp hàng đợi lượt trước xong.
+    concurrency:
+      group: trien-khai-production
+      cancel-in-progress: false
+
+    steps:
+      - name: Nạp khoá SSH
+        env:
+          KHOA: ${{ secrets.VPS_SSH_KEY }}
+          MAY_QUEN: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$KHOA" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          # known_hosts ghim sẵn khoá máy chủ. Không có nó thì lựa chọn duy nhất
+          # còn lại là StrictHostKeyChecking=no — tức là nhận bừa bất cứ máy nào
+          # trả lời địa chỉ đó, và khoá triển khai đi thẳng vào tay kẻ đứng giữa.
+          printf '%s\n' "$MAY_QUEN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Chạy 02-trien-khai.sh
+        env:
+          MAY_CHU: ${{ secrets.VPS_HOST }}
+        # Script tự lo phần còn lại: kéo mã, build Go ra api.new, chạy migration
+        # cả hai lược đồ, composer + cache cho hai app Laravel, đặt lại nginx và
+        # systemd, đổi binary rồi khởi động lại và kiểm health ở cổng nội bộ.
+        #
+        # Khoá này bị ghim sẵn forced command trong authorized_keys trên máy chủ
+        # (xem deploy/README.md), nên chuỗi lệnh dưới đây chỉ còn ý nghĩa tài
+        # liệu — máy chủ chạy đúng script đó bất kể client gửi gì.
+        run: |
+          ssh -o BatchMode=yes \
+              -o StrictHostKeyChecking=yes \
+              -o ConnectTimeout=20 \
+              "root@$MAY_CHU" \
+              'bash /var/www/selliotech/deploy/scripts/02-trien-khai.sh'
+
+      - name: Kiểm tra từ ngoài Internet
+        # Script đã tự kiểm health ở 127.0.0.1 trước khi báo xong. Lượt kiểm này
+        # đứng ngoài nên soi thêm hai thứ nó không thấy được: nginx và chứng chỉ.
+        run: |
+          for i in $(seq 1 10); do
+            if curl -fsS --max-time 10 https://api.selliotech.store/api/v1/health; then
+              echo
+              echo "API sống, nhìn từ ngoài."
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::api.selliotech.store không trả lời sau 10 lượt thử."
+          exit 1

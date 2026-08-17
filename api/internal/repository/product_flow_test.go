@@ -14,11 +14,13 @@ import (
 // newProduct tạo một sản phẩm với slug/SKU cho trước, kèm dọn dẹp cứng.
 func newProduct(t *testing.T, db *gorm.DB, slug, sku string) *domain.Product {
 	t.Helper()
-	var categoryID uint
-	db.WithContext(ctxRaw()).Raw("SELECT id FROM categories LIMIT 1").Scan(&categoryID)
-	if categoryID == 0 {
-		t.Skip("bỏ qua: DB test chưa có danh mục nào")
-	}
+	// Phải là danh mục CỦA CỬA HÀNG SỐ 1 — xem seedCategory. Trước đây chỗ này
+	// lấy "danh mục đầu tiên trong bảng" bất kể của ai, nên có lúc gắn sản phẩm
+	// vào danh mục của cửa hàng khác và Preload("Category") trả về nil.
+	//
+	// Cũng bỏ luôn nhánh t.Skip cũ: bảng trống thì bài kiểm lặng lẽ không chạy,
+	// bảng kết quả vẫn xanh, và không ai biết nó đã ngừng kiểm từ bao giờ.
+	categoryID := seedCategory(t, db)
 
 	db.WithContext(ctxTest()).Unscoped().Where("slug = ? OR sku = ?", slug, sku).Delete(&domain.Product{})
 	p := &domain.Product{
