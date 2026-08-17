@@ -408,7 +408,7 @@ Nghĩa là mỗi lượt push cũng **kiểm luôn migration**: tệp `.sql` m�
 
 ### Chạy test y như CI trên máy mình
 
-Hai chỗ máy phát triển hay lệch với máy chủ, và cả hai đều làm test xanh nhầm:
+Còn đúng một việc phải làm bằng tay, cộng hai điều nên biết:
 
 **1. Database test đã có sẵn dữ liệu cũ.** CI luôn dựng database mới tinh. Muốn giống nó thì
 xoá đi dựng lại, đừng chạy đè lên database test đã dùng nhiều tháng:
@@ -425,30 +425,30 @@ DB_NAME=selliotech_tenant_test PLATFORM_DB_NAME=selliotech_tenant_test_nen_tang 
   go run ./cmd/migrate -nen-tang chay -y
 ```
 
-**2. MySQL của XAMPP chạy `sql_mode` dễ tính hơn máy chủ.** Đây là chỗ nguy hiểm nhất, vì nó
-không làm test đỏ mà làm test **xanh nhầm**. Hai luật máy chủ có mà XAMPP thường không:
-
-| Luật | Máy chủ làm gì | XAMPP làm gì |
-|---|---|---|
-| `STRICT_TRANS_TABLES` | Ghi giá trị ngoài `ENUM` → **báo lỗi**. Xảy ra mỗi khi GORM đưa một trường bỏ trống vào câu `INSERT` | Cảnh báo rồi ghi bừa |
-| `ONLY_FULL_GROUP_BY` | `SELECT` có biểu thức không trùng khít `GROUP BY` → **báo lỗi** | Cho qua |
-
-Ép đúng `sql_mode` của máy chủ vào DSN là máy mình bắt được cả hai:
+Rồi chạy bình thường, không cần cờ gì thêm:
 
 ```bash
-TEST_DB_DSN="root:@tcp(127.0.0.1:3306)/selliotech_tenant_test?parseTime=true&sql_mode='ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'" \
-  go test ./...
+TEST_DB_DSN="root:@tcp(127.0.0.1:3306)/selliotech_tenant_test?parseTime=true" go test -p 1 ./...
 ```
 
-Chuỗi đó lấy từ chính máy chủ, kiểm lại bất cứ lúc nào:
+**2. `sql_mode` thì bộ test tự lo.** MySQL đi kèm XAMPP chạy `sql_mode` lỏng hơn máy chủ, nên
+cùng một câu lệnh cho hai kết quả khác nhau ở hai nơi — kiểu lệch nguy hiểm nhất, vì nó không
+làm test đỏ mà làm test **xanh nhầm**. Bộ test giờ tự ép `config.SQLModeKiemThu` cho phiên
+kết nối của nó, máy bạn cấu hình thế nào cũng vậy. Không phải nhớ gì.
 
-```bash
-ssh root@103.78.2.230 'mysql -N -B -e "SELECT @@global.sql_mode"'
-```
+Một luật **cố ý không** nằm trong đó: `ONLY_FULL_GROUP_BY`. Hai hệ hiểu nó khác nhau chứ
+không phải bật/tắt — MySQL 8 suy được phụ thuộc hàm nên `SELECT t.* ... GROUP BY t.id` là hợp
+lệ, MariaDB 10.4 không cài phần đó nên từ chối cùng câu lệnh. Bật lên cho máy chạy MariaDB là
+tự tạo **đỏ giả** trên những truy vấn hoàn toàn đúng ở production. Luật đó để **CI gác**: ở
+đó là MySQL 8 thật, vừa bắt được vi phạm vừa không báo oan.
 
-Đây không phải chuyện lý thuyết: lượt CI đầu tiên chạy trên MySQL 8 thật đã lôi ra một lỗi
-**đang sống trên máy chủ** — trang Báo cáo → theo size trả 500 vì `ONLY_FULL_GROUP_BY`, mà
-mọi máy phát triển đều báo xanh.
+Đây không phải chuyện lý thuyết theo cả hai chiều. `ONLY_FULL_GROUP_BY` trên CI đã lôi ra một
+lỗi **đang sống trên máy chủ** (trang Báo cáo → theo size trả 500) mà mọi máy phát triển đều
+báo xanh; còn `STRICT_TRANS_TABLES` bắt được năm chỗ trong bộ test ghi `''` vào cột `ENUM`.
+
+**3. Đừng tin `gofmt -l` chạy trên Windows.** Git checkout ra CRLF nên `gofmt` báo lệch gần
+như mọi tệp, dù `git status` sạch và CI xanh. Muốn kiểm thật thì xem `git diff` — rỗng là
+không có gì để sửa.
 
 ### Nhánh `main` đã khoá
 
