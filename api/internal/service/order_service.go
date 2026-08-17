@@ -54,6 +54,9 @@ type OrderService interface {
 	POSCheckout(ctx context.Context, req *dto.POSCheckoutRequest, role string) (*dto.POSCheckoutResponse, error)
 	// POSScan — quét mã vạch (hoặc SKU) ở quầy, trả về món hàng kèm giá và tồn.
 	POSScan(ctx context.Context, code string) (*dto.POSScanResponse, error)
+	// POSDoiHang — đổi hàng tại quầy: hàng cũ về kho, hàng mới ra khỏi kho, chênh
+	// lệch thanh toán ngay. Cả ba vế đi trong MỘT giao dịch.
+	POSDoiHang(ctx context.Context, req *dto.DoiHangRequest, role string, actorID uint) (*dto.DoiHangResponse, error)
 	// POSDiscountLimit — mức giảm giá tối đa mà vai trò này được tự bấm, tính theo
 	// phần trăm. 100 = không bị chặn.
 	POSDiscountLimit(ctx context.Context, role string) float64
@@ -1303,14 +1306,18 @@ func buildOrderItems(found map[uint]domain.CheckoutVariant, lines []domain.Check
 		pid := p.cv.ProductID
 		varID := p.cv.VariantID
 		items = append(items, domain.OrderItem{
-			ProductID:          &pid,
-			ProductVariantID:   &varID,
-			ProductName:        p.cv.ProductName,
-			VariantSKU:         p.cv.SKU,
-			Size:               p.cv.Size,
-			Color:              p.cv.Color,
-			Thumbnail:          p.cv.Thumbnail,
-			UnitPrice:          p.cv.Price,
+			ProductID:        &pid,
+			ProductVariantID: &varID,
+			ProductName:      p.cv.ProductName,
+			VariantSKU:       p.cv.SKU,
+			Size:             p.cv.Size,
+			Color:            p.cv.Color,
+			Thumbnail:        p.cv.Thumbnail,
+			UnitPrice:        p.cv.Price,
+			// Giá vốn CHỤP LẠI ngay đây, trong cùng giao dịch đã khoá biến thể: đây
+			// là thời điểm duy nhất biết chắc giá vốn nào đang có hiệu lực cho lượt
+			// bán này.
+			CostPrice:          p.cv.CostPrice,
 			DiscountPercent:    p.giam,
 			DiscountAmount:     giam,
 			Quantity:           p.qty,

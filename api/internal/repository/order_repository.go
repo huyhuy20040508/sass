@@ -478,6 +478,7 @@ func loadCheckoutVariants(tx *gorm.DB, lines []domain.CheckoutLine, lock bool) (
 		BrandID    *uint
 		BasePrice  float64
 		SalePrice  *float64
+		CostPrice  *float64
 		Thumbnail  string
 		IsActive   bool
 	}
@@ -488,7 +489,7 @@ func loadCheckoutVariants(tx *gorm.DB, lines []domain.CheckoutLine, lock bool) (
 	var prods []prodRow
 	if len(pids) > 0 {
 		if err := tx.Table("products").
-			Select("id, name, slug, category_id, brand_id, base_price, sale_price, thumbnail, is_active").
+			Select("id, name, slug, category_id, brand_id, base_price, sale_price, cost_price, thumbnail, is_active").
 			Where("id IN ? AND deleted_at IS NULL", pids).Scan(&prods).Error; err != nil {
 			return nil, err
 		}
@@ -512,13 +513,23 @@ func loadCheckoutVariants(tx *gorm.DB, lines []domain.CheckoutLine, lock bool) (
 		if v.Price != nil && *v.Price > 0 {
 			price = *v.Price
 		}
+
+		// Giá VỐN đi cùng đường với giá bán: biến thể khai riêng thì lấy của nó,
+		// không thì lấy của sản phẩm cha. Cả hai đều để trống nghĩa là cửa hàng
+		// chưa khai giá vốn — giữ nil chứ đừng quy về 0, vì 0 sẽ hiện lên báo cáo
+		// thành "lãi 100%" và đó là con số bịa.
+		cost := p.CostPrice
+		if v.CostPrice != nil {
+			cost = v.CostPrice
+		}
+
 		resolved[v.ID] = domain.CheckoutVariant{
 			VariantID: v.ID, ProductID: v.ProductID, ProductName: p.Name, Slug: p.Slug,
 			SKU: v.SKU, Size: v.Size, Color: v.Color, Thumbnail: p.Thumbnail,
 			// Danh mục + thương hiệu đi kèm để tầng service đối chiếu phạm vi
 			// chương trình khuyến mãi mà không phải hỏi lại bảng products.
 			CategoryID: p.CategoryID, BrandID: p.BrandID,
-			Price: price, Stock: tonChiNhanh[v.ID],
+			Price: price, CostPrice: cost, Stock: tonChiNhanh[v.ID],
 		}
 	}
 	return resolved, nil
@@ -665,6 +676,28 @@ func (r *orderRepository) Checkout(
 		// order_id, và vẫn trong cùng transaction: hết lượt ở đây là cả đơn rollback.
 		if claim != nil {
 			if err := consumeVoucher(tx, claim, o.ID); err != nil {
+				return err
+			}
+		}
+
+		// 6c. Tiền mặt vào két — ghi sổ quỹ TRONG CÙNG giao dịch với đơn.
+		//
+		// Chỉ đơn quầy đã thu tiền mặt: chuyển khoản không đi qua két, còn đơn giao
+		// hàng thì tiền về sau và về bằng đường khác. Ghi nhầm vào đây là con số
+		// đối chiếu cuối ca không còn khớp với tiền đếm được — hỏng đúng thứ sổ quỹ
+		// sinh ra để phục vụ.
+		if o.Channel == domain.OrderChannelPOS &&
+			o.PaymentMethod == domain.PaymentMethodCash &&
+			o.PaymentStatus == domain.OrderPaymentPaid {
+			orderID := o.ID
+			if err := ghiSoQuy(tx, &domain.SoQuy{
+				ShopID:        o.ShopID,
+				Direction:     domain.SoQuyThu,
+				Amount:        o.TotalAmount,
+				Reason:        "Bán hàng " + o.OrderCode,
+				ReferenceType: domain.SoQuyTuDonHang,
+				ReferenceID:   &orderID,
+			}); err != nil {
 				return err
 			}
 		}

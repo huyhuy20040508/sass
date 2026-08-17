@@ -2095,3 +2095,108 @@ type DonGiaHanResponse struct {
 	// Đây là câu trả lời khách chờ nghe nhất sau khi trả tiền.
 	HanMoi time.Time `json:"han_moi"`
 }
+
+// ---------- Ca làm việc & sổ quỹ ----------
+
+// MoCaRequest — mở một ca trực két.
+type MoCaRequest struct {
+	// OpeningCash là tiền mặt ĐANG CÓ trong két lúc mở ca, do người trực đếm.
+	// Không suy ra từ ca trước: giữa hai ca có thể có người rút tiền về, và con
+	// số đối chiếu phải bắt đầu từ thứ đếm được thật.
+	OpeningCash float64 `json:"opening_cash" binding:"gte=0"`
+	Note        string  `json:"note" binding:"omitempty,max=500"`
+}
+
+// DongCaRequest — chốt ca đang mở của chi nhánh.
+type DongCaRequest struct {
+	// CountedCash là tiền ĐẾM ĐƯỢC trong két. Bắt buộc phải gửi, kể cả khi bằng 0:
+	// đóng ca mà không đếm thì cả cái ca không còn tác dụng gì.
+	CountedCash float64 `json:"counted_cash" binding:"gte=0"`
+	Note        string  `json:"note" binding:"omitempty,max=500"`
+}
+
+// DongCaResponse — kết quả đóng ca.
+type DongCaResponse struct {
+	Ca *domain.CaLamViec `json:"ca"`
+	// NgoaiCa là các dòng tiền mặt phát sinh trong giờ của ca nhưng KHÔNG gắn ca
+	// nào (lúc đó chưa ai mở ca). Chúng đã vào/ra két thật nhưng không nằm trong
+	// con số đối chiếu — im lặng bỏ qua là để lại một khoản chênh không ai giải
+	// thích được.
+	NgoaiCa []domain.SoQuy `json:"ngoai_ca"`
+}
+
+// CaChiTietResponse — một ca kèm toàn bộ dòng sổ quỹ của nó.
+type CaChiTietResponse struct {
+	Ca    *domain.CaLamViec `json:"ca"`
+	SoQuy []domain.SoQuy    `json:"so_quy"`
+}
+
+// GhiSoQuyRequest — ghi tay một khoản thu/chi tiền mặt.
+type GhiSoQuyRequest struct {
+	// Direction: in (tiền vào két) | out (tiền ra).
+	Direction string `json:"direction" binding:"required,oneof=in out"`
+	// Amount LUÔN dương — chiều nằm ở direction. Cho phép số âm là mở đường cho
+	// hai cách biểu diễn cùng một khoản.
+	Amount float64 `json:"amount" binding:"required,gt=0"`
+	// Reason bắt buộc: một khoản tiền ra khỏi két mà không có lý do thì đúng bằng
+	// mất tiền, chỉ khác là có ghi lại.
+	Reason string `json:"reason" binding:"required,max=255"`
+}
+
+// ---------- Đổi hàng tại quầy ----------
+
+// DoiHangRequest — một lượt đổi hàng: khách trả lại vài món của đơn cũ và lấy
+// vài món mới, chênh lệch thanh toán ngay.
+//
+// KHÔNG dùng lại luồng trả hàng nhiều bước (lập phiếu → duyệt → nhận hàng): ở
+// quầy thì món hàng đang nằm trên tay người bán, không có gì để chờ duyệt. Cả
+// hai vế đi trong MỘT giao dịch — xem OrderRepository.DoiHang.
+type DoiHangRequest struct {
+	// OrderID là đơn CŨ chứa những món khách mang tới trả.
+	OrderID uint `json:"order_id" binding:"required,min=1"`
+	// Tra là các món trả lại, theo dòng hàng của đơn cũ.
+	Tra []DoiHangTraItem `json:"tra" binding:"required,min=1,max=50,dive"`
+	// Moi là các món khách lấy về. Được phép RỖNG: khách trả hàng rồi không lấy
+	// gì thêm cũng là một lượt đổi hợp lệ, chỉ khác là cửa hàng trả lại tiền.
+	Moi []POSItemRequest `json:"moi" binding:"omitempty,max=50,dive"`
+
+	// Reason — lý do đổi, dùng chung bộ mã với phiếu trả hàng.
+	Reason     string `json:"reason" binding:"omitempty,max=50"`
+	ReasonNote string `json:"reason_note" binding:"omitempty,max=500"`
+	// Restock = false khi hàng khách trả bị lỗi, không đưa lại lên kệ được.
+	// Mặc định (bỏ trống) là true: phần lớn lượt đổi là đổi size, hàng còn nguyên.
+	Restock *bool `json:"restock"`
+
+	// PaymentMethod áp cho phần CHÊNH LỆCH, chỉ dùng khi khách phải trả thêm.
+	PaymentMethod string `json:"payment_method" binding:"omitempty,oneof=cash bank_transfer"`
+	// AmountTendered là tiền mặt khách đưa cho phần chênh lệch.
+	AmountTendered *float64 `json:"amount_tendered" binding:"omitempty,gte=0"`
+	Note           string   `json:"note" binding:"omitempty,max=500"`
+}
+
+// DoiHangTraItem — một dòng hàng khách mang tới trả.
+type DoiHangTraItem struct {
+	// OrderItemID là DÒNG HÀNG của đơn cũ, không phải id biến thể: một đơn có thể
+	// có hai dòng cùng biến thể (khác tên in áo), và số còn trả được tính theo
+	// từng dòng.
+	OrderItemID uint `json:"order_item_id" binding:"required,min=1"`
+	Quantity    int  `json:"quantity" binding:"required,min=1"`
+}
+
+// DoiHangResponse — kết quả một lượt đổi, đủ để in phiếu ngay.
+type DoiHangResponse struct {
+	ReturnID   uint   `json:"return_id"`
+	ReturnCode string `json:"return_code"`
+	OrderID    uint   `json:"order_id"`
+	OrderCode  string `json:"order_code"`
+	// TienTra là giá trị hàng khách mang trả, TienMoi là giá trị hàng khách lấy về.
+	TienTra float64 `json:"tien_tra"`
+	TienMoi float64 `json:"tien_moi"`
+	// ChenhLech = TienMoi − TienTra. Dương = khách trả thêm, âm = cửa hàng trả lại
+	// khách. Một con số có dấu chứ không phải hai trường: người đọc chỉ cần biết
+	// tiền đi về phía nào, và hai trường thì luôn có một cái bằng 0 gây phân vân.
+	ChenhLech      float64  `json:"chenh_lech"`
+	AmountTendered *float64 `json:"amount_tendered,omitempty"`
+	ChangeAmount   *float64 `json:"change_amount,omitempty"`
+	Message        string   `json:"message"`
+}

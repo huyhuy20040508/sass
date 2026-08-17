@@ -122,7 +122,11 @@ type CheckoutVariant struct {
 	// gốc). Chương trình khuyến mãi được trừ thêm ở tầng service — xem
 	// promotionService.ApplyToCheckout.
 	Price float64
-	Stock int
+	// CostPrice là giá vốn một đơn vị tại thời điểm tra, để CHỤP vào dòng hàng của
+	// đơn. nil = cửa hàng chưa khai giá vốn cho món này — giữ nil chứ đừng quy về
+	// 0, vì 0 sẽ hiện lên báo cáo thành "lãi 100%".
+	CostPrice *float64
+	Stock     int
 	// PromotionName là tên chương trình đã áp cho dòng này (rỗng = không có), chỉ
 	// để hiển thị lại cho khách xem giỏ hàng.
 	PromotionName string
@@ -208,6 +212,17 @@ type OrderRepository interface {
 	// voucher được chốt trong CÙNG transaction này: hết lượt ngay lúc đó thì cả đơn
 	// bị rollback, thay vì tạo đơn xong mới phát hiện mã không dùng được nữa.
 	Checkout(ctx context.Context, lines []CheckoutLine, build func(map[uint]CheckoutVariant) (*Order, *VoucherClaim, error)) (*Order, error)
+	// DoiHang thực hiện MỘT lượt đổi hàng tại quầy trong một transaction: khoá đơn
+	// cũ, nhận hàng cũ về kho, tạo đơn mới đã trừ kho, nối hai vế lại và ghi chênh
+	// lệch tiền mặt vào sổ quỹ. Rời nhau ra thì một lần sập giữa chừng để lại lệch
+	// kho câm — không lỗi nào nổi lên, chỉ có con số sai từ hôm đó.
+	//
+	// build nhận đơn cũ ĐÃ KHOÁ, số còn trả được của từng dòng, và bảng giá hàng
+	// mới đã khoá biến thể; trả về phiếu trả, đơn mới, và dòng sổ quỹ (nil = lượt
+	// đổi không đụng tới tiền mặt).
+	DoiHang(ctx context.Context, orderCu uint, lines []CheckoutLine,
+		build func(cu *Order, conTraDuoc map[uint]ReturnableItem, giaMoi map[uint]CheckoutVariant) (*OrderReturn, *Order, *SoQuy, error),
+	) (*OrderReturn, *Order, error)
 	// ScanVariant tra MỘT biến thể theo mã vạch hoặc SKU (mã người bán vừa quét),
 	// kèm giá và tồn của chi nhánh đang bán — cùng đường tra giá với lúc đặt hàng.
 	// Không tìm thấy, hoặc sản phẩm cha đã ẩn/xoá, đều trả ErrVariantNotFound.

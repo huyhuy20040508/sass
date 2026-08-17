@@ -4,6 +4,7 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BannerController;
 use App\Http\Controllers\BanTaiQuayController;
 use App\Http\Controllers\BrandController;
+use App\Http\Controllers\CaLamViecController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\ChiNhanhController;
 use App\Http\Controllers\ContactController;
@@ -140,6 +141,16 @@ Route::middleware(['admin.auth', 'admin.khoa'])->prefix('admin')->name('admin.')
     Route::get('/ban-tai-quay/scan', [BanTaiQuayController::class, 'scan'])->name('ban-tai-quay.scan');
     Route::get('/ban-tai-quay/{id}/phieu', [BanTaiQuayController::class, 'phieu'])
         ->whereNumber('id')->name('ban-tai-quay.phieu');
+
+    // Ca làm việc & sổ quỹ — nơi đối chiếu tiền trong két với sổ. Nhóm `admin`
+    // chứ không phải `manage`: người trực két là nhân viên.
+    Route::get('/ca-lam-viec', [CaLamViecController::class, 'index'])->name('ca-lam-viec.index');
+    // /hien-tai, /mo, /dong, /so-quy đứng TRƯỚC /{id} để không bị hiểu là một id.
+    Route::get('/ca-lam-viec/hien-tai', [CaLamViecController::class, 'hienTai'])->name('ca-lam-viec.hienTai');
+    Route::post('/ca-lam-viec/mo', [CaLamViecController::class, 'moCa'])->name('ca-lam-viec.mo');
+    Route::post('/ca-lam-viec/dong', [CaLamViecController::class, 'dongCa'])->name('ca-lam-viec.dong');
+    Route::post('/ca-lam-viec/so-quy', [CaLamViecController::class, 'ghiSoQuy'])->name('ca-lam-viec.soQuy');
+    Route::get('/ca-lam-viec/{id}', [CaLamViecController::class, 'show'])->whereNumber('id')->name('ca-lam-viec.show');
 
     // Đơn hàng
     Route::get('/orders', [OrderController::class, 'index'])->name('orders.index');

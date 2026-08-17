@@ -318,6 +318,7 @@ func dungHeThongVoi(t *testing.T, banHang, dieuHanh bool) *heThong {
 	promotionRepo := repository.NewPromotionRepository(db)
 	voucherRepo := repository.NewVoucherRepository(db)
 	chiNhanhRepo := repository.NewChiNhanhRepository(db)
+	caRepo := repository.NewCaLamViecRepository(db)
 	contactRepo := repository.NewContactRepository(db)
 	newsletterRepo := repository.NewNewsletterRepository(db)
 
@@ -374,6 +375,7 @@ func dungHeThongVoi(t *testing.T, banHang, dieuHanh bool) *heThong {
 		Setting:   handler.NewSettingHandler(settingSvc),
 		User:      handler.NewUserHandler(userSvc),
 		ChiNhanh:  handler.NewChiNhanhHandler(service.NewChiNhanhService(chiNhanhRepo, hanMucSvc)),
+		Ca:        handler.NewCaLamViecHandler(service.NewCaLamViecService(caRepo, userRepo, chiNhanhRepo)),
 		Payment:   handler.NewPaymentHandler(paymentSvc),
 		Banner:    handler.NewBannerHandler(bannerSvc),
 		Report:    handler.NewReportHandler(reportSvc),

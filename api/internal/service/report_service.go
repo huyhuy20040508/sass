@@ -216,6 +216,9 @@ func (s *reportService) Revenue(ctx context.Context, q ReportQuery) (domain.Reve
 	if out.ByPaymentStatus, err = s.repo.ByPaymentStatus(ctx, p); err != nil {
 		return out, err
 	}
+	if out.ByShop, err = s.repo.ByShop(ctx, p); err != nil {
+		return out, err
+	}
 	return out, nil
 }
 

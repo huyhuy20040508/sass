@@ -260,6 +260,56 @@
                 <p class="rp-empty">Kỳ này chưa có mốc nào.</p>
             @endif
         </section>
+
+        {{-- Lãi gộp theo chi nhánh.
+             Chỉ hiện khi cửa hàng có TỪ HAI chi nhánh trở lên: tiệm một kho thì
+             bảng này lặp lại đúng dòng "Tổng kỳ" ở trên, thêm vào chỉ là một khối
+             nữa phải lướt qua. --}}
+        @php $byShop = $report['by_shop'] ?? []; @endphp
+        @if(count($byShop) > 1)
+            <section class="rp-card">
+                <div class="rp-card-head">
+                    <div>
+                        <h2 class="rp-card-title">Lãi gộp theo chi nhánh</h2>
+                        <p class="rp-card-sub">
+                            Tính trên kho ĐÃ XUẤT hàng của từng đơn. Giá vốn lấy theo mức chụp lúc bán,
+                            nên nhập lô mới đắt hơn không làm lãi của kỳ cũ thay đổi.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="rp-table-wrap">
+                    <table class="rp-table">
+                        <thead>
+                            <tr>
+                                <th>Chi nhánh</th>
+                                <th class="num">Số đơn</th>
+                                <th class="num">Số món</th>
+                                <th class="num">Tiền hàng</th>
+                                <th class="num">Giá vốn</th>
+                                <th class="num">Lãi gộp</th>
+                                <th class="num">Biên lãi</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach($byShop as $s)
+                                <tr>
+                                    <td>{{ $s['label'] ?? '—' }}</td>
+                                    <td class="num">{{ Chart::int($s['orders'] ?? 0) }}</td>
+                                    <td class="num">{{ Chart::int($s['units'] ?? 0) }}</td>
+                                    <td class="num">{{ Chart::money($s['revenue'] ?? 0) }}</td>
+                                    <td class="num rp-muted">{{ Chart::money($s['cost'] ?? 0) }}</td>
+                                    <td class="num {{ ($s['profit'] ?? 0) >= 0 ? 'rp-pos' : 'rp-neg' }}">
+                                        <b>{{ Chart::money($s['profit'] ?? 0) }}</b>
+                                    </td>
+                                    <td class="num">{{ number_format((float) ($s['margin'] ?? 0), 1, ',', '.') }}%</td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        @endif
     </div>
 
     @include('reports.partials.style')

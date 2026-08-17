@@ -6,6 +6,13 @@
      thuộc về lượt bán đang làm dở, và để trong cột phải thì mỗi lần giỏ dài ra
      là nó bị đẩy khỏi tầm mắt. --}}
 @section('posbar')
+    {{-- Ca làm việc đứng cạnh Đơn treo: cả hai là trạng thái của CHÍNH cái quầy
+         này, không thuộc về lượt bán đang làm dở. --}}
+    <button type="button" class="posbar-btn" id="posCaMo">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M2 10h20"/><circle cx="12" cy="14" r="1.5"/></svg>
+        <span id="posCaNhan">Ca làm việc</span>
+    </button>
+
     <button type="button" class="posbar-btn" id="posTreoMo">
         <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h14a1 1 0 0 1 1 1v16l-8-4-8 4V4a1 1 0 0 1 1-1z"/></svg>
         Đơn treo <b id="posTreoSo" hidden>0</b>
@@ -50,6 +57,10 @@
          data-store-url="{{ route('admin.ban-tai-quay.store') }}"
          data-receipt-url="{{ route('admin.ban-tai-quay.phieu', ['id' => 0]) }}"
          data-orders-url="{{ route('admin.orders.index') }}"
+         data-ca-url="{{ route('admin.ca-lam-viec.hienTai') }}"
+         data-ca-mo-url="{{ route('admin.ca-lam-viec.mo') }}"
+         data-ca-dong-url="{{ route('admin.ca-lam-viec.dong') }}"
+         data-so-quy-url="{{ route('admin.ca-lam-viec.soQuy') }}"
          data-discount-limit="{{ $hanMucGiam }}">
 
         {{-- ============ CỘT TRÁI: tìm / quét hàng ============ --}}
@@ -162,6 +173,23 @@
             <p class="pos-drawer-note">
                 Đơn treo nằm trên chính máy này. Xoá dữ liệu trình duyệt hoặc mở ở máy khác thì không thấy —
                 đây là chỗ để tạm vài phút, không phải chỗ giữ đơn qua đêm.
+            </p>
+        </div>
+    </div>
+
+    {{-- ============ Ca làm việc & sổ quỹ ============ --}}
+    <div class="pos-drawer" id="posCaBox" hidden>
+        <div class="pos-drawer-card" role="dialog" aria-modal="true" aria-labelledby="posCaTitle">
+            <header class="pos-drawer-head">
+                <h2 id="posCaTitle">Ca làm việc</h2>
+                <button type="button" class="pos-mini" id="posCaDong">Đóng</button>
+            </header>
+
+            <div class="pos-drawer-body" id="posCaND"></div>
+
+            <p class="pos-drawer-note">
+                Sổ quỹ chỉ ghi TIỀN MẶT. Chuyển khoản không đi qua két nên không nằm ở đây —
+                gộp vào là con số cuối ca không còn khớp tiền đếm được.
             </p>
         </div>
     </div>
@@ -629,6 +657,15 @@
         .pos-treo-info { flex: 1; min-width: 0; }
         .pos-treo-ten { font-size: 13px; font-weight: 500; color: #262626; }
         .pos-treo-phu { font-size: 12px; color: #8c8c8c; }
+
+        /* ---------- Ngăn kéo ca làm việc ---------- */
+        .pos-ca-form { display: grid; gap: 8px; padding: 14px 16px; }
+        .pos-ca-form .pos-done-sum { margin: 0; }
+        .pos-ca-lb { font-size: 12px; color: #595959; }
+        .pos-ca-hint { margin: 0; font-size: 12px; color: #8c8c8c; }
+        .pos-ca-line { display: grid; grid-template-columns: 90px 1fr; gap: 8px; }
+        .pos-ca-line .pos-money { height: 32px; font-size: 14px; }
+        .pos-ca-hr { width: 100%; margin: 4px 0; border: 0; border-top: 1px solid #f0f0f0; }
 
         /* ---------- Phiếu sau khi bán ---------- */
         .pos-done-card { max-width: 350px; padding: 22px; text-align: center; }
@@ -1224,6 +1261,11 @@
                 $('posDoneView').href = `${ORDERS_URL}?keyword=${encodeURIComponent(d.order_code || '')}`;
                 $('posDone').hidden = false;
                 $('posDoneNext').focus();
+
+                // Lượt bán vừa rồi làm đổi số của ca — cập nhật nhãn trên thanh trên
+                // cùng để người trực thấy két đang có bao nhiêu mà không phải mở ngăn
+                // kéo ra xem. Chạy nền, không chặn phiếu.
+                tairCa();
             }
 
             const donDep = () => {
@@ -1242,6 +1284,167 @@
                 $('posSearch').value = '';
                 timHang('');
                 $('posSearch').focus();
+            });
+
+            /* ---------- Ca làm việc & sổ quỹ ---------- */
+
+            const CA_URL = root.dataset.caUrl;
+            const CA_MO_URL = root.dataset.caMoUrl;
+            const CA_DONG_URL = root.dataset.caDongUrl;
+            const SO_QUY_URL = root.dataset.soQuyUrl;
+
+            // Ca hiện tại, giữ lại để nhãn trên thanh trên cùng không phải hỏi lại
+            // sau mỗi lượt bán. null = chưa mở ca.
+            let ca = null;
+
+            const guiJSON = (url, body) => fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Accept: 'application/json',
+                    'X-CSRF-TOKEN': CSRF,
+                },
+                body: JSON.stringify(body),
+            });
+
+            async function tairCa() {
+                try {
+                    const r = await fetch(CA_URL, { headers: { Accept: 'application/json' } });
+                    ca = (await r.json()).data || null;
+                } catch (e) {
+                    // Cụm ca làm việc là thứ GHI CHÉP, không phải thứ gác cửa: hỏng thì
+                    // nhãn mất chứ bán hàng vẫn chạy bình thường.
+                    ca = null;
+                }
+                veNhanCa();
+            }
+
+            function veNhanCa() {
+                $('posCaNhan').textContent = ca
+                    ? 'Ca: ' + tien(Number(ca.opening_cash || 0) + Number(ca.tong_thu || 0) - Number(ca.tong_chi || 0))
+                    : 'Chưa mở ca';
+            }
+
+            function veNganKeoCa() {
+                const box = $('posCaND');
+
+                if (!ca) {
+                    box.innerHTML = `
+                        <div class="pos-ca-form">
+                            <p class="pos-ca-hint">
+                                Chưa mở ca. Đếm số tiền đang có trong két rồi mở ca — từ lúc đó mọi lượt
+                                thu chi tiền mặt được ghi vào sổ của ca này.
+                            </p>
+                            <label class="pos-ca-lb" for="posCaDauCa">Tiền có sẵn trong két</label>
+                            <input type="text" inputmode="numeric" id="posCaDauCa" class="pos-input pos-money" placeholder="0">
+                            <button type="button" class="pos-submit" id="posCaMoBtn">Mở ca</button>
+                        </div>`;
+                    return;
+                }
+
+                const theoSo = Number(ca.opening_cash || 0) + Number(ca.tong_thu || 0) - Number(ca.tong_chi || 0);
+                box.innerHTML = `
+                    <div class="pos-ca-form">
+                        <dl class="pos-done-sum">
+                            <div><dt>Tiền đầu ca</dt><dd>${tien(ca.opening_cash)}</dd></div>
+                            <div><dt>Thu tiền mặt (${ca.so_don_tien_mat || 0} lượt bán)</dt><dd>${tien(ca.tong_thu)}</dd></div>
+                            <div><dt>Chi tiền mặt</dt><dd>−${tien(ca.tong_chi)}</dd></div>
+                            <div><dt><b>Theo sổ, két phải có</b></dt><dd><b>${tien(theoSo)}</b></dd></div>
+                        </dl>
+
+                        <div class="pos-ca-line">
+                            <select id="posQuyChieu" class="pos-input">
+                                <option value="out">Chi</option>
+                                <option value="in">Thu</option>
+                            </select>
+                            <input type="text" inputmode="numeric" id="posQuyTien" class="pos-input pos-money" placeholder="Số tiền">
+                        </div>
+                        <input type="text" id="posQuyLyDo" class="pos-input" placeholder="Lý do (bắt buộc) — VD: mua nước, trả tiền ship">
+                        <button type="button" class="pos-mini" id="posQuyGhi">Ghi vào sổ quỹ</button>
+
+                        <hr class="pos-ca-hr">
+
+                        <label class="pos-ca-lb" for="posCaDemCuoi">Tiền ĐẾM ĐƯỢC trong két</label>
+                        <input type="text" inputmode="numeric" id="posCaDemCuoi" class="pos-input pos-money" placeholder="0">
+                        <p class="pos-ca-hint" id="posCaChenh"></p>
+                        <button type="button" class="pos-submit" id="posCaDongBtn">Đóng ca</button>
+                    </div>`;
+            }
+
+            const moNganKeoCa = async () => {
+                await tairCa();
+                veNganKeoCa();
+                $('posCaBox').hidden = false;
+            };
+
+            $('posCaMo').addEventListener('click', moNganKeoCa);
+            $('posCaDong').addEventListener('click', () => { $('posCaBox').hidden = true; });
+
+            // Chênh lệch hiện NGAY lúc gõ, trước khi bấm đóng ca: người đếm tiền cần
+            // biết mình đang thừa hay thiếu trong lúc còn đang đếm, không phải sau khi
+            // đã chốt sổ.
+            $('posCaND').addEventListener('input', (e) => {
+                if (e.target.classList.contains('pos-money')) {
+                    const n = soTien(e.target.value);
+                    e.target.value = n ? new Intl.NumberFormat('vi-VN').format(n) : '';
+                }
+                if (e.target.id === 'posCaDemCuoi' && ca) {
+                    const theoSo = Number(ca.opening_cash || 0) + Number(ca.tong_thu || 0) - Number(ca.tong_chi || 0);
+                    const lech = soTien(e.target.value) - theoSo;
+                    const p = $('posCaChenh');
+                    p.textContent = lech === 0
+                        ? 'Khớp sổ.'
+                        : (lech > 0 ? 'Thừa ' : 'Thiếu ') + tien(Math.abs(lech)) + ' so với sổ.';
+                    p.style.color = lech === 0 ? '#389e0d' : '#cf1322';
+                }
+            });
+
+            $('posCaND').addEventListener('click', async (e) => {
+                const btn = e.target.closest('button');
+                if (!btn) return;
+
+                if (btn.id === 'posCaMoBtn') {
+                    const r = await guiJSON(CA_MO_URL, { opening_cash: soTien($('posCaDauCa').value) });
+                    const d = await r.json().catch(() => ({}));
+                    if (!r.ok) { alert(d.message || 'Không mở được ca.'); return; }
+                    await moNganKeoCa();
+                    return;
+                }
+
+                if (btn.id === 'posQuyGhi') {
+                    const lyDo = $('posQuyLyDo').value.trim();
+                    if (!lyDo) { alert('Vui lòng ghi lý do.'); return; }
+                    const r = await guiJSON(SO_QUY_URL, {
+                        direction: $('posQuyChieu').value,
+                        amount: soTien($('posQuyTien').value),
+                        reason: lyDo,
+                    });
+                    const d = await r.json().catch(() => ({}));
+                    if (!r.ok) { alert(d.message || 'Không ghi được sổ quỹ.'); return; }
+                    await moNganKeoCa();
+                    return;
+                }
+
+                if (btn.id === 'posCaDongBtn') {
+                    if (!confirm('Đóng ca với số tiền vừa đếm? Con số đối chiếu sẽ được chốt lại.')) return;
+                    const r = await guiJSON(CA_DONG_URL, { counted_cash: soTien($('posCaDemCuoi').value) });
+                    const d = await r.json().catch(() => ({}));
+                    if (!r.ok) { alert(d.message || 'Không đóng được ca.'); return; }
+
+                    const c = d.data?.ca || {};
+                    const lech = Number(c.difference || 0);
+                    const ngoai = (d.data?.ngoai_ca || []).length;
+                    alert(
+                        'Đã đóng ca.\n\n'
+                        + 'Theo sổ: ' + tien(c.expected_cash) + '\n'
+                        + 'Đếm được: ' + tien(c.counted_cash) + '\n'
+                        + (lech === 0 ? 'Khớp sổ.' : (lech > 0 ? 'Thừa ' : 'Thiếu ') + tien(Math.abs(lech)))
+                        + (ngoai ? '\n\nLƯU Ý: có ' + ngoai + ' khoản tiền mặt phát sinh lúc chưa mở ca, '
+                            + 'không nằm trong con số đối chiếu ở trên.' : '')
+                    );
+                    $('posCaBox').hidden = true;
+                    await tairCa();
+                }
             });
 
             /* ---------- Phím tắt ---------- */
@@ -1266,6 +1469,7 @@
 
             veSoTreo();
             veGio();
+            tairCa();
         })();
     </script>
 @endsection

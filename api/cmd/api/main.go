@@ -319,6 +319,7 @@ func main() {
 	promotionRepo := repository.NewPromotionRepository(db)
 	voucherRepo := repository.NewVoucherRepository(db)
 	chiNhanhRepo := repository.NewChiNhanhRepository(db)
+	caRepo := repository.NewCaLamViecRepository(db)
 	contactRepo := repository.NewContactRepository(db)
 	newsletterRepo := repository.NewNewsletterRepository(db)
 
@@ -366,6 +367,7 @@ func main() {
 	// cũng là nơi hạn mức `max_shops` lần đầu có việc để làm — trước nó, con số
 	// ấy canh một thao tác mà không màn hình nào làm được.
 	chiNhanhSvc := service.NewChiNhanhService(chiNhanhRepo, hanMucSvc)
+	caSvc := service.NewCaLamViecService(caRepo, userRepo, chiNhanhRepo)
 	// Chương trình khuyến mãi: vừa là module quản trị, vừa là thứ tính giá sau giảm
 	// cho cả trang bán hàng lẫn lúc đặt hàng. categoryRepo để chương trình khai ở
 	// danh mục cha phủ được tới sản phẩm nằm trong danh mục cháu.
@@ -435,6 +437,7 @@ func main() {
 		Setting:   handler.NewSettingHandler(settingSvc),
 		User:      handler.NewUserHandler(userSvc),
 		ChiNhanh:  handler.NewChiNhanhHandler(chiNhanhSvc),
+		Ca:        handler.NewCaLamViecHandler(caSvc),
 		Payment:   handler.NewPaymentHandler(paymentSvc),
 		Banner:    handler.NewBannerHandler(bannerSvc),
 		Report:    handler.NewReportHandler(reportSvc),

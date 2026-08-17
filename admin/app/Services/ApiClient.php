@@ -688,6 +688,46 @@ class ApiClient
         return $this->get('/admin/orders/pos/discount-limit');
     }
 
+    /** Đổi hàng tại quầy: hàng cũ về kho + hàng mới ra kho + chênh lệch, MỘT giao dịch. */
+    public function posDoiHang(array $payload): Response
+    {
+        return $this->post('/admin/orders/pos/doi-hang', $payload);
+    }
+
+    // ---------- Ca làm việc & sổ quỹ ----------
+
+    /** Ca đang mở của chi nhánh đang làm việc. `data` = null nghĩa là chưa mở ca. */
+    public function caHienTai(): Response
+    {
+        return $this->get('/admin/ca-lam-viec/hien-tai');
+    }
+
+    public function moCa(array $payload): Response
+    {
+        return $this->post('/admin/ca-lam-viec/mo', $payload);
+    }
+
+    public function dongCa(array $payload): Response
+    {
+        return $this->post('/admin/ca-lam-viec/dong', $payload);
+    }
+
+    public function caLamViec(array $query = []): Response
+    {
+        return $this->get('/admin/ca-lam-viec', $query);
+    }
+
+    public function caChiTiet(int $id): Response
+    {
+        return $this->get("/admin/ca-lam-viec/{$id}");
+    }
+
+    /** Ghi tay một khoản thu/chi tiền mặt vào sổ quỹ. */
+    public function ghiSoQuy(array $payload): Response
+    {
+        return $this->post('/admin/so-quy', $payload);
+    }
+
     /** Sửa thông tin & danh sách sản phẩm của đơn có sẵn (payload theo OrderUpdateRequest). */
     public function updateOrder(int $id, array $payload): Response
     {
