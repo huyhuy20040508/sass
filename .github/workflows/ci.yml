@@ -94,6 +94,24 @@ jobs:
         # hàm trong domain/ sẽ chỉ lộ ra vào lúc triển khai trên máy chủ.
         run: go build ./...
 
+      - name: Tạo database test
+        # Công cụ migrate CỐ Ý không tự tạo database bán hàng (xem
+        # taoDatabaseNeuThieu trong cmd/migrate): gõ sai DB_NAME mà nó tự dựng
+        # một database trắng rồi chạy hết migration vào đấy thì database thật
+        # nằm im bên cạnh, hỏng theo kiểu im lặng nhất. Nên CI phải tự khai.
+        #
+        # Collation utf8mb4_unicode_ci là BẮT BUỘC, không để MySQL 8 dùng mặc
+        # định utf8mb4_0900_ai_ci của nó: hai lược đồ so chuỗi khác nhau thì mã
+        # cửa hàng 'ABC' và 'abc' là một bên này mà là hai bên kia — CI xanh
+        # trong khi máy thật hỏng, đúng thứ CI sinh ra để chặn.
+        #
+        # Database control plane thì KHÔNG khai ở đây: công cụ migrate tự tạo
+        # nó, y như lúc chạy trên máy chủ.
+        run: |
+          mysql -h 127.0.0.1 -P 3306 -u root -e \
+            "CREATE DATABASE IF NOT EXISTS selliotech_tenant_test
+             CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+
       - name: Nạp lược đồ vào database test
         working-directory: api
         env:
@@ -138,6 +156,23 @@ jobs:
           extensions: mbstring, xml, curl, zip, gd, intl, bcmath, sqlite3, pdo_sqlite
           coverage: none
 
+      - name: Dựng thư mục runtime của Laravel
+        working-directory: admin
+        # Git KHÔNG lưu được thư mục rỗng, mà .gitignore lại loại sạch nội dung
+        # bên trong storage/ — nên bản vừa checkout thiếu chúng. Thiếu
+        # storage/framework/views là mọi test chạm view chết với đúng một câu
+        # "Please provide a valid cache path", không nhắc gì tới thư mục.
+        #
+        # Bước 5/10 của 02-trien-khai.sh tạo đúng danh sách này trên máy chủ vì
+        # cùng một lý do; sửa bên nào thì ngó sang bên kia.
+        run: |
+          mkdir -p storage/app/private storage/app/public \
+                   storage/framework/cache/data \
+                   storage/framework/sessions \
+                   storage/framework/views \
+                   storage/logs \
+                   bootstrap/cache
+
       - name: Cache composer
         uses: actions/cache@v4
         with:
@@ -176,6 +211,17 @@ jobs:
           php-version: "8.3"
           extensions: mbstring, xml, curl, zip, gd, intl, bcmath, sqlite3, pdo_sqlite
           coverage: none
+
+      - name: Dựng thư mục runtime của Laravel
+        working-directory: saas
+        # Xem chú thích ở job admin.
+        run: |
+          mkdir -p storage/app/private storage/app/public \
+                   storage/framework/cache/data \
+                   storage/framework/sessions \
+                   storage/framework/views \
+                   storage/logs \
+                   bootstrap/cache
 
       - name: Cache composer
         uses: actions/cache@v4

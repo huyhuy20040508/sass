@@ -141,6 +141,52 @@ type heThong struct {
 	nenTang *gorm.DB
 }
 
+// napVaiTroChuan bảo đảm bảng `roles` có đủ bốn dòng của nhà máy.
+//
+// PHẢI làm ở đây vì bốn dòng đó KHÔNG nằm trong migration nào: `database/seed.sql`
+// đã tắt hẳn, và trên máy thật chúng do `selliotech-tao-admin` nạp lúc dựng cửa
+// hàng đầu tiên (xem napVaiTro trong cmd/tao-admin). Nghĩa là một database vừa
+// chạy xong migration vẫn có bảng roles TRỐNG — trong khi middleware phân quyền
+// và mọi lượt gieo người dùng ở đây đều tham chiếu thẳng tới id 1–4.
+//
+// Thiếu bước này thì bộ test chỉ xanh trên máy của người đã lỡ chạy tao-admin
+// vào đúng database đó. Ai làm theo đúng ba câu lệnh ghi ở đầu tệp sẽ nhận về
+// "violates foreign key constraint" mà không có gì chỉ ra nguyên nhân — và CI,
+// nơi database nào cũng mới tinh, thì đỏ mọi lượt. Đây là lỗi đã xảy ra thật ở
+// lượt dựng CI đầu tiên.
+//
+// INSERT IGNORE chứ không phải INSERT: mọi test đều gọi hàm này, và bảng roles
+// dùng chung cho cả gói.
+func napVaiTroChuan(t *testing.T, db *gorm.DB) {
+	t.Helper()
+
+	// Giữ khớp với vaiTroChuan trong cmd/tao-admin/main.go. Chép lại thay vì
+	// dùng chung, đúng như phần nối dây ở dungHeThongVoi: bộ test phải mô tả
+	// được trạng thái nó cần mà không kéo theo một gói lệnh vào đây.
+	vaiTro := []struct {
+		id      int
+		ten     string
+		hienThi string
+		moTa    string
+	}{
+		{1, "super_admin", "Super Admin", "Toàn quyền hệ thống"},
+		{2, "admin", "Quản trị viên", "Quản lý sản phẩm, đơn hàng"},
+		{3, "staff", "Nhân viên", "Xử lý đơn hàng, kho"},
+		{4, "customer", "Khách hàng", "Người dùng cuối"},
+	}
+
+	for _, v := range vaiTro {
+		err := db.WithContext(ctxThoat()).Exec(
+			"INSERT IGNORE INTO roles (id, name, display_name, description, created_at, updated_at) "+
+				"VALUES (?, ?, ?, ?, NOW(3), NOW(3))",
+			v.id, v.ten, v.hienThi, v.moTa,
+		).Error
+		if err != nil {
+			t.Fatalf("không nạp được vai trò %s: %v", v.ten, err)
+		}
+	}
+}
+
 // dungHeThong dựng API với cụm bán hàng cho khách TẮT — đúng cấu hình production
 // hôm nay của dự án.
 func dungHeThong(t *testing.T) *heThong {
@@ -195,6 +241,8 @@ func dungHeThongVoi(t *testing.T, banHang, dieuHanh bool) *heThong {
 			_ = sqlDB.Close()
 		}
 	})
+
+	napVaiTroChuan(t, db)
 
 	// Control plane: chỉ mở khi cần: sổ tên miền là thứ DUY NHẤT của luồng phục vụ
 	// request đọc sang lược đồ đó.
