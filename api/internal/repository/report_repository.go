@@ -498,9 +498,30 @@ func (r *reportRepository) sliceByItem(ctx context.Context, p domain.ReportPerio
 		Units   int64
 		Revenue float64
 	}
-	q = q.Select("COALESCE(CAST(" + keyExpr + " AS CHAR), '') AS `key`, COALESCE(" + labelExpr + ", '') AS label, " +
+	// GROUP BY phải gộp theo ĐÚNG hai biểu thức đứng trong SELECT, từng chữ một.
+	//
+	// MySQL 8 bật sẵn ONLY_FULL_GROUP_BY và nó đối chiếu theo MẶT CHỮ chứ không
+	// rút gọn biểu thức. Trước đây SELECT lấy COALESCE(CAST(<key> AS CHAR), '')
+	// mà GROUP BY chỉ ghi <key>: với <key> là một CỘT thì MySQL vẫn chịu (mọi
+	// biểu thức trên cột đã gộp đều hợp lệ), nhưng với <key> là một BIỂU THỨC —
+	// đúng trường hợp BySize truyền COALESCE(oi.size, '') — thì nó từ chối:
+	//
+	//	Error 1055: Expression #1 of SELECT list is not in GROUP BY clause
+	//	and contains nonaggregated column 'oi.size'
+	//
+	// Tức là trang Báo cáo → theo size trả 500. Lỗi này sống được lâu vì MySQL
+	// đi kèm XAMPP không bật ONLY_FULL_GROUP_BY, còn máy chủ thì có — nó chỉ lộ
+	// ra ở lượt CI đầu tiên chạy trên MySQL 8 thật.
+	//
+	// Gộp theo chính biểu thức trong SELECT không đổi kết quả: id cast sang chuỗi
+	// vẫn phân biệt từng id, còn NULL và '' thì cả hai vế đều đã cố ý dồn về một
+	// nhóm (dòng hàng chưa ghi size, hoặc sản phẩm không thuộc danh mục nào).
+	khoa := "COALESCE(CAST(" + keyExpr + " AS CHAR), '')"
+	nhan := "COALESCE(" + labelExpr + ", '')"
+
+	q = q.Select(khoa + " AS `key`, " + nhan + " AS label, " +
 		"COUNT(DISTINCT o.id) AS orders, COALESCE(SUM(oi.quantity), 0) AS units, COALESCE(SUM(oi.total_price), 0) AS revenue").
-		Group(keyExpr + ", " + labelExpr).
+		Group(khoa + ", " + nhan).
 		Order("revenue DESC")
 	if limit > 0 {
 		q = q.Limit(limit)

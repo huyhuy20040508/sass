@@ -415,18 +415,30 @@ DB_NAME=selliotech_tenant_test PLATFORM_DB_NAME=selliotech_tenant_test_nen_tang 
   go run ./cmd/migrate -nen-tang chay -y
 ```
 
-**2. MySQL của XAMPP thường TẮT strict mode.** Máy chủ và CI chạy MySQL 8, mặc định bật
-`STRICT_TRANS_TABLES`. Khác biệt này không nhỏ: ghi một giá trị ngoài `ENUM` — chuyện xảy ra
-mỗi khi GORM đưa trường bỏ trống vào câu `INSERT` — thì máy thật **báo lỗi**, còn XAMPP chỉ
-**cảnh báo rồi ghi bừa**. Ép strict ngay trong DSN thì máy mình bắt được luôn:
+**2. MySQL của XAMPP chạy `sql_mode` dễ tính hơn máy chủ.** Đây là chỗ nguy hiểm nhất, vì nó
+không làm test đỏ mà làm test **xanh nhầm**. Hai luật máy chủ có mà XAMPP thường không:
+
+| Luật | Máy chủ làm gì | XAMPP làm gì |
+|---|---|---|
+| `STRICT_TRANS_TABLES` | Ghi giá trị ngoài `ENUM` → **báo lỗi**. Xảy ra mỗi khi GORM đưa một trường bỏ trống vào câu `INSERT` | Cảnh báo rồi ghi bừa |
+| `ONLY_FULL_GROUP_BY` | `SELECT` có biểu thức không trùng khít `GROUP BY` → **báo lỗi** | Cho qua |
+
+Ép đúng `sql_mode` của máy chủ vào DSN là máy mình bắt được cả hai:
 
 ```bash
-TEST_DB_DSN="root:@tcp(127.0.0.1:3306)/selliotech_tenant_test?parseTime=true&sql_mode='STRICT_TRANS_TABLES'" \
+TEST_DB_DSN="root:@tcp(127.0.0.1:3306)/selliotech_tenant_test?parseTime=true&sql_mode='ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'" \
   go test ./...
 ```
 
-Bỏ hai bước này thì bộ test vẫn xanh trên máy bạn và đỏ trên CI, mà thông báo lỗi lại chẳng
-liên quan gì tới cái vừa sửa — đúng ba lượt đã mất khi dựng CI lần đầu.
+Chuỗi đó lấy từ chính máy chủ, kiểm lại bất cứ lúc nào:
+
+```bash
+ssh root@103.78.2.230 'mysql -N -B -e "SELECT @@global.sql_mode"'
+```
+
+Đây không phải chuyện lý thuyết: lượt CI đầu tiên chạy trên MySQL 8 thật đã lôi ra một lỗi
+**đang sống trên máy chủ** — trang Báo cáo → theo size trả 500 vì `ONLY_FULL_GROUP_BY`, mà
+mọi máy phát triển đều báo xanh.
 
 ### Ba secret trên GitHub
 
