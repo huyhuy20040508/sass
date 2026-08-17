@@ -491,8 +491,13 @@ class OrderController extends Controller
     public function export(Request $request)
     {
         // Nếu có ?ids=... thì chỉ xuất các đơn được chọn; ngược lại xuất theo bộ lọc.
+        //
+        // Tham số thứ ba là VIỆC ĐANG LÀM, chèn vào câu báo lỗi khi không lấy được
+        // đơn nào ("Chưa chọn đơn hàng nào để xuất tệp…"). Nó không có giá trị mặc
+        // định, và chỗ gọi này từng bỏ quên — bấm Xuất trên vài đơn vừa tick là
+        // nhận thẳng trang 500.
         $orders = $request->query('ids', '') !== ''
-            ? $this->fetchOrdersForPrint($request, null)
+            ? $this->fetchOrdersForPrint($request, null, 'xuất tệp')
             : $this->fetchAll($this->filters($request));
         $fileName = 'don-hang-'.date('Ymd-His').'.csv';
 
