@@ -85,16 +85,20 @@ type DatabaseConfig struct {
 	// ConnMaxIdleTime phải NHỎ HƠN wait_timeout của MySQL, nếu không kết nối
 	// nhàn rỗi bị server đóng sẽ được tái sử dụng và gây lỗi "invalid connection".
 	ConnMaxIdleTime time.Duration
-	// SQLMode ép sql_mode cho PHIÊN kết nối. Rỗng = không đụng, để server quyết —
-	// và đó là giá trị của app chạy thật.
+	// SQLModeThem là những luật sql_mode CỘNG THÊM vào phiên kết nối. Rỗng =
+	// không đụng, để server quyết — và đó là giá trị của app chạy thật.
 	//
-	// CỐ Ý để rỗng ở production: máy chủ đã đặt sql_mode ở tầng global, ghim đè
-	// từ đây chỉ tạo thêm một chỗ nữa có thể lệch với nó. Tệ hơn, ghim một danh
-	// sách thiếu mất một luật là ÂM THẦM NỚI LỎNG máy chủ — câu lệnh đang bị từ
-	// chối bỗng chạy được, và cái lỗi đáng ra phải lộ ra thì im luôn.
+	// CỘNG THÊM chứ không phải đặt đè, và khác biệt này quan trọng: `SET sql_mode`
+	// THAY THẾ toàn bộ danh sách. Đặt đè bằng một danh sách thiếu mất một luật là
+	// âm thầm NỚI LỎNG chính chỗ mình đang muốn siết — trên CI (MySQL 8) nó sẽ gỡ
+	// luôn ONLY_FULL_GROUP_BY khỏi phiên test, tức là tắt đúng cái chốt đã tìm ra
+	// lỗi trang Báo cáo → theo size.
+	//
+	// CỐ Ý để rỗng ở production: máy chủ đã đặt sql_mode ở tầng global, thêm một
+	// chỗ khai nữa trong mã nguồn chỉ tạo thêm một chỗ có thể lệch với nó.
 	//
 	// Chỉ bộ test đặt trường này (xem SQLModeKiemThu).
-	SQLMode string
+	SQLModeThem string
 	// SecretKey CHỈ có nghĩa với cfg.Platform: khoá mã hoá các giá trị bí mật cất
 	// trong `platform_settings` (khoá cổng thanh toán của nền tảng — xem
 	// pkg/bimat). Nằm trong struct này vì nó đi cùng đúng một kết nối, và tách ra
@@ -106,12 +110,13 @@ type DatabaseConfig struct {
 }
 
 // DSN trả về chuỗi kết nối MySQL cho GORM.
-// SQLModeKiemThu là sql_mode mà BỘ TEST ép cho phiên kết nối của nó.
+// SQLModeKiemThu là những luật sql_mode mà BỘ TEST CỘNG THÊM vào phiên kết nối
+// của nó — cộng thêm, không đặt đè, xem DatabaseConfig.SQLModeThem.
 //
 // Mục đích: máy phát triển và máy chủ phải cho cùng một câu trả lời. MySQL đi
-// kèm XAMPP chạy sql_mode rỗng hoặc gần rỗng, nên ghi '' vào một cột ENUM ở đó
-// chỉ là cảnh báo rồi ghi bừa, còn trên máy chủ là lỗi thẳng. Năm chỗ trong bộ
-// test từng sống nhờ đúng khe hở đó.
+// kèm XAMPP chạy sql_mode rỗng hoặc gần rỗng, nên ghi chuỗi rỗng vào một cột
+// ENUM ở đó chỉ là cảnh báo rồi ghi bừa, còn trên máy chủ là lỗi thẳng. Năm chỗ
+// trong bộ test từng sống nhờ đúng khe hở đó.
 //
 // THIẾU ONLY_FULL_GROUP_BY LÀ CỐ Ý, dù máy chủ có bật.
 //
@@ -138,11 +143,30 @@ func (d DatabaseConfig) DSN() string {
 
 // thamSoSQLMode trả về phần "&sql_mode=..." của DSN, hoặc chuỗi rỗng khi không
 // ai khai — để nguyên cấu hình của máy chủ.
+//
+// Giá trị là một BIỂU THỨC SQL chứ không phải chuỗi hằng, và go-sql-driver đưa
+// nguyên nó vào câu `SET sql_mode=...` lúc bắt tay, nên MySQL tự tính:
+//
+//	CONCAT(@@sql_mode, IF(@@sql_mode='','',','), 'STRICT_TRANS_TABLES,...')
+//
+// Nhánh IF là để lo trường hợp máy chủ đang để sql_mode RỖNG: nối thẳng sẽ ra
+// chuỗi mở đầu bằng dấu phẩy, và MySQL từ chối cả câu. Luật trùng thì không sao,
+// MySQL tự gộp.
 func (d DatabaseConfig) thamSoSQLMode() string {
-	if d.SQLMode == "" {
+	if d.SQLModeThem == "" {
 		return ""
 	}
-	return "&sql_mode=" + url.QueryEscape("'"+d.SQLMode+"'")
+	return "&" + ThamSoSQLModeThem(d.SQLModeThem)
+}
+
+// ThamSoSQLModeThem dựng tham số DSN "sql_mode=..." cộng thêm các luật cho trước.
+//
+// Xuất ra ngoài vì internal/repository mở kết nối test THẲNG từ chuỗi DSN trong
+// biến môi trường, không đi qua DatabaseConfig — nó vẫn cần đúng biểu thức này
+// chứ không nên chép lại một bản gần giống.
+func ThamSoSQLModeThem(modes string) string {
+	bieuThuc := "CONCAT(@@sql_mode, IF(@@sql_mode='','',','), '" + modes + "')"
+	return "sql_mode=" + url.QueryEscape(bieuThuc)
 }
 
 // DSNMayChu là chuỗi kết nối tới MÁY CHỦ MySQL mà không chọn database nào.

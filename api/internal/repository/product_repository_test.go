@@ -2,7 +2,6 @@ package repository
 
 import (
 	"context"
-	"net/url"
 	"os"
 	"strings"
 	"testing"
@@ -53,12 +52,12 @@ func testDB(t *testing.T) *gorm.DB {
 	return db
 }
 
-// ghimSQLMode nhét config.SQLModeKiemThu vào TEST_DB_DSN nếu người chạy chưa khai.
+// ghimSQLMode cộng config.SQLModeKiemThu vào TEST_DB_DSN nếu người chạy chưa khai.
 //
 // Gói này mở kết nối THẲNG bằng chuỗi DSN lấy từ biến môi trường, không đi qua
 // config.DatabaseConfig.DSN() như internal/apitest — nên nó phải tự làm lấy.
 // Thiếu dòng này thì bộ test ở đây chạy dưới sql_mode của máy ai nấy dùng: XAMPP
-// để lỏng thì ghi '' vào cột ENUM vẫn lọt, còn máy chủ và CI thì báo lỗi.
+// để lỏng thì ghi chuỗi rỗng vào cột ENUM vẫn lọt, còn máy chủ và CI báo lỗi.
 //
 // Vẫn tôn trọng lựa chọn của người chạy: ai cố tình khai sql_mode riêng (để thử
 // một máy chủ cấu hình khác) thì giữ nguyên chuỗi của họ.
@@ -70,7 +69,7 @@ func ghimSQLMode(dsn string) string {
 	if strings.Contains(dsn, "?") {
 		noi = "&"
 	}
-	return dsn + noi + "sql_mode=" + url.QueryEscape("'"+config.SQLModeKiemThu+"'")
+	return dsn + noi + config.ThamSoSQLModeThem(config.SQLModeKiemThu)
 }
 
 // ctxTest là ctx của cửa hàng số 1 — cửa hàng mà migration 0002 tạo sẵn và mọi
