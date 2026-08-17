@@ -54,7 +54,10 @@ var vaiTroChuan = []struct {
 }{
 	{1, "super_admin", "Super Admin", "Toàn quyền hệ thống"},
 	{2, "admin", "Quản trị viên", "Quản lý sản phẩm, đơn hàng"},
-	{3, "staff", "Nhân viên", "Xử lý đơn hàng, kho"},
+	// "Thu ngân", không phải "Nhân viên": vai trò này chỉ mở được cụm quầy —
+	// xem migration 0009 và nhóm route `admin` trong internal/router/router.go.
+	// Sửa ở đây thì sửa cả napVaiTroChuan bên internal/apitest.
+	{3, "staff", "Thu ngân", "Bán tại quầy, đơn hàng, ca làm việc"},
 	{4, "customer", "Khách hàng", "Người dùng cuối"},
 }
 

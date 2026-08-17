@@ -985,7 +985,7 @@ func (s *authService) Me(ctx context.Context, userID uint) (*domain.User, error)
 // ganNhanVaiTro đè tên vai trò RIÊNG của cửa hàng lên user sắp trả ra ngoài.
 //
 // Quan hệ Role nạp kèm user là dòng của bảng dùng chung, tức tên mặc định của
-// nhà máy. Cửa hàng đặt tên khác ("Thu ngân" thay cho "Nhân viên") thì tên đó
+// nhà máy. Cửa hàng đặt tên khác ("Bán hàng" thay cho "Thu ngân") thì tên đó
 // nằm ở role_labels — không gắn vào đây là thanh tiêu đề và trang hồ sơ in một
 // tên, còn trang Vai trò in tên khác.
 //
