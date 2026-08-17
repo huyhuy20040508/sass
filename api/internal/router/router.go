@@ -389,13 +389,22 @@ func New(
 		// --- Admin (yêu cầu quyền quản trị) ---
 		//
 		// Hai tầng quyền:
-		//   - admin : super_admin, admin, staff — nghiệp vụ hằng ngày (đơn, kho, sản phẩm).
-		//   - manage: super_admin, admin — dữ liệu người và cấu hình hệ thống.
+		//   - admin : super_admin, admin, staff — MÀN HÌNH QUẦY và chỉ nó: bán tại
+		//     quầy, đơn hàng, ca làm việc & sổ quỹ, hồ sơ của chính mình.
+		//   - manage: super_admin, admin — toàn bộ phần còn lại.
 		//
-		// Nhân viên (staff) làm được việc kho và đơn hàng nhưng KHÔNG xem được hồ sơ
-		// khách hàng, không sửa cấu hình cửa hàng và không đụng vào tài khoản của
-		// người khác. Đây là chặn theo NHÓM ENDPOINT, chưa phải phân quyền theo từng
-		// chức năng — muốn chi tiết hơn thì phải dựng bảng permissions.
+		// Nhân viên (staff) ở đây là THU NGÂN: họ bán hàng, tra lại đơn, mở/đóng ca
+		// và đối chiếu két. Hàng hoá, giá bán, khuyến mãi, kho, mua vào, hồ sơ khách
+		// và cấu hình đều KHÔNG mở — đó là việc của chủ tiệm, và phần lớn chúng vừa
+		// phơi giá vốn vừa đổi được số tiền cửa hàng thu về.
+		//
+		// Đây là chặn theo NHÓM ENDPOINT, chưa phải phân quyền theo từng chức năng —
+		// muốn chi tiết hơn thì phải dựng bảng permissions.
+		//
+		// LƯU Ý KHI THÊM ROUTE MỚI: dấu ngoặc { } bên dưới chỉ để mắt nhìn, nó KHÔNG
+		// tạo phạm vi quyền nào. Quyền nằm ở chỗ chọn `admin.` hay `manage.` trên
+		// từng dòng, nên mặc định của một đường mới là `manage.` — chỉ hạ xuống
+		// `admin.` khi người đứng quầy thật sự cần bấm nó.
 		admin := v1.Group("/admin")
 		// DuongGoiDichVu đi cùng JWTAuth ở đây, chứ không nằm trong middleware:
 		// đó là đường DUY NHẤT một cửa hàng đã hết hạn còn đọc được, và nó phải
@@ -426,56 +435,64 @@ func New(
 			admin.PUT("/me", h.User.UpdateMe)
 			admin.PUT("/me/password", h.User.ChangePassword)
 
-			admin.POST("/categories", h.Category.Create)
-			admin.PUT("/categories/:id", h.Category.Update)
-			admin.DELETE("/categories/:id", h.Category.Delete)
+			// Danh mục & thương hiệu — khung phân loại của cả kho hàng. Người
+			// đứng quầy không dựng khung đó; họ bán những gì đã có trong đó.
+			manage.POST("/categories", h.Category.Create)
+			manage.PUT("/categories/:id", h.Category.Update)
+			manage.DELETE("/categories/:id", h.Category.Delete)
 
-			admin.POST("/brands", h.Brand.Create)
-			admin.PUT("/brands/:id", h.Brand.Update)
-			admin.DELETE("/brands/:id", h.Brand.Delete)
+			manage.POST("/brands", h.Brand.Create)
+			manage.PUT("/brands/:id", h.Brand.Update)
+			manage.DELETE("/brands/:id", h.Brand.Delete)
 
 			// Banner trang chủ — nội dung tiếp thị, cùng tầng quyền với sản phẩm.
 			// "sort" phải đứng trước /:id, nếu không nó bị hiểu là id banner.
-			admin.GET("/banners", h.Banner.List)
-			admin.POST("/banners", h.Banner.Create)
-			admin.PUT("/banners/sort", h.Banner.Sort)
-			admin.GET("/banners/:id", h.Banner.Get)
-			admin.PUT("/banners/:id", h.Banner.Update)
-			admin.PUT("/banners/:id/status", h.Banner.UpdateStatus)
-			admin.DELETE("/banners/:id", h.Banner.Delete)
+			manage.GET("/banners", h.Banner.List)
+			manage.POST("/banners", h.Banner.Create)
+			manage.PUT("/banners/sort", h.Banner.Sort)
+			manage.GET("/banners/:id", h.Banner.Get)
+			manage.PUT("/banners/:id", h.Banner.Update)
+			manage.PUT("/banners/:id/status", h.Banner.UpdateStatus)
+			manage.DELETE("/banners/:id", h.Banner.Delete)
 
 			// Chương trình khuyến mãi — cùng tầng quyền với sản phẩm vì nó chính là
 			// thứ quyết định giá bán. "stats" phải đứng trước /:id, nếu không nó bị
 			// hiểu là id chương trình.
-			admin.GET("/promotions", h.Promo.List)
-			admin.GET("/promotions/stats", h.Promo.Stats)
-			admin.POST("/promotions", h.Promo.Create)
-			admin.GET("/promotions/:id", h.Promo.Get)
-			admin.PUT("/promotions/:id", h.Promo.Update)
-			admin.PUT("/promotions/:id/status", h.Promo.UpdateStatus)
-			admin.DELETE("/promotions/:id", h.Promo.Delete)
+			manage.GET("/promotions", h.Promo.List)
+			manage.GET("/promotions/stats", h.Promo.Stats)
+			manage.POST("/promotions", h.Promo.Create)
+			manage.GET("/promotions/:id", h.Promo.Get)
+			manage.PUT("/promotions/:id", h.Promo.Update)
+			manage.PUT("/promotions/:id/status", h.Promo.UpdateStatus)
+			manage.DELETE("/promotions/:id", h.Promo.Delete)
 
 			// Voucher — mã khách tự nhập lúc thanh toán, giảm trên tổng đơn. Cùng
 			// tầng quyền với khuyến mãi vì cũng là tiền ra khỏi cửa hàng.
-			admin.GET("/vouchers", h.Voucher.List)
-			admin.GET("/vouchers/stats", h.Voucher.Stats)
-			admin.POST("/vouchers", h.Voucher.Create)
-			admin.GET("/vouchers/:id", h.Voucher.Get)
-			admin.PUT("/vouchers/:id", h.Voucher.Update)
-			admin.PUT("/vouchers/:id/status", h.Voucher.UpdateStatus)
-			admin.DELETE("/vouchers/:id", h.Voucher.Delete)
+			manage.GET("/vouchers", h.Voucher.List)
+			manage.GET("/vouchers/stats", h.Voucher.Stats)
+			manage.POST("/vouchers", h.Voucher.Create)
+			manage.GET("/vouchers/:id", h.Voucher.Get)
+			manage.PUT("/vouchers/:id", h.Voucher.Update)
+			manage.PUT("/vouchers/:id/status", h.Voucher.UpdateStatus)
+			manage.DELETE("/vouchers/:id", h.Voucher.Delete)
 
-			admin.POST("/products", h.Product.Create)
+			// Sản phẩm — nhóm `manage`. Đường ĐỌC của quầy không đi qua đây: màn
+			// hình bán tại quầy tra hàng bằng /orders/pos/scan và danh mục công
+			// khai GET /products, cả hai đều còn mở cho nhân viên.
+			manage.POST("/products", h.Product.Create)
 			// Xoá hàng loạt đặt TRƯỚC nhóm :id cho dễ đọc — một giao dịch thay vì
 			// N lượt gọi nối đuôi nhau từ trang quản trị.
-			admin.POST("/products/bulk-delete", h.Product.BulkDelete)
-			admin.POST("/products/:id/duplicate", h.Product.Duplicate)
+			manage.POST("/products/bulk-delete", h.Product.BulkDelete)
+			manage.POST("/products/:id/duplicate", h.Product.Duplicate)
 			// GET chi tiết: form sửa nạp lại dữ liệu mới nhất trước khi cho sửa,
 			// thay vì làm việc trên bản đã nạp cùng danh sách (có thể đã cũ).
-			admin.GET("/products/:id", h.Product.Get)
-			admin.PUT("/products/:id", h.Product.Update)
-			admin.PUT("/products/:id/status", h.Product.UpdateStatus)
-			admin.DELETE("/products/:id", h.Product.Delete)
+			//
+			// Đường này phơi GIÁ VỐN, nên nó theo nhóm `manage` cùng lượt ghi chứ
+			// không tách ra làm ngoại lệ chỉ-đọc.
+			manage.GET("/products/:id", h.Product.Get)
+			manage.PUT("/products/:id", h.Product.Update)
+			manage.PUT("/products/:id/status", h.Product.UpdateStatus)
+			manage.DELETE("/products/:id", h.Product.Delete)
 
 			// Khách hàng — hồ sơ cá nhân của người mua, chỉ quản trị viên xem được.
 			manage.GET("/customers", h.Customer.List)
@@ -487,7 +504,9 @@ func New(
 			manage.PUT("/customers/:id/password", h.Customer.SetPassword)
 			manage.DELETE("/customers/:id", h.Customer.Delete)
 
-			// Đơn hàng
+			// Đơn hàng — cùng với Bán tại quầy và Ca làm việc, đây là phần CÒN LẠI
+			// ở nhóm `admin`: người trực quầy phải tra lại đơn vừa bán, in lại hoá
+			// đơn và sửa ghi chú giao hàng ngay tại chỗ.
 			admin.GET("/orders", h.Order.List)
 			admin.POST("/orders", h.Order.Create)
 			// Bán tại quầy — nằm ở nhóm `admin` chứ không phải `manage`: người đứng
@@ -509,7 +528,9 @@ func New(
 			admin.PUT("/orders/:id/shipping", h.Order.UpdateShipping)
 			admin.PUT("/orders/:id/note", h.Order.UpdateNote)
 			// Món còn trả được của một đơn — màn hình lập phiếu trả dựng form từ đây.
-			admin.GET("/orders/:id/returnable", h.Return.Returnable)
+			// Đi theo nhóm `manage` cùng chính trang Trả hàng ngay dưới: nhân viên
+			// không lập được phiếu thì cũng không cần cái form đó.
+			manage.GET("/orders/:id/returnable", h.Return.Returnable)
 
 			// Ca làm việc & sổ quỹ — nhóm `admin` chứ không phải `manage`: người
 			// trực két là nhân viên, và cả cụm vô nghĩa nếu chỉ chủ mới mở/đóng ca
@@ -523,82 +544,93 @@ func New(
 			admin.GET("/ca-lam-viec/:id", h.Ca.Get)
 			admin.POST("/so-quy", h.Ca.GhiSoQuy)
 
-			// Trả hàng
-			admin.GET("/returns", h.Return.List)
-			admin.POST("/returns", h.Return.Create)
-			admin.GET("/returns/stats", h.Return.Stats)
-			admin.GET("/returns/:id", h.Return.Get)
-			admin.PUT("/returns/:id/status", h.Return.UpdateStatus)
-			admin.PUT("/returns/:id/settle", h.Return.Settle)
-			admin.PUT("/returns/:id/note", h.Return.UpdateNote)
+			// Trả hàng — TIỀN RA khỏi két cho một đơn đã thu. Nhân viên bán được
+			// hàng nhưng không tự duyệt được lượt hoàn tiền của chính mình.
+			manage.GET("/returns", h.Return.List)
+			manage.POST("/returns", h.Return.Create)
+			manage.GET("/returns/stats", h.Return.Stats)
+			manage.GET("/returns/:id", h.Return.Get)
+			manage.PUT("/returns/:id/status", h.Return.UpdateStatus)
+			manage.PUT("/returns/:id/settle", h.Return.Settle)
+			manage.PUT("/returns/:id/note", h.Return.UpdateNote)
 
 			// Tồn kho — đơn vị là biến thể sản phẩm, không phải sản phẩm.
 			// Hai đường tĩnh phải đứng trước /:id, nếu không "stats" và "adjust"
 			// sẽ bị hiểu thành id biến thể.
-			admin.GET("/inventory", h.Stock.List)
-			admin.GET("/inventory/stats", h.Stock.Stats)
-			admin.POST("/inventory/adjust", h.Stock.BulkAdjust)
-			admin.PUT("/inventory/cost", h.Stock.SetCost)
-			admin.GET("/inventory/:id", h.Stock.Get)
-			admin.GET("/inventory/:id/history", h.Stock.History)
-			admin.PUT("/inventory/:id", h.Stock.Adjust)
+			//
+			// Cả cụm ở `manage`: đây là nơi SỬA THẲNG số tồn và khai giá vốn, tức
+			// là chỗ một lượt hàng thiếu biến mất khỏi sổ mà không để lại lượt bán
+			// nào. Quầy vẫn trừ kho bình thường — nhưng chỉ qua đường bán hàng.
+			manage.GET("/inventory", h.Stock.List)
+			manage.GET("/inventory/stats", h.Stock.Stats)
+			manage.POST("/inventory/adjust", h.Stock.BulkAdjust)
+			manage.PUT("/inventory/cost", h.Stock.SetCost)
+			manage.GET("/inventory/:id", h.Stock.Get)
+			manage.GET("/inventory/:id/history", h.Stock.History)
+			manage.PUT("/inventory/:id", h.Stock.Adjust)
 
 			// Nhà cung cấp — bên bán hàng cho cửa hàng, dùng cho phiếu đặt hàng nhập.
-			admin.GET("/suppliers", h.Supplier.List)
-			admin.POST("/suppliers", h.Supplier.Create)
-			admin.GET("/suppliers/:id", h.Supplier.Get)
-			admin.PUT("/suppliers/:id", h.Supplier.Update)
-			admin.DELETE("/suppliers/:id", h.Supplier.Delete)
+			manage.GET("/suppliers", h.Supplier.List)
+			manage.POST("/suppliers", h.Supplier.Create)
+			manage.GET("/suppliers/:id", h.Supplier.Get)
+			manage.PUT("/suppliers/:id", h.Supplier.Update)
+			manage.DELETE("/suppliers/:id", h.Supplier.Delete)
 
 			// Đặt hàng nhập — chiều MUA VÀO của kho.
 			// Hai đường tĩnh ("stats", "variants") phải đứng trước /:id, nếu không
 			// chúng sẽ bị hiểu thành id phiếu.
-			admin.GET("/purchases", h.Purchase.List)
-			admin.POST("/purchases", h.Purchase.Create)
-			admin.GET("/purchases/stats", h.Purchase.Stats)
-			admin.GET("/purchases/variants", h.Purchase.SearchVariants)
-			admin.GET("/purchases/:id", h.Purchase.Get)
-			admin.PUT("/purchases/:id", h.Purchase.Update)
-			admin.DELETE("/purchases/:id", h.Purchase.Delete)
-			admin.PUT("/purchases/:id/status", h.Purchase.UpdateStatus)
-			admin.PUT("/purchases/:id/payment", h.Purchase.UpdatePayment)
+			manage.GET("/purchases", h.Purchase.List)
+			manage.POST("/purchases", h.Purchase.Create)
+			manage.GET("/purchases/stats", h.Purchase.Stats)
+			manage.GET("/purchases/variants", h.Purchase.SearchVariants)
+			manage.GET("/purchases/:id", h.Purchase.Get)
+			manage.PUT("/purchases/:id", h.Purchase.Update)
+			manage.DELETE("/purchases/:id", h.Purchase.Delete)
+			manage.PUT("/purchases/:id/status", h.Purchase.UpdateStatus)
+			manage.PUT("/purchases/:id/payment", h.Purchase.UpdatePayment)
 			// Nhận hàng là hành động tạo ra bút toán kho mới mỗi lần gọi (nhận nhiều
 			// đợt), nên là POST chứ không phải PUT.
-			admin.POST("/purchases/:id/receive", h.Purchase.Receive)
+			manage.POST("/purchases/:id/receive", h.Purchase.Receive)
 
 			// Nhập hàng — CHỈ ĐỌC lại các đợt hàng đã về (dựng từ sổ kho). Việc ghi
 			// kho vẫn chỉ có một đường duy nhất là POST /purchases/:id/receive.
 			// "stats" phải đứng trước /:code, nếu không nó bị hiểu là mã đợt nhập.
 			// Trả hàng nhập — trả hàng lại nhà cung cấp (chiều ngược của nhập hàng).
 			// "stats" và "returnable" phải đứng trước /:id để không bị hiểu là id phiếu.
-			admin.GET("/purchase-returns", h.PReturn.List)
-			admin.POST("/purchase-returns", h.PReturn.Create)
-			admin.GET("/purchase-returns/stats", h.PReturn.Stats)
-			admin.GET("/purchase-returns/returnable/:id", h.PReturn.Returnable)
-			admin.GET("/purchase-returns/:id", h.PReturn.Get)
-			admin.PUT("/purchase-returns/:id", h.PReturn.Update)
-			admin.PUT("/purchase-returns/:id/status", h.PReturn.UpdateStatus)
-			admin.PUT("/purchase-returns/:id/refund", h.PReturn.UpdateRefund)
-			admin.DELETE("/purchase-returns/:id", h.PReturn.Delete)
+			manage.GET("/purchase-returns", h.PReturn.List)
+			manage.POST("/purchase-returns", h.PReturn.Create)
+			manage.GET("/purchase-returns/stats", h.PReturn.Stats)
+			manage.GET("/purchase-returns/returnable/:id", h.PReturn.Returnable)
+			manage.GET("/purchase-returns/:id", h.PReturn.Get)
+			manage.PUT("/purchase-returns/:id", h.PReturn.Update)
+			manage.PUT("/purchase-returns/:id/status", h.PReturn.UpdateStatus)
+			manage.PUT("/purchase-returns/:id/refund", h.PReturn.UpdateRefund)
+			manage.DELETE("/purchase-returns/:id", h.PReturn.Delete)
 
 			// Cấu hình hệ thống — key-value, ghi nhiều khoá một lần.
 			//
-			// ĐỌC mở cho cả nhân viên: logo, tên cửa hàng và ngưỡng tồn kho được
-			// dùng ở khung giao diện và trang Tồn kho mà nhân viên vẫn vào được —
-			// chặn đọc thì họ nhìn thấy logo mặc định và ngưỡng cảnh báo khác hẳn
-			// quản trị viên, cùng một hệ thống mà hai người thấy hai kiểu.
-			// GHI vẫn chỉ quản trị viên.
 			// --- Yêu cầu của khách + danh sách nhận tin ---
+			// Hộp thư đến từ storefront: tên, số điện thoại, email của người lạ gửi
+			// vào. Cùng loại dữ liệu với trang Khách hàng nên cùng nhóm quyền.
 			// "stats" đứng TRƯỚC ":id" để gin không hiểu nhầm nó là một ID.
-			admin.GET("/contact-requests", h.Contact.List)
-			admin.GET("/contact-requests/stats", h.Contact.Stats)
-			admin.GET("/contact-requests/:id", h.Contact.Get)
-			admin.PUT("/contact-requests/:id/status", h.Contact.UpdateStatus)
-			admin.DELETE("/contact-requests/:id", h.Contact.Delete)
+			manage.GET("/contact-requests", h.Contact.List)
+			manage.GET("/contact-requests/stats", h.Contact.Stats)
+			manage.GET("/contact-requests/:id", h.Contact.Get)
+			manage.PUT("/contact-requests/:id/status", h.Contact.UpdateStatus)
+			manage.DELETE("/contact-requests/:id", h.Contact.Delete)
 
-			admin.GET("/newsletter", h.Contact.Subscribers)
-			admin.PUT("/newsletter/:id/unsubscribe", h.Contact.Unsubscribe)
+			manage.GET("/newsletter", h.Contact.Subscribers)
+			manage.PUT("/newsletter/:id/unsubscribe", h.Contact.Unsubscribe)
 
+			// Cấu hình hệ thống — key-value, ghi nhiều khoá một lần.
+			//
+			// ĐỌC là đường DUY NHẤT ngoài cụm quầy còn mở cho nhân viên, và có lý do
+			// cụ thể: màn hình Bán tại quầy đọc tên cửa hàng, địa chỉ, lời cảm ơn ở
+			// chân hoá đơn và hạn mức tự bớt giá (`pos_staff_discount_limit`) từ
+			// đây. Chặn đọc thì hoá đơn in ra trống phần đầu và quầy không biết mình
+			// được bớt tới đâu cho tới lúc bấm bán và bị từ chối.
+			//
+			// GHI vẫn chỉ quản trị viên.
 			admin.GET("/settings", h.Setting.List)
 			manage.PUT("/settings", h.Setting.Update)
 
@@ -651,9 +683,9 @@ func New(
 			}
 			manage.PUT("/roles/:id", h.User.UpdateRole)
 
-			admin.GET("/receipts", h.Receipt.List)
-			admin.GET("/receipts/stats", h.Receipt.Stats)
-			admin.GET("/receipts/:code", h.Receipt.Get)
+			manage.GET("/receipts", h.Receipt.List)
+			manage.GET("/receipts/stats", h.Receipt.Stats)
+			manage.GET("/receipts/:code", h.Receipt.Get)
 
 			// Báo cáo — CHỈ ĐỌC, gộp lại dữ liệu đã có theo khoảng thời gian.
 			//
@@ -670,7 +702,7 @@ func New(
 			// Bắn thông báo thử — công cụ chẩn đoán lúc cài đặt, KHÔNG mở ở
 			// production: nó tạo dữ liệu thật trong bảng notifications.
 			if !cfg.App.IsProduction() {
-				admin.POST("/notifications/test", h.Notif.TestPush)
+				manage.POST("/notifications/test", h.Notif.TestPush)
 			}
 		}
 

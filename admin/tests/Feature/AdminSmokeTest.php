@@ -296,6 +296,17 @@ class AdminSmokeTest extends TestCase
         return [$urls, $skipped];
     }
 
+    /**
+     * Nhân viên (thu ngân) chỉ mở được cụm quầy.
+     *
+     * Danh sách dưới đây điểm mặt TỪNG NHÓM TRANG chứ không lấy vài trang tiêu
+     * biểu: chỗ hỏng trong thực tế là cả một nhóm bị quên ngoài `admin.manage`
+     * khi thêm route mới, và một nhóm bị quên thì không trang nào khác đỏ lên.
+     *
+     * Go API chặn song song ở tầng dưới (xem TestThuNgan_ChiVaoDuocQuayBan bên
+     * api/internal/apitest). Bài này chỉ kiểm phần việc của Shop Admin: đá người
+     * dùng ra SỚM, tại đúng trang họ vừa bấm.
+     */
     public function test_nhan_vien_bi_chan_khoi_trang_quan_ly(): void
     {
         $session = $this->adminSession();
@@ -304,13 +315,40 @@ class AdminSmokeTest extends TestCase
             ['role' => ['name' => 'staff', 'display_name' => 'Nhân viên']]
         );
 
-        foreach (['/admin/users', '/admin/customers', '/admin/settings'] as $uri) {
+        $cam = [
+            // Người & cấu hình — đã đóng từ trước.
+            '/admin/users', '/admin/customers', '/admin/settings', '/admin/chi-nhanh',
+            '/admin/reports/revenue', '/admin/goi-dich-vu',
+            // Hàng hoá & tiếp thị.
+            '/admin/products', '/admin/categories', '/admin/brands',
+            '/admin/khuyen-mai', '/admin/voucher', '/admin/banners',
+            '/admin/contacts', '/admin/dang-ky-nhan-tin',
+            // Trả hàng, kho và mua vào.
+            '/admin/returns', '/admin/inventory', '/admin/purchases',
+            '/admin/suppliers', '/admin/receipts', '/admin/purchase-returns',
+        ];
+
+        foreach ($cam as $uri) {
             $res = $this->withSession($session)->get($uri);
 
             $this->assertContains(
                 $res->getStatusCode(),
                 [302, 403],
                 "Nhân viên KHÔNG được vào $uri nhưng nhận ".$res->getStatusCode().'.'
+            );
+        }
+
+        // Chiều còn lại, và nó quan trọng ngang chiều trên: siết nhầm cả màn hình
+        // bán hàng cũng là một cách làm cửa hàng ngừng bán.
+        $mo = ['/admin/dashboard', '/admin/ban-tai-quay', '/admin/orders', '/admin/ca-lam-viec', '/admin/profile'];
+
+        foreach ($mo as $uri) {
+            $res = $this->withSession($session)->get($uri);
+
+            $this->assertSame(
+                200,
+                $res->getStatusCode(),
+                "Nhân viên PHẢI vào được $uri nhưng nhận ".$res->getStatusCode().' | '.$this->why($res)
             );
         }
     }

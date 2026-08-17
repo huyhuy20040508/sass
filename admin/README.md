@@ -27,6 +27,11 @@ php artisan serve --port=8001
   chỉ chấp nhận vai trò `super_admin` / `admin` / `staff`, lưu token + cửa hàng vào session.
   Mã cửa hàng là `tenants.code` (mã khách hàng được cấp), không phải mã chi nhánh.
 - Middleware `admin.auth` (`EnsureAdminAuthenticated`) bảo vệ mọi route quản trị.
+- Middleware `admin.manage` (`EnsureManagerRole`) chặn thêm một tầng nữa: `staff` là
+  THU NGÂN, chỉ mở được Tổng quan, Bán tại quầy, Đơn hàng, Ca làm việc và hồ sơ của
+  chính mình. Hàng hoá, kho, mua vào, trả hàng, khách hàng, báo cáo và cấu hình đều
+  nằm sau middleware này. Go API chặn song song ở nhóm `manage` trong
+  `internal/router/router.go` — đó mới là chốt thật, tầng này chỉ để báo sớm và ẩn menu.
 - Trang: `/login`, `/dashboard`.
 
 ## Tài khoản đăng nhập
