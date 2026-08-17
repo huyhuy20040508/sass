@@ -63,22 +63,48 @@ func ctxRaw() context.Context {
 	return tenant.WithoutScope(context.Background(), "test: SQL viết tay dựng/dọn dữ liệu")
 }
 
+// seedCategory trả về id một danh mục THUỘC CỬA HÀNG SỐ 1, tạo nếu chưa có.
+//
+// Mệnh đề tenant_id = 1 là bắt buộc, không phải cho gọn. Bộ test này dùng CHUNG
+// database với internal/apitest, mà gói đó dựng hàng chục cửa hàng kèm danh mục
+// riêng của từng cửa hàng. Lấy bừa "danh mục đầu tiên trong bảng" thì có lúc vớ
+// đúng danh mục của cửa hàng khác — sản phẩm tạo ra vẫn nằm ở cửa hàng 1 nhưng
+// trỏ sang danh mục của người ta, và mọi lượt Preload("Category") sau đó trả về
+// nil vì bộ lọc tenant cắt đúng dòng ấy.
+//
+// Hỏng theo kiểu tệ nhất: phụ thuộc vào việc gói nào chạy trước và bảng đang có
+// gì, nên nó xanh trên máy này, đỏ trên máy kia, và đỏ ngắt quãng trên CI.
+//
+// tenant_id cũng phải khai TƯỜNG MINH lúc chèn: từ migration 0003 cột này không
+// còn giá trị mặc định, nên câu INSERT viết tay nào quên nó sẽ hỏng ngay tại đây
+// thay vì âm thầm rơi vào cửa hàng số 1.
+func seedCategory(t *testing.T, db *gorm.DB) uint {
+	t.Helper()
+
+	var categoryID uint
+	db.WithContext(ctxRaw()).
+		Raw("SELECT id FROM categories WHERE tenant_id = 1 AND slug = 'test-cat' LIMIT 1").Scan(&categoryID)
+	if categoryID != 0 {
+		return categoryID
+	}
+
+	if err := db.WithContext(ctxRaw()).Exec(
+		"INSERT INTO categories (tenant_id, name, slug, is_active, created_at, updated_at) VALUES (1, 'Test', 'test-cat', 1, NOW(3), NOW(3))",
+	).Error; err != nil {
+		t.Fatalf("không tạo được danh mục: %v", err)
+	}
+	db.WithContext(ctxRaw()).
+		Raw("SELECT id FROM categories WHERE tenant_id = 1 AND slug = 'test-cat'").Scan(&categoryID)
+	if categoryID == 0 {
+		t.Fatal("tạo danh mục xong vẫn không đọc lại được id")
+	}
+	return categoryID
+}
+
 // seedProduct tạo một sản phẩm trống để treo biến thể vào, kèm dọn dẹp.
 func seedProduct(t *testing.T, db *gorm.DB) uint {
 	t.Helper()
-	var categoryID uint
-	// tenant_id phải khai TƯỜNG MINH: từ migration 0003 cột này không còn giá trị
-	// mặc định, nên câu INSERT viết tay nào quên nó cũng hỏng ngay tại đây thay vì
-	// âm thầm rơi vào cửa hàng số 1.
-	if err := db.WithContext(ctxRaw()).
-		Raw("SELECT id FROM categories WHERE tenant_id = 1 LIMIT 1").Scan(&categoryID).Error; err != nil || categoryID == 0 {
-		if err := db.WithContext(ctxRaw()).Exec(
-			"INSERT INTO categories (tenant_id, name, slug, is_active, created_at, updated_at) VALUES (1, 'Test', 'test-cat', 1, NOW(3), NOW(3))",
-		).Error; err != nil {
-			t.Fatalf("không tạo được danh mục: %v", err)
-		}
-		db.WithContext(ctxRaw()).Raw("SELECT id FROM categories WHERE tenant_id = 1 AND slug = 'test-cat'").Scan(&categoryID)
-	}
+	categoryID := seedCategory(t, db)
 
 	p := &domain.Product{
 		CategoryID: categoryID,

@@ -137,7 +137,15 @@ jobs:
           # hai gói kiểm bộ lọc tenant trên MySQL thật. Thiếu nó thì cả hai tự
           # bỏ qua và lượt CI này không còn ý nghĩa gì.
           TEST_DB_DSN: "root:@tcp(127.0.0.1:3306)/selliotech_tenant_test?parseTime=true"
-        run: go test ./...
+        # -p 1: chạy từng gói MỘT, không song song.
+        #
+        # Mặc định `go test ./...` chạy nhiều gói cùng lúc, mà ở đây internal/apitest
+        # và internal/repository dùng CHUNG một database (đúng như thiết kế, ghi ở
+        # đầu app_test.go). Hai gói ghi đè lên nhau giữa chừng thì lỗi hiện ra ở
+        # một bài kiểm chẳng liên quan gì tới thay đổi vừa push, và lần chạy sau
+        # có thể lại xanh — loại đỏ ngắt quãng khiến người ta tập thói quen bấm
+        # "chạy lại" thay vì đọc.
+        run: go test -p 1 ./...
 
   # -------------------------------------------------------------------
   admin:
