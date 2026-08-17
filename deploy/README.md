@@ -332,8 +332,18 @@ Chỗ để những tệp này chứa dữ liệu khách hàng và toàn bộ kh
 
 ## Cập nhật về sau
 
-**Đẩy lên `main` là xong.** GitHub Actions chạy toàn bộ test, xanh hết thì tự SSH vào VPS
-chạy đúng script dưới đây. Chi tiết ở phần [CI/CD](#cicd--tự-động-kiểm-tra-và-triển-khai).
+**Merge PR vào `main` là xong.** GitHub Actions chạy toàn bộ test, xanh hết thì tự SSH vào
+VPS chạy đúng script dưới đây:
+
+```bash
+git checkout -b <ten-nhanh>
+# ... sửa, commit ...
+git push -u origin <ten-nhanh>
+gh pr create --fill        # rồi bấm Merge khi CI xanh
+```
+
+`main` đã khoá, **push thẳng vào không được nữa** — kể cả bạn, kể cả chủ repo. Lý do và cách
+mở khoá lúc khẩn cấp ghi ở phần [CI/CD](#cicd--tự-động-kiểm-tra-và-triển-khai).
 
 Vẫn chạy tay được, và đó vẫn là đường duy nhất khi CI hỏng hoặc khi cần triển khai lại mà
 không có commit mới:
@@ -439,6 +449,28 @@ ssh root@103.78.2.230 'mysql -N -B -e "SELECT @@global.sql_mode"'
 Đây không phải chuyện lý thuyết: lượt CI đầu tiên chạy trên MySQL 8 thật đã lôi ra một lỗi
 **đang sống trên máy chủ** — trang Báo cáo → theo size trả 500 vì `ONLY_FULL_GROUP_BY`, mà
 mọi máy phát triển đều báo xanh.
+
+### Nhánh `main` đã khoá
+
+Bật ở **Settings → Branches → Branch protection rules**. Ba luật đang có hiệu lực:
+
+| Luật | Nghĩa là |
+|---|---|
+| Require a pull request before merging | Không `git push origin main` được nữa. Số người duyệt = **0**, nên bạn tự merge PR của mình, không phải chờ ai |
+| Require status checks: `API (Go)`, `Shop Admin (Laravel)`, `SaaS Admin (Laravel)` | Nút Merge xám cho tới khi cả ba xanh |
+| Do not allow force pushes / deletions | Không ai xoá hay viết lại lịch sử `main`, kể cả lỡ tay |
+
+Cả ba **áp dụng luôn cho chủ repo** (`enforce_admins`). Cố tình push thẳng sẽ nhận:
+
+```
+remote: error: GH006: Protected branch update failed for refs/heads/main.
+remote: - Changes must be made through a pull request.
+```
+
+**Mở khoá lúc khẩn cấp.** Đánh đổi của việc bật `enforce_admins`: GitHub Actions chết hoặc CI
+kẹt thì không ai đẩy được bản vá gấp lên `main`. Lúc đó vào **Settings → Branches**, tắt luật
+đi, push, rồi **bật lại ngay**. Đừng để tắt qua đêm — luật đang tắt trông y hệt luật chưa bao
+giờ được bật.
 
 ### Ba secret trên GitHub
 
