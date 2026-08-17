@@ -86,11 +86,15 @@ type CustomerStats struct {
 // CheckoutLine — một dòng hàng khách muốn mua, ở dạng "định danh" chứ chưa có giá.
 // Biến thể được xác định bằng ID nếu có, không thì tra theo slug sản phẩm + size + màu.
 type CheckoutLine struct {
-	VariantID          uint
-	Slug               string
-	Size               string
-	Color              string
-	Quantity           int
+	VariantID uint
+	Slug      string
+	Size      string
+	Color     string
+	Quantity  int
+	// DiscountPercent là mức bớt giá của RIÊNG dòng này, do người bán ở quầy bấm.
+	// Luôn 0 với đơn khách đặt trên web: ở đó không có ai để bấm, và một trường
+	// giảm giá mà client tự gửi lên được là một cách tự phát mã giảm giá.
+	DiscountPercent    float64
 	CustomPlayerName   string
 	CustomPlayerNumber string
 }
@@ -103,9 +107,13 @@ type CheckoutVariant struct {
 	ProductName string
 	Slug        string
 	SKU         string
-	Size        string
-	Color       string
-	Thumbnail   string
+	// Barcode chỉ được điền ở đường QUÉT MÃ (ScanVariant) — luồng đặt hàng không
+	// cần tới nó, và không đọc thừa một cột cho mọi dòng giỏ hàng chỉ vì một màn
+	// hình dùng tới.
+	Barcode   string
+	Size      string
+	Color     string
+	Thumbnail string
 	// CategoryID / BrandID lấy sẵn để đối chiếu phạm vi chương trình khuyến mãi mà
 	// không phải hỏi thêm bảng products lần nữa ngay giữa giao dịch đặt hàng.
 	CategoryID uint
@@ -200,6 +208,10 @@ type OrderRepository interface {
 	// voucher được chốt trong CÙNG transaction này: hết lượt ngay lúc đó thì cả đơn
 	// bị rollback, thay vì tạo đơn xong mới phát hiện mã không dùng được nữa.
 	Checkout(ctx context.Context, lines []CheckoutLine, build func(map[uint]CheckoutVariant) (*Order, *VoucherClaim, error)) (*Order, error)
+	// ScanVariant tra MỘT biến thể theo mã vạch hoặc SKU (mã người bán vừa quét),
+	// kèm giá và tồn của chi nhánh đang bán — cùng đường tra giá với lúc đặt hàng.
+	// Không tìm thấy, hoặc sản phẩm cha đã ẩn/xoá, đều trả ErrVariantNotFound.
+	ScanVariant(ctx context.Context, code string) (*CheckoutVariant, error)
 	// QuoteVariants tra GIÁ và TỒN KHO hiện tại của các dòng giỏ hàng. Chỉ đọc:
 	// không khoá dòng, không đụng tới kho. Dòng nào không tra được (sản phẩm đã ẩn
 	// hoặc biến thể không còn) thì vắng mặt trong kết quả thay vì báo lỗi cả giỏ.

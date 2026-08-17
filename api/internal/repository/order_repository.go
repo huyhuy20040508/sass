@@ -524,6 +524,57 @@ func loadCheckoutVariants(tx *gorm.DB, lines []domain.CheckoutLine, lock bool) (
 	return resolved, nil
 }
 
+// ScanVariant tra một biến thể theo mã người bán vừa quét (hoặc gõ tay), kèm GIÁ
+// và TỒN của chi nhánh đang bán.
+//
+// Đi qua ĐÚNG loadCheckoutVariants của luồng đặt hàng thay vì tự viết một câu
+// truy vấn riêng: con số máy quét đọc ra phải bằng con số sẽ thu, kể cả khi biến
+// thể có giá riêng hay đang nằm trong một đợt khuyến mãi. Hai đường tính giá là
+// sớm muộn có ngày quầy báo một giá rồi máy tính một giá.
+//
+// Tra MÃ VẠCH TRƯỚC, SKU sau. Cả hai đều là mã người ta dán lên hàng: mã vạch do
+// nhà sản xuất in sẵn, SKU là tem tiệm tự in cho hàng lẻ — quầy phải quét được
+// cả thứ mua về lẫn thứ mình vừa in ra. Ưu tiên mã vạch vì nó là mã của chính
+// món hàng đang cầm; SKU chỉ là quy ước nội bộ và có thể trùng hình dạng với mã
+// vạch của một món khác.
+func (r *orderRepository) ScanVariant(ctx context.Context, code string) (*domain.CheckoutVariant, error) {
+	code = strings.TrimSpace(code)
+	if code == "" {
+		return nil, domain.ErrVariantNotFound
+	}
+	db := r.db.WithContext(ctx)
+
+	var v domain.ProductVariant
+	err := db.Where("barcode = ? AND is_active = 1", code).Order("id ASC").First(&v).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		err = db.Where("sku = ? AND is_active = 1", code).Order("id ASC").First(&v).Error
+	}
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, domain.ErrVariantNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	// lock = false: đây chỉ là lượt HỎI, chưa ai mua gì. Khoá dòng ở đây thì mỗi
+	// lần quét là một lần giữ biến thể cho tới hết transaction, và hai quầy quét
+	// cùng một món sẽ chờ nhau mà không có lý do nào.
+	found, err := loadCheckoutVariants(db, []domain.CheckoutLine{{VariantID: v.ID, Quantity: 1}}, false)
+	if err != nil {
+		return nil, err
+	}
+	cv, ok := found[v.ID]
+	if !ok {
+		// Biến thể có thật nhưng sản phẩm cha đã ẩn hoặc đã xoá — với người đứng
+		// quầy thì cũng là "món này không bán được", không phải hai chuyện khác nhau.
+		return nil, domain.ErrVariantNotFound
+	}
+	if v.Barcode != nil {
+		cv.Barcode = *v.Barcode
+	}
+	return &cv, nil
+}
+
 // QuoteVariants tra giá và tồn kho HIỆN TẠI của các dòng trong giỏ, chỉ đọc: không
 // khoá dòng, không mở transaction, không đụng tới kho. Dùng để đối chiếu lại giỏ
 // hàng trước khi khách bấm đặt.

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"sass-api/internal/domain"
@@ -226,6 +227,19 @@ func buildImages(reqs []dto.ImageRequest) []domain.ProductImage {
 	return out
 }
 
+// chuoiHoacNil đổi chuỗi rỗng (sau khi bỏ khoảng trắng) thành nil.
+//
+// Dùng cho các cột vừa UNIQUE vừa cho phép bỏ trống: MySQL coi mỗi NULL là một
+// giá trị riêng nên nhiều dòng cùng bỏ trống vẫn chèn được, còn chuỗi rỗng thì
+// chỉ có đúng một dòng được mang.
+func chuoiHoacNil(s string) *string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
 // buildVariants chuyển dữ liệu request sang entity biến thể.
 //
 // StockQuantity cố ý để zero-value: ReplaceVariants bỏ qua cột này nên dòng
@@ -234,8 +248,12 @@ func buildVariants(reqs []dto.VariantRequest) []domain.ProductVariant {
 	out := make([]domain.ProductVariant, 0, len(reqs))
 	for _, v := range reqs {
 		out = append(out, domain.ProductVariant{
-			ID:         v.ID,
-			SKU:        v.SKU,
+			ID:  v.ID,
+			SKU: v.SKU,
+			// Mã vạch để trống phải vào DB là NULL chứ không phải chuỗi rỗng: cột
+			// UNIQUE, mà MySQL chỉ coi các NULL là khác nhau. Ghi "" thì biến thể
+			// thứ hai chưa dán mã đụng ràng buộc với biến thể thứ nhất.
+			Barcode:    chuoiHoacNil(v.Barcode),
 			Size:       v.Size,
 			Color:      v.Color,
 			Price:      v.Price,

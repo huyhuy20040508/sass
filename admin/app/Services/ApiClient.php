@@ -671,6 +671,23 @@ class ApiClient
         return $this->post('/admin/orders/pos', $payload);
     }
 
+    /** Quét một mã vạch (hoặc SKU) — trả món hàng kèm giá đã trừ khuyến mãi và tồn chi nhánh. */
+    public function posScan(string $code): Response
+    {
+        return $this->get('/admin/orders/pos/scan', ['code' => $code]);
+    }
+
+    /**
+     * Mức giảm giá tối đa NGƯỜI ĐANG ĐĂNG NHẬP được tự bấm cho một dòng hàng.
+     *
+     * Hỏi API chứ không tự suy từ vai trò trong phiên: luật nằm ở một chỗ duy
+     * nhất, và chỗ đó cũng là chỗ chặn thật khi chốt đơn.
+     */
+    public function posDiscountLimit(): Response
+    {
+        return $this->get('/admin/orders/pos/discount-limit');
+    }
+
     /** Sửa thông tin & danh sách sản phẩm của đơn có sẵn (payload theo OrderUpdateRequest). */
     public function updateOrder(int $id, array $payload): Response
     {

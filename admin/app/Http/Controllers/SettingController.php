@@ -53,6 +53,10 @@ class SettingController extends Controller
             'title' => 'Kho',
             'sub' => 'Quy tắc theo dõi tồn kho, chỉ dùng trong trang quản trị — khách không thấy.',
         ],
+        'pos' => [
+            'title' => 'Quầy bán hàng',
+            'sub' => 'Người đứng quầy được phép làm gì. Khác nhóm Thanh toán — nhóm đó nói cửa hàng nhận tiền bằng cách nào.',
+        ],
     ];
 
     /**
@@ -78,6 +82,7 @@ class SettingController extends Controller
         'default_shipping_fee' => 'Phí thu khi đơn chưa đạt ngưỡng miễn phí bên dưới.',
         'free_shipping_threshold' => 'Đơn từ mức này trở lên được miễn phí vận chuyển. Đặt 0 = miễn phí mọi đơn.',
         'low_stock_threshold' => 'Biến thể còn tồn từ mức này trở xuống bị xếp vào nhóm "sắp hết" ở trang Tồn kho.',
+        'pos_staff_discount_limit' => 'Nhân viên bán tại quầy được tự bớt giá từng món tới mức này. Bấm cao hơn thì hệ thống từ chối bán và bảo họ gọi quản lý. Bạn và các quản trị viên KHÔNG bị con số này chặn. Đặt 0 = nhân viên không được tự bớt đồng nào.',
         'payment_cod_enabled' => 'Khách trả tiền cho shipper lúc nhận hàng. Tắt đi thì lựa chọn này biến mất khỏi trang thanh toán.',
         'payment_bank_enabled' => 'Khách chuyển khoản trước rồi cửa hàng mới giao. Chỉ hiện ra cho khách khi đã khai đủ ngân hàng, số tài khoản và chủ tài khoản bên dưới.',
         'payment_payos_enabled' => 'Khách quét mã QR trả tiền ngay trên website, đơn tự chuyển sang "đã thanh toán" khi tiền về — không phải soi sao kê. Khác chuyển khoản bên dưới ở chỗ đó. Cần người quản trị máy chủ khai bộ khoá PayOS trong file .env của API trước; chưa có khoá thì bật lên cũng chưa hiện ra cho khách.',
@@ -119,6 +124,7 @@ class SettingController extends Controller
         'default_shipping_fee' => '₫',
         'free_shipping_threshold' => '₫',
         'low_stock_threshold' => 'sản phẩm',
+        'pos_staff_discount_limit' => '%',
     ];
 
     /** Khoá dạng số nhưng là TIỀN — ô nhập tự chấm phân cách hàng nghìn. */

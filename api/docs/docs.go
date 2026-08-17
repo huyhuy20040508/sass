@@ -3314,6 +3314,86 @@ const docTemplate = `{
                 }
             }
         },
+        "/admin/orders/pos/discount-limit": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Mức giảm giá tối đa (phần trăm) mà NGƯỜI ĐANG ĐĂNG NHẬP được tự bấm cho một dòng hàng. Màn hình quầy đọc số này để giới hạn ô nhập, thay vì chép lại luật vào giao diện rồi lệch với server.\nChủ cửa hàng và quản trị viên nhận 100 (không bị chặn); nhân viên nhận mức khai trong Cài đặt → Quầy bán hàng. Server vẫn kiểm lại khi chốt đơn — đây chỉ là nói trước.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Orders"
+                ],
+                "summary": "Hạn mức giảm giá tại quầy",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/orders/pos/scan": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Tra MỘT món hàng theo mã vạch in trên sản phẩm, hoặc theo SKU nếu cửa hàng tự in tem — thử mã vạch trước, SKU sau.\nTrả về giá bán THẬT (đã trừ khuyến mãi đang chạy) và tồn kho của CHI NHÁNH đang bán, lấy qua đúng đường tra giá của luồng đặt hàng nên con số này bằng con số sẽ thu khi chốt đơn.\nKhông tìm thấy mã, hoặc tìm thấy nhưng sản phẩm đã ẩn / ngừng bán, đều trả 400 — với người đứng quầy thì cả hai đều là \"món này không bán được\".",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Orders"
+                ],
+                "summary": "Quét mã vạch tại quầy",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Mã vạch hoặc SKU",
+                        "name": "code",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.POSScanResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Không tìm thấy mã, hoặc hàng không còn bán",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/orders/revenue": {
             "get": {
                 "security": [
@@ -13499,6 +13579,13 @@ const docTemplate = `{
                 "custom_player_number": {
                     "type": "string"
                 },
+                "discount_amount": {
+                    "type": "number"
+                },
+                "discount_percent": {
+                    "description": "DiscountPercent là mức người bán BẤM khi bớt giá dòng này (0 = không bớt),\nDiscountAmount là số tiền thật đã trừ. Giữ cả hai vì mỗi con số trả lời một\ncâu khác nhau lúc đối soát: \"ai được phép duyệt mức này\" và \"đã bớt bao\nnhiêu tiền\".",
+                    "type": "number"
+                },
                 "id": {
                     "type": "integer"
                 },
@@ -13524,6 +13611,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "total_price": {
+                    "description": "TotalPrice là số tiền dòng này góp vào đơn: đơn giá × số lượng − phần đã bớt.",
                     "type": "number"
                 },
                 "unit_price": {
@@ -16916,7 +17004,7 @@ const docTemplate = `{
                     "maxItems": 50,
                     "minItems": 1,
                     "items": {
-                        "$ref": "#/definitions/dto.CheckoutItemRequest"
+                        "$ref": "#/definitions/dto.POSItemRequest"
                     }
                 },
                 "note": {
@@ -16955,6 +17043,10 @@ const docTemplate = `{
                 "discount_amount": {
                     "type": "number"
                 },
+                "line_discount_amount": {
+                    "description": "LineDiscount là TỔNG số tiền đã bớt trên từng món (khác Discount — phần mã\ngiảm giá trừ trên cả đơn). Tách riêng vì phiếu in phải nói rõ tiền đi đâu:\ngộp chung thì khách nhìn một con số giảm mà không biết nó đến từ món nào.",
+                    "type": "number"
+                },
                 "message": {
                     "type": "string"
                 },
@@ -16981,6 +17073,74 @@ const docTemplate = `{
                     "type": "number"
                 },
                 "voucher_code": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.POSItemRequest": {
+            "type": "object",
+            "required": [
+                "product_variant_id",
+                "quantity"
+            ],
+            "properties": {
+                "custom_player_name": {
+                    "type": "string",
+                    "maxLength": 50
+                },
+                "custom_player_number": {
+                    "type": "string",
+                    "maxLength": 10
+                },
+                "discount_percent": {
+                    "description": "DiscountPercent là mức bớt giá của riêng dòng này (0–100). Nhân viên bị chặn\nở mức cấu hình trong Cài đặt → Quầy bán hàng; chủ cửa hàng và quản trị viên\nkhông bị chặn.",
+                    "type": "number",
+                    "maximum": 100,
+                    "minimum": 0
+                },
+                "product_variant_id": {
+                    "type": "integer",
+                    "minimum": 1
+                },
+                "quantity": {
+                    "type": "integer",
+                    "maximum": 99,
+                    "minimum": 1
+                }
+            }
+        },
+        "dto.POSScanResponse": {
+            "type": "object",
+            "properties": {
+                "barcode": {
+                    "type": "string"
+                },
+                "color": {
+                    "type": "string"
+                },
+                "price": {
+                    "description": "Price là giá bán thật: giá riêng của biến thể (nếu có) đã trừ khuyến mãi\nđang chạy.",
+                    "type": "number"
+                },
+                "product_id": {
+                    "type": "integer"
+                },
+                "product_name": {
+                    "type": "string"
+                },
+                "product_variant_id": {
+                    "type": "integer"
+                },
+                "size": {
+                    "type": "string"
+                },
+                "sku": {
+                    "type": "string"
+                },
+                "stock": {
+                    "type": "integer"
+                },
+                "thumbnail": {
                     "type": "string"
                 }
             }
@@ -18766,6 +18926,11 @@ const docTemplate = `{
                 "size"
             ],
             "properties": {
+                "barcode": {
+                    "description": "Barcode là mã vạch in trên hàng — cái máy quét ở quầy đọc được. Để trống\nnghĩa là chưa dán mã, và hai biến thể cùng để trống là chuyện bình thường;\nnhưng hai biến thể đang bán không được mang cùng một mã (DB chặn).",
+                    "type": "string",
+                    "maxLength": 64
+                },
                 "color": {
                     "type": "string",
                     "maxLength": 50

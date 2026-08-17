@@ -150,6 +150,9 @@ var (
 	// Tiền mặt khách đưa ít hơn số phải trả. Lỗi này được bọc kèm số còn thiếu để
 	// người bán đọc thẳng trên màn hình thay vì tự trừ nhẩm.
 	ErrTenderTooLow = errors.New("số tiền khách đưa chưa đủ")
+	// Nhân viên bấm mức giảm vượt hạn quyền của mình. Bọc kèm mức tối đa được
+	// phép để họ biết phải hạ xuống bao nhiêu, hoặc phải đi gọi ai.
+	ErrDiscountTooHigh = errors.New("mức giảm giá vượt quyền của bạn")
 
 	// Trả hàng
 	// Đơn chưa giao tới tay khách, hoặc đã quá hạn đổi trả.

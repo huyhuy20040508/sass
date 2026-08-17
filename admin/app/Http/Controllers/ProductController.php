@@ -476,6 +476,7 @@ class ProductController extends Controller
             'variants' => ['required', 'array', 'min:1'],
             'variants.*.id' => ['nullable', 'integer'],
             'variants.*.sku' => ['nullable', 'string', 'max:64'],
+            'variants.*.barcode' => ['nullable', 'string', 'max:64'],
             'variants.*.size' => ['required', 'string', 'max:20'],
             'variants.*.color' => ['nullable', 'string', 'max:50'],
             'variants.*.price' => ['nullable', 'numeric', 'min:0'],
@@ -620,8 +621,10 @@ class ProductController extends Controller
             $size = trim((string) ($r['size'] ?? ''));
             $color = trim((string) ($r['color'] ?? ''));
 
-            // Bỏ qua dòng trống hoàn toàn (không size, không màu, không giá).
-            if ($size === '' && $color === ''
+            $barcode = trim((string) ($r['barcode'] ?? ''));
+
+            // Bỏ qua dòng trống hoàn toàn (không size, không màu, không mã, không giá).
+            if ($size === '' && $color === '' && $barcode === ''
                 && blank($r['price'] ?? null) && blank($r['cost_price'] ?? null)) {
                 continue;
             }
@@ -637,6 +640,9 @@ class ProductController extends Controller
             $out[] = [
                 'id' => filled($r['id'] ?? null) ? (int) $r['id'] : 0,
                 'sku' => $sku,
+                // Mã vạch để trống gửi lên chuỗi rỗng; API tự quy về NULL, vì cột
+                // UNIQUE mà chuỗi rỗng thì chỉ đúng một biến thể được bỏ trống.
+                'barcode' => $barcode,
                 'size' => $size,
                 'color' => $color,
                 'price' => filled($price) ? (float) $price : null,

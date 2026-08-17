@@ -1,30 +1,44 @@
-@extends('layouts.app')
+@extends('layouts.pos')
 
 @section('title', \App\Http\Controllers\BanTaiQuayController::TITLE)
 
+{{-- Đơn treo nằm trên thanh trên cùng, không nằm trong cột giỏ hàng: nó không
+     thuộc về lượt bán đang làm dở, và để trong cột phải thì mỗi lần giỏ dài ra
+     là nó bị đẩy khỏi tầm mắt. --}}
+@section('posbar')
+    <button type="button" class="posbar-btn" id="posTreoMo">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h14a1 1 0 0 1 1 1v16l-8-4-8 4V4a1 1 0 0 1 1-1z"/></svg>
+        Đơn treo <b id="posTreoSo" hidden>0</b>
+    </button>
+@endsection
+
 @section('content')
     {{--
-        Màn hình thu ngân.
+        Màn hình thu ngân — giai đoạn 2.
 
-        DỰNG KHÁC HẲN các trang quản trị còn lại, và đó là chủ ý. Trang danh sách
-        được thiết kế cho người NGỒI: lọc, đọc, so sánh, mở từng dòng ra xem. Quầy
-        thì có người đứng đợi — nên ở đây không có bảng, không có phân trang,
-        không có bộ lọc. Chỉ ba việc, mỗi việc một chỗ cố định trên màn hình:
-        tìm hàng (trái), cộng tiền (phải trên), thu và thối (phải dưới).
+        Bốn thứ giai đoạn 1 chưa có, và lý do từng thứ:
 
-        GIÁ KHÔNG DO TRANG NÀY QUYẾT. Payload gửi lên chỉ nói "biến thể nào, mấy
-        cái"; giá, khuyến mãi và tồn kho do API tra lại tại thời điểm bấm nút.
-        Con số trang hiển thị là `final_price` — cùng công thức tầng thanh toán
-        dùng để thu tiền — nên nó khớp; nhưng khi lệch (khuyến mãi vừa hết hạn
-        giữa lúc khách chọn hàng) thì SỐ CỦA API LÀ SỐ ĐÚNG, và màn hình in lại
-        đúng số đó ở phiếu sau khi bán xong.
+        QUÉT MÃ. Gõ tên hàng là chỗ chậm nhất của giai đoạn 1, và cũng là chỗ dễ
+        chọn nhầm nhất — hai chiếc áo cùng tên khác size trông giống hệt nhau
+        trên danh sách gợi ý. Enter trong ô tìm kiếm sẽ THỬ QUÉT trước: máy quét
+        chỉ là một bàn phím gõ rất nhanh rồi bấm Enter, nên không cần thiết bị
+        hay thư viện nào để đọc nó.
 
-        TIỀN THỐI hiện ngay lúc gõ chứ không đợi bấm nút: đó là con số người bán
-        phải đọc to lên, và đọc được trước khi nhận tiền thì không phải nhẩm lại
-        lúc đang đếm.
+        BỚT GIÁ TỪNG MÓN. Ở quầy, việc bớt tiền gần như luôn gắn với một món cụ
+        thể. Ô nhập bị kẹp theo hạn quyền của chính người đang đăng nhập; server
+        kiểm lại lần nữa khi chốt đơn, nên ô này chỉ là phép lịch sự chứ không
+        phải hàng rào.
+
+        ĐƠN TREO. Khách A quay lại lấy thêm món trong khi khách B đã đứng chờ —
+        đây là tình huống xảy ra hằng ngày, và không có chỗ treo thì người bán
+        phải nhớ giỏ hàng trong đầu. Giỏ treo nằm ở localStorage của CHÍNH MÁY
+        NÀY: nó thuộc về người đứng ở quầy này, không phải thứ cần chia cho máy
+        khác. Đổi lại, xoá dữ liệu trình duyệt là mất — nên đây là chỗ để tạm
+        vài phút, không phải chỗ giữ đơn qua đêm.
+
+        IN PHIẾU. Mở ở tab riêng với bộ CSS khổ giấy nhiệt (xem phieu.blade.php).
     --}}
     @php
-        $TITLE = \App\Http\Controllers\BanTaiQuayController::TITLE;
         $PAY_METHODS = \App\Http\Controllers\BanTaiQuayController::PAYMENT_METHODS;
         $MENH_GIA = \App\Http\Controllers\BanTaiQuayController::MENH_GIA;
     @endphp
@@ -32,28 +46,34 @@
     <div class="pos" id="pos"
          data-search-url="{{ route('admin.orders.searchProducts') }}"
          data-customer-url="{{ route('admin.orders.searchCustomers') }}"
+         data-scan-url="{{ route('admin.ban-tai-quay.scan') }}"
          data-store-url="{{ route('admin.ban-tai-quay.store') }}"
-         data-orders-url="{{ route('admin.orders.index') }}">
+         data-receipt-url="{{ route('admin.ban-tai-quay.phieu', ['id' => 0]) }}"
+         data-orders-url="{{ route('admin.orders.index') }}"
+         data-discount-limit="{{ $hanMucGiam }}">
 
-        {{-- ============ CỘT TRÁI: tìm và chọn hàng ============ --}}
+        {{-- ============ CỘT TRÁI: tìm / quét hàng ============ --}}
         <section class="pos-pick">
             <div class="pos-searchbar">
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 8v8M10 8v8M13 8v8M17 8v8"/></svg>
                 <input type="search" id="posSearch" class="pos-search" autocomplete="off" autofocus
-                       placeholder="Tìm theo tên sản phẩm hoặc mã SKU — bấm Enter để thêm món đầu tiên">
+                       placeholder="Quét mã vạch, hoặc gõ tên hàng rồi bấm Enter">
                 <kbd class="pos-kbd">F2</kbd>
             </div>
 
             <div class="pos-results" id="posResults">
-                <p class="pos-hint">Gõ tên hàng để bắt đầu. Mỗi kích cỡ / màu là một ô riêng — bấm vào ô để thêm vào giỏ.</p>
+                <p class="pos-hint">Quét mã vạch để thêm hàng ngay, hoặc gõ tên để chọn từ danh sách.</p>
             </div>
         </section>
 
         {{-- ============ CỘT PHẢI: giỏ hàng và thanh toán ============ --}}
         <aside class="pos-till">
             <header class="pos-till-head">
-                <h1 class="pos-title">{{ $TITLE }}</h1>
-                <button type="button" class="pos-clear" id="posClear" hidden>Huỷ giỏ</button>
+                <h1 class="pos-title">Hoá đơn</h1>
+                <div class="pos-till-acts">
+                    <button type="button" class="pos-mini" id="posTreoLuu" hidden>Treo đơn</button>
+                    <button type="button" class="pos-mini is-stop" id="posClear" hidden>Huỷ giỏ</button>
+                </div>
             </header>
 
             <div class="pos-cart" id="posCart">
@@ -61,8 +81,6 @@
             </div>
 
             <div class="pos-foot">
-                {{-- Khách hàng: cả khối này KHÔNG bắt buộc. Mặc định đóng vì phần lớn
-                     lượt bán ở quầy là khách lẻ, mở sẵn chỉ tổ chiếm chỗ của giỏ. --}}
                 <details class="pos-cus">
                     <summary>Khách hàng &amp; mã giảm giá <span class="pos-cus-tag" id="posCusTag">khách lẻ</span></summary>
                     <div class="pos-cus-body">
@@ -77,15 +95,18 @@
                                placeholder="Mã giảm giá khách xuất trình">
                         <input type="text" id="posNote" class="pos-input" autocomplete="off"
                                placeholder="Ghi chú cho lượt bán này">
-                        {{-- Ô ẩn giữ tài khoản khách đã chọn từ gợi ý. Rỗng = khách lẻ. --}}
                         <input type="hidden" id="posCusId" value="">
                     </div>
                 </details>
 
                 <div class="pos-sum">
                     <div class="pos-sum-row">
-                        <span>Tạm tính <em id="posQty">0 món</em></span>
-                        <b id="posSubtotal">0₫</b>
+                        <span>Tiền hàng <em id="posQty">0 món</em></span>
+                        <b id="posGross">0₫</b>
+                    </div>
+                    <div class="pos-sum-row pos-sum-cut" id="posCutRow" hidden>
+                        <span>Bớt theo món</span>
+                        <b id="posCut">0₫</b>
                     </div>
                     <div class="pos-sum-row pos-sum-total">
                         <span>Khách phải trả</span>
@@ -102,8 +123,6 @@
                         @endforeach
                     </div>
 
-                    {{-- Khối tiền mặt chỉ hiện khi thu tiền mặt: số tiền khách đưa không
-                         có nghĩa gì với một lệnh chuyển khoản. --}}
                     <div class="pos-cash" id="posCash">
                         <div class="pos-tender">
                             <label for="posTendered">Khách đưa</label>
@@ -132,8 +151,23 @@
         </aside>
     </div>
 
+    {{-- ============ Ngăn kéo đơn treo ============ --}}
+    <div class="pos-drawer" id="posTreoBox" hidden>
+        <div class="pos-drawer-card" role="dialog" aria-modal="true" aria-labelledby="posTreoTitle">
+            <header class="pos-drawer-head">
+                <h2 id="posTreoTitle">Đơn đang treo</h2>
+                <button type="button" class="pos-mini" id="posTreoDong">Đóng</button>
+            </header>
+            <div class="pos-drawer-body" id="posTreoDS"></div>
+            <p class="pos-drawer-note">
+                Đơn treo nằm trên chính máy này. Xoá dữ liệu trình duyệt hoặc mở ở máy khác thì không thấy —
+                đây là chỗ để tạm vài phút, không phải chỗ giữ đơn qua đêm.
+            </p>
+        </div>
+    </div>
+
     {{-- ============ Phiếu sau khi bán xong ============ --}}
-    <div class="pos-done" id="posDone" hidden>
+    <div class="pos-drawer" id="posDone" hidden>
         <div class="pos-done-card" role="dialog" aria-modal="true" aria-labelledby="posDoneTitle">
             <div class="pos-done-tick">
                 <svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m4 12.5 5.5 5.5L20 7"/></svg>
@@ -143,8 +177,6 @@
 
             <dl class="pos-done-sum" id="posDoneSum"></dl>
 
-            {{-- Tiền thối in TO NHẤT của cả phiếu: đây là con số duy nhất còn phải
-                 làm gì đó với nó sau khi đơn đã ghi xong. --}}
             <div class="pos-done-change" id="posDoneChange" hidden>
                 <span>Thối lại cho khách</span>
                 <b id="posDoneChangeVal"></b>
@@ -152,24 +184,21 @@
 
             <div class="pos-done-acts">
                 <button type="button" class="pos-submit" id="posDoneNext">Bán tiếp <kbd>Enter</kbd></button>
-                <a href="#" class="pos-done-link" id="posDoneView" target="_blank" rel="noopener">Xem đơn</a>
+                <div class="pos-done-links">
+                    <a href="#" id="posDonePrint" target="_blank" rel="noopener">In phiếu</a>
+                    <a href="#" id="posDoneView" target="_blank" rel="noopener">Xem đơn</a>
+                </div>
             </div>
         </div>
     </div>
 
     <style>
-        /* Bảng màu và bo góc bám theo các trang còn lại (Ant-ish): #1890ff nhấn,
-           #262626 chữ chính, #8c8c8c chữ phụ, #f0f0f0 viền. */
         .pos {
             display: grid;
-            grid-template-columns: minmax(0, 1fr) 380px;
-            gap: 16px;
+            grid-template-columns: minmax(0, 1fr) 400px;
+            gap: 12px;
             align-items: start;
-            /* Trừ chiều cao topbar + padding của layout để hai cột tự cuộn bên trong
-               thay vì kéo dài cả trang: ở quầy, thanh toán phải luôn nằm trong tầm
-               mắt, không được trôi xuống dưới màn hình khi giỏ dài ra. */
-            height: calc(100vh - 116px);
-            min-height: 480px;
+            height: 100%;
         }
 
         /* ---------- Cột trái ---------- */
@@ -179,7 +208,6 @@
             min-width: 0;
             height: 100%;
             background: #fff;
-            border: 1px solid #f0f0f0;
             border-radius: 8px;
             overflow: hidden;
         }
@@ -188,7 +216,7 @@
             display: flex;
             align-items: center;
             gap: 10px;
-            padding: 14px 16px;
+            padding: 12px 16px;
             border-bottom: 1px solid #f0f0f0;
             color: #8c8c8c;
         }
@@ -196,10 +224,11 @@
         .pos-search {
             flex: 1;
             min-width: 0;
-            height: 34px;
+            height: 36px;
             border: 0;
             outline: 0;
-            font-size: 15px;
+            font-family: inherit;
+            font-size: 16px;
             color: #262626;
             background: transparent;
         }
@@ -216,11 +245,7 @@
             background: #fafafa;
         }
 
-        .pos-results {
-            flex: 1;
-            overflow-y: auto;
-            padding: 14px 16px;
-        }
+        .pos-results { flex: 1; overflow-y: auto; padding: 14px 16px; }
 
         .pos-hint, .pos-empty {
             margin: 0;
@@ -241,38 +266,27 @@
 
         .pos-vars {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(158px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
             gap: 8px;
         }
 
-        /* Mỗi biến thể là MỘT ô bấm được, không phải một dòng có nút bấm ở cuối:
-           ở quầy người ta bấm vội và bấm bằng ngón tay trên màn hình cảm ứng, nên
-           vùng bấm phải là cả ô. */
         .pos-var {
             display: block;
             width: 100%;
-            padding: 9px 11px;
+            padding: 10px 12px;
             border: 1px solid #e8e8e8;
             border-radius: 6px;
             background: #fff;
+            font-family: inherit;
             text-align: left;
             cursor: pointer;
             transition: border-color .12s, background .12s;
         }
 
-        .pos-var:hover:not(:disabled) {
-            border-color: #1890ff;
-            background: #f0f8ff;
-        }
-
+        .pos-var:hover:not(:disabled) { border-color: #1890ff; background: #f0f8ff; }
         .pos-var:disabled { cursor: not-allowed; opacity: .5; }
 
-        .pos-var-opt {
-            display: block;
-            font-size: 13px;
-            font-weight: 500;
-            color: #262626;
-        }
+        .pos-var-opt { display: block; font-size: 13px; font-weight: 500; color: #262626; }
 
         .pos-var-meta {
             display: flex;
@@ -292,7 +306,6 @@
             flex-direction: column;
             height: 100%;
             background: #fff;
-            border: 1px solid #f0f0f0;
             border-radius: 8px;
             overflow: hidden;
         }
@@ -302,29 +315,34 @@
             align-items: center;
             justify-content: space-between;
             gap: 8px;
-            padding: 13px 16px;
+            padding: 11px 16px;
             border-bottom: 1px solid #f0f0f0;
         }
 
         .pos-title { margin: 0; font-size: 15px; font-weight: 600; color: #262626; }
+        .pos-till-acts { display: flex; gap: 6px; }
 
-        .pos-clear {
-            border: 0;
-            background: transparent;
-            padding: 2px 4px;
+        .pos-mini {
+            height: 28px;
+            padding: 0 10px;
+            border: 1px solid #e8e8e8;
+            border-radius: 4px;
+            background: #fff;
+            font-family: inherit;
             font-size: 12px;
-            color: #8c8c8c;
+            color: #595959;
             cursor: pointer;
         }
 
-        .pos-clear:hover { color: #ff4d4f; }
+        .pos-mini:hover { border-color: #1890ff; color: #1890ff; }
+        .pos-mini.is-stop:hover { border-color: #ff4d4f; color: #ff4d4f; }
 
         .pos-cart { flex: 1; overflow-y: auto; padding: 6px 0; }
 
         .pos-line {
             display: grid;
             grid-template-columns: minmax(0, 1fr) auto;
-            gap: 4px 10px;
+            gap: 3px 10px;
             padding: 9px 16px;
             border-bottom: 1px solid #fafafa;
         }
@@ -338,8 +356,12 @@
             white-space: nowrap;
         }
 
-        .pos-line-sub { grid-column: 1; font-size: 12px; color: #8c8c8c; }
         .pos-line-total { grid-row: 1; font-size: 13px; font-weight: 600; color: #262626; text-align: right; }
+        .pos-line-sub { grid-column: 1; font-size: 12px; color: #8c8c8c; }
+
+        /* Giá gốc gạch ngang khi dòng có bớt giá — người bán liếc qua là biết dòng
+           nào đã được bớt, không phải mở từng ô ra xem. */
+        .pos-line-was { text-decoration: line-through; color: #bfbfbf; }
 
         .pos-qty {
             grid-row: 2;
@@ -355,6 +377,7 @@
             border: 1px solid #e8e8e8;
             border-radius: 4px;
             background: #fff;
+            font-family: inherit;
             color: #595959;
             font-size: 15px;
             line-height: 1;
@@ -362,19 +385,42 @@
         }
 
         .pos-qty button:hover { border-color: #1890ff; color: #1890ff; }
-        .pos-qty span { min-width: 30px; text-align: center; font-size: 13px; font-weight: 600; color: #262626; }
+        .pos-qty span { min-width: 30px; text-align: center; font-size: 13px; font-weight: 600; }
+
+        /* Ô bớt giá: nhỏ, nằm ở hàng thứ ba của dòng hàng. Cố ý KHÔNG nổi bật —
+           đây là ngoại lệ, không phải thao tác thường ngày. */
+        .pos-line-cut {
+            grid-column: 1 / -1;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 2px;
+            font-size: 12px;
+            color: #8c8c8c;
+        }
+
+        .pos-line-cut input {
+            width: 54px;
+            height: 26px;
+            padding: 0 6px;
+            border: 1px solid #e8e8e8;
+            border-radius: 4px;
+            font-family: inherit;
+            font-size: 12px;
+            text-align: right;
+            color: #262626;
+            outline: 0;
+        }
+
+        .pos-line-cut input:focus { border-color: #1890ff; }
+        .pos-line-cut input.is-err { border-color: #ff4d4f; background: #fff1f0; }
+        .pos-line-cut b { color: #cf1322; font-weight: 600; }
 
         .pos-foot { border-top: 1px solid #f0f0f0; padding: 12px 16px 14px; }
 
         .pos-cus { margin-bottom: 10px; }
 
-        .pos-cus > summary {
-            cursor: pointer;
-            font-size: 12px;
-            color: #595959;
-            list-style: none;
-        }
-
+        .pos-cus > summary { cursor: pointer; font-size: 12px; color: #595959; list-style: none; }
         .pos-cus > summary::-webkit-details-marker { display: none; }
         .pos-cus > summary::before { content: '＋ '; color: #bfbfbf; }
         .pos-cus[open] > summary::before { content: '－ '; }
@@ -396,6 +442,7 @@
             padding: 0 10px;
             border: 1px solid #e8e8e8;
             border-radius: 4px;
+            font-family: inherit;
             font-size: 13px;
             color: #262626;
             outline: 0;
@@ -404,7 +451,6 @@
         .pos-input:focus { border-color: #1890ff; }
         .pos-upper { text-transform: uppercase; }
 
-        /* Gợi ý khách quen — cùng cách dựng với ô tìm khách ở trang tạo đơn. */
         .pos-ac { position: relative; }
 
         .pos-ac-menu {
@@ -427,6 +473,7 @@
             padding: 7px 10px;
             border: 0;
             background: transparent;
+            font-family: inherit;
             text-align: left;
             font-size: 13px;
             color: #262626;
@@ -435,7 +482,7 @@
 
         .pos-ac-item:hover { background: #f0f8ff; }
         .pos-ac-item em { display: block; font-style: normal; font-size: 12px; color: #8c8c8c; }
-        .pos-ac-empty { padding: 8px 10px; font-size: 12px; color: #bfbfbf; }
+        .pos-ac-empty { padding: 8px 10px; margin: 0; font-size: 12px; color: #bfbfbf; }
 
         .pos-sum { padding: 10px 0 4px; border-top: 1px solid #f0f0f0; }
 
@@ -450,13 +497,12 @@
 
         .pos-sum-row em { font-style: normal; color: #bfbfbf; }
         .pos-sum-row + .pos-sum-row { margin-top: 4px; }
-
+        .pos-sum-cut b { color: #cf1322; }
         .pos-sum-total { font-size: 15px; color: #262626; }
-        .pos-sum-total b { font-size: 21px; font-weight: 700; color: #262626; }
+        .pos-sum-total b { font-size: 22px; font-weight: 700; color: #262626; }
         .pos-sum-note { margin: 6px 0 0; font-size: 11px; color: #bfbfbf; }
 
         .pos-pay { margin-top: 12px; }
-
         .pos-tabs { display: flex; gap: 6px; }
 
         .pos-tab {
@@ -465,6 +511,7 @@
             border: 1px solid #e8e8e8;
             border-radius: 4px;
             background: #fff;
+            font-family: inherit;
             font-size: 13px;
             color: #595959;
             cursor: pointer;
@@ -473,33 +520,25 @@
         .pos-tab.is-on { border-color: #1890ff; color: #1890ff; background: #f0f8ff; font-weight: 500; }
 
         .pos-cash { margin-top: 10px; }
-
         .pos-tender { display: flex; align-items: center; gap: 8px; }
         .pos-tender label { font-size: 13px; color: #595959; white-space: nowrap; }
-
-        .pos-money { text-align: right; font-size: 16px; font-weight: 600; height: 38px; }
-
+        .pos-money { text-align: right; font-size: 17px; font-weight: 600; height: 40px; }
         .pos-notes { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
 
         .pos-note-btn {
             flex: 1 0 auto;
             min-width: 46px;
-            height: 27px;
+            height: 28px;
             border: 1px solid #e8e8e8;
             border-radius: 4px;
             background: #fafafa;
+            font-family: inherit;
             font-size: 12px;
             color: #595959;
             cursor: pointer;
         }
 
         .pos-note-btn:hover { border-color: #1890ff; color: #1890ff; }
-
-        /* [hidden] của trình duyệt là `display: none` trong UA stylesheet, mà bất kỳ
-           `display` nào do trang khai đều đè lên nó. Khối nào vừa có `display` vừa
-           được bật/tắt bằng thuộc tính hidden thì PHẢI tự khai lại — thiếu dòng này
-           là khối hiện thường trực dù JS đã đặt hidden. */
-        .pos-change[hidden], .pos-done[hidden] { display: none; }
 
         .pos-change {
             display: flex;
@@ -513,7 +552,7 @@
             color: #389e0d;
         }
 
-        .pos-change b { font-size: 18px; font-weight: 700; }
+        .pos-change b { font-size: 19px; font-weight: 700; }
 
         .pos-err {
             margin: 9px 0 0;
@@ -526,13 +565,14 @@
 
         .pos-submit {
             width: 100%;
-            height: 44px;
+            height: 46px;
             margin-top: 11px;
             border: 0;
             border-radius: 6px;
             background: #1890ff;
             color: #fff;
-            font-size: 15px;
+            font-family: inherit;
+            font-size: 16px;
             font-weight: 600;
             cursor: pointer;
             transition: background .15s;
@@ -541,8 +581,13 @@
         .pos-submit:hover:not(:disabled) { background: #40a9ff; }
         .pos-submit:disabled { background: #d9d9d9; cursor: not-allowed; }
 
-        /* ---------- Phiếu sau khi bán ---------- */
-        .pos-done {
+        /* ---------- Lớp phủ (đơn treo + phiếu bán xong) ---------- */
+        /* [hidden] của trình duyệt là display:none trong UA stylesheet, mà bất kỳ
+           display nào do trang khai đều đè lên nó. Khối vừa có display vừa bật/tắt
+           bằng hidden thì PHẢI tự khai lại — thiếu dòng này là nó hiện thường trực. */
+        .pos-drawer[hidden], .pos-change[hidden], .pos-sum-cut[hidden] { display: none; }
+
+        .pos-drawer {
             position: fixed;
             inset: 0;
             z-index: 1000;
@@ -553,14 +598,40 @@
             background: rgba(0, 0, 0, .45);
         }
 
-        .pos-done-card {
+        .pos-drawer-card, .pos-done-card {
             width: 100%;
-            max-width: 340px;
-            padding: 22px;
             border-radius: 10px;
             background: #fff;
-            text-align: center;
         }
+
+        .pos-drawer-card { max-width: 460px; max-height: 80vh; display: flex; flex-direction: column; }
+
+        .pos-drawer-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 16px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .pos-drawer-head h2 { margin: 0; font-size: 15px; font-weight: 600; }
+        .pos-drawer-body { flex: 1; overflow-y: auto; padding: 6px 0; }
+        .pos-drawer-note { margin: 0; padding: 10px 16px 14px; font-size: 11px; color: #bfbfbf; border-top: 1px solid #f0f0f0; }
+
+        .pos-treo-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 16px;
+            border-bottom: 1px solid #fafafa;
+        }
+
+        .pos-treo-info { flex: 1; min-width: 0; }
+        .pos-treo-ten { font-size: 13px; font-weight: 500; color: #262626; }
+        .pos-treo-phu { font-size: 12px; color: #8c8c8c; }
+
+        /* ---------- Phiếu sau khi bán ---------- */
+        .pos-done-card { max-width: 350px; padding: 22px; text-align: center; }
 
         .pos-done-tick {
             display: grid;
@@ -575,7 +646,6 @@
 
         .pos-done-card h2 { margin: 0; font-size: 17px; font-weight: 600; color: #262626; }
         .pos-done-code { margin: 3px 0 14px; font-size: 13px; color: #8c8c8c; }
-
         .pos-done-sum { margin: 0 0 12px; font-size: 13px; }
 
         .pos-done-sum div {
@@ -596,23 +666,17 @@
             font-size: 13px;
         }
 
+        .pos-done-change[hidden] { display: none; }
         .pos-done-change b { display: block; margin-top: 2px; font-size: 26px; font-weight: 700; }
 
         .pos-done-acts { margin-top: 14px; }
         .pos-done-acts .pos-submit { margin-top: 0; }
+        .pos-done-links { margin-top: 9px; display: flex; justify-content: center; gap: 14px; }
+        .pos-done-links a { font-size: 12px; color: #1890ff; text-decoration: none; }
+        .pos-done-links a:hover { text-decoration: underline; }
 
-        .pos-done-link {
-            display: inline-block;
-            margin-top: 9px;
-            font-size: 12px;
-            color: #1890ff;
-            text-decoration: none;
-        }
-
-        .pos-done-link:hover { text-decoration: underline; }
-
-        /* Màn hình hẹp: giỏ hàng xuống dưới, mỗi khối tự cao theo nội dung. */
         @media (max-width: 1100px) {
+            html, body { overflow: auto; }
             .pos { grid-template-columns: 1fr; height: auto; }
             .pos-pick { min-height: 340px; }
         }
@@ -625,9 +689,15 @@
 
             const SEARCH_URL = root.dataset.searchUrl;
             const CUSTOMER_URL = root.dataset.customerUrl;
+            const SCAN_URL = root.dataset.scanUrl;
             const STORE_URL = root.dataset.storeUrl;
+            const RECEIPT_URL = root.dataset.receiptUrl;   // …/0/phieu — thay 0 bằng id thật
             const ORDERS_URL = root.dataset.ordersUrl;
+            // Hạn quyền giảm giá của CHÍNH người đang đăng nhập, do API trả về.
+            // 0 = không được tự bớt đồng nào → ô nhập biến mất hẳn.
+            const HAN_MUC = Number(root.dataset.discountLimit) || 0;
             const CSRF = document.querySelector('meta[name="csrf-token"]')?.content || '';
+            const KHOA_TREO = 'pos.treo';
 
             const $ = (id) => document.getElementById(id);
             const tien = (n) => new Intl.NumberFormat('vi-VN').format(Math.round(n || 0)) + '₫';
@@ -635,18 +705,14 @@
                 { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
             ));
 
-            /* Giỏ hàng: mảng { id, ten, opt, gia, ton, sl }.
+            /* Giỏ hàng: { id, ten, opt, gia, ton, sl, giam }.
              *
-             * `gia` chỉ để HIỂN THỊ. Số thu tiền do API tính lại lúc chốt đơn, nên
-             * mọi chỗ trong tệp này gọi nó là tạm tính chứ không phải tổng tiền. */
+             * `gia` và `giam` chỉ để HIỂN THỊ và để gửi mức giảm lên. Số thu tiền do
+             * API tính lại lúc chốt đơn — kể cả phần bớt, kể cả hạn quyền. */
             let gio = [];
 
-            /* ---------- Tìm và chọn hàng ---------- */
+            /* ---------- Tìm và quét hàng ---------- */
 
-            // Giá bán THẬT của một biến thể, theo đúng thứ tự tầng thanh toán dùng:
-            // final_price (đã gồm khuyến mãi) > giá riêng của biến thể > giá sale
-            // hợp lệ > giá gốc. Sai thứ tự ở đây là báo cho khách một con số rồi thu
-            // một con số khác.
             const giaCua = (p, v) => {
                 if (v.final_price !== null && v.final_price !== undefined) return Number(v.final_price);
                 if (v.price) return Number(v.price);
@@ -666,8 +732,6 @@
                     const vars = (p.variants || []).map((v) => {
                         const gia = giaCua(p, v);
                         const ton = Number(v.stock || 0);
-                        // Hết hàng thì tắt ô luôn: API cũng sẽ từ chối, nói trước ở đây
-                        // đỡ hơn để người bán bấm rồi mới nhận lỗi giữa lúc khách đợi.
                         return `<button type="button" class="pos-var" ${ton <= 0 ? 'disabled' : ''}
                                     data-id="${v.id}" data-ten="${esc(p.name)}" data-opt="${esc(nhan(v))}"
                                     data-gia="${gia}" data-ton="${ton}">
@@ -690,7 +754,7 @@
             const timHang = (q) => {
                 clearTimeout(timer);
                 if (!q.trim()) {
-                    $('posResults').innerHTML = '<p class="pos-hint">Gõ tên hàng để bắt đầu.</p>';
+                    $('posResults').innerHTML = '<p class="pos-hint">Quét mã vạch để thêm hàng ngay, hoặc gõ tên để chọn từ danh sách.</p>';
                     return;
                 }
                 timer = setTimeout(() => {
@@ -705,11 +769,42 @@
 
             $('posSearch').addEventListener('input', (e) => timHang(e.target.value));
 
-            // Enter thêm luôn món đầu tiên còn hàng: ở quầy, tay phải đang cầm hàng
-            // nên tay trái chỉ gõ được vài phím, không rê chuột chọn ô.
-            $('posSearch').addEventListener('keydown', (e) => {
+            // Enter = "thêm món này vào giỏ", và có hai cách hiểu tuỳ thứ vừa gõ.
+            //
+            // THỬ QUÉT TRƯỚC: máy quét mã vạch chỉ là một bàn phím gõ rất nhanh rồi
+            // bấm Enter, nên không cần thiết bị hay thư viện nào để đọc nó — chỉ cần
+            // hỏi server xem chuỗi vừa gõ có phải một mã trong sổ không. Không phải
+            // thì rơi về nghĩa cũ: thêm món đầu tiên trong danh sách gợi ý.
+            $('posSearch').addEventListener('keydown', async (e) => {
                 if (e.key !== 'Enter') return;
                 e.preventDefault();
+
+                const q = e.target.value.trim();
+                if (!q) return;
+
+                try {
+                    const res = await fetch(`${SCAN_URL}?code=${encodeURIComponent(q)}`, {
+                        headers: { Accept: 'application/json' },
+                    });
+                    if (res.ok) {
+                        const d = (await res.json()).data || {};
+                        them({
+                            id: Number(d.product_variant_id),
+                            ten: d.product_name || '',
+                            opt: [d.size, d.color].filter(Boolean).join(' / ') || (d.sku || ''),
+                            gia: Number(d.price || 0),
+                            ton: Number(d.stock || 0),
+                        });
+                        // Dọn ô ngay để lượt quét sau bắt đầu từ trắng — máy quét
+                        // không tự xoá, mã cũ còn nằm đó là mã sau nối vào thành rác.
+                        e.target.value = '';
+                        timHang('');
+                        return;
+                    }
+                } catch (err) {
+                    /* Mất mạng giữa chừng thì vẫn còn đường gõ tay bên dưới. */
+                }
+
                 const dau = $('posResults').querySelector('.pos-var:not(:disabled)');
                 if (dau) dau.click();
             });
@@ -730,14 +825,11 @@
 
             function them(mon) {
                 const co = gio.find((d) => d.id === mon.id);
-                // Không cho vượt tồn ngay tại đây. API vẫn chặn lần nữa (nó mới là
-                // nơi đọc số dưới khoá), nhưng chặn sớm thì người bán biết trước khi
-                // đọc giá cho khách nghe.
                 if (co) {
                     if (co.sl >= co.ton) { baoLoi(`Chỉ còn ${co.ton} sản phẩm "${co.opt}" trong kho.`); return; }
                     co.sl++;
                 } else {
-                    gio.push({ ...mon, sl: 1 });
+                    gio.push({ ...mon, sl: 1, giam: 0 });
                 }
                 baoLoi('');
                 veGio();
@@ -753,7 +845,9 @@
                 veGio();
             }
 
-            const tamTinh = () => gio.reduce((s, d) => s + d.gia * d.sl, 0);
+            const tienHang = () => gio.reduce((s, d) => s + d.gia * d.sl, 0);
+            const botMon = () => gio.reduce((s, d) => s + Math.round(d.gia * d.sl * (d.giam || 0) / 100), 0);
+            const phaiTra = () => tienHang() - botMon();
             const soMon = () => gio.reduce((s, d) => s + d.sl, 0);
 
             function veGio() {
@@ -761,24 +855,45 @@
                 if (!gio.length) {
                     box.innerHTML = '<p class="pos-empty">Giỏ đang trống.</p>';
                 } else {
-                    box.innerHTML = gio.map((d) => `
+                    box.innerHTML = gio.map((d) => {
+                        const goc = d.gia * d.sl;
+                        const bot = Math.round(goc * (d.giam || 0) / 100);
+                        // Ô bớt giá chỉ dựng ra khi người này CÓ quyền bớt. Hiện một ô
+                        // rồi từ chối mọi con số gõ vào là kiểu giao diện tệ nhất.
+                        const oGiam = HAN_MUC > 0 ? `
+                            <div class="pos-line-cut">
+                                <span>Bớt</span>
+                                <input type="text" inputmode="decimal" class="pos-cut-input"
+                                       data-id="${d.id}" value="${d.giam || ''}" placeholder="0"
+                                       title="Tối đa ${HAN_MUC}%">
+                                <span>% ${bot > 0 ? '· <b>-' + tien(bot) + '</b>' : ''}</span>
+                            </div>` : '';
+
+                        return `
                         <div class="pos-line">
                             <span class="pos-line-name" title="${esc(d.ten)}">${esc(d.ten)}</span>
-                            <span class="pos-line-total">${tien(d.gia * d.sl)}</span>
+                            <span class="pos-line-total">
+                                ${bot > 0 ? `<span class="pos-line-was">${tien(goc)}</span> ` : ''}${tien(goc - bot)}
+                            </span>
                             <span class="pos-line-sub">${esc(d.opt)} · ${tien(d.gia)}</span>
                             <span class="pos-qty">
                                 <button type="button" data-sl="-1" data-id="${d.id}" aria-label="Bớt một">−</button>
                                 <span>${d.sl}</span>
                                 <button type="button" data-sl="1" data-id="${d.id}" aria-label="Thêm một">+</button>
                             </span>
-                        </div>`).join('');
+                            ${oGiam}
+                        </div>`;
+                    }).join('');
                 }
 
-                const tong = tamTinh();
+                const bot = botMon();
                 $('posQty').textContent = soMon() + ' món';
-                $('posSubtotal').textContent = tien(tong);
-                $('posTotal').textContent = tien(tong);
+                $('posGross').textContent = tien(tienHang());
+                $('posCutRow').hidden = bot <= 0;
+                $('posCut').textContent = '-' + tien(bot);
+                $('posTotal').textContent = tien(phaiTra());
                 $('posClear').hidden = gio.length === 0;
+                $('posTreoLuu').hidden = gio.length === 0;
                 capNhatThoi();
             }
 
@@ -787,16 +902,152 @@
                 if (btn) doiSL(Number(btn.dataset.id), Number(btn.dataset.sl));
             });
 
+            // Gõ trong ô bớt giá: cập nhật ngay nhưng KHÔNG vẽ lại cả giỏ, nếu không
+            // ô đang gõ bị dựng lại và con trỏ nhảy về đầu sau mỗi ký tự.
+            $('posCart').addEventListener('input', (e) => {
+                const o = e.target.closest('.pos-cut-input');
+                if (!o) return;
+
+                const d = gio.find((x) => x.id === Number(o.dataset.id));
+                if (!d) return;
+
+                let v = parseFloat(String(o.value).replace(',', '.'));
+                if (!isFinite(v) || v < 0) v = 0;
+
+                // Kẹp theo hạn quyền ngay tại ô. Server vẫn kiểm lại khi chốt đơn —
+                // đây chỉ là nói trước, để người bán không đọc giá cho khách nghe rồi
+                // mới bị từ chối.
+                const vuot = v > HAN_MUC;
+                if (vuot) v = HAN_MUC;
+                o.classList.toggle('is-err', vuot);
+                baoLoi(vuot ? `Bạn được bớt tối đa ${HAN_MUC}% — mức cao hơn cần quản lý duyệt.` : '');
+
+                d.giam = v;
+                capNhatTien();
+            });
+
+            // Rời ô thì vẽ lại giỏ để số tiền trên từng dòng khớp con số vừa kẹp.
+            $('posCart').addEventListener('focusout', (e) => {
+                if (e.target.closest('.pos-cut-input')) veGio();
+            });
+
+            // Chỉ cập nhật các con số tổng — dùng khi đang gõ dở trong một ô.
+            function capNhatTien() {
+                const bot = botMon();
+                $('posCutRow').hidden = bot <= 0;
+                $('posCut').textContent = '-' + tien(bot);
+                $('posTotal').textContent = tien(phaiTra());
+                capNhatThoi();
+            }
+
             $('posClear').addEventListener('click', () => {
                 if (gio.length && !confirm('Bỏ toàn bộ giỏ hàng?')) return;
                 donDep();
             });
 
+            /* ---------- Đơn treo ---------- */
+
+            const docTreo = () => {
+                try {
+                    const v = JSON.parse(localStorage.getItem(KHOA_TREO) || '[]');
+                    return Array.isArray(v) ? v : [];
+                } catch (e) {
+                    // localStorage hỏng hoặc bị tắt: coi như không có đơn treo nào.
+                    // Bán hàng không được phép dừng lại vì một tính năng phụ.
+                    return [];
+                }
+            };
+
+            const ghiTreo = (ds) => {
+                try {
+                    localStorage.setItem(KHOA_TREO, JSON.stringify(ds));
+                } catch (e) {
+                    baoLoi('Máy này không lưu được đơn treo (bộ nhớ trình duyệt đã đầy hoặc bị chặn).');
+                }
+                veSoTreo();
+            };
+
+            function veSoTreo() {
+                const n = docTreo().length;
+                $('posTreoSo').textContent = n;
+                $('posTreoSo').hidden = n === 0;
+            }
+
+            $('posTreoLuu').addEventListener('click', () => {
+                if (!gio.length) return;
+                const ds = docTreo();
+                ds.unshift({
+                    id: Date.now(),
+                    luc: new Date().toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }),
+                    ten: $('posCusName').value.trim(),
+                    sdt: $('posCusPhone').value.trim(),
+                    cusId: $('posCusId').value,
+                    voucher: $('posVoucher').value.trim(),
+                    ghiChu: $('posNote').value.trim(),
+                    gio: gio,
+                });
+                // Giữ 20 đơn gần nhất: quá số đó thì danh sách thành một đống không ai
+                // đọc, và localStorage cũng có trần dung lượng.
+                ghiTreo(ds.slice(0, 20));
+                donDep();
+                $('posSearch').focus();
+            });
+
+            const moNganKeo = () => {
+                const ds = docTreo();
+                $('posTreoDS').innerHTML = ds.length ? ds.map((t) => {
+                    const soLuong = t.gio.reduce((s, d) => s + d.sl, 0);
+                    const tong = t.gio.reduce((s, d) => s + d.gia * d.sl - Math.round(d.gia * d.sl * (d.giam || 0) / 100), 0);
+                    return `
+                        <div class="pos-treo-row">
+                            <div class="pos-treo-info">
+                                <div class="pos-treo-ten">${esc(t.ten || 'Khách lẻ')} · ${tien(tong)}</div>
+                                <div class="pos-treo-phu">${soLuong} món · treo lúc ${esc(t.luc)}</div>
+                            </div>
+                            <button type="button" class="pos-mini" data-mo="${t.id}">Mở lại</button>
+                            <button type="button" class="pos-mini is-stop" data-xoa="${t.id}">Xoá</button>
+                        </div>`;
+                }).join('') : '<p class="pos-ac-empty">Chưa có đơn nào đang treo.</p>';
+                $('posTreoBox').hidden = false;
+            };
+
+            $('posTreoMo').addEventListener('click', moNganKeo);
+            $('posTreoDong').addEventListener('click', () => { $('posTreoBox').hidden = true; });
+
+            $('posTreoDS').addEventListener('click', (e) => {
+                const moBtn = e.target.closest('[data-mo]');
+                const xoaBtn = e.target.closest('[data-xoa]');
+                const ds = docTreo();
+
+                if (xoaBtn) {
+                    ghiTreo(ds.filter((t) => String(t.id) !== xoaBtn.dataset.xoa));
+                    moNganKeo();
+                    return;
+                }
+                if (!moBtn) return;
+
+                const t = ds.find((x) => String(x.id) === moBtn.dataset.mo);
+                if (!t) return;
+                // Mở đè lên một giỏ đang dở là mất giỏ đó — hỏi trước.
+                if (gio.length && !confirm('Giỏ hiện tại sẽ bị thay bằng đơn treo này. Tiếp tục?')) return;
+
+                gio = t.gio || [];
+                $('posCusName').value = t.ten || '';
+                $('posCusPhone').value = t.sdt || '';
+                $('posCusId').value = t.cusId || '';
+                $('posVoucher').value = t.voucher || '';
+                $('posNote').value = t.ghiChu || '';
+                $('posCusTag').textContent = t.ten || 'khách lẻ';
+
+                // Lấy ra khỏi danh sách treo: đơn đang được bán thì không còn treo nữa,
+                // giữ lại là sớm muộn có người bán nó hai lần.
+                ghiTreo(ds.filter((x) => x.id !== t.id));
+                $('posTreoBox').hidden = true;
+                veGio();
+            });
+
             /* ---------- Thanh toán ---------- */
 
-            // Đọc từ tab đang bật thay vì viết cứng 'cash': danh sách hình thức do
-            // PHP dựng, viết cứng ở đây là hai chỗ cùng giữ một sự thật và sẽ lệch
-            // nhau ngay lần đầu có người đổi thứ tự trong hằng số.
             let hinhThuc = $('posPayTabs').querySelector('.pos-tab.is-on')?.dataset.method || 'cash';
 
             $('posPayTabs').addEventListener('click', (e) => {
@@ -810,8 +1061,6 @@
 
             const soTien = (s) => Number(String(s || '').replace(/\D/g, '')) || 0;
 
-            // Ô tiền khách đưa tự chấm phân cách hàng nghìn ngay lúc gõ: "500000" và
-            // "5000000" nhìn gần như nhau, mà lệch một số 0 là thối sai mười lần.
             $('posTendered').addEventListener('input', (e) => {
                 const n = soTien(e.target.value);
                 e.target.value = n ? new Intl.NumberFormat('vi-VN').format(n) : '';
@@ -823,14 +1072,14 @@
                 if (!btn) return;
                 const o = $('posTendered');
                 o.value = btn.dataset.tender === 'exact'
-                    ? new Intl.NumberFormat('vi-VN').format(tamTinh())
+                    ? new Intl.NumberFormat('vi-VN').format(phaiTra())
                     : new Intl.NumberFormat('vi-VN').format(soTien(o.value) + Number(btn.dataset.add));
                 capNhatThoi();
                 o.focus();
             });
 
             function capNhatThoi() {
-                const tong = tamTinh();
+                const tong = phaiTra();
                 const dua = soTien($('posTendered').value);
                 const thoi = dua - tong;
                 const hienThoi = hinhThuc === 'cash' && dua > 0;
@@ -842,8 +1091,6 @@
                     $('posChange').style.color = thoi >= 0 ? '#389e0d' : '#cf1322';
                 }
 
-                // Nút chốt đơn tắt khi giỏ trống hoặc tiền mặt đưa vào chưa đủ. API
-                // vẫn kiểm lại cả hai — đây chỉ là nói trước cho đỡ mất một vòng gọi.
                 const thieu = hinhThuc === 'cash' && dua > 0 && thoi < 0;
                 $('posSubmit').disabled = !gio.length || thieu;
                 $('posSubmitAmt').textContent = gio.length ? tien(tong) : '';
@@ -859,8 +1106,6 @@
 
             let cusTimer = null;
             $('posCusName').addEventListener('input', (e) => {
-                // Gõ tay = không còn là khách đã chọn nữa: giữ lại user_id cũ thì đơn
-                // gắn nhầm vào tài khoản người khác.
                 $('posCusId').value = '';
                 $('posCusTag').textContent = 'khách lẻ';
 
@@ -916,7 +1161,11 @@
                     customer_phone: $('posCusPhone').value.trim(),
                     voucher_code: $('posVoucher').value.trim(),
                     note: $('posNote').value.trim(),
-                    items: gio.map((d) => ({ product_variant_id: d.id, quantity: d.sl })),
+                    items: gio.map((d) => ({
+                        product_variant_id: d.id,
+                        quantity: d.sl,
+                        discount_percent: d.giam || 0,
+                    })),
                 };
                 if ($('posCusId').value) body.user_id = Number($('posCusId').value);
                 if (hinhThuc === 'cash' && dua > 0) body.amount_tendered = dua;
@@ -934,8 +1183,6 @@
                     const d = await res.json().catch(() => ({}));
 
                     if (!res.ok) {
-                        // Câu của API đã nói rõ việc cần làm (tên món hết hàng, số tiền
-                        // còn thiếu) — in nguyên văn, đừng thay bằng câu chung chung.
                         baoLoi(d.message || 'Không hoàn tất được lượt bán.');
                         return;
                     }
@@ -953,12 +1200,15 @@
             function xongPhieu(d) {
                 $('posDoneCode').textContent = d.order_code || '';
 
-                // In lại số của API chứ không phải số màn hình vừa tính: khuyến mãi
-                // có thể vừa hết hạn, hoặc mã giảm giá vừa được trừ thêm. Đây là con
-                // số đã thu thật.
-                const dong = [['Tiền hàng', tien(d.subtotal_amount)]];
+                const dong = [];
+                if (Number(d.line_discount_amount) > 0) {
+                    dong.push(['Tiền hàng', tien(Number(d.subtotal_amount) + Number(d.line_discount_amount))]);
+                    dong.push(['Bớt theo món', '−' + tien(d.line_discount_amount)]);
+                } else {
+                    dong.push(['Tiền hàng', tien(d.subtotal_amount)]);
+                }
                 if (Number(d.discount_amount) > 0) {
-                    dong.push([`Giảm giá${d.voucher_code ? ' (' + d.voucher_code + ')' : ''}`, '−' + tien(d.discount_amount)]);
+                    dong.push([`Mã ${d.voucher_code || 'giảm giá'}`, '−' + tien(d.discount_amount)]);
                 }
                 dong.push(['Khách phải trả', tien(d.total_amount)]);
                 if (d.amount_tendered !== null && d.amount_tendered !== undefined) {
@@ -970,14 +1220,11 @@
                 $('posDoneChange').hidden = !coThoi;
                 if (coThoi) $('posDoneChangeVal').textContent = tien(d.change_amount);
 
+                $('posDonePrint').href = RECEIPT_URL.replace(/\/0\/phieu$/, `/${d.order_id}/phieu`);
                 $('posDoneView').href = `${ORDERS_URL}?keyword=${encodeURIComponent(d.order_code || '')}`;
                 $('posDone').hidden = false;
                 $('posDoneNext').focus();
             }
-
-            // Khối tiền mặt bám theo hình thức đang chọn ngay từ lượt tải trang, chứ
-            // không chỉ khi có người bấm đổi tab.
-            $('posCash').hidden = hinhThuc !== 'cash';
 
             const donDep = () => {
                 gio = [];
@@ -993,19 +1240,22 @@
                 $('posDone').hidden = true;
                 donDep();
                 $('posSearch').value = '';
-                $('posResults').innerHTML = '<p class="pos-hint">Gõ tên hàng để bắt đầu.</p>';
+                timHang('');
                 $('posSearch').focus();
             });
 
             /* ---------- Phím tắt ---------- */
 
             document.addEventListener('keydown', (e) => {
-                // Phiếu đang mở: Enter/Esc đều nghĩa là "xong rồi, khách tiếp theo".
                 if (!$('posDone').hidden) {
                     if (e.key === 'Enter' || e.key === 'Escape') {
                         e.preventDefault();
                         $('posDoneNext').click();
                     }
+                    return;
+                }
+                if (!$('posTreoBox').hidden && e.key === 'Escape') {
+                    $('posTreoBox').hidden = true;
                     return;
                 }
                 if (e.key === 'F2') {
@@ -1014,6 +1264,7 @@
                 }
             });
 
+            veSoTreo();
             veGio();
         })();
     </script>

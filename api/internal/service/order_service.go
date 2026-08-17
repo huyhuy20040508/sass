@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -48,8 +49,14 @@ type OrderService interface {
 	// Checkout — khách đặt hàng từ storefront (giá tra lại từ DB, trừ tồn kho).
 	Checkout(ctx context.Context, req *dto.CheckoutRequest, userID uint) (*dto.CheckoutResponse, error)
 	// POSCheckout — bán tại quầy: cùng đường tra giá + trừ kho với Checkout, nhưng
-	// đơn sinh ra đã hoàn tất và đã thu tiền.
-	POSCheckout(ctx context.Context, req *dto.POSCheckoutRequest) (*dto.POSCheckoutResponse, error)
+	// đơn sinh ra đã hoàn tất và đã thu tiền. role là vai trò của NGƯỜI ĐANG BÁN,
+	// dùng để chặn mức giảm giá vượt quyền.
+	POSCheckout(ctx context.Context, req *dto.POSCheckoutRequest, role string) (*dto.POSCheckoutResponse, error)
+	// POSScan — quét mã vạch (hoặc SKU) ở quầy, trả về món hàng kèm giá và tồn.
+	POSScan(ctx context.Context, code string) (*dto.POSScanResponse, error)
+	// POSDiscountLimit — mức giảm giá tối đa mà vai trò này được tự bấm, tính theo
+	// phần trăm. 100 = không bị chặn.
+	POSDiscountLimit(ctx context.Context, role string) float64
 	// Quote — đối chiếu giỏ hàng với giá + tồn kho hiện tại, không tạo đơn.
 	Quote(ctx context.Context, req *dto.CartQuoteRequest) (*dto.CartQuoteResponse, error)
 	// MyOrders — đơn của CHÍNH khách đang đăng nhập (storefront).
@@ -351,9 +358,21 @@ func (s *orderService) Checkout(ctx context.Context, req *dto.CheckoutRequest, u
 //   - Đơn sinh ra đã completed + paid: không có gì để chờ xác nhận hay để giao.
 //   - Không phí ship, không địa chỉ: hàng trao tay ngay tại quầy.
 //   - Có thể không gắn tài khoản nào (khách lẻ).
-func (s *orderService) POSCheckout(ctx context.Context, req *dto.POSCheckoutRequest) (*dto.POSCheckoutResponse, error) {
+func (s *orderService) POSCheckout(ctx context.Context, req *dto.POSCheckoutRequest, role string) (*dto.POSCheckoutResponse, error) {
 	if len(req.Items) == 0 {
 		return nil, domain.ErrEmptyCart
+	}
+
+	// Hạn quyền giảm giá kiểm ở ĐÂY, trước khi đụng tới kho, và kiểm theo vai trò
+	// lấy từ access token chứ không từ payload. Màn hình cũng chặn sẵn, nhưng đó
+	// chỉ là phép lịch sự với người dùng: ai gửi thẳng request lên thì chỉ có chỗ
+	// này ngăn được họ tự cho mình giảm 90%.
+	limit := s.POSDiscountLimit(ctx, role)
+	for _, it := range req.Items {
+		if it.DiscountPercent > limit {
+			return nil, fmt.Errorf("%w: tối đa %s%% — nhờ quản lý duyệt mức cao hơn",
+				domain.ErrDiscountTooHigh, strconv.FormatFloat(limit, 'f', -1, 64))
+		}
 	}
 
 	// Đơn gắn vào tài khoản khách thì tài khoản đó phải có thật: user_id trỏ vào
@@ -378,10 +397,8 @@ func (s *orderService) POSCheckout(ctx context.Context, req *dto.POSCheckoutRequ
 	for _, it := range req.Items {
 		lines = append(lines, domain.CheckoutLine{
 			VariantID:          it.ProductVariantID,
-			Slug:               it.Slug,
-			Size:               it.Size,
-			Color:              it.Color,
 			Quantity:           it.Quantity,
+			DiscountPercent:    it.DiscountPercent,
 			CustomPlayerName:   it.CustomPlayerName,
 			CustomPlayerNumber: it.CustomPlayerNumber,
 		})
@@ -469,10 +486,18 @@ func (s *orderService) POSCheckout(ctx context.Context, req *dto.POSCheckoutRequ
 		msg = "Đã thu " + formatVND(*order.AmountTendered) + ", thối lại " + formatVND(*order.ChangeAmount) + "."
 	}
 
+	// Cộng lại từ chính các dòng đã ghi vào đơn, không giữ một biến chạy song song:
+	// con số in trên phiếu phải là con số đã nằm trong sổ.
+	var botTungMon float64
+	for _, it := range order.Items {
+		botTungMon += it.DiscountAmount
+	}
+
 	return &dto.POSCheckoutResponse{
 		OrderID:        order.ID,
 		OrderCode:      order.OrderCode,
 		Subtotal:       order.SubtotalAmount,
+		LineDiscount:   botTungMon,
 		Discount:       order.DiscountAmount,
 		VoucherCode:    order.VoucherCode,
 		Total:          order.TotalAmount,
@@ -482,6 +507,65 @@ func (s *orderService) POSCheckout(ctx context.Context, req *dto.POSCheckoutRequ
 		Status:         order.Status,
 		PaymentStatus:  order.PaymentStatus,
 		Message:        msg,
+	}, nil
+}
+
+// POSDiscountLimit trả mức giảm giá tối đa một vai trò được TỰ bấm ở quầy.
+//
+// Chủ cửa hàng và quản trị viên không bị chặn: họ là người đặt ra con số này, và
+// chặn chính họ thì mỗi lần muốn giảm sâu lại phải vào Cài đặt sửa rồi sửa lại.
+// Nhân viên bị chặn ở mức khai trong Cài đặt → Quầy bán hàng.
+//
+// Vai trò lạ (rỗng, hoặc một vai trò mới thêm sau này) rơi vào nhánh CHẶT: không
+// biết người này là ai thì cho họ đúng quyền của người ít quyền nhất, chứ không
+// phải quyền của chủ.
+func (s *orderService) POSDiscountLimit(ctx context.Context, role string) float64 {
+	switch role {
+	case domain.RoleSuperAdmin, domain.RoleAdmin:
+		return 100
+	}
+
+	limit := settingNumber(ctx, s.settings, SettingPOSStaffDiscountLimit)
+	// Kẹp về [0, 100]: cấu hình có thể bị sửa tay trong database, mà một con số âm
+	// hoặc 500 ở đây sẽ biến thành một hạn quyền không có nghĩa gì.
+	if limit < 0 {
+		return 0
+	}
+	if limit > 100 {
+		return 100
+	}
+	return limit
+}
+
+// POSScan tra món hàng người bán vừa quét, kèm giá đã trừ khuyến mãi và tồn của
+// chi nhánh đang bán.
+//
+// Đây là đường thay cho việc gõ tên hàng: nhanh hơn, và quan trọng hơn là không
+// chọn nhầm — hai chiếc áo cùng tên khác size trông giống hệt nhau trên danh
+// sách gợi ý, còn mã vạch thì chỉ trỏ vào đúng một biến thể.
+func (s *orderService) POSScan(ctx context.Context, code string) (*dto.POSScanResponse, error) {
+	cv, err := s.orderRepo.ScanVariant(ctx, code)
+	if err != nil {
+		return nil, err
+	}
+
+	// Khuyến mãi áp bằng CHÍNH hàm của luồng thanh toán, trên một map một phần tử.
+	// Tính tay ở đây là dựng bản sao thứ hai của luật giá, và bản sao đó sẽ lệch.
+	found := map[uint]domain.CheckoutVariant{cv.VariantID: *cv}
+	s.applyPromotions(ctx, found)
+	giaCuoi := found[cv.VariantID]
+
+	return &dto.POSScanResponse{
+		ProductVariantID: giaCuoi.VariantID,
+		ProductID:        giaCuoi.ProductID,
+		ProductName:      giaCuoi.ProductName,
+		SKU:              giaCuoi.SKU,
+		Barcode:          cv.Barcode,
+		Size:             giaCuoi.Size,
+		Color:            giaCuoi.Color,
+		Thumbnail:        giaCuoi.Thumbnail,
+		Price:            giaCuoi.Price,
+		Stock:            giaCuoi.Stock,
 	}, nil
 }
 
@@ -1174,6 +1258,7 @@ func buildOrderItems(found map[uint]domain.CheckoutVariant, lines []domain.Check
 	type picked struct {
 		cv   domain.CheckoutVariant
 		qty  int
+		giam float64
 		name string
 		num  string
 	}
@@ -1188,7 +1273,10 @@ func buildOrderItems(found map[uint]domain.CheckoutVariant, lines []domain.Check
 		if p, exists := merged[cv.VariantID]; exists {
 			p.qty += l.Quantity
 		} else {
-			merged[cv.VariantID] = &picked{cv: cv, qty: l.Quantity, name: l.CustomPlayerName, num: l.CustomPlayerNumber}
+			merged[cv.VariantID] = &picked{
+				cv: cv, qty: l.Quantity, giam: l.DiscountPercent,
+				name: l.CustomPlayerName, num: l.CustomPlayerNumber,
+			}
 			order = append(order, cv.VariantID)
 		}
 	}
@@ -1201,6 +1289,15 @@ func buildOrderItems(found map[uint]domain.CheckoutVariant, lines []domain.Check
 			return nil, 0, fmt.Errorf("%w: %s (còn %d)", domain.ErrOutOfStock, p.cv.ProductName, p.cv.Stock)
 		}
 		line := p.cv.Price * float64(p.qty)
+
+		// Bớt giá của riêng dòng này. Làm tròn tới ĐỒNG ngay tại đây thay vì để số
+		// lẻ chạy tiếp: tiền Việt không có hào, mà một phần nghìn đồng sót lại sẽ
+		// hiện ra ở ô tiền thối dưới dạng con số không đếm được bằng tờ tiền nào.
+		giam := math.Round(line * p.giam / 100)
+		if giam > line {
+			giam = line // không bớt quá số tiền của chính dòng đó
+		}
+		line -= giam
 		subtotal += line
 
 		pid := p.cv.ProductID
@@ -1214,6 +1311,8 @@ func buildOrderItems(found map[uint]domain.CheckoutVariant, lines []domain.Check
 			Color:              p.cv.Color,
 			Thumbnail:          p.cv.Thumbnail,
 			UnitPrice:          p.cv.Price,
+			DiscountPercent:    p.giam,
+			DiscountAmount:     giam,
 			Quantity:           p.qty,
 			TotalPrice:         line,
 			CustomPlayerName:   strings.TrimSpace(p.name),

@@ -424,11 +424,19 @@ type Product struct {
 type ProductVariant struct {
 	ID uint `json:"id" gorm:"primaryKey"`
 	TenantOwned
-	ProductID uint     `json:"product_id"`
-	SKU       string   `json:"sku" gorm:"column:sku"`
-	Size      string   `json:"size"`
-	Color     string   `json:"color"`
-	Price     *float64 `json:"price"`
+	ProductID uint   `json:"product_id"`
+	SKU       string `json:"sku" gorm:"column:sku"`
+	// Barcode là mã vạch in trên chính món hàng (EAN/UPC do nhà sản xuất đặt),
+	// khác SKU — mã nội bộ do cửa hàng tự đặt cho dễ đọc. nil = chưa dán mã.
+	//
+	// Con trỏ chứ không phải string: cột UNIQUE, mà MySQL chỉ coi các NULL là
+	// khác nhau. Dùng "" thì biến thể thứ hai chưa dán mã sẽ đụng ràng buộc với
+	// biến thể thứ nhất, và người dùng nhận một lỗi trùng mã vạch cho hai món
+	// đều không có mã vạch nào.
+	Barcode *string  `json:"barcode"`
+	Size    string   `json:"size"`
+	Color   string   `json:"color"`
+	Price   *float64 `json:"price"`
 	// CostPrice ghi đè giá vốn của sản phẩm cha khi biến thể có giá vốn riêng.
 	// nil = theo sản phẩm cha.
 	// Cũng bị xoá khỏi phản hồi công khai như Product.CostPrice.
@@ -771,16 +779,23 @@ const (
 type OrderItem struct {
 	ID uint `json:"id" gorm:"primaryKey"`
 	TenantOwned
-	OrderID            uint      `json:"order_id"`
-	ProductID          *uint     `json:"product_id"`
-	ProductVariantID   *uint     `json:"product_variant_id"`
-	ProductName        string    `json:"product_name"`
-	VariantSKU         string    `json:"variant_sku" gorm:"column:variant_sku"`
-	Size               string    `json:"size"`
-	Color              string    `json:"color"`
-	Thumbnail          string    `json:"thumbnail"`
-	UnitPrice          float64   `json:"unit_price"`
-	Quantity           int       `json:"quantity"`
+	OrderID          uint    `json:"order_id"`
+	ProductID        *uint   `json:"product_id"`
+	ProductVariantID *uint   `json:"product_variant_id"`
+	ProductName      string  `json:"product_name"`
+	VariantSKU       string  `json:"variant_sku" gorm:"column:variant_sku"`
+	Size             string  `json:"size"`
+	Color            string  `json:"color"`
+	Thumbnail        string  `json:"thumbnail"`
+	UnitPrice        float64 `json:"unit_price"`
+	// DiscountPercent là mức người bán BẤM khi bớt giá dòng này (0 = không bớt),
+	// DiscountAmount là số tiền thật đã trừ. Giữ cả hai vì mỗi con số trả lời một
+	// câu khác nhau lúc đối soát: "ai được phép duyệt mức này" và "đã bớt bao
+	// nhiêu tiền".
+	DiscountPercent float64 `json:"discount_percent"`
+	DiscountAmount  float64 `json:"discount_amount"`
+	Quantity        int     `json:"quantity"`
+	// TotalPrice là số tiền dòng này góp vào đơn: đơn giá × số lượng − phần đã bớt.
 	TotalPrice         float64   `json:"total_price"`
 	CustomPlayerName   string    `json:"custom_player_name"`
 	CustomPlayerNumber string    `json:"custom_player_number"`

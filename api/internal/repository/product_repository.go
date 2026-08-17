@@ -265,6 +265,7 @@ func (r *productRepository) ReplaceVariants(ctx context.Context, productID uint,
 				// đều không lưu được.
 				Updates(map[string]any{
 					"sku":         variants[i].SKU,
+					"barcode":     variants[i].Barcode,
 					"size":        variants[i].Size,
 					"color":       variants[i].Color,
 					"price":       variants[i].Price,

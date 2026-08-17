@@ -458,11 +458,15 @@ type ImageRequest struct {
 //
 // Cũng không còn `version`: fan/player đã chuyển lên cấp sản phẩm (kit_type).
 type VariantRequest struct {
-	ID    uint     `json:"id"` // >0 = cập nhật dòng cũ; 0 = thêm mới
-	SKU   string   `json:"sku" binding:"omitempty,max=64"`
-	Size  string   `json:"size" binding:"required,max=20"`
-	Color string   `json:"color" binding:"omitempty,max=50"`
-	Price *float64 `json:"price" binding:"omitempty,gte=0"`
+	ID  uint   `json:"id"` // >0 = cập nhật dòng cũ; 0 = thêm mới
+	SKU string `json:"sku" binding:"omitempty,max=64"`
+	// Barcode là mã vạch in trên hàng — cái máy quét ở quầy đọc được. Để trống
+	// nghĩa là chưa dán mã, và hai biến thể cùng để trống là chuyện bình thường;
+	// nhưng hai biến thể đang bán không được mang cùng một mã (DB chặn).
+	Barcode string   `json:"barcode" binding:"omitempty,max=64"`
+	Size    string   `json:"size" binding:"required,max=20"`
+	Color   string   `json:"color" binding:"omitempty,max=50"`
+	Price   *float64 `json:"price" binding:"omitempty,gte=0"`
 	// CostPrice bỏ trống = lấy giá vốn của sản phẩm cha.
 	CostPrice  *float64 `json:"cost_price" binding:"omitempty,gte=0"`
 	WeightGram int      `json:"weight_gram" binding:"gte=0"`
@@ -916,8 +920,50 @@ type POSCheckoutRequest struct {
 	Note           string   `json:"note" binding:"omitempty,max=500"`
 	// VoucherCode là mã giảm giá khách xuất trình. Mức giảm do server tự tính lại
 	// trên giá tại thời điểm bán — cùng đường với luồng web.
-	VoucherCode string                `json:"voucher_code" binding:"omitempty,max=50"`
-	Items       []CheckoutItemRequest `json:"items" binding:"required,min=1,max=50,dive"`
+	VoucherCode string           `json:"voucher_code" binding:"omitempty,max=50"`
+	Items       []POSItemRequest `json:"items" binding:"required,min=1,max=50,dive"`
+}
+
+// POSItemRequest — một dòng hàng trên màn hình quầy.
+//
+// Không dùng lại CheckoutItemRequest vì hai chỗ khác nhau ở đúng hai điểm, và
+// cả hai đều quan trọng:
+//
+//   - product_variant_id BẮT BUỘC. Storefront cho tra theo slug + size + màu vì
+//     khách bấm từ trang sản phẩm và trình duyệt không phải lúc nào cũng biết id.
+//     Ở quầy thì món hàng luôn đến từ ô tìm kiếm hoặc từ máy quét, cả hai đều trả
+//     về id — nhận thêm đường slug chỉ là mở một lối vào mơ hồ hơn cho cùng việc.
+//   - Có discount_percent. Trường này KHÔNG được phép tồn tại ở luồng web: client
+//     tự khai được mức giảm thì mã giảm giá còn ý nghĩa gì nữa.
+type POSItemRequest struct {
+	ProductVariantID uint `json:"product_variant_id" binding:"required,min=1"`
+	Quantity         int  `json:"quantity" binding:"required,min=1,max=99"`
+	// DiscountPercent là mức bớt giá của riêng dòng này (0–100). Nhân viên bị chặn
+	// ở mức cấu hình trong Cài đặt → Quầy bán hàng; chủ cửa hàng và quản trị viên
+	// không bị chặn.
+	DiscountPercent    float64 `json:"discount_percent" binding:"omitempty,gte=0,lte=100"`
+	CustomPlayerName   string  `json:"custom_player_name" binding:"omitempty,max=50"`
+	CustomPlayerNumber string  `json:"custom_player_number" binding:"omitempty,max=10"`
+}
+
+// POSScanResponse — kết quả quét một mã vạch ở quầy.
+//
+// Giá và tồn kho lấy qua ĐÚNG đường của lúc đặt hàng, nên con số máy quét đọc ra
+// bằng đúng con số sẽ thu. Tồn là tồn của CHI NHÁNH đang bán, không phải bản
+// cộng của cả cửa hàng.
+type POSScanResponse struct {
+	ProductVariantID uint   `json:"product_variant_id"`
+	ProductID        uint   `json:"product_id"`
+	ProductName      string `json:"product_name"`
+	SKU              string `json:"sku"`
+	Barcode          string `json:"barcode,omitempty"`
+	Size             string `json:"size"`
+	Color            string `json:"color"`
+	Thumbnail        string `json:"thumbnail"`
+	// Price là giá bán thật: giá riêng của biến thể (nếu có) đã trừ khuyến mãi
+	// đang chạy.
+	Price float64 `json:"price"`
+	Stock int     `json:"stock"`
 }
 
 // POSCheckoutResponse — kết quả một lượt bán tại quầy, đủ để in hoá đơn ngay.
@@ -926,10 +972,14 @@ type POSCheckoutResponse struct {
 	OrderCode string `json:"order_code"`
 	// Subtotal là tiền hàng theo giá server tra được (đã trừ khuyến mãi từng dòng),
 	// Discount là phần mã giảm giá trừ thêm trên cả đơn.
-	Subtotal    float64 `json:"subtotal_amount"`
-	Discount    float64 `json:"discount_amount"`
-	VoucherCode string  `json:"voucher_code,omitempty"`
-	Total       float64 `json:"total_amount"`
+	Subtotal float64 `json:"subtotal_amount"`
+	// LineDiscount là TỔNG số tiền đã bớt trên từng món (khác Discount — phần mã
+	// giảm giá trừ trên cả đơn). Tách riêng vì phiếu in phải nói rõ tiền đi đâu:
+	// gộp chung thì khách nhìn một con số giảm mà không biết nó đến từ món nào.
+	LineDiscount float64 `json:"line_discount_amount"`
+	Discount     float64 `json:"discount_amount"`
+	VoucherCode  string  `json:"voucher_code,omitempty"`
+	Total        float64 `json:"total_amount"`
 	// AmountTendered / ChangeAmount vắng mặt khi không thu tiền mặt. Số tiền thối
 	// là thứ người bán cần đọc to lên ngay, nên nó do server tính chứ không để mỗi
 	// màn hình tự trừ theo cách của mình.

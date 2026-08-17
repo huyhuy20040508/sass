@@ -798,7 +798,7 @@
         .prd-var-quick .prd-var-q-sizes { height: 36px; flex: 1; min-width: 180px; }
         .prd-var-quick .prd-btn-primary { flex-shrink: 0; }
         .prd-var-head, .prd-var-row {
-            display: grid; grid-template-columns: 1fr .7fr 1.1fr 1.1fr .7fr 36px; gap: 12px; align-items: center;
+            display: grid; grid-template-columns: .9fr .6fr 1.1fr 1fr 1fr .6fr 36px; gap: 10px; align-items: center;
         }
         /* Tồn kho chỉ để xem — nghiệp vụ kho mới được đổi, nên không phải ô nhập */
         .prd-var-stock {
@@ -1668,6 +1668,10 @@ if (words.length >= 2) teamPart = words.slice(0, 2).map((w) => w[0]).join('');
                                     <div class="prd-var-head">
                                         <span>Màu</span>
                                         <span>Size <span class="prd-req">*</span></span>
+                                        {{-- Mã vạch đứng ngay sau Size vì hai ô này cùng trả lời
+                                             "món nào": người dán tem xong thường mở đúng dòng đó
+                                             để gõ mã, không cần đi qua cột giá. --}}
+                                        <span>Mã vạch</span>
                                         <span>Giá riêng</span>
                                         <span>Giá vốn riêng</span>
                                         <span style="text-align:right">Tồn kho</span>
@@ -2157,6 +2161,7 @@ if (words.length >= 2) teamPart = words.slice(0, 2).map((w) => w[0]).join('');
                 const vid = v && v.id ? v.id : 0;
                 const color = v ? esc(v.color || '') : '';
                 const size = v ? esc(v.size || '') : '';
+                const barcode = v ? esc(v.barcode || '') : '';
                 const price = v && v.price != null ? fmtVnd(v.price) : '';
                 const cost = v && v.cost_price != null ? fmtVnd(v.cost_price) : '';
                 const stock = v && v.stock_quantity != null ? Number(v.stock_quantity) : 0;
@@ -2167,6 +2172,9 @@ if (words.length >= 2) teamPart = words.slice(0, 2).map((w) => w[0]).join('');
                     <div class="prd-var-row" data-vid="${vid}">
                         <input type="text" class="prd-input prd-var-color" placeholder="VD: Trắng" value="${color}">
                         <input type="text" class="prd-input prd-var-size" placeholder="VD: M" value="${size}">
+                        <input type="text" class="prd-input prd-var-barcode" placeholder="Quét hoặc gõ"
+                               title="Mã vạch in trên hàng — quầy quét mã này để bán. Để trống nếu chưa dán tem."
+                               value="${barcode}">
                         <div class="prd-input-prefix">
                             <input type="text" inputmode="numeric" class="prd-input prd-var-price" placeholder="Theo giá SP" value="${price}">
                             <span class="prd-input-suffix">₫</span>
@@ -2235,9 +2243,10 @@ if (words.length >= 2) teamPart = words.slice(0, 2).map((w) => w[0]).join('');
                 [...document.querySelectorAll('#mVariants .prd-var-row')].forEach((row) => {
                     const color = row.querySelector('.prd-var-color').value.trim();
                     const size = row.querySelector('.prd-var-size').value.trim();
+                    const barcode = row.querySelector('.prd-var-barcode').value.trim();
                     const price = digitsOnly(row.querySelector('.prd-var-price').value);
                     const cost = digitsOnly(row.querySelector('.prd-var-cost').value);
-                    if (!size && !color && !price && !cost) return; // dòng trống
+                    if (!size && !color && !barcode && !price && !cost) return; // dòng trống
                     if (!size) {
                         variantErr = variantErr || 'Mỗi biến thể phải có Size.';
                         row.querySelector('.prd-var-size').classList.add('is-err');
@@ -2254,6 +2263,7 @@ if (words.length >= 2) teamPart = words.slice(0, 2).map((w) => w[0]).join('');
                     fields[`variants[${vi}][id]`] = row.dataset.vid || '0';
                     fields[`variants[${vi}][size]`] = size;
                     fields[`variants[${vi}][color]`] = color;
+                    fields[`variants[${vi}][barcode]`] = barcode;   // '' = chưa dán tem
                     fields[`variants[${vi}][price]`] = price;          // '' nếu theo giá SP
                     fields[`variants[${vi}][cost_price]`] = cost;      // '' nếu theo giá vốn SP
                     vi++;

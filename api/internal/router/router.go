@@ -491,6 +491,10 @@ func New(
 			// quầy là nhân viên, và cả tính năng vô nghĩa nếu chỉ chủ cửa hàng bấm
 			// được nút thu tiền.
 			admin.POST("/orders/pos", h.Order.POSCheckout)
+			// Quét mã và hạn mức giảm giá: hai đường màn hình quầy hỏi liên tục
+			// trong lúc bán, nên đứng cạnh chính đường bán.
+			admin.GET("/orders/pos/scan", h.Order.POSScan)
+			admin.GET("/orders/pos/discount-limit", h.Order.POSDiscountLimit)
 			admin.GET("/orders/stats", h.Order.Stats)
 			admin.GET("/orders/revenue", h.Order.Revenue)
 			admin.GET("/orders/:id", h.Order.Get)

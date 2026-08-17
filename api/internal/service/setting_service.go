@@ -53,6 +53,10 @@ const (
 	SettingGroupShipping  = "shipping"
 	SettingGroupPayment   = "payment"
 	SettingGroupInventory = "inventory"
+	// SettingGroupPOS — luật của quầy bán hàng. Tách khỏi "payment" vì nhóm đó nói
+	// cửa hàng nhận tiền bằng cách nào, còn đây là NGƯỜI BÁN được phép làm gì:
+	// hai câu hỏi khác nhau, và người trả lời chúng cũng thường là hai người.
+	SettingGroupPOS = "pos"
 )
 
 // Tên các khoá cấu hình. Nơi tiêu thụ tham chiếu hằng số này chứ không viết chuỗi
@@ -74,6 +78,7 @@ const (
 	SettingDefaultShippingFee    = "default_shipping_fee"
 	SettingFreeShippingThreshold = "free_shipping_threshold"
 	SettingLowStockThreshold     = "low_stock_threshold"
+	SettingPOSStaffDiscountLimit = "pos_staff_discount_limit"
 	SettingPaymentCODEnabled     = "payment_cod_enabled"
 	SettingPaymentBankEnabled    = "payment_bank_enabled"
 	SettingPaymentPayOSEnabled   = "payment_payos_enabled"
@@ -262,6 +267,20 @@ var settingRegistry = []settingDef{
 		Label: "Ngưỡng cảnh báo sắp hết hàng", Default: "5",
 		// Chỉ dùng trong trang tồn kho của admin — không lộ ra storefront.
 		Required: true, MaxNum: 10_000,
+	},
+
+	// ----- Quầy bán hàng -----
+	{
+		Key: SettingPOSStaffDiscountLimit, Group: SettingGroupPOS, Type: SettingTypeNumber,
+		Label: "Mức giảm giá tối đa nhân viên được tự bấm (%)",
+		// Mặc định 10% chứ không phải 0: đặt 0 nghĩa là tính năng vừa dựng xong đã
+		// tắt sẵn, và người mở trang quầy lần đầu sẽ tưởng nó hỏng. 10% đủ để xử lý
+		// mấy ca thường gặp (hàng lỗi nhẹ, khách quen) mà chưa chạm tới mức phải
+		// hỏi chủ.
+		//
+		// Chủ cửa hàng và quản trị viên KHÔNG bị con số này chặn — họ tự chịu trách
+		// nhiệm về mức mình bấm. Đây là hạn quyền cho người làm thuê đứng quầy.
+		Default: "10", Required: true, MaxNum: 100,
 	},
 }
 

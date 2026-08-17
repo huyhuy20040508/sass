@@ -50,7 +50,97 @@ class BanTaiQuayController extends Controller
 
     public function index()
     {
-        return view('ban-tai-quay.index');
+        return view('ban-tai-quay.index', ['hanMucGiam' => $this->hanMucGiam()]);
+    }
+
+    /**
+     * Mức giảm giá tối đa người đang đăng nhập được tự bấm, tính bằng %.
+     *
+     * Hỏi API chứ không đọc vai trò trong phiên rồi tự suy: luật sống ở một chỗ,
+     * và chỗ đó cũng là chỗ chặn thật khi chốt đơn. Chép luật sang đây là mở
+     * đường cho ô nhập cho gõ 30% rồi bấm xong mới bị từ chối.
+     *
+     * API hỏng thì trả 0 — nhánh CHẶT. Không biết người này được phép giảm bao
+     * nhiêu thì cho họ mức của người ít quyền nhất, chứ không mở toang.
+     */
+    protected function hanMucGiam(): float
+    {
+        try {
+            $res = $this->api->posDiscountLimit();
+            if ($res->successful()) {
+                return (float) ($res->json('data.limit_percent') ?? 0);
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Load POS discount limit failed', ['msg' => $e->getMessage()]);
+        }
+
+        return 0;
+    }
+
+    /**
+     * Quét một mã vạch (hoặc SKU) và trả về món hàng.
+     *
+     * Đi vòng qua Laravel chứ không để trình duyệt gọi thẳng API: token nằm
+     * trong phiên phía máy chủ, đưa nó xuống trình duyệt để tiết kiệm một chặng
+     * là đánh đổi sai thứ.
+     */
+    public function scan(Request $request)
+    {
+        $code = trim((string) $request->query('code', ''));
+        if ($code === '') {
+            return response()->json(['message' => 'Chưa có mã để quét.'], 422);
+        }
+
+        try {
+            $res = $this->api->posScan($code);
+        } catch (\Throwable $e) {
+            Log::error('POS scan failed', ['msg' => $e->getMessage()]);
+
+            return response()->json(['message' => 'Không kết nối được API.'], 502);
+        }
+
+        if (! $res->successful()) {
+            return response()->json([
+                'message' => $res->json('message') ?: 'Không tìm thấy mã này.',
+            ], $res->status() === 500 ? 502 : $res->status());
+        }
+
+        return response()->json(['data' => $res->json('data')]);
+    }
+
+    /**
+     * Phiếu tính tiền khổ giấy in nhiệt, tự bật hộp thoại in khi mở.
+     *
+     * Trang riêng chứ không phải một khối ẩn trong màn hình quầy: khổ giấy 58/80mm
+     * cần bộ CSS @page riêng, mà nhét nó vào trang bán hàng thì mỗi lệnh Ctrl+P
+     * vô tình cũng nhả ra một tờ phiếu.
+     */
+    public function phieu(int $id)
+    {
+        try {
+            $res = $this->api->order($id);
+            if (! $res->successful()) {
+                abort(404);
+            }
+            $don = $res->json('data') ?? [];
+        } catch (\Throwable $e) {
+            Log::error('Load POS receipt failed', ['id' => $id, 'msg' => $e->getMessage()]);
+            abort(404);
+        }
+
+        return view('ban-tai-quay.phieu', [
+            'don' => $don,
+            'tenCuaHang' => $this->api->settingString('site_name', config('app.name')),
+            'diaChi' => $this->api->settingString('store_address'),
+            'dienThoai' => $this->api->settingString('contact_phone'),
+            'khoGiay' => $this->khoGiay(),
+        ]);
+    }
+
+    /** Khổ giấy in nhiệt: 58mm hoặc 80mm, nhớ theo lựa chọn trên URL. */
+    protected function khoGiay(): string
+    {
+        return request()->query('kho') === '58' ? '58' : '80';
     }
 
     /**
@@ -76,6 +166,10 @@ class BanTaiQuayController extends Controller
             'items' => 'required|array|min:1|max:50',
             'items.*.product_variant_id' => 'required|integer|min:1',
             'items.*.quantity' => 'required|integer|min:1|max:99',
+            // Hạn quyền KHÔNG kiểm ở đây, chỉ kiểm khoảng hợp lệ. Mức tối đa theo
+            // vai trò là việc của API: nó đọc vai trò từ token, còn ở đây thì vai
+            // trò nằm trong phiên — một chỗ mà người dùng chạm được nhiều hơn.
+            'items.*.discount_percent' => 'nullable|numeric|min:0|max:100',
         ], [
             'items.required' => 'Chưa có sản phẩm nào trong giỏ.',
             'items.min' => 'Chưa có sản phẩm nào trong giỏ.',
@@ -94,6 +188,7 @@ class BanTaiQuayController extends Controller
             'items' => array_map(fn ($it) => [
                 'product_variant_id' => (int) $it['product_variant_id'],
                 'quantity' => (int) $it['quantity'],
+                'discount_percent' => (float) ($it['discount_percent'] ?? 0),
             ], $data['items']),
         ];
         if (! empty($data['user_id'])) {

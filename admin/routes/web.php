@@ -136,6 +136,10 @@ Route::middleware(['admin.auth', 'admin.khoa'])->prefix('admin')->name('admin.')
     // hai bản sao thì sẽ có bản bị bỏ quên khi dữ liệu sản phẩm đổi hình dạng.
     Route::get('/ban-tai-quay', [BanTaiQuayController::class, 'index'])->name('ban-tai-quay.index');
     Route::post('/ban-tai-quay', [BanTaiQuayController::class, 'store'])->name('ban-tai-quay.store');
+    // /scan đứng TRƯỚC /{id}/phieu để không bị hiểu là một id.
+    Route::get('/ban-tai-quay/scan', [BanTaiQuayController::class, 'scan'])->name('ban-tai-quay.scan');
+    Route::get('/ban-tai-quay/{id}/phieu', [BanTaiQuayController::class, 'phieu'])
+        ->whereNumber('id')->name('ban-tai-quay.phieu');
 
     // Đơn hàng
     Route::get('/orders', [OrderController::class, 'index'])->name('orders.index');

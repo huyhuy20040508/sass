@@ -74,12 +74,49 @@ func (h *OrderHandler) POSCheckout(c *gin.Context) {
 		return
 	}
 
-	res, err := h.svc.POSCheckout(c.Request.Context(), &req)
+	// Vai trò lấy từ access token, KHÔNG từ payload: đây là thứ quyết định người
+	// này được bấm giảm bao nhiêu phần trăm.
+	res, err := h.svc.POSCheckout(c.Request.Context(), &req, c.GetString(middleware.CtxRole))
 	if err != nil {
 		respondOrderError(c, err, "Lỗi bán hàng tại quầy")
 		return
 	}
 	response.Created(c, res)
+}
+
+// @Summary		Quét mã vạch tại quầy
+// @Description	Tra MỘT món hàng theo mã vạch in trên sản phẩm, hoặc theo SKU nếu cửa hàng tự in tem — thử mã vạch trước, SKU sau.
+// @Description	Trả về giá bán THẬT (đã trừ khuyến mãi đang chạy) và tồn kho của CHI NHÁNH đang bán, lấy qua đúng đường tra giá của luồng đặt hàng nên con số này bằng con số sẽ thu khi chốt đơn.
+// @Description	Không tìm thấy mã, hoặc tìm thấy nhưng sản phẩm đã ẩn / ngừng bán, đều trả 400 — với người đứng quầy thì cả hai đều là "món này không bán được".
+// @Tags			Admin - Orders
+// @Accept			json
+// @Produce		json
+// @Param			code	query		string	true	"Mã vạch hoặc SKU"
+// @Success		200		{object}	response.Body{data=dto.POSScanResponse}
+// @Failure		400		{object}	response.Body	"Không tìm thấy mã, hoặc hàng không còn bán"
+// @Security		BearerAuth
+// @Router			/admin/orders/pos/scan [get]
+func (h *OrderHandler) POSScan(c *gin.Context) {
+	res, err := h.svc.POSScan(c.Request.Context(), c.Query("code"))
+	if err != nil {
+		respondOrderError(c, err, "Lỗi quét mã")
+		return
+	}
+	response.OK(c, res)
+}
+
+// @Summary		Hạn mức giảm giá tại quầy
+// @Description	Mức giảm giá tối đa (phần trăm) mà NGƯỜI ĐANG ĐĂNG NHẬP được tự bấm cho một dòng hàng. Màn hình quầy đọc số này để giới hạn ô nhập, thay vì chép lại luật vào giao diện rồi lệch với server.
+// @Description	Chủ cửa hàng và quản trị viên nhận 100 (không bị chặn); nhân viên nhận mức khai trong Cài đặt → Quầy bán hàng. Server vẫn kiểm lại khi chốt đơn — đây chỉ là nói trước.
+// @Tags			Admin - Orders
+// @Produce		json
+// @Success		200	{object}	response.Body
+// @Security		BearerAuth
+// @Router			/admin/orders/pos/discount-limit [get]
+func (h *OrderHandler) POSDiscountLimit(c *gin.Context) {
+	response.OK(c, gin.H{
+		"limit_percent": h.svc.POSDiscountLimit(c.Request.Context(), c.GetString(middleware.CtxRole)),
+	})
 }
 
 // @Summary		Sửa đơn hàng
@@ -638,6 +675,11 @@ func respondOrderError(c *gin.Context, err error, fallback string) {
 		response.Error(c, http.StatusBadRequest, "Sản phẩm trong giỏ không còn bán hoặc đã đổi phiên bản, vui lòng chọn lại")
 	case errors.Is(err, domain.ErrEmptyCart):
 		response.Error(c, http.StatusBadRequest, "Giỏ hàng đang trống")
+	case errors.Is(err, domain.ErrDiscountTooHigh):
+		// err đã kèm mức tối đa được phép — người bán biết ngay phải hạ xuống bao
+		// nhiêu, hoặc phải đi gọi ai.
+		response.Error(c, http.StatusForbidden, "Vượt quyền giảm giá — "+
+			strings.TrimPrefix(err.Error(), domain.ErrDiscountTooHigh.Error()+": "))
 	case errors.Is(err, domain.ErrTenderTooLow):
 		// err đã kèm số tiền còn thiếu — người bán khỏi phải tự trừ nhẩm.
 		response.Error(c, http.StatusBadRequest, "Khách đưa chưa đủ tiền — "+
