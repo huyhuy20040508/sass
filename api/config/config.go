@@ -3,6 +3,7 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 
@@ -84,6 +85,20 @@ type DatabaseConfig struct {
 	// ConnMaxIdleTime phải NHỎ HƠN wait_timeout của MySQL, nếu không kết nối
 	// nhàn rỗi bị server đóng sẽ được tái sử dụng và gây lỗi "invalid connection".
 	ConnMaxIdleTime time.Duration
+	// SQLModeThem là những luật sql_mode CỘNG THÊM vào phiên kết nối. Rỗng =
+	// không đụng, để server quyết — và đó là giá trị của app chạy thật.
+	//
+	// CỘNG THÊM chứ không phải đặt đè, và khác biệt này quan trọng: `SET sql_mode`
+	// THAY THẾ toàn bộ danh sách. Đặt đè bằng một danh sách thiếu mất một luật là
+	// âm thầm NỚI LỎNG chính chỗ mình đang muốn siết — trên CI (MySQL 8) nó sẽ gỡ
+	// luôn ONLY_FULL_GROUP_BY khỏi phiên test, tức là tắt đúng cái chốt đã tìm ra
+	// lỗi trang Báo cáo → theo size.
+	//
+	// CỐ Ý để rỗng ở production: máy chủ đã đặt sql_mode ở tầng global, thêm một
+	// chỗ khai nữa trong mã nguồn chỉ tạo thêm một chỗ có thể lệch với nó.
+	//
+	// Chỉ bộ test đặt trường này (xem SQLModeKiemThu).
+	SQLModeThem string
 	// SecretKey CHỈ có nghĩa với cfg.Platform: khoá mã hoá các giá trị bí mật cất
 	// trong `platform_settings` (khoá cổng thanh toán của nền tảng — xem
 	// pkg/bimat). Nằm trong struct này vì nó đi cùng đúng một kết nối, và tách ra
@@ -95,11 +110,63 @@ type DatabaseConfig struct {
 }
 
 // DSN trả về chuỗi kết nối MySQL cho GORM.
+// SQLModeKiemThu là những luật sql_mode mà BỘ TEST CỘNG THÊM vào phiên kết nối
+// của nó — cộng thêm, không đặt đè, xem DatabaseConfig.SQLModeThem.
+//
+// Mục đích: máy phát triển và máy chủ phải cho cùng một câu trả lời. MySQL đi
+// kèm XAMPP chạy sql_mode rỗng hoặc gần rỗng, nên ghi chuỗi rỗng vào một cột
+// ENUM ở đó chỉ là cảnh báo rồi ghi bừa, còn trên máy chủ là lỗi thẳng. Năm chỗ
+// trong bộ test từng sống nhờ đúng khe hở đó.
+//
+// THIẾU ONLY_FULL_GROUP_BY LÀ CỐ Ý, dù máy chủ có bật.
+//
+// Luật đó hai hệ hiểu KHÁC NHAU, không phải bật/tắt. MySQL 8 suy được phụ thuộc
+// hàm: `SELECT t.* ... GROUP BY t.id` là hợp lệ vì mọi cột của t phụ thuộc vào
+// khoá chính. MariaDB 10.4 không cài phần suy luận đó nên từ chối cùng câu lệnh:
+//
+//	Error 1055: 'nen_tang.t.code' isn't in GROUP BY
+//
+// Bật nó lên cho máy chạy MariaDB là tạo ra ĐỎ GIẢ trên những truy vấn hoàn toàn
+// đúng ở production — và không gì phá bộ test nhanh bằng việc nó đỏ vì lý do
+// không có thật. Luật này để CI gác: ở đó là MySQL 8 thật, đúng thứ máy chủ chạy,
+// nên nó vừa bắt được vi phạm vừa không báo oan. Trang Báo cáo → theo size chính
+// là do CI tìm ra theo đường đó.
+const SQLModeKiemThu = "STRICT_TRANS_TABLES,NO_ZERO_IN_DATE," +
+	"NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION"
+
 func (d DatabaseConfig) DSN() string {
 	return fmt.Sprintf(
-		"%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local",
-		d.User, d.Password, d.Host, d.Port, d.Name,
+		"%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local%s",
+		d.User, d.Password, d.Host, d.Port, d.Name, d.thamSoSQLMode(),
 	)
+}
+
+// thamSoSQLMode trả về phần "&sql_mode=..." của DSN, hoặc chuỗi rỗng khi không
+// ai khai — để nguyên cấu hình của máy chủ.
+//
+// Giá trị là một BIỂU THỨC SQL chứ không phải chuỗi hằng, và go-sql-driver đưa
+// nguyên nó vào câu `SET sql_mode=...` lúc bắt tay, nên MySQL tự tính:
+//
+//	CONCAT(@@sql_mode, IF(@@sql_mode='','',','), 'STRICT_TRANS_TABLES,...')
+//
+// Nhánh IF là để lo trường hợp máy chủ đang để sql_mode RỖNG: nối thẳng sẽ ra
+// chuỗi mở đầu bằng dấu phẩy, và MySQL từ chối cả câu. Luật trùng thì không sao,
+// MySQL tự gộp.
+func (d DatabaseConfig) thamSoSQLMode() string {
+	if d.SQLModeThem == "" {
+		return ""
+	}
+	return "&" + ThamSoSQLModeThem(d.SQLModeThem)
+}
+
+// ThamSoSQLModeThem dựng tham số DSN "sql_mode=..." cộng thêm các luật cho trước.
+//
+// Xuất ra ngoài vì internal/repository mở kết nối test THẲNG từ chuỗi DSN trong
+// biến môi trường, không đi qua DatabaseConfig — nó vẫn cần đúng biểu thức này
+// chứ không nên chép lại một bản gần giống.
+func ThamSoSQLModeThem(modes string) string {
+	bieuThuc := "CONCAT(@@sql_mode, IF(@@sql_mode='','',','), '" + modes + "')"
+	return "sql_mode=" + url.QueryEscape(bieuThuc)
 }
 
 // DSNMayChu là chuỗi kết nối tới MÁY CHỦ MySQL mà không chọn database nào.
@@ -109,8 +176,8 @@ func (d DatabaseConfig) DSN() string {
 // tới được lệnh CREATE DATABASE. Xem cmd/migrate.
 func (d DatabaseConfig) DSNMayChu() string {
 	return fmt.Sprintf(
-		"%s:%s@tcp(%s:%s)/?charset=utf8mb4&parseTime=True&loc=Local",
-		d.User, d.Password, d.Host, d.Port,
+		"%s:%s@tcp(%s:%s)/?charset=utf8mb4&parseTime=True&loc=Local%s",
+		d.User, d.Password, d.Host, d.Port, d.thamSoSQLMode(),
 	)
 }
 

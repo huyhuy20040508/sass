@@ -111,15 +111,21 @@ func mocCauHinh(t *testing.T, banHang bool) *config.Config {
 			// hàng cho khách (co_lap_storefront_test.go) tự bật lên.
 			EnableStorefront: banHang,
 		},
+		// SQLModeThem: cộng thêm mấy luật nghiêm vào phiên kết nối của bài kiểm, bất
+		// kể MySQL dưới máy người chạy đang để lỏng tới đâu — nhưng KHÔNG gỡ luật
+		// nào máy chủ đang có. Xem config.SQLModeKiemThu, kể cả phần giải thích vì
+		// sao ONLY_FULL_GROUP_BY cố ý không nằm trong đó mà để CI gác.
 		Database: config.DatabaseConfig{
 			User: m[1], Password: m[2], Host: m[3], Port: m[4], Name: m[5],
 			MaxOpenConns: 10, MaxIdleConns: 2,
 			ConnMaxLifetime: time.Hour, ConnMaxIdleTime: time.Minute,
+			SQLModeThem: config.SQLModeKiemThu,
 		},
 		Platform: config.DatabaseConfig{
 			User: m[1], Password: m[2], Host: m[3], Port: m[4], Name: m[5] + hauToNenTang,
 			MaxOpenConns: 5, MaxIdleConns: 1,
 			ConnMaxLifetime: time.Hour, ConnMaxIdleTime: time.Minute,
+			SQLModeThem: config.SQLModeKiemThu,
 		},
 		JWT: config.JWTConfig{
 			Secret: "bi-mat-cua-bai-kiem-co-lap", AccessTTL: 15 * time.Minute, RefreshTTL: time.Hour,
