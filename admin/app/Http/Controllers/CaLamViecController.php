@@ -68,7 +68,7 @@ class CaLamViecController extends Controller
             $error = 'Không tải được danh sách ca. Kiểm tra kết nối API.';
         }
 
-        $view = view('ca-lam-viec.index', compact('list', 'filters', 'meta'));
+        $view = view('thu-ngan.ca-lam-viec', compact('list', 'filters', 'meta'));
 
         return $error ? $view->with('error', $error) : $view;
     }
@@ -87,7 +87,7 @@ class CaLamViecController extends Controller
             abort(404);
         }
 
-        return view('ca-lam-viec.show', [
+        return view('thu-ngan.ca-chi-tiet', [
             'ca' => $data['ca'] ?? [],
             'soQuy' => $data['so_quy'] ?? [],
         ]);

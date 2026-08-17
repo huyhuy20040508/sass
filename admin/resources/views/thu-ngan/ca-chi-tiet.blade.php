@@ -1,4 +1,4 @@
-@extends('layouts.app')
+@extends('layouts.thu-ngan')
 
 @section('title', 'Ca ngày '.\Illuminate\Support\Carbon::parse($ca['opened_at'] ?? now())->format('d/m/Y'))
 
@@ -28,7 +28,7 @@
                     <span class="clv-badge">Đang mở</span>
                 @endif
             </h1>
-            <a href="{{ route('admin.ca-lam-viec.index') }}" class="clv-link">← Về danh sách ca</a>
+            <a href="{{ route('thu-ngan.ca-lam-viec.index') }}" class="clv-link">← Về danh sách ca</a>
         </div>
 
         <div class="clv-grid">

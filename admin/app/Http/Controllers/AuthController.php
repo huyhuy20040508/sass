@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Services\ApiClient;
 use App\Services\HanSuDung;
+use App\Services\ModuleLamViec;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
@@ -30,7 +31,7 @@ class AuthController extends Controller
     public function showLogin(Request $request)
     {
         if (session('api.access_token')) {
-            return redirect()->route('admin.dashboard');
+            return redirect()->to(ModuleLamViec::trangChuCuaPhien());
         }
 
         return view('auth.login', [
@@ -129,7 +130,11 @@ class AuthController extends Controller
             return redirect()->route('admin.goi-dich-vu.index');
         }
 
-        $redirect = redirect()->intended(route('admin.dashboard'))
+        // Vào thẳng module của vai trò này: nhân viên là thu ngân, đưa họ vào khu
+        // quản trị là mở ra một thanh trái gần như trống rỗng rồi bắt bấm thêm
+        // một lần nữa mới tới chỗ làm việc thật. Chủ tiệm vẫn vào khu quản trị,
+        // và cả hai đổi qua lại bằng nút ở góc phải thanh trên cùng.
+        $redirect = redirect()->intended(ModuleLamViec::trangChuCuaPhien())
             ->with('success', 'Đăng nhập thành công.');
 
         // Ghi nhớ mã cửa hàng + tên đăng nhập cho lần sau, hoặc xoá nếu bỏ chọn.

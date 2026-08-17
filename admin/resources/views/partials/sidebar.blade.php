@@ -5,11 +5,11 @@
     - Icon inline SVG (line style) đúng như bản gốc.
 --}}
 @php
-    // Vai trò của người đang đăng nhập. Nhân viên (staff) là THU NGÂN: menu của họ
-    // chỉ còn Tổng quan và nhóm Đơn hàng (bán tại quầy, đơn hàng, ca làm việc).
-    // Sản phẩm, Marketing, Kho, Trả hàng, Khách hàng, Báo cáo và Cài đặt đều đã bị
-    // route chặn bằng middleware `admin.manage`, ở đây bỏ luôn khỏi menu để không
-    // mời bấm vào chỗ sẽ bị đá ra.
+    // Vai trò của người đang đăng nhập. Nhân viên (staff) là THU NGÂN: chỗ làm
+    // việc của họ là module Thu ngân (/thu-ngan), và trong khu quản trị này menu
+    // của họ chỉ còn Tổng quan và Đơn hàng. Sản phẩm, Marketing, Kho, Trả hàng,
+    // Khách hàng, Báo cáo và Cài đặt đều đã bị route chặn bằng middleware
+    // `admin.manage`, ở đây bỏ luôn khỏi menu để không mời bấm vào chỗ sẽ bị đá ra.
     $role = (string) data_get(session('api.user'), 'role.name', '');
     $canManage = in_array($role, ['super_admin', 'admin'], true);
 
@@ -30,17 +30,13 @@
                     // dropdown Đơn hàng: người xử lý đơn và người lập phiếu trả nhìn
                     // vào cùng một chỗ, gom chung thì đỡ phải đi tìm. Chỉ khác quyền —
                     // trả hàng là tiền ra khỏi két nên chỉ quản trị viên thấy mục đó.
+                    //
+                    // BÁN TẠI QUẦY VÀ CA LÀM VIỆC KHÔNG CÒN Ở ĐÂY: cả hai đã sang
+                    // module Thu ngân (/thu-ngan), đi bằng nút đổi module ở góc phải
+                    // thanh trên cùng. Để lại một bản sao trong menu này thì hai lối
+                    // vào cùng một trang, mà một trong hai sẽ lạc hậu.
                     'label' => 'Đơn hàng', 'icon' => 'orders', 'count' => (int) ($pendingOrders ?? 0),
                     'children' => [
-                        [
-                            // Bán tại quầy đứng ĐẦU nhóm: đây là việc người trực quầy
-                            // làm cả ngày, còn hai mục dưới là nơi họ chỉ ghé khi cần
-                            // tra lại. Thứ tự menu nên theo số lần bấm, không theo thứ
-                            // tự các tính năng được dựng ra.
-                            'href' => route('admin.ban-tai-quay.index'),
-                            'label' => \App\Http\Controllers\BanTaiQuayController::TITLE,
-                            'active' => request()->routeIs('admin.ban-tai-quay.*'),
-                        ],
                         [
                             'href' => route('admin.orders.index'),
                             'label' => \App\Http\Controllers\OrderController::VIEWS['all']['label'],
@@ -51,14 +47,6 @@
                             'label' => \App\Http\Controllers\ReturnController::TITLE,
                             'active' => request()->routeIs('admin.returns.*'),
                         ]] : []),
-                        [
-                            // Ca làm việc nằm trong nhóm Đơn hàng chứ không phải Báo
-                            // cáo: nó là việc của người trực quầy (mở ca, ghi sổ quỹ,
-                            // đóng ca), không phải một bảng số để chủ tiệm ngồi đọc.
-                            'href' => route('admin.ca-lam-viec.index'),
-                            'label' => \App\Http\Controllers\CaLamViecController::TITLE,
-                            'active' => request()->routeIs('admin.ca-lam-viec.*'),
-                        ],
                     ],
                 ],
                 ...($canManage ? [[

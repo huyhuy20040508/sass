@@ -1,6 +1,9 @@
-@extends('layouts.pos')
+@extends('layouts.thu-ngan')
 
 @section('title', \App\Http\Controllers\BanTaiQuayController::TITLE)
+
+{{-- Thân KÍN: cả trang không cuộn, hai cột bên trong tự cuộn phần của mình. --}}
+@section('than', 'tn-kin')
 
 {{-- Đơn treo nằm trên thanh trên cùng, không nằm trong cột giỏ hàng: nó không
      thuộc về lượt bán đang làm dở, và để trong cột phải thì mỗi lần giỏ dài ra
@@ -53,14 +56,14 @@
     <div class="pos" id="pos"
          data-search-url="{{ route('admin.orders.searchProducts') }}"
          data-customer-url="{{ route('admin.orders.searchCustomers') }}"
-         data-scan-url="{{ route('admin.ban-tai-quay.scan') }}"
-         data-store-url="{{ route('admin.ban-tai-quay.store') }}"
-         data-receipt-url="{{ route('admin.ban-tai-quay.phieu', ['id' => 0]) }}"
-         data-orders-url="{{ route('admin.orders.index') }}"
-         data-ca-url="{{ route('admin.ca-lam-viec.hienTai') }}"
-         data-ca-mo-url="{{ route('admin.ca-lam-viec.mo') }}"
-         data-ca-dong-url="{{ route('admin.ca-lam-viec.dong') }}"
-         data-so-quy-url="{{ route('admin.ca-lam-viec.soQuy') }}"
+         data-scan-url="{{ route('thu-ngan.ban-hang.scan') }}"
+         data-store-url="{{ route('thu-ngan.ban-hang.store') }}"
+         data-receipt-url="{{ route('thu-ngan.ban-hang.phieu', ['id' => 0]) }}"
+         data-orders-url="{{ route('thu-ngan.don-hang.index') }}"
+         data-ca-url="{{ route('thu-ngan.ca-lam-viec.hienTai') }}"
+         data-ca-mo-url="{{ route('thu-ngan.ca-lam-viec.mo') }}"
+         data-ca-dong-url="{{ route('thu-ngan.ca-lam-viec.dong') }}"
+         data-so-quy-url="{{ route('thu-ngan.ca-lam-viec.soQuy') }}"
          data-discount-limit="{{ $hanMucGiam }}">
 
         {{-- ============ CỘT TRÁI: tìm / quét hàng ============ --}}

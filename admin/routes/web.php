@@ -24,12 +24,19 @@ use App\Http\Controllers\ReportController;
 use App\Http\Controllers\ReturnController;
 use App\Http\Controllers\SettingController;
 use App\Http\Controllers\SupplierController;
+use App\Http\Controllers\ThuNganController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\VoucherController;
 use Illuminate\Support\Facades\Route;
 
-// --- Route gốc: redirect vào /admin ---
-Route::get('/', fn () => redirect('/admin'));
+// --- Route gốc: về module của người đang đăng nhập ---
+//
+// Nhân viên (thu ngân) về thẳng quầy, chủ tiệm về khu quản trị — xem
+// ModuleLamViec. Chưa đăng nhập thì cứ đi vào /admin, chốt chặn ở đó sẽ đưa
+// sang trang đăng nhập kèm lý do.
+Route::get('/', fn () => session('api.access_token')
+    ? redirect()->to(\App\Services\ModuleLamViec::trangChuCuaPhien())
+    : redirect('/admin'));
 
 // --- Khách (chưa đăng nhập) ---
 Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
@@ -145,28 +152,18 @@ Route::middleware(['admin.auth', 'admin.khoa'])->prefix('admin')->name('admin.')
         Route::delete('/voucher/{id}', [VoucherController::class, 'destroy'])->whereNumber('id')->name('vouchers.destroy');
     });
 
-    // Bán tại quầy — màn hình thu ngân. Đứng trước Đơn hàng vì đây là việc người
-    // trực quầy làm cả ngày, còn trang đơn là nơi họ chỉ ghé khi cần tra lại.
-    //
-    // Dùng lại thẳng đường tìm sản phẩm của trang tạo đơn (orders.searchProducts)
-    // thay vì đẻ thêm một endpoint song song: hai màn hình hỏi cùng một câu, và
-    // hai bản sao thì sẽ có bản bị bỏ quên khi dữ liệu sản phẩm đổi hình dạng.
-    Route::get('/ban-tai-quay', [BanTaiQuayController::class, 'index'])->name('ban-tai-quay.index');
-    Route::post('/ban-tai-quay', [BanTaiQuayController::class, 'store'])->name('ban-tai-quay.store');
-    // /scan đứng TRƯỚC /{id}/phieu để không bị hiểu là một id.
-    Route::get('/ban-tai-quay/scan', [BanTaiQuayController::class, 'scan'])->name('ban-tai-quay.scan');
-    Route::get('/ban-tai-quay/{id}/phieu', [BanTaiQuayController::class, 'phieu'])
-        ->whereNumber('id')->name('ban-tai-quay.phieu');
-
-    // Ca làm việc & sổ quỹ — nơi đối chiếu tiền trong két với sổ. Nhóm `admin`
-    // chứ không phải `manage`: người trực két là nhân viên.
-    Route::get('/ca-lam-viec', [CaLamViecController::class, 'index'])->name('ca-lam-viec.index');
-    // /hien-tai, /mo, /dong, /so-quy đứng TRƯỚC /{id} để không bị hiểu là một id.
-    Route::get('/ca-lam-viec/hien-tai', [CaLamViecController::class, 'hienTai'])->name('ca-lam-viec.hienTai');
-    Route::post('/ca-lam-viec/mo', [CaLamViecController::class, 'moCa'])->name('ca-lam-viec.mo');
-    Route::post('/ca-lam-viec/dong', [CaLamViecController::class, 'dongCa'])->name('ca-lam-viec.dong');
-    Route::post('/ca-lam-viec/so-quy', [CaLamViecController::class, 'ghiSoQuy'])->name('ca-lam-viec.soQuy');
-    Route::get('/ca-lam-viec/{id}', [CaLamViecController::class, 'show'])->whereNumber('id')->name('ca-lam-viec.show');
+    // NGHIỆP VỤ THU NGÂN ĐÃ TÁCH SANG MODULE RIÊNG (/thu-ngan, xem nhóm route ở
+    // cuối tệp). Bốn đường dưới đây giữ lại ĐÚNG để chuyển hướng: máy quầy hay
+    // được đặt sẵn trang chủ trình duyệt là /admin/ban-tai-quay, và những đường
+    // dẫn ấy nằm rải rác trong ghi chú của cửa hàng. Bỏ hẳn thì một sáng nào đó
+    // người trực quầy mở máy lên và gặp trang 404.
+    Route::get('/ban-tai-quay', fn () => redirect()->route('thu-ngan.ban-hang.index'));
+    Route::get('/ban-tai-quay/{id}/phieu', fn (int $id) => redirect()->route(
+        'thu-ngan.ban-hang.phieu', ['id' => $id, 'kho' => request()->query('kho')]
+    ))->whereNumber('id');
+    Route::get('/ca-lam-viec', fn () => redirect()->route('thu-ngan.ca-lam-viec.index'));
+    Route::get('/ca-lam-viec/{id}', fn (int $id) => redirect()->route('thu-ngan.ca-lam-viec.show', $id))
+        ->whereNumber('id');
 
     // Đơn hàng
     Route::get('/orders', [OrderController::class, 'index'])->name('orders.index');
@@ -387,4 +384,45 @@ Route::middleware(['admin.auth', 'admin.khoa'])->prefix('admin')->name('admin.')
         Route::get('/reports/products', [ReportController::class, 'products'])->name('reports.products');
         Route::get('/reports/customers', [ReportController::class, 'customers'])->name('reports.customers');
     });
+});
+
+// --- MODULE THU NGÂN (yêu cầu đăng nhập; nhân viên vào được) ---
+//
+// Khu riêng chứ không phải vài trang lẻ trong /admin, vì đây là một CHỖ ĐỨNG
+// khác: người trực quầy mở máy ra là ở sẵn đây cả ca, không đi qua thanh điều
+// hướng của khu quản trị (thanh đó chứa mười thứ họ không được phép mở). Đổi
+// qua lại giữa hai module bằng nút ở góc phải thanh trên cùng — cùng một nút ở
+// cả hai bên, xem partials/module-switch.blade.php.
+//
+// CỐ Ý không có `admin.manage`: người đứng quầy là nhân viên, cả module vô
+// nghĩa nếu chỉ chủ tiệm bấm được nút thu tiền. Vẫn có `admin.khoa`: cửa hàng
+// hết hạn hợp đồng thì quầy cũng dừng, và Go API từ chối y như vậy.
+Route::middleware(['admin.auth', 'admin.khoa'])->prefix('thu-ngan')->name('thu-ngan.')->group(function () {
+    Route::get('/', fn () => redirect()->route('thu-ngan.ban-hang.index'));
+
+    // Bán tại quầy — trang mặc định của module.
+    //
+    // Dùng lại thẳng đường tìm sản phẩm của trang tạo đơn (admin.orders.searchProducts)
+    // thay vì đẻ thêm một endpoint song song: hai màn hình hỏi cùng một câu, và
+    // hai bản sao thì sẽ có bản bị bỏ quên khi dữ liệu sản phẩm đổi hình dạng.
+    Route::get('/ban-hang', [BanTaiQuayController::class, 'index'])->name('ban-hang.index');
+    Route::post('/ban-hang', [BanTaiQuayController::class, 'store'])->name('ban-hang.store');
+    // /scan đứng TRƯỚC /{id}/phieu để không bị hiểu là một id.
+    Route::get('/ban-hang/scan', [BanTaiQuayController::class, 'scan'])->name('ban-hang.scan');
+    Route::get('/ban-hang/{id}/phieu', [BanTaiQuayController::class, 'phieu'])
+        ->whereNumber('id')->name('ban-hang.phieu');
+
+    // Ca làm việc & sổ quỹ — nơi đối chiếu tiền trong két với sổ.
+    Route::get('/ca-lam-viec', [CaLamViecController::class, 'index'])->name('ca-lam-viec.index');
+    // /hien-tai, /mo, /dong, /so-quy đứng TRƯỚC /{id} để không bị hiểu là một id.
+    Route::get('/ca-lam-viec/hien-tai', [CaLamViecController::class, 'hienTai'])->name('ca-lam-viec.hienTai');
+    Route::post('/ca-lam-viec/mo', [CaLamViecController::class, 'moCa'])->name('ca-lam-viec.mo');
+    Route::post('/ca-lam-viec/dong', [CaLamViecController::class, 'dongCa'])->name('ca-lam-viec.dong');
+    Route::post('/ca-lam-viec/so-quy', [CaLamViecController::class, 'ghiSoQuy'])->name('ca-lam-viec.soQuy');
+    Route::get('/ca-lam-viec/{id}', [CaLamViecController::class, 'show'])->whereNumber('id')->name('ca-lam-viec.show');
+
+    // Đơn quầy — chỉ những đơn bán ra từ chính module này, để tra lại và in lại
+    // phiếu. Khác trang Đơn hàng bên quản trị: ở đó là đơn giao hàng cần xử lý,
+    // còn đơn quầy thì xong ngay lúc tạo.
+    Route::get('/don-hang', [ThuNganController::class, 'donHang'])->name('don-hang.index');
 });

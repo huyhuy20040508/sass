@@ -88,10 +88,13 @@ class KhoaKhiHetHanTest extends TestCase
         $res->assertSee('Thoát ra');
         // Thanh trái bỏ hẳn điều hướng: mọi mục trong đó đều quay về đây.
         //
-        // Mốc nhận biết là "Bán tại quầy" chứ không phải một mục quản lý: từ lượt
+        // Mốc nhận biết là "Tổng quan" chứ không phải một mục quản lý: từ lượt
         // siết quyền thu ngân, phần lớn menu chỉ hiện với quản trị viên, nên một
         // mục quản lý vắng mặt KHÔNG còn chứng minh được là cả thanh đã bị bỏ.
-        $res->assertDontSee('Bán tại quầy');
+        $res->assertDontSee('Tổng quan');
+        // Và nút đổi module trên thanh trên cùng cũng biến mất — module thu ngân
+        // lúc này cũng bị dồn về đúng trang này.
+        $res->assertDontSee('Chuyển sang');
     }
 
     /**

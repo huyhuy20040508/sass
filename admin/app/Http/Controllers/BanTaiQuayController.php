@@ -50,7 +50,7 @@ class BanTaiQuayController extends Controller
 
     public function index()
     {
-        return view('ban-tai-quay.index', ['hanMucGiam' => $this->hanMucGiam()]);
+        return view('thu-ngan.ban-hang', ['hanMucGiam' => $this->hanMucGiam()]);
     }
 
     /**
@@ -128,7 +128,7 @@ class BanTaiQuayController extends Controller
             abort(404);
         }
 
-        return view('ban-tai-quay.phieu', [
+        return view('thu-ngan.phieu', [
             'don' => $don,
             'tenCuaHang' => $this->api->settingString('site_name', config('app.name')),
             'diaChi' => $this->api->settingString('store_address'),
