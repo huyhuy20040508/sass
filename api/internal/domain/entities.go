@@ -788,6 +788,13 @@ type OrderItem struct {
 	Color            string  `json:"color"`
 	Thumbnail        string  `json:"thumbnail"`
 	UnitPrice        float64 `json:"unit_price"`
+	// CostPrice là giá vốn một đơn vị CHỤP LẠI tại thời điểm bán.
+	//
+	// Có nó thì lãi gộp của tháng trước không tự đổi khi nhập lô mới đắt hơn. nil =
+	// dòng bán trước khi có cột này, hoặc đi qua đường tạo đơn thủ công (nơi người
+	// nhập gõ giá bán chứ không tra giá vốn) — báo cáo lùi về giá vốn hiện tại cho
+	// những dòng ấy, đúng như nó vẫn tính từ trước tới nay.
+	CostPrice *float64 `json:"cost_price"`
 	// DiscountPercent là mức người bán BẤM khi bớt giá dòng này (0 = không bớt),
 	// DiscountAmount là số tiền thật đã trừ. Giữ cả hai vì mỗi con số trả lời một
 	// câu khác nhau lúc đối soát: "ai được phép duyệt mức này" và "đã bớt bao
@@ -828,14 +835,19 @@ type OrderReturn struct {
 	// ShopID là chi nhánh nhận hàng trả về — LUÔN lấy theo đơn gốc, không lấy
 	// theo chi nhánh người duyệt đang đứng: hàng quay về đúng kho đã xuất nó ra,
 	// nếu không thì hai kho cùng lệch, một bên thừa một bên thiếu.
-	ShopID      uint   `json:"shop_id"`
-	ReturnCode  string `json:"return_code"`
-	OrderID     uint   `json:"order_id"`
-	UserID      *uint  `json:"user_id"`
-	Status      string `json:"status"`
-	Reason      string `json:"reason"`
-	ReasonNote  string `json:"reason_note"`
-	RequestedBy string `json:"requested_by"`
+	ShopID     uint   `json:"shop_id"`
+	ReturnCode string `json:"return_code"`
+	OrderID    uint   `json:"order_id"`
+	// ExchangeOrderID là đơn MỚI khách lấy về trong một lượt đổi hàng tại quầy.
+	// nil = trả hàng thuần, có hoàn tiền. Thiếu mối nối này thì trong sổ chỉ còn
+	// một phiếu trả và một đơn bán tình cờ trùng giờ, và câu hỏi "khách đổi cái
+	// áo đó lấy cái gì" không tra được nữa.
+	ExchangeOrderID *uint  `json:"exchange_order_id"`
+	UserID          *uint  `json:"user_id"`
+	Status          string `json:"status"`
+	Reason          string `json:"reason"`
+	ReasonNote      string `json:"reason_note"`
+	RequestedBy     string `json:"requested_by"`
 
 	RefundMethod string `json:"refund_method"`
 	BankAccount  string `json:"bank_account"`

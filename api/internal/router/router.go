@@ -58,12 +58,15 @@ type Handlers struct {
 	// khách hàng của nền tảng — xem domain.ChiNhanh. Luôn có mặt: đây là dữ liệu
 	// data plane, không phụ thuộc control plane.
 	ChiNhanh *handler.ChiNhanhHandler
-	Payment  *handler.PaymentHandler
-	Banner   *handler.BannerHandler
-	Report   *handler.ReportHandler
-	Promo    *handler.PromotionHandler
-	Voucher  *handler.VoucherHandler
-	Contact  *handler.ContactHandler
+	// Ca là ca làm việc + sổ quỹ tiền mặt — cụm trả lời câu hỏi cuối ngày: tiền
+	// trong két có khớp sổ không, và nếu lệch thì lệch trong lượt trực của ai.
+	Ca      *handler.CaLamViecHandler
+	Payment *handler.PaymentHandler
+	Banner  *handler.BannerHandler
+	Report  *handler.ReportHandler
+	Promo   *handler.PromotionHandler
+	Voucher *handler.VoucherHandler
+	Contact *handler.ContactHandler
 	// Plan phục vụ KHU ĐIỀU HÀNH NỀN TẢNG (danh mục phần mềm, bảng giá, tính
 	// năng gói). nil = chưa dựng control plane; cả nhóm /platform không được
 	// đăng ký.
@@ -495,6 +498,8 @@ func New(
 			// trong lúc bán, nên đứng cạnh chính đường bán.
 			admin.GET("/orders/pos/scan", h.Order.POSScan)
 			admin.GET("/orders/pos/discount-limit", h.Order.POSDiscountLimit)
+			// Đổi hàng: nhận hàng cũ + bán hàng mới + ghi chênh lệch, một giao dịch.
+			admin.POST("/orders/pos/doi-hang", h.Order.POSDoiHang)
 			admin.GET("/orders/stats", h.Order.Stats)
 			admin.GET("/orders/revenue", h.Order.Revenue)
 			admin.GET("/orders/:id", h.Order.Get)
@@ -505,6 +510,18 @@ func New(
 			admin.PUT("/orders/:id/note", h.Order.UpdateNote)
 			// Món còn trả được của một đơn — màn hình lập phiếu trả dựng form từ đây.
 			admin.GET("/orders/:id/returnable", h.Return.Returnable)
+
+			// Ca làm việc & sổ quỹ — nhóm `admin` chứ không phải `manage`: người
+			// trực két là nhân viên, và cả cụm vô nghĩa nếu chỉ chủ mới mở/đóng ca
+			// được. Chủ vẫn xem được toàn bộ lịch sử qua cùng những đường này.
+			//
+			// /hien-tai, /mo, /dong đứng TRƯỚC /:id để không bị hiểu là một id.
+			admin.GET("/ca-lam-viec/hien-tai", h.Ca.HienTai)
+			admin.POST("/ca-lam-viec/mo", h.Ca.MoCa)
+			admin.POST("/ca-lam-viec/dong", h.Ca.DongCa)
+			admin.GET("/ca-lam-viec", h.Ca.List)
+			admin.GET("/ca-lam-viec/:id", h.Ca.Get)
+			admin.POST("/so-quy", h.Ca.GhiSoQuy)
 
 			// Trả hàng
 			admin.GET("/returns", h.Return.List)

@@ -105,6 +105,38 @@ func (h *OrderHandler) POSScan(c *gin.Context) {
 	response.OK(c, res)
 }
 
+// @Summary		Đổi hàng tại quầy
+// @Description	Một lượt đổi: khách mang vài món của đơn cũ tới trả và lấy vài món mới, chênh lệch thanh toán ngay.
+// @Description	Hàng cũ về kho NGAY (phiếu trả sinh thẳng ở trạng thái "đã nhận") — ở quầy thì món hàng đang nằm trên tay người bán, không có gì để chờ duyệt như luồng trả hàng qua website.
+// @Description	CẢ BA VẾ đi trong MỘT giao dịch: nhận hàng cũ, bán hàng mới, ghi chênh lệch vào sổ quỹ. Rời nhau ra thì một lần sập giữa chừng để lại lệch kho câm.
+// @Description	Giá hàng TRẢ lấy theo ĐƠN CŨ, không tra lại bảng giá hôm nay: khách trả đúng món đã mua thì phải được ghi nhận đúng số tiền đã trả cho nó.
+// @Description	`chenh_lech` = tiền hàng mới − tiền hàng trả. Dương = khách trả thêm (gửi `amount_tendered` nếu thu tiền mặt, thiếu tiền thì 400); âm = cửa hàng trả lại khách, tự ghi một dòng CHI vào sổ quỹ.
+// @Description	`moi` được phép rỗng: khách trả hàng rồi không lấy gì thêm cũng là một lượt hợp lệ.
+// @Tags			Admin - Orders
+// @Accept			json
+// @Produce		json
+// @Param			body	body		dto.DoiHangRequest	true	"Hàng trả và hàng lấy về"
+// @Success		201		{object}	response.Body{data=dto.DoiHangResponse}
+// @Failure		400		{object}	response.Body	"Trả quá số còn trả được, hết hàng, hoặc khách đưa thiếu tiền"
+// @Failure		403		{object}	response.Body	"Mức giảm giá vượt quyền"
+// @Failure		404		{object}	response.Body	"Không tìm thấy đơn cũ"
+// @Security		BearerAuth
+// @Router			/admin/orders/pos/doi-hang [post]
+func (h *OrderHandler) POSDoiHang(c *gin.Context) {
+	var req dto.DoiHangRequest
+	if !bindJSON(c, &req) {
+		return
+	}
+
+	res, err := h.svc.POSDoiHang(c.Request.Context(), &req,
+		c.GetString(middleware.CtxRole), currentUserID(c))
+	if err != nil {
+		respondOrderError(c, err, "Lỗi đổi hàng")
+		return
+	}
+	response.Created(c, res)
+}
+
 // @Summary		Hạn mức giảm giá tại quầy
 // @Description	Mức giảm giá tối đa (phần trăm) mà NGƯỜI ĐANG ĐĂNG NHẬP được tự bấm cho một dòng hàng. Màn hình quầy đọc số này để giới hạn ô nhập, thay vì chép lại luật vào giao diện rồi lệch với server.
 // @Description	Chủ cửa hàng và quản trị viên nhận 100 (không bị chặn); nhân viên nhận mức khai trong Cài đặt → Quầy bán hàng. Server vẫn kiểm lại khi chốt đơn — đây chỉ là nói trước.
@@ -675,6 +707,10 @@ func respondOrderError(c *gin.Context, err error, fallback string) {
 		response.Error(c, http.StatusBadRequest, "Sản phẩm trong giỏ không còn bán hoặc đã đổi phiên bản, vui lòng chọn lại")
 	case errors.Is(err, domain.ErrEmptyCart):
 		response.Error(c, http.StatusBadRequest, "Giỏ hàng đang trống")
+	case errors.Is(err, domain.ErrReturnQtyExceeded):
+		// err đã kèm tên món và số còn trả được.
+		response.Error(c, http.StatusBadRequest, "Không trả được số này — "+
+			strings.TrimPrefix(err.Error(), domain.ErrReturnQtyExceeded.Error()+": "))
 	case errors.Is(err, domain.ErrDiscountTooHigh):
 		// err đã kèm mức tối đa được phép — người bán biết ngay phải hạ xuống bao
 		// nhiêu, hoặc phải đi gọi ai.

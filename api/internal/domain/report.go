@@ -72,6 +72,26 @@ type ReportSlice struct {
 	Revenue float64 `json:"revenue"`
 }
 
+// ShopProfitSlice — lãi gộp của MỘT chi nhánh trong kỳ.
+//
+// Không dùng lại ReportSlice vì kiểu đó cố tình chỉ có doanh thu: nó phục vụ các
+// lát cắt cơ cấu (theo hình thức thanh toán, theo tỉnh) — nơi giá vốn không có
+// nghĩa. Nhét Cost/Profit vào đó là mọi lát cắt đều mang hai cột luôn bằng 0.
+type ShopProfitSlice struct {
+	ShopID uint   `json:"shop_id"`
+	Label  string `json:"label"`
+	Orders int64  `json:"orders"`
+	Units  int64  `json:"units"`
+	// Revenue ở đây là TIỀN HÀNG sau giảm giá (không gồm phí vận chuyển), để trừ
+	// thẳng ra lãi gộp — cùng quy ước với ReportTotals.Profit.
+	Revenue float64 `json:"revenue"`
+	Cost    float64 `json:"cost"`
+	Profit  float64 `json:"profit"`
+	// Margin là biên lãi gộp, %. Tính sẵn ở server để hai màn hình (báo cáo và
+	// xuất Excel) không mỗi nơi làm tròn một kiểu.
+	Margin float64 `json:"margin"`
+}
+
 // ReportTotals — số tổng của MỘT kỳ, tính trên đơn CÒN HIỆU LỰC.
 //
 // Quan hệ giữa các cột tiền: Revenue = Subtotal - Discount + Shipping.
@@ -123,6 +143,10 @@ type RevenueReport struct {
 	// tình trạng thu tiền (`key` = pending|paid|failed|refunded).
 	ByPaymentMethod []ReportSlice `json:"by_payment_method"`
 	ByPaymentStatus []ReportSlice `json:"by_payment_status"`
+	// ByShop — lãi gộp tách theo chi nhánh. Tiệm một chi nhánh nhận đúng một dòng
+	// trùng với Totals; tiệm nhiều chi nhánh mới đọc được cái đáng đọc: kho nào
+	// đang gánh, kho nào bán nhiều mà lãi mỏng.
+	ByShop []ShopProfitSlice `json:"by_shop"`
 }
 
 // ---------- 2. Báo cáo đơn hàng ----------
@@ -309,6 +333,8 @@ type ReportRepository interface {
 
 	ByPaymentMethod(ctx context.Context, p ReportPeriod) ([]ReportSlice, error)
 	ByPaymentStatus(ctx context.Context, p ReportPeriod) ([]ReportSlice, error)
+	// ByShop tách lãi gộp theo chi nhánh, sắp theo lãi giảm dần.
+	ByShop(ctx context.Context, p ReportPeriod) ([]ShopProfitSlice, error)
 
 	OrderCounts(ctx context.Context, p ReportPeriod) (OrderReportTotals, error)
 	ByStatus(ctx context.Context, p ReportPeriod) ([]ReportSlice, error)

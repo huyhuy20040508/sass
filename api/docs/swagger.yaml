@@ -1,5 +1,60 @@
 basePath: /api/v1
 definitions:
+  domain.CaLamViec:
+    properties:
+      closed_at:
+        type: string
+      closed_by:
+        type: integer
+      closed_by_name:
+        type: string
+      counted_cash:
+        description: |-
+          CountedCash là tiền ĐẾM ĐƯỢC lúc đóng ca, ExpectedCash là tiền SỔ nói lẽ ra
+          phải có, Difference là chênh lệch (âm = thiếu két).
+
+          Lưu cả ba chứ không tính lại khi đọc: ExpectedCash chốt theo sổ tại đúng
+          thời điểm đóng ca, mà sổ có thể được ghi thêm sau đó (một khoản chi quên
+          ghi). Con số hai bên đã ký nhận hôm ấy phải giữ nguyên.
+        type: number
+      created_at:
+        type: string
+      difference:
+        type: number
+      expected_cash:
+        type: number
+      id:
+        type: integer
+      note:
+        type: string
+      opened_at:
+        type: string
+      opened_by:
+        type: integer
+      opened_by_name:
+        type: string
+      opening_cash:
+        type: number
+      shop_id:
+        description: |-
+          ShopID là chi nhánh của ca. Mỗi chi nhánh chỉ được có MỘT ca đang mở —
+          ràng buộc nằm ở database (uq_work_shifts_open), không phải ở tầng code:
+          hai người bấm "mở ca" cùng lúc thì chỉ khoá của database mới chặn được.
+        type: integer
+      shop_name:
+        description: |-
+          Các trường dưới đây KHÔNG phải cột — tầng service điền thêm khi trả về màn
+          hình, để một lượt gọi là đủ dựng cả trang.
+        type: string
+      so_don_tien_mat:
+        type: integer
+      tong_chi:
+        type: number
+      tong_thu:
+        type: number
+      updated_at:
+        type: string
+    type: object
   domain.ChiNhanh:
     properties:
       address:
@@ -478,6 +533,15 @@ definitions:
     properties:
       color:
         type: string
+      cost_price:
+        description: |-
+          CostPrice là giá vốn một đơn vị CHỤP LẠI tại thời điểm bán.
+
+          Có nó thì lãi gộp của tháng trước không tự đổi khi nhập lô mới đắt hơn. nil =
+          dòng bán trước khi có cột này, hoặc đi qua đường tạo đơn thủ công (nơi người
+          nhập gõ giá bán chứ không tra giá vốn) — báo cáo lùi về giá vốn hiện tại cho
+          những dòng ấy, đúng như nó vẫn tính từ trước tới nay.
+        type: number
       created_at:
         type: string
       custom_player_name:
@@ -1212,6 +1276,14 @@ definitions:
         items:
           $ref: '#/definitions/domain.ReportSlice'
         type: array
+      by_shop:
+        description: |-
+          ByShop — lãi gộp tách theo chi nhánh. Tiệm một chi nhánh nhận đúng một dòng
+          trùng với Totals; tiệm nhiều chi nhánh mới đọc được cái đáng đọc: kho nào
+          đang gánh, kho nào bán nhiều mà lãi mỏng.
+        items:
+          $ref: '#/definitions/domain.ShopProfitSlice'
+        type: array
       from:
         example: "2026-07-01"
         type: string
@@ -1261,6 +1333,69 @@ definitions:
         type: integer
       name:
         type: string
+      updated_at:
+        type: string
+    type: object
+  domain.ShopProfitSlice:
+    properties:
+      cost:
+        type: number
+      label:
+        type: string
+      margin:
+        description: |-
+          Margin là biên lãi gộp, %. Tính sẵn ở server để hai màn hình (báo cáo và
+          xuất Excel) không mỗi nơi làm tròn một kiểu.
+        type: number
+      orders:
+        type: integer
+      profit:
+        type: number
+      revenue:
+        description: |-
+          Revenue ở đây là TIỀN HÀNG sau giảm giá (không gồm phí vận chuyển), để trừ
+          thẳng ra lãi gộp — cùng quy ước với ReportTotals.Profit.
+        type: number
+      shop_id:
+        type: integer
+      units:
+        type: integer
+    type: object
+  domain.SoQuy:
+    properties:
+      amount:
+        type: number
+      created_at:
+        type: string
+      created_by:
+        type: integer
+      created_by_name:
+        type: string
+      direction:
+        description: |-
+          Direction: SoQuyThu | SoQuyChi. Amount LUÔN dương — chiều nằm ở cột này,
+          không phải ở dấu của số tiền. Cho phép số âm là mở đường cho hai cách biểu
+          diễn cùng một khoản, và mọi phép cộng về sau phải nhớ cả hai.
+        type: string
+      id:
+        type: integer
+      reason:
+        type: string
+      reference_id:
+        type: integer
+      reference_type:
+        type: string
+      shift_id:
+        description: |-
+          ShiftID nil = phát sinh lúc không có ca nào mở.
+
+          Cho phép nil là quyết định có cân nhắc: bán hàng KHÔNG BAO GIỜ bị chặn vì
+          chưa ai mở ca. Chặn lại thì một buổi sáng quên mở ca là cả tiệm đứng im —
+          cái giá đó lớn hơn hẳn lợi ích của việc ép đúng quy trình. Dòng "ngoài ca"
+          vẫn vào sổ đầy đủ và màn hình đóng ca chỉ chúng ra.
+        type: integer
+      shop_id:
+        type: integer
       updated_at:
         type: string
     type: object
@@ -1508,6 +1643,15 @@ definitions:
     required:
     - name
     - slug
+    type: object
+  dto.CaChiTietResponse:
+    properties:
+      ca:
+        $ref: '#/definitions/domain.CaLamViec'
+      so_quy:
+        items:
+          $ref: '#/definitions/domain.SoQuy'
+        type: array
     type: object
   dto.CartQuoteItem:
     properties:
@@ -2220,6 +2364,102 @@ definitions:
         example: 29970000
         type: number
     type: object
+  dto.DoiHangRequest:
+    properties:
+      amount_tendered:
+        description: AmountTendered là tiền mặt khách đưa cho phần chênh lệch.
+        minimum: 0
+        type: number
+      moi:
+        description: |-
+          Moi là các món khách lấy về. Được phép RỖNG: khách trả hàng rồi không lấy
+          gì thêm cũng là một lượt đổi hợp lệ, chỉ khác là cửa hàng trả lại tiền.
+        items:
+          $ref: '#/definitions/dto.POSItemRequest'
+        maxItems: 50
+        type: array
+      note:
+        maxLength: 500
+        type: string
+      order_id:
+        description: OrderID là đơn CŨ chứa những món khách mang tới trả.
+        minimum: 1
+        type: integer
+      payment_method:
+        description: PaymentMethod áp cho phần CHÊNH LỆCH, chỉ dùng khi khách phải
+          trả thêm.
+        enum:
+        - cash
+        - bank_transfer
+        type: string
+      reason:
+        description: Reason — lý do đổi, dùng chung bộ mã với phiếu trả hàng.
+        maxLength: 50
+        type: string
+      reason_note:
+        maxLength: 500
+        type: string
+      restock:
+        description: |-
+          Restock = false khi hàng khách trả bị lỗi, không đưa lại lên kệ được.
+          Mặc định (bỏ trống) là true: phần lớn lượt đổi là đổi size, hàng còn nguyên.
+        type: boolean
+      tra:
+        description: Tra là các món trả lại, theo dòng hàng của đơn cũ.
+        items:
+          $ref: '#/definitions/dto.DoiHangTraItem'
+        maxItems: 50
+        minItems: 1
+        type: array
+    required:
+    - order_id
+    - tra
+    type: object
+  dto.DoiHangResponse:
+    properties:
+      amount_tendered:
+        type: number
+      change_amount:
+        type: number
+      chenh_lech:
+        description: |-
+          ChenhLech = TienMoi − TienTra. Dương = khách trả thêm, âm = cửa hàng trả lại
+          khách. Một con số có dấu chứ không phải hai trường: người đọc chỉ cần biết
+          tiền đi về phía nào, và hai trường thì luôn có một cái bằng 0 gây phân vân.
+        type: number
+      message:
+        type: string
+      order_code:
+        type: string
+      order_id:
+        type: integer
+      return_code:
+        type: string
+      return_id:
+        type: integer
+      tien_moi:
+        type: number
+      tien_tra:
+        description: TienTra là giá trị hàng khách mang trả, TienMoi là giá trị hàng
+          khách lấy về.
+        type: number
+    type: object
+  dto.DoiHangTraItem:
+    properties:
+      order_item_id:
+        description: |-
+          OrderItemID là DÒNG HÀNG của đơn cũ, không phải id biến thể: một đơn có thể
+          có hai dòng cùng biến thể (khác tên in áo), và số còn trả được tính theo
+          từng dòng.
+        minimum: 1
+        type: integer
+      quantity:
+        minimum: 1
+        type: integer
+    required:
+    - order_item_id
+    - quantity
+    type: object
   dto.DoiMatKhauRequest:
     properties:
       mat_khau:
@@ -2322,6 +2562,32 @@ definitions:
         example: cho_thanh_toan
         type: string
     type: object
+  dto.DongCaRequest:
+    properties:
+      counted_cash:
+        description: |-
+          CountedCash là tiền ĐẾM ĐƯỢC trong két. Bắt buộc phải gửi, kể cả khi bằng 0:
+          đóng ca mà không đếm thì cả cái ca không còn tác dụng gì.
+        minimum: 0
+        type: number
+      note:
+        maxLength: 500
+        type: string
+    type: object
+  dto.DongCaResponse:
+    properties:
+      ca:
+        $ref: '#/definitions/domain.CaLamViec'
+      ngoai_ca:
+        description: |-
+          NgoaiCa là các dòng tiền mặt phát sinh trong giờ của ca nhưng KHÔNG gắn ca
+          nào (lúc đó chưa ai mở ca). Chúng đã vào/ra két thật nhưng không nằm trong
+          con số đối chiếu — im lặng bỏ qua là để lại một khoản chênh không ai giải
+          thích được.
+        items:
+          $ref: '#/definitions/domain.SoQuy'
+        type: array
+    type: object
   dto.FacebookLoginRequest:
     properties:
       code:
@@ -2341,6 +2607,30 @@ definitions:
         type: string
     required:
     - email
+    type: object
+  dto.GhiSoQuyRequest:
+    properties:
+      amount:
+        description: |-
+          Amount LUÔN dương — chiều nằm ở direction. Cho phép số âm là mở đường cho
+          hai cách biểu diễn cùng một khoản.
+        type: number
+      direction:
+        description: 'Direction: in (tiền vào két) | out (tiền ra).'
+        enum:
+        - in
+        - out
+        type: string
+      reason:
+        description: |-
+          Reason bắt buộc: một khoản tiền ra khỏi két mà không có lý do thì đúng bằng
+          mất tiền, chỉ khác là có ghi lại.
+        maxLength: 255
+        type: string
+    required:
+    - amount
+    - direction
+    - reason
     type: object
   dto.GiaHanRequest:
     properties:
@@ -2909,6 +3199,19 @@ definitions:
     required:
     - email
     - password
+    type: object
+  dto.MoCaRequest:
+    properties:
+      note:
+        maxLength: 500
+        type: string
+      opening_cash:
+        description: |-
+          OpeningCash là tiền mặt ĐANG CÓ trong két lúc mở ca, do người trực đếm.
+          Không suy ra từ ca trước: giữa hai ca có thể có người rút tiền về, và con
+          số đối chiếu phải bắt đầu từ thứ đếm được thật.
+        minimum: 0
+        type: number
     type: object
   dto.OrderCancelRequest:
     properties:
@@ -5244,6 +5547,13 @@ definitions:
         type: string
       deduction:
         type: number
+      exchange_order_id:
+        description: |-
+          ExchangeOrderID là đơn MỚI khách lấy về trong một lượt đổi hàng tại quầy.
+          nil = trả hàng thuần, có hoàn tiền. Thiếu mối nối này thì trong sổ chỉ còn
+          một phiếu trả và một đơn bán tình cờ trùng giờ, và câu hỏi "khách đổi cái
+          áo đó lấy cái gì" không tra được nữa.
+        type: integer
       handled_by:
         type: integer
       histories:
@@ -5744,6 +6054,177 @@ paths:
       summary: Cập nhật thương hiệu
       tags:
       - Admin - Brands
+  /admin/ca-lam-viec:
+    get:
+      description: Lịch sử các ca, mới nhất trước. Lọc theo chi nhánh, trạng thái
+        và khoảng ngày MỞ ca.
+      parameters:
+      - description: Lọc theo chi nhánh (bỏ trống = mọi chi nhánh)
+        in: query
+        name: shop_id
+        type: integer
+      - description: dang_mo|da_dong
+        in: query
+        name: status
+        type: string
+      - description: Từ ngày (YYYY-MM-DD)
+        in: query
+        name: from_date
+        type: string
+      - description: Đến ngày (YYYY-MM-DD)
+        in: query
+        name: to_date
+        type: string
+      - description: Trang (mặc định 1)
+        in: query
+        name: page
+        type: integer
+      - description: Số ca/trang (mặc định 20, tối đa 100)
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                meta:
+                  $ref: '#/definitions/response.Pagination'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: Danh sách ca làm việc
+      tags:
+      - Admin - Ca làm việc
+  /admin/ca-lam-viec/{id}:
+    get:
+      description: 'Ca kèm TOÀN BỘ dòng sổ quỹ của nó, cũ trước. Đây là màn hình dùng
+        để truy lại một khoản chênh: đọc từng lần tiền vào/ra theo đúng thứ tự đã
+        xảy ra.'
+      parameters:
+      - description: ID ca
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.CaChiTietResponse'
+              type: object
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Chi tiết một ca
+      tags:
+      - Admin - Ca làm việc
+  /admin/ca-lam-viec/dong:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Chốt ca đang mở: cộng lại sổ quỹ DƯỚI KHOÁ rồi ghi ba con số — tiền đếm được, tiền theo sổ (đầu ca + thu − chi) và chênh lệch. Chênh lệch âm nghĩa là thiếu két.
+        Trả kèm `ngoai_ca`: những khoản tiền mặt phát sinh trong giờ của ca nhưng lúc đó chưa ai mở ca. Chúng đã vào/ra két thật mà không nằm trong con số đối chiếu, nên phải được nhìn thấy chứ không im lặng bỏ qua.
+        Ba con số được LƯU LẠI chứ không tính lại khi đọc: sổ có thể được ghi thêm sau đó, còn con số hai bên đã ký nhận hôm ấy thì phải giữ nguyên.
+      parameters:
+      - description: Tiền đếm được
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.DongCaRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.DongCaResponse'
+              type: object
+        "409":
+          description: Chưa mở ca, hoặc ca đã đóng
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Đóng ca
+      tags:
+      - Admin - Ca làm việc
+  /admin/ca-lam-viec/hien-tai:
+    get:
+      description: |-
+        Ca trực két đang mở của CHI NHÁNH ĐANG LÀM VIỆC, kèm tổng thu / tổng chi tiền mặt và số lượt bán thu tiền mặt trong ca.
+        Trả `data: null` khi chưa ai mở ca — đây là trạng thái BÌNH THƯỜNG, không phải lỗi: bán hàng không bao giờ bị chặn vì chưa mở ca, tiền vẫn vào sổ quỹ với `shift_id` rỗng và màn hình đóng ca sẽ chỉ chúng ra.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/domain.CaLamViec'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: Ca đang mở
+      tags:
+      - Admin - Ca làm việc
+  /admin/ca-lam-viec/mo:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Mở một ca trực két cho chi nhánh đang làm việc. `opening_cash` là tiền mặt người trực ĐẾM ĐƯỢC trong két lúc mở — không suy ra từ ca trước, vì giữa hai ca có thể đã có người rút tiền về.
+        Mỗi chi nhánh chỉ được có MỘT ca mở; mở khi đang còn ca trả 409. Ràng buộc này nằm ở database nên hai người bấm cùng lúc cũng chỉ một người mở được.
+      parameters:
+      - description: Tiền đầu ca
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.MoCaRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/domain.CaLamViec'
+              type: object
+        "409":
+          description: Chi nhánh đang có ca mở
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Mở ca
+      tags:
+      - Admin - Ca làm việc
   /admin/categories:
     post:
       consumes:
@@ -7769,6 +8250,53 @@ paths:
       security:
       - BearerAuth: []
       summary: Hạn mức giảm giá tại quầy
+      tags:
+      - Admin - Orders
+  /admin/orders/pos/doi-hang:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Một lượt đổi: khách mang vài món của đơn cũ tới trả và lấy vài món mới, chênh lệch thanh toán ngay.
+        Hàng cũ về kho NGAY (phiếu trả sinh thẳng ở trạng thái "đã nhận") — ở quầy thì món hàng đang nằm trên tay người bán, không có gì để chờ duyệt như luồng trả hàng qua website.
+        CẢ BA VẾ đi trong MỘT giao dịch: nhận hàng cũ, bán hàng mới, ghi chênh lệch vào sổ quỹ. Rời nhau ra thì một lần sập giữa chừng để lại lệch kho câm.
+        Giá hàng TRẢ lấy theo ĐƠN CŨ, không tra lại bảng giá hôm nay: khách trả đúng món đã mua thì phải được ghi nhận đúng số tiền đã trả cho nó.
+        `chenh_lech` = tiền hàng mới − tiền hàng trả. Dương = khách trả thêm (gửi `amount_tendered` nếu thu tiền mặt, thiếu tiền thì 400); âm = cửa hàng trả lại khách, tự ghi một dòng CHI vào sổ quỹ.
+        `moi` được phép rỗng: khách trả hàng rồi không lấy gì thêm cũng là một lượt hợp lệ.
+      parameters:
+      - description: Hàng trả và hàng lấy về
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.DoiHangRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.DoiHangResponse'
+              type: object
+        "400":
+          description: Trả quá số còn trả được, hết hàng, hoặc khách đưa thiếu tiền
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: Mức giảm giá vượt quyền
+          schema:
+            $ref: '#/definitions/response.Body'
+        "404":
+          description: Không tìm thấy đơn cũ
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Đổi hàng tại quầy
       tags:
       - Admin - Orders
   /admin/orders/pos/scan:
@@ -10144,6 +10672,38 @@ paths:
       summary: Cập nhật cấu hình hệ thống
       tags:
       - Admin - Settings
+  /admin/so-quy:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Ghi vào sổ quỹ một khoản KHÔNG đi qua đơn hàng: mua nước, trả tiền ship, chủ rút bớt tiền mặt về. Khoản này tự gắn vào ca đang mở của chi nhánh; chưa mở ca thì vẫn ghi nhưng không thuộc ca nào.
+        `amount` luôn DƯƠNG — chiều tiền nằm ở `direction` (`in` = vào két, `out` = ra khỏi két). `reason` bắt buộc: một khoản ra khỏi két không có lý do thì đúng bằng mất tiền, chỉ khác là có ghi lại.
+        CHỈ TIỀN MẶT. Chuyển khoản không đi qua két nên không thuộc sổ này; ghi vào đây là con số đối chiếu cuối ca không còn khớp tiền đếm được.
+      parameters:
+      - description: Khoản thu/chi
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.GhiSoQuyRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/domain.SoQuy'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: Ghi tay một khoản thu/chi tiền mặt
+      tags:
+      - Admin - Ca làm việc
   /admin/suppliers:
     get:
       consumes:

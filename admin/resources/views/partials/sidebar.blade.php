@@ -48,6 +48,14 @@
                             'label' => \App\Http\Controllers\ReturnController::TITLE,
                             'active' => request()->routeIs('admin.returns.*'),
                         ],
+                        [
+                            // Ca làm việc nằm trong nhóm Đơn hàng chứ không phải Báo
+                            // cáo: nó là việc của người trực quầy (mở ca, ghi sổ quỹ,
+                            // đóng ca), không phải một bảng số để chủ tiệm ngồi đọc.
+                            'href' => route('admin.ca-lam-viec.index'),
+                            'label' => \App\Http\Controllers\CaLamViecController::TITLE,
+                            'active' => request()->routeIs('admin.ca-lam-viec.*'),
+                        ],
                     ],
                 ],
                 [

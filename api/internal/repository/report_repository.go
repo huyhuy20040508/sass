@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	"gorm.io/gorm"
@@ -33,10 +34,20 @@ func NewReportRepository(db *gorm.DB) domain.ReportRepository {
 // nói hai con số khác nhau về cùng một kỳ.
 var deadStatuses = []string{domain.OrderStatusCancelled, domain.OrderStatusReturned}
 
-// costExpr — giá vốn MỘT đơn vị của dòng hàng: ưu tiên giá vốn biến thể, thiếu
-// thì lùi về giá vốn sản phẩm, thiếu nốt thì 0 (chưa khai giá vốn = chưa tính
-// được lãi, giao diện phải nói rõ chỗ đó thay vì bịa ra một con số).
-const costExpr = "COALESCE(pv.cost_price, p.cost_price, 0)"
+// costExpr — giá vốn MỘT đơn vị của dòng hàng.
+//
+// Thứ tự ưu tiên, và lý do của bậc đầu tiên:
+//
+//	oi.cost_price  giá vốn CHỤP LÚC BÁN. Phải đứng trước, nếu không thì nhập lô
+//	               mới đắt hơn 20% là lãi gộp của mọi tháng trước tự co lại trên
+//	               báo cáo dù không đơn nào thay đổi — sổ sách tự sửa số liệu quá
+//	               khứ thì không dùng để ra quyết định được.
+//	pv.cost_price  giá vốn hiện tại của biến thể, cho dòng bán trước khi có cột
+//	pv.cost_price  chụp, hoặc đơn tạo thủ công (người nhập gõ giá bán, không tra
+//	p.cost_price   giá vốn). Đây đúng bằng cách báo cáo vẫn tính từ trước tới nay.
+//	0              chưa khai giá vốn = chưa tính được lãi. Giao diện phải nói rõ
+//	               chỗ đó thay vì bịa ra một con số.
+const costExpr = "COALESCE(oi.cost_price, pv.cost_price, p.cost_price, 0)"
 
 // orders lọc đơn CÒN HIỆU LỰC trong kỳ. Bí danh bảng luôn là `o` để các câu
 // truy vấn bên dưới ghép join vào mà không phải đoán tên.
@@ -203,6 +214,71 @@ func (r *reportRepository) ByPaymentMethod(ctx context.Context, p domain.ReportP
 
 func (r *reportRepository) ByPaymentStatus(ctx context.Context, p domain.ReportPeriod) ([]domain.ReportSlice, error) {
 	return r.sliceByOrderColumn(ctx, p, "o.payment_status", 0)
+}
+
+// ByShop tách lãi gộp theo chi nhánh bán đơn.
+//
+// Chạy trên bảng DÒNG HÀNG chứ không trên bảng đơn: giá vốn nằm ở từng món, và
+// gộp theo đơn thì mỗi đơn nhiều dòng sẽ bị nhân lên. Số ĐƠN vì thế phải đếm
+// COUNT(DISTINCT o.id) — đếm thường ra số dòng hàng.
+//
+// LEFT JOIN sang shops: chi nhánh bị đóng rồi thì đơn cũ của nó vẫn phải có mặt
+// trong báo cáo kỳ trước, chỉ là không còn tên để hiện.
+func (r *reportRepository) ByShop(ctx context.Context, p domain.ReportPeriod) ([]domain.ShopProfitSlice, error) {
+	var rows []struct {
+		ShopID  uint
+		Label   string
+		Orders  int64
+		Units   int64
+		Revenue float64
+		Cost    float64
+	}
+
+	err := r.items(ctx, p).
+		Joins("LEFT JOIN shops s ON s.id = o.shop_id").
+		Select(`o.shop_id AS shop_id,
+			COALESCE(s.name, '') AS label,
+			COUNT(DISTINCT o.id) AS orders,
+			COALESCE(SUM(oi.quantity), 0) AS units,
+			COALESCE(SUM(oi.total_price), 0) AS revenue,
+			COALESCE(SUM(` + costExpr + ` * oi.quantity), 0) AS cost`).
+		Group("o.shop_id, s.name").
+		Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]domain.ShopProfitSlice, 0, len(rows))
+	for _, row := range rows {
+		s := domain.ShopProfitSlice{
+			ShopID: row.ShopID, Label: row.Label, Orders: row.Orders,
+			Units: row.Units, Revenue: row.Revenue, Cost: row.Cost,
+			Profit: row.Revenue - row.Cost,
+		}
+		if s.Label == "" {
+			// Chi nhánh đã đóng (hoặc dòng dữ liệu cũ chưa gán chi nhánh): vẫn phải
+			// hiện ra, vì tiền của nó có thật trong tổng.
+			s.Label = "Chi nhánh đã đóng"
+		}
+		if s.Revenue > 0 {
+			s.Margin = s.Profit / s.Revenue * 100
+		}
+		out = append(out, s)
+	}
+
+	// Sắp ở Go chứ không ORDER BY: lãi là cột tính ra, và sắp theo biểu thức lặp
+	// lại cả cụm COALESCE dài trong ORDER BY chỉ để được đúng thứ tự này.
+	slices.SortFunc(out, func(a, b domain.ShopProfitSlice) int {
+		switch {
+		case a.Profit > b.Profit:
+			return -1
+		case a.Profit < b.Profit:
+			return 1
+		default:
+			return 0
+		}
+	})
+	return out, nil
 }
 
 func (r *reportRepository) ByProvince(ctx context.Context, p domain.ReportPeriod, limit int) ([]domain.ReportSlice, error) {
