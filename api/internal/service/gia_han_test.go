@@ -122,7 +122,7 @@ func (f *fakeHopDongGiaHan) UpsertKhachHang(context.Context, domain.PlatformTena
 func (f *fakeHopDongGiaHan) AiDangMangMa(context.Context, string, uint) (uint, error) {
 	return 0, nil
 }
-func (f *fakeHopDongGiaHan) Tao(context.Context, *domain.Subscription) error              { return nil }
+func (f *fakeHopDongGiaHan) Tao(context.Context, *domain.Subscription) error { return nil }
 func (f *fakeHopDongGiaHan) Tim(context.Context, uint) (*domain.HopDongDayDu, error) {
 	return nil, nil
 }

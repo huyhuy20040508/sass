@@ -332,6 +332,12 @@ Chỗ để những tệp này chứa dữ liệu khách hàng và toàn bộ kh
 
 ## Cập nhật về sau
 
+**Đẩy lên `main` là xong.** GitHub Actions chạy toàn bộ test, xanh hết thì tự SSH vào VPS
+chạy đúng script dưới đây. Chi tiết ở phần [CI/CD](#cicd--tự-động-kiểm-tra-và-triển-khai).
+
+Vẫn chạy tay được, và đó vẫn là đường duy nhất khi CI hỏng hoặc khi cần triển khai lại mà
+không có commit mới:
+
 ```bash
 cd /var/www/selliotech
 sudo bash deploy/scripts/02-trien-khai.sh
@@ -353,6 +359,100 @@ sudo bash deploy/scripts/02-trien-khai.sh   # chạy script mới
 Đây đúng là chỗ đã vấp lúc thêm tên miền gốc. Lượt đầu kéo về `landing/` và `deploy/nginx/selliotech.store.conf`, nhưng vòng lặp cài nginx của **bản script cũ** chỉ biết ba tên miền con nên bỏ qua tệp mới. Cùng lúc đó script vẫn `rm -f /etc/nginx/sites-enabled/default`, thế là tên miền gốc rơi vào block đứng đầu bảng chữ cái — `admin.selliotech.store` — và trả về trang đăng nhập Shop Admin kèm cookie phiên của khu quản trị. Nhìn thì tưởng cấu hình sai, thật ra chỉ là chưa chạy lượt hai.
 
 Dấu hiệu nhận ra: `ls -1 /etc/nginx/sites-enabled/` thiếu tệp mà bạn vừa thêm.
+
+---
+
+## CI/CD — tự động kiểm tra và triển khai
+
+Toàn bộ nằm trong một tệp: [`.github/workflows/ci.yml`](../.github/workflows/ci.yml).
+
+| Lượt chạy | Kiểm tra | Triển khai |
+|---|---|---|
+| Pull request | ✅ ba job | ❌ không bao giờ |
+| Push lên `main` | ✅ ba job | ✅ nếu cả ba xanh |
+| Bấm **Run workflow** ở tab Actions | ✅ ba job | ✅ nếu đang ở `main` |
+
+Ba job kiểm tra chạy song song, khoảng 3–5 phút:
+
+| Job | Làm gì |
+|---|---|
+| **API (Go)** | `gofmt` → `go vet` → `go build ./...` → `go test ./...` trên **MySQL 8 thật** |
+| **Shop Admin** | `composer install` → `php artisan test` (PHP 8.3, sqlite in-memory) |
+| **SaaS Admin** | như trên, cho `saas/` |
+
+Xanh hết thì job **Triển khai** SSH vào VPS và chạy `02-trien-khai.sh` — cùng một script vẫn
+gõ tay lâu nay. Không có đường triển khai thứ hai để hai bên lệch nhau. Sau đó nó gọi
+`https://api.selliotech.store/api/v1/health` từ ngoài Internet: script chỉ tự kiểm ở
+`127.0.0.1`, nên nginx hỏng hay chứng chỉ đứt thì chỉ lượt kiểm ngoài này thấy.
+
+### Vì sao CI phải dựng MySQL thật
+
+Hai gói test đáng giá nhất — `internal/apitest` và `internal/repository` — **tự bỏ qua** khi
+không có biến `TEST_DB_DSN`. Chạy CI mà quên dựng database thì mọi thứ vẫn xanh: xanh vì
+không kiểm gì cả. Đúng kiểu hỏng không ai nhìn ra cho tới hôm bộ lọc tenant thủng trên máy
+thật. Nên job API dựng container `mysql:8.0` (đúng dòng máy chủ đang chạy), nạp cả hai lược
+đồ bằng chính `cmd/migrate`, rồi mới chạy test.
+
+Nghĩa là mỗi lượt push cũng **kiểm luôn migration**: tệp `.sql` mới viết sai cú pháp là CI
+đỏ ngay, thay vì đỏ lúc đang chạy migration trên database thật của khách.
+
+### Ba secret trên GitHub
+
+Đã đặt sẵn ở **Settings → Secrets and variables → Actions**:
+
+| Secret | Là gì |
+|---|---|
+| `VPS_HOST` | `103.78.2.230` |
+| `VPS_SSH_KEY` | Private key `ed25519` **riêng cho CI** — không phải khoá cá nhân của bạn |
+| `VPS_KNOWN_HOSTS` | Khoá máy chủ, để `ssh` xác minh đúng máy chứ không nhận bừa |
+
+Khoá CI bị **ghim sẵn một lệnh duy nhất** trong `/root/.ssh/authorized_keys`:
+
+```
+command="/bin/bash /var/www/selliotech/deploy/scripts/02-trien-khai.sh",no-agent-forwarding,no-port-forwarding,no-pty,no-user-rc,no-X11-forwarding ssh-ed25519 AAAA... github-actions-selliotech
+```
+
+Ai lấy được secret đó cũng chỉ bấm được nút triển khai, **không có shell root**. Đây là lý
+do phải có forced command: khoá triển khai luôn là khoá quyền cao nhất trong hệ thống, mà
+nó lại nằm trên máy của bên thứ ba.
+
+Đổi khoá khi nghi lộ:
+
+```bash
+# Trên máy bạn
+ssh-keygen -t ed25519 -N '' -C 'github-actions-selliotech' -f /tmp/ci_deploy
+gh secret set VPS_SSH_KEY --repo huyhuy20040508/sass < /tmp/ci_deploy
+
+# Trên VPS: xoá dòng cũ (grep 'github-actions-selliotech'), thêm dòng mới kèm forced command
+sudo nano /root/.ssh/authorized_keys
+```
+
+### Commit có sửa `02-trien-khai.sh` thì phải chạy hai lượt
+
+Cùng lý do đã ghi ở phần trên: script chạy trên máy chủ luôn là **bản đang có sẵn trên
+đĩa**, không phải bản vừa kéo về. Lượt CI đầu chỉ mang script mới lên máy.
+
+Cho nó thi hành bằng cách vào tab **Actions → CI → Run workflow** trên nhánh `main`. Lượt
+này chạy lại test (nhanh, gần như toàn cache) rồi triển khai bằng script mới.
+
+Dấu hiệu quên bước này: CI báo xanh nhưng thay đổi trong `deploy/` không có tác dụng gì.
+
+### Khi CI đỏ
+
+```bash
+gh run list --repo huyhuy20040508/sass --limit 5
+gh run view --repo huyhuy20040508/sass --log-failed
+```
+
+| Job đỏ | Nhìn vào đâu trước |
+|---|---|
+| `gofmt` | Chạy `cd api && gofmt -w .` rồi commit lại |
+| `go test` phần `apitest`/`repository` | Thường là migration mới quên cột, hoặc query thiếu điều kiện tenant |
+| `php artisan test` | Chạy lại y hệt dưới máy: `cd admin && php artisan test` |
+| `Triển khai` | Test đã xanh, tức là **mã nguồn ổn** — hỏng ở máy chủ. SSH vào chạy tay `sudo bash deploy/scripts/02-trien-khai.sh` để thấy nó chết ở bước nào trong 10 bước |
+
+Deploy hỏng giữa chừng thì máy chủ vẫn chạy bản cũ: script build ra `api.new` và chỉ đổi
+tên ở bước 9, sau khi mọi bước trước đã qua.
 
 ---
 

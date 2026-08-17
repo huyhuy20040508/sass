@@ -54,14 +54,14 @@ func (f *fakeHopDongQuet) UpsertKhachHang(context.Context, domain.PlatformTenant
 func (f *fakeHopDongQuet) AiDangMangMa(context.Context, string, uint) (uint, error) {
 	return 0, nil
 }
-func (f *fakeHopDongQuet) Tao(context.Context, *domain.Subscription) error              { return nil }
-func (f *fakeHopDongQuet) Tim(context.Context, uint) (*domain.HopDongDayDu, error)      { return nil, nil }
-func (f *fakeHopDongQuet) GiaHan(context.Context, uint, int) error                      { return nil }
-func (f *fakeHopDongQuet) Huy(context.Context, uint, string) error                      { return nil }
-func (f *fakeHopDongQuet) Sua(context.Context, uint, uint, domain.SuaHopDong) error     { return nil }
-func (f *fakeHopDongQuet) KyCuoiDaThu(context.Context, uint) (*time.Time, error)        { return nil, nil }
-func (f *fakeHopDongQuet) ThuTien(context.Context, *domain.Invoice) error               { return nil }
-func (f *fakeHopDongQuet) TongDaThu(context.Context, uint) (float64, int, error)        { return 0, 0, nil }
+func (f *fakeHopDongQuet) Tao(context.Context, *domain.Subscription) error          { return nil }
+func (f *fakeHopDongQuet) Tim(context.Context, uint) (*domain.HopDongDayDu, error)  { return nil, nil }
+func (f *fakeHopDongQuet) GiaHan(context.Context, uint, int) error                  { return nil }
+func (f *fakeHopDongQuet) Huy(context.Context, uint, string) error                  { return nil }
+func (f *fakeHopDongQuet) Sua(context.Context, uint, uint, domain.SuaHopDong) error { return nil }
+func (f *fakeHopDongQuet) KyCuoiDaThu(context.Context, uint) (*time.Time, error)    { return nil, nil }
+func (f *fakeHopDongQuet) ThuTien(context.Context, *domain.Invoice) error           { return nil }
+func (f *fakeHopDongQuet) TongDaThu(context.Context, uint) (float64, int, error)    { return 0, 0, nil }
 
 func (f *fakeHopDongQuet) SapHetHan(context.Context, time.Time, time.Time) ([]domain.HopDongQuaHan, error) {
 	return f.sapHetHan, nil
