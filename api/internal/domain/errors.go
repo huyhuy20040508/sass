@@ -146,6 +146,11 @@ var (
 	// Khách tự huỷ đơn: đơn đã qua giai đoạn được phép tự huỷ (đang chuẩn bị trở đi).
 	ErrCancelNotAllowed = errors.New("đơn không còn ở giai đoạn khách tự huỷ được")
 
+	// Bán tại quầy
+	// Tiền mặt khách đưa ít hơn số phải trả. Lỗi này được bọc kèm số còn thiếu để
+	// người bán đọc thẳng trên màn hình thay vì tự trừ nhẩm.
+	ErrTenderTooLow = errors.New("số tiền khách đưa chưa đủ")
+
 	// Trả hàng
 	// Đơn chưa giao tới tay khách, hoặc đã quá hạn đổi trả.
 	ErrReturnNotAllowed = errors.New("đơn hàng này không nằm trong diện trả hàng")

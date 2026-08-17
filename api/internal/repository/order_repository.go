@@ -288,6 +288,9 @@ func (r *orderRepository) List(ctx context.Context, f domain.OrderFilter) ([]dom
 	if f.PaymentMethod != "" && f.PaymentMethod != "all" {
 		q = q.Where("payment_method = ?", f.PaymentMethod)
 	}
+	if f.Channel != "" && f.Channel != "all" {
+		q = q.Where("channel = ?", f.Channel)
+	}
 	if f.UserID != nil {
 		q = q.Where("user_id = ?", *f.UserID)
 	}
@@ -528,7 +531,19 @@ func (r *orderRepository) QuoteVariants(ctx context.Context, lines []domain.Chec
 	return loadCheckoutVariants(r.db.WithContext(ctx), lines, false)
 }
 
-// Checkout tạo đơn từ storefront trong một transaction.
+// checkoutNote là câu mô tả nguồn gốc đơn, ghi vào sổ kho và mốc lịch sử đầu tiên.
+//
+// Lấy theo channel chứ không nhận từ tầng trên: hai chỗ ghi (bút toán kho và lịch
+// sử đơn) phải nói cùng một câu, và câu đó là hệ quả của việc đơn tới từ đâu chứ
+// không phải một lựa chọn riêng của mỗi lời gọi.
+func checkoutNote(o *domain.Order) string {
+	if o.Channel == domain.OrderChannelPOS {
+		return "Bán tại quầy"
+	}
+	return "Khách đặt hàng từ website"
+}
+
+// Checkout tạo đơn từ storefront hoặc từ quầy bán hàng, trong một transaction.
 //
 // Thứ tự quan trọng: KHOÁ biến thể trước (SELECT ... FOR UPDATE), rồi mới kiểm tra
 // tồn kho và trừ. Nếu kiểm tra trước khi khoá thì hai khách bấm đặt cùng lúc đều
@@ -540,7 +555,17 @@ func (r *orderRepository) Checkout(
 ) (*domain.Order, error) {
 	var created *domain.Order
 
-	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	// Chi nhánh bán đơn này, chốt trước khi mở giao dịch — cùng cách và cùng lý do
+	// với Create (xem chú thích ở đó). Bỏ bước này thì đơn vào sổ với shop_id = 0:
+	// khoá ngoại sang `shops` từ chối cả lượt insert, nên không đơn nào đặt được.
+	// Còn ở bản cài không có khoá ngoại ấy thì tệ hơn — đơn nằm ở một chi nhánh
+	// không tồn tại, và mọi con số theo chi nhánh đều thiếu nó.
+	shopID, err := chiNhanhCuaRequest(ctx, r.db)
+	if err != nil {
+		return nil, err
+	}
+
+	err = r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// 1-3. Tra biến thể + giá hiện tại, có KHOÁ vì các dòng này sắp bị trừ kho
 		resolved, err := loadCheckoutVariants(tx, lines, true)
 		if err != nil {
@@ -552,6 +577,9 @@ func (r *orderRepository) Checkout(
 		if err != nil {
 			return err
 		}
+		// Gán ở đây chứ không để service tự khai: chi nhánh bán đơn phải là ĐÚNG cái
+		// mà bước trừ kho bên dưới đọc, và cả hai cùng lấy từ một chỗ duy nhất.
+		o.ShopID = shopID
 
 		// 5. Tạo đơn — mã tạm trước để lấy ID, rồi đổi thành mã theo ngày + ID
 		o.OrderCode = fmt.Sprintf("TMP%d", time.Now().UnixNano())
@@ -564,8 +592,22 @@ func (r *orderRepository) Checkout(
 		}
 
 		// 6. Trừ kho + ghi sổ kho, dùng ID đơn làm tham chiếu (biến thể đã khoá ở bước 2)
-		if err := syncOrderStock(tx, o, orderDesiredStock(o.Items), "export", "Khách đặt hàng"); err != nil {
+		note := checkoutNote(o)
+		if err := syncOrderStock(tx, o, orderDesiredStock(o.Items), "export", note); err != nil {
 			return err
+		}
+
+		// 6a. Lượt bán của sản phẩm.
+		//
+		// Đơn giao hàng sinh ra ở "chờ xác nhận" nên chưa tính, và được cộng về sau
+		// khi LockAndUpdate chuyển nó sang "đã giao". Đơn tại quầy thì sinh ra đã
+		// hoàn tất — hàng ra khỏi kho và tới tay khách trong cùng một thao tác, sẽ
+		// KHÔNG có lượt chuyển trạng thái nào sau này để cộng hộ. Không cộng ở đây
+		// thì mọi thứ bán tại quầy vĩnh viễn không xuất hiện trong "bán chạy nhất".
+		if soldCounted(o.Status) {
+			if err := syncSoldCount(tx, o, "", o.Status); err != nil {
+				return err
+			}
 		}
 
 		// 6b. Chốt lượt voucher. Phải nằm SAU bước tạo đơn vì voucher_usages cần
@@ -581,7 +623,7 @@ func (r *orderRepository) Checkout(
 			OrderID:    o.ID,
 			FromStatus: "",
 			ToStatus:   o.Status,
-			Note:       "Khách đặt hàng từ website",
+			Note:       note,
 		}).Error; err != nil {
 			return err
 		}

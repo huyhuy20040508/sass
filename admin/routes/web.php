@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BannerController;
+use App\Http\Controllers\BanTaiQuayController;
 use App\Http\Controllers\BrandController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\ChiNhanhController;
@@ -126,6 +127,15 @@ Route::middleware(['admin.auth', 'admin.khoa'])->prefix('admin')->name('admin.')
     Route::put('/voucher/{id}/toggle-status', [VoucherController::class, 'toggleStatus'])->whereNumber('id')->name('vouchers.toggleStatus');
     Route::put('/voucher/{id}', [VoucherController::class, 'update'])->whereNumber('id')->name('vouchers.update');
     Route::delete('/voucher/{id}', [VoucherController::class, 'destroy'])->whereNumber('id')->name('vouchers.destroy');
+
+    // Bán tại quầy — màn hình thu ngân. Đứng trước Đơn hàng vì đây là việc người
+    // trực quầy làm cả ngày, còn trang đơn là nơi họ chỉ ghé khi cần tra lại.
+    //
+    // Dùng lại thẳng đường tìm sản phẩm của trang tạo đơn (orders.searchProducts)
+    // thay vì đẻ thêm một endpoint song song: hai màn hình hỏi cùng một câu, và
+    // hai bản sao thì sẽ có bản bị bỏ quên khi dữ liệu sản phẩm đổi hình dạng.
+    Route::get('/ban-tai-quay', [BanTaiQuayController::class, 'index'])->name('ban-tai-quay.index');
+    Route::post('/ban-tai-quay', [BanTaiQuayController::class, 'store'])->name('ban-tai-quay.store');
 
     // Đơn hàng
     Route::get('/orders', [OrderController::class, 'index'])->name('orders.index');

@@ -677,39 +677,55 @@ type Order struct {
 	// ShopID là CHI NHÁNH phát sinh đơn này: chi nhánh người bán đang làm việc
 	// (đơn tại quầy), hoặc chi nhánh bán online (đơn từ storefront — xem
 	// ChiNhanhRepository.BanOnline). Đây cũng là kho bị trừ hàng.
-	ShopID           uint           `json:"shop_id"`
-	OrderCode        string         `json:"order_code"`
-	UserID           *uint          `json:"user_id"`
-	VoucherID        *uint          `json:"voucher_id"`
-	RecipientName    string         `json:"recipient_name"`
-	RecipientPhone   string         `json:"recipient_phone"`
-	RecipientEmail   string         `json:"recipient_email"`
-	ShippingProvince string         `json:"shipping_province"`
-	ShippingDistrict string         `json:"shipping_district"`
-	ShippingWard     string         `json:"shipping_ward"`
-	ShippingAddress  string         `json:"shipping_address"`
-	SubtotalAmount   float64        `json:"subtotal_amount"`
-	DiscountAmount   float64        `json:"discount_amount"`
-	ShippingFee      float64        `json:"shipping_fee"`
-	TotalAmount      float64        `json:"total_amount"`
-	VoucherCode      string         `json:"voucher_code"`
-	PaymentMethod    string         `json:"payment_method"`
-	PaymentStatus    string         `json:"payment_status"`
-	Status           string         `json:"status"`
-	ShippingMethod   string         `json:"shipping_method"`
-	TrackingNumber   string         `json:"tracking_number"`
-	Note             string         `json:"note"`
-	AdminNote        string         `json:"admin_note"`
-	CancelReason     string         `json:"cancel_reason"`
-	PlacedAt         *time.Time     `json:"placed_at"`
-	ConfirmedAt      *time.Time     `json:"confirmed_at"`
-	ShippedAt        *time.Time     `json:"shipped_at"`
-	DeliveredAt      *time.Time     `json:"delivered_at"`
-	CancelledAt      *time.Time     `json:"cancelled_at"`
-	Items            []OrderItem    `json:"items,omitempty" gorm:"foreignKey:OrderID"`
-	CreatedAt        time.Time      `json:"created_at"`
-	UpdatedAt        time.Time      `json:"updated_at"`
-	DeletedAt        gorm.DeletedAt `json:"-" gorm:"index"`
+	ShopID    uint   `json:"shop_id"`
+	OrderCode string `json:"order_code"`
+	// Channel là NƠI đơn phát sinh: OrderChannelWeb (đơn có giao hàng — khách tự
+	// đặt hoặc nhân viên đặt hộ) hoặc OrderChannelPOS (bán tại quầy). Đơn quầy
+	// không có địa chỉ giao, sinh ra đã hoàn tất và đã thu tiền.
+	//
+	// default:web không thừa dù mọi đường tạo đơn đều tự khai: cột là ENUM NOT
+	// NULL, nên đường nào quên khai sẽ ghi chuỗi rỗng và MySQL từ chối cả lượt
+	// insert. Có tag này thì GORM bỏ hẳn cột khỏi câu lệnh và database điền 'web'
+	// — đơn vào sổ với kênh đúng của nó thay vì cả thao tác gãy.
+	Channel string `json:"channel" gorm:"default:web"`
+	// UserID nil = khách lẻ: người mua tại quầy không có tài khoản, và ép họ tạo
+	// một cái chỉ để bán được một lần là thứ không ai làm ở quầy thật.
+	UserID           *uint   `json:"user_id"`
+	VoucherID        *uint   `json:"voucher_id"`
+	RecipientName    string  `json:"recipient_name"`
+	RecipientPhone   string  `json:"recipient_phone"`
+	RecipientEmail   string  `json:"recipient_email"`
+	ShippingProvince string  `json:"shipping_province"`
+	ShippingDistrict string  `json:"shipping_district"`
+	ShippingWard     string  `json:"shipping_ward"`
+	ShippingAddress  string  `json:"shipping_address"`
+	SubtotalAmount   float64 `json:"subtotal_amount"`
+	DiscountAmount   float64 `json:"discount_amount"`
+	ShippingFee      float64 `json:"shipping_fee"`
+	TotalAmount      float64 `json:"total_amount"`
+	// AmountTendered / ChangeAmount là tiền khách đưa và tiền thối lại tại quầy.
+	// nil = không thu bằng tiền mặt; 0 = có thu và khách đưa vừa đủ. Hai chuyện
+	// khác nhau, nên không dùng float64 với giá trị 0 cho cả hai.
+	AmountTendered *float64       `json:"amount_tendered"`
+	ChangeAmount   *float64       `json:"change_amount"`
+	VoucherCode    string         `json:"voucher_code"`
+	PaymentMethod  string         `json:"payment_method"`
+	PaymentStatus  string         `json:"payment_status"`
+	Status         string         `json:"status"`
+	ShippingMethod string         `json:"shipping_method"`
+	TrackingNumber string         `json:"tracking_number"`
+	Note           string         `json:"note"`
+	AdminNote      string         `json:"admin_note"`
+	CancelReason   string         `json:"cancel_reason"`
+	PlacedAt       *time.Time     `json:"placed_at"`
+	ConfirmedAt    *time.Time     `json:"confirmed_at"`
+	ShippedAt      *time.Time     `json:"shipped_at"`
+	DeliveredAt    *time.Time     `json:"delivered_at"`
+	CancelledAt    *time.Time     `json:"cancelled_at"`
+	Items          []OrderItem    `json:"items,omitempty" gorm:"foreignKey:OrderID"`
+	CreatedAt      time.Time      `json:"created_at"`
+	UpdatedAt      time.Time      `json:"updated_at"`
+	DeletedAt      gorm.DeletedAt `json:"-" gorm:"index"`
 	// StockMoves là những thay đổi tồn kho mà thao tác vừa rồi gây ra, do tầng
 	// repository điền vào sau khi transaction chạy xong. Không phải cột của bảng
 	// orders và không trả ra API — chỉ để service biết biến thể nào vừa tụt xuống
@@ -739,6 +755,17 @@ const (
 	OrderStatusCompleted  = "completed"
 	OrderStatusCancelled  = "cancelled"
 	OrderStatusReturned   = "returned"
+)
+
+// Nơi đơn phát sinh (cột orders.channel).
+const (
+	// OrderChannelWeb — đơn có giao hàng. Gồm cả đơn nhân viên đặt hộ khi khách
+	// gọi điện: khác ở người bấm nút, còn đơn thì vẫn có địa chỉ, có phí ship và
+	// thu tiền sau.
+	OrderChannelWeb = "web"
+	// OrderChannelPOS — bán tại quầy: khách đứng trước mặt, trả tiền và cầm hàng
+	// đi ngay trong một thao tác.
+	OrderChannelPOS = "pos"
 )
 
 type OrderItem struct {
@@ -1042,8 +1069,11 @@ type Payment struct {
 
 // Hình thức thanh toán của đơn hàng.
 const (
-	PaymentMethodCOD   = "cod"
-	PaymentMethodBank  = "bank_transfer"
+	PaymentMethodCOD  = "cod"
+	PaymentMethodBank = "bank_transfer"
+	// PaymentMethodCash — tiền mặt trao tay tại quầy. Khác 'cod' ở chỗ tiền đã
+	// nằm trong két chứ không phải đang chờ shipper thu hộ.
+	PaymentMethodCash  = "cash"
 	PaymentMethodPayOS = "payos"
 	PaymentMethodSePay = "sepay"
 )

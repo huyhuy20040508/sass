@@ -30,6 +30,15 @@
                     'label' => 'Đơn hàng', 'icon' => 'orders', 'count' => (int) ($pendingOrders ?? 0),
                     'children' => [
                         [
+                            // Bán tại quầy đứng ĐẦU nhóm: đây là việc người trực quầy
+                            // làm cả ngày, còn hai mục dưới là nơi họ chỉ ghé khi cần
+                            // tra lại. Thứ tự menu nên theo số lần bấm, không theo thứ
+                            // tự các tính năng được dựng ra.
+                            'href' => route('admin.ban-tai-quay.index'),
+                            'label' => \App\Http\Controllers\BanTaiQuayController::TITLE,
+                            'active' => request()->routeIs('admin.ban-tai-quay.*'),
+                        ],
+                        [
                             'href' => route('admin.orders.index'),
                             'label' => \App\Http\Controllers\OrderController::VIEWS['all']['label'],
                             'active' => request()->routeIs('admin.orders.*'),

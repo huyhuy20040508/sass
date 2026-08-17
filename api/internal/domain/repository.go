@@ -125,13 +125,16 @@ type OrderFilter struct {
 	Keyword       string // mã đơn / tên / SĐT / email người nhận
 	Status        string // all | pending | confirmed | ... | returned
 	PaymentStatus string // all | pending | paid | failed | refunded
-	PaymentMethod string // all | cod | vnpay | momo | bank_transfer
-	UserID        *uint  // lọc đơn của một khách hàng
-	FromDate      string // YYYY-MM-DD (theo created_at)
-	ToDate        string // YYYY-MM-DD
-	Sort          string // newest | oldest | total_desc | total_asc
-	Page          int
-	PageSize      int
+	PaymentMethod string // all | cod | vnpay | momo | bank_transfer | cash
+	// Channel: all | web | pos — nơi đơn phát sinh. Đây là bộ lọc tách được doanh
+	// thu quầy khỏi doanh thu giao hàng, hai thứ có cách vận hành khác hẳn nhau.
+	Channel  string
+	UserID   *uint  // lọc đơn của một khách hàng
+	FromDate string // YYYY-MM-DD (theo created_at)
+	ToDate   string // YYYY-MM-DD
+	Sort     string // newest | oldest | total_desc | total_asc
+	Page     int
+	PageSize int
 }
 
 // StockRelease yêu cầu trả TOÀN BỘ hàng của đơn về kho — dùng khi đơn khép lại

@@ -15,6 +15,7 @@
         $PAY_STATUSES = \App\Http\Controllers\OrderController::PAYMENT_STATUSES;
         $PAY_METHODS = \App\Http\Controllers\OrderController::PAYMENT_METHODS;
         $SORTS = \App\Http\Controllers\OrderController::SORTS;
+        $CHANNELS = \App\Http\Controllers\OrderController::CHANNELS;
         $PAGE_SIZES = \App\Http\Controllers\OrderController::PAGE_SIZES;
 
         // Khung nhìn hiện tại. Hiện chỉ còn 'all' — trả hàng đã tách thành module
@@ -32,6 +33,7 @@
             || $filters['status'] !== 'all'
             || $filters['payment_status'] !== 'all'
             || $filters['payment_method'] !== 'all'
+            || $filters['channel'] !== 'all'
             || $filters['from_date'] !== ''
             || $filters['to_date'] !== ''
             || $filters['sort'] !== 'newest';
@@ -40,6 +42,7 @@
         $advCount = ($filters['status'] !== 'all' ? 1 : 0)
             + ($filters['payment_status'] !== 'all' ? 1 : 0)
             + ($filters['payment_method'] !== 'all' ? 1 : 0)
+            + ($filters['channel'] !== 'all' ? 1 : 0)
             + ($filters['sort'] !== 'newest' ? 1 : 0);
         $advOpen = $advCount > 0;
 
@@ -215,6 +218,14 @@
                     @endforeach
                 </select>
 
+                <select name="channel" class="ord-select" title="Lọc theo nơi phát sinh đơn">
+                    <option value="all" {{ $filters['channel'] === 'all' ? 'selected' : '' }}>Tất cả kênh bán</option>
+                    @foreach($CHANNELS as $value => $label)
+                        <option value="{{ $value }}" {{ $filters['channel'] === $value ? 'selected' : '' }}>{{ $label }}
+                        </option>
+                    @endforeach
+                </select>
+
                 <select name="sort" class="ord-select" title="Sắp xếp">
                     @foreach($SORTS as $value => $label)
                         <option value="{{ $value }}" {{ $filters['sort'] === $value ? 'selected' : '' }}>{{ $label }}</option>
@@ -308,6 +319,12 @@
                             <td class="ord-c-stt">{{ $firstRank + $i + 1 }}</td>
                             <td class="ord-c-code" data-view="{{ $id }}" title="Xem chi tiết đơn hàng">
                                 <span class="ord-code">{{ $o['order_code'] ?? '—' }}</span>
+                                {{-- Chỉ đánh dấu đơn quầy, không dán nhãn cả hai loại: đơn giao hàng
+                                     là mặc định và chiếm gần hết bảng, gắn nhãn cho chúng chỉ thêm
+                                     một cột chữ lặp lại mà không nói thêm điều gì. --}}
+                                @if(($o['channel'] ?? 'web') === 'pos')
+                                    <span class="ord-kenh" title="Đơn bán tại quầy — đã giao hàng và thu tiền">Quầy</span>
+                                @endif
                             </td>
                             <td class="ord-c-cus" data-view="{{ $id }}" title="Xem chi tiết đơn hàng">
                                 <span class="ord-name">{{ $o['recipient_name'] ?? '—' }}</span>
@@ -1389,6 +1406,21 @@
             font-weight: 600;
             color: #262626;
             letter-spacing: .2px;
+        }
+
+        /* Nhãn "Quầy" cạnh mã đơn. Cố ý nhạt và nhỏ: đây là chú thích phân loại,
+           không phải trạng thái cần xử lý — nó không được tranh chỗ với badge
+           trạng thái ở cột bên phải, thứ mà nhân viên thật sự phải nhìn. */
+        .ord-kenh {
+            display: inline-block;
+            margin-left: 6px;
+            padding: 1px 6px;
+            border-radius: 4px;
+            background: #f0f0f0;
+            color: #595959;
+            font-size: 11px;
+            font-weight: 500;
+            vertical-align: middle;
         }
 
         .ord-name {

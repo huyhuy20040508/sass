@@ -50,6 +50,38 @@ func (h *OrderHandler) Create(c *gin.Context) {
 	response.Created(c, res)
 }
 
+// @Summary		Bán hàng tại quầy
+// @Description	Ghi nhận một lượt bán TẠI QUẦY: khách đứng trước mặt, trả tiền và cầm hàng đi trong cùng một thao tác.
+// @Description	Mỗi dòng hàng chỉ nói mua biến thể nào (product_variant_id, hoặc slug + size + color) và số lượng — TÊN, GIÁ, SKU đều do server tra lại từ database rồi áp khuyến mãi đang chạy. Người bán KHÔNG gõ giá, nên không có đường nào bán sai giá vì gõ nhầm. Đây là điểm khác lớn nhất so với `POST /admin/orders` (đặt hộ qua điện thoại), nơi giá do người tạo đơn nhập vào.
+// @Description	Tồn kho được khoá và trừ ngay trong cùng transaction như đơn khách đặt trên web, nên hai quầy bấm cùng lúc trên món cuối cùng thì chỉ một bên bán được; thiếu hàng trả 400 và không tạo đơn.
+// @Description	Đơn sinh ra đã ở trạng thái "hoàn tất" và "đã thanh toán", không có phí vận chuyển và không có địa chỉ giao. Lượt bán của sản phẩm được cộng ngay tại đây vì đơn không còn bước chuyển trạng thái nào về sau.
+// @Description	`user_id` bỏ trống là khách lẻ — đơn không gắn tài khoản nào, `customer_name` / `customer_phone` cũng không bắt buộc. Có gửi `user_id` thì tài khoản đó phải tồn tại, nếu không trả 404.
+// @Description	`payment_method` chỉ nhận `cash` hoặc `bank_transfer`: đơn được ghi "đã thanh toán" ngay lúc tạo, nên chỉ chấp nhận hình thức mà tiền đã về trước khi khách rời quầy. Các công tắc thanh toán của storefront KHÔNG áp dụng ở đây — chúng nói cửa hàng nhận gì trên website.
+// @Description	`amount_tendered` (tiền mặt khách đưa) không bắt buộc; có gửi thì server kiểm phải đủ trả (thiếu thì 400) và trả về `change_amount` để người bán đọc số tiền thối.
+// @Tags			Admin - Orders
+// @Accept			json
+// @Produce		json
+// @Param			body	body		dto.POSCheckoutRequest	true	"Giỏ hàng tại quầy và cách thanh toán"
+// @Success		201		{object}	response.Body{data=dto.POSCheckoutResponse}
+// @Failure		400		{object}	response.Body	"Hết hàng, sản phẩm không còn bán, hoặc khách đưa thiếu tiền"
+// @Failure		404		{object}	response.Body	"user_id không tồn tại"
+// @Failure		422		{object}	response.Body
+// @Security		BearerAuth
+// @Router			/admin/orders/pos [post]
+func (h *OrderHandler) POSCheckout(c *gin.Context) {
+	var req dto.POSCheckoutRequest
+	if !bindJSON(c, &req) {
+		return
+	}
+
+	res, err := h.svc.POSCheckout(c.Request.Context(), &req)
+	if err != nil {
+		respondOrderError(c, err, "Lỗi bán hàng tại quầy")
+		return
+	}
+	response.Created(c, res)
+}
+
 // @Summary		Sửa đơn hàng
 // @Description	Sửa thông tin người nhận, địa chỉ giao, phương thức thanh toán, phí ship, giảm giá, ghi chú và DANH SÁCH SẢN PHẨM của một đơn có sẵn. Không đổi khách hàng, mã đơn, trạng thái hay tình trạng thanh toán ở đây. Server tính lại tiền hàng & tổng tiền, đồng thời CHỈNH TỒN KHO theo đúng phần chênh: tăng số lượng thì trừ thêm, giảm hoặc bỏ sản phẩm thì hoàn lại kho (ghi bút toán `adjustment` vào sổ kho); thiếu hàng cho phần tăng thêm thì trả 400. Chỉ sửa được khi đơn còn ở giai đoạn đầu (chờ xác nhận / đã xác nhận / đang chuẩn bị).
 // @Tags			Admin - Orders
@@ -96,7 +128,8 @@ func (h *OrderHandler) Update(c *gin.Context) {
 // @Param			keyword			query		string	false	"Mã đơn / tên / SĐT / email người nhận"
 // @Param			status			query		string	false	"all|pending|confirmed|processing|shipping|delivered|completed|cancelled|returned — cho phép nhiều giá trị ngăn cách bởi dấu phẩy"
 // @Param			payment_status	query		string	false	"all|pending|paid|failed|refunded"
-// @Param			payment_method	query		string	false	"all|cod|vnpay|momo|bank_transfer"
+// @Param			payment_method	query		string	false	"all|cod|vnpay|momo|bank_transfer|cash — `cash` là tiền mặt thu tại quầy"
+// @Param			channel			query		string	false	"all|web|pos — nơi phát sinh đơn: `web` là đơn có giao hàng, `pos` là bán tại quầy"
 // @Param			user_id			query		int		false	"Lọc đơn của một khách hàng"
 // @Param			from_date		query		string	false	"Từ ngày (YYYY-MM-DD)"
 // @Param			to_date			query		string	false	"Đến ngày (YYYY-MM-DD)"
@@ -123,6 +156,7 @@ func (h *OrderHandler) List(c *gin.Context) {
 		Status:        c.Query("status"),
 		PaymentStatus: c.Query("payment_status"),
 		PaymentMethod: c.Query("payment_method"),
+		Channel:       c.Query("channel"),
 		FromDate:      c.Query("from_date"),
 		ToDate:        c.Query("to_date"),
 		Sort:          c.Query("sort"),
@@ -604,6 +638,10 @@ func respondOrderError(c *gin.Context, err error, fallback string) {
 		response.Error(c, http.StatusBadRequest, "Sản phẩm trong giỏ không còn bán hoặc đã đổi phiên bản, vui lòng chọn lại")
 	case errors.Is(err, domain.ErrEmptyCart):
 		response.Error(c, http.StatusBadRequest, "Giỏ hàng đang trống")
+	case errors.Is(err, domain.ErrTenderTooLow):
+		// err đã kèm số tiền còn thiếu — người bán khỏi phải tự trừ nhẩm.
+		response.Error(c, http.StatusBadRequest, "Khách đưa chưa đủ tiền — "+
+			strings.TrimPrefix(err.Error(), domain.ErrTenderTooLow.Error()+": "))
 	case errors.Is(err, domain.ErrPaymentMethodDisabled):
 		response.Error(c, http.StatusUnprocessableEntity,
 			"Cửa hàng hiện không nhận hình thức thanh toán này, vui lòng chọn cách khác")

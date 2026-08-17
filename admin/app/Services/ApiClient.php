@@ -659,6 +659,18 @@ class ApiClient
         return $this->post('/admin/orders', $payload);
     }
 
+    /**
+     * Bán một lượt TẠI QUẦY (payload theo POSCheckoutRequest).
+     *
+     * Khác createOrder ở chỗ payload KHÔNG mang giá: mỗi dòng chỉ nói mua biến
+     * thể nào và mấy cái, còn giá do API tra lại từ database rồi áp khuyến mãi.
+     * Đơn trả về đã hoàn tất và đã thu tiền.
+     */
+    public function posCheckout(array $payload): Response
+    {
+        return $this->post('/admin/orders/pos', $payload);
+    }
+
     /** Sửa thông tin & danh sách sản phẩm của đơn có sẵn (payload theo OrderUpdateRequest). */
     public function updateOrder(int $id, array $payload): Response
     {

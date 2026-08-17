@@ -47,6 +47,9 @@ type OrderService interface {
 	Create(ctx context.Context, req *dto.OrderCreateRequest) (*OrderDetail, error)
 	// Checkout — khách đặt hàng từ storefront (giá tra lại từ DB, trừ tồn kho).
 	Checkout(ctx context.Context, req *dto.CheckoutRequest, userID uint) (*dto.CheckoutResponse, error)
+	// POSCheckout — bán tại quầy: cùng đường tra giá + trừ kho với Checkout, nhưng
+	// đơn sinh ra đã hoàn tất và đã thu tiền.
+	POSCheckout(ctx context.Context, req *dto.POSCheckoutRequest) (*dto.POSCheckoutResponse, error)
 	// Quote — đối chiếu giỏ hàng với giá + tồn kho hiện tại, không tạo đơn.
 	Quote(ctx context.Context, req *dto.CartQuoteRequest) (*dto.CartQuoteResponse, error)
 	// MyOrders — đơn của CHÍNH khách đang đăng nhập (storefront).
@@ -213,32 +216,14 @@ func (s *orderService) Checkout(ctx context.Context, req *dto.CheckoutRequest, u
 		// là có khe cho đợt vừa hết hạn vẫn được giảm, hoặc ngược lại.
 		s.applyPromotions(ctx, found)
 
-		// Gộp các dòng trùng biến thể để kiểm tồn kho theo TỔNG số lượng,
-		// tránh trường hợp 2 dòng cùng biến thể đều lọt qua rồi trừ âm kho.
-		type picked struct {
-			cv   domain.CheckoutVariant
-			qty  int
-			name string
-			num  string
-		}
-		merged := make(map[uint]*picked, len(lines))
-		order := make([]uint, 0, len(lines))
-
-		for _, l := range lines {
-			cv, ok := matchVariant(found, l)
-			if !ok {
-				return nil, nil, fmt.Errorf("%w: %s", domain.ErrVariantNotFound, strings.TrimSpace(l.Slug))
-			}
-			if p, exists := merged[cv.VariantID]; exists {
-				p.qty += l.Quantity
-			} else {
-				merged[cv.VariantID] = &picked{cv: cv, qty: l.Quantity, name: l.CustomPlayerName, num: l.CustomPlayerNumber}
-				order = append(order, cv.VariantID)
-			}
+		items, subtotal, err := buildOrderItems(found, lines)
+		if err != nil {
+			return nil, nil, err
 		}
 
 		now := time.Now()
 		o := &domain.Order{
+			Channel:          domain.OrderChannelWeb,
 			RecipientName:    strings.TrimSpace(req.RecipientName),
 			RecipientPhone:   strings.TrimSpace(req.RecipientPhone),
 			RecipientEmail:   strings.TrimSpace(req.RecipientEmail),
@@ -257,33 +242,7 @@ func (s *orderService) Checkout(ctx context.Context, req *dto.CheckoutRequest, u
 			o.UserID = &uid
 		}
 
-		var subtotal float64
-		for _, vid := range order {
-			p := merged[vid]
-			if p.cv.Stock < p.qty {
-				return nil, nil, fmt.Errorf("%w: %s (còn %d)", domain.ErrOutOfStock, p.cv.ProductName, p.cv.Stock)
-			}
-			line := p.cv.Price * float64(p.qty)
-			subtotal += line
-
-			pid := p.cv.ProductID
-			varID := p.cv.VariantID
-			o.Items = append(o.Items, domain.OrderItem{
-				ProductID:          &pid,
-				ProductVariantID:   &varID,
-				ProductName:        p.cv.ProductName,
-				VariantSKU:         p.cv.SKU,
-				Size:               p.cv.Size,
-				Color:              p.cv.Color,
-				Thumbnail:          p.cv.Thumbnail,
-				UnitPrice:          p.cv.Price,
-				Quantity:           p.qty,
-				TotalPrice:         line,
-				CustomPlayerName:   strings.TrimSpace(p.name),
-				CustomPlayerNumber: strings.TrimSpace(p.num),
-			})
-		}
-
+		o.Items = items
 		o.SubtotalAmount = subtotal
 		o.ShippingFee = s.shippingFeeFor(ctx, subtotal)
 
@@ -377,6 +336,152 @@ func (s *orderService) Checkout(ctx context.Context, req *dto.CheckoutRequest, u
 		Message:       msg,
 		BankTransfer:  bank,
 		Payment:       pay,
+	}, nil
+}
+
+// POSCheckout bán một lượt tại quầy: khách đứng trước mặt, trả tiền và cầm hàng
+// đi trong cùng một thao tác.
+//
+// Đi qua ĐÚNG orderRepo.Checkout của luồng web — giá tra lại từ database, khuyến
+// mãi áp trong giao dịch, biến thể khoá trước khi trừ kho. Người bán không gõ giá
+// vào đâu cả, nên hai đường bán không bao giờ nói hai con số cho cùng một món, và
+// hai quầy bấm cùng lúc trên món cuối cùng thì chỉ một bên bán được.
+//
+// Khác web ở ba chỗ, và chỉ ba chỗ đó:
+//   - Đơn sinh ra đã completed + paid: không có gì để chờ xác nhận hay để giao.
+//   - Không phí ship, không địa chỉ: hàng trao tay ngay tại quầy.
+//   - Có thể không gắn tài khoản nào (khách lẻ).
+func (s *orderService) POSCheckout(ctx context.Context, req *dto.POSCheckoutRequest) (*dto.POSCheckoutResponse, error) {
+	if len(req.Items) == 0 {
+		return nil, domain.ErrEmptyCart
+	}
+
+	// Đơn gắn vào tài khoản khách thì tài khoản đó phải có thật: user_id trỏ vào
+	// khoảng không sẽ thành một đơn không bao giờ hiện trong lịch sử mua của ai.
+	if req.UserID > 0 {
+		exists, err := s.orderRepo.UserExists(ctx, req.UserID)
+		if err != nil {
+			return nil, err
+		}
+		if !exists {
+			return nil, domain.ErrNotFound
+		}
+	}
+
+	// CỐ Ý không hỏi paymentMethodAvailable: các công tắc đó nói cửa hàng nhận
+	// hình thức nào TRÊN WEBSITE, nơi khách trả tiền cho một người không có mặt.
+	// Ở quầy thì tiền đã nằm trong tay người bán trước khi họ bấm nút — tắt "nhận
+	// chuyển khoản" trên storefront không có nghĩa là từ chối tờ tiền khách vừa
+	// đưa. Danh sách hình thức hợp lệ đã chặn ở tầng binding của DTO.
+
+	lines := make([]domain.CheckoutLine, 0, len(req.Items))
+	for _, it := range req.Items {
+		lines = append(lines, domain.CheckoutLine{
+			VariantID:          it.ProductVariantID,
+			Slug:               it.Slug,
+			Size:               it.Size,
+			Color:              it.Color,
+			Quantity:           it.Quantity,
+			CustomPlayerName:   it.CustomPlayerName,
+			CustomPlayerNumber: it.CustomPlayerNumber,
+		})
+	}
+
+	order, err := s.orderRepo.Checkout(ctx, lines, func(found map[uint]domain.CheckoutVariant) (*domain.Order, *domain.VoucherClaim, error) {
+		s.applyPromotions(ctx, found)
+
+		now := time.Now()
+		o := &domain.Order{
+			Channel:        domain.OrderChannelPOS,
+			RecipientName:  strings.TrimSpace(req.CustomerName),
+			RecipientPhone: strings.TrimSpace(req.CustomerPhone),
+			PaymentMethod:  req.PaymentMethod,
+			PaymentStatus:  domain.OrderPaymentPaid,
+			Status:         domain.OrderStatusCompleted,
+			Note:           strings.TrimSpace(req.Note),
+			// Ba mốc cùng một thời điểm, và đó là sự thật chứ không phải cách điền cho
+			// đủ cột: đặt, giao và nhận hàng ở quầy xảy ra trong cùng một khoảnh khắc.
+			// Bỏ trống thì mọi báo cáo đọc theo delivered_at sẽ không thấy đơn quầy nào.
+			PlacedAt:    &now,
+			ConfirmedAt: &now,
+			DeliveredAt: &now,
+		}
+		if req.UserID > 0 {
+			uid := req.UserID
+			o.UserID = &uid
+		}
+
+		items, subtotal, err := buildOrderItems(found, lines)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		o.Items = items
+		o.SubtotalAmount = subtotal
+		// Không có phí ship: hàng không đi đâu cả.
+		o.ShippingFee = 0
+
+		claim, err := s.applyVoucher(ctx, req.VoucherCode, o, subtotal, req.UserID, o.RecipientPhone)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		total := subtotal - o.DiscountAmount
+		if total < 0 {
+			total = 0
+		}
+		o.TotalAmount = total
+
+		// Tiền mặt: đưa thiếu thì KHÔNG bán. Bán rồi ghi "đã thanh toán" khi khách
+		// mới đưa một nửa là tự tạo ra một khoản nợ mà không sổ nào ghi lại.
+		//
+		// Chỉ áp cho tiền mặt: số tiền khách đưa không có nghĩa gì với một lệnh
+		// chuyển khoản, và nhận nó ở đó chỉ tổ ghi vào đơn một con số không ai kiểm.
+		if req.PaymentMethod == domain.PaymentMethodCash && req.AmountTendered != nil {
+			tendered := *req.AmountTendered
+			if tendered < total {
+				return nil, nil, fmt.Errorf("%w: còn thiếu %s", domain.ErrTenderTooLow, formatVND(total-tendered))
+			}
+			change := tendered - total
+			o.AmountTendered = &tendered
+			o.ChangeAmount = &change
+		}
+
+		return o, claim, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// Không gửi email (đơn quầy không hỏi địa chỉ thư) và không đẩy thông báo vào
+	// chuông của admin: đơn này do chính người đang đứng ở quầy vừa tạo. Chỉ bắn
+	// tín hiệu để bảng đơn ở máy khác tự làm mới, y như luồng tạo đơn thủ công.
+	s.notifyCustomer(ctx, order, "order_created",
+		"Đã mua hàng tại quầy — đơn "+order.OrderCode,
+		"Cảm ơn bạn đã mua sắm. Đơn đã hoàn tất và thanh toán xong.")
+	s.signalOrder(ctx, order)
+	// Quầy là nơi hàng ra khỏi kho nhanh nhất mà người bán lại không nhìn thấy số
+	// tồn còn lại — cảnh báo sắp hết ở đây có giá trị hơn ở bất kỳ luồng nào khác.
+	s.notifyLowStock(ctx, order)
+
+	msg := "Đã bán và thu tiền xong."
+	if order.ChangeAmount != nil {
+		msg = "Đã thu " + formatVND(*order.AmountTendered) + ", thối lại " + formatVND(*order.ChangeAmount) + "."
+	}
+
+	return &dto.POSCheckoutResponse{
+		OrderID:        order.ID,
+		OrderCode:      order.OrderCode,
+		Subtotal:       order.SubtotalAmount,
+		Discount:       order.DiscountAmount,
+		VoucherCode:    order.VoucherCode,
+		Total:          order.TotalAmount,
+		AmountTendered: order.AmountTendered,
+		ChangeAmount:   order.ChangeAmount,
+		PaymentMethod:  order.PaymentMethod,
+		Status:         order.Status,
+		PaymentStatus:  order.PaymentStatus,
+		Message:        msg,
 	}, nil
 }
 
@@ -489,6 +594,7 @@ func (s *orderService) MyOrders(ctx context.Context, userID uint, filter domain.
 	filter.Keyword = ""
 	filter.PaymentStatus = ""
 	filter.PaymentMethod = ""
+	filter.Channel = ""
 
 	orders, total, err := s.orderRepo.List(ctx, filter)
 	if err != nil {
@@ -1050,6 +1156,73 @@ func placedAtText(o *domain.Order) string {
 	return t.Format("15:04 02/01/2006")
 }
 
+// buildOrderItems dựng danh sách dòng hàng của đơn từ giỏ hàng và bảng giá vừa
+// tra được, đồng thời trả về tiền hàng.
+//
+// Dùng chung cho đơn web và đơn tại quầy: hai đường bán khác nhau ở trạng thái
+// đơn và cách thu tiền, còn "mua gì, giá bao nhiêu, đủ hàng không" thì phải là
+// cùng một câu trả lời. Tách ra để không có hai bản luật giá trôi khỏi nhau.
+//
+// Hai dòng cùng một biến thể được GỘP lại. Không gộp thì mỗi dòng tự thấy đủ
+// hàng cho riêng nó và cả hai cùng lọt qua, để lượt trừ kho phía sau lãnh phần
+// thiếu — đúng lúc đơn đã tính tiền xong. Thông tin in áo lấy theo dòng ĐẦU
+// TIÊN: một biến thể chỉ có một dòng trong đơn, nên hai yêu cầu in khác nhau
+// không có chỗ để cùng tồn tại.
+//
+// Thứ tự dòng hàng giữ đúng thứ tự khách chọn, không theo thứ tự duyệt map.
+func buildOrderItems(found map[uint]domain.CheckoutVariant, lines []domain.CheckoutLine) ([]domain.OrderItem, float64, error) {
+	type picked struct {
+		cv   domain.CheckoutVariant
+		qty  int
+		name string
+		num  string
+	}
+	merged := make(map[uint]*picked, len(lines))
+	order := make([]uint, 0, len(lines))
+
+	for _, l := range lines {
+		cv, ok := matchVariant(found, l)
+		if !ok {
+			return nil, 0, fmt.Errorf("%w: %s", domain.ErrVariantNotFound, strings.TrimSpace(l.Slug))
+		}
+		if p, exists := merged[cv.VariantID]; exists {
+			p.qty += l.Quantity
+		} else {
+			merged[cv.VariantID] = &picked{cv: cv, qty: l.Quantity, name: l.CustomPlayerName, num: l.CustomPlayerNumber}
+			order = append(order, cv.VariantID)
+		}
+	}
+
+	var subtotal float64
+	items := make([]domain.OrderItem, 0, len(order))
+	for _, vid := range order {
+		p := merged[vid]
+		if p.cv.Stock < p.qty {
+			return nil, 0, fmt.Errorf("%w: %s (còn %d)", domain.ErrOutOfStock, p.cv.ProductName, p.cv.Stock)
+		}
+		line := p.cv.Price * float64(p.qty)
+		subtotal += line
+
+		pid := p.cv.ProductID
+		varID := p.cv.VariantID
+		items = append(items, domain.OrderItem{
+			ProductID:          &pid,
+			ProductVariantID:   &varID,
+			ProductName:        p.cv.ProductName,
+			VariantSKU:         p.cv.SKU,
+			Size:               p.cv.Size,
+			Color:              p.cv.Color,
+			Thumbnail:          p.cv.Thumbnail,
+			UnitPrice:          p.cv.Price,
+			Quantity:           p.qty,
+			TotalPrice:         line,
+			CustomPlayerName:   strings.TrimSpace(p.name),
+			CustomPlayerNumber: strings.TrimSpace(p.num),
+		})
+	}
+	return items, subtotal, nil
+}
+
 // matchVariant tìm biến thể đã tra được ứng với một dòng giỏ hàng.
 func matchVariant(found map[uint]domain.CheckoutVariant, l domain.CheckoutLine) (domain.CheckoutVariant, bool) {
 	if l.VariantID > 0 {
@@ -1104,6 +1277,9 @@ func (s *orderService) Create(ctx context.Context, req *dto.OrderCreateRequest) 
 	now := time.Now()
 	uid := req.UserID
 	o := &domain.Order{
+		// Đơn nhân viên đặt hộ khi khách gọi điện vẫn là đơn GIAO HÀNG: có địa chỉ,
+		// có phí ship, thu tiền sau. Khác đơn quầy ở đúng những điểm đó.
+		Channel:          domain.OrderChannelWeb,
 		UserID:           &uid,
 		RecipientName:    strings.TrimSpace(req.RecipientName),
 		RecipientPhone:   strings.TrimSpace(req.RecipientPhone),

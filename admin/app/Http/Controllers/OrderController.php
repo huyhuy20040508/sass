@@ -31,6 +31,14 @@ class OrderController extends Controller
         'cod' => 'COD (khi nhận hàng)', 'vnpay' => 'VNPay',
         'momo' => 'MoMo', 'bank_transfer' => 'Chuyển khoản',
         'payos' => 'Online (PayOS)', 'sepay' => 'Chuyển khoản (SePay)',
+        'cash' => 'Tiền mặt (tại quầy)',
+    ];
+
+    /** Nơi đơn phát sinh. Hai loại đơn này vận hành khác hẳn nhau — đơn 'web' còn
+     *  phải soạn và giao, đơn 'pos' thì xong ngay lúc tạo — nên trộn chung một
+     *  danh sách là bắt người trực đơn tự đọc lướt để bỏ qua nửa số dòng. */
+    public const CHANNELS = [
+        'web' => 'Đơn giao hàng', 'pos' => 'Bán tại quầy',
     ];
 
     public const SORTS = [
@@ -396,6 +404,14 @@ class OrderController extends Controller
                 'size' => $v['size'] ?? '',
                 'color' => $v['color'] ?? '',
                 'price' => $v['price'] ?? null,
+                // final_price là GIÁ BÁN THẬT của biến thể: giá riêng của nó (nếu có)
+                // đè giá sản phẩm, rồi chương trình khuyến mãi đang chạy trừ tiếp —
+                // đúng công thức tầng thanh toán dùng để thu tiền.
+                //
+                // Màn hình bán tại quầy đọc trường này để con số đọc cho khách nghe
+                // bằng đúng con số API sẽ thu. Không có nó thì quầy báo giá gốc trong
+                // khi hệ thống tính giá đã giảm, và người bán là người phải giải thích.
+                'final_price' => isset($v['final_price']) ? (float) $v['final_price'] : null,
                 'stock' => $v['stock_quantity'] ?? 0,
                 'image' => $v['image'] ?? '',
             ], $p['variants'] ?? []);
@@ -483,11 +499,16 @@ class OrderController extends Controller
         return response()->streamDownload(function () use ($orders) {
             $out = fopen('php://output', 'w');
             fwrite($out, "\xEF\xBB\xBF");
-            fputcsv($out, ['Mã đơn', 'Ngày đặt', 'Người nhận', 'Số điện thoại', 'Địa chỉ giao', 'Số sản phẩm', 'Tiền hàng', 'Giảm giá', 'Phí ship', 'Tổng tiền', 'Phương thức', 'Thanh toán', 'Trạng thái']);
+            // Cột "Kênh" đứng ngay sau ngày đặt: người mở tệp này thường đang cộng sổ
+            // một ngày, mà doanh thu quầy và doanh thu giao hàng là hai khoản phải
+            // tách được ra. Không có cột ấy thì đơn quầy chỉ nhận ra qua ô địa chỉ
+            // trống — một dấu hiệu gián tiếp và dễ đọc nhầm.
+            fputcsv($out, ['Mã đơn', 'Ngày đặt', 'Kênh', 'Người nhận', 'Số điện thoại', 'Địa chỉ giao', 'Số sản phẩm', 'Tiền hàng', 'Giảm giá', 'Phí ship', 'Tổng tiền', 'Phương thức', 'Thanh toán', 'Trạng thái']);
             foreach ($orders as $o) {
                 fputcsv($out, [
                     $o['order_code'] ?? '',
                     ! empty($o['created_at']) ? Carbon::parse($o['created_at'])->format('d/m/Y H:i') : '',
+                    self::CHANNELS[$o['channel'] ?? ''] ?? ($o['channel'] ?? ''),
                     $o['recipient_name'] ?? '', $o['recipient_phone'] ?? '', self::shippingAddress($o),
                     collect($o['items'] ?? [])->sum('quantity'), (float) ($o['subtotal_amount'] ?? 0), (float) ($o['discount_amount'] ?? 0),
                     (float) ($o['shipping_fee'] ?? 0), (float) ($o['total_amount'] ?? 0),
@@ -523,6 +544,7 @@ class OrderController extends Controller
 
         $ps = (string) $request->query('payment_status', 'all');
         $pm = (string) $request->query('payment_method', 'all');
+        $ch = (string) $request->query('channel', 'all');
         $so = (string) $request->query('sort', 'newest');
         $psize = (int) $request->query('page_size', 20);
         $date = fn ($v) => preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $v) ? (string) $v : '';
@@ -533,6 +555,7 @@ class OrderController extends Controller
             'status' => $status,
             'payment_status' => isset(self::PAYMENT_STATUSES[$ps]) ? $ps : 'all',
             'payment_method' => isset(self::PAYMENT_METHODS[$pm]) ? $pm : 'all',
+            'channel' => isset(self::CHANNELS[$ch]) ? $ch : 'all',
             'from_date' => $date($request->query('from_date')), 'to_date' => $date($request->query('to_date')),
             'sort' => isset(self::SORTS[$so]) ? $so : 'newest',
             'page' => max(1, (int) $request->query('page', 1)),

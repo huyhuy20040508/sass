@@ -487,6 +487,10 @@ func New(
 			// Đơn hàng
 			admin.GET("/orders", h.Order.List)
 			admin.POST("/orders", h.Order.Create)
+			// Bán tại quầy — nằm ở nhóm `admin` chứ không phải `manage`: người đứng
+			// quầy là nhân viên, và cả tính năng vô nghĩa nếu chỉ chủ cửa hàng bấm
+			// được nút thu tiền.
+			admin.POST("/orders/pos", h.Order.POSCheckout)
 			admin.GET("/orders/stats", h.Order.Stats)
 			admin.GET("/orders/revenue", h.Order.Revenue)
 			admin.GET("/orders/:id", h.Order.Get)

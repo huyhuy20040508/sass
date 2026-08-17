@@ -882,6 +882,65 @@ type OrderCreateRequest struct {
 	Items            []OrderItemRequest `json:"items" binding:"required,min=1,dive"`
 }
 
+// POSCheckoutRequest — payload bán hàng TẠI QUẦY.
+//
+// Cố ý KHÔNG dùng lại OrderCreateRequest dù cùng là "nhân viên tạo đơn": đơn thủ
+// công là đơn GIAO HÀNG đặt hộ qua điện thoại (bắt buộc có tài khoản khách, có
+// địa chỉ, giá do người tạo gõ vào), còn đây là khách đứng trước mặt trả tiền và
+// cầm hàng đi. Gộp hai thứ vào một payload thì mỗi trường phải mang chú thích
+// "bắt buộc trong trường hợp này, bỏ qua trong trường hợp kia", và mọi ràng buộc
+// đều phải nới ra tới mức lỏng nhất của hai bên.
+//
+// Giống luồng khách đặt trên web: mỗi dòng chỉ nói MUA GÌ, MẤY CÁI — tên, giá và
+// SKU đều do server tra lại từ database rồi áp khuyến mãi đang chạy. Người bán
+// không gõ giá, nên không có đường nào bán sai giá vì gõ nhầm.
+type POSCheckoutRequest struct {
+	// UserID gắn đơn vào một tài khoản khách CÓ SẴN — dùng khi khách quen muốn
+	// tích luỹ lịch sử mua. Bỏ trống (0) là khách lẻ: quầy phải bán được cho người
+	// không có tài khoản, ép tạo hồ sơ chỉ để tính tiền một lần là thứ không ai
+	// làm giữa lúc có người đứng đợi.
+	UserID uint `json:"user_id"`
+	// Tên và số điện thoại khách lẻ, cả hai đều không bắt buộc — có thì ghi vào đơn
+	// để còn gọi lại lúc đổi trả, không có thì đơn vẫn bán được.
+	CustomerName  string `json:"customer_name" binding:"omitempty,max=100"`
+	CustomerPhone string `json:"customer_phone" binding:"omitempty,max=20"`
+	// PaymentMethod chỉ nhận hình thức mà tiền ĐÃ về trước khi khách rời quầy:
+	// tiền mặt, hoặc khách tự chuyển khoản và người bán nhìn thấy báo có. Cổng
+	// thanh toán online (payos/sepay) không nằm ở đây vì đơn quầy được ghi "đã
+	// thanh toán" ngay lúc tạo, mà tiền qua cổng thì phải đợi cổng báo về.
+	PaymentMethod string `json:"payment_method" binding:"required,oneof=cash bank_transfer"`
+	// AmountTendered là số tiền mặt khách đưa. Bỏ trống nghĩa là khách đưa vừa đủ
+	// (hoặc không trả bằng tiền mặt) — con trỏ chứ không phải float64 để phân biệt
+	// "không khai" với "đưa 0đ". Đưa thiếu thì đơn bị từ chối, không tạo nợ.
+	AmountTendered *float64 `json:"amount_tendered" binding:"omitempty,gte=0"`
+	Note           string   `json:"note" binding:"omitempty,max=500"`
+	// VoucherCode là mã giảm giá khách xuất trình. Mức giảm do server tự tính lại
+	// trên giá tại thời điểm bán — cùng đường với luồng web.
+	VoucherCode string                `json:"voucher_code" binding:"omitempty,max=50"`
+	Items       []CheckoutItemRequest `json:"items" binding:"required,min=1,max=50,dive"`
+}
+
+// POSCheckoutResponse — kết quả một lượt bán tại quầy, đủ để in hoá đơn ngay.
+type POSCheckoutResponse struct {
+	OrderID   uint   `json:"order_id"`
+	OrderCode string `json:"order_code"`
+	// Subtotal là tiền hàng theo giá server tra được (đã trừ khuyến mãi từng dòng),
+	// Discount là phần mã giảm giá trừ thêm trên cả đơn.
+	Subtotal    float64 `json:"subtotal_amount"`
+	Discount    float64 `json:"discount_amount"`
+	VoucherCode string  `json:"voucher_code,omitempty"`
+	Total       float64 `json:"total_amount"`
+	// AmountTendered / ChangeAmount vắng mặt khi không thu tiền mặt. Số tiền thối
+	// là thứ người bán cần đọc to lên ngay, nên nó do server tính chứ không để mỗi
+	// màn hình tự trừ theo cách của mình.
+	AmountTendered *float64 `json:"amount_tendered,omitempty"`
+	ChangeAmount   *float64 `json:"change_amount,omitempty"`
+	PaymentMethod  string   `json:"payment_method"`
+	Status         string   `json:"status"`
+	PaymentStatus  string   `json:"payment_status"`
+	Message        string   `json:"message"`
+}
+
 // OrderUpdateRequest — payload admin sửa một đơn hàng CÓ SẴN. Không cho đổi khách
 // hàng (user_id), mã đơn, trạng thái hay tình trạng thanh toán ở luồng này; chỉ sửa
 // thông tin người nhận, giao hàng, giảm giá và danh sách sản phẩm. Server tính lại

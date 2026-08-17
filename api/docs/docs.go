@@ -3097,8 +3097,14 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "all|cod|vnpay|momo|bank_transfer",
+                        "description": "all|cod|vnpay|momo|bank_transfer|cash — ` + "`" + `cash` + "`" + ` là tiền mặt thu tại quầy",
                         "name": "payment_method",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "all|web|pos — nơi phát sinh đơn: ` + "`" + `web` + "`" + ` là đơn có giao hàng, ` + "`" + `pos` + "`" + ` là bán tại quầy",
+                        "name": "channel",
                         "in": "query"
                     },
                     {
@@ -3226,6 +3232,75 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/orders/pos": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Ghi nhận một lượt bán TẠI QUẦY: khách đứng trước mặt, trả tiền và cầm hàng đi trong cùng một thao tác.\nMỗi dòng hàng chỉ nói mua biến thể nào (product_variant_id, hoặc slug + size + color) và số lượng — TÊN, GIÁ, SKU đều do server tra lại từ database rồi áp khuyến mãi đang chạy. Người bán KHÔNG gõ giá, nên không có đường nào bán sai giá vì gõ nhầm. Đây là điểm khác lớn nhất so với ` + "`" + `POST /admin/orders` + "`" + ` (đặt hộ qua điện thoại), nơi giá do người tạo đơn nhập vào.\nTồn kho được khoá và trừ ngay trong cùng transaction như đơn khách đặt trên web, nên hai quầy bấm cùng lúc trên món cuối cùng thì chỉ một bên bán được; thiếu hàng trả 400 và không tạo đơn.\nĐơn sinh ra đã ở trạng thái \"hoàn tất\" và \"đã thanh toán\", không có phí vận chuyển và không có địa chỉ giao. Lượt bán của sản phẩm được cộng ngay tại đây vì đơn không còn bước chuyển trạng thái nào về sau.\n` + "`" + `user_id` + "`" + ` bỏ trống là khách lẻ — đơn không gắn tài khoản nào, ` + "`" + `customer_name` + "`" + ` / ` + "`" + `customer_phone` + "`" + ` cũng không bắt buộc. Có gửi ` + "`" + `user_id` + "`" + ` thì tài khoản đó phải tồn tại, nếu không trả 404.\n` + "`" + `payment_method` + "`" + ` chỉ nhận ` + "`" + `cash` + "`" + ` hoặc ` + "`" + `bank_transfer` + "`" + `: đơn được ghi \"đã thanh toán\" ngay lúc tạo, nên chỉ chấp nhận hình thức mà tiền đã về trước khi khách rời quầy. Các công tắc thanh toán của storefront KHÔNG áp dụng ở đây — chúng nói cửa hàng nhận gì trên website.\n` + "`" + `amount_tendered` + "`" + ` (tiền mặt khách đưa) không bắt buộc; có gửi thì server kiểm phải đủ trả (thiếu thì 400) và trả về ` + "`" + `change_amount` + "`" + ` để người bán đọc số tiền thối.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Orders"
+                ],
+                "summary": "Bán hàng tại quầy",
+                "parameters": [
+                    {
+                        "description": "Giỏ hàng tại quầy và cách thanh toán",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.POSCheckoutRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.POSCheckoutResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Hết hàng, sản phẩm không còn bán, hoặc khách đưa thiếu tiền",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "404": {
+                        "description": "user_id không tồn tại",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
@@ -13295,10 +13370,21 @@ const docTemplate = `{
                 "admin_note": {
                     "type": "string"
                 },
+                "amount_tendered": {
+                    "description": "AmountTendered / ChangeAmount là tiền khách đưa và tiền thối lại tại quầy.\nnil = không thu bằng tiền mặt; 0 = có thu và khách đưa vừa đủ. Hai chuyện\nkhác nhau, nên không dùng float64 với giá trị 0 cho cả hai.",
+                    "type": "number"
+                },
                 "cancel_reason": {
                     "type": "string"
                 },
                 "cancelled_at": {
+                    "type": "string"
+                },
+                "change_amount": {
+                    "type": "number"
+                },
+                "channel": {
+                    "description": "Channel là NƠI đơn phát sinh: OrderChannelWeb (đơn có giao hàng — khách tự\nđặt hoặc nhân viên đặt hộ) hoặc OrderChannelPOS (bán tại quầy). Đơn quầy\nkhông có địa chỉ giao, sinh ra đã hoàn tất và đã thu tiền.\n\ndefault:web không thừa dù mọi đường tạo đơn đều tự khai: cột là ENUM NOT\nNULL, nên đường nào quên khai sẽ ghi chuỗi rỗng và MySQL từ chối cả lượt\ninsert. Có tag này thì GORM bỏ hẳn cột khỏi câu lệnh và database điền 'web'\n— đơn vào sổ với kênh đúng của nó thay vì cả thao tác gãy.",
                     "type": "string"
                 },
                 "confirmed_at": {
@@ -13387,6 +13473,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "user_id": {
+                    "description": "UserID nil = khách lẻ: người mua tại quầy không có tài khoản, và ép họ tạo\nmột cái chỉ để bán được một lần là thứ không ai làm ở quầy thật.",
                     "type": "integer"
                 },
                 "voucher_code": {
@@ -16803,6 +16890,101 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.POSCheckoutRequest": {
+            "type": "object",
+            "required": [
+                "items",
+                "payment_method"
+            ],
+            "properties": {
+                "amount_tendered": {
+                    "description": "AmountTendered là số tiền mặt khách đưa. Bỏ trống nghĩa là khách đưa vừa đủ\n(hoặc không trả bằng tiền mặt) — con trỏ chứ không phải float64 để phân biệt\n\"không khai\" với \"đưa 0đ\". Đưa thiếu thì đơn bị từ chối, không tạo nợ.",
+                    "type": "number",
+                    "minimum": 0
+                },
+                "customer_name": {
+                    "description": "Tên và số điện thoại khách lẻ, cả hai đều không bắt buộc — có thì ghi vào đơn\nđể còn gọi lại lúc đổi trả, không có thì đơn vẫn bán được.",
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "customer_phone": {
+                    "type": "string",
+                    "maxLength": 20
+                },
+                "items": {
+                    "type": "array",
+                    "maxItems": 50,
+                    "minItems": 1,
+                    "items": {
+                        "$ref": "#/definitions/dto.CheckoutItemRequest"
+                    }
+                },
+                "note": {
+                    "type": "string",
+                    "maxLength": 500
+                },
+                "payment_method": {
+                    "description": "PaymentMethod chỉ nhận hình thức mà tiền ĐÃ về trước khi khách rời quầy:\ntiền mặt, hoặc khách tự chuyển khoản và người bán nhìn thấy báo có. Cổng\nthanh toán online (payos/sepay) không nằm ở đây vì đơn quầy được ghi \"đã\nthanh toán\" ngay lúc tạo, mà tiền qua cổng thì phải đợi cổng báo về.",
+                    "type": "string",
+                    "enum": [
+                        "cash",
+                        "bank_transfer"
+                    ]
+                },
+                "user_id": {
+                    "description": "UserID gắn đơn vào một tài khoản khách CÓ SẴN — dùng khi khách quen muốn\ntích luỹ lịch sử mua. Bỏ trống (0) là khách lẻ: quầy phải bán được cho người\nkhông có tài khoản, ép tạo hồ sơ chỉ để tính tiền một lần là thứ không ai\nlàm giữa lúc có người đứng đợi.",
+                    "type": "integer"
+                },
+                "voucher_code": {
+                    "description": "VoucherCode là mã giảm giá khách xuất trình. Mức giảm do server tự tính lại\ntrên giá tại thời điểm bán — cùng đường với luồng web.",
+                    "type": "string",
+                    "maxLength": 50
+                }
+            }
+        },
+        "dto.POSCheckoutResponse": {
+            "type": "object",
+            "properties": {
+                "amount_tendered": {
+                    "description": "AmountTendered / ChangeAmount vắng mặt khi không thu tiền mặt. Số tiền thối\nlà thứ người bán cần đọc to lên ngay, nên nó do server tính chứ không để mỗi\nmàn hình tự trừ theo cách của mình.",
+                    "type": "number"
+                },
+                "change_amount": {
+                    "type": "number"
+                },
+                "discount_amount": {
+                    "type": "number"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "order_code": {
+                    "type": "string"
+                },
+                "order_id": {
+                    "type": "integer"
+                },
+                "payment_method": {
+                    "type": "string"
+                },
+                "payment_status": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "subtotal_amount": {
+                    "description": "Subtotal là tiền hàng theo giá server tra được (đã trừ khuyến mãi từng dòng),\nDiscount là phần mã giảm giá trừ thêm trên cả đơn.",
+                    "type": "number"
+                },
+                "total_amount": {
+                    "type": "number"
+                },
+                "voucher_code": {
+                    "type": "string"
+                }
+            }
+        },
         "dto.PaymentStatusResponse": {
             "type": "object",
             "properties": {
@@ -18924,6 +19106,10 @@ const docTemplate = `{
                 "admin_note": {
                     "type": "string"
                 },
+                "amount_tendered": {
+                    "description": "AmountTendered / ChangeAmount là tiền khách đưa và tiền thối lại tại quầy.\nnil = không thu bằng tiền mặt; 0 = có thu và khách đưa vừa đủ. Hai chuyện\nkhác nhau, nên không dùng float64 với giá trị 0 cho cả hai.",
+                    "type": "number"
+                },
                 "can_cancel": {
                     "description": "CanCancel cho biết KHÁCH có được tự huỷ đơn này không. Storefront dựa vào đây\nđể hiện nút huỷ, khỏi phải chép lại luật vào giao diện rồi lệch với server.",
                     "type": "boolean"
@@ -18932,6 +19118,13 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "cancelled_at": {
+                    "type": "string"
+                },
+                "change_amount": {
+                    "type": "number"
+                },
+                "channel": {
+                    "description": "Channel là NƠI đơn phát sinh: OrderChannelWeb (đơn có giao hàng — khách tự\nđặt hoặc nhân viên đặt hộ) hoặc OrderChannelPOS (bán tại quầy). Đơn quầy\nkhông có địa chỉ giao, sinh ra đã hoàn tất và đã thu tiền.\n\ndefault:web không thừa dù mọi đường tạo đơn đều tự khai: cột là ENUM NOT\nNULL, nên đường nào quên khai sẽ ghi chuỗi rỗng và MySQL từ chối cả lượt\ninsert. Có tag này thì GORM bỏ hẳn cột khỏi câu lệnh và database điền 'web'\n— đơn vào sổ với kênh đúng của nó thay vì cả thao tác gãy.",
                     "type": "string"
                 },
                 "confirmed_at": {
@@ -19033,6 +19226,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "user_id": {
+                    "description": "UserID nil = khách lẻ: người mua tại quầy không có tài khoản, và ép họ tạo\nmột cái chỉ để bán được một lần là thứ không ai làm ở quầy thật.",
                     "type": "integer"
                 },
                 "voucher_code": {

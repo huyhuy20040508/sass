@@ -381,9 +381,28 @@ definitions:
     properties:
       admin_note:
         type: string
+      amount_tendered:
+        description: |-
+          AmountTendered / ChangeAmount là tiền khách đưa và tiền thối lại tại quầy.
+          nil = không thu bằng tiền mặt; 0 = có thu và khách đưa vừa đủ. Hai chuyện
+          khác nhau, nên không dùng float64 với giá trị 0 cho cả hai.
+        type: number
       cancel_reason:
         type: string
       cancelled_at:
+        type: string
+      change_amount:
+        type: number
+      channel:
+        description: |-
+          Channel là NƠI đơn phát sinh: OrderChannelWeb (đơn có giao hàng — khách tự
+          đặt hoặc nhân viên đặt hộ) hoặc OrderChannelPOS (bán tại quầy). Đơn quầy
+          không có địa chỉ giao, sinh ra đã hoàn tất và đã thu tiền.
+
+          default:web không thừa dù mọi đường tạo đơn đều tự khai: cột là ENUM NOT
+          NULL, nên đường nào quên khai sẽ ghi chuỗi rỗng và MySQL từ chối cả lượt
+          insert. Có tag này thì GORM bỏ hẳn cột khỏi câu lệnh và database điền 'web'
+          — đơn vào sổ với kênh đúng của nó thay vì cả thao tác gãy.
         type: string
       confirmed_at:
         type: string
@@ -446,6 +465,9 @@ definitions:
       updated_at:
         type: string
       user_id:
+        description: |-
+          UserID nil = khách lẻ: người mua tại quầy không có tài khoản, và ép họ tạo
+          một cái chỉ để bán được một lần là thứ không ai làm ở quầy thật.
         type: integer
       voucher_code:
         type: string
@@ -3082,6 +3104,94 @@ definitions:
     - recipient_phone
     - shipping_address
     type: object
+  dto.POSCheckoutRequest:
+    properties:
+      amount_tendered:
+        description: |-
+          AmountTendered là số tiền mặt khách đưa. Bỏ trống nghĩa là khách đưa vừa đủ
+          (hoặc không trả bằng tiền mặt) — con trỏ chứ không phải float64 để phân biệt
+          "không khai" với "đưa 0đ". Đưa thiếu thì đơn bị từ chối, không tạo nợ.
+        minimum: 0
+        type: number
+      customer_name:
+        description: |-
+          Tên và số điện thoại khách lẻ, cả hai đều không bắt buộc — có thì ghi vào đơn
+          để còn gọi lại lúc đổi trả, không có thì đơn vẫn bán được.
+        maxLength: 100
+        type: string
+      customer_phone:
+        maxLength: 20
+        type: string
+      items:
+        items:
+          $ref: '#/definitions/dto.CheckoutItemRequest'
+        maxItems: 50
+        minItems: 1
+        type: array
+      note:
+        maxLength: 500
+        type: string
+      payment_method:
+        description: |-
+          PaymentMethod chỉ nhận hình thức mà tiền ĐÃ về trước khi khách rời quầy:
+          tiền mặt, hoặc khách tự chuyển khoản và người bán nhìn thấy báo có. Cổng
+          thanh toán online (payos/sepay) không nằm ở đây vì đơn quầy được ghi "đã
+          thanh toán" ngay lúc tạo, mà tiền qua cổng thì phải đợi cổng báo về.
+        enum:
+        - cash
+        - bank_transfer
+        type: string
+      user_id:
+        description: |-
+          UserID gắn đơn vào một tài khoản khách CÓ SẴN — dùng khi khách quen muốn
+          tích luỹ lịch sử mua. Bỏ trống (0) là khách lẻ: quầy phải bán được cho người
+          không có tài khoản, ép tạo hồ sơ chỉ để tính tiền một lần là thứ không ai
+          làm giữa lúc có người đứng đợi.
+        type: integer
+      voucher_code:
+        description: |-
+          VoucherCode là mã giảm giá khách xuất trình. Mức giảm do server tự tính lại
+          trên giá tại thời điểm bán — cùng đường với luồng web.
+        maxLength: 50
+        type: string
+    required:
+    - items
+    - payment_method
+    type: object
+  dto.POSCheckoutResponse:
+    properties:
+      amount_tendered:
+        description: |-
+          AmountTendered / ChangeAmount vắng mặt khi không thu tiền mặt. Số tiền thối
+          là thứ người bán cần đọc to lên ngay, nên nó do server tính chứ không để mỗi
+          màn hình tự trừ theo cách của mình.
+        type: number
+      change_amount:
+        type: number
+      discount_amount:
+        type: number
+      message:
+        type: string
+      order_code:
+        type: string
+      order_id:
+        type: integer
+      payment_method:
+        type: string
+      payment_status:
+        type: string
+      status:
+        type: string
+      subtotal_amount:
+        description: |-
+          Subtotal là tiền hàng theo giá server tra được (đã trừ khuyến mãi từng dòng),
+          Discount là phần mã giảm giá trừ thêm trên cả đơn.
+        type: number
+      total_amount:
+        type: number
+      voucher_code:
+        type: string
+    type: object
   dto.PaymentStatusResponse:
     properties:
       amount:
@@ -4782,6 +4892,12 @@ definitions:
     properties:
       admin_note:
         type: string
+      amount_tendered:
+        description: |-
+          AmountTendered / ChangeAmount là tiền khách đưa và tiền thối lại tại quầy.
+          nil = không thu bằng tiền mặt; 0 = có thu và khách đưa vừa đủ. Hai chuyện
+          khác nhau, nên không dùng float64 với giá trị 0 cho cả hai.
+        type: number
       can_cancel:
         description: |-
           CanCancel cho biết KHÁCH có được tự huỷ đơn này không. Storefront dựa vào đây
@@ -4790,6 +4906,19 @@ definitions:
       cancel_reason:
         type: string
       cancelled_at:
+        type: string
+      change_amount:
+        type: number
+      channel:
+        description: |-
+          Channel là NƠI đơn phát sinh: OrderChannelWeb (đơn có giao hàng — khách tự
+          đặt hoặc nhân viên đặt hộ) hoặc OrderChannelPOS (bán tại quầy). Đơn quầy
+          không có địa chỉ giao, sinh ra đã hoàn tất và đã thu tiền.
+
+          default:web không thừa dù mọi đường tạo đơn đều tự khai: cột là ENUM NOT
+          NULL, nên đường nào quên khai sẽ ghi chuỗi rỗng và MySQL từ chối cả lượt
+          insert. Có tag này thì GORM bỏ hẳn cột khỏi câu lệnh và database điền 'web'
+          — đơn vào sổ với kênh đúng của nó thay vì cả thao tác gãy.
         type: string
       confirmed_at:
         type: string
@@ -4862,6 +4991,9 @@ definitions:
       updated_at:
         type: string
       user_id:
+        description: |-
+          UserID nil = khách lẻ: người mua tại quầy không có tài khoản, và ép họ tạo
+          một cái chỉ để bán được một lần là thứ không ai làm ở quầy thật.
         type: integer
       voucher_code:
         type: string
@@ -7085,9 +7217,15 @@ paths:
         in: query
         name: payment_status
         type: string
-      - description: all|cod|vnpay|momo|bank_transfer
+      - description: all|cod|vnpay|momo|bank_transfer|cash — `cash` là tiền mặt thu
+          tại quầy
         in: query
         name: payment_method
+        type: string
+      - description: 'all|web|pos — nơi phát sinh đơn: `web` là đơn có giao hàng,
+          `pos` là bán tại quầy'
+        in: query
+        name: channel
         type: string
       - description: Lọc đơn của một khách hàng
         in: query
@@ -7489,6 +7627,54 @@ paths:
       security:
       - BearerAuth: []
       summary: Chuyển trạng thái đơn hàng
+      tags:
+      - Admin - Orders
+  /admin/orders/pos:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Ghi nhận một lượt bán TẠI QUẦY: khách đứng trước mặt, trả tiền và cầm hàng đi trong cùng một thao tác.
+        Mỗi dòng hàng chỉ nói mua biến thể nào (product_variant_id, hoặc slug + size + color) và số lượng — TÊN, GIÁ, SKU đều do server tra lại từ database rồi áp khuyến mãi đang chạy. Người bán KHÔNG gõ giá, nên không có đường nào bán sai giá vì gõ nhầm. Đây là điểm khác lớn nhất so với `POST /admin/orders` (đặt hộ qua điện thoại), nơi giá do người tạo đơn nhập vào.
+        Tồn kho được khoá và trừ ngay trong cùng transaction như đơn khách đặt trên web, nên hai quầy bấm cùng lúc trên món cuối cùng thì chỉ một bên bán được; thiếu hàng trả 400 và không tạo đơn.
+        Đơn sinh ra đã ở trạng thái "hoàn tất" và "đã thanh toán", không có phí vận chuyển và không có địa chỉ giao. Lượt bán của sản phẩm được cộng ngay tại đây vì đơn không còn bước chuyển trạng thái nào về sau.
+        `user_id` bỏ trống là khách lẻ — đơn không gắn tài khoản nào, `customer_name` / `customer_phone` cũng không bắt buộc. Có gửi `user_id` thì tài khoản đó phải tồn tại, nếu không trả 404.
+        `payment_method` chỉ nhận `cash` hoặc `bank_transfer`: đơn được ghi "đã thanh toán" ngay lúc tạo, nên chỉ chấp nhận hình thức mà tiền đã về trước khi khách rời quầy. Các công tắc thanh toán của storefront KHÔNG áp dụng ở đây — chúng nói cửa hàng nhận gì trên website.
+        `amount_tendered` (tiền mặt khách đưa) không bắt buộc; có gửi thì server kiểm phải đủ trả (thiếu thì 400) và trả về `change_amount` để người bán đọc số tiền thối.
+      parameters:
+      - description: Giỏ hàng tại quầy và cách thanh toán
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.POSCheckoutRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.POSCheckoutResponse'
+              type: object
+        "400":
+          description: Hết hàng, sản phẩm không còn bán, hoặc khách đưa thiếu tiền
+          schema:
+            $ref: '#/definitions/response.Body'
+        "404":
+          description: user_id không tồn tại
+          schema:
+            $ref: '#/definitions/response.Body'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Bán hàng tại quầy
       tags:
       - Admin - Orders
   /admin/orders/revenue:
