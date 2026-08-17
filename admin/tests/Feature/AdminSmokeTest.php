@@ -46,6 +46,7 @@ class AdminSmokeTest extends TestCase
         'admin.' => '/admin/dashboard',
         'admin.reports.index' => '/admin/reports/revenue',
         'admin.settings.index' => '/admin/settings/general',
+        'thu-ngan.' => '/thu-ngan/ban-hang',
     ];
 
     /**
@@ -55,6 +56,16 @@ class AdminSmokeTest extends TestCase
     protected const REQUIRED_QUERY = [
         'admin.orders.labelBatch' => 'orders#id',
         'admin.orders.printBatch' => 'orders#id',
+    ];
+
+    /**
+     * Đường JSON cho màn hình gọi bằng fetch — KHÔNG phải trang.
+     *
+     * Chúng đòi tham số trên query và trả 4xx khi thiếu (đúng thiết kế), nên gọi
+     * trần trong lượt quét trang là bắt lỗi một thứ không hỏng.
+     */
+    protected const KHONG_PHAI_TRANG = [
+        'thu-ngan.ban-hang.scan',
     ];
 
     // ---------------------------------------------------------------- helpers
@@ -123,18 +134,25 @@ class AdminSmokeTest extends TestCase
         return static::$ids[$cacheKey] = $value === null ? null : (string) $value;
     }
 
-    /** Danh sách route GET của khu quản trị, tách theo có/không có tham số. */
+    /**
+     * Danh sách route GET của CẢ HAI module, tách theo có/không có tham số.
+     *
+     * `thu-ngan.` cũng nằm trong lượt quét: module thu ngân là nơi cửa hàng thu
+     * tiền, hỏng một trang ở đó thì tiệm ngừng bán — không có lý do gì để nó
+     * được kiểm nhẹ hơn khu quản trị.
+     */
     protected function adminGetRoutes(bool $withParams): array
     {
         $out = [];
 
         foreach (Route::getRoutes() as $route) {
             $name = $route->getName() ?? '';
+            $cuaTa = str_starts_with($name, 'admin.') || str_starts_with($name, 'thu-ngan.');
 
-            if (! str_starts_with($name, 'admin.') || ! in_array('GET', $route->methods(), true)) {
+            if (! $cuaTa || ! in_array('GET', $route->methods(), true)) {
                 continue;
             }
-            if (isset(self::REDIRECT_ROUTES[$name])) {
+            if (isset(self::REDIRECT_ROUTES[$name]) || in_array($name, self::KHONG_PHAI_TRANG, true)) {
                 continue;
             }
             if (str_contains($route->uri(), '{') !== $withParams) {
@@ -268,6 +286,8 @@ class AdminSmokeTest extends TestCase
             'admin.returns.detail' => ['id' => $this->firstValue('/admin/returns', 'id')],
             'admin.returns.returnable' => ['orderId' => $this->firstValue('/admin/orders', 'id')],
             'admin.settings.page' => ['group' => 'general'],
+            'thu-ngan.ban-hang.phieu' => ['id' => $this->firstValue('/admin/orders', 'id')],
+            'thu-ngan.ca-lam-viec.show' => ['id' => $this->firstValue('/admin/ca-lam-viec', 'id')],
         ];
 
         $routes = $this->adminGetRoutes(withParams: true);
@@ -340,7 +360,13 @@ class AdminSmokeTest extends TestCase
 
         // Chiều còn lại, và nó quan trọng ngang chiều trên: siết nhầm cả màn hình
         // bán hàng cũng là một cách làm cửa hàng ngừng bán.
-        $mo = ['/admin/dashboard', '/admin/ban-tai-quay', '/admin/orders', '/admin/ca-lam-viec', '/admin/profile'];
+        //
+        // Cụm quầy nay nằm ở module Thu ngân (/thu-ngan) — nhân viên phải vào
+        // được TRỌN module đó, còn trong khu quản trị thì đúng ba trang dưới đây.
+        $mo = [
+            '/admin/dashboard', '/admin/orders', '/admin/profile',
+            '/thu-ngan/ban-hang', '/thu-ngan/ca-lam-viec', '/thu-ngan/don-hang',
+        ];
 
         foreach ($mo as $uri) {
             $res = $this->withSession($session)->get($uri);

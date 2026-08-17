@@ -59,11 +59,10 @@
 
     {{-- Right actions --}}
     <div class="jh-tb-actions">
-        <button type="button" class="jh-tb-iconbtn" aria-label="Trợ giúp">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 0 1 4.5 1.5c0 1.5-2 2-2 3"/><path d="M12 17h.01"/>
-            </svg>
-        </button>
+        {{-- Đổi module (Quản trị ↔ Thu ngân).
+             Chỗ này trước là nút dấu hỏi "Trợ giúp" — bấm vào không xảy ra gì
+             cả, mà lại chiếm đúng vị trí cạnh chuông thông báo. --}}
+        @include('partials.module-switch')
 
         {{-- Chuông thông báo — danh sách nạp bằng fetch, cập nhật tức thì qua SSE
              (xem public/js/realtime.js). Các URL truyền qua data-* để file JS tĩnh
@@ -202,6 +201,9 @@
 
     /* Right */
     .jh-tb-actions { margin-left: auto; display: flex; align-items: center; gap: 2px; }
+    /* Nút đổi module là một viên có viền, còn chuông là icon trần — để sát nhau
+       thì viền chạm vào vùng bấm của chuông. */
+    .jh-tb-actions .mdsw { margin-right: 8px; }
     .jh-tb-iconbtn {
         position: relative; display: inline-flex; align-items: center; justify-content: center;
         height: 38px; width: 38px;

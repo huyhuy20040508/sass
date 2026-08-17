@@ -1,4 +1,4 @@
-@extends('layouts.app')
+@extends('layouts.thu-ngan')
 
 @section('title', \App\Http\Controllers\CaLamViecController::TITLE)
 
@@ -26,7 +26,7 @@
     <div class="clv">
         <div class="clv-head">
             <h1 class="clv-title">{{ $TITLE }}</h1>
-            <a href="{{ route('admin.ban-tai-quay.index') }}" class="clv-link">Mở / đóng ca ở màn hình Bán tại quầy →</a>
+            <a href="{{ route('thu-ngan.ban-hang.index') }}" class="clv-link">Mở / đóng ca ở màn hình Bán tại quầy →</a>
         </div>
 
         @isset($error)
@@ -43,7 +43,7 @@
             <input type="date" name="from_date" value="{{ $filters['from_date'] }}" class="clv-select" onchange="this.form.submit()">
             <input type="date" name="to_date" value="{{ $filters['to_date'] }}" class="clv-select" onchange="this.form.submit()">
             @if($filters['status'] !== '' || $filters['from_date'] !== '' || $filters['to_date'] !== '')
-                <a href="{{ route('admin.ca-lam-viec.index') }}" class="clv-clear">Xoá lọc</a>
+                <a href="{{ route('thu-ngan.ca-lam-viec.index') }}" class="clv-clear">Xoá lọc</a>
             @endif
         </form>
 
@@ -66,7 +66,7 @@
                     <tbody>
                         @foreach($list as $c)
                             @php $lech = $c['difference']; @endphp
-                            <tr onclick="window.location='{{ route('admin.ca-lam-viec.show', $c['id']) }}'">
+                            <tr onclick="window.location='{{ route('thu-ngan.ca-lam-viec.show', $c['id']) }}'">
                                 <td>{{ $gio($c['opened_at'] ?? null) }}</td>
                                 <td>
                                     @if(empty($c['closed_at']))

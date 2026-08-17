@@ -60,7 +60,7 @@
         .dam { font-weight: 700; }
         .nho { font-size: .88em; }
 
-        .ten-tiem { font-size: 1.25em; font-weight: 700; }
+        .ten-tiem { margin: 0; font-size: 1.25em; font-weight: 700; line-height: 1.45; }
 
         /* Đường kẻ bằng dấu gạch chứ không phải border: máy in nhiệt vẽ đường
            mảnh 1px rất nhạt, có máy bỏ qua hẳn. */
@@ -123,7 +123,9 @@
 </head>
 <body>
     <div class="giua">
-        <div class="ten-tiem">{{ $tenCuaHang }}</div>
+        {{-- Tên tiệm là tiêu đề cấp 1 của tờ phiếu — giống trang in hoá đơn và
+             in tem bên khu quản trị, mỗi trang đúng một thẻ h1. --}}
+        <h1 class="ten-tiem">{{ $tenCuaHang }}</h1>
         @if($diaChi !== '')
             <div class="nho">{{ $diaChi }}</div>
         @endif

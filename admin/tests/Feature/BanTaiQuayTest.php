@@ -75,7 +75,7 @@ class BanTaiQuayTest extends TestCase
         Http::fake(['*/admin/orders/pos' => Http::response($this->apiBanXong(), 201)]);
 
         $this->withSession($this->phienNhanVien())
-            ->postJson(route('admin.ban-tai-quay.store'), $this->gioHang())
+            ->postJson(route('thu-ngan.ban-hang.store'), $this->gioHang())
             ->assertOk();
 
         Http::assertSent(function ($req) {
@@ -109,7 +109,7 @@ class BanTaiQuayTest extends TestCase
         Http::fake(['*/admin/orders/pos' => Http::response($this->apiBanXong(), 201)]);
 
         $this->withSession($this->phienNhanVien())
-            ->postJson(route('admin.ban-tai-quay.store'), $this->gioHang())
+            ->postJson(route('thu-ngan.ban-hang.store'), $this->gioHang())
             ->assertOk();
 
         Http::assertSent(fn ($req) => ! array_key_exists('user_id', $req->data()));
@@ -121,7 +121,7 @@ class BanTaiQuayTest extends TestCase
         Http::fake(['*/admin/orders/pos' => Http::response($this->apiBanXong(), 201)]);
 
         $this->withSession($this->phienNhanVien())
-            ->postJson(route('admin.ban-tai-quay.store'), $this->gioHang(['user_id' => 42]))
+            ->postJson(route('thu-ngan.ban-hang.store'), $this->gioHang(['user_id' => 42]))
             ->assertOk();
 
         Http::assertSent(fn ($req) => ($req->data()['user_id'] ?? null) === 42);
@@ -136,7 +136,7 @@ class BanTaiQuayTest extends TestCase
         Http::fake(['*/admin/orders/pos' => Http::response($this->apiBanXong(), 201)]);
 
         $this->withSession($this->phienNhanVien())
-            ->postJson(route('admin.ban-tai-quay.store'), $this->gioHang([
+            ->postJson(route('thu-ngan.ban-hang.store'), $this->gioHang([
                 'payment_method' => 'bank_transfer',
                 'amount_tendered' => 500000,
             ]))
@@ -159,7 +159,7 @@ class BanTaiQuayTest extends TestCase
         )]);
 
         $this->withSession($this->phienNhanVien())
-            ->postJson(route('admin.ban-tai-quay.store'), $this->gioHang())
+            ->postJson(route('thu-ngan.ban-hang.store'), $this->gioHang())
             ->assertStatus(400)
             ->assertJson(['message' => 'Không đủ hàng — Áo Real Madrid (M / Trắng) (còn 1)']);
     }
@@ -170,7 +170,7 @@ class BanTaiQuayTest extends TestCase
         Http::fake();
 
         $this->withSession($this->phienNhanVien())
-            ->postJson(route('admin.ban-tai-quay.store'), ['payment_method' => 'cash', 'items' => []])
+            ->postJson(route('thu-ngan.ban-hang.store'), ['payment_method' => 'cash', 'items' => []])
             ->assertStatus(422);
 
         Http::assertNothingSent();
@@ -185,7 +185,7 @@ class BanTaiQuayTest extends TestCase
         Http::fake();
 
         $this->withSession($this->phienNhanVien())
-            ->postJson(route('admin.ban-tai-quay.store'), $this->gioHang(['payment_method' => 'payos']))
+            ->postJson(route('thu-ngan.ban-hang.store'), $this->gioHang(['payment_method' => 'payos']))
             ->assertStatus(422);
 
         Http::assertNothingSent();
@@ -197,10 +197,10 @@ class BanTaiQuayTest extends TestCase
         Http::fake(['*/admin/orders/pos/discount-limit' => Http::response(['data' => ['limit_percent' => 10]])]);
 
         $this->withSession($this->phienNhanVien())
-            ->get(route('admin.ban-tai-quay.index'))
+            ->get(route('thu-ngan.ban-hang.index'))
             ->assertOk()
-            ->assertSee('data-store-url="'.route('admin.ban-tai-quay.store').'"', false)
-            ->assertSee('data-scan-url="'.route('admin.ban-tai-quay.scan').'"', false)
+            ->assertSee('data-store-url="'.route('thu-ngan.ban-hang.store').'"', false)
+            ->assertSee('data-scan-url="'.route('thu-ngan.ban-hang.scan').'"', false)
             ->assertSee('data-search-url="'.route('admin.orders.searchProducts').'"', false);
     }
 
@@ -212,7 +212,7 @@ class BanTaiQuayTest extends TestCase
         Http::fake(['*/admin/orders/pos/discount-limit' => Http::response(['data' => ['limit_percent' => 15]])]);
 
         $this->withSession($this->phienNhanVien())
-            ->get(route('admin.ban-tai-quay.index'))
+            ->get(route('thu-ngan.ban-hang.index'))
             ->assertOk()
             ->assertSee('data-discount-limit="15"', false);
     }
@@ -229,7 +229,7 @@ class BanTaiQuayTest extends TestCase
         Http::fake(['*/admin/orders/pos/discount-limit' => Http::response([], 500)]);
 
         $this->withSession($this->phienNhanVien())
-            ->get(route('admin.ban-tai-quay.index'))
+            ->get(route('thu-ngan.ban-hang.index'))
             ->assertOk()
             ->assertSee('data-discount-limit="0"', false);
     }
@@ -240,7 +240,7 @@ class BanTaiQuayTest extends TestCase
         Http::fake(['*/admin/orders/pos' => Http::response($this->apiBanXong(), 201)]);
 
         $this->withSession($this->phienNhanVien())
-            ->postJson(route('admin.ban-tai-quay.store'), $this->gioHang([
+            ->postJson(route('thu-ngan.ban-hang.store'), $this->gioHang([
                 'items' => [['product_variant_id' => 12, 'quantity' => 2, 'discount_percent' => 15]],
             ]))
             ->assertOk();
@@ -260,7 +260,7 @@ class BanTaiQuayTest extends TestCase
         Http::fake(['*/admin/orders/pos' => Http::response($this->apiBanXong(), 201)]);
 
         $this->withSession($this->phienNhanVien())
-            ->postJson(route('admin.ban-tai-quay.store'), $this->gioHang())
+            ->postJson(route('thu-ngan.ban-hang.store'), $this->gioHang())
             ->assertOk();
 
         Http::assertSent(fn ($req) => $req->data()['items'][0]['discount_percent'] === 0.0);
@@ -272,7 +272,7 @@ class BanTaiQuayTest extends TestCase
         Http::fake();
 
         $this->withSession($this->phienNhanVien())
-            ->postJson(route('admin.ban-tai-quay.store'), $this->gioHang([
+            ->postJson(route('thu-ngan.ban-hang.store'), $this->gioHang([
                 'items' => [['product_variant_id' => 12, 'quantity' => 1, 'discount_percent' => 150]],
             ]))
             ->assertStatus(422);
@@ -289,7 +289,7 @@ class BanTaiQuayTest extends TestCase
         ]])]);
 
         $this->withSession($this->phienNhanVien())
-            ->getJson(route('admin.ban-tai-quay.scan', ['code' => '8938505970012']))
+            ->getJson(route('thu-ngan.ban-hang.scan', ['code' => '8938505970012']))
             ->assertOk()
             ->assertJsonPath('data.product_variant_id', 12)
             ->assertJsonPath('data.price', 90000);
@@ -305,7 +305,7 @@ class BanTaiQuayTest extends TestCase
         )]);
 
         $this->withSession($this->phienNhanVien())
-            ->getJson(route('admin.ban-tai-quay.scan', ['code' => '0000']))
+            ->getJson(route('thu-ngan.ban-hang.scan', ['code' => '0000']))
             ->assertStatus(400)
             ->assertJsonPath('message', 'Sản phẩm trong giỏ không còn bán hoặc đã đổi phiên bản, vui lòng chọn lại');
     }
@@ -316,7 +316,7 @@ class BanTaiQuayTest extends TestCase
         Http::fake();
 
         $this->withSession($this->phienNhanVien())
-            ->getJson(route('admin.ban-tai-quay.scan', ['code' => '  ']))
+            ->getJson(route('thu-ngan.ban-hang.scan', ['code' => '  ']))
             ->assertStatus(422);
 
         Http::assertNothingSent();
@@ -349,7 +349,7 @@ class BanTaiQuayTest extends TestCase
         ]])]);
 
         $res = $this->withSession($this->phienNhanVien())
-            ->get(route('admin.ban-tai-quay.phieu', ['id' => 88]))
+            ->get(route('thu-ngan.ban-hang.phieu', ['id' => 88]))
             ->assertOk();
 
         // 2 × 90.000 = 180.000 TRƯỚC khi bớt.
@@ -370,12 +370,12 @@ class BanTaiQuayTest extends TestCase
         Http::fake(['*/admin/orders/88' => Http::response($don)]);
 
         $this->withSession($this->phienNhanVien())
-            ->get(route('admin.ban-tai-quay.phieu', ['id' => 88]))
+            ->get(route('thu-ngan.ban-hang.phieu', ['id' => 88]))
             ->assertOk()
             ->assertSee('size: 80mm auto', false);
 
         $this->withSession($this->phienNhanVien())
-            ->get(route('admin.ban-tai-quay.phieu', ['id' => 88, 'kho' => '58']))
+            ->get(route('thu-ngan.ban-hang.phieu', ['id' => 88, 'kho' => '58']))
             ->assertOk()
             ->assertSee('size: 58mm auto', false);
     }

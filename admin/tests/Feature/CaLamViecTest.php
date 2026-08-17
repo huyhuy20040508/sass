@@ -42,7 +42,7 @@ class CaLamViecTest extends TestCase
         Http::fake(['*/admin/ca-lam-viec/mo' => Http::response($this->caDangMo(), 201)]);
 
         $this->withSession($this->phienNhanVien())
-            ->postJson(route('admin.ca-lam-viec.mo'), ['opening_cash' => 500000])
+            ->postJson(route('thu-ngan.ca-lam-viec.mo'), ['opening_cash' => 500000])
             ->assertOk();
 
         Http::assertSent(fn ($req) => $req->data()['opening_cash'] === 500000.0);
@@ -61,7 +61,7 @@ class CaLamViecTest extends TestCase
         )]);
 
         $this->withSession($this->phienNhanVien())
-            ->postJson(route('admin.ca-lam-viec.mo'), ['opening_cash' => 0])
+            ->postJson(route('thu-ngan.ca-lam-viec.mo'), ['opening_cash' => 0])
             ->assertStatus(409)
             ->assertJsonPath('message', 'Chi nhánh này đang có ca mở. Đóng ca đó trước khi mở ca mới.');
     }
@@ -72,7 +72,7 @@ class CaLamViecTest extends TestCase
         Http::fake(['*/admin/ca-lam-viec/dong' => Http::response(['data' => ['ca' => [], 'ngoai_ca' => []]])]);
 
         $this->withSession($this->phienNhanVien())
-            ->postJson(route('admin.ca-lam-viec.dong'), ['counted_cash' => 625000])
+            ->postJson(route('thu-ngan.ca-lam-viec.dong'), ['counted_cash' => 625000])
             ->assertOk();
 
         Http::assertSent(fn ($req) => $req->data()['counted_cash'] === 625000.0);
@@ -89,7 +89,7 @@ class CaLamViecTest extends TestCase
         Http::fake();
 
         $this->withSession($this->phienNhanVien())
-            ->postJson(route('admin.ca-lam-viec.soQuy'), ['direction' => 'out', 'amount' => 50000])
+            ->postJson(route('thu-ngan.ca-lam-viec.soQuy'), ['direction' => 'out', 'amount' => 50000])
             ->assertStatus(422);
 
         Http::assertNothingSent();
@@ -101,7 +101,7 @@ class CaLamViecTest extends TestCase
         Http::fake();
 
         $this->withSession($this->phienNhanVien())
-            ->postJson(route('admin.ca-lam-viec.soQuy'), [
+            ->postJson(route('thu-ngan.ca-lam-viec.soQuy'), [
                 'direction' => 'out', 'amount' => 0, 'reason' => 'Mua nước',
             ])
             ->assertStatus(422);
@@ -115,7 +115,7 @@ class CaLamViecTest extends TestCase
         Http::fake(['*/admin/so-quy' => Http::response(['data' => ['id' => 9]], 201)]);
 
         $this->withSession($this->phienNhanVien())
-            ->postJson(route('admin.ca-lam-viec.soQuy'), [
+            ->postJson(route('thu-ngan.ca-lam-viec.soQuy'), [
                 'direction' => 'out', 'amount' => 50000, 'reason' => '  Mua nước cho quầy  ',
             ])
             ->assertOk();
@@ -142,7 +142,7 @@ class CaLamViecTest extends TestCase
         Http::fake(['*/admin/ca-lam-viec/hien-tai' => Http::response([], 500)]);
 
         $this->withSession($this->phienNhanVien())
-            ->getJson(route('admin.ca-lam-viec.hienTai'))
+            ->getJson(route('thu-ngan.ca-lam-viec.hienTai'))
             ->assertOk()
             ->assertJsonPath('data', null);
     }
@@ -153,7 +153,7 @@ class CaLamViecTest extends TestCase
         Http::fake(['*/admin/ca-lam-viec/hien-tai' => Http::response(['data' => null])]);
 
         $this->withSession($this->phienNhanVien())
-            ->getJson(route('admin.ca-lam-viec.hienTai'))
+            ->getJson(route('thu-ngan.ca-lam-viec.hienTai'))
             ->assertOk()
             ->assertJsonPath('data', null);
     }
@@ -173,7 +173,7 @@ class CaLamViecTest extends TestCase
         ])]);
 
         $this->withSession($this->phienNhanVien())
-            ->get(route('admin.ca-lam-viec.index'))
+            ->get(route('thu-ngan.ca-lam-viec.index'))
             ->assertOk()
             ->assertSee('630.000₫', false)
             ->assertSee('625.000₫', false)
@@ -201,7 +201,7 @@ class CaLamViecTest extends TestCase
         ]])]);
 
         $this->withSession($this->phienNhanVien())
-            ->get(route('admin.ca-lam-viec.show', ['id' => 3]))
+            ->get(route('thu-ngan.ca-lam-viec.show', ['id' => 3]))
             ->assertOk()
             ->assertSee('Bán hàng DH001', false)
             ->assertSee('Mua nước cho quầy', false)
