@@ -87,6 +87,19 @@ func seedProduct(t *testing.T, db *gorm.DB) uint {
 		SKU:        "TEST-STOCK-SKU",
 		KitType:    "fan",
 		BasePrice:  100000,
+		// PHẢI khai, dù cột có DEFAULT 'active': GORM đưa mọi trường vào câu
+		// INSERT kể cả trường bỏ trống, nên database nhận chuỗi rỗng và không
+		// bao giờ chạm tới giá trị mặc định. Mà '' không nằm trong ENUM
+		// ('active','hidden','discontinued').
+		//
+		// MySQL 8 — máy chủ và CI — chạy STRICT_TRANS_TABLES nên nó dừng lại với
+		// "Data truncated for column 'status'". MySQL/MariaDB đi kèm XAMPP
+		// thường TẮT strict; ở đó cùng câu lệnh chỉ là cảnh báo, hàng vẫn vào,
+		// và bài kiểm xanh suốt trên máy phát triển.
+		//
+		// Muốn máy mình bắt được loại lỗi này thì ép strict ngay trong DSN:
+		//   TEST_DB_DSN="...?parseTime=true&sql_mode='STRICT_TRANS_TABLES'"
+		Status: domain.ProductStatusActive,
 	}
 	db.WithContext(ctxTest()).Where("slug = ?", p.Slug).Unscoped().Delete(&domain.Product{})
 	if err := db.WithContext(ctxTest()).Create(p).Error; err != nil {

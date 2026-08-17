@@ -36,6 +36,9 @@ func TestPurchaseReturnTruKhoDungMotLan(t *testing.T) {
 		SupplierID:   &supplierID,
 		SupplierName: "NCC kiểm thử trả hàng",
 		Status:       domain.PurchaseStatusOrdered,
+		// Bắt buộc dưới MySQL strict — xem chú thích ở seedProduct
+		// (product_repository_test.go).
+		PaymentStatus: domain.PurchasePaymentUnpaid,
 		Items: []domain.PurchaseOrderItem{
 			{ProductID: &productID, ProductVariantID: &v.ID, ProductName: "Áo test", VariantSKU: "TEST-PRET-M", Quantity: 10, UnitCost: 100_000},
 		},

@@ -185,7 +185,19 @@ func gieo(t *testing.T, db *gorm.DB, ma string) *cuaHang {
 		ReturnCode: "th-" + c.vet, OrderID: c.donGiao, UserID: &khach.ID,
 		Status: domain.ReturnStatusPending, Reason: domain.ReturnReasonDefective,
 		ReasonNote: "Lý do " + c.vet, RequestedBy: "customer",
-		ItemsAmount: 100000, RefundAmount: 100000, Restock: true,
+		// PHẢI khai, dù cột có DEFAULT 'bank_transfer': GORM ghi mọi trường vào
+		// câu INSERT kể cả trường bỏ trống, nên database nhận chuỗi rỗng chứ
+		// không bao giờ chạm tới giá trị mặc định. Mà '' không nằm trong ENUM.
+		//
+		// MySQL 8 (máy chủ, và CI) chạy STRICT_TRANS_TABLES nên nó BÁO LỖI:
+		// "Data truncated for column 'refund_method'". MySQL/MariaDB cài kèm
+		// XAMPP thường tắt strict, ở đó cùng câu lệnh chỉ là một cảnh báo và
+		// hàng vẫn vào — nên lỗi này xanh suốt trên máy phát triển.
+		//
+		// bank_transfer là đúng thứ luồng thật sinh ra: dịch vụ tự điền giá trị
+		// này khi người trả hàng không chọn (order_return_service.go).
+		RefundMethod: "bank_transfer",
+		ItemsAmount:  100000, RefundAmount: 100000, Restock: true,
 	}
 	tao(t, db, ctx, traHang)
 	c.traHang = traHang.ID
@@ -372,7 +384,9 @@ func boSung(t *testing.T, db *gorm.DB, c *cuaHang) {
 		ShopID:     c.chiNhanh,
 		ReturnCode: "th2-" + c.vet, OrderID: don.ID, UserID: &khach.ID,
 		Status: domain.ReturnStatusPending, Reason: domain.ReturnReasonWrongSize,
-		RequestedBy: "customer", ItemsAmount: 200000, RefundAmount: 200000, Restock: true,
+		// Xem chú thích ở lượt gieo phiếu trả hàng phía trên.
+		RefundMethod: "bank_transfer",
+		RequestedBy:  "customer", ItemsAmount: 200000, RefundAmount: 200000, Restock: true,
 	}
 	tao(t, db, ctx, traHang)
 	tao(t, db, ctx, &domain.OrderReturnItem{

@@ -42,8 +42,12 @@ func TestGoodsReceiptDungLaiTungDotNhan(t *testing.T) {
 		SupplierID:   &supplierID,
 		SupplierName: "NCC kiểm thử nhập hàng",
 		Status:       domain.PurchaseStatusOrdered,
-		ItemsAmount:  1_000_000,
-		TotalAmount:  1_000_000,
+		// Bắt buộc dưới MySQL strict — xem chú thích ở seedProduct
+		// (product_repository_test.go). Đây cũng là giá trị luồng thật dùng khi
+		// lập phiếu đặt (purchase_order_service.go).
+		PaymentStatus: domain.PurchasePaymentUnpaid,
+		ItemsAmount:   1_000_000,
+		TotalAmount:   1_000_000,
 		Items: []domain.PurchaseOrderItem{
 			{ProductID: &productID, ProductVariantID: &variants[0].ID, ProductName: "Áo test", VariantSKU: "TEST-RCPT-M", Quantity: 10, UnitCost: 50_000},
 			{ProductID: &productID, ProductVariantID: &variants[1].ID, ProductName: "Áo test", VariantSKU: "TEST-RCPT-L", Quantity: 4, UnitCost: 125_000},

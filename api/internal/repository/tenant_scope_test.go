@@ -427,6 +427,9 @@ func TestLocTenant_PreloadCungBiLoc(t *testing.T) {
 		CategoryID: danhMuc.ID,
 		Name:       "SP preload", Slug: "loc-preload-sp", SKU: "LOC-PRELOAD-SP",
 		KitType: "fan", BasePrice: 1000,
+		// Bắt buộc dưới MySQL strict — xem chú thích ở seedProduct
+		// (product_repository_test.go).
+		Status: domain.ProductStatusActive,
 	}
 	if err := db.WithContext(mot).Create(sp).Error; err != nil {
 		t.Fatalf("tạo sản phẩm lỗi: %v", err)

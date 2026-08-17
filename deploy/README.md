@@ -396,6 +396,38 @@ thật. Nên job API dựng container `mysql:8.0` (đúng dòng máy chủ đang
 Nghĩa là mỗi lượt push cũng **kiểm luôn migration**: tệp `.sql` mới viết sai cú pháp là CI
 đỏ ngay, thay vì đỏ lúc đang chạy migration trên database thật của khách.
 
+### Chạy test y như CI trên máy mình
+
+Hai chỗ máy phát triển hay lệch với máy chủ, và cả hai đều làm test xanh nhầm:
+
+**1. Database test đã có sẵn dữ liệu cũ.** CI luôn dựng database mới tinh. Muốn giống nó thì
+xoá đi dựng lại, đừng chạy đè lên database test đã dùng nhiều tháng:
+
+```bash
+mysql -u root -e "DROP DATABASE IF EXISTS selliotech_tenant_test;
+                  DROP DATABASE IF EXISTS selliotech_tenant_test_nen_tang;
+                  CREATE DATABASE selliotech_tenant_test
+                    CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+cd api
+DB_NAME=selliotech_tenant_test PLATFORM_DB_NAME=selliotech_tenant_test_nen_tang \
+  go run ./cmd/migrate chay -y
+DB_NAME=selliotech_tenant_test PLATFORM_DB_NAME=selliotech_tenant_test_nen_tang \
+  go run ./cmd/migrate -nen-tang chay -y
+```
+
+**2. MySQL của XAMPP thường TẮT strict mode.** Máy chủ và CI chạy MySQL 8, mặc định bật
+`STRICT_TRANS_TABLES`. Khác biệt này không nhỏ: ghi một giá trị ngoài `ENUM` — chuyện xảy ra
+mỗi khi GORM đưa trường bỏ trống vào câu `INSERT` — thì máy thật **báo lỗi**, còn XAMPP chỉ
+**cảnh báo rồi ghi bừa**. Ép strict ngay trong DSN thì máy mình bắt được luôn:
+
+```bash
+TEST_DB_DSN="root:@tcp(127.0.0.1:3306)/selliotech_tenant_test?parseTime=true&sql_mode='STRICT_TRANS_TABLES'" \
+  go test ./...
+```
+
+Bỏ hai bước này thì bộ test vẫn xanh trên máy bạn và đỏ trên CI, mà thông báo lỗi lại chẳng
+liên quan gì tới cái vừa sửa — đúng ba lượt đã mất khi dựng CI lần đầu.
+
 ### Ba secret trên GitHub
 
 Đã đặt sẵn ở **Settings → Secrets and variables → Actions**:
