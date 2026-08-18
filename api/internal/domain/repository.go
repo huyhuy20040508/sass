@@ -968,11 +968,6 @@ type TinhTrangPhien struct {
 	CuaHangHoatDong bool
 }
 
-// ConDungDuoc gộp ba vế lại cho nơi gọi chỉ cần một câu trả lời.
-func (t TinhTrangPhien) ConDungDuoc() bool {
-	return t.CoNguoiDung && t.NguoiDungHoatDong && t.CuaHangHoatDong
-}
-
 // PhienRepository trả lời câu hỏi DUY NHẤT của middleware xác thực: chiếc token
 // này còn ứng với một tài khoản sống trong một cửa hàng đang mở không.
 //
