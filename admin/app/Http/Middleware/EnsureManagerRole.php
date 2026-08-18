@@ -24,14 +24,17 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class EnsureManagerRole
 {
-    /** Vai trò được phép quản lý người dùng, khách hàng và cấu hình. */
-    protected array $allowedRoles = ['super_admin', 'admin'];
-
     public function handle(Request $request, Closure $next): Response
     {
         $role = data_get(session('api.user'), 'role.name');
 
-        if (in_array($role, $this->allowedRoles, true)) {
+        // Từ migration 0015, cửa vào đọc từ `users.access_areas` — tích gì vào được
+        // nấy, nên một tài khoản vai admin mà chủ tiệm bỏ tích "Quản lý" thì không
+        // vào đây nữa. EnsureCuaVao giữ luật đọc đó, kể cả đường lui cho phiên cũ.
+        //
+        // Super admin luôn đi qua: đó là tài khoản gốc của cửa hàng, khoá nhầm nó
+        // là mất luôn đường vào để sửa (API cũng miễn trừ y như vậy).
+        if ($role === 'super_admin' || in_array('quan_ly', EnsureCuaVao::cuaCuaPhien(), true)) {
             return $next($request);
         }
 

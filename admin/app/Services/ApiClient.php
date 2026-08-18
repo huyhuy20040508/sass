@@ -1181,6 +1181,131 @@ class ApiClient
         return $this->delete("/admin/users/{$id}");
     }
 
+    // ---------- Nhân sự (hồ sơ người đi làm) ----------
+    //
+    // Đây là bảng `employees` bên API — CON NGƯỜI, khác hẳn users() ở trên (tài
+    // khoản đăng nhập). Một nhân viên có thể không có tài khoản nào; việc cấp
+    // tài khoản là khối `tai_khoan` gửi kèm trong hồ sơ.
+
+    /**
+     * Danh sách hồ sơ nhân viên.
+     * $query hỗ trợ: keyword, status, position, contract_type, shop_id.
+     *
+     * Không phân trang — số người của một cửa hàng đếm bằng hàng chục.
+     */
+    public function nhanSu(array $query = []): Response
+    {
+        return $this->get('/admin/nhan-su', $query);
+    }
+
+    /** Thêm hồ sơ nhân viên. Bỏ trống `code` thì API tự đặt (NV0001, NV0002…). */
+    public function taoNhanSu(array $data): Response
+    {
+        return $this->post('/admin/nhan-su', $data);
+    }
+
+    /** Sửa hồ sơ nhân viên. Bỏ trống `code` = giữ nguyên mã cũ. */
+    public function suaNhanSu(int $id, array $data): Response
+    {
+        return $this->put("/admin/nhan-su/{$id}", $data);
+    }
+
+    /**
+     * Bật/tắt nhanh trạng thái làm việc — đường riêng cho công tắc trên bảng.
+     *
+     * Không dùng lại suaNhanSu(): bấm một công tắc mà gửi lên cả hồ sơ thì chỉ cần
+     * trang đang giữ một bản cũ là lượt bấm đó ghi đè ngược mọi thứ vừa sửa.
+     *
+     * `da_nghi` luôn khoá tài khoản đăng nhập gắn kèm (API tự làm). $moTaiKhoan
+     * chỉ có nghĩa ở chiều ngược lại — nhận người cũ làm lại thì mở luôn tài
+     * khoản hay để khoá, màn hình hỏi trước rồi gửi câu trả lời xuống đây.
+     */
+    public function doiTrangThaiNhanSu(int $id, string $status, bool $moTaiKhoan = false): Response
+    {
+        return $this->put("/admin/nhan-su/{$id}/trang-thai", [
+            'status' => $status,
+            'mo_tai_khoan' => $moTaiKhoan,
+        ]);
+    }
+
+    // ---------------------------------------------------------------------
+    // Nhóm quyền (phân quyền theo chức năng)
+    // ---------------------------------------------------------------------
+    //
+    // Nhóm quyền là của TỪNG CỬA HÀNG, khác `roles()` bên dưới vốn là bốn vai
+    // trò dùng chung cả nền tảng. Vai trò trả lời "anh là loại người nào",
+    // nhóm quyền trả lời "anh bấm được nút nào".
+
+    /** Danh sách nhóm quyền của cửa hàng, kèm số người đang dùng từng nhóm. */
+    public function nhomQuyen(): Response
+    {
+        return $this->get('/admin/nhom-quyen');
+    }
+
+    /** Cây quyền của phần mềm — dữ liệu để màn hình vẽ ô tick. */
+    public function danhMucQuyen(): Response
+    {
+        return $this->get('/admin/nhom-quyen/danh-muc');
+    }
+
+    public function taoNhomQuyen(array $data): Response
+    {
+        return $this->post('/admin/nhom-quyen', $data);
+    }
+
+    public function suaNhomQuyen(int $id, array $data): Response
+    {
+        return $this->put("/admin/nhom-quyen/{$id}", $data);
+    }
+
+    /** Thay TOÀN BỘ danh sách quyền của một nhóm — cho màn hình tick. */
+    public function datQuyenNhom(int $id, array $quyen): Response
+    {
+        return $this->put("/admin/nhom-quyen/{$id}/quyen", ['quyen' => array_values($quyen)]);
+    }
+
+    public function xoaNhomQuyen(int $id): Response
+    {
+        return $this->delete("/admin/nhom-quyen/{$id}");
+    }
+
+    /** Các nhóm quyền một tài khoản đang mang. */
+    public function nhomQuyenCuaNguoi(int $userID): Response
+    {
+        return $this->get("/admin/users/{$userID}/nhom-quyen");
+    }
+
+    /**
+     * Đặt danh sách nhóm cho một tài khoản.
+     *
+     * MẢNG, không phải một giá trị: một người mang được nhiều nhóm cùng lúc và
+     * quyền của họ là HỢP của chúng — quản lý ca tối vẫn đứng quầy. Mảng rỗng =
+     * thu hết quyền (vẫn đăng nhập được, chỉ là không mở được trang nào).
+     */
+    public function datNhomChoNguoi(int $userID, array $nhomQuyen): Response
+    {
+        return $this->put("/admin/users/{$userID}/nhom-quyen", [
+            'nhom_quyen' => array_values(array_map('intval', $nhomQuyen)),
+        ]);
+    }
+
+    /**
+     * Quyền của CHÍNH người đang đăng nhập — trang quản trị đọc để lọc menu.
+     *
+     * Không thay cho chốt ở API: ẩn một mục menu chỉ là phép lịch sự, chặn thật
+     * vẫn nằm ở máy chủ trên từng đường.
+     */
+    public function quyenCuaToi(): Response
+    {
+        return $this->get('/admin/quyen-cua-toi');
+    }
+
+    /** Xoá (mềm) một hồ sơ nhân viên. Tài khoản đăng nhập của người đó giữ nguyên. */
+    public function xoaNhanSu(int $id): Response
+    {
+        return $this->delete("/admin/nhan-su/{$id}");
+    }
+
     // ---------- Chi nhánh (điểm bán của cửa hàng) ----------
     //
     // "Chi nhánh" là bảng `shops` bên API: các điểm bán NẰM TRONG cửa hàng của

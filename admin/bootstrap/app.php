@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\EnsureAdminAuthenticated;
+use App\Http\Middleware\EnsureCuaVao;
 use App\Http\Middleware\EnsureManagerRole;
 use App\Http\Middleware\GiuLoiNhanKhiGoiNen;
 use App\Http\Middleware\KhoaKhiHetHan;
@@ -37,6 +38,8 @@ return Application::configure(basePath: dirname(__DIR__))
             'admin.manage' => EnsureManagerRole::class,
             // Cửa hàng hết hạn hợp đồng: mọi trang dồn về trang Các gói dịch vụ.
             'admin.khoa' => KhoaKhiHetHan::class,
+            // Chặn theo CỬA đã tích trong mục Nhân sự: admin.cua:thu_ngan | :quan_ly.
+            'admin.cua' => EnsureCuaVao::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

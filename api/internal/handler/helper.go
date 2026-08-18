@@ -8,6 +8,7 @@ import (
 
 	"sass-api/internal/domain"
 	"sass-api/internal/middleware"
+	"sass-api/internal/service"
 	"sass-api/pkg/response"
 
 	"github.com/gin-gonic/gin"
@@ -102,6 +103,17 @@ func voucherUseError(c *gin.Context, err error) bool {
 
 // handleServiceError ánh xạ lỗi nghiệp vụ sang mã HTTP phù hợp.
 func handleServiceError(c *gin.Context, err error) {
+	// Lỗi theo TỪNG Ô đứng trước mọi nhánh khác: nó mang sẵn tên ô và câu chữ,
+	// nên chỉ việc trả 422 y như lỗi validate của binding. Trước đây chỉ handler
+	// dùng thử bắt kiểu này, và mọi service khác trả nó về đây đều rơi xuống
+	// nhánh mặc định — người dùng nhận 500 cho một lỗi nhập liệu.
+	var theoO *service.LoiTheoO
+	if errors.As(err, &theoO) {
+		response.ValidationError(c, theoO.Fields)
+
+		return
+	}
+
 	switch {
 	case errors.Is(err, domain.ErrNotFound):
 		response.Error(c, 404, "Không tìm thấy dữ liệu")
@@ -163,6 +175,41 @@ func handleServiceError(c *gin.Context, err error) {
 		})
 	case errors.Is(err, domain.ErrChiNhanhCuoiCung):
 		response.Error(c, 409, "Đây là chi nhánh đang hoạt động cuối cùng — đóng nó xong thì cửa hàng không còn điểm bán nào để ghi đơn hàng hay tồn kho")
+	// Nhân sự. Ba lỗi, ba cách chữa khác nhau: đổi mã, chọn người khác, hoặc bỏ
+	// tick cấp tài khoản — nên không gộp chúng vào một câu chung.
+	case errors.Is(err, domain.ErrMaNhanVienDaCo):
+		response.ValidationError(c, map[string]string{
+			"code": "Mã này đã có nhân viên khác dùng, vui lòng đặt mã khác",
+		})
+	case errors.Is(err, domain.ErrTaiKhoanDaGanNhanSu):
+		response.Error(c, 409, "Tài khoản này đã gắn với một hồ sơ nhân sự khác")
+	case errors.Is(err, domain.ErrNhanSuDaCoTaiKhoan):
+		response.Error(c, 409, "Hồ sơ này đã có tài khoản đăng nhập — đổi mật khẩu hay đổi quyền là thao tác riêng, không cấp thêm tài khoản thứ hai")
+	// Phân quyền theo chức năng. Ba lỗi, ba cách chữa khác nhau: sửa lại chuỗi
+	// gõ sai, chuyển người sang nhóm khác, hoặc thôi đừng xoá nhóm hệ thống.
+	case errors.Is(err, domain.ErrQuyenLa):
+		response.ValidationError(c, map[string]string{
+			"quyen": "Có quyền không nằm trong danh mục của phần mềm (" +
+				strings.TrimPrefix(err.Error(), domain.ErrQuyenLa.Error()+": ") + ")",
+		})
+	case errors.Is(err, domain.ErrMaNhomQuyenDaCo):
+		response.ValidationError(c, map[string]string{
+			"code": "Mã này đã có nhóm quyền khác dùng, vui lòng đặt mã khác",
+		})
+	case errors.Is(err, domain.ErrNhomQuyenDangDung):
+		// err đã kèm số tài khoản đang mang nhóm — in ra, vì người đọc cần biết
+		// phải chuyển mấy người trước khi xoá được.
+		response.Error(c, 409, "Nhóm quyền này đang có "+
+			strings.TrimPrefix(err.Error(), domain.ErrNhomQuyenDangDung.Error()+": ")+
+			" dùng. Chuyển họ sang nhóm khác trước đã")
+	case errors.Is(err, domain.ErrNhomQuyenHeThong):
+		response.Error(c, 422, "Đây là nhóm quyền hệ thống dựng sẵn — sửa được tên và quyền, nhưng không xoá được")
+	case errors.Is(err, domain.ErrNhanSuDangMoCa):
+		response.Error(c, 409, "Nhân viên này còn một ca chưa đóng. Đóng ca đó trước đã — xoá bây giờ là khoá luôn tài khoản của chính người đang giữ két")
+	case errors.Is(err, domain.ErrNhanSuDaGhiSoQuy):
+		response.Error(c, 409, "Nhân viên này đã ghi sổ quỹ nên hồ sơ phải giữ lại để đối chiếu tiền. Nghỉ việc thì đặt trạng thái \"Đã nghỉ\" — tài khoản vẫn bị khoá")
+	case errors.Is(err, domain.ErrTuDanhDauNghiViec):
+		response.Error(c, 409, "Đây là hồ sơ gắn với tài khoản bạn đang đăng nhập — đánh dấu nghỉ việc sẽ khoá luôn tài khoản này và đá bạn ra ngoài. Nhờ một quản trị viên khác làm giúp")
 	case errors.Is(err, domain.ErrLastSuperAdmin):
 		response.Error(c, 409, "Đây là super admin đang hoạt động cuối cùng — khoá hoặc xoá xong sẽ không còn ai quản trị được hệ thống")
 	case errors.Is(err, domain.ErrEmailNotVerified):

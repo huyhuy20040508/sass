@@ -231,7 +231,7 @@ class ProductController extends Controller
     }
 
     /**
-     * Nhận file ảnh từ modal, lưu vào public disk (storage/app/public/products),
+     * Nhận file ảnh từ modal, lưu vào public disk (public/storage/products),
      * trả URL tuyệt đối để gán vào trường thumbnail của sản phẩm.
      */
     public function uploadImage(Request $request)

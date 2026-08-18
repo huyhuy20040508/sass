@@ -27,6 +27,12 @@ class ModuleLamViec
 
     public const QUAN_TRI = 'quan-tri';
 
+    /** Cửa vào (`users.access_areas`) mà mỗi module đòi — xem migration 0015. */
+    protected const CUA = [
+        self::THU_NGAN => 'thu_ngan',
+        self::QUAN_TRI => 'quan_ly',
+    ];
+
     /**
      * Vai trò MẶC ĐỊNH đứng ở module thu ngân.
      *
@@ -52,9 +58,21 @@ class ModuleLamViec
             : route('admin.dashboard');
     }
 
-    /** Trang đầu theo vai trò của người đang đăng nhập trong phiên. */
+    /**
+     * Trang đầu của người đang đăng nhập.
+     *
+     * Đọc CỬA trước, vai trò sau: một người vai admin nhưng chỉ được tích "Thu
+     * ngân" phải về quầy, không phải về khu quản trị rồi bị chốt chặn đá ngược
+     * lại. Không có cửa nào thì rơi về luật cũ theo vai trò.
+     */
     public static function trangChuCuaPhien(): string
     {
+        $cua = \App\Http\Middleware\EnsureCuaVao::cuaCuaPhien();
+
+        if ($cua !== [] && ! in_array('quan_ly', $cua, true)) {
+            return self::trangChu(self::THU_NGAN);
+        }
+
         return self::trangChu(self::macDinh(data_get(session('api.user'), 'role.name')));
     }
 
@@ -79,6 +97,28 @@ class ModuleLamViec
      * sai thì họ bấm sang một khu không có việc của mình.
      */
     public static function danhSach(): array
+    {
+        // CHỈ những module người này có cửa. Liệt kê cả hai cho mọi người là mời
+        // người trực quầy bấm sang khu quản trị rồi bị đá ngược về đúng chỗ cũ —
+        // một cái nút không làm gì cả, đứng ở vị trí dễ thấy nhất của thanh.
+        //
+        // KHÔNG có nhánh "chưa biết cửa thì hiện hết". Nhánh đó nghe như phòng xa
+        // nhưng chạy ngược chiều: đúng lúc không đọc được cửa là lúc màn hình mời
+        // người ta bấm vào khu họ không vào được. Không biết thì KHÔNG mời — cùng
+        // lối với PlatformRole bên API, quên gắn phải là đóng chứ không phải mở.
+        //
+        // CuaVao đã lo đường lui cho phiên cũ (suy từ vai trò), nên tới đây mà rỗng
+        // thì nghĩa là người này thật sự không có khu nào để đổi sang.
+        $cua = \App\Services\CuaVao::cua();
+
+        return array_values(array_filter(
+            self::tatCa(),
+            static fn (array $m) => in_array(self::CUA[$m['ma']] ?? '', $cua, true)
+        ));
+    }
+
+    /** Hai module của phần mềm, chưa lọc theo cửa. */
+    protected static function tatCa(): array
     {
         return [
             [

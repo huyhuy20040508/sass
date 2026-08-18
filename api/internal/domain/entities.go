@@ -5,6 +5,7 @@ package domain
 import (
 	"database/sql/driver"
 	"fmt"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -131,6 +132,53 @@ const (
 	CustomerRoleID   uint = 4
 )
 
+// Cửa vào — khớp SET `users.access_areas`.
+const (
+	CuaQuanLy  = "quan_ly"
+	CuaThuNgan = "thu_ngan"
+)
+
+var CuaVaoHopLe = map[string]bool{CuaQuanLy: true, CuaThuNgan: true}
+
+// CuaVao trả những cửa người này mở được.
+//
+// Cột rỗng = tài khoản có TRƯỚC migration 0015 (hoặc token cũ chưa mang cột
+// này): suy từ role_id đúng như hệ thống hành xử trước đó — admin đi cả hai cửa,
+// staff chỉ có quầy. Suy chứ không trả rỗng, vì trả rỗng là khoá cứng mọi tài
+// khoản cũ ra ngoài ngay lượt triển khai.
+func CuaVao(accessAreas string, roleID uint) []string {
+	if accessAreas != "" {
+		cua := make([]string, 0, 2)
+		for _, c := range strings.Split(accessAreas, ",") {
+			if c = strings.TrimSpace(c); CuaVaoHopLe[c] {
+				cua = append(cua, c)
+			}
+		}
+
+		return cua
+	}
+
+	switch roleID {
+	case SuperAdminRoleID, AdminRoleID:
+		return []string{CuaQuanLy, CuaThuNgan}
+	case StaffRoleID:
+		return []string{CuaThuNgan}
+	}
+
+	return nil
+}
+
+// CoCua cho biết người này mở được cửa đó không.
+func CoCua(accessAreas string, roleID uint, cua string) bool {
+	for _, c := range CuaVao(accessAreas, roleID) {
+		if c == cua {
+			return true
+		}
+	}
+
+	return false
+}
+
 // InternalRoleIDs là các vai trò NỘI BỘ — mọi vai trò trừ customer.
 //
 // Đây là tập tài khoản của trang "Người dùng & vai trò": khách hàng có trang
@@ -240,8 +288,17 @@ type User struct {
 	// Username là ô THỨ HAI của màn hình đăng nhập 3 ô, chỉ duy nhất trong một
 	// tenant. NULL = tài khoản khách hàng (khách mua sắm đăng nhập bằng email):
 	// UNIQUE chỉ cho lọt đúng một dòng chuỗi rỗng nên bắt buộc phải là NULL.
-	Username     StringOrNull `json:"username" gorm:"column:username"`
-	RoleID       uint         `json:"role_id"`
+	Username StringOrNull `json:"username" gorm:"column:username"`
+	RoleID   uint         `json:"role_id"`
+	// AccessAreas là cột SET ghi ĐÚNG những cửa đã giao cho người này:
+	// "quan_ly", "thu_ngan", hoặc cả hai. Tích gì vào được nấy.
+	//
+	// KHÁC role_id: role_id trả lời "anh là LOẠI người nào" (chủ tiệm / người của
+	// tiệm / khách), còn đây trả lời "người của tiệm thì mở được CỬA nào". Một
+	// con số không nói được câu "vừa quản lý vừa đứng quầy" — xem migration 0015.
+	//
+	// Rỗng = tài khoản có trước 0015 hoặc là khách hàng; CuaVao() suy từ role_id.
+	AccessAreas  StringOrNull `json:"access_areas" gorm:"column:access_areas"`
 	Role         *Role        `json:"role,omitempty" gorm:"foreignKey:RoleID"`
 	FullName     string       `json:"full_name"`
 	Email        string       `json:"email"`

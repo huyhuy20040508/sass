@@ -103,6 +103,19 @@
                 ...($canManage ? [
                     ['href' => route('admin.customers.index'), 'label' => 'Khách hàng', 'icon' => 'customers', 'active' => request()->routeIs('admin.customers.*')],
                 ] : []),
+                // Nhân sự đứng ngay sau Khách hàng: hai module cùng nói về NGƯỜI,
+                // một bên ngoài cửa hàng một bên trong. Cố ý KHÔNG nhét vào Cài
+                // đặt cạnh "Người dùng & vai trò" — hai trang đó dễ lẫn sẵn rồi,
+                // xếp chung một chỗ thì càng khó phân biệt hồ sơ nhân viên với
+                // tài khoản đăng nhập.
+                ...($canManage ? [
+                    [
+                        'href' => route('admin.nhan-su.index'),
+                        'label' => \App\Http\Controllers\NhanSuController::TITLE,
+                        'icon' => 'staff',
+                        'active' => request()->routeIs('admin.nhan-su.*'),
+                    ],
+                ] : []),
                 ...($canManage ? [[
                     // Module kho gồm ĐÚNG 5 trang dưới đây, tất cả đã có route thật.
                     // Không còn mục 'soon' nào: "Chuyển kho" đã bỏ khỏi menu vì cửa hàng
@@ -168,14 +181,22 @@
                             ])
                             ->values()
                             ->all(),
-                        [
-                            'href' => route('admin.users.index'),
-                            'label' => \App\Http\Controllers\UserController::TITLE,
-                            'active' => request()->routeIs('admin.users.*') || request()->routeIs('admin.roles.*'),
-                        ],
+                        // "Người dùng & vai trò" ĐÃ BỎ KHỎI MENU (17/08/2026).
+                        //
+                        // Chủ tiệm mua phần mềm để quản lý NHÂN VIÊN, không phải để
+                        // quản lý tài khoản: hai trang cùng nói về một con người mà
+                        // bắt tạo hai lần ở hai chỗ. Việc cấp tài khoản đăng nhập nay
+                        // là một khối trong hồ sơ nhân sự (/admin/nhan-su).
+                        //
+                        // Route /admin/users vẫn còn sống nhưng KHÔNG có lối vào:
+                        // trang nhân sự chưa lưu được gì (chưa có bảng + API), nên gỡ
+                        // luôn đường cũ là cửa hàng mất hẳn cách cấp tài khoản cho
+                        // người mới. Xoá hẳn UserController khi API nhân sự cấp được
+                        // tài khoản.
+
                         // Chi nhánh: các ĐIỂM BÁN của cửa hàng này. Nằm trong Cài đặt
-                        // cạnh Người dùng vì cùng một loại việc — dựng bộ khung của
-                        // tiệm, không phải bán hàng hằng ngày.
+                        // vì cùng một loại việc — dựng bộ khung của tiệm, không phải
+                        // bán hàng hằng ngày.
                         [
                             'href' => route('admin.chi-nhanh.index'),
                             'label' => \App\Http\Controllers\ChiNhanhController::TITLE,
@@ -205,6 +226,20 @@
         'inventory' => '<path d="M2 8.6a.6.6 0 0 1 .35-.55l9.25-4.15a1 1 0 0 1 .8 0l9.25 4.15a.6.6 0 0 1 .35.55v1a.6.6 0 0 1-.6.6H2.6a.6.6 0 0 1-.6-.6Z"/><path d="M9.6 6.4v1.5M11.1 5.7v2.2M12.9 5.7v2.2M14.4 6.4v1.5"/><path d="M4 10.2V21M20 10.2V21"/><path d="M6 21v-8a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v8"/><path d="M6 15h12M6 18h12"/><path d="M2.4 21h19.2"/>',
         'customers' => '<circle cx="9" cy="7.6" r="4"/><path d="M2 21v-.8a7 7 0 0 1 14 0v.8"/><path d="M15.7 3.6a4 4 0 0 1 0 8"/><path d="M15.7 11.6a6.3 6.3 0 0 1 6.3 6.3v.9"/>',
         'promotion' => '<path d="M4 12 12 4h8v8l-8 8-8-8Z"/><circle cx="16" cy="8" r="1.5"/><path d="M9 15l6-6"/>',
+        // Ba người đứng sau một bánh răng — icon do chủ dự án chọn cho module Nhân
+        // sự. Dựng lại ở dạng nét 24×24 cho khớp bộ icon còn lại của thanh này
+        // (bản gốc là hình vuông 512, nét dày, đặt nguyên vào đây thì lệch hẳn với
+        // các mục xung quanh).
+        //
+        // Bánh răng 8 răng vẽ bằng toạ độ tính sẵn: cung ngoài bán kính 5,9 ở đỉnh
+        // răng, cung trong 4,72 ở chân răng, tâm (12; 15,2). Sửa tay từng số là
+        // cách chắc chắn làm răng lệch nhau — muốn đổi số răng hay độ sâu thì tính
+        // lại cả vòng.
+        'staff' => '<circle cx="12" cy="3.9" r="2.3"/><path d="M8.15 9.2a4.2 4.2 0 0 1 7.7 0"/>'
+            .'<circle cx="5" cy="6.2" r="2.2"/><path d="M1.05 12.2a4.6 4.6 0 0 1 7.15-2.1"/>'
+            .'<circle cx="19" cy="6.2" r="2.2"/><path d="M22.95 12.2a4.6 4.6 0 0 0-7.15-2.1"/>'
+            .'<path d="M10.9 10.61L10.92 9.4A5.9 5.9 0 0 1 13.08 9.4L13.1 10.61A4.72 4.72 0 0 1 14.47 11.18L15.34 10.34A5.9 5.9 0 0 1 16.86 11.86L16.02 12.73A4.72 4.72 0 0 1 16.59 14.1L17.8 14.12A5.9 5.9 0 0 1 17.8 16.28L16.59 16.3A4.72 4.72 0 0 1 16.02 17.67L16.86 18.54A5.9 5.9 0 0 1 15.34 20.06L14.47 19.22A4.72 4.72 0 0 1 13.1 19.79L13.08 21A5.9 5.9 0 0 1 10.92 21L10.9 19.79A4.72 4.72 0 0 1 9.53 19.22L8.66 20.06A5.9 5.9 0 0 1 7.14 18.54L7.98 17.67A4.72 4.72 0 0 1 7.41 16.3L6.2 16.28A5.9 5.9 0 0 1 6.2 14.12L7.41 14.1A4.72 4.72 0 0 1 7.98 12.73L7.14 11.86A5.9 5.9 0 0 1 8.66 10.34L9.53 11.18A4.72 4.72 0 0 1 10.9 10.61Z"/>'
+            .'<circle cx="12" cy="15.2" r="2.3"/>',
         // Loa cầm tay + hai vòng sóng — nhóm việc rao ra bên ngoài cửa hàng.
         'marketing' => '<path d="M4 9.5h2.5L12 5.2v13.6L6.5 14.5H4a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1Z"/><path d="M6.6 14.5v3a1.4 1.4 0 0 0 1.4 1.4h.9a1.4 1.4 0 0 0 1.4-1.4v-1.1"/><path d="M15.6 9.4a3.9 3.9 0 0 1 0 5.2"/><path d="M18.2 6.8a7.6 7.6 0 0 1 0 10.4"/>',
         'report' => '<path d="M3 3v18h18"/><path d="M7 15v3M12 10v8M17 6v12"/>',
@@ -213,7 +248,12 @@
         'settings' => '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/>',
     ];
 
-    $svg = fn ($name, $sw = '1.6') => '<svg class="jh-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="' . $sw . '" stroke-linecap="round" stroke-linejoin="round">' . ($icons[$name] ?? '') . '</svg>';
+    // Vài icon nhiều chi tiết hơn mức nét 1,6 chịu được ở cỡ 20px: các nét nằm sát
+    // nhau nhòe vào nhau thành một vệt đặc. Khai riêng độ dày cho chúng ở đây thay
+    // vì vẽ lại icon đơn giản hơn.
+    $strokes = ['staff' => '1.35'];
+
+    $svg = fn ($name, $sw = null) => '<svg class="jh-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="' . ($sw ?? $strokes[$name] ?? '1.6') . '" stroke-linecap="round" stroke-linejoin="round">' . ($icons[$name] ?? '') . '</svg>';
 @endphp
 
 <aside id="jhSidebar" class="jh-sidebar">

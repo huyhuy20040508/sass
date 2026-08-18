@@ -12,6 +12,7 @@ use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\GoiDichVuController;
 use App\Http\Controllers\InventoryController;
+use App\Http\Controllers\NhanSuController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\ProductController;
@@ -47,18 +48,62 @@ Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
 Route::get('/quen-mat-khau', [AuthController::class, 'forgotPassword'])->name('password.forgot');
 
-// --- Khu vực quản trị (yêu cầu đăng nhập + quyền admin) ---
+// HAI ĐƯỜNG TRA CỨU DÙNG CHUNG cho cả hai module — nằm NGOÀI cửa `quan_ly`.
+//
+// Màn hình bán tại quầy gọi đúng hai đường này để tìm hàng và tìm khách (xem
+// thu-ngan/ban-hang.blade.php). Chúng mang tiền tố /admin vì trang tạo đơn của
+// khu quản trị dựng ra chúng trước, nhưng chúng là lượt TRA CỨU trả JSON, không
+// phải một trang của khu quản trị — đóng lại theo cửa `quan_ly` là người trực
+// quầy gõ tên hàng mà không ra gì, và không có gì trên màn hình nói vì sao.
+Route::middleware(['admin.auth', 'admin.khoa'])->prefix('admin')->name('admin.')->group(function () {
+    Route::get('/orders/new/customers', [OrderController::class, 'searchCustomers'])->name('orders.searchCustomers');
+    Route::get('/orders/new/products', [OrderController::class, 'searchProducts'])->name('orders.searchProducts');
+
+    // NGHIỆP VỤ THU NGÂN ĐÃ TÁCH SANG MODULE RIÊNG (/thu-ngan, xem nhóm route ở
+    // cuối tệp). Bốn đường dưới đây giữ lại ĐÚNG để chuyển hướng: máy quầy hay
+    // được đặt sẵn trang chủ trình duyệt là /admin/ban-tai-quay, và những đường
+    // dẫn ấy nằm rải rác trong ghi chú của cửa hàng. Bỏ hẳn thì một sáng nào đó
+    // người trực quầy mở máy lên và gặp trang 404.
+    //
+    // Chúng nằm NGOÀI cửa `quan_ly` cùng lý do với hai đường tra cứu trên: người
+    // trực quầy mới là người gõ đúng mấy đường này. Để trong cửa thì họ bị đá về
+    // trang bán hàng — đúng module, nhưng SAI TRANG, và cái phiếu họ định in lại
+    // hay ca họ định mở ra xem thì mất dấu.
+    Route::get('/ban-tai-quay', fn () => redirect()->route('thu-ngan.ban-hang.index'));
+    Route::get('/ban-tai-quay/{id}/phieu', fn (int $id) => redirect()->route(
+        'thu-ngan.ban-hang.phieu', ['id' => $id, 'kho' => request()->query('kho')]
+    ))->whereNumber('id');
+    Route::get('/ca-lam-viec', fn () => redirect()->route('thu-ngan.ca-lam-viec.index'));
+    Route::get('/ca-lam-viec/{id}', fn (int $id) => redirect()->route('thu-ngan.ca-lam-viec.show', $id))
+        ->whereNumber('id');
+});
+
+// --- KHU QUẢN TRỊ (đăng nhập + cửa `quan_ly`) ---
+//
 // `admin.khoa` chạy ngay sau `admin.auth`: cửa hàng hết hạn hợp đồng thì mọi
 // đường trong nhóm này dồn về trang Các gói dịch vụ. Chốt chặn thật nằm ở Go API
 // (403 kèm mã CUA_HANG_KHOA); middleware ở đây chỉ để người dùng nhìn thấy một
 // trang nói rõ phải làm gì, thay vì lỗi rải rác ở từng mục.
-Route::middleware(['admin.auth', 'admin.khoa'])->prefix('admin')->name('admin.')->group(function () {
+//
+// Người chỉ đứng quầy không mở được BẤT KỲ trang nào ở đây, kể cả Tổng quan:
+// trước đây họ vào được và gặp một thanh trái gần như trống rỗng, còn nút đổi
+// module thì vẫn mời họ sang. Cửa đặt ở đúng một chỗ này thay vì rải `admin.cua`
+// lên từng nhóm con — thêm một trang mới là nó nằm trong cửa sẵn, không phải nhớ.
+Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:quan_ly'])->prefix('admin')->name('admin.')->group(function () {
     Route::get('/', fn () => redirect()->route('admin.dashboard'));
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
     // Tài khoản của tôi — hồ sơ + mật khẩu của chính người đang đăng nhập.
-    // Cố tình nằm NGOÀI nhóm `admin.manage`: nhân viên không vào được trang Người
-    // dùng, đóng nốt đường này thì họ không có cách nào tự đổi mật khẩu.
+    //
+    // Đòi cửa `quan_ly`: người CHỈ đứng quầy không xem hồ sơ của mình ở đây, menu
+    // của họ chỉ còn nút Đăng xuất. Cả trang này thuộc khu quản trị, và khu đó
+    // không phải chỗ của họ — để hở một đường vào thì thanh trái, chuông thông
+    // báo và mọi thứ khác của khu ấy cũng hiện ra theo.
+    //
+    // ĐÁNH ĐỔI, ghi ra để lần sau khỏi phải đoán: họ mất luôn đường TỰ ĐỔI MẬT
+    // KHẨU. Từ nay việc đó do chủ tiệm đặt lại hộ trong mục Nhân sự. Muốn trả
+    // lại thì kéo riêng `profile/password` ra nhóm dùng chung phía trên, đừng
+    // kéo cả ba đường.
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::put('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::put('/profile/password', [ProfileController::class, 'password'])->name('profile.password');
@@ -152,18 +197,6 @@ Route::middleware(['admin.auth', 'admin.khoa'])->prefix('admin')->name('admin.')
         Route::delete('/voucher/{id}', [VoucherController::class, 'destroy'])->whereNumber('id')->name('vouchers.destroy');
     });
 
-    // NGHIỆP VỤ THU NGÂN ĐÃ TÁCH SANG MODULE RIÊNG (/thu-ngan, xem nhóm route ở
-    // cuối tệp). Bốn đường dưới đây giữ lại ĐÚNG để chuyển hướng: máy quầy hay
-    // được đặt sẵn trang chủ trình duyệt là /admin/ban-tai-quay, và những đường
-    // dẫn ấy nằm rải rác trong ghi chú của cửa hàng. Bỏ hẳn thì một sáng nào đó
-    // người trực quầy mở máy lên và gặp trang 404.
-    Route::get('/ban-tai-quay', fn () => redirect()->route('thu-ngan.ban-hang.index'));
-    Route::get('/ban-tai-quay/{id}/phieu', fn (int $id) => redirect()->route(
-        'thu-ngan.ban-hang.phieu', ['id' => $id, 'kho' => request()->query('kho')]
-    ))->whereNumber('id');
-    Route::get('/ca-lam-viec', fn () => redirect()->route('thu-ngan.ca-lam-viec.index'));
-    Route::get('/ca-lam-viec/{id}', fn (int $id) => redirect()->route('thu-ngan.ca-lam-viec.show', $id))
-        ->whereNumber('id');
 
     // Đơn hàng
     Route::get('/orders', [OrderController::class, 'index'])->name('orders.index');
@@ -172,8 +205,6 @@ Route::middleware(['admin.auth', 'admin.khoa'])->prefix('admin')->name('admin.')
     Route::get('/orders/print', [OrderController::class, 'print'])->name('orders.printBatch');
     Route::get('/orders/label', [OrderController::class, 'label'])->name('orders.labelBatch');
     Route::post('/orders/bulk-status', [OrderController::class, 'bulkStatus'])->name('orders.bulkStatus');
-    Route::get('/orders/new/customers', [OrderController::class, 'searchCustomers'])->name('orders.searchCustomers');
-    Route::get('/orders/new/products', [OrderController::class, 'searchProducts'])->name('orders.searchProducts');
     Route::post('/orders', [OrderController::class, 'store'])->name('orders.store');
     Route::put('/orders/{id}', [OrderController::class, 'update'])->name('orders.update');
     Route::get('/orders/{id}/detail', [OrderController::class, 'detail'])->name('orders.detail');
@@ -330,6 +361,30 @@ Route::middleware(['admin.auth', 'admin.khoa'])->prefix('admin')->name('admin.')
 
         Route::put('/roles/{id}', [UserController::class, 'updateRole'])->whereNumber('id')->name('roles.update');
 
+        // Nhân sự — HỒ SƠ NHÂN VIÊN, khác hẳn /admin/users (tài khoản đăng nhập).
+        //
+        // Cùng nhóm quyền với Người dùng: hồ sơ nhân sự có lương và số căn cước,
+        // thu ngân không đọc được. Bốn đường đã có màn hình nhưng phần lưu trữ
+        // (bảng + API) chưa dựng — xem NhanSuController.
+        Route::get('/nhan-su', [NhanSuController::class, 'index'])->name('nhan-su.index');
+        // Xuất trước /nhan-su/{id} sẽ không đụng nhau vì đường kia không tồn tại,
+        // nhưng cứ để cạnh index cho dễ đọc: cùng một thứ, hai định dạng.
+        Route::get('/nhan-su/xuat', [NhanSuController::class, 'export'])->name('nhan-su.export');
+        Route::post('/nhan-su', [NhanSuController::class, 'store'])->name('nhan-su.store');
+        // Tải ảnh TRƯỚC khi gửi hồ sơ: form chỉ mang theo đường dẫn ảnh trả về,
+        // nên bấm Lưu mà hỏng thì ảnh vẫn còn đó, không phải chọn lại.
+        Route::post('/nhan-su/anh', [NhanSuController::class, 'uploadAnh'])->name('nhan-su.anh');
+        // Hàng loạt — đặt TRƯỚC /nhan-su/{id} để "hang-loat" không bị hiểu là một id.
+        Route::post('/nhan-su/hang-loat/trang-thai', [NhanSuController::class, 'bulkTrangThai'])
+            ->name('nhan-su.bulkTrangThai');
+        Route::post('/nhan-su/hang-loat/xoa', [NhanSuController::class, 'bulkDestroy'])
+            ->name('nhan-su.bulkDestroy');
+        Route::put('/nhan-su/{id}', [NhanSuController::class, 'update'])->whereNumber('id')->name('nhan-su.update');
+        // Công tắc trạng thái trên bảng danh sách — chỉ đổi một cột.
+        Route::put('/nhan-su/{id}/trang-thai', [NhanSuController::class, 'updateStatus'])
+            ->whereNumber('id')->name('nhan-su.updateStatus');
+        Route::delete('/nhan-su/{id}', [NhanSuController::class, 'destroy'])->whereNumber('id')->name('nhan-su.destroy');
+
         // Chi nhánh — các ĐIỂM BÁN của chính cửa hàng này (bảng `shops` bên API),
         // không phải khách hàng của nhà cung cấp.
         //
@@ -397,7 +452,12 @@ Route::middleware(['admin.auth', 'admin.khoa'])->prefix('admin')->name('admin.')
 // CỐ Ý không có `admin.manage`: người đứng quầy là nhân viên, cả module vô
 // nghĩa nếu chỉ chủ tiệm bấm được nút thu tiền. Vẫn có `admin.khoa`: cửa hàng
 // hết hạn hợp đồng thì quầy cũng dừng, và Go API từ chối y như vậy.
-Route::middleware(['admin.auth', 'admin.khoa'])->prefix('thu-ngan')->name('thu-ngan.')->group(function () {
+//
+// `admin.cua:thu_ngan` — TÍCH GÌ VÀO ĐƯỢC NẤY. Người chỉ được tích "Quản lý"
+// trong mục Nhân sự KHÔNG mở được module này, dù vai trò của họ là admin. Trước
+// migration 0015 thì vai admin đi qua cả hai khu, nên cả cụm này là một cửa mở
+// mà chủ tiệm không có cách nào đóng lại.
+Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:thu_ngan'])->prefix('thu-ngan')->name('thu-ngan.')->group(function () {
     Route::get('/', fn () => redirect()->route('thu-ngan.ban-hang.index'));
 
     // Bán tại quầy — trang mặc định của module.

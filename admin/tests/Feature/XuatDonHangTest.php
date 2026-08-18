@@ -60,6 +60,10 @@ class XuatDonHangTest extends TestCase
         Http::fake([
             '*/admin/orders/11' => Http::response($this->donMau(11, 'DH011', 'pos')),
             '*/admin/orders/12' => Http::response($this->donMau(12, 'DH012')),
+            // Bắt-tất: thiếu nó thì mấy lượt gọi khác của middleware (hạn hợp
+            // đồng) đi ra API THẬT, và bài kiểm đổi màu theo việc máy đang chạy
+            // API hay không — chứ không theo mã nguồn.
+            '*' => Http::response(['data' => []]),
         ]);
 
         $res = $this->withSession($this->phienQuanTri())
@@ -77,10 +81,13 @@ class XuatDonHangTest extends TestCase
     /** Xuất theo BỘ LỌC — nhánh còn lại, không có ?ids. */
     public function test_xuat_theo_bo_loc(): void
     {
-        Http::fake(['*/admin/orders*' => Http::response([
-            'data' => [$this->donMau(11, 'DH011', 'pos')['data']],
-            'meta' => ['total_pages' => 1],
-        ])]);
+        Http::fake([
+            '*/admin/orders*' => Http::response([
+                'data' => [$this->donMau(11, 'DH011', 'pos')['data']],
+                'meta' => ['total_pages' => 1],
+            ]),
+            '*' => Http::response(['data' => []]),
+        ]);
 
         $csv = $this->withSession($this->phienQuanTri())
             ->get(route('admin.orders.export', ['channel' => 'pos']))
@@ -93,7 +100,10 @@ class XuatDonHangTest extends TestCase
     /** Chọn toàn id không có thật thì nói rõ là chưa chọn được đơn nào. */
     public function test_khong_co_don_nao_thi_bao_404(): void
     {
-        Http::fake(['*/admin/orders/99' => Http::response([], 404)]);
+        Http::fake([
+            '*/admin/orders/99' => Http::response([], 404),
+            '*' => Http::response(['data' => []]),
+        ]);
 
         $this->withSession($this->phienQuanTri())
             ->get(route('admin.orders.export', ['ids' => '99']))

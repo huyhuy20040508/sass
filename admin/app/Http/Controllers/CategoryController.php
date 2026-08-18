@@ -184,7 +184,7 @@ class CategoryController extends Controller
     }
 
     /**
-     * Nhận file ảnh từ modal, lưu vào public disk (storage/app/public/categories),
+     * Nhận file ảnh từ modal, lưu vào public disk (public/storage/categories),
      * trả URL tuyệt đối để gán vào trường image của danh mục.
      */
     public function uploadImage(Request $request)
