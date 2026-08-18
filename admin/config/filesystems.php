@@ -40,7 +40,23 @@ return [
 
         'public' => [
             'driver' => 'local',
-            'root' => storage_path('app/public'),
+            // GHI THẲNG vào thư mục đang được phục vụ, không đi qua storage/app/public.
+            //
+            // Mặc định của Laravel là storage_path('app/public') cộng một liên kết
+            // tượng trưng public/storage -> đó. Trên máy này liên kết ấy KHÔNG tồn
+            // tại: public/storage là một thư mục thật, và ảnh của sản phẩm, danh
+            // mục, banner đều nằm sẵn trong đó. Hệ quả là mọi ảnh MỚI tải lên rơi
+            // vào storage/app/public rồi nằm im — /storage/... trả 403 trong khi
+            // ảnh cũ vẫn 200. Lỗi im lặng: tải lên báo thành công, ảnh không hiện.
+            //
+            // Trỏ thẳng root vào public_path('storage') thì đúng ở CẢ HAI kiểu cài:
+            // máy này ghi vào thư mục thật, còn máy chủ có liên kết tượng trưng thì
+            // ghi xuyên qua liên kết vào đúng storage/app/public như cũ.
+            //
+            // (Cách kia là chạy `php artisan storage:link`, nhưng nó đòi xoá thư mục
+            // thật đang chứa ảnh của cửa hàng — và trên Windows thì lệnh tạo liên
+            // kết còn cần quyền quản trị.)
+            'root' => public_path('storage'),
             'url' => rtrim(env('APP_URL', 'http://localhost'), '/').'/storage',
             'visibility' => 'public',
             'throw' => false,

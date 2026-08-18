@@ -112,7 +112,7 @@ class ModuleThuNganTest extends TestCase
     // ------------------------------------------------------------ nút đổi module
 
     /**
-     * Nút đổi module có mặt ở CẢ HAI bên.
+     * Nút đổi module có mặt ở CẢ HAI bên — với người được giao CẢ HAI CỬA.
      *
      * Một chiều thôi thì thành cái bẫy: sang được quầy mà không có đường về, hoặc
      * ngược lại. Ở quầy thì nút này còn là lối ra duy nhất — màn hình đó không có
@@ -125,13 +125,118 @@ class ModuleThuNganTest extends TestCase
             '*' => Http::response(['data' => []]),
         ]);
 
-        $quay = $this->withSession($this->phien('staff'))
+        $caHai = $this->phien('admin');
+        $caHai['api.user']['access_areas'] = 'quan_ly,thu_ngan';
+
+        $quay = $this->withSession($caHai)
             ->get(route('thu-ngan.ban-hang.index'))->assertOk();
         $quay->assertSee(route('admin.dashboard'), false);
 
-        $quanTri = $this->withSession($this->phien('admin'))
+        $quanTri = $this->withSession($caHai)
             ->get(route('admin.orders.index'))->assertOk();
         $quanTri->assertSee(route('thu-ngan.ban-hang.index'), false);
+    }
+
+    /**
+     * Người CHỈ có cửa quầy: thấy NHÃN "Thu ngân", không thấy nút đổi module.
+     *
+     * Hai vế, và cần cả hai. Bỏ nguyên cả khối đi thì thanh mất thứ duy nhất cho
+     * biết mình đang đứng ở đâu. Để nguyên một cái nút có mũi tên thì bấm vào chỉ
+     * thấy đúng chỗ mình đang đứng — trông như hỏng. Nên: in ra cái nhãn, và
+     * KHÔNG in ra nút.
+     */
+    public function test_thu_ngan_thay_nhan_chu_khong_thay_nut_doi_module(): void
+    {
+        Http::fake([
+            '*/admin/orders/pos/discount-limit' => Http::response(['data' => ['limit_percent' => 0]]),
+            '*' => Http::response(['data' => []]),
+        ]);
+
+        $phien = $this->phien('staff');
+        $phien['api.user']['access_areas'] = 'thu_ngan';
+
+        $quay = $this->withSession($phien)
+            ->get(route('thu-ngan.ban-hang.index'))->assertOk();
+
+        // Vẫn biết mình đang ở đâu.
+        $quay->assertSee('mdsw-nhan', false);
+        $quay->assertSee('Thu ngân', false);
+        // Nhưng không có nút, không có lối sang khu quản trị.
+        $quay->assertDontSee('id="mdswBtn"', false);
+        $quay->assertDontSee(route('admin.dashboard'), false);
+    }
+
+    /**
+     * Nút đổi module biến mất với MỌI hình dạng phiên của người chỉ đứng quầy.
+     *
+     * Ba đường ghi phiên khác nhau nên vai trò nằm ở ba chỗ: `/auth/login` trả
+     * entity (`role.name`), `/admin/me` trả DTO (`role_name`), vài chỗ cũ nhét
+     * thẳng chuỗi vào `role`. Đọc sót một hình dạng là rơi xuống "không biết vai
+     * nào" — và trước đây chỗ đó lại HIỆN CẢ HAI module, tức là đúng lúc không
+     * đọc được cửa thì màn hình mời người ta bấm vào khu họ không vào được.
+     *
+     * Đó chính là cái nút "Thu ngân" bấm không xổ mà người dùng gặp: nó hiện ra
+     * nhờ nhánh đoán mò, rồi mục duy nhất bên trong là chỗ họ đang đứng.
+     */
+    public function test_nut_doi_module_an_voi_moi_hinh_dang_phien(): void
+    {
+        Http::fake([
+            '*/admin/orders/pos/discount-limit' => Http::response(['data' => ['limit_percent' => 0]]),
+            '*' => Http::response(['data' => []]),
+        ]);
+
+        // Hai hình dạng phiên thật sự tới được trang. Mấy hình dạng khác
+        // (`role_name` của DTO, `role` là chuỗi) bị EnsureAdminAuthenticated chặn
+        // từ trước vì nó chỉ đọc `role.name` — CuaVao vẫn đọc cả ba cho chắc, nhưng
+        // khẳng định chúng ở đây thì chỉ là khẳng định một cảnh không xảy ra.
+        $hinhDang = [
+            'vai staff' => ['role' => ['name' => 'staff']],
+            'vai admin nhưng chỉ tích cửa quầy' => [
+                'role' => ['name' => 'admin'], 'access_areas' => 'thu_ngan',
+            ],
+        ];
+
+        foreach ($hinhDang as $ten => $nguoi) {
+            $html = $this->withSession([
+                'api.access_token' => 'tok',
+                'api.user' => array_merge(['id' => 7, 'full_name' => 'Người trực'], $nguoi),
+            ])->get(route('thu-ngan.ban-hang.index'))->assertOk()->getContent();
+
+            $this->assertStringNotContainsString('id="mdswBtn"', $html,
+                "Phiên dạng [$ten] vẫn vẽ ra nút đổi module");
+            // Nút thì không, nhưng nhãn "đang ở đâu" thì phải còn.
+            $this->assertStringContainsString('mdsw-nhan', $html,
+                "Phiên dạng [$ten] mất luôn nhãn cho biết đang ở module nào");
+        }
+
+        // Phiên không đọc được vai lẫn cửa thì KHÔNG vào tới trang để mà bàn về
+        // cái nút: EnsureAdminAuthenticated chặn từ trước. Khẳng định ở đây để lần
+        // sau ai đó nới lỗ hổng đó ra thì bài kiểm này lên tiếng.
+        $this->withSession([
+            'api.access_token' => 'tok',
+            'api.user' => ['id' => 7, 'full_name' => 'Không rõ vai'],
+        ])->get(route('thu-ngan.ban-hang.index'))->assertRedirect(route('login'));
+    }
+
+    /** Người có CẢ HAI cửa thì nút xổ ra đủ hai mục để bấm sang. */
+    public function test_ca_hai_cua_thi_nut_xo_ra_hai_muc(): void
+    {
+        Http::fake([
+            '*/admin/orders/pos/discount-limit' => Http::response(['data' => ['limit_percent' => 0]]),
+            '*' => Http::response(['data' => []]),
+        ]);
+
+        $phien = $this->phien('admin');
+        $phien['api.user']['access_areas'] = 'quan_ly,thu_ngan';
+
+        $html = $this->withSession($phien)
+            ->get(route('thu-ngan.ban-hang.index'))->assertOk()->getContent();
+
+        $this->assertStringContainsString('id="mdswBtn"', $html);
+        // Hai mục, và mục kia phải trỏ sang khu quản trị — một mục thì bấm vào
+        // chẳng đi đâu, đúng cái đã gặp.
+        $this->assertSame(2, substr_count($html, 'role="menuitem"'));
+        $this->assertStringContainsString(route('admin.dashboard'), $html);
     }
 
     /**

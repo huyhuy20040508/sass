@@ -225,6 +225,14 @@
         @php
             $tnUser = session('api.user');
             $tnTen = trim((string) data_get($tnUser, 'full_name', '')) ?: (string) data_get($tnUser, 'username', 'Tài khoản');
+            // Người CHỈ có cửa quầy không mở được hồ sơ: cả trang "Tài khoản của
+            // tôi" nằm trong khu quản trị, và khu đó không dành cho họ. Menu ở quầy
+            // vì thế chỉ còn đúng nút Đăng xuất.
+            //
+            // Ẩn ở đây LÀ ĐỦ để màn hình gọn, nhưng không đủ để gọi là chặn — route
+            // admin.profile.* đứng sau `admin.cua:quan_ly`, nên gõ thẳng đường dẫn
+            // cũng không vào được.
+            $tnCoHoSo = in_array('quan_ly', \App\Http\Middleware\EnsureCuaVao::cuaCuaPhien(), true);
         @endphp
         <div class="postk" id="postk">
             <button type="button" class="posbar-btn" id="postkBtn" aria-haspopup="true" aria-expanded="false">
@@ -233,7 +241,9 @@
             </button>
 
             <div class="postk-menu">
-                <a href="{{ route('admin.profile.edit') }}" class="postk-item">Tài khoản của tôi</a>
+                @if($tnCoHoSo)
+                    <a href="{{ route('admin.profile.edit') }}" class="postk-item">Tài khoản của tôi</a>
+                @endif
                 <form method="POST" action="{{ route('logout') }}">
                     @csrf
                     <button type="submit" class="postk-item postk-item--out">Đăng xuất</button>

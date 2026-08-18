@@ -138,14 +138,19 @@
                 </div>
                 {{-- Hồ sơ & mật khẩu của chính mình. Đặt ở menu này chứ không phải
                      sidebar: sidebar là điều hướng giữa các module dữ liệu, còn đây
-                     là tài khoản đang đăng nhập — và nhân viên cũng vào được, trong
-                     khi nhóm "Cài đặt" trên sidebar thì không. --}}
-                <a href="{{ route('admin.profile.edit') }}" class="jh-tb-menu__item">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M4.5 20a7.5 7.5 0 0 1 15 0"/><circle cx="12" cy="8" r="4"/>
-                    </svg>
-                    Tài khoản của tôi
-                </a>
+                     là tài khoản đang đăng nhập.
+
+                     CHỈ hiện cho người có cửa quản trị. Người chỉ đứng quầy còn đúng
+                     nút Đăng xuất — cùng một menu, cùng một luật với thanh trên cùng
+                     của quầy, và route cũng đóng lại nên đây không phải là giấu nút. --}}
+                @if(in_array('quan_ly', \App\Http\Middleware\EnsureCuaVao::cuaCuaPhien(), true))
+                    <a href="{{ route('admin.profile.edit') }}" class="jh-tb-menu__item">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M4.5 20a7.5 7.5 0 0 1 15 0"/><circle cx="12" cy="8" r="4"/>
+                        </svg>
+                        Tài khoản của tôi
+                    </a>
+                @endif
 
                 <form method="POST" action="{{ route('logout') }}" class="jh-tb-logout-form">
                     @csrf

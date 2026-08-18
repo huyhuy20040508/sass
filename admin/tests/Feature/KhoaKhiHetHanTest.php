@@ -45,6 +45,11 @@ class KhoaKhiHetHanTest extends TestCase
                 ],
                 'bang_gia' => [], 'fields' => [],
             ]], 200),
+            // Bắt-tất: thiếu nó thì mấy lượt gọi khác của trang đi ra API THẬT,
+            // token giả bị 401 và ApiClient dọn sạch phiên GIỮA CHỪNG request —
+            // trang vẫn dựng ra được nhưng từ đó trở đi `session('api.user')` là
+            // null, nên bài kiểm đo nhầm một màn hình của người chưa đăng nhập.
+            '*' => Http::response(['data' => []]),
         ]);
     }
 

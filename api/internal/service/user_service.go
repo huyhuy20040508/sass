@@ -35,6 +35,20 @@ type UserService interface {
 	Create(ctx context.Context, req *dto.UserRequest, actor Actor) (*dto.UserResponse, error)
 	Update(ctx context.Context, id uint, req *dto.UserRequest, actor Actor) (*dto.UserResponse, error)
 	UpdateStatus(ctx context.Context, id uint, status string, actor Actor) (*dto.UserResponse, error)
+	// SetRole đổi VAI TRÒ của một tài khoản — chỉ một cột, không đụng tên đăng
+	// nhập hay email. Tách khỏi Update vì nơi gọi (hồ sơ nhân sự) không cầm bản
+	// đầy đủ của tài khoản, mà dựng tạm một bản để gọi Update thì chính là cách
+	// ghi đè email và trạng thái bằng dữ liệu cũ.
+	SetRole(ctx context.Context, id uint, roleID uint, actor Actor) (*dto.UserResponse, error)
+
+	// SetCuaVao ghi CỬA VÀO đã giao cho tài khoản (users.access_areas).
+	//
+	// Tách khỏi SetRole vì hai cột trả lời hai câu khác nhau: role_id là "loại
+	// tài khoản", access_areas là "mở được khu nào". Cũng vì tách nên lượt ghi
+	// này KHÔNG kèm luật "không tự hạ vai của mình" của SetRole — bỏ tích cửa
+	// của chính mình là chuyện chủ tiệm làm được, và lượt đó chỉ khoá bớt một
+	// khu chứ không hạ vai trò, nên họ vẫn còn đường vào để bật lại.
+	SetCuaVao(ctx context.Context, id uint, cua []string, actor Actor) error
 	SetPassword(ctx context.Context, id uint, password string, actor Actor) (*dto.UserResponse, error)
 	Delete(ctx context.Context, id uint, actor Actor) error
 
@@ -246,6 +260,77 @@ func (s *userService) UpdateStatus(ctx context.Context, id uint, status string, 
 		return nil, err
 	}
 	return s.GetByID(ctx, u.ID)
+}
+
+// SetRole đổi vai trò, giữ đủ ba lượt chặn của Update — ba cái này mất đi thì
+// đường này thành cửa sau để làm đúng những việc Update không cho làm.
+func (s *userService) SetRole(ctx context.Context, id uint, roleID uint, actor Actor) (*dto.UserResponse, error) {
+	u, err := s.internalUser(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	// Vai trò không đổi thì đừng ghi: lượt sửa hồ sơ nào cũng gửi kèm role_id, phần
+	// lớn là giữ nguyên, và một lượt ghi thừa ở đây còn làm sai luật "tự hạ
+	// quyền của chính mình" ngay dưới.
+	if u.RoleID == roleID {
+		return s.GetByID(ctx, u.ID)
+	}
+	if err := s.canManage(u, actor); err != nil {
+		return nil, err
+	}
+	if err := s.canAssignRole(roleID, actor); err != nil {
+		return nil, err
+	}
+	// Tự đổi vai trò của chính mình: phiên đang chạy bằng token cũ nên màn hình
+	// vẫn trông bình thường, tới lần đăng nhập sau mới phát hiện mất quyền.
+	if actor.ID == id {
+		return nil, domain.ErrForbidden
+	}
+	// Hạ vai trò của super admin cuối cùng là khoá cả hệ thống.
+	if u.RoleID == domain.SuperAdminRoleID {
+		if err := s.ensureAnotherSuperAdmin(ctx, u.ID); err != nil {
+			return nil, err
+		}
+	}
+
+	u.RoleID = roleID
+	// Vai trò đã đổi -> quan hệ nạp sẵn không còn đúng. Bỏ đi để GetByID đọc lại.
+	u.Role = nil
+	if err := s.users.Update(ctx, u); err != nil {
+		return nil, err
+	}
+
+	return s.GetByID(ctx, u.ID)
+}
+
+// SetCuaVao — xem UserService.SetCuaVao.
+func (s *userService) SetCuaVao(ctx context.Context, id uint, cua []string, actor Actor) error {
+	u, err := s.internalUser(ctx, id)
+	if err != nil {
+		return err
+	}
+	if err := s.canManage(u, actor); err != nil {
+		return err
+	}
+
+	// Chỉ giữ giá trị có thật; ô lạ rơi ra ngoài thay vì xuống cột SET và ném lỗi
+	// 1265 với câu chữ của MySQL.
+	sach := make([]string, 0, len(cua))
+	for _, c := range cua {
+		if domain.CuaVaoHopLe[c] {
+			sach = append(sach, c)
+		}
+	}
+
+	moi := domain.StringOrNull(strings.Join(sach, ","))
+	if u.AccessAreas == moi {
+		return nil
+	}
+
+	u.AccessAreas = moi
+	u.Role = nil
+
+	return s.users.Update(ctx, u)
 }
 
 func (s *userService) SetPassword(ctx context.Context, id uint, password string, actor Actor) (*dto.UserResponse, error) {
@@ -502,6 +587,9 @@ func buildUser(u *domain.User, nhan map[uint]domain.RoleLabel) dto.UserResponse 
 		EmailVerified: u.EmailVerifiedAt != nil,
 		LastLoginAt:   formatDateTime(u.LastLoginAt),
 		CreatedAt:     u.CreatedAt.Format(time.RFC3339),
+		// Cột rỗng (tài khoản trước 0015) thì CuaVao suy từ vai — trả ra danh sách
+		// đã suy sẵn để phía trước không phải biết luật đó.
+		Quyen: domain.CuaVao(string(u.AccessAreas), u.RoleID),
 	}
 	if u.Role != nil {
 		res.RoleName = u.Role.Name

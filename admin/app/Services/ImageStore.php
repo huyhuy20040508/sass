@@ -87,6 +87,49 @@ class ImageStore
     }
 
     /**
+     * Xoá một tệp ảnh khỏi ổ đĩa, nhận vào chính ĐƯỜNG DẪN mà put() đã trả về.
+     *
+     * Không có hàm này thì mỗi lượt đổi ảnh để lại một tệp mồ côi: không hồ sơ
+     * nào trỏ tới, không màn hình nào hiện ra, và không ai biết để dọn. Một cửa
+     * hàng sửa ảnh vài trăm lượt là ổ đĩa đầy những thứ như vậy.
+     *
+     * Tên tệp do put() sinh ngẫu nhiên nên hai hồ sơ không bao giờ dùng chung một
+     * tệp — xoá ở đây không kéo mất ảnh của ai khác.
+     *
+     * Im lặng bỏ qua khi đường dẫn rỗng, không thuộc ổ đĩa này, hoặc tệp đã biến
+     * mất: đây là việc DỌN DẸP đi kèm một thao tác khác, không phải thao tác
+     * chính. Ném lỗi ở đây là làm hỏng lượt lưu hồ sơ vì một tệp rác.
+     */
+    public static function xoa(?string $url): void
+    {
+        $url = trim((string) $url);
+        if ($url === '') {
+            return;
+        }
+
+        // put() trả URL đầy đủ; cắt lấy phần đường dẫn rồi bỏ tiền tố /storage để
+        // ra đúng khoá trên ổ đĩa. Đường dẫn của nơi khác (ảnh dán từ web) không
+        // khớp tiền tố này nên rơi ra ngoài — đúng ý, ta chỉ dọn thứ mình tạo.
+        $duong = parse_url($url, PHP_URL_PATH) ?: $url;
+        $tien = rtrim(parse_url((string) config('filesystems.disks.public.url'), PHP_URL_PATH) ?: '/storage', '/');
+
+        if ($tien === '' || ! str_starts_with($duong, $tien.'/')) {
+            return;
+        }
+
+        $khoa = ltrim(substr($duong, strlen($tien)), '/');
+        if ($khoa === '' || str_contains($khoa, '..')) {
+            return;
+        }
+
+        try {
+            Storage::disk('public')->delete($khoa);
+        } catch (\Throwable $e) {
+            Log::warning('Khong xoa duoc anh cu', ['khoa' => $khoa, 'msg' => $e->getMessage()]);
+        }
+    }
+
+    /**
      * Thu nhỏ + nén, trả về đường dẫn tương đối trong ổ đĩa, hoặc null nếu không
      * xử lý được (định dạng GD không đọc nổi, ảnh hỏng, hết bộ nhớ...).
      */

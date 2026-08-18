@@ -29,6 +29,15 @@ use Tests\TestCase;
  */
 class AdminSmokeTest extends TestCase
 {
+    /**
+     * Bài kiểm DUY NHẤT được gọi API thật — đó là toàn bộ lý do nó tồn tại.
+     *
+     * Chốt preventStrayRequests trong Tests\TestCase chặn mọi lượt gọi không giả
+     * lập; để nguyên thì lượt đăng nhập dưới đây ném lỗi, rơi vào catch, và bài
+     * kiểm khói lặng lẽ "skipped" mãi mãi — đúng kiểu hỏng mà nó sinh ra để bắt.
+     */
+    protected bool $choPhepGoiApiThat = true;
+
     /** Session giả lập sau khi đăng nhập (dùng lại cho mọi test). */
     protected static ?array $adminSession = null;
 
@@ -338,6 +347,7 @@ class AdminSmokeTest extends TestCase
         $cam = [
             // Người & cấu hình — đã đóng từ trước.
             '/admin/users', '/admin/customers', '/admin/settings', '/admin/chi-nhanh',
+            '/admin/nhan-su',
             '/admin/reports/revenue', '/admin/goi-dich-vu',
             // Hàng hoá & tiếp thị.
             '/admin/products', '/admin/categories', '/admin/brands',

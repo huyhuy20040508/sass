@@ -27,10 +27,38 @@
 
     $mdswTone = $tone ?? 'sang';
     $mdswHienTai = \App\Services\ModuleLamViec::hienTai();
+    // danhSach() đã lọc theo CỬA của người đang đăng nhập: người chỉ đứng quầy
+    // chỉ thấy một mục.
     $mdswDs = \App\Services\ModuleLamViec::danhSach();
+
+    // Không đọc được module nào thì mới bỏ hẳn — không có gì để nói.
+    if ($mdswDs === []) {
+        return;
+    }
+
     $mdswDangO = collect($mdswDs)->firstWhere('ma', $mdswHienTai) ?? $mdswDs[0];
+
+    // MỘT module = không có gì để ĐỔI, nhưng vẫn có gì để NÓI.
+    //
+    // Trước đây chỗ này bỏ hẳn cả khối đi, và mất luôn thứ duy nhất trên thanh
+    // cho biết mình đang đứng ở đâu. Còn để nguyên một cái nút có mũi tên xổ
+    // xuống thì tệ theo chiều kia: bấm vào chỉ thấy đúng chỗ mình đang đứng, nên
+    // nó trông như hỏng.
+    //
+    // Nên khi chỉ có một: in ra một CÁI NHÃN. Cùng chỗ, cùng biểu tượng, cùng
+    // chữ — bỏ mũi tên, bỏ con trỏ bàn tay, không phải thẻ <button>. Nhìn là
+    // biết đây là chỉ dẫn chứ không phải nút.
+    $mdswMotMinh = count($mdswDs) < 2;
 @endphp
 
+@if($mdswMotMinh)
+    <span class="mdsw mdsw--{{ $mdswTone }} mdsw-nhan" title="Bạn đang ở {{ $mdswDangO['ten'] }}">
+        <svg class="mdsw-btn__ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+            {!! $mdswDangO['icon'] !!}
+        </svg>
+        <span class="mdsw-btn__ten">{{ $mdswDangO['ten'] }}</span>
+    </span>
+@else
 <div class="mdsw mdsw--{{ $mdswTone }}" id="mdsw">
     <button type="button" class="mdsw-btn" id="mdswBtn"
             aria-haspopup="true" aria-expanded="false"
@@ -70,9 +98,23 @@
         @endforeach
     </div>
 </div>
+@endif
 
 <style>
     .mdsw { position: relative; font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+
+    /* Nhãn "đang ở đâu" khi người này chỉ có MỘT module — cùng dáng với nút, bỏ
+       mũi tên và mọi dấu hiệu bấm được. Con trỏ giữ mặc định: đổi thành bàn tay
+       là lại hứa một việc không có. */
+    .mdsw-nhan {
+        display: inline-flex; align-items: center; gap: 7px;
+        height: 34px; padding: 0 10px;
+        border-radius: 6px; border: 1px solid transparent;
+        font-size: 13px; font-weight: 600; line-height: 1;
+    }
+    .mdsw-nhan .mdsw-btn__ico { width: 16px; height: 16px; flex-shrink: 0; }
+    .mdsw--sang.mdsw-nhan { color: #475569; background: #f1f5f9; }
+    .mdsw--toi.mdsw-nhan { color: #fff; background: rgba(255, 255, 255, .10); }
 
     .mdsw-btn {
         display: inline-flex; align-items: center; gap: 7px;

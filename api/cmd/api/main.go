@@ -319,6 +319,7 @@ func main() {
 	promotionRepo := repository.NewPromotionRepository(db)
 	voucherRepo := repository.NewVoucherRepository(db)
 	chiNhanhRepo := repository.NewChiNhanhRepository(db)
+	nhanSuRepo := repository.NewNhanVienRepository(db)
 	caRepo := repository.NewCaLamViecRepository(db)
 	contactRepo := repository.NewContactRepository(db)
 	newsletterRepo := repository.NewNewsletterRepository(db)
@@ -379,6 +380,13 @@ func main() {
 	// Tài khoản nội bộ (quản trị & nhân viên) + vai trò — dùng chung userRepo với
 	// khách hàng nhưng lọc ngược vai trò nên hai luồng không thấy dữ liệu của nhau.
 	userSvc := service.NewUserService(userRepo, roleRepo, hanMucSvc)
+	// Nhân sự: HỒ SƠ người đi làm. Nhận userSvc chứ không phải userRepo — khối
+	// "cấp tài khoản" trong hồ sơ phải đi qua đủ luật của module tài khoản (vai
+	// trò cấp được, tên đăng nhập, email trùng, hạn mức tài khoản của hợp đồng),
+	// và chép lại năm luật đó ở tầng nhân sự là chép thiếu một cái.
+	quyenRepo := repository.NewQuyenRepository(db)
+	nhanSuSvc := service.NewNhanSuService(nhanSuRepo, chiNhanhRepo, userSvc, quyenRepo)
+	nhomQuyenSvc := service.NewNhomQuyenService(quyenRepo, userRepo)
 	// Hub SSE + service thông báo: đơn mới hiện ngay trên trang admin và trạng thái
 	// đơn hiện ngay ở trang tài khoản của khách, không cần tải lại trang.
 	hub := realtime.NewHub()
@@ -437,6 +445,8 @@ func main() {
 		Setting:   handler.NewSettingHandler(settingSvc),
 		User:      handler.NewUserHandler(userSvc),
 		ChiNhanh:  handler.NewChiNhanhHandler(chiNhanhSvc),
+		NhanSu:    handler.NewNhanSuHandler(nhanSuSvc),
+		NhomQuyen: handler.NewNhomQuyenHandler(nhomQuyenSvc),
 		Ca:        handler.NewCaLamViecHandler(caSvc),
 		Payment:   handler.NewPaymentHandler(paymentSvc),
 		Banner:    handler.NewBannerHandler(bannerSvc),
@@ -459,7 +469,8 @@ func main() {
 	// một cửa hàng chỉ chặn được lượt ĐĂNG NHẬP MỚI — ai đang mở phiên vẫn dùng
 	// tiếp cho tới khi access token hết hạn. Xem middleware.JWTAuth.
 	r := router.New(cfg, jwtMgr, tenMienRepo, nguoiDieuHanhRepo,
-		repository.NewPhienRepository(db), chiNhanhRepo, handlers)
+		repository.NewPhienRepository(db), chiNhanhRepo,
+		quyenRepo, handlers)
 	srv := &http.Server{
 		Addr:        announcedAddr(cfg.App.Port),
 		Handler:     r,

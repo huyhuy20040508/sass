@@ -25,7 +25,12 @@ type cuaHang struct {
 
 	quanTri  uint // tài khoản đăng nhập
 	nhanVien uint
-	khach    uint // khách hàng (vai trò customer)
+
+	// Hai nhóm quyền mặc định của cửa hàng này — bài kiểm phân quyền cần id để
+	// tick thêm hoặc bỏ bớt quyền rồi xem chốt phản ứng ra sao.
+	nhomQuanLy  uint
+	nhomThuNgan uint
+	khach       uint // khách hàng (vai trò customer)
 
 	chiNhanh   uint // điểm bán (bảng shops), KHÔNG phải cửa hàng
 	danhMuc    uint
@@ -124,6 +129,14 @@ func gieo(t *testing.T, db *gorm.DB, ma string) *cuaHang {
 	}
 	tao(t, db, ctx, khach)
 	c.khach = khach.ID
+
+	// --- nhóm quyền ---
+	//
+	// Gieo Y HỆT cmd/quyen làm với cửa hàng thật: hai nhóm mặc định, rồi xếp
+	// người vào theo vai trò. Thiếu bước này thì mọi tài khoản trong bộ kiểm
+	// không có quyền nào và cả gói đỏ ở lượt 403 đầu tiên — mà đỏ vì bối cảnh
+	// gieo thiếu, không phải vì chốt sai.
+	gieoNhomQuyen(t, db, ctx, c, quanTri.ID, nhanVien.ID)
 
 	// --- điểm bán ---
 	//
@@ -526,3 +539,37 @@ func tao(t *testing.T, db *gorm.DB, ctx context.Context, v any) {
 }
 
 func conTro[T any](v T) *T { return &v }
+
+// gieoNhomQuyen dựng hai nhóm mặc định cho một cửa hàng và xếp người vào.
+//
+// Dùng chung nguồn với đời thật: domain.NhomDungSan(). Chép tay danh sách quyền
+// vào đây là dựng một bản thứ hai để nó lệch với bản mà cửa hàng thật đang chạy
+// — và lúc đó bộ kiểm sẽ xanh cho một hệ thống không còn tồn tại.
+func gieoNhomQuyen(t *testing.T, db *gorm.DB, ctx context.Context, c *cuaHang, quanTriID, nhanVienID uint) {
+	t.Helper()
+
+	nhom := map[string]uint{}
+	for _, nm := range domain.NhomDungSan() {
+		g := &domain.NhomQuyen{
+			Code: nm.Code, Name: nm.Name, Description: nm.MoTa,
+			IsSystem: true, FullAccess: nm.FullAccess,
+		}
+		tao(t, db, ctx, g)
+		nhom[nm.Code] = g.ID
+
+		for _, q := range nm.Quyen {
+			it := &domain.NhomQuyenItem{GroupID: g.ID, Permission: q}
+			tao(t, db, ctx, it)
+		}
+	}
+
+	c.nhomQuanLy = nhom[domain.NhomQuyenQuanLy]
+	c.nhomThuNgan = nhom[domain.NhomQuyenThuNgan]
+
+	for id, groupID := range map[uint]uint{
+		quanTriID:  c.nhomQuanLy,
+		nhanVienID: c.nhomThuNgan,
+	} {
+		tao(t, db, ctx, &domain.NhomQuyenCuaNguoi{UserID: id, GroupID: groupID})
+	}
+}

@@ -1,0 +1,49 @@
+-- =====================================================================
+--  0014_ca-lam-2026-08-18.sql
+--  Ngày: 18/08/2026
+-- =====================================================================
+--  KHÔNG viết CREATE DATABASE hay USE ở đây: công cụ đã kết nối sẵn đúng
+--  database của môi trường đang chạy (cục bộ / thử / thật đều khác tên).
+--
+--  MySQL không cho DDL nằm trong transaction, nên tệp chạy dở là dở thật.
+--  Viết sao cho chạy lại được nếu có thể: IF NOT EXISTS, IF EXISTS...
+--
+--  Tệp này đã chạy ở đâu đó rồi thì TUYỆT ĐỐI không sửa nội dung nữa —
+--  công cụ giữ vân tay và sẽ báo lệch. Cần thêm gì thì viết tệp mới.
+-- =====================================================================
+--
+--  CA LÀM VIỆC CỦA NHÂN VIÊN
+--
+--  Màn hình nhân sự thay ô "Chức danh" bằng ô "Ca làm việc" — đúng ô mà
+--  bảng nhân sự của order v2 vẫn có. Với một cửa hàng bán lẻ thì chức
+--  danh gần như không nói thêm điều gì: người của tiệm hoặc đứng quầy
+--  hoặc quản lý, và điều đó đã nằm ở ô Phân quyền. Còn ca làm thì ngày
+--  nào cũng phải tra: xếp lịch, đối chiếu ca bán, tính công.
+--
+--  Cột `position` GIỮ NGUYÊN, không xoá. Nó vẫn có dữ liệu của những hồ
+--  sơ khai trước hôm nay, và module chấm công dựng sau còn cần tới chức
+--  danh. Từ nay trang nhân sự không gửi nó lên nữa, nên hồ sơ mới rơi về
+--  mặc định 'ban_hang' của cột — xem NhanSuService.dienHoSo bên API.
+-- ---------------------------------------------------------------------
+
+-- ---------------------------------------------------------------------
+--  Vì sao SET chứ không phải VARCHAR chứa chuỗi ngăn bằng dấu phẩy:
+--
+--  Một người trực được nhiều ca, nên ô này chọn nhiều — y như bên order
+--  v2 (`hrm_employees.work_shift_id`). Nhưng bên đó lưu CSV trong một cột
+--  VARCHAR, và cái giá phải trả thì nhìn thấy được ngay trong mã nguồn
+--  của họ: mọi lượt lọc theo ca phải viết `work_shift_id REGEXP ?`, chạy
+--  quét cả bảng, và không có gì ngăn một giá trị rác như "7" lọt vào.
+--
+--  SET của MySQL cho đúng thứ CSV cho — nhiều giá trị trong một cột —
+--  nhưng database tự kiểm giá trị lạ và FIND_IN_SET() dùng được thẳng.
+--
+--  NULL = chưa xếp ca, KHÁC với chuỗi rỗng (SET rỗng nghĩa là "đã xét và
+--  không trực ca nào"). Tầng Go ghi NULL cho ô bỏ trống — xem StringOrNull.
+--
+--  Đặt sau `hired_on` để mấy cột về công việc nằm cạnh nhau khi đọc
+--  DESCRIBE, chứ không lẫn vào nhóm lương phía dưới.
+-- ---------------------------------------------------------------------
+ALTER TABLE employees
+  ADD COLUMN work_shift SET('sang','chieu','ca_ngay') NULL
+    COMMENT 'ca trực; NULL = chưa xếp' AFTER hired_on;

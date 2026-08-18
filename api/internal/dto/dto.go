@@ -554,6 +554,198 @@ type ChiNhanhRequest struct {
 	IsActive *bool `json:"is_active"`
 }
 
+// ---------- Nhân sự (hồ sơ người đi làm) ----------
+
+// NhanSuRequest — payload tạo/sửa MỘT HỒ SƠ NHÂN VIÊN.
+//
+// Đây là CON NGƯỜI, không phải tài khoản đăng nhập (xem domain.NhanVien). Việc
+// cấp tài khoản là khối `tai_khoan` lồng bên trong — tuỳ chọn, vì phần đông nhân
+// viên của một tiệm nhỏ không đụng vào phần mềm.
+type NhanSuRequest struct {
+	// Code bỏ trống khi TẠO = hệ thống tự đặt (NV0001, NV0002…). Bỏ trống khi SỬA
+	// = giữ nguyên mã cũ: mã đã đi vào bảng lương và bảng chấm công.
+	Code     string `json:"code" binding:"omitempty,max=30" example:"NV0007"`
+	FullName string `json:"full_name" binding:"required,max=150" example:"Nguyễn Văn An"`
+	// Avatar — đường dẫn ảnh do Shop Admin tải lên và lưu hộ; API chỉ cất chuỗi.
+	Avatar string `json:"avatar" binding:"omitempty,max=255"`
+	Gender string `json:"gender" binding:"omitempty,oneof=nam nu khac"`
+	// BirthDate/HiredOn theo dạng YYYY-MM-DD (đúng thứ ô <input type="date"> gửi lên).
+	BirthDate string `json:"birth_date" binding:"omitempty" example:"1998-08-23"`
+	Phone     string `json:"phone" binding:"omitempty,max=20"`
+	Email     string `json:"email" binding:"omitempty,email,max=191"`
+	IDNumber  string `json:"id_number" binding:"omitempty,max=20"`
+	Address   string `json:"address" binding:"omitempty,max=255"`
+
+	// Position là chức danh CÔNG VIỆC, không phải quyền trên phần mềm.
+	//
+	// KHÔNG còn bắt buộc: trang nhân sự đã thay ô này bằng ca làm việc (với một
+	// cửa hàng bán lẻ thì chức danh không nói thêm gì so với ô Phân quyền). Bỏ
+	// trống thì lượt TẠO rơi về mặc định 'ban_hang' của cột, còn lượt SỬA giữ
+	// nguyên giá trị cũ — hồ sơ khai từ trước không bị một lượt sửa tên làm mất
+	// chức danh.
+	Position string `json:"position" binding:"omitempty" example:"thu_ngan"`
+	// WorkShift — các ca người này trực. Mảng vì một người trực được nhiều ca;
+	// service ghép thành chuỗi cho cột SET `employees.work_shift`.
+	WorkShift []string `json:"work_shift" example:"sang,chieu"`
+	// ShopID BẮT BUỘC: mỗi nhân viên phải đứng ở một chi nhánh cụ thể. Cửa hàng
+	// một điểm bán thì màn hình tự chọn sẵn chi nhánh duy nhất đó, người dùng
+	// không phải làm gì thêm — nhưng dữ liệu vẫn ghi rõ nơi làm việc, để bảng
+	// chấm công và báo cáo theo chi nhánh sau này không phải đoán.
+	// KHÔNG dùng binding:"required" ở đây: bộ validate của gin đặt tên ô theo tên
+	// TRƯỜNG GO ("ShopID") nên trang quản trị nhận về một khoá không khớp ô nào
+	// trên form. Lượt kiểm nằm ở service và trả đúng khoá `shop_id`.
+	ShopID       uint   `json:"shop_id"`
+	HiredOn      string `json:"hired_on" binding:"omitempty" example:"2026-08-17"`
+	ContractType string `json:"contract_type" binding:"omitempty"`
+	Status       string `json:"status" binding:"required" example:"dang_lam"`
+
+	SalaryType string  `json:"salary_type" binding:"omitempty"`
+	Salary     float64 `json:"salary" binding:"omitempty,gte=0"`
+	Allowance  float64 `json:"allowance" binding:"omitempty,gte=0"`
+	// CommissionRate tính theo % doanh số — quá 100 thì bán càng nhiều càng lỗ,
+	// gần như chắc chắn là gõ nhầm.
+	CommissionRate float64 `json:"commission_rate" binding:"omitempty,gte=0,lte=100"`
+
+	Note string `json:"note" binding:"omitempty,max=500"`
+
+	// TaiKhoan có mặt = cấp tài khoản đăng nhập cho người này. Bỏ hẳn khoá này
+	// (null) = không cấp, KHÁC với gửi khối rỗng.
+	TaiKhoan *NhanSuTaiKhoanRequest `json:"tai_khoan"`
+
+	// RoleID — QUYỀN của người này trên phần mềm (2 = quản lý, 3 = thu ngân).
+	//
+	// Một trường cho cả hai việc, có chủ ý: lúc cấp tài khoản mới thì đây là
+	// quyền đặt cho nó, lúc sửa hồ sơ đã có tài khoản thì đây là quyền ĐỔI SANG.
+	// Hai trường riêng cho cùng một khái niệm là chờ ngày màn hình gửi cái này
+	// còn API đọc cái kia.
+	//
+	// KHÁC hẳn Position: Position là VIỆC người đó làm, còn đây là những gì họ
+	// mở được trên phần mềm. Mặc định hai thứ đi đôi, nhưng cửa hàng có quyền
+	// tách chúng ra — quản lý ca tối chỉ đứng quầy, hay thu ngân được giao coi kho.
+	//
+	// 0 = không nói gì về quyền (hồ sơ không có tài khoản).
+	RoleID uint `json:"role_id" example:"3"`
+
+	// Quyen — CỬA VÀO đã tích cho người này: "quan_ly", "thu_ngan", hoặc cả hai.
+	//
+	// Mảng chứ không phải một con số, vì một người giữ được cả hai cửa và màn
+	// hình phải hiện lại đúng thứ đã tích. RoleID ở trên vẫn suy ra từ đây (có
+	// "quan_ly" -> 2, còn lại -> 3) và vẫn được gửi kèm: nó là khoá ngoại tới
+	// `roles`, nằm trong token, và là thứ phân biệt người của tiệm với khách.
+	//
+	// Rỗng = lượt gọi không nói gì về cửa; service giữ nguyên cột đang có.
+	Quyen []string `json:"quyen" example:"quan_ly,thu_ngan"`
+
+	// MoTaiKhoan = "nhận người này làm lại thì mở luôn tài khoản cũ".
+	//
+	// Chỉ có nghĩa khi Status quay về `dang_lam`. Đặt trạng thái `da_nghi` luôn
+	// KHOÁ tài khoản (không hỏi), còn mở lại thì phải nói rõ ở đây — xem
+	// service.dongBoTaiKhoan.
+	MoTaiKhoan bool `json:"mo_tai_khoan"`
+}
+
+// NhanSuTaiKhoanRequest — khối "cấp tài khoản đăng nhập" nằm trong hồ sơ nhân sự.
+//
+// Không có ô email riêng: email của tài khoản lấy từ chính hồ sơ (NhanSuRequest.Email),
+// nên một người chỉ khai một địa chỉ. Bảng `users` bắt buộc email và đặt UNIQUE
+// lên nó, nên hồ sơ nào xin cấp tài khoản thì phải có email — service từ chối
+// kèm câu nói rõ điều đó thay vì bịa ra một địa chỉ nội bộ.
+type NhanSuTaiKhoanRequest struct {
+	Username string `json:"username" binding:"required,min=3,max=50" example:"an.nv"`
+	// Password bỏ trống thì hệ thống cấp mật khẩu mặc định, y như trang tài khoản.
+	Password string `json:"password" binding:"omitempty,min=6,max=72"`
+}
+
+// NhanSuTrangThaiRequest — bật/tắt nhanh trạng thái làm việc từ công tắc trên
+// bảng danh sách.
+//
+// Đường riêng chứ không dùng lại PUT hồ sơ: bấm một công tắc mà phải gửi lên cả
+// hai chục trường của hồ sơ thì chỉ cần màn hình đang giữ một bản cũ là lượt bấm
+// đó ghi đè ngược mọi thứ người khác vừa sửa.
+type NhanSuTrangThaiRequest struct {
+	Status string `json:"status" binding:"required" example:"dang_lam"`
+	// MoTaiKhoan: xem NhanSuRequest.MoTaiKhoan — công tắc gạt về "đang làm" gửi
+	// kèm khoá này sau khi màn hình hỏi lại người bấm.
+	MoTaiKhoan bool `json:"mo_tai_khoan"`
+}
+
+// NhanSuResponse — hồ sơ nhân viên kèm hai thứ mà màn hình danh sách cần mà bảng
+// `employees` không giữ: tên chi nhánh và tên đăng nhập của tài khoản.
+//
+// Ghép sẵn ở API thay vì để trang quản trị gọi thêm hai lượt nữa rồi tự nối —
+// nối ở phía ngoài thì mỗi màn hình nối một kiểu và sẽ có màn hình nối sai.
+type NhanSuResponse struct {
+	domain.NhanVien
+	ShopName string `json:"shop_name"`
+	Username string `json:"username"`
+	RoleID   uint   `json:"role_id"`
+	// UserStatus (active | inactive) là trạng thái của TÀI KHOẢN, khác với Status
+	// của hồ sơ. Hai cột tách nhau nên màn hình phải nói được "đang làm nhưng tài
+	// khoản đang khoá" — trường hợp có thật sau khi nhận lại người cũ mà chưa mở
+	// tài khoản cho họ.
+	UserStatus string `json:"user_status"`
+	// Quyen — cửa vào của tài khoản gắn kèm. Bảng hiện ĐÚNG danh sách này, một
+	// huy hiệu mỗi cửa: tích hai ô thì ra hai huy hiệu, tích một thì ra một.
+	Quyen []string `json:"quyen"`
+	// NhomQuyen — id các nhóm quyền tài khoản này đang mang.
+	//
+	// Trả kèm danh sách để hộp thoại sửa tick sẵn đúng những nhóm đang có. Thiếu
+	// nó thì màn hình mở ra với ô tick trống, và một lượt bấm Lưu bình thường sẽ
+	// thu sạch quyền của người đó mà không ai định làm vậy.
+	NhomQuyen       []uint `json:"nhom_quyen"`
+	RoleDisplayName string `json:"role_display_name"`
+}
+
+// ---------- Nhóm quyền (phân quyền theo chức năng) ----------
+
+// NhomQuyenRequest — payload tạo/sửa một NHÓM QUYỀN.
+type NhomQuyenRequest struct {
+	// Code bỏ trống khi TẠO = hệ thống tự đặt (nhom-1, nhom-2…). Khi SỬA thì
+	// khoá này bị bỏ qua: mã là thứ mã nguồn gọi tên hai nhóm hệ thống.
+	Code        string `json:"code" binding:"omitempty,max=50"`
+	Name        string `json:"name" binding:"required,max=100" example:"Thủ kho"`
+	Description string `json:"description" binding:"omitempty,max=255"`
+	// Quyen là TOÀN BỘ danh sách quyền của nhóm sau lượt này.
+	//
+	// nil (bỏ hẳn khoá) = giữ nguyên danh sách đang có. Mảng RỖNG = bỏ hết tick.
+	// Hai thứ đó khác nhau, và gộp lại thì không có cách nào thu hết quyền của
+	// một nhóm.
+	Quyen []string `json:"quyen"`
+}
+
+// NhomQuyenQuyenRequest — chỉ thay danh sách quyền, cho màn hình tick.
+type NhomQuyenQuyenRequest struct {
+	Quyen []string `json:"quyen"`
+}
+
+// GanNhomQuyenRequest — đặt danh sách nhóm cho MỘT tài khoản.
+//
+// Mảng, không phải một giá trị: một người mang được nhiều nhóm cùng lúc (quản lý
+// ca tối vẫn đứng quầy), và quyền của họ là HỢP của các nhóm ấy.
+type GanNhomQuyenRequest struct {
+	NhomQuyen []uint `json:"nhom_quyen"`
+}
+
+// NhomQuyenResponse — một nhóm kèm hai thứ màn hình cần mà bảng không giữ.
+type NhomQuyenResponse struct {
+	domain.NhomQuyen
+	// Quyen: nhóm mang cờ toàn quyền trả về CẢ danh mục, vì đó đúng là những gì
+	// nó có — màn hình tick hiện đủ dấu tick thay vì một danh sách trống.
+	Quyen []string `json:"quyen"`
+	// SoThanhVien để màn hình nói trước "còn 3 người đang dùng" khi ai đó định xoá.
+	SoThanhVien int64 `json:"so_thanh_vien"`
+}
+
+// QuyenCuaToiResponse — quyền của CHÍNH người đang đăng nhập.
+//
+// Trang quản trị đọc nó một lần lúc đăng nhập để lọc menu. Nó không thay cho
+// chốt ở API: ẩn một mục menu chỉ là phép lịch sự, còn chặn thật vẫn nằm ở
+// middleware của từng đường.
+type QuyenCuaToiResponse struct {
+	ToanQuyen bool     `json:"toan_quyen"`
+	Quyen     []string `json:"quyen"`
+}
+
 // ---------- Tài khoản nội bộ & vai trò ----------
 
 // UserRequest — payload tạo/sửa tài khoản NỘI BỘ (quản trị & nhân viên).
@@ -623,6 +815,10 @@ type UserResponse struct {
 	RoleID          uint   `json:"role_id" example:"2"`
 	RoleName        string `json:"role_name" example:"admin"`
 	RoleDisplayName string `json:"role_display_name" example:"Quản trị viên"`
+	// Quyen — CỬA VÀO đã giao (users.access_areas). Cột rỗng thì suy từ role_id,
+	// nên danh sách này LUÔN nói đúng những khu người đó mở được, kể cả với tài
+	// khoản có trước migration 0015.
+	Quyen []string `json:"quyen" example:"quan_ly,thu_ngan"`
 
 	EmailVerified bool   `json:"email_verified"`
 	LastLoginAt   string `json:"last_login_at"`
