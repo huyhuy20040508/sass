@@ -26,9 +26,6 @@ Thumbs.db
 
 # ===== Laravel (admin) =====
 /admin/vendor/
-/admin/node_modules/
-/admin/public/build/
-/admin/public/hot
 /admin/storage/*.key
 /admin/storage/app/**
 !/admin/storage/app/.gitignore
@@ -42,9 +39,6 @@ Thumbs.db
 
 # ===== Laravel (saas — khu điều hành nền tảng) =====
 /saas/vendor/
-/saas/node_modules/
-/saas/public/build/
-/saas/public/hot
 /saas/storage/*.key
 /saas/storage/app/**
 !/saas/storage/app/.gitignore

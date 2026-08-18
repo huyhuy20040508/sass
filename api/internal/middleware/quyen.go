@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"net/http"
-	"sort"
 
 	"github.com/gin-gonic/gin"
 
@@ -162,18 +161,6 @@ func CurrentTenantID(c *gin.Context) uint {
 	v, _ := id.(uint)
 
 	return v
-}
-
-// DuongDaGan trả danh sách "METHOD /đường" đã gắn quyền, đã sắp xếp — cho thông
-// báo lỗi của bài kiểm dễ đọc.
-func (k *KiemQuyen) DuongDaGan() []string {
-	ds := make([]string, 0, len(k.so))
-	for d := range k.so {
-		ds = append(ds, d)
-	}
-	sort.Strings(ds)
-
-	return ds
 }
 
 // joinPath ghép đường của nhóm với đường của route, tránh sinh ra dấu gạch đôi.

@@ -225,15 +225,6 @@ class ApiClient
 
     // ---------- Auth ----------
 
-    /** Đăng nhập, trả về Response thô để controller xử lý. */
-    public function login(string $email, string $password): Response
-    {
-        return $this->request(false)->post('/auth/login', [
-            'email' => $email,
-            'password' => $password,
-        ]);
-    }
-
     /**
      * Đăng nhập 3 ô: mã cửa hàng + tên đăng nhập + mật khẩu.
      *
@@ -397,12 +388,6 @@ class ApiClient
         return $this->get('/admin/banners', $position !== '' ? ['position' => $position] : []);
     }
 
-    /** Lấy 1 banner theo id. */
-    public function banner(int $id): Response
-    {
-        return $this->get("/admin/banners/{$id}");
-    }
-
     public function createBanner(array $data): Response
     {
         return $this->post('/admin/banners', $data);
@@ -444,11 +429,6 @@ class ApiClient
         return $this->get('/admin/promotions/stats');
     }
 
-    public function promotion(int $id): Response
-    {
-        return $this->get("/admin/promotions/{$id}");
-    }
-
     public function createPromotion(array $data): Response
     {
         return $this->post('/admin/promotions', $data);
@@ -484,11 +464,6 @@ class ApiClient
         return $this->get('/admin/vouchers/stats');
     }
 
-    public function voucher(int $id): Response
-    {
-        return $this->get("/admin/vouchers/{$id}");
-    }
-
     public function createVoucher(array $data): Response
     {
         return $this->post('/admin/vouchers', $data);
@@ -520,12 +495,6 @@ class ApiClient
     public function products(array $query = []): Response
     {
         return $this->get('/products', $query);
-    }
-
-    /** Chi tiết sản phẩm theo slug. */
-    public function productBySlug(string $slug): Response
-    {
-        return $this->get("/products/{$slug}");
     }
 
     public function createProduct(array $data): Response
@@ -686,12 +655,6 @@ class ApiClient
     public function posDiscountLimit(): Response
     {
         return $this->get('/admin/orders/pos/discount-limit');
-    }
-
-    /** Đổi hàng tại quầy: hàng cũ về kho + hàng mới ra kho + chênh lệch, MỘT giao dịch. */
-    public function posDoiHang(array $payload): Response
-    {
-        return $this->post('/admin/orders/pos/doi-hang', $payload);
     }
 
     // ---------- Ca làm việc & sổ quỹ ----------
@@ -1145,12 +1108,6 @@ class ApiClient
         return $this->get('/admin/users/stats');
     }
 
-    /** Chi tiết một tài khoản nội bộ. */
-    public function user(int $id): Response
-    {
-        return $this->get("/admin/users/{$id}");
-    }
-
     /** Thêm tài khoản nội bộ (bỏ trống password thì API cấp mật khẩu mặc định). */
     public function createUser(array $data): Response
     {
@@ -1242,39 +1199,6 @@ class ApiClient
         return $this->get('/admin/nhom-quyen');
     }
 
-    /** Cây quyền của phần mềm — dữ liệu để màn hình vẽ ô tick. */
-    public function danhMucQuyen(): Response
-    {
-        return $this->get('/admin/nhom-quyen/danh-muc');
-    }
-
-    public function taoNhomQuyen(array $data): Response
-    {
-        return $this->post('/admin/nhom-quyen', $data);
-    }
-
-    public function suaNhomQuyen(int $id, array $data): Response
-    {
-        return $this->put("/admin/nhom-quyen/{$id}", $data);
-    }
-
-    /** Thay TOÀN BỘ danh sách quyền của một nhóm — cho màn hình tick. */
-    public function datQuyenNhom(int $id, array $quyen): Response
-    {
-        return $this->put("/admin/nhom-quyen/{$id}/quyen", ['quyen' => array_values($quyen)]);
-    }
-
-    public function xoaNhomQuyen(int $id): Response
-    {
-        return $this->delete("/admin/nhom-quyen/{$id}");
-    }
-
-    /** Các nhóm quyền một tài khoản đang mang. */
-    public function nhomQuyenCuaNguoi(int $userID): Response
-    {
-        return $this->get("/admin/users/{$userID}/nhom-quyen");
-    }
-
     /**
      * Đặt danh sách nhóm cho một tài khoản.
      *
@@ -1287,17 +1211,6 @@ class ApiClient
         return $this->put("/admin/users/{$userID}/nhom-quyen", [
             'nhom_quyen' => array_values(array_map('intval', $nhomQuyen)),
         ]);
-    }
-
-    /**
-     * Quyền của CHÍNH người đang đăng nhập — trang quản trị đọc để lọc menu.
-     *
-     * Không thay cho chốt ở API: ẩn một mục menu chỉ là phép lịch sự, chặn thật
-     * vẫn nằm ở máy chủ trên từng đường.
-     */
-    public function quyenCuaToi(): Response
-    {
-        return $this->get('/admin/quyen-cua-toi');
     }
 
     /** Xoá (mềm) một hồ sơ nhân viên. Tài khoản đăng nhập của người đó giữ nguyên. */

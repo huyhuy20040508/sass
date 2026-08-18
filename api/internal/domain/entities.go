@@ -1463,21 +1463,6 @@ type Banner struct {
 	UpdatedAt time.Time  `json:"updated_at"`
 }
 
-// IsLive cho biết banner có đang thực sự hiện trên storefront tại thời điểm now
-// hay không — gộp cả công tắc hiển thị lẫn lịch chạy.
-func (b Banner) IsLive(now time.Time) bool {
-	if !b.IsActive {
-		return false
-	}
-	if b.StartAt != nil && now.Before(*b.StartAt) {
-		return false
-	}
-	if b.EndAt != nil && now.After(*b.EndAt) {
-		return false
-	}
-	return true
-}
-
 type Setting struct {
 	ID uint `json:"id" gorm:"primaryKey"`
 	TenantOwned

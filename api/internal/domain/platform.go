@@ -981,12 +981,6 @@ func (q QuyenApp) ChoPhep(ma string) bool {
 	return false
 }
 
-// KhongCoAppNao = true khi người này chưa được giao phần mềm nào.
-//
-// Dùng để nói đúng lý do trên màn hình ("chưa được giao phần mềm nào") thay vì
-// để họ nhìn một danh sách rỗng và tưởng nền tảng chưa bán gì.
-func (q QuyenApp) KhongCoAppNao() bool { return !q.ToanQuyen && len(q.Ma) == 0 }
-
 // PlatformRoleGhiDuoc trả lời "vai trò này có được SỬA sổ nền tảng không".
 //
 // `support` là vai trò chỉ đọc, và đó là toàn bộ lý do nó tồn tại tách khỏi

@@ -166,17 +166,6 @@ class ApiClient
         ]);
     }
 
-    /**
-     * Lấy hồ sơ người điều hành hiện tại theo access token.
-     *
-     * /auth/platform-me chứ không phải /auth/me: đường kia đòi token của một cửa
-     * hàng, và token khu điều hành cố ý không mang cửa hàng nào.
-     */
-    public function me(): Response
-    {
-        return $this->get('/auth/platform-me');
-    }
-
     /** Kiểm tra API có sống không — dùng cho ô trạng thái ở Dashboard. */
     public function health(): bool
     {
@@ -201,12 +190,6 @@ class ApiClient
     // nó VẮNG MẶT hẳn và mọi đường trả 404, không phải 500 — controller phải đọc
     // 404 ở đây là "chưa cấu hình control plane" chứ không phải "không có dữ liệu".
 
-    /** Danh mục phần mềm người đang đăng nhập được phụ trách (owner thấy hết). */
-    public function apps(): Response
-    {
-        return $this->get('/platform/apps');
-    }
-
     /**
      * Bảng giá của nền tảng.
      *
@@ -217,12 +200,6 @@ class ApiClient
     public function plans(string $app = ''): Response
     {
         return $this->get('/platform/plans', $this->loc(['app' => $app]));
-    }
-
-    /** Một dòng bảng giá kèm tính năng đã khai của nó. */
-    public function planFeatures(int $planId): Response
-    {
-        return $this->get("/platform/plans/{$planId}/features");
     }
 
     /**
