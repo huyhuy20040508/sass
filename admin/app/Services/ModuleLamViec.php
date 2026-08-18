@@ -50,6 +50,38 @@ class ModuleLamViec
             : self::QUAN_TRI;
     }
 
+    /**
+     * Trang tới ngay sau khi đăng nhập.
+     *
+     * CÓ TỪ HAI CỬA thì dừng ở màn CHỌN CỬA VÀO: một người vừa quản kho vừa đứng
+     * quầy đăng nhập lúc 7h sáng để mở ca, chứ không phải để xem báo cáo — mà
+     * luật cũ (suy từ vai trò) luôn thả họ vào khu quản trị rồi bắt tự tìm nút
+     * đổi module ở góc phải. Màn chọn hỏi thẳng một câu, một lần, ngay đầu ca.
+     *
+     * CHỈ CÓ MỘT CỬA thì KHÔNG hỏi. Người trực quầy mở máy ra là để bán hàng;
+     * chèn thêm một màn hình chỉ có đúng một ô để bấm là lấy lại đúng cái click
+     * mà lần tách module này bỏ đi. Cùng luật với nút đổi module: một module =
+     * không có gì để chọn.
+     */
+    public static function sauKhiDangNhap(): string
+    {
+        return count(self::danhSach()) > 1
+            ? route('chon-cua')
+            : self::trangChuCuaPhien();
+    }
+
+    /**
+     * Một module theo mã, CHỈ khi người đang đăng nhập có cửa vào đó.
+     *
+     * Đọc qua danhSach() (đã lọc theo cửa) chứ không qua tatCa(): đây là thứ màn
+     * chọn cửa dùng để kiểm ô người dùng vừa bấm, nên nó phải trả lời "anh có
+     * được vào đây không", không phải "chỗ này có tồn tại không".
+     */
+    public static function timTheoMa(?string $ma): ?array
+    {
+        return collect(self::danhSach())->firstWhere('ma', (string) $ma);
+    }
+
     /** Trang đầu của một module — cũng là đích của nút đổi module. */
     public static function trangChu(string $module): string
     {
