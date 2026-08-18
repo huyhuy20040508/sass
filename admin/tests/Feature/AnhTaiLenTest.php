@@ -27,13 +27,22 @@ class AnhTaiLenTest extends TestCase
      */
     public function test_dia_public_ghi_vao_thu_muc_duoc_phuc_vu(): void
     {
-        $ghi = realpath(config('filesystems.disks.public.root'));
-        $phucVu = realpath(public_path('storage'));
+        // KHÔNG đòi thư mục phải có sẵn: trên máy vừa clone (CI) thì public/storage
+        // chưa tồn tại — nó do `php artisan storage:link` dựng lúc triển khai. Đòi
+        // realpath thành công ở đây là bắt bài kiểm phụ thuộc vào việc ai đó đã
+        // chạy một lệnh khác trước đó.
+        //
+        // Nên chuẩn hoá rồi so VỊ TRÍ ĐÃ CẤU HÌNH: có thật thì realpath (đi xuyên
+        // qua liên kết tượng trưng trên máy chủ), chưa có thì so chính đường dẫn.
+        $chuanHoa = static fn (string $duong): string => rtrim(
+            str_replace('\\', '/', realpath($duong) ?: $duong), '/'
+        );
 
-        $this->assertNotFalse($ghi, 'Thư mục gốc của đĩa public không tồn tại');
-        $this->assertNotFalse($phucVu, 'Thiếu public/storage — chạy `php artisan storage:link`');
-        $this->assertSame($phucVu, $ghi,
-            'Ảnh tải lên rơi vào một chỗ, còn /storage phục vụ một chỗ khác');
+        $this->assertSame(
+            $chuanHoa(public_path('storage')),
+            $chuanHoa((string) config('filesystems.disks.public.root')),
+            'Ảnh tải lên rơi vào một chỗ, còn /storage phục vụ một chỗ khác'
+        );
     }
 
     /** Đường dẫn trả về phải là URL đầy đủ dưới /storage, không phải đường tương đối. */
