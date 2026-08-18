@@ -43,35 +43,21 @@ class ModuleThuNganTest extends TestCase
     // -------------------------------------------------- vào đúng module của mình
 
     /**
-     * Nhân viên đăng nhập xong là ở sẵn quầy.
+     * Đăng nhập xong là dừng ở màn chọn cửa vào — CẢ nhân viên lẫn chủ tiệm.
      *
-     * Đây là lý do chính của cả lần tách: người trực quầy mở máy ra để bán hàng,
-     * mà khu quản trị với họ chỉ còn ba trang. Đưa họ vào đó là bắt bấm thêm một
-     * lần nữa mỗi sáng, mỗi ca.
+     * Nhân viên chỉ có một khu nên ô khu vực với họ chỉ còn một, nhưng màn ấy còn
+     * hỏi chi nhánh và in tên tiệm vừa vào; đi thẳng vào quầy là bỏ qua cả hai rồi
+     * bán cả ca vào nhầm kho.
      */
-    public function test_nhan_vien_dang_nhap_vao_thang_module_thu_ngan(): void
+    public function test_dang_nhap_xong_dung_o_man_chon_cua(): void
     {
-        Http::fake(['*/auth/shop-login' => Http::response($this->apiDangNhap('staff'))]);
+        foreach (['staff', 'admin'] as $vai) {
+            Http::fake(['*/auth/shop-login' => Http::response($this->apiDangNhap($vai))]);
 
-        $this->post(route('login.attempt'), [
-            'shop_code' => 'quochuy', 'username' => 'thungan', 'password' => 'x',
-        ])->assertRedirect(route('thu-ngan.ban-hang.index'));
-    }
-
-    /**
-     * Chủ tiệm — người có CẢ HAI cửa — dừng ở màn chọn cửa vào.
-     *
-     * Trước đây chỗ này thả thẳng vào khu quản trị, và đó là cái sai của luật cũ:
-     * chủ tiệm đăng nhập lúc 7h sáng có thể là để mở ca bán hàng chứ không phải để
-     * xem báo cáo. Vế còn lại — nhân viên KHÔNG gặp màn này — do bài ngay trên giữ.
-     */
-    public function test_quan_tri_dang_nhap_dung_o_man_chon_cua(): void
-    {
-        Http::fake(['*/auth/shop-login' => Http::response($this->apiDangNhap('admin'))]);
-
-        $this->post(route('login.attempt'), [
-            'shop_code' => 'quochuy', 'username' => 'admin', 'password' => 'x',
-        ])->assertRedirect(route('chon-cua'));
+            $this->post(route('login.attempt'), [
+                'shop_code' => 'quochuy', 'username' => $vai, 'password' => 'x',
+            ])->assertRedirect(route('chon-cua'));
+        }
     }
 
     /** Vào thẳng "/" khi đang có phiên: mỗi vai trò về module của mình. */

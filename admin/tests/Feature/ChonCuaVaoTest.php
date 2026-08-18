@@ -12,8 +12,7 @@ use Tests\TestCase;
  *
  * Bốn thứ dễ hỏng ở một màn hình kiểu này, và cả bốn đều hỏng lặng lẽ:
  *
- *  1. Nó hiện ra với người chỉ có MỘT khu — thành một màn hình có đúng một ô để
- *     bấm, lấy lại đúng cái click mà lần tách module vừa bỏ đi.
+ *  1. Nó in ô của khu người ta KHÔNG được giao — bấm vào chỉ để bị đá ngược về.
  *  2. Nó nhận bừa mã khu gửi lên, để người dùng bấm xong bị `admin.cua` đá ngược
  *     về mà không hiểu vì sao.
  *  3. Chi nhánh vừa chọn rơi mất trên đường vào module — hàng đi ra khỏi kho khác
@@ -91,18 +90,38 @@ class ChonCuaVaoTest extends TestCase
     }
 
     /**
-     * Người CHỈ có cửa quầy không bao giờ gặp màn này — kể cả khi gõ tay đường dẫn.
+     * Người CHỈ có cửa quầy vẫn thấy màn này — một ô, và KHÔNG có ô Quản trị.
      *
-     * Một màn hình chỉ có đúng một ô để bấm không hỏi ai điều gì, nó chỉ bắt bấm.
-     * Người trực quầy mở máy ra là để bán hàng.
+     * Với họ ô khu vực không còn là câu hỏi, nhưng tên tiệm và chi nhánh thì còn.
      */
-    public function test_nguoi_mot_cua_di_thang_vao_module_cua_minh(): void
+    public function test_nguoi_mot_cua_van_thay_man_chon(): void
     {
         $this->fakeApi();
 
-        $this->withSession($this->phien('staff', 'thu_ngan'))
+        $html = $this->withSession($this->phien('staff', 'thu_ngan'))
+            ->get(route('chon-cua'))->assertOk();
+
+        $html->assertSee('value="thu-ngan"', false);
+        $html->assertDontSee('value="quan-tri"', false);
+        $html->assertSee('Tiệm Quốc Huy', false);
+    }
+
+    /**
+     * KHÔNG có khu nào thì đi thẳng — màn này lúc đó trống thật, không có ô nào
+     * để bấm ngoài nút đăng xuất.
+     */
+    public function test_nguoi_khong_co_cua_nao_di_thang(): void
+    {
+        $this->fakeApi();
+
+        // Khai cửa nhưng lọc ra rỗng — hình dạng duy nhất cho ra "không khu nào"
+        // mà phiên vẫn qua được chốt đăng nhập (xem CuaVao::tuPhien).
+        $phien = $this->phien('admin', '');
+        $phien['api.user']['quyen'] = ['kho_bi_mat'];
+
+        $this->withSession($phien)
             ->get(route('chon-cua'))
-            ->assertRedirect(route('thu-ngan.ban-hang.index'));
+            ->assertRedirect(route('admin.dashboard'));
     }
 
     /** Chưa đăng nhập thì không mở được. */
