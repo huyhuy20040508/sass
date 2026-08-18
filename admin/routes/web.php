@@ -7,6 +7,7 @@ use App\Http\Controllers\BrandController;
 use App\Http\Controllers\CaLamViecController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\ChiNhanhController;
+use App\Http\Controllers\ChonCuaVaoController;
 use App\Http\Controllers\ContactController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\DashboardController;
@@ -47,6 +48,20 @@ Route::post('/login', [AuthController::class, 'login'])->name('login.attempt');
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
 Route::get('/quen-mat-khau', [AuthController::class, 'forgotPassword'])->name('password.forgot');
+
+// --- MÀN CHỌN CỬA VÀO — ngã ba giữa trang đăng nhập và chỗ làm việc ---
+//
+// Nằm NGOÀI cả hai nhóm module, và bắt buộc phải vậy: tới đây người dùng chưa
+// chọn khu nào, nên gắn `admin.cua` vào đây là một chốt chặn hỏi đúng câu mà màn
+// hình này sinh ra để hỏi. Chỉ đòi đã đăng nhập.
+//
+// `admin.khoa` thì vẫn giữ: cửa hàng hết hạn hợp đồng chẳng có khu nào mở, và
+// mời họ chọn giữa hai ô rồi đá cả hai về trang gói dịch vụ là bắt bấm một lần
+// vô nghĩa ngay lúc họ đang cần biết phải gia hạn.
+Route::middleware(['admin.auth', 'admin.khoa'])->group(function () {
+    Route::get('/chon-cua', [ChonCuaVaoController::class, 'index'])->name('chon-cua');
+    Route::post('/chon-cua', [ChonCuaVaoController::class, 'vao'])->name('chon-cua.vao');
+});
 
 // HAI ĐƯỜNG TRA CỨU DÙNG CHUNG cho cả hai module — nằm NGOÀI cửa `quan_ly`.
 //

@@ -130,11 +130,14 @@ class AuthController extends Controller
             return redirect()->route('admin.goi-dich-vu.index');
         }
 
-        // Vào thẳng module của vai trò này: nhân viên là thu ngân, đưa họ vào khu
-        // quản trị là mở ra một thanh trái gần như trống rỗng rồi bắt bấm thêm
-        // một lần nữa mới tới chỗ làm việc thật. Chủ tiệm vẫn vào khu quản trị,
-        // và cả hai đổi qua lại bằng nút ở góc phải thanh trên cùng.
-        $redirect = redirect()->intended(ModuleLamViec::trangChuCuaPhien())
+        // ĐI ĐÂU TIẾP: hỏi ModuleLamViec, đừng đoán ở đây.
+        //
+        // Người được giao CẢ HAI khu dừng ở màn chọn cửa vào — họ đăng nhập lúc 7h
+        // sáng có thể là để mở ca bán hàng, không phải để xem báo cáo, mà luật cũ
+        // luôn thả họ vào khu quản trị rồi bắt tự tìm nút đổi module ở góc phải.
+        // Người chỉ có MỘT khu thì vào thẳng, không thấy màn chọn: một màn hình chỉ
+        // có đúng một ô để bấm là lấy lại đúng cái click mà lần tách module bỏ đi.
+        $redirect = redirect()->intended(ModuleLamViec::sauKhiDangNhap())
             ->with('success', 'Đăng nhập thành công.');
 
         // Ghi nhớ mã cửa hàng + tên đăng nhập cho lần sau, hoặc xoá nếu bỏ chọn.

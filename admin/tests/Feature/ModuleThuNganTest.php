@@ -58,14 +58,20 @@ class ModuleThuNganTest extends TestCase
         ])->assertRedirect(route('thu-ngan.ban-hang.index'));
     }
 
-    /** Chủ tiệm thì vẫn vào khu quản trị. */
-    public function test_quan_tri_dang_nhap_vao_khu_quan_tri(): void
+    /**
+     * Chủ tiệm — người có CẢ HAI cửa — dừng ở màn chọn cửa vào.
+     *
+     * Trước đây chỗ này thả thẳng vào khu quản trị, và đó là cái sai của luật cũ:
+     * chủ tiệm đăng nhập lúc 7h sáng có thể là để mở ca bán hàng chứ không phải để
+     * xem báo cáo. Vế còn lại — nhân viên KHÔNG gặp màn này — do bài ngay trên giữ.
+     */
+    public function test_quan_tri_dang_nhap_dung_o_man_chon_cua(): void
     {
         Http::fake(['*/auth/shop-login' => Http::response($this->apiDangNhap('admin'))]);
 
         $this->post(route('login.attempt'), [
             'shop_code' => 'quochuy', 'username' => 'admin', 'password' => 'x',
-        ])->assertRedirect(route('admin.dashboard'));
+        ])->assertRedirect(route('chon-cua'));
     }
 
     /** Vào thẳng "/" khi đang có phiên: mỗi vai trò về module của mình. */
