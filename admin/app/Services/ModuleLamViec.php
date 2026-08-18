@@ -51,21 +51,17 @@ class ModuleLamViec
     }
 
     /**
-     * Trang tới ngay sau khi đăng nhập.
+     * Trang tới ngay sau khi đăng nhập: MÀN CHỌN CỬA VÀO, cho mọi người.
      *
-     * CÓ TỪ HAI CỬA thì dừng ở màn CHỌN CỬA VÀO: một người vừa quản kho vừa đứng
-     * quầy đăng nhập lúc 7h sáng để mở ca, chứ không phải để xem báo cáo — mà
-     * luật cũ (suy từ vai trò) luôn thả họ vào khu quản trị rồi bắt tự tìm nút
-     * đổi module ở góc phải. Màn chọn hỏi thẳng một câu, một lần, ngay đầu ca.
+     * Kể cả người chỉ có một khu. Màn ấy không chỉ hỏi khu — nó còn hỏi chi
+     * nhánh, và nói người này đang đứng ở tiệm nào; thu ngân bỏ qua là bỏ qua cả
+     * ba, rồi bán cả ca vào nhầm kho mà không có chỗ nào kịp nhận ra.
      *
-     * CHỈ CÓ MỘT CỬA thì KHÔNG hỏi. Người trực quầy mở máy ra là để bán hàng;
-     * chèn thêm một màn hình chỉ có đúng một ô để bấm là lấy lại đúng cái click
-     * mà lần tách module này bỏ đi. Cùng luật với nút đổi module: một module =
-     * không có gì để chọn.
+     * Không có khu nào thì đi thẳng — không còn gì để hỏi.
      */
     public static function sauKhiDangNhap(): string
     {
-        return count(self::danhSach()) > 1
+        return self::danhSach() !== []
             ? route('chon-cua')
             : self::trangChuCuaPhien();
     }
@@ -149,7 +145,14 @@ class ModuleLamViec
         ));
     }
 
-    /** Hai module của phần mềm, chưa lọc theo cửa. */
+    /**
+     * Hai module của phần mềm, chưa lọc theo cửa.
+     *
+     * Mỗi mục mang hai hình cho hai cỡ: `icon` (nét SVG) cho nút đổi module trên
+     * hai thanh trên cùng, nơi hình chỉ còn 17px; `anh` (ảnh chụp) cho hai ô to ở
+     * màn chọn cửa. Ảnh chụp thu về 17px chỉ còn một vệt màu, nét SVG phóng to
+     * bằng nửa ô thì trống trải.
+     */
     protected static function tatCa(): array
     {
         return [
@@ -158,6 +161,7 @@ class ModuleLamViec
                 'ten' => 'Thu ngân',
                 'mo_ta' => 'Bán tại quầy, ca làm việc, sổ quỹ',
                 'href' => self::trangChu(self::THU_NGAN),
+                'anh' => 'images/cua-thu-ngan.jpg',
                 'icon' => '<rect x="2.5" y="7" width="19" height="12" rx="2"/><path d="M2.5 11h19"/><circle cx="12" cy="15" r="1.6"/><path d="M6 4.5h12"/>',
             ],
             [
@@ -165,6 +169,7 @@ class ModuleLamViec
                 'ten' => 'Quản trị',
                 'mo_ta' => 'Hàng hoá, kho, khách hàng, báo cáo',
                 'href' => self::trangChu(self::QUAN_TRI),
+                'anh' => 'images/cua-quan-tri.jpg',
                 'icon' => '<rect x="3" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5"/>',
             ],
         ];

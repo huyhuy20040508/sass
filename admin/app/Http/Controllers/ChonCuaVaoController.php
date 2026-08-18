@@ -13,7 +13,7 @@ use Illuminate\Http\Request;
  * Hỏi đúng hai câu, và chỉ hỏi một lần mỗi lượt đăng nhập:
  *
  *   1. Hôm nay đứng ở CHI NHÁNH nào? (bỏ qua nếu tiệm chỉ có một)
- *   2. Vào QUẦY BÁN hay KHU QUẢN TRỊ? (bỏ qua nếu chỉ được giao một cửa)
+ *   2. Vào QUẦY BÁN hay KHU QUẢN TRỊ? (người một cửa vẫn thấy, chỉ một ô)
  *
  * VÌ SAO CÓ MÀN NÀY. Trước đây đăng nhập xong là rơi thẳng vào một module suy từ
  * vai trò. Với người chỉ có một cửa thì đúng, nhưng chủ tiệm — người được giao cả
@@ -33,20 +33,19 @@ use Illuminate\Http\Request;
 class ChonCuaVaoController extends Controller
 {
     /**
-     * Hiện màn chọn.
+     * Hiện màn chọn — cho MỌI người, kể cả người chỉ được giao một khu.
      *
-     * Có DƯỚI HAI module thì không hiện gì cả mà đi thẳng: một màn hình chỉ có
-     * đúng một ô để bấm không hỏi ai điều gì, nó chỉ bắt bấm. Người trực quầy mở
-     * máy ra là để bán hàng — đây đúng là cái click mà lần tách module vừa bỏ đi.
+     * Với họ ô khu vực không còn là câu hỏi, nhưng ba thứ còn lại thì còn: tên
+     * tiệm vừa đăng nhập, chi nhánh hôm nay đứng, và một chỗ để đăng xuất khi gõ
+     * nhầm tài khoản. Thu ngân đi thẳng vào quầy là mất cả ba.
      *
-     * Đóng luôn cả đường gõ tay `/chon-cua`: người một cửa vào đây cũng chỉ gặp
-     * cái ô ấy.
+     * Không có khu nào thì mới đi thẳng: lúc đó màn này trống thật.
      */
     public function index()
     {
         $ds = ModuleLamViec::danhSach();
 
-        if (count($ds) < 2) {
+        if ($ds === []) {
             return redirect()->to(ModuleLamViec::trangChuCuaPhien());
         }
 
