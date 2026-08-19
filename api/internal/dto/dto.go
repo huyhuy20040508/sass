@@ -686,14 +686,8 @@ type NhanSuResponse struct {
 	UserStatus string `json:"user_status"`
 	// Quyen — cửa vào của tài khoản gắn kèm. Bảng hiện ĐÚNG danh sách này, một
 	// huy hiệu mỗi cửa: tích hai ô thì ra hai huy hiệu, tích một thì ra một.
-	Quyen []string `json:"quyen"`
-	// NhomQuyen — id các nhóm quyền tài khoản này đang mang.
-	//
-	// Trả kèm danh sách để hộp thoại sửa tick sẵn đúng những nhóm đang có. Thiếu
-	// nó thì màn hình mở ra với ô tick trống, và một lượt bấm Lưu bình thường sẽ
-	// thu sạch quyền của người đó mà không ai định làm vậy.
-	NhomQuyen       []uint `json:"nhom_quyen"`
-	RoleDisplayName string `json:"role_display_name"`
+	Quyen           []string `json:"quyen"`
+	RoleDisplayName string   `json:"role_display_name"`
 }
 
 // ---------- Nhóm quyền (phân quyền theo chức năng) ----------
@@ -713,17 +707,10 @@ type NhomQuyenRequest struct {
 	Quyen []string `json:"quyen"`
 }
 
-// NhomQuyenQuyenRequest — chỉ thay danh sách quyền, cho màn hình tick.
+// NhomQuyenQuyenRequest — chỉ thay danh sách quyền. Dùng cho cả bảng tick của
+// một NHÓM lẫn bảng tick của một NGƯỜI.
 type NhomQuyenQuyenRequest struct {
 	Quyen []string `json:"quyen"`
-}
-
-// GanNhomQuyenRequest — đặt danh sách nhóm cho MỘT tài khoản.
-//
-// Mảng, không phải một giá trị: một người mang được nhiều nhóm cùng lúc (quản lý
-// ca tối vẫn đứng quầy), và quyền của họ là HỢP của các nhóm ấy.
-type GanNhomQuyenRequest struct {
-	NhomQuyen []uint `json:"nhom_quyen"`
 }
 
 // NhomQuyenResponse — một nhóm kèm hai thứ màn hình cần mà bảng không giữ.
@@ -732,8 +719,6 @@ type NhomQuyenResponse struct {
 	// Quyen: nhóm mang cờ toàn quyền trả về CẢ danh mục, vì đó đúng là những gì
 	// nó có — màn hình tick hiện đủ dấu tick thay vì một danh sách trống.
 	Quyen []string `json:"quyen"`
-	// SoThanhVien để màn hình nói trước "còn 3 người đang dùng" khi ai đó định xoá.
-	SoThanhVien int64 `json:"so_thanh_vien"`
 }
 
 // QuyenCuaToiResponse — quyền của CHÍNH người đang đăng nhập.

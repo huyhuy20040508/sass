@@ -321,19 +321,6 @@ func (s *nhanSuService) dungDanhSach(ctx context.Context, list []domain.NhanVien
 		taiKhoan[u.ID] = u
 	}
 
-	// Nhóm quyền của CẢ danh sách trong một lượt đọc, rồi tra trong map — không
-	// phải mỗi dòng một lượt.
-	userIDs := make([]uint, 0, len(list))
-	for i := range list {
-		if list[i].UserID != nil {
-			userIDs = append(userIDs, *list[i].UserID)
-		}
-	}
-	nhomTheoNguoi, err := s.quyen.NhomTheoNguoi(ctx, userIDs)
-	if err != nil {
-		return nil, err
-	}
-
 	items := make([]dto.NhanSuResponse, 0, len(list))
 	for i := range list {
 		nv := list[i]
@@ -349,7 +336,6 @@ func (s *nhanSuService) dungDanhSach(ctx context.Context, list []domain.NhanVien
 				item.RoleDisplayName = u.RoleDisplayName
 				item.Quyen = u.Quyen
 			}
-			item.NhomQuyen = nhomTheoNguoi[*nv.UserID]
 		}
 		items = append(items, item)
 	}

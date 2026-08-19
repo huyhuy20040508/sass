@@ -710,8 +710,8 @@ func New(
 			q.Dat(manage, http.MethodDelete, "/nhom-quyen/:id", "nhom-quyen.xoa", h.NhomQuyen.Delete)
 
 			// Gán nhóm cho một tài khoản: đứng ở cụm tài khoản vì đó là thứ nó sửa.
-			q.Dat(manage, http.MethodGet, "/users/:id/nhom-quyen", "tai-khoan.xem", h.NhomQuyen.NhomCuaNguoi)
-			q.Dat(manage, http.MethodPut, "/users/:id/nhom-quyen", "nhom-quyen.sua", h.NhomQuyen.DatNhomChoNguoi)
+			q.Dat(manage, http.MethodGet, "/users/:id/quyen", "tai-khoan.xem", h.NhomQuyen.QuyenCuaNguoi)
+			q.Dat(manage, http.MethodPut, "/users/:id/quyen", "nhom-quyen.sua", h.NhomQuyen.DatQuyenChoNguoi)
 
 			q.Dat(manage, http.MethodGet, "/users", "tai-khoan.xem", h.User.List)
 			q.Dat(manage, http.MethodPost, "/users", "tai-khoan.them", h.User.Create)

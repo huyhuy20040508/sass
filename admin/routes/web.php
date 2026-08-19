@@ -16,6 +16,7 @@ use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\NhanSuController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\OrderController;
+use App\Http\Controllers\PhanQuyenController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\PromotionController;
@@ -361,6 +362,15 @@ Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:quan_ly'])->prefix('ad
         Route::post('/settings/upload-logo', [SettingController::class, 'uploadLogo'])->name('settings.uploadLogo');
         Route::get('/settings/{group}', [SettingController::class, 'page'])->name('settings.page');
         Route::put('/settings/{group}', [SettingController::class, 'update'])->name('settings.update');
+
+        // Phân quyền theo chức năng — định nghĩa NHÓM QUYỀN của cửa hàng.
+        // Gán nhóm cho từng người thì làm ở hồ sơ nhân sự, không phải ở đây.
+        // Phân quyền theo chức năng — chi nhánh → nhân viên → tick từng việc.
+        // Bộ quyền mẫu (nhóm quyền) CHƯA LÀM: API còn đủ đường, trang chưa mở lối vào.
+        Route::get('/phan-quyen', [PhanQuyenController::class, 'index'])->name('phan-quyen.index');
+        // {id} ở đây là id TÀI KHOẢN (users), không phải id hồ sơ nhân sự.
+        Route::put('/phan-quyen/nhan-vien/{id}/quyen', [PhanQuyenController::class, 'datQuyenNhanVien'])
+            ->whereNumber('id')->name('phan-quyen.datQuyenNhanVien');
 
         // Người dùng & vai trò — tài khoản NỘI BỘ (quản trị + nhân viên).
         // Khách hàng nằm ở /admin/customers, không đi qua nhóm route này.

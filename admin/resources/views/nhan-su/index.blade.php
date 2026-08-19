@@ -545,41 +545,6 @@
 
                              Chỉ có nghĩa khi hồ sơ CÓ tài khoản: nhóm quyền thuộc về tài
                              khoản, còn hồ sơ là con người. --}}
-                        {{-- Nhóm quyền — KHÁC ô "Phân quyền" ở tab Chi tiết, và hai thứ này
-                             hay bị lẫn nên nói rõ:
-
-                               • Phân quyền (tab Chi tiết) = CỬA VÀO. Quản lý thì mở được khu
-                                 quản trị, Thu ngân thì vào quầy bán. Đó là `users.role_id`.
-                               • Nhóm quyền (ở đây) = trong cửa đó thì bấm được nút nào —
-                                 xem giá vốn, sửa kho, xoá đơn. Đó là `permission_groups`.
-
-                             Chỉ có nghĩa khi hồ sơ CÓ tài khoản: cả hai đều gắn vào tài
-                             khoản, còn hồ sơ là con người. --}}
-                        <div id="nsuNhomQuyenRow" class="nsu-mt" style="display:none;">
-                            <label class="nsu-field-label">Nhóm quyền</label>
-                            @if($nhomQuyen === [])
-                                <p class="nsu-hint">
-                                    Chưa tra được nhóm quyền nào. Người này sẽ đăng nhập được nhưng
-                                    chưa mở được trang nào cho tới khi bạn giao nhóm.
-                                </p>
-                            @else
-                                <div class="nsu-nhom-quyen">
-                                    @foreach($nhomQuyen as $nq)
-                                        <label class="nsu-nhom-quyen-item">
-                                            <input type="checkbox" name="nhom_quyen[]" value="{{ $nq['id'] }}"
-                                                   data-nsu-nhom>
-                                            <span>
-                                                {{ $nq['name'] }}
-                                                @if(!empty($nq['full_access']))
-                                                    <em class="nsu-nhom-quyen-note">toàn quyền</em>
-                                                @endif
-                                            </span>
-                                        </label>
-                                    @endforeach
-                                </div>
-                            @endif
-                        </div>
-
                         {{-- Ẩn khi chưa bật. --}}
                         <div id="nsuTaiKhoanBox" class="nsu-grid nsu-mt" style="display:none;">
                             <div>
@@ -1342,26 +1307,8 @@
             var chuCapTaiKhoan = document.getElementById('nsuCoTaiKhoanHint');
             var chuDaCoTaiKhoan = document.getElementById('nsuTaiKhoanDaCo');
 
-            var hangNhomQuyen = document.getElementById('nsuNhomQuyenRow');
-            var oNhomQuyen = Array.prototype.slice.call(
-                document.querySelectorAll('[data-nsu-nhom]'));
-
-            // Ô nhóm quyền chỉ có nghĩa khi hồ sơ CÓ tài khoản — đang cấp mới, hoặc
-            // đã có sẵn. Người không đụng tới phần mềm thì đây là câu hỏi trống.
-            function hienNhomQuyen() {
-                var hien = daCoTaiKhoan || coTaiKhoan.checked;
-                hangNhomQuyen.style.display = hien ? '' : 'none';
-
-                // Ẩn đi thì BỎ TICK hết: form không được gửi lên một danh sách nhóm
-                // cho một hồ sơ vừa tắt tài khoản.
-                if (!hien) {
-                    oNhomQuyen.forEach(function (o) { o.checked = false; });
-                }
-            }
-
             function hienKhoiTaiKhoan() {
                 hopTaiKhoan.style.display = coTaiKhoan.checked ? '' : 'none';
-                hienNhomQuyen();
             }
             coTaiKhoan.addEventListener('change', hienKhoiTaiKhoan);
 
@@ -1439,13 +1386,6 @@
                 // Tên đăng nhập và mật khẩu không mang giá trị cũ sang.
                 document.getElementById('nsuUsername').value = '';
                 document.getElementById('nsuMatKhau').value = '';
-
-                // Nhóm quyền hiện có của hồ sơ. API trả kèm trong danh sách nên không
-                // phải gọi thêm một lượt cho mỗi lần mở hộp thoại.
-                var dangCo = (hoSo && hoSo.nhom_quyen) || [];
-                oNhomQuyen.forEach(function (o) {
-                    o.checked = dangCo.indexOf(parseInt(o.value, 10)) !== -1;
-                });
 
                 khoiTaiKhoanTheoHoSo(hoSo);
             }

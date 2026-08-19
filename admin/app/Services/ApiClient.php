@@ -1186,30 +1186,43 @@ class ApiClient
     }
 
     // ---------------------------------------------------------------------
-    // Nhóm quyền (phân quyền theo chức năng)
+    // Phân quyền theo chức năng
     // ---------------------------------------------------------------------
     //
-    // Nhóm quyền là của TỪNG CỬA HÀNG, khác `roles()` bên dưới vốn là bốn vai
-    // trò dùng chung cả nền tảng. Vai trò trả lời "anh là loại người nào",
-    // nhóm quyền trả lời "anh bấm được nút nào".
+    // Quyền gán THẲNG cho từng tài khoản (bảng `user_permissions`), khác
+    // `roles()` bên dưới vốn là bốn vai trò dùng chung cả nền tảng. Vai trò trả
+    // lời "anh là loại người nào", quyền trả lời "anh bấm được nút nào".
+    //
+    // API còn nhóm quyền (`/admin/nhom-quyen`) làm bộ mẫu, nhưng trang quản trị
+    // chưa dùng tới nên không khai ở đây.
 
-    /** Danh sách nhóm quyền của cửa hàng, kèm số người đang dùng từng nhóm. */
-    public function nhomQuyen(): Response
+    /**
+     * Cây quyền của phần mềm — mọi việc có thể tick, xếp theo nhóm hiển thị.
+     *
+     * Danh mục nằm trong mã nguồn Go (`internal/domain/quyen.go`) chứ không phải
+     * database, nên trang này không khai lại: thêm quyền bên đó là bảng tick hiện ngay.
+     */
+    public function danhMucQuyen(): Response
     {
-        return $this->get('/admin/nhom-quyen');
+        return $this->get('/admin/nhom-quyen/danh-muc');
+    }
+
+    /** Quyền đã tick cho một tài khoản, kèm cờ toàn quyền. */
+    public function quyenCuaNguoi(int $userID): Response
+    {
+        return $this->get("/admin/users/{$userID}/quyen");
     }
 
     /**
-     * Đặt danh sách nhóm cho một tài khoản.
+     * Thay TOÀN BỘ quyền của một tài khoản.
      *
-     * MẢNG, không phải một giá trị: một người mang được nhiều nhóm cùng lúc và
-     * quyền của họ là HỢP của chúng — quản lý ca tối vẫn đứng quầy. Mảng rỗng =
-     * thu hết quyền (vẫn đăng nhập được, chỉ là không mở được trang nào).
+     * Mảng rỗng = thu hết quyền: người đó vẫn đăng nhập được, chỉ là không mở
+     * được trang nào. API từ chối lượt tự đặt cho chính mình.
      */
-    public function datNhomChoNguoi(int $userID, array $nhomQuyen): Response
+    public function datQuyenChoNguoi(int $userID, array $quyen): Response
     {
-        return $this->put("/admin/users/{$userID}/nhom-quyen", [
-            'nhom_quyen' => array_values(array_map('intval', $nhomQuyen)),
+        return $this->put("/admin/users/{$userID}/quyen", [
+            'quyen' => array_values(array_map('strval', $quyen)),
         ]);
     }
 

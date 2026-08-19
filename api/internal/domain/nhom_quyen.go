@@ -48,24 +48,24 @@ type NhomQuyenItem struct {
 
 func (NhomQuyenItem) TableName() string { return "permission_group_items" }
 
-// NhomQuyenCuaNguoi — một người mang một nhóm. Bảng `user_permission_groups`.
+// QuyenRieng — một việc MỘT NGƯỜI được làm. Bảng `user_permissions`.
 //
-// Nhiều-nhiều, có chủ ý: người quản lý ca tối vẫn đứng quầy, kế toán vẫn phải
-// vào được kho. Với quan hệ một-một, cách duy nhất để nói "vừa quản lý vừa thu
-// ngân" là đẻ ra một nhóm thứ ba mang đúng cái tên ấy — rồi nhóm thứ tư, thứ
-// năm cho mọi tổ hợp.
-type NhomQuyenCuaNguoi struct {
+// Đây là nguồn sự thật DUY NHẤT về quyền của một tài khoản (xem migration
+// 0017). Nhóm quyền chỉ còn là MẪU để màn hình điền sẵn ô tick.
+//
+// Có hàng = có quyền; không lưu hàng "tắt" cho ô bị bỏ tick.
+type QuyenRieng struct {
 	ID uint `json:"id" gorm:"primaryKey"`
 	TenantOwned
 
-	UserID  uint `json:"user_id"`
-	GroupID uint `json:"group_id"`
+	UserID     uint   `json:"user_id"`
+	Permission string `json:"permission"`
 
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-func (NhomQuyenCuaNguoi) TableName() string { return "user_permission_groups" }
+func (QuyenRieng) TableName() string { return "user_permissions" }
 
 // BoQuyen là tập quyền của MỘT người, dựng cho MỘT request.
 //
@@ -119,7 +119,7 @@ func (b BoQuyen) DanhSach() []string {
 
 // QuyenRepository — sổ phân quyền của một cửa hàng.
 type QuyenRepository interface {
-	// BoQuyenCuaNguoi đọc tập quyền của một tài khoản qua nhóm mà họ mang.
+	// BoQuyenCuaNguoi đọc tập quyền đã tick cho một tài khoản (`user_permissions`).
 	//
 	// Chạy trên đường NÓNG: mọi request vào một đường có gắn quyền đều hỏi câu
 	// này. Nhận tenantID tường minh và tự khai điều kiện, cùng lý do như
@@ -150,20 +150,14 @@ type QuyenRepository interface {
 	QuyenCuaNhom(ctx context.Context, groupID uint) ([]string, error)
 	// DatQuyenChoNhom thay TOÀN BỘ danh sách quyền của nhóm.
 	DatQuyenChoNhom(ctx context.Context, groupID uint, quyen []string) error
-	DemThanhVien(ctx context.Context, groupID uint) (int64, error)
 
-	// NhomCuaNguoi trả về id các nhóm một người đang mang.
-	NhomCuaNguoi(ctx context.Context, userID uint) ([]uint, error)
-	// NhomTheoNguoi đọc nhóm của NHIỀU người trong MỘT lượt.
-	//
-	// Có mặt vì màn hình nhân sự cần nó cho cả danh sách: mỗi dòng một lượt đọc
-	// thì một cửa hàng ba chục người là ba chục lượt cho một lần mở trang.
-	NhomTheoNguoi(ctx context.Context, userIDs []uint) (map[uint][]uint, error)
-	// DatNhomChoNguoi thay TOÀN BỘ danh sách nhóm của một người.
+	// QuyenRiengCuaNguoi trả về quyền đã tick cho một người, kèm cờ toàn quyền.
+	QuyenRiengCuaNguoi(ctx context.Context, userID uint) (toanQuyen bool, quyen []string, err error)
+	// DatQuyenChoNguoi thay TOÀN BỘ quyền của một người.
 	//
 	// Danh sách rỗng = thu hết quyền. Khác hẳn khoá tài khoản: người đó vẫn đăng
 	// nhập được, chỉ là không mở được trang nào.
-	DatNhomChoNguoi(ctx context.Context, userID uint, groupIDs []uint) error
+	DatQuyenChoNguoi(ctx context.Context, userID uint, quyen []string) error
 }
 
 // Lỗi nghiệp vụ của phân quyền.
@@ -172,8 +166,6 @@ var (
 	// ErrQuyenLa — chuỗi quyền không có trong danh mục. Chặn ở đây thay vì ghi
 	// xuống: một quyền gõ sai là một trang không ai mở được mà không báo lỗi gì.
 	ErrQuyenLa = errors.New("quyền không có trong danh mục")
-	// ErrNhomQuyenDangDung — xoá nhóm còn người mang.
-	ErrNhomQuyenDangDung = errors.New("nhóm quyền này đang có người dùng")
 	// ErrNhomQuyenHeThong — xoá nhóm hệ thống dựng sẵn.
 	ErrNhomQuyenHeThong = errors.New("không xoá được nhóm quyền hệ thống")
 )

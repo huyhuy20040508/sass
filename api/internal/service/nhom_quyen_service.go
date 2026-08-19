@@ -37,9 +37,9 @@ type NhomQuyenService interface {
 	// menu. Đi thẳng xuống repository vì nó không có luật nghiệp vụ nào.
 	BoQuyenCuaToi(ctx context.Context, userID, tenantID uint) (domain.BoQuyen, error)
 
-	// NhomCuaNguoi / DatNhomChoNguoi — một người mang được NHIỀU nhóm.
-	NhomCuaNguoi(ctx context.Context, userID uint) ([]uint, error)
-	DatNhomChoNguoi(ctx context.Context, userID uint, groupIDs []uint, actor Actor) error
+	// QuyenCuaNguoi / DatQuyenChoNguoi — quyền gán THẲNG cho một tài khoản.
+	QuyenCuaNguoi(ctx context.Context, userID uint) (dto.QuyenCuaToiResponse, error)
+	DatQuyenChoNguoi(ctx context.Context, userID uint, quyen []string, actor Actor) error
 }
 
 type nhomQuyenService struct {
@@ -138,7 +138,10 @@ func (s *nhomQuyenService) Update(ctx context.Context, id uint, req *dto.NhomQuy
 	return s.GetByID(ctx, id)
 }
 
-// Delete xoá CỨNG. Nhóm hệ thống và nhóm còn người mang đều không xoá được.
+// Delete xoá CỨNG. Chỉ nhóm hệ thống là không xoá được.
+//
+// KHÔNG còn kiểm "nhóm đang có người mang": từ migration 0017 nhóm chỉ là MẪU
+// để điền sẵn ô tick, xoá nó không lấy đi quyền của ai.
 func (s *nhomQuyenService) Delete(ctx context.Context, id uint) error {
 	nq, err := s.repo.FindByID(ctx, id)
 	if err != nil {
@@ -146,16 +149,6 @@ func (s *nhomQuyenService) Delete(ctx context.Context, id uint) error {
 	}
 	if nq.IsSystem {
 		return domain.ErrNhomQuyenHeThong
-	}
-
-	// Đếm trước để câu từ chối nói được CON SỐ. Khoá ngoại cũng chặn, nhưng nó
-	// chỉ nói "vi phạm ràng buộc" — người đọc không biết phải chuyển mấy người.
-	n, err := s.repo.DemThanhVien(ctx, id)
-	if err != nil {
-		return err
-	}
-	if n > 0 {
-		return fmt.Errorf("%w: %d tài khoản", domain.ErrNhomQuyenDangDung, n)
 	}
 
 	return s.repo.Delete(ctx, id)
@@ -194,18 +187,36 @@ func (s *nhomQuyenService) BoQuyenCuaToi(ctx context.Context, userID, tenantID u
 	return s.repo.BoQuyenCuaNguoi(ctx, userID, tenantID)
 }
 
-func (s *nhomQuyenService) NhomCuaNguoi(ctx context.Context, userID uint) ([]uint, error) {
-	return s.repo.NhomCuaNguoi(ctx, userID)
+// QuyenCuaNguoi đọc quyền đã tick cho một người — màn phân quyền dựng ô tick.
+func (s *nhomQuyenService) QuyenCuaNguoi(ctx context.Context, userID uint) (dto.QuyenCuaToiResponse, error) {
+	if _, err := s.users.FindByID(ctx, userID); err != nil {
+		return dto.QuyenCuaToiResponse{}, err
+	}
+
+	toanQuyen, ds, err := s.repo.QuyenRiengCuaNguoi(ctx, userID)
+	if err != nil {
+		return dto.QuyenCuaToiResponse{}, err
+	}
+	if toanQuyen {
+		ds = domain.TatCaQuyen()
+	}
+
+	return dto.QuyenCuaToiResponse{ToanQuyen: toanQuyen, Quyen: ds}, nil
 }
 
-// DatNhomChoNguoi thay toàn bộ danh sách nhóm của một người.
+// DatQuyenChoNguoi thay toàn bộ quyền của một tài khoản.
 //
-// Chặn TỰ ĐỔI NHÓM CỦA CHÍNH MÌNH, cùng lý do với việc không cho tự đổi vai trò:
+// Chặn TỰ SỬA QUYỀN CỦA CHÍNH MÌNH, cùng lý do với việc không cho tự đổi vai trò:
 // phiên đang chạy bằng token cũ nên màn hình vẫn trông bình thường, tới lần đăng
 // nhập sau mới phát hiện mất quyền — và lúc đó thì không còn đường vào để sửa.
-func (s *nhomQuyenService) DatNhomChoNguoi(ctx context.Context, userID uint, groupIDs []uint, actor Actor) error {
+func (s *nhomQuyenService) DatQuyenChoNguoi(ctx context.Context, userID uint, quyen []string, actor Actor) error {
 	if actor.ID == userID {
 		return domain.ErrForbidden
+	}
+
+	chot, err := chotQuyen(quyen)
+	if err != nil {
+		return err
 	}
 
 	// Tài khoản phải thuộc CHÍNH cửa hàng này: FindByID đi qua bộ lọc tenant nên
@@ -214,15 +225,7 @@ func (s *nhomQuyenService) DatNhomChoNguoi(ctx context.Context, userID uint, gro
 		return err
 	}
 
-	// Mọi nhóm cũng phải của chính cửa hàng này. Không kiểm thì một id nhóm của
-	// tiệm khác đi thẳng vào bảng nối, và người này nhận quyền theo bảng của họ.
-	for _, gid := range groupIDs {
-		if _, err := s.repo.FindByID(ctx, gid); err != nil {
-			return err
-		}
-	}
-
-	return s.repo.DatNhomChoNguoi(ctx, userID, groupIDs)
+	return s.repo.DatQuyenChoNguoi(ctx, userID, chot)
 }
 
 // ---------------------------------------------------------------------
@@ -243,12 +246,6 @@ func (s *nhomQuyenService) dungResponse(ctx context.Context, nq *domain.NhomQuye
 		}
 		item.Quyen = quyen
 	}
-
-	n, err := s.repo.DemThanhVien(ctx, nq.ID)
-	if err != nil {
-		return nil, err
-	}
-	item.SoThanhVien = n
 
 	return &item, nil
 }
