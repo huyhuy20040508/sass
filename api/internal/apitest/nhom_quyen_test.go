@@ -30,6 +30,12 @@ func TestNhomQuyenChuoiDayDu(t *testing.T) {
 	if !contains(res.than, "ton-kho") {
 		t.Fatalf("danh mục quyền thiếu nhóm kho: %s", catBot(res.than))
 	}
+	// Tầng trên cùng là KHU: màn Phân quyền khoá cả khu Quản trị với người chỉ
+	// có cửa quầy. Trộn hai khu vào một cây phẳng là bảng tick mở toang trở lại
+	// mà không có gì đỏ lên.
+	if !contains(res.than, `"ma":"thu_ngan"`) || !contains(res.than, `"ma":"quan_ly"`) {
+		t.Fatalf("danh mục quyền chưa chia theo khu làm việc: %s", catBot(res.than))
+	}
 
 	// 2. Cửa hàng tự tạo nhóm "Thủ kho" — đúng thứ mà hệ hai vai trò cũ không
 	// diễn đạt nổi: xem kho nhưng không đụng tới lương hay giá vốn.

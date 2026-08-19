@@ -26,20 +26,41 @@ class PhanQuyenTest extends TestCase
     protected function fakeApi(): void
     {
         Http::fake([
+            // Cây ba tầng: KHU -> nhóm -> mục. Khu là ranh giới bảng tick khoá theo,
+            // nên bài nào nói về khoá cũng phải đi qua đúng hình dạng này.
             '*/admin/nhom-quyen/danh-muc*' => Http::response(['data' => [
-                ['ten' => 'Bán hàng', 'mucs' => [
-                    [
-                        'prefix' => 'don-hang', 'ten' => 'Đơn hàng',
-                        'viec' => ['xem', 'them', 'sua'],
-                        'le' => [['ma' => 'doanh-thu', 'ten' => 'Xem doanh thu']],
+                [
+                    'ma' => 'quan_ly', 'ten' => 'Quản trị', 'mo_ta' => 'Chỉ người có cửa Quản lý.',
+                    'nhom' => [
+                        ['ten' => 'Hàng hoá', 'mucs' => [
+                            ['prefix' => 'san-pham', 'ten' => 'Sản phẩm', 'viec' => ['xem', 'them', 'sua', 'xoa']],
+                        ]],
                     ],
-                    ['prefix' => 'so-quy', 'ten' => 'Sổ quỹ', 'viec' => ['them']],
-                ]],
+                ],
+                [
+                    'ma' => 'thu_ngan', 'ten' => 'Thu ngân', 'mo_ta' => 'Việc ở quầy.',
+                    'nhom' => [
+                        ['ten' => 'Bán tại quầy', 'mucs' => [
+                            [
+                                'prefix' => 'don-hang', 'ten' => 'Đơn hàng',
+                                'viec' => ['xem', 'them', 'sua'],
+                                'le' => [['ma' => 'doanh-thu', 'ten' => 'Xem doanh thu']],
+                            ],
+                            ['prefix' => 'so-quy', 'ten' => 'Sổ quỹ', 'viec' => ['them']],
+                        ]],
+                    ],
+                ],
             ]]),
             // Quyền riêng của tài khoản 41 — bảng tick dựng từ đây.
             '*/admin/users/41/quyen' => Http::response(['data' => [
                 'toan_quyen' => false,
                 'quyen' => ['don-hang.xem', 'so-quy.them'],
+            ]]),
+            // Thu ngân 42: đang mang một quyền khu quản trị từ trước, thứ bảng
+            // tick phải giữ lại chứ không được lặng lẽ đánh rơi lúc Lưu.
+            '*/admin/users/42/quyen' => Http::response(['data' => [
+                'toan_quyen' => false,
+                'quyen' => ['don-hang.xem', 'san-pham.xem'],
             ]]),
             '*/admin/users/*/quyen' => Http::response(['data' => ['toan_quyen' => false, 'quyen' => []]]),
             '*/admin/chi-nhanh*' => Http::response(['data' => [
@@ -50,6 +71,13 @@ class PhanQuyenTest extends TestCase
                     'id' => 12, 'code' => 'NV0001', 'full_name' => 'Nguyễn Văn An', 'shop_id' => 5,
                     'shop_name' => 'Kho miền Bắc', 'user_id' => 41, 'username' => 'an.nv',
                     'user_status' => 'active', 'status' => 'dang_lam',
+                    'quyen' => ['quan_ly', 'thu_ngan'],
+                ],
+                [
+                    'id' => 15, 'code' => 'NV0004', 'full_name' => 'Lê Thu Ngân', 'shop_id' => 5,
+                    'shop_name' => 'Kho miền Bắc', 'user_id' => 42, 'username' => 'ngan.tn',
+                    'user_status' => 'active', 'status' => 'dang_lam',
+                    'quyen' => ['thu_ngan'],
                 ],
                 [
                     'id' => 13, 'code' => 'NV0002', 'full_name' => 'Trần Thị Bình', 'shop_id' => 5,
@@ -60,6 +88,7 @@ class PhanQuyenTest extends TestCase
                     'id' => 14, 'code' => 'NV0003', 'full_name' => 'Chủ tiệm', 'shop_id' => 5,
                     'shop_name' => 'Kho miền Bắc', 'user_id' => 1, 'username' => 'admin',
                     'user_status' => 'active', 'status' => 'dang_lam',
+                    'quyen' => ['quan_ly', 'thu_ngan'],
                 ],
             ]]),
             '*' => Http::response(['data' => []]),
@@ -98,8 +127,13 @@ class PhanQuyenTest extends TestCase
         $this->assertDoesNotMatchRegularExpression('/data-pq-perm="don-hang\.sua"\s+checked/', $html);
         // Ô tick gửi lên được, không phải bảng chỉ đọc.
         $res->assertSee('name="quyen[]"', false);
-        // Khối gập sẵn — tải lại trang không bung hết bảng ra.
-        $res->assertSee('class="pq-sec"', false);
+        // Hai mục lớn: việc của quầy không nằm lẫn trong khu quản trị nữa.
+        $res->assertSee('data-pq-khu-toggle="0"', false);
+        $res->assertSee('data-pq-khu-toggle="1"', false);
+        $res->assertSee('Quản trị', false);
+        $res->assertSee('Bán tại quầy', false);
+        // Gập sẵn CẢ HAI tầng dưới: mở trang ra chỉ thấy hai dòng mục lớn.
+        $res->assertSee('class="pq-sec is-hidden"', false);
         $res->assertSee('class="pq-row is-hidden"', false);
         // Cột "Xoá" của Đơn hàng bỏ trống vì danh mục không khai việc đó.
         $res->assertDontSee('data-pq-perm="don-hang.xoa"', false);
@@ -166,6 +200,98 @@ class PhanQuyenTest extends TestCase
 
         $res->assertOk();
         $res->assertSee('Không tự sửa quyền của chính mình', false);
+    }
+
+    /**
+     * Thu ngân: ô của khu quản trị KHOÁ ngay trên bảng, không cho tick.
+     *
+     * Người chỉ có cửa quầy mà tick được "Sản phẩm" thì dòng quyền ấy ghi xuống
+     * thật nhưng không mở thêm trang nào — nhóm route `manage` bên API đòi cửa
+     * `quan_ly` trước khi hỏi tới quyền. Khoá tại chỗ, và nói ra lý do.
+     */
+    public function test_thu_ngan_khong_tick_duoc_viec_khu_quan_tri(): void
+    {
+        $this->fakeApi();
+
+        $res = $this->withSession($this->phienQuanTri())->get('/admin/phan-quyen?nv=15');
+
+        $res->assertOk();
+        $res->assertSee('chỉ được giao khu', false);
+
+        $oSanPham = $this->the($res->getContent(), 'san-pham.xem');
+        $this->assertStringContainsString('disabled', $oSanPham);
+        // Không mang tên trường thì lượt Lưu không thể gửi nó lên.
+        $this->assertStringNotContainsString('name="quyen[]"', $oSanPham);
+
+        // Việc ở quầy thì vẫn tick được như thường.
+        $oDonHang = $this->the($res->getContent(), 'don-hang.them');
+        $this->assertStringNotContainsString('disabled', $oDonHang);
+        $this->assertStringContainsString('name="quyen[]"', $oDonHang);
+    }
+
+    /**
+     * Quyền khu quản trị mà thu ngân ĐANG CÓ thì lượt Lưu không được đánh rơi.
+     *
+     * Ô khoá là ô disabled, mà ô disabled không đi theo form. Không giữ lại thì
+     * chỉ mở trang lên rồi bấm Lưu là quyền cũ của họ biến mất, không tick gì và
+     * cũng không báo gì.
+     */
+    public function test_giu_lai_quyen_quan_tri_thu_ngan_dang_co(): void
+    {
+        $this->fakeApi();
+
+        $res = $this->withSession($this->phienQuanTri())->get('/admin/phan-quyen?nv=15');
+
+        $res->assertOk();
+        $res->assertSee('<input type="hidden" name="quyen[]" value="san-pham.xem">', false);
+    }
+
+    /** Người có cửa Quản lý thì bảng mở hết, không ô nào bị khoá. */
+    public function test_nguoi_co_cua_quan_ly_tick_duoc_moi_o(): void
+    {
+        $this->fakeApi();
+
+        $res = $this->withSession($this->phienQuanTri())->get('/admin/phan-quyen?nv=12');
+
+        $res->assertOk();
+        $res->assertDontSee('chỉ được giao khu', false);
+
+        $oSanPham = $this->the($res->getContent(), 'san-pham.xem');
+        $this->assertStringNotContainsString('disabled', $oSanPham);
+        $this->assertStringContainsString('name="quyen[]"', $oSanPham);
+    }
+
+    /** Thẻ <input> của một mã quyền — thuộc tính xuống dòng nên phải dò cả thẻ. */
+    protected function the(string $html, string $ma): string
+    {
+        $khop = preg_match('/<input[^>]*data-pq-perm="'.preg_quote($ma, '/').'"[^>]*>/', $html, $m);
+        $this->assertSame(1, $khop, "không tìm thấy ô tick của quyền $ma");
+
+        return $m[0];
+    }
+
+    /**
+     * API cũ hơn trang quản trị: nói thẳng, không vẽ một bảng vô nghĩa.
+     *
+     * Hình dạng cũ (`{nhom, quay}`) lặp ra vẫn được hai dòng — không tên, không
+     * con, không tick được gì. Người dùng nhìn vào đó không có cách nào đoán ra
+     * là máy chủ chưa khởi động lại.
+     */
+    public function test_api_tra_hinh_dang_cu_thi_noi_ro(): void
+    {
+        Http::fake([
+            '*/admin/nhom-quyen/danh-muc*' => Http::response(['data' => [
+                'nhom' => [['ten' => 'Bán hàng', 'mucs' => []]],
+                'quay' => ['don-hang.xem'],
+            ]]),
+            '*' => Http::response(['data' => []]),
+        ]);
+
+        $res = $this->withSession($this->phienQuanTri())->get('/admin/phan-quyen');
+
+        $res->assertOk();
+        $res->assertSee('Khởi động lại API', false);
+        $res->assertDontSee('data-pq-khu-toggle', false);
     }
 
     /** Có lối vào trong menu Cài đặt — trang không có menu là trang không ai tìm ra. */

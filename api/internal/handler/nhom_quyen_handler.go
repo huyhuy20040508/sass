@@ -29,10 +29,12 @@ func NewNhomQuyenHandler(svc service.NhomQuyenService) *NhomQuyenHandler {
 //	@Description	Toàn bộ quyền có thể tick, xếp theo nhóm hiển thị đúng thứ tự thanh điều hướng.
 //	@Description	Danh sách này nằm trong mã nguồn chứ không phải database: nó phải khớp từng chữ
 //	@Description	với những đường mà máy chủ thật sự chặn.
+//	@Description	Tầng trên cùng là KHU làm việc (Quản trị / Thu ngân) — màn hình khoá cả khu
+//	@Description	Quản trị với người chỉ được giao cửa quầy.
 //	@Tags			Admin - Nhóm quyền
 //	@Produce		json
 //	@Security		BearerAuth
-//	@Success		200	{object}	response.Body{data=[]domain.NhomMucQuyen}
+//	@Success		200	{object}	response.Body{data=[]domain.KhuQuyen}
 //	@Router			/admin/nhom-quyen/danh-muc [get]
 func (h *NhomQuyenHandler) DanhMuc(c *gin.Context) {
 	response.OK(c, h.svc.DanhMuc(c.Request.Context()))

@@ -21,8 +21,8 @@ import (
 //   - Bỏ cờ "toàn quyền" thì phải TRẢI danh mục thành từng dòng ngay lúc đó —
 //     xem BoToanQuyen.
 type NhomQuyenService interface {
-	// DanhMuc trả cây quyền để màn hình vẽ ô tick.
-	DanhMuc(ctx context.Context) []domain.NhomMucQuyen
+	// DanhMuc trả cây quyền để màn hình vẽ ô tick: khu -> nhóm -> mục.
+	DanhMuc(ctx context.Context) []domain.KhuQuyen
 
 	List(ctx context.Context) ([]dto.NhomQuyenResponse, error)
 	GetByID(ctx context.Context, id uint) (*dto.NhomQuyenResponse, error)
@@ -51,7 +51,7 @@ func NewNhomQuyenService(repo domain.QuyenRepository, users domain.UserRepositor
 	return &nhomQuyenService{repo: repo, users: users}
 }
 
-func (s *nhomQuyenService) DanhMuc(context.Context) []domain.NhomMucQuyen {
+func (s *nhomQuyenService) DanhMuc(context.Context) []domain.KhuQuyen {
 	return domain.DanhMucQuyen
 }
 

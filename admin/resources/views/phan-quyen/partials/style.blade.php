@@ -125,12 +125,24 @@
     .pq-col-viec { width: 84px; text-align: center; }
     .pq-matrix th.pq-col-viec { text-align: center; }
 
-    /* Hàng tiêu đề khối — bấm vào để gập cả khối. */
-    .pq-sec td { background: #fafafa; padding: 8px 12px; border-bottom: 1px solid #f0f0f0; }
-    .pq-sec-btn {
+    /* MỤC LỚN — một khu làm việc (Quản trị / Thu ngân), gập sẵn.
+       Nền trắng như bản ERP cũ; thứ tách nó khỏi hàng nhóm bên dưới là ĐỘ THỤT
+       ĐẦU DÒNG, không phải màu. Ba tầng mà tầng nào cũng tô một màu thì bảng
+       thành cái cầu vồng và mắt vẫn phải đếm để biết mình đang ở đâu. */
+    .pq-khu td { background: #fff; padding: 11px 12px; border-bottom: 1px solid #f0f0f0; }
+    .pq-khu-btn, .pq-sec-btn {
         border: 0; background: transparent; padding: 0 6px 0 0; cursor: pointer;
         color: #bfbfbf; vertical-align: middle;
     }
+    .pq-khu:not(.is-open) .pq-caret { transform: rotate(-90deg); }
+    .pq-khu-label { display: inline-flex; align-items: center; gap: 8px; margin: 0; cursor: pointer; }
+    .pq-khu-ten { font-size: 13.5px; font-weight: 700; color: #262626; }
+    .pq-khu-mota { margin-left: 10px; font-size: 12px; color: #bfbfbf; }
+    .pq-khu.is-khoa .pq-khu-ten { color: #8c8c8c; }
+
+    /* Hàng nhóm — tầng giữa, bấm vào để gập cả nhóm. Thụt vào một nấc so với mục lớn. */
+    .pq-sec.is-hidden { display: none; }
+    .pq-sec td { background: #fafafa; padding: 8px 12px 8px 34px; border-bottom: 1px solid #f0f0f0; }
     .pq-caret { transition: transform .18s ease; }
     .pq-sec:not(.is-open) .pq-caret { transform: rotate(-90deg); }
     .pq-sec-label {
@@ -141,6 +153,8 @@
 
     .pq-row.is-hidden { display: none; }
     .pq-row td { padding: 9px 12px; }
+    /* Tầng trong cùng, thụt thêm một nấc nữa. */
+    .pq-row td.pq-col-name { padding-left: 56px; }
     .pq-row:hover td { background: #fafafa; }
     .pq-row-label { display: inline-flex; align-items: center; gap: 8px; margin: 0; cursor: pointer; }
     .pq-le {
@@ -151,6 +165,15 @@
     .pq-cb { width: 15px; height: 15px; accent-color: #1890ff; cursor: pointer; margin: 0; }
     /* Bảng chỉ đọc: vẫn thấy rõ tick nhưng không mời bấm. */
     .pq-matrix.is-readonly .pq-cb { cursor: default; opacity: .9; }
+
+    /* Ô KHOÁ — việc của khu quản trị, người chỉ có cửa quầy không tick được.
+       Làm nhạt chứ không giấu đi: giấu thì bảng của hai người trông khác nhau và
+       không ai đoán ra vì sao, còn để nhạt thì đọc ra ngay "có mục này, chỉ là
+       chưa tới lượt anh". Con trỏ cấm cộng title nói nốt phần vì sao. */
+    .pq-cb:disabled { cursor: not-allowed; }
+    .pq-row.is-khoa td, .pq-sec.is-khoa td { color: #bfbfbf; }
+    .pq-row.is-khoa:hover td { background: transparent; }
+    .pq-le.is-khoa { color: #bfbfbf; cursor: not-allowed; }
 
     .pq-foot {
         padding: 10px 20px; border-top: 1px solid #f0f0f0;
