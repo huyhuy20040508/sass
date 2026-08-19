@@ -941,8 +941,8 @@
         .prd-pp-loss { color: #cf1322 !important; }
         .prd-pp-note { font-size: 11.5px; color: #cf1322; }
 
-        .prd-modal-foot { justify-content: space-between; align-items: center; gap: 16px; }
-        .prd-foot-btns { display: flex; gap: 8px; flex-shrink: 0; margin-left: auto; }
+        .prd-modal-foot { justify-content: center; align-items: center; gap: 16px; }
+        .prd-foot-btns { display: flex; gap: 8px; flex-shrink: 0; }
         .prd-foot-msg { margin: 0; font-size: 12px; color: #8c8c8c; }
         .prd-foot-msg.is-err { color: #cf1322; }
         .prd-foot-msg:empty { display: none; }

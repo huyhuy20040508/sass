@@ -1078,11 +1078,11 @@
         .po-modal-body { padding: 16px 20px; display: flex; flex-direction: column; gap: 18px; }
         .po-modal-foot {
             position: sticky; bottom: 0; z-index: 2;
-            display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+            display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap;
             padding: 12px 20px; border-top: 1px solid #f0f0f0; background: #fafafa;
         }
-        .po-foot-center { justify-content: flex-end; }
-        .po-foot-right { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+        .po-foot-center { justify-content: center; }
+        .po-foot-right { display: flex; align-items: center; gap: 8px; }
         .po-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
         .po-view-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
