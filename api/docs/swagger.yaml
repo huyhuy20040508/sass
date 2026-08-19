@@ -191,6 +191,26 @@ definitions:
       total:
         type: integer
     type: object
+  domain.DonViTinh:
+    properties:
+      code:
+        description: Code là mã ngắn người dùng tự đặt (KG, CAI, THUNG…), luôn viết
+          hoa.
+        type: string
+      created_at:
+        type: string
+      id:
+        type: integer
+      is_active:
+        description: |-
+          IsActive = có bày ra ở ô chọn đơn vị của mặt hàng không. Tắt chứ không xoá
+          khi một đơn vị thôi dùng: mặt hàng cũ vẫn phải tra ra được tên đơn vị.
+        type: boolean
+      name:
+        type: string
+      updated_at:
+        type: string
+    type: object
   domain.GoodsReceipt:
     properties:
       amount:
@@ -2648,6 +2668,20 @@ definitions:
         description: 'TrangThai: cho_thanh_toan | da_thanh_toan | huy | het_han'
         example: cho_thanh_toan
         type: string
+    type: object
+  dto.DonViTinhRequest:
+    properties:
+      code:
+        maxLength: 20
+        type: string
+      is_active:
+        description: IsActive bỏ trống = true (đơn vị mới mặc định đang dùng).
+        type: boolean
+      name:
+        maxLength: 100
+        type: string
+    required:
+    - name
     type: object
   dto.DongCaRequest:
     properties:
@@ -5389,6 +5423,13 @@ definitions:
         example: Thuế đơn bán hàng
         type: string
     type: object
+  dto.TrangThaiDonViTinhRequest:
+    properties:
+      is_active:
+        type: boolean
+    required:
+    - is_active
+    type: object
   dto.TrangThaiThueRequest:
     properties:
       is_active:
@@ -7475,6 +7516,218 @@ paths:
       summary: Thống kê khách hàng
       tags:
       - Admin - Customers
+  /admin/don-vi-tinh:
+    get:
+      description: |-
+        Tìm theo tên hoặc mã. Đặt `active=true` để chỉ lấy đơn vị đang bật — ô chọn đơn vị lúc khai mặt hàng dùng tham số này.
+        Cố ý KHÔNG phân trang: danh sách đơn vị của một cửa hàng chỉ vài chục dòng, trang quản trị tự cắt trang.
+      parameters:
+      - description: Tên hoặc mã đơn vị
+        in: query
+        name: keyword
+        type: string
+      - description: true = chỉ đơn vị đang bật
+        in: query
+        name: active
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/domain.DonViTinh'
+                  type: array
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Danh sách đơn vị tính
+      tags:
+      - Admin - Đơn vị tính
+    post:
+      consumes:
+      - application/json
+      description: Mã tự viết hoa và phải khác mọi mã đã có TRONG CỬA HÀNG NÀY, kể
+        cả mã của đơn vị đã xoá. Tên so không phân biệt hoa thường nhưng có phân biệt
+        dấu.
+      parameters:
+      - description: Thông tin đơn vị tính
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.DonViTinhRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/domain.DonViTinh'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Body'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Thêm đơn vị tính
+      tags:
+      - Admin - Đơn vị tính
+  /admin/don-vi-tinh/{id}:
+    delete:
+      description: Xoá mềm. Đơn vị đã thôi dùng nhưng còn muốn tra lại thì nên TẮT
+        thay vì xoá.
+      parameters:
+      - description: ID đơn vị tính
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Body'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Xoá đơn vị tính
+      tags:
+      - Admin - Đơn vị tính
+    get:
+      parameters:
+      - description: ID đơn vị tính
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/domain.DonViTinh'
+              type: object
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Chi tiết một đơn vị tính
+      tags:
+      - Admin - Đơn vị tính
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: ID đơn vị tính
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Thông tin đơn vị tính
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.DonViTinhRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/domain.DonViTinh'
+              type: object
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Sửa đơn vị tính
+      tags:
+      - Admin - Đơn vị tính
+  /admin/don-vi-tinh/{id}/trang-thai:
+    put:
+      consumes:
+      - application/json
+      description: Tắt = thôi bày ở ô chọn đơn vị lúc khai mặt hàng. Dòng vẫn còn
+        nên mặt hàng cũ vẫn tra ra được tên đơn vị.
+      parameters:
+      - description: ID đơn vị tính
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Trạng thái
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.TrangThaiDonViTinhRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/domain.DonViTinh'
+              type: object
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Bật/tắt một đơn vị tính
+      tags:
+      - Admin - Đơn vị tính
   /admin/goi-dich-vu:
     get:
       description: |-

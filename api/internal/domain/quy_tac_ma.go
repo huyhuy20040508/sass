@@ -33,6 +33,7 @@ const (
 const (
 	LoaiHangHoa      = "hang-hoa"
 	LoaiNhomHangHoa  = "nhom-hang-hoa"
+	LoaiDonViTinh    = "don-vi-tinh"
 	LoaiNhaCungCap   = "nha-cung-cap"
 	LoaiNhanVien     = "nhan-vien"
 	LoaiDonHang      = "don-hang"
@@ -62,6 +63,7 @@ var DanhMucLoaiMa = []LoaiMa{
 	// Danh mục — dùng chung toàn cửa hàng.
 	{Ma: LoaiHangHoa, Ten: "Hàng hóa", DungChung: true, TienToGoiY: "HH"},
 	{Ma: LoaiNhomHangHoa, Ten: "Nhóm hàng hóa", DungChung: true, TienToGoiY: "NH"},
+	{Ma: LoaiDonViTinh, Ten: "Đơn vị tính", DungChung: true, TienToGoiY: "DV"},
 	{Ma: LoaiNhaCungCap, Ten: "Nhà cung cấp", DungChung: true, TienToGoiY: "NCC"},
 	{Ma: LoaiNhanVien, Ten: "Nhân viên", DungChung: true, TienToGoiY: "NV"},
 

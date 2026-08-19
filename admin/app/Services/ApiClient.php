@@ -345,6 +345,44 @@ class ApiClient
         return $this->delete("/admin/categories/{$id}");
     }
 
+    // ---------- Đơn vị tính (Hàng hóa -> Đơn vị) ----------
+
+    /**
+     * Danh sách đơn vị tính. $onlyActive = true để chỉ lấy đơn vị đang bật
+     * (ô chọn đơn vị lúc khai mặt hàng dùng cái này).
+     *
+     * API cố ý không phân trang — danh sách chỉ vài chục dòng nên trang quản
+     * trị tự cắt trang, và ô tìm kiếm vẫn tìm trên TOÀN bộ danh sách.
+     */
+    public function donViTinh(string $keyword = '', bool $onlyActive = false): Response
+    {
+        return $this->get('/admin/don-vi-tinh', array_filter([
+            'keyword' => $keyword,
+            'active' => $onlyActive ? 'true' : null,
+        ]));
+    }
+
+    public function taoDonViTinh(array $payload): Response
+    {
+        return $this->post('/admin/don-vi-tinh', $payload);
+    }
+
+    public function suaDonViTinh(int $id, array $payload): Response
+    {
+        return $this->put("/admin/don-vi-tinh/{$id}", $payload);
+    }
+
+    /** Công tắc bật/tắt trên bảng. */
+    public function doiTrangThaiDonViTinh(int $id, bool $isActive): Response
+    {
+        return $this->put("/admin/don-vi-tinh/{$id}/trang-thai", ['is_active' => $isActive]);
+    }
+
+    public function xoaDonViTinh(int $id): Response
+    {
+        return $this->delete("/admin/don-vi-tinh/{$id}");
+    }
+
     // ---------- Thuế suất ----------
 
     /**

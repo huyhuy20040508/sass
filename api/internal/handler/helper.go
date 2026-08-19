@@ -233,6 +233,15 @@ func handleServiceError(c *gin.Context, err error) {
 		response.ValidationError(c, map[string]string{
 			"muc": "Giữ lại ít nhất một mức thuế. Muốn thôi áp thuế thì tắt cả dòng",
 		})
+	// Đơn vị tính — trùng mã hay trùng tên, tô đỏ đúng ô người vừa gõ.
+	case errors.Is(err, domain.ErrDonViTinhTrungMa):
+		response.ValidationError(c, map[string]string{
+			"code": "Mã đơn vị này đã có trong cửa hàng (tính cả đơn vị đã xoá)",
+		})
+	case errors.Is(err, domain.ErrDonViTinhTrungTen):
+		response.ValidationError(c, map[string]string{
+			"name": "Tên đơn vị này đã có trong cửa hàng",
+		})
 	case errors.Is(err, domain.ErrNhanSuDangMoCa):
 		response.Error(c, 409, "Nhân viên này còn một ca chưa đóng. Đóng ca đó trước đã — xoá bây giờ là khoá luôn tài khoản của chính người đang giữ két")
 	case errors.Is(err, domain.ErrNhanSuDaGhiSoQuy):

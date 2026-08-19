@@ -105,6 +105,12 @@ var DanhMucQuyen = []KhuQuyen{
 						Viec: []string{QuyenThem, QuyenSua, QuyenXoa},
 					},
 					{
+						// Đứng giữa Danh mục và Thuế suất, đúng thứ tự của thanh
+						// điều hướng — người tick không phải đi tìm.
+						Prefix: "don-vi-tinh", Ten: "Đơn vị tính",
+						Viec: []string{QuyenXem, QuyenThem, QuyenSua, QuyenXoa},
+					},
+					{
 						// Tách "xem" khỏi "sửa": đổi bộ mức là đổi ô chọn thuế của
 						// mọi phiếu lập sau đó, cả bên bán lẫn bên mua.
 						Prefix: "thue", Ten: "Thuế suất",

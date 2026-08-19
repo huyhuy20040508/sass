@@ -322,6 +322,7 @@ func dungHeThongVoi(t *testing.T, banHang, dieuHanh bool) *heThong {
 	newsletterRepo := repository.NewNewsletterRepository(db)
 	quyTacMaRepo := repository.NewQuyTacMaRepository(db)
 	thueRepo := repository.NewThueRepository(db)
+	donViTinhRepo := repository.NewDonViTinhRepository(db)
 
 	settingSvc := service.NewSettingService(settingRepo)
 	authSvc := service.NewAuthService(userRepo, nguoiDieuHanhRepo, tenantRepo, roleRepo, verifyRepo, mailSender, jwtMgr,
@@ -382,6 +383,7 @@ func dungHeThongVoi(t *testing.T, banHang, dieuHanh bool) *heThong {
 		QuyTacMa: handler.NewQuyTacMaHandler(
 			service.NewQuyTacMaService(quyTacMaRepo, chiNhanhRepo)),
 		Thue:      handler.NewThueHandler(service.NewThueService(thueRepo)),
+		DonViTinh: handler.NewDonViTinhHandler(service.NewDonViTinhService(donViTinhRepo, quyTacMaRepo)),
 		Ca:        handler.NewCaLamViecHandler(service.NewCaLamViecService(caRepo, userRepo, chiNhanhRepo)),
 		Payment:   handler.NewPaymentHandler(paymentSvc),
 		Banner:    handler.NewBannerHandler(bannerSvc),

@@ -66,6 +66,8 @@ type Handlers struct {
 	NhomQuyen *handler.NhomQuyenHandler
 	// QuyTacMa — quy tắc đánh số chứng từ (Cài đặt → Thông số chung).
 	QuyTacMa *handler.QuyTacMaHandler
+	// DonViTinh — đơn vị tính (Hàng hóa → Đơn vị).
+	DonViTinh *handler.DonViTinhHandler
 	// Thue — thuế suất (Hàng hóa → Thuế).
 	Thue *handler.ThueHandler
 	// Ca là ca làm việc + sổ quỹ tiền mặt — cụm trả lời câu hỏi cuối ngày: tiền
@@ -476,6 +478,15 @@ func New(
 			q.Dat(manage, http.MethodPost, "/categories", "danh-muc.them", h.Category.Create)
 			q.Dat(manage, http.MethodPut, "/categories/:id", "danh-muc.sua", h.Category.Update)
 			q.Dat(manage, http.MethodDelete, "/categories/:id", "danh-muc.xoa", h.Category.Delete)
+
+			// Đơn vị tính — bảng tra gắn cho mặt hàng. Cùng tầng với danh mục:
+			// đây là khung phân loại, không phải việc hằng ngày của quầy.
+			q.Dat(manage, http.MethodGet, "/don-vi-tinh", "don-vi-tinh.xem", h.DonViTinh.List)
+			q.Dat(manage, http.MethodPost, "/don-vi-tinh", "don-vi-tinh.them", h.DonViTinh.Create)
+			q.Dat(manage, http.MethodGet, "/don-vi-tinh/:id", "don-vi-tinh.xem", h.DonViTinh.Get)
+			q.Dat(manage, http.MethodPut, "/don-vi-tinh/:id", "don-vi-tinh.sua", h.DonViTinh.Update)
+			q.Dat(manage, http.MethodPut, "/don-vi-tinh/:id/trang-thai", "don-vi-tinh.sua", h.DonViTinh.DoiTrangThai)
+			q.Dat(manage, http.MethodDelete, "/don-vi-tinh/:id", "don-vi-tinh.xoa", h.DonViTinh.Delete)
 
 			// Thuế suất — bộ mức bày ra ở ô chọn thuế của đơn bán, đơn mua và
 			// từng mặt hàng. Cùng tầng với danh mục: đây là khung, không phải

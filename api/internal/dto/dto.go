@@ -2445,3 +2445,27 @@ type CapNhatThueRequest struct {
 type TrangThaiThueRequest struct {
 	IsActive *bool `json:"is_active" binding:"required"`
 }
+
+// ---------- Đơn vị tính (Hàng hóa → Đơn vị) ----------
+
+// DonViTinhRequest — payload tạo/sửa đơn vị tính.
+//
+// Mã bỏ trống thì server tự đặt: theo quy tắc đánh số của cửa hàng nếu đã bật ở
+// Cài đặt → Thông số chung, không thì dải DV001. Bỏ trống lúc SỬA là giữ nguyên
+// mã cũ, không sinh mã mới.
+//
+// Gõ tay thì chỉ nhận chữ cái + chữ số (giữ luật của bản cũ v2): mã in lên tem
+// và đọc lẫn với số lượng, khoảng trắng hay dấu gạch ở đó chỉ tổ khó đọc. Server
+// tự viết hoa nên gõ "kg" hay "KG" đều ra một mã.
+type DonViTinhRequest struct {
+	Code string `json:"code" binding:"omitempty,max=20,alphanum"`
+	Name string `json:"name" binding:"required,max=100"`
+	// IsActive bỏ trống = true (đơn vị mới mặc định đang dùng).
+	IsActive *bool `json:"is_active"`
+}
+
+// TrangThaiDonViTinhRequest — công tắc bật/tắt trên bảng danh sách.
+// Con trỏ vì cùng lý do với TrangThaiThueRequest.
+type TrangThaiDonViTinhRequest struct {
+	IsActive *bool `json:"is_active" binding:"required"`
+}

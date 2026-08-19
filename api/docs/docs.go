@@ -2094,6 +2094,353 @@ const docTemplate = `{
                 }
             }
         },
+        "/admin/don-vi-tinh": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Tìm theo tên hoặc mã. Đặt ` + "`" + `active=true` + "`" + ` để chỉ lấy đơn vị đang bật — ô chọn đơn vị lúc khai mặt hàng dùng tham số này.\nCố ý KHÔNG phân trang: danh sách đơn vị của một cửa hàng chỉ vài chục dòng, trang quản trị tự cắt trang.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Đơn vị tính"
+                ],
+                "summary": "Danh sách đơn vị tính",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Tên hoặc mã đơn vị",
+                        "name": "keyword",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "true = chỉ đơn vị đang bật",
+                        "name": "active",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/domain.DonViTinh"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Mã tự viết hoa và phải khác mọi mã đã có TRONG CỬA HÀNG NÀY, kể cả mã của đơn vị đã xoá. Tên so không phân biệt hoa thường nhưng có phân biệt dấu.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Đơn vị tính"
+                ],
+                "summary": "Thêm đơn vị tính",
+                "parameters": [
+                    {
+                        "description": "Thông tin đơn vị tính",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.DonViTinhRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/domain.DonViTinh"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/don-vi-tinh/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Đơn vị tính"
+                ],
+                "summary": "Chi tiết một đơn vị tính",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID đơn vị tính",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/domain.DonViTinh"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Đơn vị tính"
+                ],
+                "summary": "Sửa đơn vị tính",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID đơn vị tính",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Thông tin đơn vị tính",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.DonViTinhRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/domain.DonViTinh"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Xoá mềm. Đơn vị đã thôi dùng nhưng còn muốn tra lại thì nên TẮT thay vì xoá.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Đơn vị tính"
+                ],
+                "summary": "Xoá đơn vị tính",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID đơn vị tính",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/don-vi-tinh/{id}/trang-thai": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Tắt = thôi bày ở ô chọn đơn vị lúc khai mặt hàng. Dòng vẫn còn nên mặt hàng cũ vẫn tra ra được tên đơn vị.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Đơn vị tính"
+                ],
+                "summary": "Bật/tắt một đơn vị tính",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID đơn vị tính",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Trạng thái",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.TrangThaiDonViTinhRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/domain.DonViTinh"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/goi-dich-vu": {
             "get": {
                 "security": [
@@ -14602,6 +14949,31 @@ const docTemplate = `{
                 }
             }
         },
+        "domain.DonViTinh": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "description": "Code là mã ngắn người dùng tự đặt (KG, CAI, THUNG…), luôn viết hoa.",
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "is_active": {
+                    "description": "IsActive = có bày ra ở ô chọn đơn vị của mặt hàng không. Tắt chứ không xoá\nkhi một đơn vị thôi dùng: mặt hàng cũ vẫn phải tra ra được tên đơn vị.",
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
         "domain.GoodsReceipt": {
             "type": "object",
             "properties": {
@@ -17831,6 +18203,26 @@ const docTemplate = `{
                     "description": "TrangThai: cho_thanh_toan | da_thanh_toan | huy | het_han",
                     "type": "string",
                     "example": "cho_thanh_toan"
+                }
+            }
+        },
+        "dto.DonViTinhRequest": {
+            "type": "object",
+            "required": [
+                "name"
+            ],
+            "properties": {
+                "code": {
+                    "type": "string",
+                    "maxLength": 20
+                },
+                "is_active": {
+                    "description": "IsActive bỏ trống = true (đơn vị mới mặc định đang dùng).",
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 100
                 }
             }
         },
@@ -21120,6 +21512,17 @@ const docTemplate = `{
                 "ten": {
                     "type": "string",
                     "example": "Thuế đơn bán hàng"
+                }
+            }
+        },
+        "dto.TrangThaiDonViTinhRequest": {
+            "type": "object",
+            "required": [
+                "is_active"
+            ],
+            "properties": {
+                "is_active": {
+                    "type": "boolean"
                 }
             }
         },
