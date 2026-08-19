@@ -480,7 +480,6 @@ func loadCheckoutVariants(tx *gorm.DB, lines []domain.CheckoutLine, lock bool) (
 		Name       string
 		Slug       string
 		CategoryID uint
-		BrandID    *uint
 		BasePrice  float64
 		SalePrice  *float64
 		CostPrice  *float64
@@ -494,7 +493,7 @@ func loadCheckoutVariants(tx *gorm.DB, lines []domain.CheckoutLine, lock bool) (
 	var prods []prodRow
 	if len(pids) > 0 {
 		if err := tx.Table("products").
-			Select("id, name, slug, category_id, brand_id, base_price, sale_price, cost_price, thumbnail, is_active").
+			Select("id, name, slug, category_id, base_price, sale_price, cost_price, thumbnail, is_active").
 			Where("id IN ? AND deleted_at IS NULL", pids).Scan(&prods).Error; err != nil {
 			return nil, err
 		}
@@ -531,10 +530,10 @@ func loadCheckoutVariants(tx *gorm.DB, lines []domain.CheckoutLine, lock bool) (
 		resolved[v.ID] = domain.CheckoutVariant{
 			VariantID: v.ID, ProductID: v.ProductID, ProductName: p.Name, Slug: p.Slug,
 			SKU: v.SKU, Size: v.Size, Color: v.Color, Thumbnail: p.Thumbnail,
-			// Danh mục + thương hiệu đi kèm để tầng service đối chiếu phạm vi
-			// chương trình khuyến mãi mà không phải hỏi lại bảng products.
-			CategoryID: p.CategoryID, BrandID: p.BrandID,
-			Price: price, CostPrice: cost, Stock: tonChiNhanh[v.ID],
+			// Danh mục đi kèm để tầng service đối chiếu phạm vi chương trình
+			// khuyến mãi mà không phải hỏi lại bảng products.
+			CategoryID: p.CategoryID,
+			Price:      price, CostPrice: cost, Stock: tonChiNhanh[v.ID],
 		}
 	}
 	return resolved, nil

@@ -478,7 +478,6 @@ func (r *reportRepository) ProductRows(ctx context.Context, p domain.ReportPerio
 		Slug         string
 		Thumbnail    string
 		CategoryName string
-		BrandName    string
 		Orders       int64
 		Units        int64
 		Revenue      float64
@@ -488,7 +487,6 @@ func (r *reportRepository) ProductRows(ctx context.Context, p domain.ReportPerio
 	}
 	err := r.items(ctx, p).
 		Joins("LEFT JOIN categories c ON c.id = p.category_id").
-		Joins("LEFT JOIN brands b ON b.id = p.brand_id").
 		// Sản phẩm đã bị xoá hẳn khỏi danh mục thì order_items.product_id về NULL:
 		// những dòng đó không gộp được về mặt hàng nào nên để ngoài bảng xếp hạng,
 		// phần tiền của chúng vẫn nằm trong Totals.
@@ -499,7 +497,6 @@ func (r *reportRepository) ProductRows(ctx context.Context, p domain.ReportPerio
 			COALESCE(p.slug, '') AS slug,
 			COALESCE(p.thumbnail, '') AS thumbnail,
 			COALESCE(c.name, '') AS category_name,
-			COALESCE(b.name, '') AS brand_name,
 			COUNT(DISTINCT o.id) AS orders,
 			COALESCE(SUM(oi.quantity), 0) AS units,
 			COALESCE(SUM(oi.total_price), 0) AS revenue,
@@ -507,7 +504,7 @@ func (r *reportRepository) ProductRows(ctx context.Context, p domain.ReportPerio
 			COALESCE(SUM(oi.total_price), 0) - COALESCE(SUM(` + costExpr + ` * oi.quantity), 0) AS profit,
 			COALESCE((SELECT SUM(v.stock_quantity) FROM product_variants v
 				WHERE v.product_id = oi.product_id AND v.deleted_at IS NULL), 0) AS stock`).
-		Group("oi.product_id, p.name, p.sku, p.slug, p.thumbnail, c.name, b.name").
+		Group("oi.product_id, p.name, p.sku, p.slug, p.thumbnail, c.name").
 		Order(order).
 		Limit(limit).
 		Scan(&rows).Error
@@ -524,7 +521,6 @@ func (r *reportRepository) ProductRows(ctx context.Context, p domain.ReportPerio
 			Slug:         row.Slug,
 			Thumbnail:    row.Thumbnail,
 			CategoryName: row.CategoryName,
-			BrandName:    row.BrandName,
 			Orders:       row.Orders,
 			Units:        row.Units,
 			Revenue:      row.Revenue,
@@ -542,10 +538,6 @@ func (r *reportRepository) ProductRows(ctx context.Context, p domain.ReportPerio
 
 func (r *reportRepository) ByCategory(ctx context.Context, p domain.ReportPeriod, limit int) ([]domain.ReportSlice, error) {
 	return r.sliceByItem(ctx, p, "p.category_id", "c.name", "LEFT JOIN categories c ON c.id = p.category_id", limit)
-}
-
-func (r *reportRepository) ByBrand(ctx context.Context, p domain.ReportPeriod, limit int) ([]domain.ReportSlice, error) {
-	return r.sliceByItem(ctx, p, "p.brand_id", "b.name", "LEFT JOIN brands b ON b.id = p.brand_id", limit)
 }
 
 // BySize gộp theo size ghi trên dòng hàng (snapshot lúc mua), không theo biến thể

@@ -4,7 +4,7 @@
 
 @section('content')
     {{--
-        Trang "Khuyến mãi" — dựng theo đúng khuôn trang Nhà cung cấp / Thương hiệu:
+        Trang "Khuyến mãi" — dựng theo đúng khuôn trang Nhà cung cấp:
         [ header ] + [ thanh lọc realtime ] + [ bảng ] + [ chân trang ] + [ modal CRUD ].
 
         Đây là thứ QUYẾT ĐỊNH GIÁ BÁN ngoài cửa hàng, nên trang này nói rõ ba điều mà
@@ -160,7 +160,6 @@
                             $end = !empty($p['end_at']) ? \Illuminate\Support\Carbon::parse($p['end_at']) : null;
                             $nProduct = count($p['product_ids'] ?? []);
                             $nCategory = count($p['category_ids'] ?? []);
-                            $nBrand = count($p['brand_ids'] ?? []);
                         @endphp
                         <tr data-id="{{ $id }}">
                             <td class="pmo-c-check"><input type="checkbox" class="pmo-check pmo-row-check" value="{{ $id }}"
@@ -176,14 +175,13 @@
                             </td>
                             <td class="pmo-c-off"><span class="pmo-off">{{ $discountText($p) }}</span></td>
                             <td class="pmo-c-scope">
-                                {{-- Số sản phẩm bị phủ là con số quan trọng nhất; ba nhóm đích chỉ
+                                {{-- Số sản phẩm bị phủ là con số quan trọng nhất; hai nhóm đích chỉ
                                      là cách khai ra con số đó nên xuống dòng phụ. --}}
                                 <span class="pmo-scope-total">{{ $num($p['product_count'] ?? 0) }} sản phẩm</span>
                                 <span class="pmo-sub">
                                     @php
                                         $parts = [];
                                         if ($nCategory) $parts[] = $nCategory.' danh mục';
-                                        if ($nBrand) $parts[] = $nBrand.' thương hiệu';
                                         if ($nProduct) $parts[] = $nProduct.' sản phẩm lẻ';
                                     @endphp
                                     {{ $parts ? implode(' · ', $parts) : 'Chưa khai phạm vi' }}
@@ -219,7 +217,7 @@
                                     Không tìm thấy chương trình nào khớp bộ lọc. Thử xoá bớt điều kiện lọc.
                                 @else
                                     Chưa có chương trình khuyến mãi nào. Bấm “Tạo chương trình” để mở đợt giảm giá đầu tiên —
-                                    chọn sản phẩm, danh mục hoặc thương hiệu rồi đặt ngày bắt đầu và kết thúc, tới giờ hệ thống tự chạy.
+                                    chọn sản phẩm hoặc danh mục rồi đặt ngày bắt đầu và kết thúc, tới giờ hệ thống tự chạy.
                                 @endif
                             </td>
                         </tr>
@@ -345,24 +343,6 @@
 
                             <div class="pmo-scope">
                                 <div class="pmo-scope-head">
-                                    <span>Thương hiệu</span>
-                                    <span class="pmo-scope-count" data-count="brand">0</span>
-                                </div>
-                                <input type="text" class="pmo-scope-search" data-search="brand" placeholder="Tìm thương hiệu…" autocomplete="off">
-                                <div class="pmo-scope-list" data-list="brand">
-                                    @forelse($brands as $b)
-                                        <label class="pmo-pick" data-text="{{ mb_strtolower($b['name'] ?? '', 'UTF-8') }}">
-                                            <input type="checkbox" class="pmo-check" name="brand_ids[]" value="{{ $b['id'] ?? 0 }}" data-kind="brand">
-                                            <span class="pmo-pick-name">{{ $b['name'] ?? '' }}</span>
-                                        </label>
-                                    @empty
-                                        <p class="pmo-scope-empty">Chưa có thương hiệu nào.</p>
-                                    @endforelse
-                                </div>
-                            </div>
-
-                            <div class="pmo-scope">
-                                <div class="pmo-scope-head">
                                     <span>Sản phẩm lẻ</span>
                                     <span class="pmo-scope-count" data-count="product">0</span>
                                 </div>
@@ -381,7 +361,7 @@
                                     @endforelse
                                 </div>
                                 @if(count($products) >= 100)
-                                    <p class="pmo-hint pmo-scope-more">Đang hiện 100 sản phẩm mới nhất. Cần đợt rộng hơn thì chọn theo danh mục hoặc thương hiệu.</p>
+                                    <p class="pmo-hint pmo-scope-more">Đang hiện 100 sản phẩm mới nhất. Cần đợt rộng hơn thì chọn theo danh mục.</p>
                                 @endif
                             </div>
                         </div>
@@ -810,7 +790,7 @@
             const boxes = () => Array.from(form.querySelectorAll('.pmo-scope-list input[type="checkbox"]'));
 
             function syncScope() {
-                const counts = { category: 0, brand: 0, product: 0 };
+                const counts = { category: 0, product: 0 };
                 boxes().forEach((cb) => { if (cb.checked) counts[cb.dataset.kind]++; });
 
                 form.querySelectorAll('[data-count]').forEach((el) => {
@@ -821,7 +801,6 @@
 
                 const parts = [];
                 if (counts.category) parts.push(`${counts.category} danh mục`);
-                if (counts.brand) parts.push(`${counts.brand} thương hiệu`);
                 if (counts.product) parts.push(`${counts.product} sản phẩm lẻ`);
                 $scopeSum.textContent = parts.length ? 'Đã chọn ' + parts.join(' · ') : 'Chưa chọn gì';
             }
@@ -868,7 +847,6 @@
 
                 const picked = {
                     category: new Set((isEdit ? p.category_ids : []) || []),
-                    brand: new Set((isEdit ? p.brand_ids : []) || []),
                     product: new Set((isEdit ? p.product_ids : []) || []),
                 };
                 boxes().forEach((cb) => { cb.checked = picked[cb.dataset.kind].has(Number(cb.value)); });
@@ -892,7 +870,7 @@
             form.addEventListener('submit', (e) => {
                 if (!boxes().some((cb) => cb.checked)) {
                     e.preventDefault();
-                    toastErr('Chưa chọn phạm vi áp dụng. Hãy tick ít nhất một danh mục, thương hiệu hoặc sản phẩm — '
+                    toastErr('Chưa chọn phạm vi áp dụng. Hãy tick ít nhất một danh mục hoặc sản phẩm — '
                         + 'chương trình không có phạm vi thì không giảm giá cho ai cả.');
                     return;
                 }

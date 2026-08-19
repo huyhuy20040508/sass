@@ -54,8 +54,7 @@
         {{-- Bộ lọc --}}
         @php
             // Đếm số bộ lọc nâng cao đang bật -> tự mở hàng nâng cao + hiện badge.
-            $advCount = ($filters['brand_id'] ? 1 : 0)
-                + ($filters['kit_type'] !== '' ? 1 : 0)
+            $advCount = ($filters['kit_type'] !== '' ? 1 : 0)
                 + ($filters['status'] !== 'all' ? 1 : 0)
                 + ($filters['featured'] !== '' ? 1 : 0)
                 + ($filters['sort'] !== 'newest' ? 1 : 0);
@@ -139,13 +138,6 @@
 
             {{-- Hàng nâng cao: các bộ lọc còn lại (ẩn cho tới khi bấm "Nâng cao") --}}
             <div class="prd-toolbar-adv {{ $advOpen ? 'is-open' : '' }}" id="prdAdvRow">
-                <select name="brand_id" class="prd-select" title="Lọc theo thương hiệu">
-                    <option value="0">Tất cả thương hiệu</option>
-                    @foreach($brands as $b)
-                        <option value="{{ $b['id'] }}" {{ $filters['brand_id'] === $b['id'] ? 'selected' : '' }}>{{ $b['name'] }}</option>
-                    @endforeach
-                </select>
-
                 <select name="kit_type" class="prd-select" title="Lọc theo loại áo">
                     <option value="">Tất cả loại áo</option>
                     @foreach($kitTypes as $val => $label)
@@ -189,7 +181,6 @@
                         <th class="prd-c-name">Sản phẩm</th>
                         <th class="prd-c-sku">SKU</th>
                         <th class="prd-c-cat">Danh mục</th>
-                        <th class="prd-c-brand">Thương hiệu</th>
                         <th class="prd-c-price">Giá</th>
                         <th class="prd-c-stock">Tồn kho</th>
                         <th class="prd-c-kit">Loại áo</th>
@@ -256,7 +247,6 @@
                             </td>
                             <td class="prd-c-sku" data-view="{{ $p['id'] }}" title="Xem chi tiết sản phẩm"><span class="prd-code">{{ $p['sku'] }}</span></td>
                             <td class="prd-c-cat">{{ $p['category']['name'] ?? '—' }}</td>
-                            <td class="prd-c-brand">{{ $p['brand']['name'] ?? '—' }}</td>
                             <td class="prd-c-price">
                                 <span class="prd-price-sale">{{ number_format($now, 0, ',', '.') }}₫</span>
                                 @if($sale)
@@ -330,7 +320,7 @@
                     @empty
                         <tr>
                             <td colspan="14" class="prd-empty">
-                                @if($filters['keyword'] !== '' || $filters['category_id'] || $filters['brand_id'] || $filters['kit_type'] || $filters['status'] !== 'all' || $filters['featured'] !== '')
+                                @if($filters['keyword'] !== '' || $filters['category_id'] || $filters['kit_type'] || $filters['status'] !== 'all' || $filters['featured'] !== '')
                                     Không tìm thấy sản phẩm nào khớp bộ lọc. Thử xoá bớt điều kiện lọc.
                                 @else
                                     Chưa có sản phẩm nào. Bấm “Thêm sản phẩm” để tạo mới.
@@ -353,7 +343,6 @@
 
     <div id="prdBulkMount"></div>
     <div id="prdModalMount"></div>
-    <div id="prdMiniMount"></div>
 
     {{-- Modal Import file --}}
     <div class="prd-overlay" id="prdImportOverlay" style="display:none;">
@@ -489,7 +478,6 @@
         .prd-table.hide-img    .prd-c-img,
         .prd-table.hide-sku    .prd-c-sku,
         .prd-table.hide-cat    .prd-c-cat,
-        .prd-table.hide-brand  .prd-c-brand,
         .prd-table.hide-price  .prd-c-price,
         .prd-table.hide-stock  .prd-c-stock,
         .prd-table.hide-kit    .prd-c-kit,
@@ -539,7 +527,6 @@
         .prd-table th.prd-c-name,   .prd-table td.prd-c-name   { min-width: 200px; max-width: 320px; overflow: hidden; text-overflow: ellipsis; }
         .prd-table th.prd-c-sku,    .prd-table td.prd-c-sku    { width: 1%; }
         .prd-table th.prd-c-cat,    .prd-table td.prd-c-cat    { width: 1%; }
-        .prd-table th.prd-c-brand,  .prd-table td.prd-c-brand  { width: 1%; }
         .prd-table th.prd-c-price,  .prd-table td.prd-c-price  { width: 1%; }
         .prd-table th.prd-c-stock,  .prd-table td.prd-c-stock  { width: 1%; text-align: center; }
         .prd-table th.prd-c-kit,    .prd-table td.prd-c-kit    { width: 1%; }
@@ -718,18 +705,6 @@
             background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23595959' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='m6 9 6 6 6-6'/></svg>");
             background-repeat: no-repeat; background-position: right 10px center;
         }
-        /* Ô select kèm nút cộng bên phải */
-        .prd-input-with-btn { display: flex; gap: 8px; align-items: stretch; }
-        .prd-input-with-btn .prd-msel { flex: 1; min-width: 0; }
-        .prd-addon-btn {
-            flex-shrink: 0; width: 36px; height: 36px; border: 1px solid #d9d9d9; border-radius: 4px;
-            background: #fff; color: #1890ff; cursor: pointer; display: inline-flex;
-            align-items: center; justify-content: center; transition: border-color .15s, background .15s;
-        }
-        .prd-addon-btn:hover { border-color: #86b7fe; background: #f0f7ff; }
-
-        /* Modal nhỏ (thêm nhanh) — nổi trên modal sản phẩm */
-        .prd-overlay.prd-overlay-top { z-index: 1092; }
         .prd-dialog-sm { max-width: 420px; }
 
         .prd-input-prefix { position: relative; }
@@ -974,7 +949,6 @@
             const URL_BULK = @json(route('admin.products.bulkDestroy'));
             const URL_STORE = @json(route('admin.products.store'));
             const URL_UPLOAD = @json(route('admin.products.uploadImage'));
-            const URL_BRAND_STORE = @json(route('admin.brands.store'));
             const URL_BASE = @json(url('admin/products'));
 const RETURN_URL = @json(route('admin.products.index', request()->query()));
             // Dữ liệu sản phẩm (thô) để dựng payload khi đổi trạng thái mà không mất trường nào.
@@ -982,7 +956,6 @@ const RETURN_URL = @json(route('admin.products.index', request()->query()));
             const BY_ID = new Map(PRODUCTS.map((p) => [p.id, p]));
             // Dữ liệu cho modal thêm/sửa.
             const CATEGORIES = @json($orderedCats);            // [{id, name, level}] đã xếp theo cây
-            const BRANDS = @json(array_map(fn ($b) => ['id' => $b['id'], 'name' => $b['name']], $brands));
             const KIT_TYPES = @json($kitTypes);                // { value: label }
             const STATUSES = @json($statuses);                 // { active: 'Đang bán', ... }
             const STATUS_HINTS = @json($statusHints);          // câu giải thích từng mức
@@ -1302,88 +1275,6 @@ const RETURN_URL = @json(route('admin.products.index', request()->query()));
 
             // ---------- Modal thêm/sửa ----------
             const $modalMount = document.getElementById('prdModalMount');
-            const $miniMount = document.getElementById('prdMiniMount');
-
-            // Toast thành công (dùng cho thêm nhanh thương hiệu).
-            function toastOk(msg) {
-                const cont = document.querySelector('.toast-container');
-                if (!cont || typeof bootstrap === 'undefined') return;
-                const el = document.createElement('div');
-                el.className = 'toast align-items-center text-bg-success border-0';
-                el.setAttribute('role', 'alert');
-                el.innerHTML = `<div class="d-flex"><div class="toast-body"><i class="bi bi-check-circle-fill me-2"></i>${esc(msg)}</div>`
-                    + '<button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button></div>';
-                cont.appendChild(el);
-                const t = new bootstrap.Toast(el, { delay: 3000 });
-                el.addEventListener('hidden.bs.toast', () => el.remove());
-                t.show();
-            }
-
-            // ---------- Modal nhỏ: thêm nhanh thương hiệu ----------
-            function closeBrandQuick() { $miniMount.innerHTML = ''; }
-            function openBrandQuickModal(onCreated) {
-                $miniMount.innerHTML = `
-                    <div class="prd-overlay prd-overlay-top" id="bqOverlay">
-                        <div class="prd-dialog prd-dialog-sm" id="bqDialog">
-                            <div class="prd-modal-head">
-                                <h4 class="prd-modal-title">Thêm nhanh thương hiệu</h4>
-                                <button type="button" class="prd-modal-x" id="bqX">
-                                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
-                                </button>
-                            </div>
-                            <div class="prd-modal-body">
-                                <div>
-                                    <label class="prd-field-label">Tên thương hiệu <span class="prd-req">*</span></label>
-                                    <input type="text" id="bqName" class="prd-input" placeholder="VD: Nike, Adidas, Puma" maxlength="150">
-                                </div>
-                            </div>
-                            <div class="prd-modal-foot">
-                                <button type="button" class="prd-btn-ghost" id="bqCancel">Hủy</button>
-                                <button type="button" class="prd-btn-primary" id="bqSave">Lưu</button>
-                            </div>
-                        </div>
-                    </div>`;
-                document.getElementById('bqX').addEventListener('click', closeBrandQuick);
-                document.getElementById('bqCancel').addEventListener('click', closeBrandQuick);
-                const nameEl = document.getElementById('bqName');
-                const saveBtn = document.getElementById('bqSave');
-                async function submit() {
-                    const name = nameEl.value.trim();
-                    if (!name) { toastErr('Vui lòng nhập tên thương hiệu.'); return; }
-                    saveBtn.disabled = true;
-                    try {
-                        const res = await fetch(URL_BRAND_STORE, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' },
-                            body: JSON.stringify({ name }),
-                        });
-                        const data = await res.json().catch(() => ({}));
-                        if (!res.ok) { toastErr(data.message || 'Tạo thương hiệu thất bại.'); saveBtn.disabled = false; return; }
-                        onCreated(data);
-                        closeBrandQuick();
-                    } catch (err) {
-                        toastErr('Không kết nối được máy chủ.');
-                        saveBtn.disabled = false;
-                    }
-                }
-                saveBtn.addEventListener('click', submit);
-                nameEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); submit(); } });
-                setTimeout(() => nameEl.focus(), 0);
-            }
-            function addBrandToSelect(b) {
-                if (!b || !b.id) return;
-                const sel = document.getElementById('mBrand');
-                if (sel) {
-                    const opt = document.createElement('option');
-                    opt.value = b.id;
-                    opt.textContent = b.name;
-                    sel.appendChild(opt);
-                    sel.value = String(b.id);
-                    sel.dispatchEvent(new Event('change')); // cập nhật trạng thái placeholder xám
-                }
-                BRANDS.push({ id: b.id, name: b.name });
-                toastOk(`Đã thêm thương hiệu "${b.name}".`);
-            }
 
             // Mã sản phẩm hiển thị tự sinh từ id: SP000001, SP000002, ... (chỉ để hiển thị, không lưu).
             const fmtProdCode = (id) => 'SP' + String(id).padStart(6, '0');
@@ -1474,13 +1365,6 @@ if (words.length >= 2) teamPart = words.slice(0, 2).map((w) => w[0]).join('');
                     const pad = '&nbsp;&nbsp;'.repeat(Math.max(0, c.level)) + (c.level > 0 ? '└ ' : '');
                     return `<option value="${c.id}" ${sel}>${pad}${esc(c.name)}</option>`;
                 }).join('');
-
-                const brandOpts = ['<option value="">Chọn thương hiệu</option>'].concat(
-                    BRANDS.map((b) => {
-                        const sel = (isEdit || isView) && p && Number(p.brand_id) === Number(b.id) ? 'selected' : '';
-                        return `<option value="${b.id}" ${sel}>${esc(b.name)}</option>`;
-                    })
-                ).join('');
 
                 const kitOpts = ['<option value="">Chọn loại áo</option>'].concat(
                     Object.entries(KIT_TYPES).map(([val, label]) => {
@@ -1596,15 +1480,6 @@ if (words.length >= 2) teamPart = words.slice(0, 2).map((w) => w[0]).join('');
                                         <label class="prd-field-label" for="mCategory">Danh mục <span class="prd-req">*</span></label>
                                         <select id="mCategory" class="prd-msel">${catOpts}</select>
                                         <p class="prd-err" data-err="mCategory"></p>
-                                    </div>
-                                    <div>
-                                        <label class="prd-field-label" for="mBrand">Thương hiệu</label>
-                                        <div class="prd-input-with-btn">
-                                            <select id="mBrand" class="prd-msel" data-ph>${brandOpts}</select>
-                                            ${isView ? '' : `<button type="button" class="prd-addon-btn" id="mBrandAdd" title="Thêm nhanh thương hiệu">
-                                                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5v14"/></svg>
-                                            </button>`}
-                                        </div>
                                     </div>
                                     <div>
                                         <label class="prd-field-label" for="mKit">Loại áo</label>
@@ -1882,10 +1757,6 @@ if (words.length >= 2) teamPart = words.slice(0, 2).map((w) => w[0]).join('');
                             if (e.key === 'Enter') { e.preventDefault(); quickAddSizes(); }
                         });
                     }
-
-                    // Thêm nhanh thương hiệu (nút +)
-                    const brandAddBtn = document.getElementById('mBrandAdd');
-                    if (brandAddBtn) brandAddBtn.addEventListener('click', () => openBrandQuickModal(addBrandToSelect));
 
                     // SKU tự tạo từ đội bóng · loại áo · mùa giải (vẫn sửa tay được).
                     // Quy tắc đánh số đang bật thì mã do máy chủ đặt — trình duyệt
@@ -2223,7 +2094,6 @@ if (words.length >= 2) teamPart = words.slice(0, 2).map((w) => w[0]).join('');
                     name,
                     sku,
                     category_id: categoryId,
-                    brand_id: document.getElementById('mBrand').value,
                     slug: dialog.dataset.slug || '',
                     team: val('mTeam'),
                     season: val('mSeason'),
@@ -2338,7 +2208,6 @@ if (words.length >= 2) teamPart = words.slice(0, 2).map((w) => w[0]).join('');
             // Đóng modal bằng phím Esc (modal nhỏ ưu tiên trước).
             document.addEventListener('keydown', (e) => {
                 if (e.key !== 'Escape') return;
-                if ($miniMount.innerHTML) { closeBrandQuick(); return; }
                 if ($modalMount.innerHTML) closeModal();
             });
 
@@ -2388,7 +2257,6 @@ if (words.length >= 2) teamPart = words.slice(0, 2).map((w) => w[0]).join('');
                     { key: 'img', label: 'Ảnh' },
                     { key: 'sku', label: 'SKU' },
                     { key: 'cat', label: 'Danh mục' },
-                    { key: 'brand', label: 'Thương hiệu' },
                     { key: 'price', label: 'Giá' },
                     { key: 'stock', label: 'Tồn kho' },
                     { key: 'kit', label: 'Loại áo' },

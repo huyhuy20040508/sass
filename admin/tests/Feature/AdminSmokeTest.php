@@ -350,7 +350,7 @@ class AdminSmokeTest extends TestCase
             '/admin/nhan-su',
             '/admin/reports/revenue', '/admin/goi-dich-vu',
             // Hàng hoá & tiếp thị.
-            '/admin/products', '/admin/categories', '/admin/brands',
+            '/admin/products', '/admin/categories',
             '/admin/khuyen-mai', '/admin/voucher', '/admin/banners',
             '/admin/contacts', '/admin/dang-ky-nhan-tin',
             // Trả hàng, kho và mua vào.

@@ -210,8 +210,8 @@ func (r *promotionRepository) Running(ctx context.Context, at time.Time) ([]doma
 	return items, err
 }
 
-func (r *promotionRepository) CountProducts(ctx context.Context, productIDs, categoryIDs, brandIDs []uint) (int64, error) {
-	if len(productIDs) == 0 && len(categoryIDs) == 0 && len(brandIDs) == 0 {
+func (r *promotionRepository) CountProducts(ctx context.Context, productIDs, categoryIDs []uint) (int64, error) {
+	if len(productIDs) == 0 && len(categoryIDs) == 0 {
 		return 0, nil
 	}
 
@@ -232,7 +232,6 @@ func (r *promotionRepository) CountProducts(ctx context.Context, productIDs, cat
 	}
 	add("id", productIDs)
 	add("category_id", categoryIDs)
-	add("brand_id", brandIDs)
 
 	var n int64
 	err := r.db.WithContext(ctx).Model(&domain.Product{}).

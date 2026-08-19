@@ -35,9 +35,6 @@ func (r *productRepository) List(ctx context.Context, f domain.ProductFilter) ([
 	} else if f.CategoryID != nil {
 		q = q.Where("category_id = ?", *f.CategoryID)
 	}
-	if f.BrandID != nil {
-		q = q.Where("brand_id = ?", *f.BrandID)
-	}
 	if f.KitType != "" {
 		q = q.Where("kit_type = ?", f.KitType)
 	}
@@ -82,7 +79,7 @@ func (r *productRepository) List(ctx context.Context, f domain.ProductFilter) ([
 
 	// Danh mục & thương hiệu luôn nạp: thẻ sản phẩm hiển thị chúng, và tầng
 	// khuyến mãi cần để biết chương trình có áp cho sản phẩm này không.
-	q = q.Preload("Brand").Preload("Category")
+	q = q.Preload("Category")
 	if !f.Slim {
 		q = q.Preload("Variants", func(db *gorm.DB) *gorm.DB { return db.Order("id ASC") }).
 			Preload("Images", func(db *gorm.DB) *gorm.DB { return db.Order("sort_order ASC, id ASC") })
@@ -96,7 +93,7 @@ func (r *productRepository) List(ctx context.Context, f domain.ProductFilter) ([
 func (r *productRepository) FindByID(ctx context.Context, id uint) (*domain.Product, error) {
 	var p domain.Product
 	err := r.db.WithContext(ctx).
-		Preload("Brand").Preload("Category").
+		Preload("Category").
 		Preload("Variants").Preload("Images").
 		First(&p, id).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -108,7 +105,7 @@ func (r *productRepository) FindByID(ctx context.Context, id uint) (*domain.Prod
 func (r *productRepository) FindBySlug(ctx context.Context, slug string) (*domain.Product, error) {
 	var p domain.Product
 	err := r.db.WithContext(ctx).
-		Preload("Brand").Preload("Category").
+		Preload("Category").
 		Preload("Variants").Preload("Images").
 		Where("slug = ?", slug).First(&p).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {

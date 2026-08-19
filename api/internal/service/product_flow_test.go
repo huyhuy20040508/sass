@@ -123,7 +123,6 @@ func TestDecorateTinhGiaRiengChoTungBienThe(t *testing.T) {
 		}},
 		byProduct:  map[uint][]int{7: {0}},
 		byCategory: map[uint][]int{},
-		byBrand:    map[uint][]int{},
 		parentOf:   map[uint]uint{},
 	}
 
@@ -165,7 +164,6 @@ func TestDecorateKhongCoKhuyenMaiVanGiuGiaRieng(t *testing.T) {
 		promos:     []domain.Promotion{},
 		byProduct:  map[uint][]int{},
 		byCategory: map[uint][]int{},
-		byBrand:    map[uint][]int{},
 		parentOf:   map[uint]uint{},
 	}
 

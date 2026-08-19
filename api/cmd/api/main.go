@@ -303,7 +303,7 @@ func main() {
 	verifyRepo := repository.NewEmailVerificationRepository(db)
 	categoryRepo := repository.NewCategoryRepository(db)
 	quyTacMaRepo := repository.NewQuyTacMaRepository(db)
-	brandRepo := repository.NewBrandRepository(db)
+	thueRepo := repository.NewThueRepository(db)
 	productRepo := repository.NewProductRepository(db)
 	orderRepo := repository.NewOrderRepository(db)
 	paymentRepo := repository.NewPaymentRepository(db)
@@ -342,7 +342,6 @@ func main() {
 	// super_admin của một cửa hàng — cách đó chính là lỗ hổng đã đóng ở 0007.
 	authSvc := service.NewAuthService(userRepo, nguoiDieuHanhRepo, tenantRepo, roleRepo, verifyRepo, mailSender, jwtMgr, cfg.JWT, cfg.Mail, !cfg.App.IsProduction(), settingSvc, fbClient, ggClient)
 	categorySvc := service.NewCategoryService(categoryRepo, quyTacMaRepo)
-	brandSvc := service.NewBrandService(brandRepo)
 	bannerSvc := service.NewBannerService(bannerRepo)
 	// Cửa xét HẠN MỨC HỢP ĐỒNG — chỗ ba con số đã ký (chi nhánh / tài khoản /
 	// sản phẩm) lần đầu có hiệu lực thật, thay vì chỉ được in ra màn hình.
@@ -364,7 +363,7 @@ func main() {
 		))
 	}
 
-	productSvc := service.NewProductService(productRepo, categoryRepo, brandRepo, hanMucSvc, quyTacMaRepo)
+	productSvc := service.NewProductService(productRepo, categoryRepo, hanMucSvc, quyTacMaRepo)
 	// Chi nhánh: các ĐIỂM BÁN trong một cửa hàng. Đây là thứ gói Chuỗi bán, và
 	// cũng là nơi hạn mức `max_shops` lần đầu có việc để làm — trước nó, con số
 	// ấy canh một thao tác mà không màn hình nào làm được.
@@ -373,6 +372,8 @@ func main() {
 	// Quy tắc đánh số chứng từ — chiNhanhRepo để chốt chi nhánh có thật trước khi
 	// ghi một bộ quy tắc không màn hình nào đọc tới.
 	quyTacMaSvc := service.NewQuyTacMaService(quyTacMaRepo, chiNhanhRepo)
+	// Thuế suất — bốn loại dựng sẵn khi cửa hàng mở màn hình lần đầu.
+	thueSvc := service.NewThueService(thueRepo)
 	// Chương trình khuyến mãi: vừa là module quản trị, vừa là thứ tính giá sau giảm
 	// cho cả trang bán hàng lẫn lúc đặt hàng. categoryRepo để chương trình khai ở
 	// danh mục cha phủ được tới sản phẩm nằm trong danh mục cháu.
@@ -435,7 +436,6 @@ func main() {
 		Health:    handler.NewHealthHandler(version),
 		Auth:      handler.NewAuthHandler(authSvc),
 		Category:  handler.NewCategoryHandler(categorySvc),
-		Brand:     handler.NewBrandHandler(brandSvc),
 		Product:   handler.NewProductHandler(productSvc, promotionSvc),
 		Customer:  handler.NewCustomerHandler(customerSvc),
 		Order:     handler.NewOrderHandler(orderSvc),
@@ -452,6 +452,7 @@ func main() {
 		NhanSu:    handler.NewNhanSuHandler(nhanSuSvc),
 		NhomQuyen: handler.NewNhomQuyenHandler(nhomQuyenSvc),
 		QuyTacMa:  handler.NewQuyTacMaHandler(quyTacMaSvc),
+		Thue:      handler.NewThueHandler(thueSvc),
 		Ca:        handler.NewCaLamViecHandler(caSvc),
 		Payment:   handler.NewPaymentHandler(paymentSvc),
 		Banner:    handler.NewBannerHandler(bannerSvc),

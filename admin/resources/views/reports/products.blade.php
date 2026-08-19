@@ -31,14 +31,6 @@
             'ratio' => Chart::share($c['revenue'] ?? 0, $catMax),
         ])->all();
 
-        $brandMax = max(1, (float) collect($report['by_brand'] ?? [])->max('revenue'));
-        $brandRows = collect($report['by_brand'] ?? [])->map(fn ($b) => [
-            'label' => $b['label'] !== '' ? $b['label'] : 'Không rõ thương hiệu',
-            'value' => Chart::money($b['revenue'] ?? 0),
-            'extra' => Chart::int($b['units'] ?? 0).' món',
-            'ratio' => Chart::share($b['revenue'] ?? 0, $brandMax),
-        ])->all();
-
         // Size xếp theo SỐ MÓN chứ không theo tiền: cần biết nên nhập nhiều size
         // nào, mà size đắt tiền không đồng nghĩa với size bán chạy.
         $sizes = collect($report['by_size'] ?? [])->sortByDesc('units')->values();
@@ -169,7 +161,6 @@
                             <tr>
                                 <th class="num">#</th>
                                 <th>Sản phẩm</th>
-                                <th>Thương hiệu</th>
                                 <th class="num">Số đơn</th>
                                 <th class="num">Đã bán</th>
                                 <th class="num">Tiền hàng</th>
@@ -196,7 +187,6 @@
                                             </span>
                                         </div>
                                     </td>
-                                    <td class="rp-muted">{{ $item['brand_name'] ?: '—' }}</td>
                                     <td class="num">{{ Chart::int($item['orders'] ?? 0) }}</td>
                                     <td class="num"><b>{{ Chart::int($item['units'] ?? 0) }}</b></td>
                                     <td class="num">{{ Chart::money($item['revenue'] ?? 0) }}</td>
@@ -245,13 +235,6 @@
                 'title' => 'Theo danh mục',
                 'sub' => 'Tối đa 12 danh mục có doanh thu cao nhất.',
                 'rows' => $catRows,
-                'empty' => 'Kỳ này chưa bán được món nào.',
-            ])
-
-            @include('reports.partials.bars', [
-                'title' => 'Theo thương hiệu',
-                'sub' => 'Tối đa 12 thương hiệu có doanh thu cao nhất.',
-                'rows' => $brandRows,
                 'empty' => 'Kỳ này chưa bán được món nào.',
             ])
 

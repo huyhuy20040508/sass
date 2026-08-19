@@ -35,7 +35,6 @@ var ky = "from=" + time.Now().AddDate(0, 0, -1).Format("2006-01-02") +
 var bangDanhSach = []khoDoc{
 	// Ba đường này trả mảng thẳng, không có meta phân trang.
 	{"catalog", "/api/v1/categories?page_size=100", -1},
-	{"catalog", "/api/v1/brands?page_size=100", -1},
 	{"catalog", "/api/v1/products?page_size=100", 1},
 
 	{"thong-bao", "/api/v1/notifications?page_size=100", -1},

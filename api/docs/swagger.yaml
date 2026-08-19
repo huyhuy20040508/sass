@@ -334,8 +334,6 @@ definitions:
     type: object
   domain.InventoryItem:
     properties:
-      brand_name:
-        type: string
       category_name:
         type: string
       color:
@@ -415,6 +413,57 @@ definitions:
       total_variants:
         type: integer
     type: object
+  domain.KhuQuyen:
+    properties:
+      ma:
+        type: string
+      mo_ta:
+        type: string
+      nhom:
+        items:
+          $ref: '#/definitions/domain.NhomMucQuyen'
+        type: array
+      ten:
+        type: string
+    type: object
+  domain.LoaiMa:
+    properties:
+      dung_chung:
+        description: |-
+          DungChung = true: một quy tắc cho cả cửa hàng (shop_id = 0). Hàng hoá hay
+          nhân viên là dữ liệu mọi chi nhánh cùng tra, hai chi nhánh đặt hai tiền tố
+          khác nhau thì mã của cùng một bảng nhảy loạn.
+        type: boolean
+      ma:
+        type: string
+      ten:
+        type: string
+      tien_to_goi_y:
+        description: TienToGoiY điền sẵn vào ô lúc người dùng vừa bật quy tắc.
+        type: string
+    type: object
+  domain.MucQuyen:
+    properties:
+      le:
+        items:
+          $ref: '#/definitions/domain.QuyenLe'
+        type: array
+      prefix:
+        description: |-
+          Prefix đi vào chuỗi quyền: "san-pham" -> "san-pham.xem". Tiếng Việt không
+          dấu, gạch ngang — cùng lối đặt tên với đường dẫn của dự án.
+        type: string
+      ten:
+        type: string
+      viec:
+        description: |-
+          Viec là những việc chuẩn màn hình này có. KHÔNG phải màn hình nào cũng đủ
+          bốn: danh mục sản phẩm không có "xem" riêng vì ai đọc được sản phẩm thì
+          cũng đọc được danh mục của nó.
+        items:
+          type: string
+        type: array
+    type: object
   domain.NewsletterSubscriber:
     properties:
       created_at:
@@ -430,6 +479,15 @@ definitions:
       unsubscribed_at:
         type: string
       updated_at:
+        type: string
+    type: object
+  domain.NhomMucQuyen:
+    properties:
+      mucs:
+        items:
+          $ref: '#/definitions/domain.MucQuyen'
+        type: array
+      ten:
         type: string
     type: object
   domain.Order:
@@ -773,14 +831,10 @@ definitions:
     type: object
   domain.ProductReport:
     properties:
-      by_brand:
-        items:
-          $ref: '#/definitions/domain.ReportSlice'
-        type: array
       by_category:
         description: |-
-          Ba lát cắt cùng dạng: `key` là id (danh mục/thương hiệu) hoặc chính giá trị
-          (size), `label` là tên đọc được.
+          Hai lát cắt cùng dạng: `key` là id danh mục hoặc chính giá trị (size),
+          `label` là tên đọc được.
         items:
           $ref: '#/definitions/domain.ReportSlice'
         type: array
@@ -815,8 +869,6 @@ definitions:
     type: object
   domain.ProductReportRow:
     properties:
-      brand_name:
-        type: string
       category_name:
         type: string
       cost:
@@ -1139,6 +1191,38 @@ definitions:
         type: string
       variant_id:
         type: integer
+    type: object
+  domain.QuyTacMa:
+    properties:
+      created_at:
+        type: string
+      doc_type:
+        type: string
+      id:
+        type: integer
+      is_active:
+        type: boolean
+      length:
+        type: integer
+      prefix:
+        type: string
+      shop_id:
+        description: 'ShopID = 0: dùng chung toàn cửa hàng. Khác 0: chỉ chi nhánh
+          đó.'
+        type: integer
+      suffix:
+        type: string
+      updated_at:
+        type: string
+      value_part:
+        type: string
+    type: object
+  domain.QuyenLe:
+    properties:
+      ma:
+        type: string
+      ten:
+        type: string
     type: object
   domain.ReportBucket:
     properties:
@@ -1463,6 +1547,17 @@ definitions:
     type: object
   domain.User:
     properties:
+      access_areas:
+        description: |-
+          AccessAreas là cột SET ghi ĐÚNG những cửa đã giao cho người này:
+          "quan_ly", "thu_ngan", hoặc cả hai. Tích gì vào được nấy.
+
+          KHÁC role_id: role_id trả lời "anh là LOẠI người nào" (chủ tiệm / người của
+          tiệm / khách), còn đây trả lời "người của tiệm thì mở được CỬA nào". Một
+          con số không nói được câu "vừa quản lý vừa đứng quầy" — xem migration 0015.
+
+          Rỗng = tài khoản có trước 0015 hoặc là khách hàng; CuaVao() suy từ role_id.
+        type: string
       avatar:
         type: string
       created_at:
@@ -1624,26 +1719,6 @@ definitions:
     required:
     - is_active
     type: object
-  dto.BrandRequest:
-    properties:
-      description:
-        maxLength: 500
-        type: string
-      is_active:
-        type: boolean
-      logo:
-        maxLength: 255
-        type: string
-      name:
-        maxLength: 150
-        type: string
-      slug:
-        maxLength: 191
-        type: string
-    required:
-    - name
-    - slug
-    type: object
   dto.CaChiTietResponse:
     properties:
       ca:
@@ -1652,6 +1727,16 @@ definitions:
         items:
           $ref: '#/definitions/domain.SoQuy'
         type: array
+    type: object
+  dto.CapNhatThueRequest:
+    properties:
+      muc:
+        items:
+          type: integer
+        minItems: 1
+        type: array
+    required:
+    - muc
     type: object
   dto.CartQuoteItem:
     properties:
@@ -1740,13 +1825,15 @@ definitions:
       parent_id:
         type: integer
       slug:
+        description: |-
+          Slug là MÃ NHÓM. Bỏ trống = hệ thống đặt (theo quy tắc đánh số của cửa
+          hàng, hoặc dải NH0001 nếu chưa bật quy tắc).
         maxLength: 191
         type: string
       sort_order:
         type: integer
     required:
     - name
-    - slug
     type: object
   dto.CauHinhNenTangField:
     properties:
@@ -3200,6 +3287,18 @@ definitions:
     - email
     - password
     type: object
+  dto.LuuQuyTacMaRequest:
+    properties:
+      quy_tac:
+        items:
+          $ref: '#/definitions/dto.QuyTacMaItem'
+        type: array
+      shop_id:
+        minimum: 1
+        type: integer
+    required:
+    - shop_id
+    type: object
   dto.MoCaRequest:
     properties:
       note:
@@ -3212,6 +3311,346 @@ definitions:
           số đối chiếu phải bắt đầu từ thứ đếm được thật.
         minimum: 0
         type: number
+    type: object
+  dto.MucThueChon:
+    properties:
+      gia_tri:
+        example: 10
+        type: integer
+      nhan:
+        example: 10%
+        type: string
+    type: object
+  dto.NhanSuRequest:
+    properties:
+      address:
+        maxLength: 255
+        type: string
+      allowance:
+        minimum: 0
+        type: number
+      avatar:
+        description: Avatar — đường dẫn ảnh do Shop Admin tải lên và lưu hộ; API chỉ
+          cất chuỗi.
+        maxLength: 255
+        type: string
+      birth_date:
+        description: BirthDate/HiredOn theo dạng YYYY-MM-DD (đúng thứ ô <input type="date">
+          gửi lên).
+        example: "1998-08-23"
+        type: string
+      code:
+        description: |-
+          Code bỏ trống khi TẠO = hệ thống tự đặt (NV0001, NV0002…). Bỏ trống khi SỬA
+          = giữ nguyên mã cũ: mã đã đi vào bảng lương và bảng chấm công.
+        example: NV0007
+        maxLength: 30
+        type: string
+      commission_rate:
+        description: |-
+          CommissionRate tính theo % doanh số — quá 100 thì bán càng nhiều càng lỗ,
+          gần như chắc chắn là gõ nhầm.
+        maximum: 100
+        minimum: 0
+        type: number
+      contract_type:
+        type: string
+      email:
+        maxLength: 191
+        type: string
+      full_name:
+        example: Nguyễn Văn An
+        maxLength: 150
+        type: string
+      gender:
+        enum:
+        - nam
+        - nu
+        - khac
+        type: string
+      hired_on:
+        example: "2026-08-17"
+        type: string
+      id_number:
+        maxLength: 20
+        type: string
+      mo_tai_khoan:
+        description: |-
+          MoTaiKhoan = "nhận người này làm lại thì mở luôn tài khoản cũ".
+
+          Chỉ có nghĩa khi Status quay về `dang_lam`. Đặt trạng thái `da_nghi` luôn
+          KHOÁ tài khoản (không hỏi), còn mở lại thì phải nói rõ ở đây — xem
+          service.dongBoTaiKhoan.
+        type: boolean
+      note:
+        maxLength: 500
+        type: string
+      phone:
+        maxLength: 20
+        type: string
+      position:
+        description: |-
+          Position là chức danh CÔNG VIỆC, không phải quyền trên phần mềm.
+
+          KHÔNG còn bắt buộc: trang nhân sự đã thay ô này bằng ca làm việc (với một
+          cửa hàng bán lẻ thì chức danh không nói thêm gì so với ô Phân quyền). Bỏ
+          trống thì lượt TẠO rơi về mặc định 'ban_hang' của cột, còn lượt SỬA giữ
+          nguyên giá trị cũ — hồ sơ khai từ trước không bị một lượt sửa tên làm mất
+          chức danh.
+        example: thu_ngan
+        type: string
+      quyen:
+        description: |-
+          Quyen — CỬA VÀO đã tích cho người này: "quan_ly", "thu_ngan", hoặc cả hai.
+
+          Mảng chứ không phải một con số, vì một người giữ được cả hai cửa và màn
+          hình phải hiện lại đúng thứ đã tích. RoleID ở trên vẫn suy ra từ đây (có
+          "quan_ly" -> 2, còn lại -> 3) và vẫn được gửi kèm: nó là khoá ngoại tới
+          `roles`, nằm trong token, và là thứ phân biệt người của tiệm với khách.
+
+          Rỗng = lượt gọi không nói gì về cửa; service giữ nguyên cột đang có.
+        example:
+        - quan_ly
+        - thu_ngan
+        items:
+          type: string
+        type: array
+      role_id:
+        description: |-
+          RoleID — QUYỀN của người này trên phần mềm (2 = quản lý, 3 = thu ngân).
+
+          Một trường cho cả hai việc, có chủ ý: lúc cấp tài khoản mới thì đây là
+          quyền đặt cho nó, lúc sửa hồ sơ đã có tài khoản thì đây là quyền ĐỔI SANG.
+          Hai trường riêng cho cùng một khái niệm là chờ ngày màn hình gửi cái này
+          còn API đọc cái kia.
+
+          KHÁC hẳn Position: Position là VIỆC người đó làm, còn đây là những gì họ
+          mở được trên phần mềm. Mặc định hai thứ đi đôi, nhưng cửa hàng có quyền
+          tách chúng ra — quản lý ca tối chỉ đứng quầy, hay thu ngân được giao coi kho.
+
+          0 = không nói gì về quyền (hồ sơ không có tài khoản).
+        example: 3
+        type: integer
+      salary:
+        minimum: 0
+        type: number
+      salary_type:
+        type: string
+      shop_id:
+        description: |-
+          ShopID BẮT BUỘC: mỗi nhân viên phải đứng ở một chi nhánh cụ thể. Cửa hàng
+          một điểm bán thì màn hình tự chọn sẵn chi nhánh duy nhất đó, người dùng
+          không phải làm gì thêm — nhưng dữ liệu vẫn ghi rõ nơi làm việc, để bảng
+          chấm công và báo cáo theo chi nhánh sau này không phải đoán.
+          KHÔNG dùng binding:"required" ở đây: bộ validate của gin đặt tên ô theo tên
+          TRƯỜNG GO ("ShopID") nên trang quản trị nhận về một khoá không khớp ô nào
+          trên form. Lượt kiểm nằm ở service và trả đúng khoá `shop_id`.
+        type: integer
+      status:
+        example: dang_lam
+        type: string
+      tai_khoan:
+        allOf:
+        - $ref: '#/definitions/dto.NhanSuTaiKhoanRequest'
+        description: |-
+          TaiKhoan có mặt = cấp tài khoản đăng nhập cho người này. Bỏ hẳn khoá này
+          (null) = không cấp, KHÁC với gửi khối rỗng.
+      work_shift:
+        description: |-
+          WorkShift — các ca người này trực. Mảng vì một người trực được nhiều ca;
+          service ghép thành chuỗi cho cột SET `employees.work_shift`.
+        example:
+        - sang
+        - chieu
+        items:
+          type: string
+        type: array
+    required:
+    - full_name
+    - status
+    type: object
+  dto.NhanSuResponse:
+    properties:
+      address:
+        type: string
+      allowance:
+        type: number
+      avatar:
+        description: |-
+          Avatar giữ ĐƯỜNG DẪN ảnh trên ổ đĩa công khai của Shop Admin, không giữ ảnh
+          — xem migration 0016. Rỗng = chưa có ảnh.
+        type: string
+      birth_date:
+        description: |-
+          BirthDate/HiredOn là cột DATE. Dùng *time.Time để phân biệt "chưa khai" với
+          ngày 0001-01-01 — hai thứ đó hiện ra màn hình khác hẳn nhau.
+        type: string
+      code:
+        type: string
+      commission_rate:
+        type: number
+      contract_type:
+        type: string
+      created_at:
+        type: string
+      email:
+        type: string
+      full_name:
+        type: string
+      gender:
+        type: string
+      hired_on:
+        type: string
+      id:
+        type: integer
+      id_number:
+        type: string
+      note:
+        type: string
+      phone:
+        type: string
+      position:
+        description: |-
+          Position là VIỆC người đó làm; quyền trên phần mềm nằm ở users.role_id.
+          Trang nhân sự KHÔNG còn gửi ô này (đã thay bằng ca làm) — hồ sơ mới rơi về
+          mặc định 'ban_hang' của cột; dữ liệu cũ và module chấm công sau vẫn dùng.
+        type: string
+      quyen:
+        description: |-
+          Quyen — cửa vào của tài khoản gắn kèm. Bảng hiện ĐÚNG danh sách này, một
+          huy hiệu mỗi cửa: tích hai ô thì ra hai huy hiệu, tích một thì ra một.
+        items:
+          type: string
+        type: array
+      role_display_name:
+        type: string
+      role_id:
+        type: integer
+      salary:
+        type: number
+      salary_type:
+        type: string
+      shop_id:
+        description: |-
+          ShopID NULL được: cửa hàng một điểm bán thì "làm ở chi nhánh nào" chưa có
+          nghĩa. UserID NULL = người này không có tài khoản đăng nhập.
+        type: integer
+      shop_name:
+        type: string
+      status:
+        type: string
+      updated_at:
+        type: string
+      user_id:
+        type: integer
+      user_status:
+        description: |-
+          UserStatus (active | inactive) là trạng thái của TÀI KHOẢN, khác với Status
+          của hồ sơ. Hai cột tách nhau nên màn hình phải nói được "đang làm nhưng tài
+          khoản đang khoá" — trường hợp có thật sau khi nhận lại người cũ mà chưa mở
+          tài khoản cho họ.
+        type: string
+      username:
+        type: string
+      work_shift:
+        description: |-
+          WorkShift là cột SET: nhiều ca trong một ô, đọc lên thành "sang,chieu".
+          NULL = chưa xếp ca, khác chuỗi rỗng ("đã xét, không trực ca nào").
+        type: string
+    type: object
+  dto.NhanSuTaiKhoanRequest:
+    properties:
+      password:
+        description: Password bỏ trống thì hệ thống cấp mật khẩu mặc định, y như trang
+          tài khoản.
+        maxLength: 72
+        minLength: 6
+        type: string
+      username:
+        example: an.nv
+        maxLength: 50
+        minLength: 3
+        type: string
+    required:
+    - username
+    type: object
+  dto.NhanSuTrangThaiRequest:
+    properties:
+      mo_tai_khoan:
+        description: |-
+          MoTaiKhoan: xem NhanSuRequest.MoTaiKhoan — công tắc gạt về "đang làm" gửi
+          kèm khoá này sau khi màn hình hỏi lại người bấm.
+        type: boolean
+      status:
+        example: dang_lam
+        type: string
+    required:
+    - status
+    type: object
+  dto.NhomQuyenQuyenRequest:
+    properties:
+      quyen:
+        items:
+          type: string
+        type: array
+    type: object
+  dto.NhomQuyenRequest:
+    properties:
+      code:
+        description: |-
+          Code bỏ trống khi TẠO = hệ thống tự đặt (nhom-1, nhom-2…). Khi SỬA thì
+          khoá này bị bỏ qua: mã là thứ mã nguồn gọi tên hai nhóm hệ thống.
+        maxLength: 50
+        type: string
+      description:
+        maxLength: 255
+        type: string
+      name:
+        example: Thủ kho
+        maxLength: 100
+        type: string
+      quyen:
+        description: |-
+          Quyen là TOÀN BỘ danh sách quyền của nhóm sau lượt này.
+
+          nil (bỏ hẳn khoá) = giữ nguyên danh sách đang có. Mảng RỖNG = bỏ hết tick.
+          Hai thứ đó khác nhau, và gộp lại thì không có cách nào thu hết quyền của
+          một nhóm.
+        items:
+          type: string
+        type: array
+    required:
+    - name
+    type: object
+  dto.NhomQuyenResponse:
+    properties:
+      code:
+        type: string
+      created_at:
+        type: string
+      description:
+        type: string
+      full_access:
+        description: |-
+          FullAccess: mọi quyền HIỆN CÓ VÀ SẼ CÓ — xem chú thích dài ở migration 0012.
+          Đây là thứ giữ cho một module ra mắt sau này tự tới tay quản trị viên.
+        type: boolean
+      id:
+        type: integer
+      is_system:
+        description: 'IsSystem: nhóm hệ thống dựng sẵn. Sửa được, KHÔNG xoá được.'
+        type: boolean
+      name:
+        type: string
+      quyen:
+        description: |-
+          Quyen: nhóm mang cờ toàn quyền trả về CẢ danh mục, vì đó đúng là những gì
+          nó có — màn hình tick hiện đủ dấu tick thay vì một danh sách trống.
+        items:
+          type: string
+        type: array
+      updated_at:
+        type: string
     type: object
   dto.OrderCancelRequest:
     properties:
@@ -3722,8 +4161,6 @@ definitions:
       base_price:
         minimum: 0
         type: number
-      brand_id:
-        type: integer
       category_id:
         type: integer
       cost_price:
@@ -3770,6 +4207,9 @@ definitions:
         maxLength: 500
         type: string
       sku:
+        description: |-
+          SKU bỏ trống = sinh theo quy tắc mã hàng hoá; chưa bật quy tắc thì API trả
+          422 đòi nhập tay. Lúc SỬA, bỏ trống là giữ mã cũ.
         maxLength: 64
         type: string
       slug:
@@ -3801,7 +4241,6 @@ definitions:
     required:
     - category_id
     - name
-    - sku
     - slug
     type: object
   dto.ProductStatusRequest:
@@ -3831,10 +4270,6 @@ definitions:
     type: object
   dto.PromotionRequest:
     properties:
-      brand_ids:
-        items:
-          type: integer
-        type: array
       category_ids:
         items:
           type: integer
@@ -3867,7 +4302,7 @@ definitions:
         type: string
       product_ids:
         description: |-
-          Ba danh sách phạm vi. Phải có ít nhất một id ở một trong ba — chương trình
+          Hai danh sách phạm vi. Phải có ít nhất một id ở một trong hai — chương trình
           không phạm vi thì không giảm cho ai, tạo ra chỉ để nằm đó gây hiểu nhầm.
         items:
           type: integer
@@ -3884,10 +4319,6 @@ definitions:
     type: object
   dto.PromotionResponse:
     properties:
-      brand_ids:
-        items:
-          type: integer
-        type: array
       category_ids:
         items:
           type: integer
@@ -4140,6 +4571,55 @@ definitions:
           khoản đang bị khoá — đặt lại mật khẩu KHÔNG mở khoá hộ.
         example: active
         type: string
+    type: object
+  dto.QuyTacMaItem:
+    properties:
+      doc_type:
+        example: don-hang
+        maxLength: 40
+        type: string
+      length:
+        description: Length là tổng số ký tự phần GIỮA (ngày + số đếm).
+        example: 6
+        maximum: 20
+        minimum: 3
+        type: integer
+      prefix:
+        example: DH
+        maxLength: 20
+        type: string
+      suffix:
+        maxLength: 20
+        type: string
+      value_part:
+        description: 'ValuePart: so-thu-tu | ngay-thang-nam | thang-nam.'
+        example: so-thu-tu
+        maxLength: 20
+        type: string
+    required:
+    - doc_type
+    - length
+    - value_part
+    type: object
+  dto.QuyTacMaResponse:
+    properties:
+      loai:
+        items:
+          $ref: '#/definitions/domain.LoaiMa'
+        type: array
+      quy_tac:
+        items:
+          $ref: '#/definitions/domain.QuyTacMa'
+        type: array
+    type: object
+  dto.QuyenCuaToiResponse:
+    properties:
+      quyen:
+        items:
+          type: string
+        type: array
+      toan_quyen:
+        type: boolean
     type: object
   dto.RefreshRequest:
     properties:
@@ -4880,6 +5360,42 @@ definitions:
         example: 1980000
         type: number
     type: object
+  dto.ThueItem:
+    properties:
+      chon_duoc:
+        items:
+          $ref: '#/definitions/dto.MucThueChon'
+        type: array
+      id:
+        type: integer
+      is_active:
+        type: boolean
+      loai:
+        example: ban-hang
+        type: string
+      mo_ta:
+        type: string
+      muc:
+        description: Muc là các mức ĐANG BẬT; MucNhan là chính chúng đã dịch sang
+          chữ.
+        items:
+          type: integer
+        type: array
+      muc_nhan:
+        items:
+          type: string
+        type: array
+      ten:
+        example: Thuế đơn bán hàng
+        type: string
+    type: object
+  dto.TrangThaiThueRequest:
+    properties:
+      is_active:
+        type: boolean
+    required:
+    - is_active
+    type: object
   dto.UpdateContactStatusRequest:
     properties:
       admin_note:
@@ -4969,6 +5485,17 @@ definitions:
         type: string
       phone:
         type: string
+      quyen:
+        description: |-
+          Quyen — CỬA VÀO đã giao (users.access_areas). Cột rỗng thì suy từ role_id,
+          nên danh sách này LUÔN nói đúng những khu người đó mở được, kể cả với tài
+          khoản có trước migration 0015.
+        example:
+        - quan_ly
+        - thu_ngan
+        items:
+          type: string
+        type: array
       role_display_name:
         example: Quản trị viên
         type: string
@@ -5924,136 +6451,6 @@ paths:
       summary: Sắp xếp lại banner
       tags:
       - Admin - Banners
-  /admin/brands:
-    post:
-      consumes:
-      - application/json
-      parameters:
-      - description: Dữ liệu thương hiệu
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/dto.BrandRequest'
-      produces:
-      - application/json
-      responses:
-        "201":
-          description: Created
-          schema:
-            $ref: '#/definitions/response.Body'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/response.Body'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.Body'
-        "403":
-          description: Forbidden
-          schema:
-            $ref: '#/definitions/response.Body'
-        "409":
-          description: Conflict
-          schema:
-            $ref: '#/definitions/response.Body'
-        "422":
-          description: Unprocessable Entity
-          schema:
-            $ref: '#/definitions/response.Body'
-      security:
-      - BearerAuth: []
-      summary: Tạo thương hiệu
-      tags:
-      - Admin - Brands
-  /admin/brands/{id}:
-    delete:
-      parameters:
-      - description: ID thương hiệu
-        in: path
-        name: id
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/response.Body'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/response.Body'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.Body'
-        "403":
-          description: Forbidden
-          schema:
-            $ref: '#/definitions/response.Body'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/response.Body'
-        "409":
-          description: Conflict
-          schema:
-            $ref: '#/definitions/response.Body'
-      security:
-      - BearerAuth: []
-      summary: Xóa thương hiệu
-      tags:
-      - Admin - Brands
-    put:
-      consumes:
-      - application/json
-      parameters:
-      - description: ID thương hiệu
-        in: path
-        name: id
-        required: true
-        type: integer
-      - description: Dữ liệu thương hiệu
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/dto.BrandRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/response.Body'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/response.Body'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.Body'
-        "403":
-          description: Forbidden
-          schema:
-            $ref: '#/definitions/response.Body'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/response.Body'
-        "422":
-          description: Unprocessable Entity
-          schema:
-            $ref: '#/definitions/response.Body'
-      security:
-      - BearerAuth: []
-      summary: Cập nhật thương hiệu
-      tags:
-      - Admin - Brands
   /admin/ca-lam-viec:
     get:
       description: Lịch sử các ca, mới nhất trước. Lọc theo chi nhánh, trạng thái
@@ -7229,10 +7626,6 @@ paths:
         in: query
         name: category_id
         type: integer
-      - description: Lọc theo thương hiệu
-        in: query
-        name: brand_id
-        type: integer
       - description: all|in|low|out
         in: query
         name: stock
@@ -7728,6 +8121,533 @@ paths:
       summary: Gỡ một email khỏi danh sách nhận tin
       tags:
       - Admin - Contact
+  /admin/nhan-su:
+    get:
+      description: |-
+        Hồ sơ người đi làm của cửa hàng, sắp theo trạng thái (đang làm trước) rồi tới tên.
+        Không phân trang: số người của một cửa hàng đếm bằng hàng chục.
+      parameters:
+      - description: Tìm theo tên, mã nhân viên hoặc số điện thoại
+        in: query
+        name: keyword
+        type: string
+      - description: dang_lam | tam_nghi | da_nghi
+        in: query
+        name: status
+        type: string
+      - description: Chức danh công việc
+        in: query
+        name: position
+        type: string
+      - description: Loại hợp đồng
+        in: query
+        name: contract_type
+        type: string
+      - description: Chi nhánh
+        in: query
+        name: shop_id
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/dto.NhanSuResponse'
+                  type: array
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Danh sách nhân sự
+      tags:
+      - Admin - Nhân sự
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Bỏ trống `code` thì hệ thống tự đặt (NV0001, NV0002…).
+        Gửi kèm khối `tai_khoan` để cấp luôn tài khoản đăng nhập cho người này —
+        khi đó hồ sơ phải có `email` (bảng tài khoản bắt buộc và đặt UNIQUE lên email)
+        và `role_id` là quyền đặt cho tài khoản đó.
+      parameters:
+      - description: Hồ sơ nhân viên
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.NhanSuRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.NhanSuResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.Body'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Body'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.Body'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Thêm hồ sơ nhân viên
+      tags:
+      - Admin - Nhân sự
+  /admin/nhan-su/{id}:
+    delete:
+      description: |-
+        Xoá MỀM, và KHOÁ luôn tài khoản đăng nhập gắn kèm: xoá là hành động mạnh hơn
+        "đã nghỉ" nên không thể lỏng hơn. Xoá hồ sơ của chính mình thì bị từ chối.
+        Người nghỉ việc thì nên đặt trạng thái `da_nghi` thay vì xoá — hồ sơ còn để tra lương cũ.
+      parameters:
+      - description: ID hồ sơ
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Body'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Body'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Xoá hồ sơ nhân viên
+      tags:
+      - Admin - Nhân sự
+    get:
+      parameters:
+      - description: ID hồ sơ
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.NhanSuResponse'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Body'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Chi tiết một hồ sơ nhân sự
+      tags:
+      - Admin - Nhân sự
+    put:
+      consumes:
+      - application/json
+      description: |-
+        Bỏ trống `code` = giữ nguyên mã cũ (mã đã đi vào bảng lương).
+        Khối `tai_khoan` chỉ dùng để cấp tài khoản cho hồ sơ CHƯA có; đổi mật khẩu
+        là đường riêng của module tài khoản.
+        Hồ sơ ĐÃ có tài khoản thì `role_id` là lệnh đổi vai trò cho tài khoản đó.
+        `status` = `da_nghi` khoá luôn tài khoản gắn kèm; đặt lại `dang_lam` chỉ mở
+        tài khoản khi gửi kèm `mo_tai_khoan: true`.
+      parameters:
+      - description: ID hồ sơ
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Hồ sơ nhân viên
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.NhanSuRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.NhanSuResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.Body'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Body'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.Body'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Sửa hồ sơ nhân viên
+      tags:
+      - Admin - Nhân sự
+  /admin/nhan-su/{id}/trang-thai:
+    put:
+      consumes:
+      - application/json
+      description: |-
+        Đường riêng cho công tắc trên bảng danh sách: chỉ đổi cột `status`,
+        không đụng tới phần còn lại của hồ sơ.
+        Đặt `da_nghi` sẽ KHOÁ luôn tài khoản đăng nhập gắn với hồ sơ (nếu có) —
+        nghỉ việc mà tài khoản còn mở thì người đó vẫn vào được quầy bán bằng
+        mật khẩu cũ. Chiều ngược lại không tự mở: gửi kèm `mo_tai_khoan: true`.
+      parameters:
+      - description: ID hồ sơ
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Trạng thái mới
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.NhanSuTrangThaiRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.NhanSuResponse'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Body'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.Body'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Bật/tắt trạng thái làm việc
+      tags:
+      - Admin - Nhân sự
+  /admin/nhom-quyen:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/dto.NhomQuyenResponse'
+                  type: array
+              type: object
+      security:
+      - BearerAuth: []
+      summary: Danh sách nhóm quyền
+      tags:
+      - Admin - Nhóm quyền
+    post:
+      consumes:
+      - application/json
+      description: Bỏ trống `code` thì hệ thống tự đặt (nhom-1, nhom-2…).
+      parameters:
+      - description: Nhóm quyền
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.NhomQuyenRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.NhomQuyenResponse'
+              type: object
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Thêm nhóm quyền
+      tags:
+      - Admin - Nhóm quyền
+  /admin/nhom-quyen/{id}:
+    delete:
+      description: Nhóm hệ thống và nhóm còn người mang đều KHÔNG xoá được.
+      parameters:
+      - description: ID nhóm
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Body'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.Body'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Xoá nhóm quyền
+      tags:
+      - Admin - Nhóm quyền
+    get:
+      parameters:
+      - description: ID nhóm
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.NhomQuyenResponse'
+              type: object
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Chi tiết một nhóm quyền
+      tags:
+      - Admin - Nhóm quyền
+    put:
+      consumes:
+      - application/json
+      description: |-
+        Mã nhóm KHÔNG đổi được. Bỏ hẳn khoá `quyen` = giữ nguyên danh sách quyền;
+        gửi mảng rỗng = bỏ hết tick.
+      parameters:
+      - description: ID nhóm
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Nhóm quyền
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.NhomQuyenRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.NhomQuyenResponse'
+              type: object
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Sửa nhóm quyền
+      tags:
+      - Admin - Nhóm quyền
+  /admin/nhom-quyen/{id}/quyen:
+    put:
+      consumes:
+      - application/json
+      description: |-
+        Thay TOÀN BỘ danh sách. Nhóm đang mang cờ "toàn quyền" thì lượt này gỡ cờ đi:
+        người dùng vừa nói rõ họ muốn một danh sách cụ thể.
+      parameters:
+      - description: ID nhóm
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Danh sách quyền
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.NhomQuyenQuyenRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.NhomQuyenResponse'
+              type: object
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Đặt danh sách quyền của một nhóm
+      tags:
+      - Admin - Nhóm quyền
+  /admin/nhom-quyen/danh-muc:
+    get:
+      description: |-
+        Toàn bộ quyền có thể tick, xếp theo nhóm hiển thị đúng thứ tự thanh điều hướng.
+        Danh sách này nằm trong mã nguồn chứ không phải database: nó phải khớp từng chữ
+        với những đường mà máy chủ thật sự chặn.
+        Tầng trên cùng là KHU làm việc (Quản trị / Thu ngân) — màn hình khoá cả khu
+        Quản trị với người chỉ được giao cửa quầy.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/domain.KhuQuyen'
+                  type: array
+              type: object
+      security:
+      - BearerAuth: []
+      summary: Cây quyền của phần mềm
+      tags:
+      - Admin - Nhóm quyền
   /admin/notifications/test:
     post:
       description: 'Chỉ dùng để kiểm tra đường truyền realtime khi cài đặt: tạo một
@@ -9816,6 +10736,99 @@ paths:
       summary: Tìm sản phẩm để đưa vào phiếu đặt hàng
       tags:
       - Admin - Purchases
+  /admin/quy-tac-ma:
+    get:
+      description: |-
+        Trả về danh mục loại đánh số được (khai trong mã nguồn) và MỌI quy tắc đã lưu của cửa hàng.
+        `shop_id = 0` là quy tắc dùng chung toàn cửa hàng (hàng hoá, nhà cung cấp, nhân viên).
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.QuyTacMaResponse'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Quy tắc đánh số chứng từ
+      tags:
+      - Admin - Quy tắc đánh số
+    put:
+      consumes:
+      - application/json
+      description: |-
+        Gửi lên TRẠNG THÁI CUỐI CÙNG: loại có trong `quy_tac` là bật, loại vắng mặt là tắt.
+        Lượt lưu chạm hai phạm vi — chi nhánh `shop_id` và phạm vi dùng chung.
+      parameters:
+      - description: Bảng quy tắc
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.LuuQuyTacMaRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Body'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Body'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Lưu quy tắc đánh số của một chi nhánh
+      tags:
+      - Admin - Quy tắc đánh số
+  /admin/quyen-cua-toi:
+    get:
+      description: |-
+        Trang quản trị đọc một lần lúc đăng nhập để lọc menu. KHÔNG thay cho chốt ở
+        máy chủ — ẩn một mục menu chỉ là phép lịch sự, chặn thật nằm ở từng đường.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.QuyenCuaToiResponse'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: Quyền của chính người đang đăng nhập
+      tags:
+      - Admin - Nhóm quyền
   /admin/receipts:
     get:
       consumes:
@@ -10894,6 +11907,136 @@ paths:
       summary: Sửa nhà cung cấp
       tags:
       - Admin - Suppliers
+  /admin/thue:
+    get:
+      description: |-
+        Bốn loại cố định, mỗi loại kèm bộ mức đang bật và bộ mức cho chọn.
+        Cửa hàng chưa có dòng nào thì lượt gọi này dựng sẵn theo mức mặc định.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/dto.ThueItem'
+                  type: array
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Danh sách thuế suất
+      tags:
+      - Admin - Thuế
+  /admin/thue/{id}:
+    put:
+      consumes:
+      - application/json
+      description: Gửi lên TRẠNG THÁI CUỐI CÙNG của ô chọn. Mức nằm ngoài bộ cho chọn
+        của loại đó bị từ chối.
+      parameters:
+      - description: ID dòng thuế
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Bộ mức
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CapNhatThueRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.ThueItem'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Body'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Sửa bộ mức của một loại thuế
+      tags:
+      - Admin - Thuế
+  /admin/thue/{id}/trang-thai:
+    put:
+      consumes:
+      - application/json
+      description: Tắt = màn nghiệp vụ thôi bày ô chọn thuế của loại đó. Dòng vẫn
+        còn, bật lại là bộ mức cũ nguyên vẹn.
+      parameters:
+      - description: ID dòng thuế
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Trạng thái
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.TrangThaiThueRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.ThueItem'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Body'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Bật/tắt một loại thuế
+      tags:
+      - Admin - Thuế
   /admin/users:
     get:
       description: |-
@@ -11214,6 +12357,82 @@ paths:
       summary: Đặt lại mật khẩu tài khoản nội bộ
       tags:
       - Admin - Users
+  /admin/users/{id}/quyen:
+    get:
+      description: |-
+        Màn phân quyền đọc để dựng sẵn ô tick. Nhóm quyền chỉ là mẫu — quyền thật
+        nằm ở đây (bảng user_permissions).
+      parameters:
+      - description: ID tài khoản
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.QuyenCuaToiResponse'
+              type: object
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Quyền đã tick cho một tài khoản
+      tags:
+      - Admin - Nhóm quyền
+    put:
+      consumes:
+      - application/json
+      description: |-
+        Thay TOÀN BỘ danh sách. Mảng rỗng = thu hết quyền (tài khoản vẫn đăng
+        nhập được, chỉ là không mở được trang nào).
+        KHÔNG tự đặt cho chính mình: phiên đang chạy bằng token cũ nên màn hình vẫn
+        trông bình thường, tới lần đăng nhập sau mới phát hiện mất đường vào.
+      parameters:
+      - description: ID tài khoản
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Danh sách quyền
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.NhomQuyenQuyenRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Body'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Đặt quyền cho một tài khoản
+      tags:
+      - Admin - Nhóm quyền
   /admin/users/{id}/status:
     put:
       consumes:
@@ -12165,49 +13384,6 @@ paths:
       summary: Danh sách vị trí banner hỗ trợ
       tags:
       - Banners
-  /brands:
-    get:
-      description: Mỗi thương hiệu kèm `product_count` — số sản phẩm (chưa xoá) đang
-        gắn thương hiệu đó.
-      parameters:
-      - description: true = lấy cả thương hiệu ẩn
-        in: query
-        name: all
-        type: boolean
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/response.Body'
-      summary: Danh sách thương hiệu
-      tags:
-      - Brands
-  /brands/{id}:
-    get:
-      description: Kèm `product_count` — số sản phẩm (chưa xoá) đang gắn thương hiệu
-        này.
-      parameters:
-      - description: ID thương hiệu
-        in: path
-        name: id
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/response.Body'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/response.Body'
-      summary: Chi tiết thương hiệu
-      tags:
-      - Brands
   /categories:
     get:
       parameters:
@@ -13925,10 +15101,6 @@ paths:
       - description: ID danh mục (tự gộp sản phẩm của mọi danh mục con/cháu)
         in: query
         name: category_id
-        type: integer
-      - description: ID thương hiệu
-        in: query
-        name: brand_id
         type: integer
       - description: 'Loại áo: fan (FAN) | player (PLAYER)'
         in: query

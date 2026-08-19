@@ -30,7 +30,6 @@ func NewInventoryHandler(svc service.InventoryService) *InventoryHandler {
 // @Produce		json
 // @Param			keyword		query		string	false	"Tên sản phẩm / SKU biến thể / SKU sản phẩm"
 // @Param			category_id	query		int		false	"Lọc theo danh mục"
-// @Param			brand_id	query		int		false	"Lọc theo thương hiệu"
 // @Param			stock		query		string	false	"all|in|low|out"
 // @Param			cost		query		string	false	"all|missing (chưa khai giá vốn)|set (đã khai)"
 // @Param			is_active	query		bool	false	"Lọc theo trạng thái bán của biến thể"
@@ -264,10 +263,6 @@ func inventoryFilterFrom(c *gin.Context, defaultSize, maxSize int) (domain.Inven
 	if id, err := strconv.ParseUint(c.Query("category_id"), 10, 64); err == nil && id > 0 {
 		v := uint(id)
 		f.CategoryID = &v
-	}
-	if id, err := strconv.ParseUint(c.Query("brand_id"), 10, 64); err == nil && id > 0 {
-		v := uint(id)
-		f.BrandID = &v
 	}
 	if v, err := strconv.ParseBool(c.Query("is_active")); err == nil {
 		f.IsActive = &v

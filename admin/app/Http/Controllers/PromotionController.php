@@ -89,11 +89,10 @@ class PromotionController extends Controller
             'filters' => $filters,
             'stats' => $stats,
             'meta' => $meta,
-            // Ba nguồn để chọn phạm vi. Nạp sẵn cùng trang thay vì gọi thêm khi mở
+            // Hai nguồn để chọn phạm vi. Nạp sẵn cùng trang thay vì gọi thêm khi mở
             // modal: cửa hàng cỡ này chỉ vài trăm dòng, mà đợi API lúc đang điền
             // biểu mẫu thì khó chịu hơn nhiều so với việc trang nặng thêm chút.
             'categories' => $this->fetchCategories(),
-            'brands' => $this->fetchBrands(),
             'products' => $this->fetchProducts(),
         ]);
 
@@ -282,8 +281,6 @@ class PromotionController extends Controller
             'product_ids.*' => ['integer'],
             'category_ids' => ['nullable', 'array'],
             'category_ids.*' => ['integer'],
-            'brand_ids' => ['nullable', 'array'],
-            'brand_ids.*' => ['integer'],
         ], [
             'name.required' => 'Vui lòng nhập tên chương trình.',
             'name.max' => 'Tên chương trình tối đa 150 ký tự.',
@@ -327,7 +324,6 @@ class PromotionController extends Controller
             'is_active' => $request->boolean('is_active'),
             'product_ids' => $ids('product_ids'),
             'category_ids' => $ids('category_ids'),
-            'brand_ids' => $ids('brand_ids'),
         ];
     }
 
@@ -350,20 +346,6 @@ class PromotionController extends Controller
             }
         } catch (\Throwable $e) {
             Log::error('Fetch categories for promotion failed', ['msg' => $e->getMessage()]);
-        }
-
-        return [];
-    }
-
-    protected function fetchBrands(): array
-    {
-        try {
-            $res = $this->api->brands(true);
-            if ($res->successful()) {
-                return $res->json('data') ?? [];
-            }
-        } catch (\Throwable $e) {
-            Log::error('Fetch brands for promotion failed', ['msg' => $e->getMessage()]);
         }
 
         return [];

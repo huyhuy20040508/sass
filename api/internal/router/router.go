@@ -42,7 +42,6 @@ type Handlers struct {
 	Health   *handler.HealthHandler
 	Auth     *handler.AuthHandler
 	Category *handler.CategoryHandler
-	Brand    *handler.BrandHandler
 	Product  *handler.ProductHandler
 	Customer *handler.CustomerHandler
 	Order    *handler.OrderHandler
@@ -67,6 +66,8 @@ type Handlers struct {
 	NhomQuyen *handler.NhomQuyenHandler
 	// QuyTacMa — quy tắc đánh số chứng từ (Cài đặt → Thông số chung).
 	QuyTacMa *handler.QuyTacMaHandler
+	// Thue — thuế suất (Hàng hóa → Thuế).
+	Thue *handler.ThueHandler
 	// Ca là ca làm việc + sổ quỹ tiền mặt — cụm trả lời câu hỏi cuối ngày: tiền
 	// trong két có khớp sổ không, và nếu lệch thì lệch trong lượt trực của ai.
 	Ca      *handler.CaLamViecHandler
@@ -304,8 +305,6 @@ func New(
 		catalog := khachLa(v1)
 		catalog.GET("/categories", h.Category.List)
 		catalog.GET("/categories/:id", h.Category.Get)
-		catalog.GET("/brands", h.Brand.List)
-		catalog.GET("/brands/:id", h.Brand.Get)
 		catalog.GET("/products", h.Product.List)
 		catalog.GET("/products/:slug", h.Product.GetBySlug)
 
@@ -478,9 +477,12 @@ func New(
 			q.Dat(manage, http.MethodPut, "/categories/:id", "danh-muc.sua", h.Category.Update)
 			q.Dat(manage, http.MethodDelete, "/categories/:id", "danh-muc.xoa", h.Category.Delete)
 
-			q.Dat(manage, http.MethodPost, "/brands", "thuong-hieu.them", h.Brand.Create)
-			q.Dat(manage, http.MethodPut, "/brands/:id", "thuong-hieu.sua", h.Brand.Update)
-			q.Dat(manage, http.MethodDelete, "/brands/:id", "thuong-hieu.xoa", h.Brand.Delete)
+			// Thuế suất — bộ mức bày ra ở ô chọn thuế của đơn bán, đơn mua và
+			// từng mặt hàng. Cùng tầng với danh mục: đây là khung, không phải
+			// việc hằng ngày của quầy.
+			q.Dat(manage, http.MethodGet, "/thue", "thue.xem", h.Thue.List)
+			q.Dat(manage, http.MethodPut, "/thue/:id", "thue.sua", h.Thue.Update)
+			q.Dat(manage, http.MethodPut, "/thue/:id/trang-thai", "thue.sua", h.Thue.DoiTrangThai)
 
 			// Banner trang chủ — nội dung tiếp thị, cùng tầng quyền với sản phẩm.
 			// "sort" phải đứng trước /:id, nếu không nó bị hiểu là id banner.

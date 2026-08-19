@@ -38,7 +38,6 @@
 
         // Số bộ lọc nâng cao đang bật -> tự mở hàng nâng cao + hiện badge.
         $advCount = ($filters['category_id'] > 0 ? 1 : 0)
-            + ($filters['brand_id'] > 0 ? 1 : 0)
             + ($filters['cost'] !== 'all' ? 1 : 0)
             + ($filters['is_active'] !== '' ? 1 : 0)
             + ($filters['sort'] !== 'stock_asc' ? 1 : 0);
@@ -233,22 +232,13 @@
                 </div>
             </div>
 
-            {{-- Hàng nâng cao: danh mục + thương hiệu + trạng thái bán + sắp xếp --}}
+            {{-- Hàng nâng cao: danh mục + trạng thái bán + sắp xếp --}}
             <div class="inv-toolbar-adv {{ $advOpen ? 'is-open' : '' }}" id="invAdvRow">
                 <select name="category_id" class="inv-select" title="Lọc theo danh mục">
                     <option value="">Tất cả danh mục</option>
                     @foreach($categories as $c)
                         <option value="{{ $c['id'] }}" {{ $filters['category_id'] === (int) $c['id'] ? 'selected' : '' }}>
                             {{ $c['name'] }}
-                        </option>
-                    @endforeach
-                </select>
-
-                <select name="brand_id" class="inv-select" title="Lọc theo thương hiệu">
-                    <option value="">Tất cả thương hiệu</option>
-                    @foreach($brands as $b)
-                        <option value="{{ $b['id'] }}" {{ $filters['brand_id'] === (int) $b['id'] ? 'selected' : '' }}>
-                            {{ $b['name'] }}
                         </option>
                     @endforeach
                 </select>
@@ -366,7 +356,6 @@
                             </td>
                             <td class="inv-c-group">
                                 <span class="inv-name">{{ $it['category_name'] ?: '—' }}</span>
-                                <span class="inv-sub">{{ $it['brand_name'] ?: '—' }}</span>
                             </td>
                             <td class="inv-c-qty">
                                 <span class="inv-qty is-{{ $state }}">{{ number_format($qty, 0, ',', '.') }}</span>
@@ -672,7 +661,7 @@
                 </div>
 
                 <p class="inv-meta-line">
-                    Danh mục <b id="vCategory">—</b> · Thương hiệu <b id="vBrand">—</b>
+                    Danh mục <b id="vCategory">—</b>
                 </p>
 
                 <div class="inv-view-sec">
@@ -1517,7 +1506,7 @@
                 const token = ledger.token;
                 $('vMoreWrap').hidden = true;
                 $('vLedger').innerHTML = '<tr><td colspan="6" class="inv-ledger-empty">Đang tải…</td></tr>';
-                ['vName', 'vSku', 'vCategory', 'vBrand', 'vQty', 'vPrice', 'vCost', 'vValue'].forEach((k) => {
+                ['vName', 'vSku', 'vCategory', 'vQty', 'vPrice', 'vCost', 'vValue'].forEach((k) => {
                     $(k).textContent = '—';
                 });
                 $('vTotal').textContent = '';
@@ -1539,7 +1528,6 @@
                         // mạch dễ hơn là hai ô rời nhau ở hai chỗ khác nhau.
                         $('vSku').textContent = [it.sku, variantText(it)].filter((s) => s && s !== '—').join(' · ');
                         $('vCategory').textContent = it.category_name || '—';
-                        $('vBrand').textContent = it.brand_name || '—';
                         $('vQty').textContent = nf.format(qty);
                         $('vPrice').textContent = money(it.price);
                         // Chưa khai giá vốn: hiện "Chưa khai" thay vì 0₫, và giá trị vốn

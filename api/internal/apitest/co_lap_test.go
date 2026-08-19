@@ -45,8 +45,6 @@ var bangTuyen = []buoc{
 	// --- Catalog công khai (đọc token nếu có, nên vẫn phải lọc theo cửa hàng) ---
 	{"catalog", "GET /categories/{id}", http.MethodGet,
 		func(c *cuaHang) string { return fmt.Sprintf("/api/v1/categories/%d", c.danhMuc) }, nil, phaDoc},
-	{"catalog", "GET /brands/{id}", http.MethodGet,
-		func(c *cuaHang) string { return fmt.Sprintf("/api/v1/brands/%d", c.thuongHieu) }, nil, phaDoc},
 	{"catalog", "GET /products/{slug}", http.MethodGet,
 		func(c *cuaHang) string { return "/api/v1/products/" + c.slug }, nil, phaDoc},
 
@@ -62,15 +60,6 @@ var bangTuyen = []buoc{
 		}, phaSua},
 	{"danh-muc", "DELETE /admin/categories/{id}", http.MethodDelete,
 		func(c *cuaHang) string { return fmt.Sprintf("/api/v1/admin/categories/%d", c.danhMuc) }, nil, phaXoa},
-
-	// --- Thương hiệu ---
-	{"thuong-hieu", "PUT /admin/brands/{id}", http.MethodPut,
-		func(c *cuaHang) string { return fmt.Sprintf("/api/v1/admin/brands/%d", c.thuongHieu) },
-		func(c *cuaHang) any {
-			return map[string]any{"name": "Thương hiệu " + c.vet, "slug": "th-" + c.vet}
-		}, phaSua},
-	{"thuong-hieu", "DELETE /admin/brands/{id}", http.MethodDelete,
-		func(c *cuaHang) string { return fmt.Sprintf("/api/v1/admin/brands/%d", c.thuongHieu) }, nil, phaXoa},
 
 	// --- Banner ---
 	{"banner", "GET /admin/banners/{id}", http.MethodGet,

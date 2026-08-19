@@ -193,16 +193,6 @@ type PlatformAuthResponse struct {
 	User *domain.PlatformUser `json:"user"`
 }
 
-// ---------- Brand ----------
-
-type BrandRequest struct {
-	Name        string `json:"name" binding:"required,max=150"`
-	Slug        string `json:"slug" binding:"required,max=191"`
-	Logo        string `json:"logo" binding:"omitempty,max=255"`
-	Description string `json:"description" binding:"omitempty,max=500"`
-	IsActive    *bool  `json:"is_active"`
-}
-
 // ---------- Banner ----------
 
 // BannerRequest là dữ liệu tạo/sửa một banner.
@@ -252,11 +242,10 @@ type PromotionRequest struct {
 	StartAt           string   `json:"start_at" binding:"required,datetime=2006-01-02T15:04" example:"2026-08-10T08:00"`
 	EndAt             string   `json:"end_at" binding:"required,datetime=2006-01-02T15:04" example:"2026-09-01T23:59"`
 	IsActive          *bool    `json:"is_active"`
-	// Ba danh sách phạm vi. Phải có ít nhất một id ở một trong ba — chương trình
+	// Hai danh sách phạm vi. Phải có ít nhất một id ở một trong hai — chương trình
 	// không phạm vi thì không giảm cho ai, tạo ra chỉ để nằm đó gây hiểu nhầm.
 	ProductIDs  []uint `json:"product_ids"`
 	CategoryIDs []uint `json:"category_ids"`
-	BrandIDs    []uint `json:"brand_ids"`
 }
 
 // PromotionStatusRequest bật/tắt một chương trình mà không đụng tới ngày chạy.
@@ -264,7 +253,7 @@ type PromotionStatusRequest struct {
 	IsActive *bool `json:"is_active" binding:"required"`
 }
 
-// PromotionResponse là chương trình kèm phạm vi đã tách sẵn thành ba danh sách id
+// PromotionResponse là chương trình kèm phạm vi đã tách sẵn thành hai danh sách id
 // và mấy thông tin suy ra sẵn cho giao diện.
 type PromotionResponse struct {
 	ID                uint     `json:"id"`
@@ -281,7 +270,6 @@ type PromotionResponse struct {
 	Status      string `json:"status"`
 	ProductIDs  []uint `json:"product_ids"`
 	CategoryIDs []uint `json:"category_ids"`
-	BrandIDs    []uint `json:"brand_ids"`
 	// ProductCount là số sản phẩm đang bán mà chương trình phủ tới (đã tính cả
 	// danh mục con).
 	ProductCount int64  `json:"product_count"`
@@ -407,7 +395,6 @@ type VoucherResponse struct {
 
 type ProductRequest struct {
 	CategoryID uint   `json:"category_id" binding:"required"`
-	BrandID    *uint  `json:"brand_id"`
 	Name       string `json:"name" binding:"required,max=200"`
 	Slug       string `json:"slug" binding:"required,max=191"`
 	// SKU bỏ trống = sinh theo quy tắc mã hàng hoá; chưa bật quy tắc thì API trả
@@ -2417,4 +2404,44 @@ type QuyTacMaItem struct {
 type LuuQuyTacMaRequest struct {
 	ShopID uint           `json:"shop_id" binding:"required,min=1"`
 	QuyTac []QuyTacMaItem `json:"quy_tac" binding:"omitempty,dive"`
+}
+
+// ---------- Thuế suất (Hàng hóa → Thuế) ----------
+
+// MucThueChon — một mức trong ô chọn: số để lưu, chữ để hiện.
+//
+// Nhãn dựng ở API chứ không để màn hình tự đoán: -1 và -2 không phải phần trăm,
+// mỗi nơi tự dịch là mỗi nơi in ra một chữ khác nhau.
+type MucThueChon struct {
+	GiaTri int    `json:"gia_tri" example:"10"`
+	Nhan   string `json:"nhan" example:"10%"`
+}
+
+// ThueItem — một dòng trên bảng Thuế, đã ghép sẵn tên loại và bộ mức cho chọn.
+//
+// Ghép ở đây thay vì trả hai danh sách rời cho màn hình tự nối: nối ở ngoài thì
+// mỗi màn hình nối một kiểu và sẽ có màn hình nối sai.
+type ThueItem struct {
+	ID   uint   `json:"id"`
+	Loai string `json:"loai" example:"ban-hang"`
+	Ten  string `json:"ten" example:"Thuế đơn bán hàng"`
+	MoTa string `json:"mo_ta"`
+	// Muc là các mức ĐANG BẬT; MucNhan là chính chúng đã dịch sang chữ.
+	Muc      []int         `json:"muc"`
+	MucNhan  []string      `json:"muc_nhan"`
+	ChonDuoc []MucThueChon `json:"chon_duoc"`
+	IsActive bool          `json:"is_active"`
+}
+
+// CapNhatThueRequest — bảng mức sau khi sửa, gửi lên nguyên trạng thái cuối.
+type CapNhatThueRequest struct {
+	Muc []int `json:"muc" binding:"required,min=1"`
+}
+
+// TrangThaiThueRequest — công tắc bật/tắt trên bảng danh sách.
+//
+// Con trỏ chứ không phải bool: `false` là giá trị rỗng của bool, để kiểu thường
+// thì "tắt dòng này" và "quên gửi trường" là hai câu giống hệt nhau.
+type TrangThaiThueRequest struct {
+	IsActive *bool `json:"is_active" binding:"required"`
 }

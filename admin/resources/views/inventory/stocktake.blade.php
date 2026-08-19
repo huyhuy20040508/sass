@@ -33,9 +33,6 @@
         if ($filters['category_id'] > 0) {
             $scope[] = 'lọc theo danh mục';
         }
-        if ($filters['brand_id'] > 0) {
-            $scope[] = 'lọc theo thương hiệu';
-        }
     }
     $scopeText = $scope ? implode(' · ', $scope) : 'toàn bộ kho';
     $truncated = $total > count($rows);

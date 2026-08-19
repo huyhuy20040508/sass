@@ -216,7 +216,6 @@ type ProductReportRow struct {
 	Slug         string  `json:"slug"`
 	Thumbnail    string  `json:"thumbnail"`
 	CategoryName string  `json:"category_name"`
-	BrandName    string  `json:"brand_name"`
 	Orders       int64   `json:"orders"`
 	Units        int64   `json:"units"`
 	Revenue      float64 `json:"revenue"`
@@ -243,10 +242,9 @@ type ProductReport struct {
 	Totals   ProductReportTotals `json:"totals"`
 	Prev     ProductReportTotals `json:"prev"`
 	Items    []ProductReportRow  `json:"items"`
-	// Ba lát cắt cùng dạng: `key` là id (danh mục/thương hiệu) hoặc chính giá trị
-	// (size), `label` là tên đọc được.
+	// Hai lát cắt cùng dạng: `key` là id danh mục hoặc chính giá trị (size),
+	// `label` là tên đọc được.
 	ByCategory []ReportSlice `json:"by_category"`
-	ByBrand    []ReportSlice `json:"by_brand"`
 	BySize     []ReportSlice `json:"by_size"`
 	// Số sản phẩm ĐANG BÁN mà cả kỳ không bán được món nào — phần vốn nằm chết,
 	// không nhìn bảng xếp hạng nào thấy được.
@@ -347,7 +345,6 @@ type ReportRepository interface {
 	ProductTotals(ctx context.Context, p ReportPeriod) (ProductReportTotals, error)
 	ProductRows(ctx context.Context, p ReportPeriod, sort string, limit int) ([]ProductReportRow, error)
 	ByCategory(ctx context.Context, p ReportPeriod, limit int) ([]ReportSlice, error)
-	ByBrand(ctx context.Context, p ReportPeriod, limit int) ([]ReportSlice, error)
 	BySize(ctx context.Context, p ReportPeriod, limit int) ([]ReportSlice, error)
 	UnsoldProducts(ctx context.Context, p ReportPeriod) (int64, error)
 

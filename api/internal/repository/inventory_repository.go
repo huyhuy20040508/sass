@@ -110,9 +110,6 @@ func applyInventoryFilter(q *gorm.DB, f domain.InventoryFilter, ton string) *gor
 	if f.CategoryID != nil {
 		q = q.Where("p.category_id = ?", *f.CategoryID)
 	}
-	if f.BrandID != nil {
-		q = q.Where("p.brand_id = ?", *f.BrandID)
-	}
 	if f.IsActive != nil {
 		q = q.Where("v.is_active = ?", *f.IsActive)
 	}
@@ -170,11 +167,10 @@ func (r *inventoryRepository) List(ctx context.Context, f domain.InventoryFilter
 
 	q := applyInventoryFilter(r.baseQuery(ctx), f, ton).
 		Joins("LEFT JOIN categories c ON c.id = p.category_id").
-		Joins("LEFT JOIN brands b ON b.id = p.brand_id").
 		Select(`v.id AS variant_id, v.product_id, p.name AS product_name, p.slug,
 			COALESCE(NULLIF(v.image, ''), NULLIF(p.thumbnail, ''), '') AS thumbnail,
 			v.sku, v.size, v.color, COALESCE(p.kit_type, '') AS kit_type,
-			COALESCE(c.name, '') AS category_name, COALESCE(b.name, '') AS brand_name,
+			COALESCE(c.name, '') AS category_name,
 			` + ton + ` AS stock_quantity, v.is_active, p.is_active AS product_active,
 			` + effectivePriceExpr + ` AS price,
 			` + effectiveCostExpr + ` AS cost_price,
@@ -215,12 +211,11 @@ func (r *inventoryRepository) FindItem(ctx context.Context, variantID uint) (*do
 	var items []domain.InventoryItem
 	err := r.baseQuery(ctx).
 		Joins("LEFT JOIN categories c ON c.id = p.category_id").
-		Joins("LEFT JOIN brands b ON b.id = p.brand_id").
 		Where("v.id = ?", variantID).
 		Select(`v.id AS variant_id, v.product_id, p.name AS product_name, p.slug,
 			COALESCE(NULLIF(v.image, ''), NULLIF(p.thumbnail, ''), '') AS thumbnail,
 			v.sku, v.size, v.color, COALESCE(p.kit_type, '') AS kit_type,
-			COALESCE(c.name, '') AS category_name, COALESCE(b.name, '') AS brand_name,
+			COALESCE(c.name, '') AS category_name,
 			` + ton + ` AS stock_quantity, v.is_active, p.is_active AS product_active,
 			` + effectivePriceExpr + ` AS price,
 			` + effectiveCostExpr + ` AS cost_price,

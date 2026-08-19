@@ -54,7 +54,7 @@
                     'children' => [
                         ['href' => route('admin.products.index'), 'label' => 'Danh sách sản phẩm', 'active' => request()->routeIs('admin.products.*')],
                         ['href' => route('admin.categories.index'), 'label' => 'Nhóm hàng hóa', 'active' => request()->routeIs('admin.categories.*')],
-                        ['href' => route('admin.brands.index'), 'label' => 'Danh sách thương hiệu', 'active' => request()->routeIs('admin.brands.*')],
+                        ['href' => route('admin.thue.index'), 'label' => 'Thuế', 'active' => request()->routeIs('admin.thue.*')],
                     ],
                 ]] : []),
                 // Marketing đứng ngay sau Hàng hóa: đây đều là thứ khách nhìn thấy

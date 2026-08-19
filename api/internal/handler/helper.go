@@ -222,6 +222,17 @@ func handleServiceError(c *gin.Context, err error) {
 		response.ValidationError(c, map[string]string{
 			"prefix": "Tiền tố và hậu tố chỉ gồm chữ không dấu, số, gạch ngang hoặc gạch dưới",
 		})
+	// Thuế suất — ô chọn mức, nên tô đỏ đúng ô đó.
+	case errors.Is(err, domain.ErrLoaiThueLa):
+		response.Error(c, 422, "Loại thuế này không có trong danh mục của phần mềm")
+	case errors.Is(err, domain.ErrMucThueLa):
+		response.ValidationError(c, map[string]string{
+			"muc": "Có mức thuế không nằm trong bộ mức của loại này",
+		})
+	case errors.Is(err, domain.ErrThueTrongRong):
+		response.ValidationError(c, map[string]string{
+			"muc": "Giữ lại ít nhất một mức thuế. Muốn thôi áp thuế thì tắt cả dòng",
+		})
 	case errors.Is(err, domain.ErrNhanSuDangMoCa):
 		response.Error(c, 409, "Nhân viên này còn một ca chưa đóng. Đóng ca đó trước đã — xoá bây giờ là khoá luôn tài khoản của chính người đang giữ két")
 	case errors.Is(err, domain.ErrNhanSuDaGhiSoQuy):

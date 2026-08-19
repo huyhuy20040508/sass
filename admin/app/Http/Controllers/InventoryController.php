@@ -130,8 +130,7 @@ class InventoryController extends Controller
 
         $view = view('inventory.index', compact('items', 'filters', 'meta'))
             ->with('stats', $this->stats($filters['low_stock']))
-            ->with('categories', $this->options('categories'))
-            ->with('brands', $this->options('brands'));
+            ->with('categories', $this->options('categories'));
 
         return $error ? $view->with('error', $error) : $view;
     }
@@ -712,7 +711,7 @@ class InventoryController extends Controller
         return response()->streamDownload(function () use ($rows, $low) {
             $out = fopen('php://output', 'w');
             fwrite($out, "\xEF\xBB\xBF");
-            fputcsv($out, ['SKU', 'Sản phẩm', 'Loại áo', 'Size', 'Màu', 'Danh mục', 'Thương hiệu', 'Tồn kho', 'Mức tồn', 'Giá bán', 'Giá vốn', 'Giá trị vốn tồn kho', 'Trạng thái', 'Lần cuối phát sinh']);
+            fputcsv($out, ['SKU', 'Sản phẩm', 'Loại áo', 'Size', 'Màu', 'Danh mục', 'Tồn kho', 'Mức tồn', 'Giá bán', 'Giá vốn', 'Giá trị vốn tồn kho', 'Trạng thái', 'Lần cuối phát sinh']);
             foreach ($rows as $r) {
                 $qty = (int) ($r['stock_quantity'] ?? 0);
                 fputcsv($out, [
@@ -722,7 +721,6 @@ class InventoryController extends Controller
                     $r['size'] ?? '',
                     $r['color'] ?? '',
                     $r['category_name'] ?? '',
-                    $r['brand_name'] ?? '',
                     $qty,
                     self::STOCK_STATES[self::stockState($qty, $low)] ?? '',
                     (float) ($r['price'] ?? 0),
@@ -806,7 +804,6 @@ class InventoryController extends Controller
         return [
             'keyword' => trim((string) $request->query('keyword', '')),
             'category_id' => max(0, (int) $request->query('category_id', 0)),
-            'brand_id' => max(0, (int) $request->query('brand_id', 0)),
             'stock' => isset(self::STOCK_STATES[$stock]) ? $stock : 'all',
             'cost' => isset(self::COST_STATES[$cost]) ? $cost : 'all',
             'is_active' => isset(self::ACTIVE_STATES[$active]) ? $active : '',
@@ -841,9 +838,6 @@ class InventoryController extends Controller
         if ($filters['category_id'] > 0) {
             $query['category_id'] = $filters['category_id'];
         }
-        if ($filters['brand_id'] > 0) {
-            $query['brand_id'] = $filters['brand_id'];
-        }
         if ($filters['is_active'] !== '') {
             $query['is_active'] = $filters['is_active'] === '1' ? 'true' : 'false';
         }
@@ -870,11 +864,11 @@ class InventoryController extends Controller
         return $stats;
     }
 
-    /** Danh mục / thương hiệu cho ô lọc. Hỏng thì trả mảng rỗng, ô lọc chỉ còn "Tất cả". */
+    /** Danh mục cho ô lọc. Hỏng thì trả mảng rỗng, ô lọc chỉ còn "Tất cả". */
     protected function options(string $kind): array
     {
         try {
-            $res = $kind === 'brands' ? $this->api->brands(true) : $this->api->categories(true);
+            $res = $this->api->categories(true);
             if ($res->successful()) {
                 return $res->json('data') ?? [];
             }

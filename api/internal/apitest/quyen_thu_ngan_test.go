@@ -51,7 +51,6 @@ func TestThuNgan_ChiVaoDuocQuayBan(t *testing.T) {
 		// Đường ĐỌC của sản phẩm cũng đóng, và đó là chủ ý: nó trả kèm giá vốn.
 		{"chi tiết sản phẩm", http.MethodGet, fmt.Sprintf("/api/v1/admin/products/%d", a.sanPham), nil},
 		{"tạo danh mục", http.MethodPost, "/api/v1/admin/categories", map[string]any{"name": "Danh mục lạ"}},
-		{"tạo thương hiệu", http.MethodPost, "/api/v1/admin/brands", map[string]any{"name": "Thương hiệu lạ"}},
 		{"danh sách banner", http.MethodGet, "/api/v1/admin/banners", nil},
 		{"danh sách khuyến mãi", http.MethodGet, "/api/v1/admin/promotions", nil},
 		{"danh sách voucher", http.MethodGet, "/api/v1/admin/vouchers", nil},

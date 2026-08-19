@@ -32,12 +32,11 @@ type cuaHang struct {
 	nhomThuNgan uint
 	khach       uint // khách hàng (vai trò customer)
 
-	chiNhanh   uint // điểm bán (bảng shops), KHÔNG phải cửa hàng
-	danhMuc    uint
-	thuongHieu uint
-	sanPham    uint
-	slug       string
-	bienThe    uint
+	chiNhanh uint // điểm bán (bảng shops), KHÔNG phải cửa hàng
+	danhMuc  uint
+	sanPham  uint
+	slug     string
+	bienThe  uint
 
 	donHang    uint   // trạng thái confirmed — dùng cho các đường sửa đơn
 	maDonHang  string // orders.order_code — khoá của đường tra cứu công khai
@@ -154,14 +153,10 @@ func gieo(t *testing.T, db *gorm.DB, ma string) *cuaHang {
 	tao(t, db, ctx, danhMuc)
 	c.danhMuc = danhMuc.ID
 
-	thuongHieu := &domain.Brand{Name: "Thương hiệu " + c.vet, Slug: "th-" + c.vet, IsActive: true}
-	tao(t, db, ctx, thuongHieu)
-	c.thuongHieu = thuongHieu.ID
-
 	c.slug = "sp-" + c.vet
 	sanPham := &domain.Product{
-		CategoryID: danhMuc.ID, BrandID: &thuongHieu.ID,
-		Name: "Sản phẩm " + c.vet, Slug: c.slug, SKU: "sku-" + c.vet,
+		CategoryID: danhMuc.ID,
+		Name:       "Sản phẩm " + c.vet, Slug: c.slug, SKU: "sku-" + c.vet,
 		BasePrice: 100000, Status: domain.ProductStatusActive, IsActive: true,
 	}
 	tao(t, db, ctx, sanPham)

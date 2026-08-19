@@ -297,7 +297,7 @@ class ProductController extends Controller
         return response()->streamDownload(function () use ($all, $kit, $statuses) {
             $out = fopen('php://output', 'w');
             fwrite($out, "\xEF\xBB\xBF"); // BOM để Excel đọc đúng tiếng Việt
-            fputcsv($out, ['Mã SP', 'SKU', 'Tên sản phẩm', 'Danh mục', 'Thương hiệu', 'Đội bóng', 'Mùa giải', 'Loại áo', 'Giá gốc', 'Giá KM', 'Giá vốn', 'Tổng tồn kho', 'Trạng thái', 'Nổi bật']);
+            fputcsv($out, ['Mã SP', 'SKU', 'Tên sản phẩm', 'Danh mục', 'Đội bóng', 'Mùa giải', 'Loại áo', 'Giá gốc', 'Giá KM', 'Giá vốn', 'Tổng tồn kho', 'Trạng thái', 'Nổi bật']);
             foreach ($all as $p) {
                 $stock = collect($p['variants'] ?? [])->sum('stock_quantity');
                 fputcsv($out, [
@@ -305,7 +305,6 @@ class ProductController extends Controller
                     $p['sku'] ?? '',
                     $p['name'] ?? '',
                     data_get($p, 'category.name', ''),
-                    data_get($p, 'brand.name', ''),
                     $p['team'] ?? '',
                     $p['season'] ?? '',
                     $kit[$p['kit_type'] ?? ''] ?? ($p['kit_type'] ?? ''),
@@ -330,9 +329,9 @@ class ProductController extends Controller
             $out = fopen('php://output', 'w');
             fwrite($out, "\xEF\xBB\xBF");
             // Không có cột tồn kho: sản phẩm nhập vào luôn ở tồn 0, phải qua kho.
-            fputcsv($out, ['name', 'category_id', 'brand_id', 'team', 'season', 'kit_type', 'base_price', 'sale_price', 'cost_price', 'sizes']);
-            fputcsv($out, ['Áo Real Madrid Sân Nhà 2024/2025 - FAN', '4', '2', 'Real Madrid', '2024/2025', 'fan', '850000', '799000', '520000', 'S,M,L,XL']);
-            fputcsv($out, ['Áo Man City Sân Khách 2024/2025 - PLAYER', '3', '1', 'Manchester City', '2024/2025', 'player', '820000', '', '', 'M,L']);
+            fputcsv($out, ['name', 'category_id', 'team', 'season', 'kit_type', 'base_price', 'sale_price', 'cost_price', 'sizes']);
+            fputcsv($out, ['Áo Real Madrid Sân Nhà 2024/2025 - FAN', '4', 'Real Madrid', '2024/2025', 'fan', '850000', '799000', '520000', 'S,M,L,XL']);
+            fputcsv($out, ['Áo Man City Sân Khách 2024/2025 - PLAYER', '3', 'Manchester City', '2024/2025', 'player', '820000', '', '', 'M,L']);
             fclose($out);
         }, 'mau-nhap-san-pham.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
     }
@@ -390,7 +389,6 @@ class ProductController extends Controller
             $kit = $get($row, 'kit_type');
             $kit = in_array($kit, array_keys(self::KIT_TYPES), true) ? $kit : '';
             $sku = $this->productSku(['team' => $team, 'name' => $name, 'kit_type' => $kit, 'season' => $season]);
-            $brandId = (int) $get($row, 'brand_id');
             $sale = $get($row, 'sale_price');
             $cost = $get($row, 'cost_price');
 
@@ -408,7 +406,6 @@ class ProductController extends Controller
 
             $payload = [
                 'category_id' => $categoryId,
-                'brand_id' => $brandId > 0 ? $brandId : null,
                 'name' => $name,
                 'slug' => $this->slugify($name),
                 'sku' => $sku,
@@ -459,7 +456,6 @@ class ProductController extends Controller
             'name' => ['required', 'string', 'max:200'],
             'sku' => ['nullable', 'string', 'max:64'],
             'category_id' => ['required', 'integer', 'min:1'],
-            'brand_id' => ['nullable', 'integer'],
             'slug' => ['nullable', 'string', 'max:191'],
             'short_description' => ['nullable', 'string', 'max:500'],
             'description' => ['nullable', 'string'],
@@ -505,7 +501,6 @@ class ProductController extends Controller
             'variants.*.price.numeric' => 'Giá biến thể không hợp lệ.',
         ])->stopOnFirstFailure()->validate();
 
-        $brandId = $v['brand_id'] ?? null;
         $salePrice = $v['sale_price'] ?? null;
         $costPrice = $v['cost_price'] ?? null;
         // SKU: người dùng gõ thì tôn trọng. Bỏ trống thì hoặc để API đặt theo quy
@@ -540,7 +535,6 @@ class ProductController extends Controller
         // là bỏ qua bước đồng bộ ảnh và giữ nguyên những gì đang có.
         $payload = [
             'category_id' => (int) $v['category_id'],
-            'brand_id' => filled($brandId) ? (int) $brandId : null,
             'name' => $v['name'],
             'slug' => filled($v['slug'] ?? null) ? $this->slugify($v['slug']) : $this->slugify($v['name']),
             'sku' => $sku,
@@ -759,7 +753,6 @@ class ProductController extends Controller
         return [
             'keyword' => trim((string) $request->query('keyword', '')),
             'category_id' => (int) $request->query('category_id', 0),
-            'brand_id' => (int) $request->query('brand_id', 0),
             'kit_type' => $kitType,
             'status' => $status,
             'featured' => $featured,
@@ -783,9 +776,6 @@ class ProductController extends Controller
         }
         if ($f['category_id'] > 0) {
             $q['category_id'] = $f['category_id'];
-        }
-        if ($f['brand_id'] > 0) {
-            $q['brand_id'] = $f['brand_id'];
         }
         if ($f['kit_type'] !== '') {
             $q['kit_type'] = $f['kit_type'];
@@ -813,7 +803,6 @@ class ProductController extends Controller
             'meta' => $meta,
             'filters' => $filters,
             'categories' => $this->loadCategories(),
-            'brands' => $this->loadBrands(),
             'kitTypes' => self::KIT_TYPES,
             'statuses' => self::STATUSES,
             'statusHints' => self::STATUS_HINTS,
@@ -861,21 +850,6 @@ class ProductController extends Controller
             }
         } catch (\Throwable $e) {
             Log::warning('Load categories for product filter failed', ['msg' => $e->getMessage()]);
-        }
-
-        return [];
-    }
-
-    /** Thương hiệu cho dropdown lọc — im lặng nếu API lỗi. */
-    protected function loadBrands(): array
-    {
-        try {
-            $res = $this->api->brands(all: true);
-            if ($res->successful()) {
-                return $res->json('data') ?? [];
-            }
-        } catch (\Throwable $e) {
-            Log::warning('Load brands for product filter failed', ['msg' => $e->getMessage()]);
         }
 
         return [];
