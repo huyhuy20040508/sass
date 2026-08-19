@@ -10,6 +10,7 @@ use App\Http\Controllers\ChonCuaVaoController;
 use App\Http\Controllers\ContactController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DonViTinhController;
 use App\Http\Controllers\GoiDichVuController;
 use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\NhanSuController;
@@ -156,6 +157,15 @@ Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:quan_ly'])->prefix('ad
         Route::put('/categories/{id}', [CategoryController::class, 'update'])->name('categories.update');
         Route::delete('/categories/{id}/children', [CategoryController::class, 'destroyChildren'])->name('categories.destroyChildren');
         Route::delete('/categories/{id}', [CategoryController::class, 'destroy'])->name('categories.destroy');
+
+        // Đơn vị tính — bảng tra gắn cho mặt hàng. Đứng giữa Nhóm hàng hóa và
+        // Thuế, đúng thứ tự của bản cũ v2 (Menu QR: hàng hoá → nhóm → đơn vị → thuế).
+        Route::get('/don-vi-tinh', [DonViTinhController::class, 'index'])->name('don-vi-tinh.index');
+        Route::post('/don-vi-tinh', [DonViTinhController::class, 'store'])->name('don-vi-tinh.store');
+        Route::post('/don-vi-tinh/bulk-destroy', [DonViTinhController::class, 'bulkDestroy'])->name('don-vi-tinh.bulkDestroy');
+        Route::put('/don-vi-tinh/{id}/trang-thai', [DonViTinhController::class, 'toggleStatus'])->whereNumber('id')->name('don-vi-tinh.toggleStatus');
+        Route::put('/don-vi-tinh/{id}', [DonViTinhController::class, 'update'])->whereNumber('id')->name('don-vi-tinh.update');
+        Route::delete('/don-vi-tinh/{id}', [DonViTinhController::class, 'destroy'])->whereNumber('id')->name('don-vi-tinh.destroy');
 
         // Thuế suất — bốn loại cố định, chỉ sửa bộ mức và bật/tắt (không thêm/xoá).
         Route::get('/thue', [ThueController::class, 'index'])->name('thue.index');
