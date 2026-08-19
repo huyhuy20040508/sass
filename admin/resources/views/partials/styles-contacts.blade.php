@@ -135,7 +135,7 @@
         .ct-modal-x:hover { color: #262626; }
         .ct-modal-body { padding: 18px 20px; overflow-y: auto; }
         .ct-modal-foot {
-            display: flex; align-items: center; justify-content: flex-end; gap: 8px;
+            display: flex; align-items: center; justify-content: center; gap: 8px;
             padding: 14px 20px; border-top: 1px solid #f0f0f0; background: #fafafa; flex-wrap: wrap;
         }
 

@@ -294,7 +294,7 @@
         .cnh-modal-title { margin: 0; font-size: 15px; font-weight: 700; }
         .cnh-modal-x { border: 0; background: none; color: #8c8c8c; cursor: pointer; line-height: 0; }
         .cnh-modal-body { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
-        .cnh-modal-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 16px; border-top: 1px solid #f0f0f0; }
+        .cnh-modal-foot { display: flex; justify-content: center; gap: 8px; padding: 12px 16px; border-top: 1px solid #f0f0f0; }
         .cnh-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
         .cnh-field-label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; }
         .cnh-req { color: #ff4d4f; }

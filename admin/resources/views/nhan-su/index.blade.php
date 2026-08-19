@@ -912,7 +912,7 @@
         .nsu-switch-label { font-size: 13px; color: #262626; }
         /* Công tắc trong bảng nằm trong form riêng nên phải bỏ margin. */
         .nsu-switch-form { display: inline-flex; margin: 0; }
-        .nsu-modal-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 20px; border-top: 1px solid #f0f0f0; background: #fafafa; border-radius: 0 0 6px 6px; }
+        .nsu-modal-foot { display: flex; justify-content: center; gap: 8px; padding: 12px 20px; border-top: 1px solid #f0f0f0; background: #fafafa; border-radius: 0 0 6px 6px; }
 
         /* Hộp xác nhận: cùng khung với hộp thêm/sửa, chỉ hẹp lại vì nó chỉ chứa
            mấy dòng chữ. Nút Đồng ý tô ĐỎ khi lượt bấm khoá tài khoản hay xoá hồ

@@ -952,10 +952,10 @@
         .inv-modal-x:hover { color: #262626; }
         .inv-modal-body { padding: 16px 20px; display: flex; flex-direction: column; gap: 18px; }
         .inv-modal-foot {
-            position: sticky; bottom: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+            position: sticky; bottom: 0; display: flex; align-items: center; justify-content: center; gap: 12px;
             border-top: 1px solid #f0f0f0; background: #fff; padding: 12px 20px; flex-wrap: wrap;
         }
-        .inv-foot-right { margin-left: auto; display: flex; gap: 8px; }
+        .inv-foot-right { display: flex; gap: 8px; }
 
         .inv-btn-ghost {
             height: 34px; border: 1px solid #d9d9d9; border-radius: 4px; padding: 0 16px; font-size: 13px;

@@ -108,7 +108,7 @@
         padding: 16px 24px 24px 24px;
         display: flex;
         align-items: center;
-        justify-content: flex-end;
+        justify-content: center;
         gap: 12px;
     }
 

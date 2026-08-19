@@ -1085,7 +1085,7 @@
         .ord-cal-foot {
             display: flex;
             align-items: center;
-            justify-content: space-between;
+            justify-content: center;
             gap: 12px;
             padding: 10px 12px;
             border-top: 1px solid #f0f0f0;
@@ -1635,7 +1635,6 @@
         }
 
         .ord-foot-right {
-            margin-left: auto;
             display: flex;
             gap: 8px;
         }

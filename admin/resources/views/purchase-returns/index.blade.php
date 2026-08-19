@@ -712,12 +712,12 @@
         .pr-modal-x:hover { background: #f5f5f5; color: #262626; }
         .pr-modal-body { padding: 16px 20px; display: flex; flex-direction: column; gap: 16px; }
         .pr-modal-foot {
-            position: sticky; bottom: 0; z-index: 2; display: flex; align-items: center; justify-content: space-between;
+            position: sticky; bottom: 0; z-index: 2; display: flex; align-items: center; justify-content: center;
             gap: 12px; flex-wrap: wrap; padding: 12px 20px; border-top: 1px solid #f0f0f0; background: #fafafa;
         }
-        .pr-foot-center { justify-content: space-between; }
+        .pr-foot-center { justify-content: center; }
         .pr-foot-left { display: flex; align-items: center; gap: 8px; }
-        .pr-foot-right { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+        .pr-foot-right { display: flex; align-items: center; gap: 8px; }
 
         .pr-note {
             margin: 0; padding: 10px 12px; border: 1px solid #e6f0fb; border-radius: 4px; background: #f5f9ff;

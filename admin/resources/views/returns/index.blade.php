@@ -1028,11 +1028,11 @@
         .rt-modal-x:hover { color: #262626; }
         .rt-modal-body { padding: 16px 20px; display: flex; flex-direction: column; gap: 18px; }
         .rt-modal-foot {
-            position: sticky; bottom: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+            position: sticky; bottom: 0; display: flex; align-items: center; justify-content: center; gap: 12px;
             border-top: 1px solid #f0f0f0; background: #fff; padding: 12px 20px; flex-wrap: wrap;
         }
         .rt-modal-foot.rt-foot-center { justify-content: center; gap: 8px; }
-        .rt-foot-right { margin-left: auto; display: flex; gap: 8px; }
+        .rt-foot-right { display: flex; gap: 8px; }
         .rt-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 
         .rt-btn-ghost {
