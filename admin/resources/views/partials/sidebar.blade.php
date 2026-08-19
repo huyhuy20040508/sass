@@ -50,14 +50,14 @@
                     ],
                 ],
                 ...($canManage ? [[
-                    'label' => 'Sản phẩm', 'icon' => 'products',
+                    'label' => 'Hàng hóa', 'icon' => 'products',
                     'children' => [
                         ['href' => route('admin.products.index'), 'label' => 'Danh sách sản phẩm', 'active' => request()->routeIs('admin.products.*')],
-                        ['href' => route('admin.categories.index'), 'label' => 'Danh sách danh mục', 'active' => request()->routeIs('admin.categories.*')],
+                        ['href' => route('admin.categories.index'), 'label' => 'Nhóm hàng hóa', 'active' => request()->routeIs('admin.categories.*')],
                         ['href' => route('admin.brands.index'), 'label' => 'Danh sách thương hiệu', 'active' => request()->routeIs('admin.brands.*')],
                     ],
                 ]] : []),
-                // Marketing đứng ngay sau Sản phẩm: đây đều là thứ khách nhìn thấy
+                // Marketing đứng ngay sau Hàng hóa: đây đều là thứ khách nhìn thấy
                 // ngoài cửa hàng, sửa xong thường xem lại trang chủ luôn.
                 //
                 // Khuyến mãi, Voucher và Banner đã có trang thật. Riêng "Bài viết" mới
@@ -225,8 +225,10 @@
         'dashboard' => '<rect x="2" y="3" width="9" height="8" rx="1"/><rect x="2" y="13" width="9" height="8" rx="1"/><rect x="13" y="3" width="9" height="18" rx="1"/><path d="M4.6 8.8V7.6M6.5 8.8V6.2M8.4 8.8V4.8"/><path d="m4.2 18.6 2.1-2.2 1 1 2.5-2.6"/><circle cx="17.5" cy="8" r="3.1"/><path d="M17.5 4.9V8h3.1"/><path d="M15 13.6h5M15.5 16h4M15.5 18.4h4"/>',
         // Thùng hàng có dấu tích — đơn hàng đã xử lý.
         'orders' => '<path d="M20.4 11.4V7.6H3.6V20a1 1 0 0 0 1 1h8"/><path d="M3.6 7.6 6.3 3.5a1 1 0 0 1 .84-.45h9.72a1 1 0 0 1 .84.45l2.7 4.1"/><path d="M9.6 7.6v3.9l2.4-1.5 2.4 1.5V7.6"/><circle cx="17.4" cy="16.6" r="4.4"/><path d="m15.5 16.7 1.4 1.4 2.4-3.5"/>',
-        // Áo gấp — sản phẩm.
-        'products' => '<path d="M2.6 21V4.4L6.1 3l3-1.4a7 7 0 0 0 5.8 0l3 1.4 3.5 1.4V21Z"/><path d="m6.1 3 2.8 5.3L12 5.5M17.9 3l-2.8 5.3L12 5.5"/><path d="M12 5.5V21"/><path d="M15 10.2h3.6v3.6L16.8 15 15 13.8Z"/><circle cx="9.6" cy="8.9" r=".55"/><circle cx="9.6" cy="12" r=".55"/><circle cx="9.6" cy="15.1" r=".55"/><circle cx="9.6" cy="18.2" r=".55"/>',
+        // Thùng hàng có mũi tên trả hàng — icon do chủ dự án chọn cho mục Hàng hóa.
+        // Bản gốc là hình vuông 512 nét dày; vẽ lại ở dạng nét 24x24 cho khớp bộ icon
+        // còn lại của thanh này, bỏ ký hiệu "chiều dựng thùng" vì cỡ này nhìn ra mực.
+        'products' => '<path d="M2.2 8.2 5.2 3.4h9.6l3 4.8"/><path d="M2.2 8.2h15.6"/><path d="M2.2 8.2v12.2a.6.6 0 0 0 .6.6h12"/><path d="M17.8 8.2v5"/><path d="M8.6 3.4v7.2M13.4 3.4v7.2"/><path d="m8.6 10.6 1.2 1.1 1.2-1.1 1.2 1.1 1.2-1.1"/><circle cx="17.6" cy="17.6" r="4.4"/><path d="m16.4 15.5-1.6 1.5 1.6 1.5"/><path d="M14.8 17h3.4a1.8 1.8 0 0 1 0 3.6h-1.1"/>',
         'categories' => '<path d="M3 3h7l11 11-7 7L3 10V3Z"/><circle cx="7.5" cy="7.5" r="1.5"/>',
         // Khung ảnh có núi và mặt trời — banner quảng cáo trên trang chủ.
         'banners' => '<rect x="2.5" y="4.5" width="19" height="15" rx="2"/><circle cx="8" cy="9.6" r="1.5"/><path d="m3.4 16.8 4.4-4 3.2 2.9 3.4-3.4 6.2 5.9"/>',
