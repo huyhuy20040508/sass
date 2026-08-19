@@ -3,7 +3,6 @@
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BannerController;
 use App\Http\Controllers\BanTaiQuayController;
-use App\Http\Controllers\BrandController;
 use App\Http\Controllers\CaLamViecController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\ChiNhanhController;
@@ -28,6 +27,7 @@ use App\Http\Controllers\ReturnController;
 use App\Http\Controllers\SettingController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\ThongSoChungController;
+use App\Http\Controllers\ThueController;
 use App\Http\Controllers\ThuNganController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\VoucherController;
@@ -157,6 +157,11 @@ Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:quan_ly'])->prefix('ad
         Route::delete('/categories/{id}/children', [CategoryController::class, 'destroyChildren'])->name('categories.destroyChildren');
         Route::delete('/categories/{id}', [CategoryController::class, 'destroy'])->name('categories.destroy');
 
+        // Thuế suất — bốn loại cố định, chỉ sửa bộ mức và bật/tắt (không thêm/xoá).
+        Route::get('/thue', [ThueController::class, 'index'])->name('thue.index');
+        Route::put('/thue/{id}', [ThueController::class, 'update'])->name('thue.update');
+        Route::put('/thue/{id}/trang-thai', [ThueController::class, 'toggleStatus'])->name('thue.toggleStatus');
+
         // Sản phẩm
         Route::get('/products', [ProductController::class, 'index'])->name('products.index');
         Route::get('/products/export', [ProductController::class, 'export'])->name('products.export');
@@ -173,16 +178,6 @@ Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:quan_ly'])->prefix('ad
         Route::put('/products/{id}', [ProductController::class, 'update'])->name('products.update');
         Route::delete('/products/{id}', [ProductController::class, 'destroy'])->name('products.destroy');
 
-        // Thương hiệu — trang quản lý riêng; store() dùng chung cho cả modal "thêm
-        // nhanh" bên trang Sản phẩm (gửi AJAX, nhận JSON).
-        Route::get('/brands', [BrandController::class, 'index'])->name('brands.index');
-        Route::get('/brands/export', [BrandController::class, 'export'])->name('brands.export');
-        Route::post('/brands/upload-logo', [BrandController::class, 'uploadLogo'])->name('brands.uploadLogo');
-        Route::post('/brands/bulk-destroy', [BrandController::class, 'bulkDestroy'])->name('brands.bulkDestroy');
-        Route::post('/brands', [BrandController::class, 'store'])->name('brands.store');
-        Route::put('/brands/{id}/toggle-status', [BrandController::class, 'toggleStatus'])->whereNumber('id')->name('brands.toggleStatus');
-        Route::put('/brands/{id}', [BrandController::class, 'update'])->whereNumber('id')->name('brands.update');
-        Route::delete('/brands/{id}', [BrandController::class, 'destroy'])->whereNumber('id')->name('brands.destroy');
 
         // Banner trang chủ — nội dung tiếp thị hiện trên storefront.
         Route::get('/banners', [BannerController::class, 'index'])->name('banners.index');

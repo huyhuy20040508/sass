@@ -180,7 +180,6 @@ func buildTargets(req dto.PromotionRequest) []domain.PromotionTarget {
 	}
 	add(domain.PromotionTargetProduct, req.ProductIDs)
 	add(domain.PromotionTargetCategory, req.CategoryIDs)
-	add(domain.PromotionTargetBrand, req.BrandIDs)
 	return targets
 }
 
@@ -198,7 +197,6 @@ func (s *promotionService) toResponse(ctx context.Context, p *domain.Promotion) 
 		Status:            promotionStatus(p, time.Now()),
 		ProductIDs:        []uint{},
 		CategoryIDs:       []uint{},
-		BrandIDs:          []uint{},
 		CreatedAt:         p.CreatedAt.Format(time.RFC3339),
 	}
 
@@ -208,8 +206,6 @@ func (s *promotionService) toResponse(ctx context.Context, p *domain.Promotion) 
 			res.ProductIDs = append(res.ProductIDs, t.TargetID)
 		case domain.PromotionTargetCategory:
 			res.CategoryIDs = append(res.CategoryIDs, t.TargetID)
-		case domain.PromotionTargetBrand:
-			res.BrandIDs = append(res.BrandIDs, t.TargetID)
 		}
 	}
 
@@ -224,7 +220,7 @@ func (s *promotionService) toResponse(ctx context.Context, p *domain.Promotion) 
 			cats = expanded
 		}
 	}
-	if n, err := s.repo.CountProducts(ctx, res.ProductIDs, cats, res.BrandIDs); err == nil {
+	if n, err := s.repo.CountProducts(ctx, res.ProductIDs, cats); err == nil {
 		res.ProductCount = n
 	}
 
@@ -254,7 +250,6 @@ type promoMatcher struct {
 	promos     []domain.Promotion
 	byProduct  map[uint][]int
 	byCategory map[uint][]int
-	byBrand    map[uint][]int
 	// parentOf để leo ngược cây danh mục: chương trình khai ở danh mục cha phải phủ
 	// tới sản phẩm nằm trong danh mục cháu.
 	parentOf map[uint]uint
@@ -272,7 +267,6 @@ func (s *promotionService) matcher(ctx context.Context) *promoMatcher {
 		promos:     promos,
 		byProduct:  map[uint][]int{},
 		byCategory: map[uint][]int{},
-		byBrand:    map[uint][]int{},
 	}
 	needCats := false
 	for i, p := range promos {
@@ -283,8 +277,6 @@ func (s *promotionService) matcher(ctx context.Context) *promoMatcher {
 			case domain.PromotionTargetCategory:
 				m.byCategory[t.TargetID] = append(m.byCategory[t.TargetID], i)
 				needCats = true
-			case domain.PromotionTargetBrand:
-				m.byBrand[t.TargetID] = append(m.byBrand[t.TargetID], i)
 			}
 		}
 	}
@@ -309,7 +301,7 @@ func (s *promotionService) matcher(ctx context.Context) *promoMatcher {
 // Nhiều chương trình cùng phủ một sản phẩm thì KHÔNG cộng dồn — chọn đúng một cái
 // có lợi nhất cho khách. Cộng dồn nghe thì hào phóng nhưng hai đợt 50% chồng nhau
 // là bán không đồng, và không ai kịp nhận ra trước khi đơn về.
-func (m *promoMatcher) bestFor(price float64, productID, categoryID uint, brandID *uint) (float64, string) {
+func (m *promoMatcher) bestFor(price float64, productID, categoryID uint) (float64, string) {
 	if m == nil || price <= 0 {
 		return 0, ""
 	}
@@ -340,12 +332,6 @@ func (m *promoMatcher) bestFor(price float64, productID, categoryID uint, brandI
 		}
 		cid = m.parentOf[cid]
 	}
-	if brandID != nil {
-		for _, i := range m.byBrand[*brandID] {
-			try(i)
-		}
-	}
-
 	return best, bestName
 }
 
@@ -380,7 +366,7 @@ func (m *promoMatcher) decorate(p *domain.Product) {
 	if p.SalePrice != nil && *p.SalePrice > 0 && *p.SalePrice < base {
 		base = *p.SalePrice
 	}
-	if d, name := m.bestFor(base, p.ID, p.CategoryID, p.BrandID); d > 0 {
+	if d, name := m.bestFor(base, p.ID, p.CategoryID); d > 0 {
 		final := base - d
 		p.FinalPrice = &final
 		p.PromotionName = name
@@ -397,7 +383,7 @@ func (m *promoMatcher) decorate(p *domain.Product) {
 			vb = *v
 		}
 		final := vb
-		if d, _ := m.bestFor(vb, p.ID, p.CategoryID, p.BrandID); d > 0 {
+		if d, _ := m.bestFor(vb, p.ID, p.CategoryID); d > 0 {
 			final = vb - d
 		}
 		p.Variants[i].FinalPrice = &final
@@ -414,7 +400,7 @@ func (s *promotionService) ApplyToCheckout(ctx context.Context, resolved map[uin
 	}
 
 	for id, cv := range resolved {
-		d, name := m.bestFor(cv.Price, cv.ProductID, cv.CategoryID, cv.BrandID)
+		d, name := m.bestFor(cv.Price, cv.ProductID, cv.CategoryID)
 		if d <= 0 {
 			continue
 		}

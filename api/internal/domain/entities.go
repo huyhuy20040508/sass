@@ -376,24 +376,6 @@ type Category struct {
 	DeletedAt   gorm.DeletedAt `json:"-" gorm:"index"`
 }
 
-type Brand struct {
-	ID uint `json:"id" gorm:"primaryKey"`
-	TenantOwned
-	Name        string         `json:"name"`
-	Slug        string         `json:"slug"`
-	Logo        string         `json:"logo"`
-	Description string         `json:"description"`
-	IsActive    bool           `json:"is_active"`
-	CreatedAt   time.Time      `json:"created_at"`
-	UpdatedAt   time.Time      `json:"updated_at"`
-	DeletedAt   gorm.DeletedAt `json:"-" gorm:"index"`
-
-	// ProductCount là số sản phẩm (chưa xoá) đang gắn thương hiệu này. Không có
-	// cột trong DB (gorm:"-"), repository tự đếm và gán khi trả danh sách/chi tiết
-	// — trang quản trị dùng để hiện mức sử dụng và cảnh báo trước khi xoá.
-	ProductCount int64 `json:"product_count" gorm:"-"`
-}
-
 // Trạng thái kinh doanh của một sản phẩm.
 //
 // Đây là danh sách ĐÓNG — thêm giá trị mới phải sửa cả ENUM trong DB, nhãn bên
@@ -427,8 +409,6 @@ type Product struct {
 	TenantOwned
 	CategoryID       uint       `json:"category_id"`
 	Category         *Category  `json:"category,omitempty" gorm:"foreignKey:CategoryID"`
-	BrandID          *uint      `json:"brand_id"`
-	Brand            *Brand     `json:"brand,omitempty" gorm:"foreignKey:BrandID"`
 	Name             string     `json:"name"`
 	Slug             string     `json:"slug"`
 	SKU              string     `json:"sku" gorm:"column:sku"`
@@ -666,7 +646,6 @@ const (
 const (
 	PromotionTargetProduct  = "product"
 	PromotionTargetCategory = "category"
-	PromotionTargetBrand    = "brand"
 )
 
 // Promotion là một đợt giảm giá có thời hạn, áp thẳng lên giá từng sản phẩm.

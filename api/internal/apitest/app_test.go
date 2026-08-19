@@ -301,7 +301,6 @@ func dungHeThongVoi(t *testing.T, banHang, dieuHanh bool) *heThong {
 	roleRepo := repository.NewRoleRepository(db)
 	verifyRepo := repository.NewEmailVerificationRepository(db)
 	categoryRepo := repository.NewCategoryRepository(db)
-	brandRepo := repository.NewBrandRepository(db)
 	productRepo := repository.NewProductRepository(db)
 	orderRepo := repository.NewOrderRepository(db)
 	paymentRepo := repository.NewPaymentRepository(db)
@@ -322,12 +321,12 @@ func dungHeThongVoi(t *testing.T, banHang, dieuHanh bool) *heThong {
 	contactRepo := repository.NewContactRepository(db)
 	newsletterRepo := repository.NewNewsletterRepository(db)
 	quyTacMaRepo := repository.NewQuyTacMaRepository(db)
+	thueRepo := repository.NewThueRepository(db)
 
 	settingSvc := service.NewSettingService(settingRepo)
 	authSvc := service.NewAuthService(userRepo, nguoiDieuHanhRepo, tenantRepo, roleRepo, verifyRepo, mailSender, jwtMgr,
 		cfg.JWT, cfg.Mail, true, settingSvc, fbClient, ggClient)
 	categorySvc := service.NewCategoryService(categoryRepo, quyTacMaRepo)
-	brandSvc := service.NewBrandService(brandRepo)
 	bannerSvc := service.NewBannerService(bannerRepo)
 	// Cửa xét hạn mức hợp đồng chỉ có khi có control plane, y như main.go. Bộ
 	// kiểm này gieo dữ liệu THẲNG QUA GORM chứ không qua service, nên hạn mức
@@ -340,7 +339,7 @@ func dungHeThongVoi(t *testing.T, banHang, dieuHanh bool) *heThong {
 			productRepo, userRepo, chiNhanhRepo, cfg.App.Code)
 	}
 
-	productSvc := service.NewProductService(productRepo, categoryRepo, brandRepo, hanMucSvc, quyTacMaRepo)
+	productSvc := service.NewProductService(productRepo, categoryRepo, hanMucSvc, quyTacMaRepo)
 	promotionSvc := service.NewPromotionService(promotionRepo, categoryRepo)
 	voucherSvc := service.NewVoucherService(voucherRepo)
 	customerSvc := service.NewCustomerService(userRepo)
@@ -362,7 +361,6 @@ func dungHeThongVoi(t *testing.T, banHang, dieuHanh bool) *heThong {
 		Health:   handler.NewHealthHandler("test"),
 		Auth:     handler.NewAuthHandler(authSvc),
 		Category: handler.NewCategoryHandler(categorySvc),
-		Brand:    handler.NewBrandHandler(brandSvc),
 		Product:  handler.NewProductHandler(productSvc, promotionSvc),
 		Customer: handler.NewCustomerHandler(customerSvc),
 		Order:    handler.NewOrderHandler(orderSvc),
@@ -383,6 +381,7 @@ func dungHeThongVoi(t *testing.T, banHang, dieuHanh bool) *heThong {
 			service.NewNhomQuyenService(repository.NewQuyenRepository(db), userRepo)),
 		QuyTacMa: handler.NewQuyTacMaHandler(
 			service.NewQuyTacMaService(quyTacMaRepo, chiNhanhRepo)),
+		Thue:      handler.NewThueHandler(service.NewThueService(thueRepo)),
 		Ca:        handler.NewCaLamViecHandler(service.NewCaLamViecService(caRepo, userRepo, chiNhanhRepo)),
 		Payment:   handler.NewPaymentHandler(paymentSvc),
 		Banner:    handler.NewBannerHandler(bannerSvc),

@@ -446,210 +446,6 @@
                 }
             }
         },
-        "/admin/brands": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Admin - Brands"
-                ],
-                "summary": "Tạo thương hiệu",
-                "parameters": [
-                    {
-                        "description": "Dữ liệu thương hiệu",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/dto.BrandRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "$ref": "#/definitions/response.Body"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/response.Body"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/response.Body"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
-                        "schema": {
-                            "$ref": "#/definitions/response.Body"
-                        }
-                    },
-                    "409": {
-                        "description": "Conflict",
-                        "schema": {
-                            "$ref": "#/definitions/response.Body"
-                        }
-                    },
-                    "422": {
-                        "description": "Unprocessable Entity",
-                        "schema": {
-                            "$ref": "#/definitions/response.Body"
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/brands/{id}": {
-            "put": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Admin - Brands"
-                ],
-                "summary": "Cập nhật thương hiệu",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "ID thương hiệu",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Dữ liệu thương hiệu",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/dto.BrandRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/response.Body"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/response.Body"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/response.Body"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
-                        "schema": {
-                            "$ref": "#/definitions/response.Body"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/response.Body"
-                        }
-                    },
-                    "422": {
-                        "description": "Unprocessable Entity",
-                        "schema": {
-                            "$ref": "#/definitions/response.Body"
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Admin - Brands"
-                ],
-                "summary": "Xóa thương hiệu",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "ID thương hiệu",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/response.Body"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/response.Body"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/response.Body"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
-                        "schema": {
-                            "$ref": "#/definitions/response.Body"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/response.Body"
-                        }
-                    },
-                    "409": {
-                        "description": "Conflict",
-                        "schema": {
-                            "$ref": "#/definitions/response.Body"
-                        }
-                    }
-                }
-            }
-        },
         "/admin/ca-lam-viec": {
             "get": {
                 "security": [
@@ -2522,12 +2318,6 @@
                         "in": "query"
                     },
                     {
-                        "type": "integer",
-                        "description": "Lọc theo thương hiệu",
-                        "name": "brand_id",
-                        "in": "query"
-                    },
-                    {
                         "type": "string",
                         "description": "all|in|low|out",
                         "name": "stock",
@@ -3290,6 +3080,835 @@
                     },
                     "404": {
                         "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/nhan-su": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Hồ sơ người đi làm của cửa hàng, sắp theo trạng thái (đang làm trước) rồi tới tên.\nKhông phân trang: số người của một cửa hàng đếm bằng hàng chục.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Nhân sự"
+                ],
+                "summary": "Danh sách nhân sự",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Tìm theo tên, mã nhân viên hoặc số điện thoại",
+                        "name": "keyword",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "dang_lam | tam_nghi | da_nghi",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Chức danh công việc",
+                        "name": "position",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Loại hợp đồng",
+                        "name": "contract_type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Chi nhánh",
+                        "name": "shop_id",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/dto.NhanSuResponse"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Bỏ trống `code` thì hệ thống tự đặt (NV0001, NV0002…).\nGửi kèm khối `tai_khoan` để cấp luôn tài khoản đăng nhập cho người này —\nkhi đó hồ sơ phải có `email` (bảng tài khoản bắt buộc và đặt UNIQUE lên email)\nvà `role_id` là quyền đặt cho tài khoản đó.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Nhân sự"
+                ],
+                "summary": "Thêm hồ sơ nhân viên",
+                "parameters": [
+                    {
+                        "description": "Hồ sơ nhân viên",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.NhanSuRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.NhanSuResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/nhan-su/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Nhân sự"
+                ],
+                "summary": "Chi tiết một hồ sơ nhân sự",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID hồ sơ",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.NhanSuResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Bỏ trống `code` = giữ nguyên mã cũ (mã đã đi vào bảng lương).\nKhối `tai_khoan` chỉ dùng để cấp tài khoản cho hồ sơ CHƯA có; đổi mật khẩu\nlà đường riêng của module tài khoản.\nHồ sơ ĐÃ có tài khoản thì `role_id` là lệnh đổi vai trò cho tài khoản đó.\n`status` = `da_nghi` khoá luôn tài khoản gắn kèm; đặt lại `dang_lam` chỉ mở\ntài khoản khi gửi kèm `mo_tai_khoan: true`.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Nhân sự"
+                ],
+                "summary": "Sửa hồ sơ nhân viên",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID hồ sơ",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Hồ sơ nhân viên",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.NhanSuRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.NhanSuResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Xoá MỀM, và KHOÁ luôn tài khoản đăng nhập gắn kèm: xoá là hành động mạnh hơn\n\"đã nghỉ\" nên không thể lỏng hơn. Xoá hồ sơ của chính mình thì bị từ chối.\nNgười nghỉ việc thì nên đặt trạng thái `da_nghi` thay vì xoá — hồ sơ còn để tra lương cũ.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Nhân sự"
+                ],
+                "summary": "Xoá hồ sơ nhân viên",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID hồ sơ",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/nhan-su/{id}/trang-thai": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Đường riêng cho công tắc trên bảng danh sách: chỉ đổi cột `status`,\nkhông đụng tới phần còn lại của hồ sơ.\nĐặt `da_nghi` sẽ KHOÁ luôn tài khoản đăng nhập gắn với hồ sơ (nếu có) —\nnghỉ việc mà tài khoản còn mở thì người đó vẫn vào được quầy bán bằng\nmật khẩu cũ. Chiều ngược lại không tự mở: gửi kèm `mo_tai_khoan: true`.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Nhân sự"
+                ],
+                "summary": "Bật/tắt trạng thái làm việc",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID hồ sơ",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Trạng thái mới",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.NhanSuTrangThaiRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.NhanSuResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/nhom-quyen": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Nhóm quyền"
+                ],
+                "summary": "Danh sách nhóm quyền",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/dto.NhomQuyenResponse"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Bỏ trống `code` thì hệ thống tự đặt (nhom-1, nhom-2…).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Nhóm quyền"
+                ],
+                "summary": "Thêm nhóm quyền",
+                "parameters": [
+                    {
+                        "description": "Nhóm quyền",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.NhomQuyenRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.NhomQuyenResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/nhom-quyen/danh-muc": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Toàn bộ quyền có thể tick, xếp theo nhóm hiển thị đúng thứ tự thanh điều hướng.\nDanh sách này nằm trong mã nguồn chứ không phải database: nó phải khớp từng chữ\nvới những đường mà máy chủ thật sự chặn.\nTầng trên cùng là KHU làm việc (Quản trị / Thu ngân) — màn hình khoá cả khu\nQuản trị với người chỉ được giao cửa quầy.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Nhóm quyền"
+                ],
+                "summary": "Cây quyền của phần mềm",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/domain.KhuQuyen"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/nhom-quyen/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Nhóm quyền"
+                ],
+                "summary": "Chi tiết một nhóm quyền",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID nhóm",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.NhomQuyenResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Mã nhóm KHÔNG đổi được. Bỏ hẳn khoá `quyen` = giữ nguyên danh sách quyền;\ngửi mảng rỗng = bỏ hết tick.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Nhóm quyền"
+                ],
+                "summary": "Sửa nhóm quyền",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID nhóm",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Nhóm quyền",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.NhomQuyenRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.NhomQuyenResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Nhóm hệ thống và nhóm còn người mang đều KHÔNG xoá được.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Nhóm quyền"
+                ],
+                "summary": "Xoá nhóm quyền",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID nhóm",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/nhom-quyen/{id}/quyen": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Thay TOÀN BỘ danh sách. Nhóm đang mang cờ \"toàn quyền\" thì lượt này gỡ cờ đi:\nngười dùng vừa nói rõ họ muốn một danh sách cụ thể.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Nhóm quyền"
+                ],
+                "summary": "Đặt danh sách quyền của một nhóm",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID nhóm",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Danh sách quyền",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.NhomQuyenQuyenRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.NhomQuyenResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
@@ -6553,6 +7172,153 @@
                 }
             }
         },
+        "/admin/quy-tac-ma": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Trả về danh mục loại đánh số được (khai trong mã nguồn) và MỌI quy tắc đã lưu của cửa hàng.\n`shop_id = 0` là quy tắc dùng chung toàn cửa hàng (hàng hoá, nhà cung cấp, nhân viên).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Quy tắc đánh số"
+                ],
+                "summary": "Quy tắc đánh số chứng từ",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.QuyTacMaResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Gửi lên TRẠNG THÁI CUỐI CÙNG: loại có trong `quy_tac` là bật, loại vắng mặt là tắt.\nLượt lưu chạm hai phạm vi — chi nhánh `shop_id` và phạm vi dùng chung.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Quy tắc đánh số"
+                ],
+                "summary": "Lưu quy tắc đánh số của một chi nhánh",
+                "parameters": [
+                    {
+                        "description": "Bảng quy tắc",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.LuuQuyTacMaRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/quyen-cua-toi": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Trang quản trị đọc một lần lúc đăng nhập để lọc menu. KHÔNG thay cho chốt ở\nmáy chủ — ẩn một mục menu chỉ là phép lịch sự, chặn thật nằm ở từng đường.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Nhóm quyền"
+                ],
+                "summary": "Quyền của chính người đang đăng nhập",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.QuyenCuaToiResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
         "/admin/receipts": {
             "get": {
                 "security": [
@@ -8242,6 +9008,216 @@
                 }
             }
         },
+        "/admin/thue": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Bốn loại cố định, mỗi loại kèm bộ mức đang bật và bộ mức cho chọn.\nCửa hàng chưa có dòng nào thì lượt gọi này dựng sẵn theo mức mặc định.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Thuế"
+                ],
+                "summary": "Danh sách thuế suất",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/dto.ThueItem"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/thue/{id}": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Gửi lên TRẠNG THÁI CUỐI CÙNG của ô chọn. Mức nằm ngoài bộ cho chọn của loại đó bị từ chối.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Thuế"
+                ],
+                "summary": "Sửa bộ mức của một loại thuế",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID dòng thuế",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Bộ mức",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.CapNhatThueRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.ThueItem"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/thue/{id}/trang-thai": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Tắt = màn nghiệp vụ thôi bày ô chọn thuế của loại đó. Dòng vẫn còn, bật lại là bộ mức cũ nguyên vẹn.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Thuế"
+                ],
+                "summary": "Bật/tắt một loại thuế",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID dòng thuế",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Trạng thái",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.TrangThaiThueRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.ThueItem"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/users": {
             "get": {
                 "security": [
@@ -8762,6 +9738,120 @@
                     },
                     "401": {
                         "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/users/{id}/quyen": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Màn phân quyền đọc để dựng sẵn ô tick. Nhóm quyền chỉ là mẫu — quyền thật\nnằm ở đây (bảng user_permissions).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Nhóm quyền"
+                ],
+                "summary": "Quyền đã tick cho một tài khoản",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID tài khoản",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.QuyenCuaToiResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Thay TOÀN BỘ danh sách. Mảng rỗng = thu hết quyền (tài khoản vẫn đăng\nnhập được, chỉ là không mở được trang nào).\nKHÔNG tự đặt cho chính mình: phiên đang chạy bằng token cũ nên màn hình vẫn\ntrông bình thường, tới lần đăng nhập sau mới phát hiện mất đường vào.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Nhóm quyền"
+                ],
+                "summary": "Đặt quyền cho một tài khoản",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID tài khoản",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Danh sách quyền",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.NhomQuyenQuyenRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
@@ -10185,69 +11275,6 @@
                 "responses": {
                     "200": {
                         "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/response.Body"
-                        }
-                    }
-                }
-            }
-        },
-        "/brands": {
-            "get": {
-                "description": "Mỗi thương hiệu kèm `product_count` — số sản phẩm (chưa xoá) đang gắn thương hiệu đó.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Brands"
-                ],
-                "summary": "Danh sách thương hiệu",
-                "parameters": [
-                    {
-                        "type": "boolean",
-                        "description": "true = lấy cả thương hiệu ẩn",
-                        "name": "all",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/response.Body"
-                        }
-                    }
-                }
-            }
-        },
-        "/brands/{id}": {
-            "get": {
-                "description": "Kèm `product_count` — số sản phẩm (chưa xoá) đang gắn thương hiệu này.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Brands"
-                ],
-                "summary": "Chi tiết thương hiệu",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "ID thương hiệu",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/response.Body"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
@@ -12719,12 +13746,6 @@
                         "in": "query"
                     },
                     {
-                        "type": "integer",
-                        "description": "ID thương hiệu",
-                        "name": "brand_id",
-                        "in": "query"
-                    },
-                    {
                         "type": "string",
                         "description": "Loại áo: fan (FAN) | player (PLAYER)",
                         "name": "kit_type",
@@ -13785,9 +14806,6 @@
         "domain.InventoryItem": {
             "type": "object",
             "properties": {
-                "brand_name": {
-                    "type": "string"
-                },
                 "category_name": {
                     "type": "string"
                 },
@@ -13879,6 +14897,70 @@
                 }
             }
         },
+        "domain.KhuQuyen": {
+            "type": "object",
+            "properties": {
+                "ma": {
+                    "type": "string"
+                },
+                "mo_ta": {
+                    "type": "string"
+                },
+                "nhom": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.NhomMucQuyen"
+                    }
+                },
+                "ten": {
+                    "type": "string"
+                }
+            }
+        },
+        "domain.LoaiMa": {
+            "type": "object",
+            "properties": {
+                "dung_chung": {
+                    "description": "DungChung = true: một quy tắc cho cả cửa hàng (shop_id = 0). Hàng hoá hay\nnhân viên là dữ liệu mọi chi nhánh cùng tra, hai chi nhánh đặt hai tiền tố\nkhác nhau thì mã của cùng một bảng nhảy loạn.",
+                    "type": "boolean"
+                },
+                "ma": {
+                    "type": "string"
+                },
+                "ten": {
+                    "type": "string"
+                },
+                "tien_to_goi_y": {
+                    "description": "TienToGoiY điền sẵn vào ô lúc người dùng vừa bật quy tắc.",
+                    "type": "string"
+                }
+            }
+        },
+        "domain.MucQuyen": {
+            "type": "object",
+            "properties": {
+                "le": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.QuyenLe"
+                    }
+                },
+                "prefix": {
+                    "description": "Prefix đi vào chuỗi quyền: \"san-pham\" -\u003e \"san-pham.xem\". Tiếng Việt không\ndấu, gạch ngang — cùng lối đặt tên với đường dẫn của dự án.",
+                    "type": "string"
+                },
+                "ten": {
+                    "type": "string"
+                },
+                "viec": {
+                    "description": "Viec là những việc chuẩn màn hình này có. KHÔNG phải màn hình nào cũng đủ\nbốn: danh mục sản phẩm không có \"xem\" riêng vì ai đọc được sản phẩm thì\ncũng đọc được danh mục của nó.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
         "domain.NewsletterSubscriber": {
             "type": "object",
             "properties": {
@@ -13901,6 +14983,20 @@
                     "type": "string"
                 },
                 "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "domain.NhomMucQuyen": {
+            "type": "object",
+            "properties": {
+                "mucs": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.MucQuyen"
+                    }
+                },
+                "ten": {
                     "type": "string"
                 }
             }
@@ -14366,14 +15462,8 @@
         "domain.ProductReport": {
             "type": "object",
             "properties": {
-                "by_brand": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/domain.ReportSlice"
-                    }
-                },
                 "by_category": {
-                    "description": "Ba lát cắt cùng dạng: `key` là id (danh mục/thương hiệu) hoặc chính giá trị\n(size), `label` là tên đọc được.",
+                    "description": "Hai lát cắt cùng dạng: `key` là id danh mục hoặc chính giá trị (size),\n`label` là tên đọc được.",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/domain.ReportSlice"
@@ -14422,9 +15512,6 @@
         "domain.ProductReportRow": {
             "type": "object",
             "properties": {
-                "brand_name": {
-                    "type": "string"
-                },
                 "category_name": {
                     "type": "string"
                 },
@@ -14889,6 +15976,53 @@
                 }
             }
         },
+        "domain.QuyTacMa": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "doc_type": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "is_active": {
+                    "type": "boolean"
+                },
+                "length": {
+                    "type": "integer"
+                },
+                "prefix": {
+                    "type": "string"
+                },
+                "shop_id": {
+                    "description": "ShopID = 0: dùng chung toàn cửa hàng. Khác 0: chỉ chi nhánh đó.",
+                    "type": "integer"
+                },
+                "suffix": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "value_part": {
+                    "type": "string"
+                }
+            }
+        },
+        "domain.QuyenLe": {
+            "type": "object",
+            "properties": {
+                "ma": {
+                    "type": "string"
+                },
+                "ten": {
+                    "type": "string"
+                }
+            }
+        },
         "domain.ReportBucket": {
             "type": "object",
             "properties": {
@@ -15320,6 +16454,10 @@
         "domain.User": {
             "type": "object",
             "properties": {
+                "access_areas": {
+                    "description": "AccessAreas là cột SET ghi ĐÚNG những cửa đã giao cho người này:\n\"quan_ly\", \"thu_ngan\", hoặc cả hai. Tích gì vào được nấy.\n\nKHÁC role_id: role_id trả lời \"anh là LOẠI người nào\" (chủ tiệm / người của\ntiệm / khách), còn đây trả lời \"người của tiệm thì mở được CỬA nào\". Một\ncon số không nói được câu \"vừa quản lý vừa đứng quầy\" — xem migration 0015.\n\nRỗng = tài khoản có trước 0015 hoặc là khách hàng; CuaVao() suy từ role_id.",
+                    "type": "string"
+                },
                 "avatar": {
                     "type": "string"
                 },
@@ -15534,34 +16672,6 @@
                 }
             }
         },
-        "dto.BrandRequest": {
-            "type": "object",
-            "required": [
-                "name",
-                "slug"
-            ],
-            "properties": {
-                "description": {
-                    "type": "string",
-                    "maxLength": 500
-                },
-                "is_active": {
-                    "type": "boolean"
-                },
-                "logo": {
-                    "type": "string",
-                    "maxLength": 255
-                },
-                "name": {
-                    "type": "string",
-                    "maxLength": 150
-                },
-                "slug": {
-                    "type": "string",
-                    "maxLength": 191
-                }
-            }
-        },
         "dto.CaChiTietResponse": {
             "type": "object",
             "properties": {
@@ -15572,6 +16682,21 @@
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/domain.SoQuy"
+                    }
+                }
+            }
+        },
+        "dto.CapNhatThueRequest": {
+            "type": "object",
+            "required": [
+                "muc"
+            ],
+            "properties": {
+                "muc": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "type": "integer"
                     }
                 }
             }
@@ -15671,8 +16796,7 @@
         "dto.CategoryRequest": {
             "type": "object",
             "required": [
-                "name",
-                "slug"
+                "name"
             ],
             "properties": {
                 "description": {
@@ -15694,6 +16818,7 @@
                     "type": "integer"
                 },
                 "slug": {
+                    "description": "Slug là MÃ NHÓM. Bỏ trống = hệ thống đặt (theo quy tắc đánh số của cửa\nhàng, hoặc dải NH0001 nếu chưa bật quy tắc).",
                     "type": "string",
                     "maxLength": 191
                 },
@@ -17433,6 +18558,24 @@
                 }
             }
         },
+        "dto.LuuQuyTacMaRequest": {
+            "type": "object",
+            "required": [
+                "shop_id"
+            ],
+            "properties": {
+                "quy_tac": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.QuyTacMaItem"
+                    }
+                },
+                "shop_id": {
+                    "type": "integer",
+                    "minimum": 1
+                }
+            }
+        },
         "dto.MoCaRequest": {
             "type": "object",
             "properties": {
@@ -17444,6 +18587,372 @@
                     "description": "OpeningCash là tiền mặt ĐANG CÓ trong két lúc mở ca, do người trực đếm.\nKhông suy ra từ ca trước: giữa hai ca có thể có người rút tiền về, và con\nsố đối chiếu phải bắt đầu từ thứ đếm được thật.",
                     "type": "number",
                     "minimum": 0
+                }
+            }
+        },
+        "dto.MucThueChon": {
+            "type": "object",
+            "properties": {
+                "gia_tri": {
+                    "type": "integer",
+                    "example": 10
+                },
+                "nhan": {
+                    "type": "string",
+                    "example": "10%"
+                }
+            }
+        },
+        "dto.NhanSuRequest": {
+            "type": "object",
+            "required": [
+                "full_name",
+                "status"
+            ],
+            "properties": {
+                "address": {
+                    "type": "string",
+                    "maxLength": 255
+                },
+                "allowance": {
+                    "type": "number",
+                    "minimum": 0
+                },
+                "avatar": {
+                    "description": "Avatar — đường dẫn ảnh do Shop Admin tải lên và lưu hộ; API chỉ cất chuỗi.",
+                    "type": "string",
+                    "maxLength": 255
+                },
+                "birth_date": {
+                    "description": "BirthDate/HiredOn theo dạng YYYY-MM-DD (đúng thứ ô \u003cinput type=\"date\"\u003e gửi lên).",
+                    "type": "string",
+                    "example": "1998-08-23"
+                },
+                "code": {
+                    "description": "Code bỏ trống khi TẠO = hệ thống tự đặt (NV0001, NV0002…). Bỏ trống khi SỬA\n= giữ nguyên mã cũ: mã đã đi vào bảng lương và bảng chấm công.",
+                    "type": "string",
+                    "maxLength": 30,
+                    "example": "NV0007"
+                },
+                "commission_rate": {
+                    "description": "CommissionRate tính theo % doanh số — quá 100 thì bán càng nhiều càng lỗ,\ngần như chắc chắn là gõ nhầm.",
+                    "type": "number",
+                    "maximum": 100,
+                    "minimum": 0
+                },
+                "contract_type": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string",
+                    "maxLength": 191
+                },
+                "full_name": {
+                    "type": "string",
+                    "maxLength": 150,
+                    "example": "Nguyễn Văn An"
+                },
+                "gender": {
+                    "type": "string",
+                    "enum": [
+                        "nam",
+                        "nu",
+                        "khac"
+                    ]
+                },
+                "hired_on": {
+                    "type": "string",
+                    "example": "2026-08-17"
+                },
+                "id_number": {
+                    "type": "string",
+                    "maxLength": 20
+                },
+                "mo_tai_khoan": {
+                    "description": "MoTaiKhoan = \"nhận người này làm lại thì mở luôn tài khoản cũ\".\n\nChỉ có nghĩa khi Status quay về `dang_lam`. Đặt trạng thái `da_nghi` luôn\nKHOÁ tài khoản (không hỏi), còn mở lại thì phải nói rõ ở đây — xem\nservice.dongBoTaiKhoan.",
+                    "type": "boolean"
+                },
+                "note": {
+                    "type": "string",
+                    "maxLength": 500
+                },
+                "phone": {
+                    "type": "string",
+                    "maxLength": 20
+                },
+                "position": {
+                    "description": "Position là chức danh CÔNG VIỆC, không phải quyền trên phần mềm.\n\nKHÔNG còn bắt buộc: trang nhân sự đã thay ô này bằng ca làm việc (với một\ncửa hàng bán lẻ thì chức danh không nói thêm gì so với ô Phân quyền). Bỏ\ntrống thì lượt TẠO rơi về mặc định 'ban_hang' của cột, còn lượt SỬA giữ\nnguyên giá trị cũ — hồ sơ khai từ trước không bị một lượt sửa tên làm mất\nchức danh.",
+                    "type": "string",
+                    "example": "thu_ngan"
+                },
+                "quyen": {
+                    "description": "Quyen — CỬA VÀO đã tích cho người này: \"quan_ly\", \"thu_ngan\", hoặc cả hai.\n\nMảng chứ không phải một con số, vì một người giữ được cả hai cửa và màn\nhình phải hiện lại đúng thứ đã tích. RoleID ở trên vẫn suy ra từ đây (có\n\"quan_ly\" -\u003e 2, còn lại -\u003e 3) và vẫn được gửi kèm: nó là khoá ngoại tới\n`roles`, nằm trong token, và là thứ phân biệt người của tiệm với khách.\n\nRỗng = lượt gọi không nói gì về cửa; service giữ nguyên cột đang có.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "quan_ly",
+                        "thu_ngan"
+                    ]
+                },
+                "role_id": {
+                    "description": "RoleID — QUYỀN của người này trên phần mềm (2 = quản lý, 3 = thu ngân).\n\nMột trường cho cả hai việc, có chủ ý: lúc cấp tài khoản mới thì đây là\nquyền đặt cho nó, lúc sửa hồ sơ đã có tài khoản thì đây là quyền ĐỔI SANG.\nHai trường riêng cho cùng một khái niệm là chờ ngày màn hình gửi cái này\ncòn API đọc cái kia.\n\nKHÁC hẳn Position: Position là VIỆC người đó làm, còn đây là những gì họ\nmở được trên phần mềm. Mặc định hai thứ đi đôi, nhưng cửa hàng có quyền\ntách chúng ra — quản lý ca tối chỉ đứng quầy, hay thu ngân được giao coi kho.\n\n0 = không nói gì về quyền (hồ sơ không có tài khoản).",
+                    "type": "integer",
+                    "example": 3
+                },
+                "salary": {
+                    "type": "number",
+                    "minimum": 0
+                },
+                "salary_type": {
+                    "type": "string"
+                },
+                "shop_id": {
+                    "description": "ShopID BẮT BUỘC: mỗi nhân viên phải đứng ở một chi nhánh cụ thể. Cửa hàng\nmột điểm bán thì màn hình tự chọn sẵn chi nhánh duy nhất đó, người dùng\nkhông phải làm gì thêm — nhưng dữ liệu vẫn ghi rõ nơi làm việc, để bảng\nchấm công và báo cáo theo chi nhánh sau này không phải đoán.\nKHÔNG dùng binding:\"required\" ở đây: bộ validate của gin đặt tên ô theo tên\nTRƯỜNG GO (\"ShopID\") nên trang quản trị nhận về một khoá không khớp ô nào\ntrên form. Lượt kiểm nằm ở service và trả đúng khoá `shop_id`.",
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "string",
+                    "example": "dang_lam"
+                },
+                "tai_khoan": {
+                    "description": "TaiKhoan có mặt = cấp tài khoản đăng nhập cho người này. Bỏ hẳn khoá này\n(null) = không cấp, KHÁC với gửi khối rỗng.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/dto.NhanSuTaiKhoanRequest"
+                        }
+                    ]
+                },
+                "work_shift": {
+                    "description": "WorkShift — các ca người này trực. Mảng vì một người trực được nhiều ca;\nservice ghép thành chuỗi cho cột SET `employees.work_shift`.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "sang",
+                        "chieu"
+                    ]
+                }
+            }
+        },
+        "dto.NhanSuResponse": {
+            "type": "object",
+            "properties": {
+                "address": {
+                    "type": "string"
+                },
+                "allowance": {
+                    "type": "number"
+                },
+                "avatar": {
+                    "description": "Avatar giữ ĐƯỜNG DẪN ảnh trên ổ đĩa công khai của Shop Admin, không giữ ảnh\n— xem migration 0016. Rỗng = chưa có ảnh.",
+                    "type": "string"
+                },
+                "birth_date": {
+                    "description": "BirthDate/HiredOn là cột DATE. Dùng *time.Time để phân biệt \"chưa khai\" với\nngày 0001-01-01 — hai thứ đó hiện ra màn hình khác hẳn nhau.",
+                    "type": "string"
+                },
+                "code": {
+                    "type": "string"
+                },
+                "commission_rate": {
+                    "type": "number"
+                },
+                "contract_type": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "full_name": {
+                    "type": "string"
+                },
+                "gender": {
+                    "type": "string"
+                },
+                "hired_on": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "id_number": {
+                    "type": "string"
+                },
+                "note": {
+                    "type": "string"
+                },
+                "phone": {
+                    "type": "string"
+                },
+                "position": {
+                    "description": "Position là VIỆC người đó làm; quyền trên phần mềm nằm ở users.role_id.\nTrang nhân sự KHÔNG còn gửi ô này (đã thay bằng ca làm) — hồ sơ mới rơi về\nmặc định 'ban_hang' của cột; dữ liệu cũ và module chấm công sau vẫn dùng.",
+                    "type": "string"
+                },
+                "quyen": {
+                    "description": "Quyen — cửa vào của tài khoản gắn kèm. Bảng hiện ĐÚNG danh sách này, một\nhuy hiệu mỗi cửa: tích hai ô thì ra hai huy hiệu, tích một thì ra một.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "role_display_name": {
+                    "type": "string"
+                },
+                "role_id": {
+                    "type": "integer"
+                },
+                "salary": {
+                    "type": "number"
+                },
+                "salary_type": {
+                    "type": "string"
+                },
+                "shop_id": {
+                    "description": "ShopID NULL được: cửa hàng một điểm bán thì \"làm ở chi nhánh nào\" chưa có\nnghĩa. UserID NULL = người này không có tài khoản đăng nhập.",
+                    "type": "integer"
+                },
+                "shop_name": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "integer"
+                },
+                "user_status": {
+                    "description": "UserStatus (active | inactive) là trạng thái của TÀI KHOẢN, khác với Status\ncủa hồ sơ. Hai cột tách nhau nên màn hình phải nói được \"đang làm nhưng tài\nkhoản đang khoá\" — trường hợp có thật sau khi nhận lại người cũ mà chưa mở\ntài khoản cho họ.",
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                },
+                "work_shift": {
+                    "description": "WorkShift là cột SET: nhiều ca trong một ô, đọc lên thành \"sang,chieu\".\nNULL = chưa xếp ca, khác chuỗi rỗng (\"đã xét, không trực ca nào\").",
+                    "type": "string"
+                }
+            }
+        },
+        "dto.NhanSuTaiKhoanRequest": {
+            "type": "object",
+            "required": [
+                "username"
+            ],
+            "properties": {
+                "password": {
+                    "description": "Password bỏ trống thì hệ thống cấp mật khẩu mặc định, y như trang tài khoản.",
+                    "type": "string",
+                    "maxLength": 72,
+                    "minLength": 6
+                },
+                "username": {
+                    "type": "string",
+                    "maxLength": 50,
+                    "minLength": 3,
+                    "example": "an.nv"
+                }
+            }
+        },
+        "dto.NhanSuTrangThaiRequest": {
+            "type": "object",
+            "required": [
+                "status"
+            ],
+            "properties": {
+                "mo_tai_khoan": {
+                    "description": "MoTaiKhoan: xem NhanSuRequest.MoTaiKhoan — công tắc gạt về \"đang làm\" gửi\nkèm khoá này sau khi màn hình hỏi lại người bấm.",
+                    "type": "boolean"
+                },
+                "status": {
+                    "type": "string",
+                    "example": "dang_lam"
+                }
+            }
+        },
+        "dto.NhomQuyenQuyenRequest": {
+            "type": "object",
+            "properties": {
+                "quyen": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "dto.NhomQuyenRequest": {
+            "type": "object",
+            "required": [
+                "name"
+            ],
+            "properties": {
+                "code": {
+                    "description": "Code bỏ trống khi TẠO = hệ thống tự đặt (nhom-1, nhom-2…). Khi SỬA thì\nkhoá này bị bỏ qua: mã là thứ mã nguồn gọi tên hai nhóm hệ thống.",
+                    "type": "string",
+                    "maxLength": 50
+                },
+                "description": {
+                    "type": "string",
+                    "maxLength": 255
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "example": "Thủ kho"
+                },
+                "quyen": {
+                    "description": "Quyen là TOÀN BỘ danh sách quyền của nhóm sau lượt này.\n\nnil (bỏ hẳn khoá) = giữ nguyên danh sách đang có. Mảng RỖNG = bỏ hết tick.\nHai thứ đó khác nhau, và gộp lại thì không có cách nào thu hết quyền của\nmột nhóm.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "dto.NhomQuyenResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "full_access": {
+                    "description": "FullAccess: mọi quyền HIỆN CÓ VÀ SẼ CÓ — xem chú thích dài ở migration 0012.\nĐây là thứ giữ cho một module ra mắt sau này tự tới tay quản trị viên.",
+                    "type": "boolean"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "is_system": {
+                    "description": "IsSystem: nhóm hệ thống dựng sẵn. Sửa được, KHÔNG xoá được.",
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "quyen": {
+                    "description": "Quyen: nhóm mang cờ toàn quyền trả về CẢ danh mục, vì đó đúng là những gì\nnó có — màn hình tick hiện đủ dấu tick thay vì một danh sách trống.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "updated_at": {
+                    "type": "string"
                 }
             }
         },
@@ -18100,16 +19609,12 @@
             "required": [
                 "category_id",
                 "name",
-                "sku",
                 "slug"
             ],
             "properties": {
                 "base_price": {
                     "type": "number",
                     "minimum": 0
-                },
-                "brand_id": {
-                    "type": "integer"
                 },
                 "category_id": {
                     "type": "integer"
@@ -18168,6 +19673,7 @@
                     "maxLength": 500
                 },
                 "sku": {
+                    "description": "SKU bỏ trống = sinh theo quy tắc mã hàng hoá; chưa bật quy tắc thì API trả\n422 đòi nhập tay. Lúc SỬA, bỏ trống là giữ mã cũ.",
                     "type": "string",
                     "maxLength": 64
                 },
@@ -18247,12 +19753,6 @@
                 "start_at"
             ],
             "properties": {
-                "brand_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "integer"
-                    }
-                },
                 "category_ids": {
                     "type": "array",
                     "items": {
@@ -18290,7 +19790,7 @@
                     "maxLength": 150
                 },
                 "product_ids": {
-                    "description": "Ba danh sách phạm vi. Phải có ít nhất một id ở một trong ba — chương trình\nkhông phạm vi thì không giảm cho ai, tạo ra chỉ để nằm đó gây hiểu nhầm.",
+                    "description": "Hai danh sách phạm vi. Phải có ít nhất một id ở một trong hai — chương trình\nkhông phạm vi thì không giảm cho ai, tạo ra chỉ để nằm đó gây hiểu nhầm.",
                     "type": "array",
                     "items": {
                         "type": "integer"
@@ -18305,12 +19805,6 @@
         "dto.PromotionResponse": {
             "type": "object",
             "properties": {
-                "brand_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "integer"
-                    }
-                },
                 "category_ids": {
                     "type": "array",
                     "items": {
@@ -18651,6 +20145,74 @@
                     "description": "TrangThai: active | inactive. In ra để người sắp đặt lại mật khẩu thấy tài\nkhoản đang bị khoá — đặt lại mật khẩu KHÔNG mở khoá hộ.",
                     "type": "string",
                     "example": "active"
+                }
+            }
+        },
+        "dto.QuyTacMaItem": {
+            "type": "object",
+            "required": [
+                "doc_type",
+                "length",
+                "value_part"
+            ],
+            "properties": {
+                "doc_type": {
+                    "type": "string",
+                    "maxLength": 40,
+                    "example": "don-hang"
+                },
+                "length": {
+                    "description": "Length là tổng số ký tự phần GIỮA (ngày + số đếm).",
+                    "type": "integer",
+                    "maximum": 20,
+                    "minimum": 3,
+                    "example": 6
+                },
+                "prefix": {
+                    "type": "string",
+                    "maxLength": 20,
+                    "example": "DH"
+                },
+                "suffix": {
+                    "type": "string",
+                    "maxLength": 20
+                },
+                "value_part": {
+                    "description": "ValuePart: so-thu-tu | ngay-thang-nam | thang-nam.",
+                    "type": "string",
+                    "maxLength": 20,
+                    "example": "so-thu-tu"
+                }
+            }
+        },
+        "dto.QuyTacMaResponse": {
+            "type": "object",
+            "properties": {
+                "loai": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.LoaiMa"
+                    }
+                },
+                "quy_tac": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.QuyTacMa"
+                    }
+                }
+            }
+        },
+        "dto.QuyenCuaToiResponse": {
+            "type": "object",
+            "properties": {
+                "quyen": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "toan_quyen": {
+                    "type": "boolean"
                 }
             }
         },
@@ -19518,6 +21080,58 @@
                 }
             }
         },
+        "dto.ThueItem": {
+            "type": "object",
+            "properties": {
+                "chon_duoc": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.MucThueChon"
+                    }
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "is_active": {
+                    "type": "boolean"
+                },
+                "loai": {
+                    "type": "string",
+                    "example": "ban-hang"
+                },
+                "mo_ta": {
+                    "type": "string"
+                },
+                "muc": {
+                    "description": "Muc là các mức ĐANG BẬT; MucNhan là chính chúng đã dịch sang chữ.",
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "muc_nhan": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "ten": {
+                    "type": "string",
+                    "example": "Thuế đơn bán hàng"
+                }
+            }
+        },
+        "dto.TrangThaiThueRequest": {
+            "type": "object",
+            "required": [
+                "is_active"
+            ],
+            "properties": {
+                "is_active": {
+                    "type": "boolean"
+                }
+            }
+        },
         "dto.UpdateContactStatusRequest": {
             "type": "object",
             "required": [
@@ -19629,6 +21243,17 @@
                 },
                 "phone": {
                     "type": "string"
+                },
+                "quyen": {
+                    "description": "Quyen — CỬA VÀO đã giao (users.access_areas). Cột rỗng thì suy từ role_id,\nnên danh sách này LUÔN nói đúng những khu người đó mở được, kể cả với tài\nkhoản có trước migration 0015.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "quan_ly",
+                        "thu_ngan"
+                    ]
                 },
                 "role_display_name": {
                     "type": "string",

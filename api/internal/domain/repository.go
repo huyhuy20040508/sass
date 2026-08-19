@@ -13,7 +13,6 @@ type ProductFilter struct {
 	// con/cháu (cây danh mục tối đa 3 cấp: Câu lạc bộ → giải đấu → CLB).
 	// Có phần tử thì repo lọc IN theo danh sách này thay cho CategoryID.
 	CategoryIDs []uint
-	BrandID     *uint
 	KitType     string
 	IsFeatured  *bool
 	IsActive    *bool // lọc chính xác theo trạng thái (nil = không lọc)
@@ -114,10 +113,9 @@ type CheckoutVariant struct {
 	Size      string
 	Color     string
 	Thumbnail string
-	// CategoryID / BrandID lấy sẵn để đối chiếu phạm vi chương trình khuyến mãi mà
-	// không phải hỏi thêm bảng products lần nữa ngay giữa giao dịch đặt hàng.
+	// CategoryID lấy sẵn để đối chiếu phạm vi chương trình khuyến mãi mà không
+	// phải hỏi thêm bảng products lần nữa ngay giữa giao dịch đặt hàng.
 	CategoryID uint
-	BrandID    *uint
 	// Price là giá hiệu lực TRƯỚC khuyến mãi (giá riêng biến thể > sale_price > giá
 	// gốc). Chương trình khuyến mãi được trừ thêm ở tầng service — xem
 	// promotionService.ApplyToCheckout.
@@ -680,7 +678,6 @@ type GoodsReceiptRepository interface {
 type InventoryFilter struct {
 	Keyword    string // tên sản phẩm / SKU biến thể / SKU sản phẩm
 	CategoryID *uint
-	BrandID    *uint
 	Stock      string // all | in | low | out — nhóm theo mức tồn
 	// Cost lọc theo tình trạng khai giá vốn: all | missing (chưa khai) | set (đã khai).
 	// Có bộ lọc này thì cảnh báo "thiếu giá vốn N biến thể" mới bấm vào được — biết
@@ -710,7 +707,6 @@ type InventoryItem struct {
 	// kho phân biệt được FAN với PLAYER mà không phải gọi thêm.
 	KitType       string `json:"kit_type"`
 	CategoryName  string `json:"category_name"`
-	BrandName     string `json:"brand_name"`
 	StockQuantity int    `json:"stock_quantity"`
 	// Price là giá HIỆU LỰC của biến thể: giá riêng của biến thể nếu có, không thì
 	// giá khuyến mãi, không nữa thì giá gốc của sản phẩm.
@@ -1194,7 +1190,7 @@ type PromotionRepository interface {
 	// CountProducts đếm số sản phẩm ĐANG BÁN nằm trong phạm vi đã cho — người bán
 	// cần biết đợt này chạm vào bao nhiêu mặt hàng trước khi bật. Danh mục con đã
 	// được tầng service khai triển sẵn vào categoryIDs.
-	CountProducts(ctx context.Context, productIDs, categoryIDs, brandIDs []uint) (int64, error)
+	CountProducts(ctx context.Context, productIDs, categoryIDs []uint) (int64, error)
 }
 
 // VoucherFilter là tham số lọc/phân trang khi liệt kê voucher.
@@ -1260,16 +1256,6 @@ type VoucherRepository interface {
 	// vấn, để lọc mã họ đã dùng hết khỏi danh sách gợi ý mà không phải hỏi từng mã.
 	// Nhận diện khách giống CountUsageByUser: userID hoặc số điện thoại.
 	CountUsageByUserBulk(ctx context.Context, voucherIDs []uint, userID uint, phone string) (map[uint]int64, error)
-}
-
-// BrandRepository — truy cập bảng brands.
-type BrandRepository interface {
-	List(ctx context.Context, onlyActive bool) ([]Brand, error)
-	FindByID(ctx context.Context, id uint) (*Brand, error)
-	ExistsBySlug(ctx context.Context, slug string, excludeID uint) (bool, error)
-	Create(ctx context.Context, b *Brand) error
-	Update(ctx context.Context, b *Brand) error
-	Delete(ctx context.Context, id uint) error
 }
 
 // SettingRepository — truy cập bảng settings (cấu hình hệ thống dạng key-value).

@@ -67,7 +67,7 @@ type AppConfig struct {
 	//
 	// CHÚ Ý: một số route trông có vẻ "công khai" nhưng khu quản trị VẪN GỌI nên
 	// KHÔNG nằm trong cụm này — /health, /auth/login, /auth/me, /auth/refresh,
-	// /categories, /brands, /products, /notifications, /events. Xem router.go.
+	// /categories, /products, /notifications, /events. Xem router.go.
 	EnableStorefront bool
 }
 

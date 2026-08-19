@@ -27,7 +27,6 @@ type ProductService interface {
 type productService struct {
 	repo         domain.ProductRepository
 	categoryRepo domain.CategoryRepository
-	brandRepo    domain.BrandRepository
 	// hanMuc xét hạn mức sản phẩm của hợp đồng. nil = máy chủ chưa nối được
 	// control plane, khi đó không có hợp đồng nào đọc được nên không ép gì cả.
 	hanMuc HanMucService
@@ -39,12 +38,11 @@ type productService struct {
 func NewProductService(
 	repo domain.ProductRepository,
 	categoryRepo domain.CategoryRepository,
-	brandRepo domain.BrandRepository,
 	hanMuc HanMucService,
 	quyTac domain.QuyTacMaRepository,
 ) ProductService {
 	return &productService{
-		repo: repo, categoryRepo: categoryRepo, brandRepo: brandRepo,
+		repo: repo, categoryRepo: categoryRepo,
 		hanMuc: hanMuc, quyTac: quyTac,
 	}
 }
@@ -334,7 +332,6 @@ func (s *productService) Duplicate(ctx context.Context, id uint) (*domain.Produc
 
 	newProduct := &domain.Product{
 		CategoryID:       orig.CategoryID,
-		BrandID:          orig.BrandID,
 		Name:             newName,
 		Slug:             newSlug,
 		SKU:              newSKU,
@@ -402,16 +399,12 @@ func (s *productService) Delete(ctx context.Context, id uint) error {
 	return s.repo.Delete(ctx, id)
 }
 
-// validateRefs kiểm tra category_id (và brand_id nếu có) tồn tại.
+// validateRefs kiểm tra category_id tồn tại.
 func (s *productService) validateRefs(ctx context.Context, req dto.ProductRequest) error {
 	if _, err := s.categoryRepo.FindByID(ctx, req.CategoryID); err != nil {
 		return err // ErrNotFound -> handler trả 404
 	}
-	if req.BrandID != nil {
-		if _, err := s.brandRepo.FindByID(ctx, *req.BrandID); err != nil {
-			return err
-		}
-	}
+
 	return nil
 }
 
@@ -419,7 +412,6 @@ func (s *productService) validateRefs(ctx context.Context, req dto.ProductReques
 // isCreate=true chỉ khi tạo mới (đặt mặc định cho các cờ boolean khi nil).
 func applyProductRequest(p *domain.Product, req dto.ProductRequest, isCreate bool) {
 	p.CategoryID = req.CategoryID
-	p.BrandID = req.BrandID
 	p.Name = req.Name
 	p.Slug = req.Slug
 	p.SKU = req.SKU

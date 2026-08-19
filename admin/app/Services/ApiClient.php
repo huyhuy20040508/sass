@@ -345,36 +345,27 @@ class ApiClient
         return $this->delete("/admin/categories/{$id}");
     }
 
-    // ---------- Brands ----------
+    // ---------- Thuế suất ----------
 
     /**
-     * Danh sách thương hiệu ($all = true để lấy cả thương hiệu ẩn).
-     * Mỗi phần tử kèm product_count — số sản phẩm đang gắn thương hiệu đó.
+     * Bốn dòng thuế của cửa hàng, mỗi dòng kèm bộ mức đang bật và bộ mức cho chọn.
+     * Lượt gọi đầu tiên của một cửa hàng mới sẽ dựng sẵn bốn dòng theo mức mặc định.
      */
-    public function brands(bool $all = true): Response
+    public function taxes(): Response
     {
-        return $this->get('/brands', $all ? ['all' => 'true'] : []);
+        return $this->get('/admin/thue');
     }
 
-    /** Lấy 1 thương hiệu theo id. */
-    public function brand(int $id): Response
+    /** Sửa bộ mức của một loại thuế ($muc là mảng số nguyên). */
+    public function updateTax(int $id, array $muc): Response
     {
-        return $this->get("/brands/{$id}");
+        return $this->put("/admin/thue/{$id}", ['muc' => array_values($muc)]);
     }
 
-    public function createBrand(array $data): Response
+    /** Bật/tắt một loại thuế từ công tắc trên bảng. */
+    public function toggleTaxStatus(int $id, bool $isActive): Response
     {
-        return $this->post('/admin/brands', $data);
-    }
-
-    public function updateBrand(int $id, array $data): Response
-    {
-        return $this->put("/admin/brands/{$id}", $data);
-    }
-
-    public function deleteBrand(int $id): Response
-    {
-        return $this->delete("/admin/brands/{$id}");
+        return $this->put("/admin/thue/{$id}/trang-thai", ['is_active' => $isActive]);
     }
 
     // ---------- Banners ----------
@@ -489,7 +480,7 @@ class ApiClient
 
     /**
      * Danh sách sản phẩm (lọc/tìm/phân trang phía server).
-     * $query hỗ trợ: keyword, category_id, brand_id, kit_type, active, all,
+     * $query hỗ trợ: keyword, category_id, kit_type, active, all,
      * featured, min_price, max_price, sort, page, page_size.
      */
     public function products(array $query = []): Response
@@ -791,7 +782,7 @@ class ApiClient
 
     /**
      * Danh sách tồn kho theo BIẾN THỂ sản phẩm (lọc/sắp xếp/phân trang phía server).
-     * $query hỗ trợ: keyword, category_id, brand_id, stock, is_active, low_stock,
+     * $query hỗ trợ: keyword, category_id, stock, is_active, low_stock,
      * sort, page, page_size.
      */
     public function inventory(array $query = []): Response

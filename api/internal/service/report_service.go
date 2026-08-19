@@ -335,9 +335,6 @@ func (s *reportService) Products(ctx context.Context, q ReportQuery) (domain.Pro
 	if out.ByCategory, err = s.repo.ByCategory(ctx, p, reportSliceTop); err != nil {
 		return out, err
 	}
-	if out.ByBrand, err = s.repo.ByBrand(ctx, p, reportSliceTop); err != nil {
-		return out, err
-	}
 	if out.BySize, err = s.repo.BySize(ctx, p, reportSliceTop); err != nil {
 		return out, err
 	}

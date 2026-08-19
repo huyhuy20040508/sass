@@ -88,7 +88,7 @@ func (r *categoryRepository) Update(ctx context.Context, c *domain.Category) err
 	return translateCategoryErr(r.db.WithContext(ctx).Save(c).Error)
 }
 
-// Delete xóa mềm (soft delete) để nhất quán với brand và product.
+// Delete xóa mềm (soft delete) để nhất quán với product.
 // Dữ liệu danh mục vẫn được giữ lại trong DB phục vụ truy vấn lịch sử.
 func (r *categoryRepository) Delete(ctx context.Context, id uint) error {
 	return translateCategoryErr(r.db.WithContext(ctx).Delete(&domain.Category{}, id).Error)

@@ -39,10 +39,10 @@ func TestCleanTableName(t *testing.T) {
 
 // ---------- phần chạy trên MySQL thật ----------
 
-// hangHoa dựng một thương hiệu để làm dữ liệu thử. Chọn brands vì nó là bảng đơn
-// giản nhất có tenant_id: không khoá ngoại nào ngoài tenant, không dây dưa gì.
-func hangHoa(slug string) *domain.Brand {
-	return &domain.Brand{Name: "Thử " + slug, Slug: slug, IsActive: true}
+// hangHoa dựng một danh mục để làm dữ liệu thử. Chọn categories vì nó là bảng
+// đơn giản nhất có tenant_id mà không dây dưa sang bảng khác.
+func hangHoa(slug string) *domain.Category {
+	return &domain.Category{Name: "Thử " + slug, Slug: slug, IsActive: true}
 }
 
 // haiCuaHang dựng hai cửa hàng và trả về ctx của từng bên, kèm dọn dẹp.
@@ -74,7 +74,7 @@ func haiCuaHang(t *testing.T, db *gorm.DB, tienTo string) (motCtx, haiCtx contex
 
 	don := func() {
 		for _, ctx := range []context.Context{motCtx, haiCtx} {
-			db.WithContext(ctx).Unscoped().Where("slug LIKE ?", tienTo+"%").Delete(&domain.Brand{})
+			db.WithContext(ctx).Unscoped().Where("slug LIKE ?", tienTo+"%").Delete(&domain.Category{})
 		}
 	}
 	don()
@@ -99,7 +99,7 @@ func TestLocTenant_KhongDocDuocDuLieuCuaCuaHangKhac(t *testing.T) {
 	}
 
 	// Danh sách: đường đi bình thường.
-	var ds []domain.Brand
+	var ds []domain.Category
 	if err := db.WithContext(mot).Where("slug LIKE ?", "loc-doc-%").Find(&ds).Error; err != nil {
 		t.Fatalf("đọc danh sách lỗi: %v", err)
 	}
@@ -109,7 +109,7 @@ func TestLocTenant_KhongDocDuocDuLieuCuaCuaHangKhac(t *testing.T) {
 
 	// Đọc thẳng bằng id của người khác: ĐÂY MỚI LÀ ĐƯỜNG ĐI LỆCH. Sửa id trên URL
 	// là làm được, và không có bộ lọc thì nó trả về dữ liệu thật.
-	var lom domain.Brand
+	var lom domain.Category
 	err := db.WithContext(mot).First(&lom, cuaHai.ID).Error
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
 		t.Fatalf("đọc bằng id của cửa hàng khác phải là 'không tìm thấy', nhận: %v (id %d)", err, lom.ID)
@@ -118,7 +118,7 @@ func TestLocTenant_KhongDocDuocDuLieuCuaCuaHangKhac(t *testing.T) {
 	// Đếm cũng phải bị lọc — nếu không thì con số trên trang tổng quan là tổng của
 	// mọi khách hàng.
 	var n int64
-	if err := db.WithContext(mot).Model(&domain.Brand{}).Where("slug LIKE ?", "loc-doc-%").Count(&n).Error; err != nil {
+	if err := db.WithContext(mot).Model(&domain.Category{}).Where("slug LIKE ?", "loc-doc-%").Count(&n).Error; err != nil {
 		t.Fatalf("đếm lỗi: %v", err)
 	}
 	if n != 1 {
@@ -141,7 +141,7 @@ func TestLocTenant_GhiTenantVaoDongMoi(t *testing.T) {
 		t.Fatalf("phải ghi đè tenant theo ctx, nhận %d", b.TenantID)
 	}
 
-	var doc domain.Brand
+	var doc domain.Category
 	if err := db.WithContext(mot).First(&doc, b.ID).Error; err != nil {
 		t.Fatalf("đọc lại lỗi: %v", err)
 	}
@@ -161,7 +161,7 @@ func TestLocTenant_KhongSuaXoaDuocDuLieuCuaCuaHangKhac(t *testing.T) {
 		t.Fatalf("tạo lỗi: %v", err)
 	}
 
-	res := db.WithContext(mot).Model(&domain.Brand{}).Where("id = ?", cuaHai.ID).
+	res := db.WithContext(mot).Model(&domain.Category{}).Where("id = ?", cuaHai.ID).
 		Update("name", "bị người khác sửa")
 	if res.Error != nil {
 		t.Fatalf("lệnh sửa lỗi: %v", res.Error)
@@ -170,7 +170,7 @@ func TestLocTenant_KhongSuaXoaDuocDuLieuCuaCuaHangKhac(t *testing.T) {
 		t.Fatalf("không được sửa dòng của cửa hàng khác, đã sửa %d dòng", res.RowsAffected)
 	}
 
-	res = db.WithContext(mot).Where("id = ?", cuaHai.ID).Delete(&domain.Brand{})
+	res = db.WithContext(mot).Where("id = ?", cuaHai.ID).Delete(&domain.Category{})
 	if res.Error != nil {
 		t.Fatalf("lệnh xoá lỗi: %v", res.Error)
 	}
@@ -179,7 +179,7 @@ func TestLocTenant_KhongSuaXoaDuocDuLieuCuaCuaHangKhac(t *testing.T) {
 	}
 
 	// Bên chủ vẫn phải đọc được nguyên vẹn.
-	var doc domain.Brand
+	var doc domain.Category
 	if err := db.WithContext(hai).First(&doc, cuaHai.ID).Error; err != nil {
 		t.Fatalf("chủ dòng phải đọc được: %v", err)
 	}
@@ -196,7 +196,7 @@ func TestLocTenant_KhongSuaXoaDuocDuLieuCuaCuaHangKhac(t *testing.T) {
 func TestLocTenant_ThieuTenantThiHong(t *testing.T) {
 	db := testDB(t)
 
-	var ds []domain.Brand
+	var ds []domain.Category
 	err := db.WithContext(context.Background()).Find(&ds).Error
 	if !errors.Is(err, ErrNoTenant) {
 		t.Fatalf("thiếu tenant phải trả ErrNoTenant, nhận: %v", err)
@@ -222,7 +222,7 @@ func TestLocTenant_LocDungKhiBangCoBiDanh(t *testing.T) {
 	}
 
 	var ten []string
-	err := db.WithContext(mot).Table("brands b").
+	err := db.WithContext(mot).Table("categories b").
 		Select("b.name").
 		Where("b.slug LIKE ?", "loc-bidanh-%").
 		Scan(&ten).Error
@@ -252,13 +252,13 @@ func TestLocTenant_ChanSQLVietTay(t *testing.T) {
 	mot, _ := haiCuaHang(t, db, "loc-raw-")
 
 	var n int64
-	err := db.WithContext(mot).Raw("SELECT COUNT(*) FROM brands").Scan(&n).Error
+	err := db.WithContext(mot).Raw("SELECT COUNT(*) FROM categories").Scan(&n).Error
 	if !errors.Is(err, ErrRawSQL) {
 		t.Fatalf("SQL viết tay phải bị chặn, nhận: %v", err)
 	}
 
 	boQua := tenant.WithoutScope(context.Background(), "test: đếm toàn bảng có chủ ý")
-	if err := db.WithContext(boQua).Raw("SELECT COUNT(*) FROM brands WHERE tenant_id = 1").Scan(&n).Error; err != nil {
+	if err := db.WithContext(boQua).Raw("SELECT COUNT(*) FROM categories WHERE tenant_id = 1").Scan(&n).Error; err != nil {
 		t.Fatalf("khai lý do rồi thì phải chạy được: %v", err)
 	}
 }
@@ -270,12 +270,12 @@ func TestLocTenant_VanChanLenhGhiKhongDieuKien(t *testing.T) {
 	db := testDB(t)
 	mot, _ := haiCuaHang(t, db, "loc-luoi-")
 
-	err := db.WithContext(mot).Model(&domain.Brand{}).Update("name", "đổi hết").Error
+	err := db.WithContext(mot).Model(&domain.Category{}).Update("name", "đổi hết").Error
 	if !errors.Is(err, gorm.ErrMissingWhereClause) {
 		t.Fatalf("UPDATE không điều kiện phải trả ErrMissingWhereClause, nhận: %v", err)
 	}
 
-	err = db.WithContext(mot).Delete(&domain.Brand{}).Error
+	err = db.WithContext(mot).Delete(&domain.Category{}).Error
 	if !errors.Is(err, gorm.ErrMissingWhereClause) {
 		t.Fatalf("DELETE không điều kiện phải trả ErrMissingWhereClause, nhận: %v", err)
 	}
@@ -297,7 +297,7 @@ func TestLocTenant_SaveVaDeleteTheoBanGhiVanChay(t *testing.T) {
 		t.Fatalf("Save theo bản ghi phải chạy được: %v", err)
 	}
 
-	var doc domain.Brand
+	var doc domain.Category
 	if err := db.WithContext(mot).First(&doc, b.ID).Error; err != nil {
 		t.Fatalf("đọc lại lỗi: %v", err)
 	}
@@ -330,7 +330,7 @@ func TestLocTenant_SaveKhongChuyenDuocSangCuaHangKhac(t *testing.T) {
 		t.Fatalf("Save lỗi: %v", err)
 	}
 
-	var beoSang domain.Brand
+	var beoSang domain.Category
 	if err := db.WithContext(hai).First(&beoSang, b.ID).Error; !errors.Is(err, gorm.ErrRecordNotFound) {
 		t.Fatalf("dòng đã chuyển sang cửa hàng 2 — đây là rò dữ liệu (err=%v)", err)
 	}
@@ -350,7 +350,7 @@ func TestLocTenant_UnscopedVanBiLoc(t *testing.T) {
 		t.Fatalf("xoá mềm lỗi: %v", err)
 	}
 
-	var ds []domain.Brand
+	var ds []domain.Category
 	if err := db.WithContext(mot).Unscoped().Where("slug LIKE ?", "loc-unscoped-%").Find(&ds).Error; err != nil {
 		t.Fatalf("truy vấn lỗi: %v", err)
 	}
@@ -375,7 +375,7 @@ func TestLocTenant_TrongGiaoDichVanLoc(t *testing.T) {
 			return err
 		}
 
-		var lom domain.Brand
+		var lom domain.Category
 
 		return tx.First(&lom, cuaHai.ID).Error
 	})
@@ -385,7 +385,7 @@ func TestLocTenant_TrongGiaoDichVanLoc(t *testing.T) {
 
 	// Giao dịch trên đã cuộn lại nên dòng vừa tạo không được còn.
 	var n int64
-	if err := db.WithContext(mot).Model(&domain.Brand{}).Where("slug = ?", "loc-tx-mot").Count(&n).Error; err != nil {
+	if err := db.WithContext(mot).Model(&domain.Category{}).Where("slug = ?", "loc-tx-mot").Count(&n).Error; err != nil {
 		t.Fatalf("đếm lỗi: %v", err)
 	}
 	if n != 0 {
@@ -398,7 +398,7 @@ func TestLocTenant_GhiNhieuDongCungDuocDongDau(t *testing.T) {
 	db := testDB(t)
 	mot, _ := haiCuaHang(t, db, "loc-lo-")
 
-	lo := []domain.Brand{*hangHoa("loc-lo-a"), *hangHoa("loc-lo-b")}
+	lo := []domain.Category{*hangHoa("loc-lo-a"), *hangHoa("loc-lo-b")}
 	if err := db.WithContext(mot).Create(&lo).Error; err != nil {
 		t.Fatalf("ghi lô lỗi: %v", err)
 	}
@@ -509,21 +509,21 @@ func TestLocTenant_EntityQuenNhungThiHong(t *testing.T) {
 	db := testDB(t)
 	mot, _ := haiCuaHang(t, db, "loc-quen-")
 
-	// Bản sao của Brand nhưng CỐ Ý không nhúng TenantOwned — mô phỏng đúng lỗi
+	// Bản sao của Category nhưng CỐ Ý không nhúng TenantOwned — mô phỏng đúng lỗi
 	// "thêm bảng mới rồi quên".
-	type brandQuenTenant struct {
+	type danhMucQuenTenant struct {
 		ID       uint `gorm:"primaryKey"`
 		Name     string
 		Slug     string
 		IsActive bool
 	}
 
-	err := db.WithContext(mot).Table("brands").
-		Create(&brandQuenTenant{Name: "Quên", Slug: "loc-quen-a", IsActive: true}).Error
+	err := db.WithContext(mot).Table("categories").
+		Create(&danhMucQuenTenant{Name: "Quên", Slug: "loc-quen-a", IsActive: true}).Error
 	if !errors.Is(err, ErrNoTenantColumn) {
 		t.Fatalf("entity thiếu TenantOwned phải trả ErrNoTenantColumn, nhận: %v", err)
 	}
-	if err != nil && !strings.Contains(err.Error(), "brands") {
+	if err != nil && !strings.Contains(err.Error(), "categories") {
 		t.Errorf("thông báo lỗi nên chỉ rõ bảng nào, nhận: %v", err)
 	}
 }

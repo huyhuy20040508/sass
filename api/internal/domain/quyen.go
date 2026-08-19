@@ -105,8 +105,10 @@ var DanhMucQuyen = []KhuQuyen{
 						Viec: []string{QuyenThem, QuyenSua, QuyenXoa},
 					},
 					{
-						Prefix: "thuong-hieu", Ten: "Thương hiệu",
-						Viec: []string{QuyenThem, QuyenSua, QuyenXoa},
+						// Tách "xem" khỏi "sửa": đổi bộ mức là đổi ô chọn thuế của
+						// mọi phiếu lập sau đó, cả bên bán lẫn bên mua.
+						Prefix: "thue", Ten: "Thuế suất",
+						Viec: []string{QuyenXem, QuyenSua},
 					},
 				},
 			},
