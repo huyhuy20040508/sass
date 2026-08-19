@@ -15,6 +15,11 @@ use Illuminate\Support\Facades\Log;
  * Danh mục quyền do API giữ (`api/internal/domain/quyen.go`), không khai lại ở
  * đây: thêm một quyền bên Go là bảng tick hiện ngay.
  *
+ * CỬA VÀO VẪN ĐỨNG TRÊN QUYỀN. Cây quyền chia sẵn hai KHU (`domain.KhuQuyen`),
+ * đúng hai module người dùng đứng vào: Quản trị và Thu ngân. Người chỉ được giao
+ * cửa quầy thì cả khu Quản trị khoá cứng — muốn giao thì mở cửa Quản lý cho họ
+ * trong hồ sơ Nhân sự trước.
+ *
  * BỘ QUYỀN MẪU (nhóm quyền) CHƯA LÀM. API vẫn còn đủ đường
  * (`/admin/nhom-quyen`), chỉ là trang quản trị chưa mở lối vào — dựng lại một
  * tab gọi mấy đường đó là có.
@@ -52,6 +57,7 @@ class PhanQuyenController extends Controller
             [$chiNhanh, $error] = $this->doc(fn () => $this->api->chiNhanh(), 'danh sách chi nhánh', $error);
             [$nhanVien, $error] = $this->doc(fn () => $this->api->nhanSu(), 'danh sách nhân sự', $error);
             [$danhMuc, $error] = $this->doc(fn () => $this->api->danhMucQuyen(), 'danh mục quyền', $error);
+            [$danhMuc, $error] = $this->locKhu($danhMuc, $error);
         } catch (\Throwable $e) {
             Log::error('Load phan quyen failed', ['msg' => $e->getMessage()]);
             $error = 'Không tải được dữ liệu phân quyền. Kiểm tra kết nối API.';
@@ -88,6 +94,7 @@ class PhanQuyenController extends Controller
             'dangBat' => $dangBat,
             'toanQuyen' => $toanQuyen,
             'toiLaAi' => (int) session('api.user.id'),
+            'chiQuay' => $chon ? $this->chiCuaQuay($chon) : false,
         ]);
 
         return $error ? $view->with('error', $error) : $view;
@@ -132,6 +139,49 @@ class PhanQuyenController extends Controller
             : ($res->json('message') ?: 'Thao tác không thành công.');
 
         return back()->with('error', $message);
+    }
+
+    /**
+     * Chỉ giữ những mục ĐÚNG hình dạng một khu, và nói ra nếu không còn mục nào.
+     *
+     * Máy chủ API cũ hơn trang quản trị là chuyện có thật mỗi lượt triển khai lệch
+     * nhịp. Không có chốt này thì bảng vẫn vẽ: mỗi khoá lạ thành một dòng không
+     * tên, không con, và người dùng ngồi đoán xem mình vừa làm hỏng cái gì. Một
+     * câu chỉ thẳng vào máy chủ đắt hơn cả màn hình đó.
+     */
+    protected function locKhu(array $data, ?string $loiCu): array
+    {
+        $khu = array_values(array_filter(
+            $data,
+            static fn ($k) => is_array($k) && isset($k['nhom'])
+        ));
+
+        if ($data !== [] && $khu === []) {
+            return [[], $loiCu ?? 'Máy chủ API trả danh mục quyền theo hình dạng cũ (chưa chia theo khu làm việc). Khởi động lại API rồi tải lại trang.'];
+        }
+
+        return [$khu, $loiCu];
+    }
+
+    /**
+     * Người này CHỈ đứng quầy — không mở được khu quản trị (`users.access_areas`).
+     *
+     * Với họ, cả khu Quản trị của cây quyền là chữ chết: nhóm route
+     * `manage` bên API đòi cửa `quan_ly` trước khi hỏi tới quyền, nên dòng ghi
+     * xuống không mở thêm được trang nào. Bảng tick khoá luôn những ô ấy thay vì
+     * cho tick rồi báo lỗi sau — xem `ma-tran.blade.php`.
+     *
+     * KHÔNG BIẾT thì KHÔNG KHOÁ. Danh sách cửa rỗng nghĩa là payload cũ chưa mang
+     * cột này, và khoá theo phỏng đoán ở đây là xám cả bảng của mọi nhân viên —
+     * chủ tiệm hết đường phân quyền cho bất kỳ ai. Ngược với lối "quên gắn thì
+     * đóng" của chốt chặn, vì đây không phải chốt: API vẫn từ chối như thường
+     * nếu người đó thật sự không có cửa.
+     */
+    protected function chiCuaQuay(array $nv): bool
+    {
+        $cua = (array) ($nv['quyen'] ?? []);
+
+        return $cua !== [] && ! in_array('quan_ly', $cua, true);
     }
 
     /**

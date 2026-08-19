@@ -8,9 +8,12 @@
     @php
         $C = \App\Http\Controllers\PhanQuyenController::class;
 
+        // Cây ba tầng: khu -> nhóm -> mục.
         $tongQuyen = collect($danhMuc)->sum(
-            fn ($nh) => collect($nh['mucs'] ?? [])->sum(
-                fn ($m) => count($m['viec'] ?? []) + count($m['le'] ?? [])
+            fn ($khu) => collect($khu['nhom'] ?? [])->sum(
+                fn ($nh) => collect($nh['mucs'] ?? [])->sum(
+                    fn ($m) => count($m['viec'] ?? []) + count($m['le'] ?? [])
+                )
             )
         );
 
@@ -150,6 +153,16 @@
                             Người này đang có <b>toàn quyền</b> — gồm cả quyền của module ra mắt sau này.
                             Bấm Lưu ở đây là chuyển thành danh sách cụ thể bên dưới, và từ đó module
                             mới sẽ phải tick tay.
+                        </p>
+                    @endif
+
+                    {{-- Nói TRƯỚC lý do những ô xám ở dưới, chứ không để người dùng
+                         bấm vào một ô không nhúc nhích rồi tự đoán. --}}
+                    @if($coTaiKhoan && $chiQuay)
+                        <p class="pq-callout is-info">
+                            Người này chỉ được giao khu <b>Thu ngân</b> nên chỉ tick được những việc ở quầy.
+                            Muốn giao thêm việc trong khu quản trị thì mở cửa <b>Quản lý</b> cho họ ở
+                            <a href="{{ route('admin.nhan-su.index') }}">hồ sơ Nhân sự</a> trước, rồi quay lại đây.
                         </p>
                     @endif
 

@@ -51,155 +51,190 @@ type MucQuyen struct {
 	Le   []QuyenLe `json:"le,omitempty"`
 }
 
-// NhomMucQuyen — một khối trên màn hình phân quyền, xếp theo đúng thứ tự của
-// thanh điều hướng để người tick không phải đi tìm.
+// NhomMucQuyen — một khối bên trong một khu, xếp theo đúng thứ tự của thanh điều
+// hướng để người tick không phải đi tìm.
 type NhomMucQuyen struct {
 	Ten  string     `json:"ten"`
 	Mucs []MucQuyen `json:"mucs"`
 }
 
+// KhuQuyen — MỘT KHU LÀM VIỆC của phần mềm, và là tầng trên cùng của cây quyền.
+//
+// Hai khu này chính là hai module người dùng đứng vào (xem ModuleLamViec bên
+// trang quản trị): Quản trị và Thu ngân. Chia ra chứ không gom một mớ, vì cửa
+// vào đứng TRÊN quyền — nhóm route `manage` đòi cửa `quan_ly` trước khi hỏi tới
+// quyền, nên với người chỉ đứng quầy thì mọi ô ngoài khu Thu ngân là chữ chết.
+// Gom chung thì màn Phân quyền không có cách nào nói ra điều đó, và chủ tiệm
+// tick xong vẫn không hiểu vì sao người kia không mở được trang.
+//
+// Ma khớp `users.access_areas` (CuaQuanLy / CuaThuNgan): đó là thứ màn hình dựa
+// vào để biết khu nào khoá cho ai.
+type KhuQuyen struct {
+	Ma   string         `json:"ma"`
+	Ten  string         `json:"ten"`
+	MoTa string         `json:"mo_ta"`
+	Nhom []NhomMucQuyen `json:"nhom"`
+}
+
 // DanhMucQuyen — toàn bộ cây quyền, cũng chính là thứ màn hình phân quyền vẽ ra.
-var DanhMucQuyen = []NhomMucQuyen{
+var DanhMucQuyen = []KhuQuyen{
 	{
-		Ten: "Bán hàng",
-		Mucs: []MucQuyen{
+		Ma: CuaQuanLy, Ten: "Quản trị",
+		MoTa: "Chỉ người được giao cửa Quản lý mới dùng được.",
+		Nhom: []NhomMucQuyen{
 			{
-				Prefix: "don-hang", Ten: "Đơn hàng",
-				Viec: []string{QuyenXem, QuyenThem, QuyenSua},
-				Le: []QuyenLe{
-					{Ma: "doanh-thu", Ten: "Xem doanh thu"},
-					{Ma: "doi-hang", Ten: "Đổi hàng tại quầy"},
+				Ten: "Bán hàng",
+				Mucs: []MucQuyen{
+					{
+						Prefix: "tra-hang", Ten: "Trả hàng",
+						Viec: []string{QuyenXem, QuyenThem, QuyenSua},
+					},
 				},
 			},
 			{
-				Prefix: "tra-hang", Ten: "Trả hàng",
-				Viec: []string{QuyenXem, QuyenThem, QuyenSua},
-			},
-			{
-				Prefix: "ca-lam-viec", Ten: "Ca làm việc",
-				Viec: []string{QuyenXem, QuyenThem},
-			},
-			{
-				// Thu/chi ngoài đơn hàng — tiền mặt ra vào két giữa ca.
-				Prefix: "so-quy", Ten: "Sổ quỹ",
-				Viec: []string{QuyenThem},
-			},
-		},
-	},
-	{
-		Ten: "Hàng hoá",
-		Mucs: []MucQuyen{
-			{
-				Prefix: "san-pham", Ten: "Sản phẩm",
-				Viec: []string{QuyenXem, QuyenThem, QuyenSua, QuyenXoa},
-			},
-			{
-				// Không có "xem" riêng: ai đọc được sản phẩm thì cũng đọc được
-				// khung phân loại của nó, và đường đọc ấy vốn công khai.
-				Prefix: "danh-muc", Ten: "Danh mục",
-				Viec: []string{QuyenThem, QuyenSua, QuyenXoa},
-			},
-			{
-				Prefix: "thuong-hieu", Ten: "Thương hiệu",
-				Viec: []string{QuyenThem, QuyenSua, QuyenXoa},
-			},
-		},
-	},
-	{
-		Ten: "Marketing",
-		Mucs: []MucQuyen{
-			{
-				Prefix: "khuyen-mai", Ten: "Khuyến mãi",
-				Viec: []string{QuyenXem, QuyenThem, QuyenSua, QuyenXoa},
-			},
-			{
-				Prefix: "ma-giam-gia", Ten: "Mã giảm giá",
-				Viec: []string{QuyenXem, QuyenThem, QuyenSua, QuyenXoa},
-			},
-			{
-				Prefix: "banner", Ten: "Banner trang chủ",
-				Viec: []string{QuyenXem, QuyenThem, QuyenSua, QuyenXoa},
-			},
-			{
-				Prefix: "lien-he", Ten: "Liên hệ",
-				Viec: []string{QuyenXem, QuyenSua, QuyenXoa},
-			},
-			{
-				Prefix: "nhan-tin", Ten: "Đăng ký nhận tin",
-				Viec: []string{QuyenXem, QuyenSua},
-			},
-		},
-	},
-	{
-		Ten: "Khách hàng",
-		Mucs: []MucQuyen{
-			{
-				Prefix: "khach-hang", Ten: "Khách hàng",
-				Viec: []string{QuyenXem, QuyenThem, QuyenSua, QuyenXoa},
-			},
-		},
-	},
-	{
-		Ten: "Kho",
-		Mucs: []MucQuyen{
-			{
-				Prefix: "ton-kho", Ten: "Tồn kho",
-				Viec: []string{QuyenXem, QuyenSua},
-				Le: []QuyenLe{
-					// Giá vốn tách riêng: nhìn thấy nó là biết cửa hàng lãi bao
-					// nhiêu trên mỗi món.
-					{Ma: "gia-von", Ten: "Xem và sửa giá vốn"},
+				Ten: "Hàng hoá",
+				Mucs: []MucQuyen{
+					{
+						Prefix: "san-pham", Ten: "Sản phẩm",
+						Viec: []string{QuyenXem, QuyenThem, QuyenSua, QuyenXoa},
+					},
+					{
+						// Không có "xem" riêng: ai đọc được sản phẩm thì cũng đọc được
+						// khung phân loại của nó, và đường đọc ấy vốn công khai.
+						Prefix: "danh-muc", Ten: "Danh mục",
+						Viec: []string{QuyenThem, QuyenSua, QuyenXoa},
+					},
+					{
+						Prefix: "thuong-hieu", Ten: "Thương hiệu",
+						Viec: []string{QuyenThem, QuyenSua, QuyenXoa},
+					},
 				},
 			},
 			{
-				Prefix: "nha-cung-cap", Ten: "Nhà cung cấp",
-				Viec: []string{QuyenXem, QuyenThem, QuyenSua, QuyenXoa},
+				Ten: "Marketing",
+				Mucs: []MucQuyen{
+					{
+						Prefix: "khuyen-mai", Ten: "Khuyến mãi",
+						Viec: []string{QuyenXem, QuyenThem, QuyenSua, QuyenXoa},
+					},
+					{
+						Prefix: "ma-giam-gia", Ten: "Mã giảm giá",
+						Viec: []string{QuyenXem, QuyenThem, QuyenSua, QuyenXoa},
+					},
+					{
+						Prefix: "banner", Ten: "Banner trang chủ",
+						Viec: []string{QuyenXem, QuyenThem, QuyenSua, QuyenXoa},
+					},
+					{
+						Prefix: "lien-he", Ten: "Liên hệ",
+						Viec: []string{QuyenXem, QuyenSua, QuyenXoa},
+					},
+					{
+						Prefix: "nhan-tin", Ten: "Đăng ký nhận tin",
+						Viec: []string{QuyenXem, QuyenSua},
+					},
+				},
 			},
 			{
-				Prefix: "dat-hang-nhap", Ten: "Đặt hàng nhập",
-				Viec: []string{QuyenXem, QuyenThem, QuyenSua, QuyenXoa},
+				Ten: "Khách hàng",
+				Mucs: []MucQuyen{
+					{
+						Prefix: "khach-hang", Ten: "Khách hàng",
+						Viec: []string{QuyenXem, QuyenThem, QuyenSua, QuyenXoa},
+					},
+				},
 			},
 			{
-				Prefix: "nhap-kho", Ten: "Nhập kho",
-				Viec: []string{QuyenXem, QuyenThem},
+				Ten: "Kho",
+				Mucs: []MucQuyen{
+					{
+						Prefix: "ton-kho", Ten: "Tồn kho",
+						Viec: []string{QuyenXem, QuyenSua},
+						Le: []QuyenLe{
+							// Giá vốn tách riêng: nhìn thấy nó là biết cửa hàng lãi bao
+							// nhiêu trên mỗi món.
+							{Ma: "gia-von", Ten: "Xem và sửa giá vốn"},
+						},
+					},
+					{
+						Prefix: "nha-cung-cap", Ten: "Nhà cung cấp",
+						Viec: []string{QuyenXem, QuyenThem, QuyenSua, QuyenXoa},
+					},
+					{
+						Prefix: "dat-hang-nhap", Ten: "Đặt hàng nhập",
+						Viec: []string{QuyenXem, QuyenThem, QuyenSua, QuyenXoa},
+					},
+					{
+						Prefix: "nhap-kho", Ten: "Nhập kho",
+						Viec: []string{QuyenXem, QuyenThem},
+					},
+					{
+						Prefix: "tra-hang-nhap", Ten: "Trả hàng nhập",
+						Viec: []string{QuyenXem, QuyenThem, QuyenSua, QuyenXoa},
+					},
+				},
 			},
 			{
-				Prefix: "tra-hang-nhap", Ten: "Trả hàng nhập",
-				Viec: []string{QuyenXem, QuyenThem, QuyenSua, QuyenXoa},
+				Ten: "Báo cáo",
+				Mucs: []MucQuyen{
+					{
+						Prefix: "bao-cao", Ten: "Báo cáo",
+						Viec: []string{QuyenXem},
+					},
+				},
+			},
+			{
+				Ten: "Hệ thống",
+				Mucs: []MucQuyen{
+					{
+						Prefix: "nhan-su", Ten: "Nhân sự",
+						Viec: []string{QuyenXem, QuyenThem, QuyenSua, QuyenXoa},
+					},
+					{
+						Prefix: "tai-khoan", Ten: "Tài khoản đăng nhập",
+						Viec: []string{QuyenXem, QuyenThem, QuyenSua, QuyenXoa},
+					},
+					{
+						Prefix: "nhom-quyen", Ten: "Nhóm quyền",
+						Viec: []string{QuyenXem, QuyenThem, QuyenSua, QuyenXoa},
+					},
+					{
+						Prefix: "chi-nhanh", Ten: "Chi nhánh",
+						Viec: []string{QuyenXem, QuyenThem, QuyenSua, QuyenXoa},
+					},
+					{
+						Prefix: "cau-hinh", Ten: "Cấu hình cửa hàng",
+						Viec: []string{QuyenSua},
+					},
+				},
 			},
 		},
 	},
 	{
-		Ten: "Báo cáo",
-		Mucs: []MucQuyen{
+		Ma: CuaThuNgan, Ten: "Thu ngân",
+		MoTa: "Việc ở quầy. Quản lý dùng chung đúng mấy quyền này, không có bản thứ hai.",
+		Nhom: []NhomMucQuyen{
 			{
-				Prefix: "bao-cao", Ten: "Báo cáo",
-				Viec: []string{QuyenXem},
-			},
-		},
-	},
-	{
-		Ten: "Hệ thống",
-		Mucs: []MucQuyen{
-			{
-				Prefix: "nhan-su", Ten: "Nhân sự",
-				Viec: []string{QuyenXem, QuyenThem, QuyenSua, QuyenXoa},
-			},
-			{
-				Prefix: "tai-khoan", Ten: "Tài khoản đăng nhập",
-				Viec: []string{QuyenXem, QuyenThem, QuyenSua, QuyenXoa},
-			},
-			{
-				Prefix: "nhom-quyen", Ten: "Nhóm quyền",
-				Viec: []string{QuyenXem, QuyenThem, QuyenSua, QuyenXoa},
-			},
-			{
-				Prefix: "chi-nhanh", Ten: "Chi nhánh",
-				Viec: []string{QuyenXem, QuyenThem, QuyenSua, QuyenXoa},
-			},
-			{
-				Prefix: "cau-hinh", Ten: "Cấu hình cửa hàng",
-				Viec: []string{QuyenSua},
+				Ten: "Bán tại quầy",
+				Mucs: []MucQuyen{
+					{
+						Prefix: "don-hang", Ten: "Đơn hàng",
+						Viec: []string{QuyenXem, QuyenThem, QuyenSua},
+						Le: []QuyenLe{
+							{Ma: "doanh-thu", Ten: "Xem doanh thu"},
+							{Ma: "doi-hang", Ten: "Đổi hàng tại quầy"},
+						},
+					},
+					{
+						Prefix: "ca-lam-viec", Ten: "Ca làm việc",
+						Viec: []string{QuyenXem, QuyenThem},
+					},
+					{
+						// Thu/chi ngoài đơn hàng — tiền mặt ra vào két giữa ca.
+						Prefix: "so-quy", Ten: "Sổ quỹ",
+						Viec: []string{QuyenThem},
+					},
+				},
 			},
 		},
 	},
@@ -209,7 +244,18 @@ var DanhMucQuyen = []NhomMucQuyen{
 // cho bài kiểm đối chiếu với router.
 func TatCaQuyen() []string {
 	ds := make([]string, 0, 96)
-	for _, nhom := range DanhMucQuyen {
+	for _, khu := range DanhMucQuyen {
+		ds = append(ds, quyenTrongKhu(khu)...)
+	}
+	sort.Strings(ds)
+
+	return ds
+}
+
+// quyenTrongKhu trải mọi chuỗi quyền của một khu.
+func quyenTrongKhu(khu KhuQuyen) []string {
+	ds := make([]string, 0, 32)
+	for _, nhom := range khu.Nhom {
 		for _, muc := range nhom.Mucs {
 			for _, viec := range muc.Viec {
 				ds = append(ds, muc.Prefix+"."+viec)
@@ -219,7 +265,6 @@ func TatCaQuyen() []string {
 			}
 		}
 	}
-	sort.Strings(ds)
 
 	return ds
 }
