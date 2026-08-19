@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Services\ApiClient;
+use App\Services\CuaVao;
 use App\Services\ImageStore;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -168,7 +170,6 @@ class NhanSuController extends Controller
             'filters' => $filters,
             'chiNhanh' => $this->chiNhanh(),
             'quyen' => self::QUYEN,
-            'nhomQuyen' => $this->nhomQuyen(),
         ]);
 
         return $error ? $view->with('error', $error) : $view;
@@ -178,12 +179,10 @@ class NhanSuController extends Controller
     public function store(Request $request)
     {
         $data = $this->validated($request);
-        $nhom = $request->has('nhom_quyen') ? (array) $request->input('nhom_quyen', []) : null;
 
         return $this->send(
             fn () => $this->api->taoNhanSu($data),
-            'Đã thêm hồ sơ "'.$data['full_name'].'".',
-            fn (?array $hoSo) => $this->ganNhomQuyen($hoSo, $nhom)
+            'Đã thêm hồ sơ "'.$data['full_name'].'".'
         );
     }
 
@@ -196,19 +195,16 @@ class NhanSuController extends Controller
         // hồ sơ giữ nguyên đường dẫn cũ trỏ vào một tệp không còn.
         $anhCu = trim((string) $request->input('avatar_cu', ''));
         $anhMoi = $data['avatar'] ?? '';
-        // has() chứ không phải input(): form KHÔNG gửi khoá này (hồ sơ không có
-        // tài khoản) khác hẳn gửi mảng rỗng (thu hết nhóm của người ta).
-        $nhom = $request->has('nhom_quyen') ? (array) $request->input('nhom_quyen', []) : null;
 
         return $this->send(
             fn () => $this->api->suaNhanSu($id, $data),
             'Đã cập nhật hồ sơ "'.$data['full_name'].'".',
-            function (?array $hoSo) use ($nhom, $anhCu, $anhMoi) {
+            function (?array $hoSo) use ($anhCu, $anhMoi) {
                 if ($anhCu !== '' && $anhCu !== $anhMoi) {
                     ImageStore::xoa($anhCu);
                 }
 
-                return $this->ganNhomQuyen($hoSo, $nhom);
+                return null;
             }
         );
     }
@@ -408,7 +404,7 @@ class NhanSuController extends Controller
     /** Ngày dạng người đọc; API trả chuỗi ISO đầy đủ. */
     protected static function ngayGon(?string $ngay): string
     {
-        return filled($ngay) ? \Illuminate\Support\Carbon::parse($ngay)->format('d/m/Y') : '';
+        return filled($ngay) ? Carbon::parse($ngay)->format('d/m/Y') : '';
     }
 
     /**
@@ -537,8 +533,6 @@ class NhanSuController extends Controller
             // quyền của họ là hợp của chúng. Không kiểm id có thật ở đây: API
             // kiểm lại và từ chối id của cửa hàng khác, còn form thì chỉ cần
             // chặn thứ rõ ràng không phải số.
-            'nhom_quyen' => ['nullable', 'array'],
-            'nhom_quyen.*' => ['integer', 'min:1'],
             // Phân quyền = CỬA VÀO (khu quản trị hay quầy bán). Mảng vì màn hình
             // cho tick nhiều vai; vaiTro() quy về một role_id. Bắt buộc khi đang
             // cấp tài khoản: một tài khoản không vai là tài khoản đăng nhập được
@@ -629,55 +623,6 @@ class NhanSuController extends Controller
     }
 
     /**
-     * Nhóm quyền của cửa hàng — cho ô chọn nhiều trong hồ sơ.
-     *
-     * Hỏng thì trả rỗng: màn hình bớt một ô, chứ không mất luôn trang nhân sự.
-     */
-    protected function nhomQuyen(): array
-    {
-        try {
-            $res = $this->api->nhomQuyen();
-            if ($res->successful()) {
-                return $res->json('data') ?? [];
-            }
-        } catch (\Throwable $e) {
-            Log::warning('Load nhom quyen cho nhan su failed', ['msg' => $e->getMessage()]);
-        }
-
-        return [];
-    }
-
-    /**
-     * Gán nhóm quyền cho tài khoản của một hồ sơ, sau khi hồ sơ đã lưu xong.
-     *
-     * Lượt gọi RIÊNG chứ không nhét vào payload hồ sơ: nhóm quyền thuộc về TÀI
-     * KHOẢN, còn hồ sơ là con người — và phần đông nhân viên không có tài khoản
-     * nào để gán. Hồ sơ không có tài khoản thì đây là việc không tồn tại.
-     *
-     * Hỏng thì chỉ báo thêm một câu: hồ sơ đã lưu rồi, quay ngược lại được nữa.
-     */
-    protected function ganNhomQuyen(?array $hoSo, ?array $nhomQuyen): ?string
-    {
-        $userID = (int) ($hoSo['user_id'] ?? 0);
-        if ($userID === 0 || $nhomQuyen === null) {
-            return null;
-        }
-
-        try {
-            $res = $this->api->datNhomChoNguoi($userID, $nhomQuyen);
-            if ($res->successful()) {
-                return null;
-            }
-
-            return $res->json('message') ?: 'Không đặt được nhóm quyền cho tài khoản này.';
-        } catch (\Throwable $e) {
-            Log::error('Gan nhom quyen failed', ['msg' => $e->getMessage()]);
-
-            return 'Hồ sơ đã lưu nhưng chưa đặt được nhóm quyền — kiểm tra kết nối API.';
-        }
-    }
-
-    /**
      * Chi nhánh đang mở — cho ô chọn và ô lọc. Hỏng thì trả rỗng chứ không chặn
      * cả trang.
      */
@@ -718,7 +663,7 @@ class NhanSuController extends Controller
             // Lượt lưu này có thể vừa đổi CỬA của chính người đang bấm — hỏi lại
             // API ngay, thay vì để họ nhìn một thanh điều hướng nói sai cho tới
             // lần đăng nhập sau. Đây đúng là chỗ "đáng hỏi" mà CuaVao nói tới.
-            \App\Services\CuaVao::lamMoi();
+            CuaVao::lamMoi();
 
             $ve = redirect()->route('admin.nhan-su.index')->with('success', $success);
 

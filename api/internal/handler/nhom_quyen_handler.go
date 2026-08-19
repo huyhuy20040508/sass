@@ -226,33 +226,36 @@ func (h *NhomQuyenHandler) Delete(c *gin.Context) {
 	response.OKMessage(c, "Đã xoá nhóm quyền", nil)
 }
 
-// NhomCuaNguoi godoc
+// QuyenCuaNguoi godoc
 //
-//	@Summary	Các nhóm quyền của một tài khoản
-//	@Tags		Admin - Nhóm quyền
-//	@Produce	json
-//	@Security	BearerAuth
-//	@Param		id	path		int	true	"ID tài khoản"
-//	@Success	200	{object}	response.Body{data=[]int}
-//	@Router		/admin/users/{id}/nhom-quyen [get]
-func (h *NhomQuyenHandler) NhomCuaNguoi(c *gin.Context) {
+//	@Summary		Quyền đã tick cho một tài khoản
+//	@Description	Màn phân quyền đọc để dựng sẵn ô tick. Nhóm quyền chỉ là mẫu — quyền thật
+//	@Description	nằm ở đây (bảng user_permissions).
+//	@Tags			Admin - Nhóm quyền
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			id	path		int	true	"ID tài khoản"
+//	@Success		200	{object}	response.Body{data=dto.QuyenCuaToiResponse}
+//	@Failure		404	{object}	response.Body
+//	@Router			/admin/users/{id}/quyen [get]
+func (h *NhomQuyenHandler) QuyenCuaNguoi(c *gin.Context) {
 	id, ok := parseUintParam(c, "id")
 	if !ok {
 		return
 	}
-	ds, err := h.svc.NhomCuaNguoi(c.Request.Context(), id)
+	bo, err := h.svc.QuyenCuaNguoi(c.Request.Context(), id)
 	if err != nil {
 		handleServiceError(c, err)
 
 		return
 	}
-	response.OK(c, ds)
+	response.OK(c, bo)
 }
 
-// DatNhomChoNguoi godoc
+// DatQuyenChoNguoi godoc
 //
-//	@Summary		Đặt nhóm quyền cho một tài khoản
-//	@Description	Thay TOÀN BỘ danh sách nhóm. Mảng rỗng = thu hết quyền (tài khoản vẫn đăng
+//	@Summary		Đặt quyền cho một tài khoản
+//	@Description	Thay TOÀN BỘ danh sách. Mảng rỗng = thu hết quyền (tài khoản vẫn đăng
 //	@Description	nhập được, chỉ là không mở được trang nào).
 //	@Description	KHÔNG tự đặt cho chính mình: phiên đang chạy bằng token cũ nên màn hình vẫn
 //	@Description	trông bình thường, tới lần đăng nhập sau mới phát hiện mất đường vào.
@@ -261,24 +264,25 @@ func (h *NhomQuyenHandler) NhomCuaNguoi(c *gin.Context) {
 //	@Produce		json
 //	@Security		BearerAuth
 //	@Param			id		path		int							true	"ID tài khoản"
-//	@Param			body	body		dto.GanNhomQuyenRequest		true	"Danh sách nhóm"
+//	@Param			body	body		dto.NhomQuyenQuyenRequest	true	"Danh sách quyền"
 //	@Success		200		{object}	response.Body
 //	@Failure		403		{object}	response.Body
 //	@Failure		404		{object}	response.Body
-//	@Router			/admin/users/{id}/nhom-quyen [put]
-func (h *NhomQuyenHandler) DatNhomChoNguoi(c *gin.Context) {
+//	@Failure		422		{object}	response.Body
+//	@Router			/admin/users/{id}/quyen [put]
+func (h *NhomQuyenHandler) DatQuyenChoNguoi(c *gin.Context) {
 	id, ok := parseUintParam(c, "id")
 	if !ok {
 		return
 	}
-	var req dto.GanNhomQuyenRequest
+	var req dto.NhomQuyenQuyenRequest
 	if !bindJSON(c, &req) {
 		return
 	}
-	if err := h.svc.DatNhomChoNguoi(c.Request.Context(), id, req.NhomQuyen, currentActor(c)); err != nil {
+	if err := h.svc.DatQuyenChoNguoi(c.Request.Context(), id, req.Quyen, currentActor(c)); err != nil {
 		handleServiceError(c, err)
 
 		return
 	}
-	response.OKMessage(c, "Đã cập nhật nhóm quyền của tài khoản", nil)
+	response.OKMessage(c, "Đã cập nhật quyền của tài khoản", nil)
 }

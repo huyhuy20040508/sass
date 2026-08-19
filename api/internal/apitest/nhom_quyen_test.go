@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"testing"
+
+	"sass-api/internal/domain"
 )
 
 // Chuỗi đầy đủ của phân quyền theo chức năng, chạy qua API thật và MySQL thật:
@@ -65,32 +67,31 @@ func TestNhomQuyenChuoiDayDu(t *testing.T) {
 		t.Fatalf("chuỗi quyền gõ sai phải trả 422 chỉ vào ô quyen, nhận %d\n%s", res.ma, catBot(res.than))
 	}
 
-	// 4. Gán nhóm cho nhân viên. Người này ĐANG mang nhóm Thu ngân — gán thêm chứ
-	// không thay, vì một người mang được nhiều nhóm.
-	duongGan := fmt.Sprintf("/api/v1/admin/users/%d/nhom-quyen", a.nhanVien)
-	res = h.goi(t, admin, http.MethodPut, duongGan, map[string]any{
-		"nhom_quyen": []uint{a.nhomThuNgan, tao.Data.ID},
+	// 4. Cấp quyền THẲNG cho nhân viên (migration 0017): danh sách gửi lên là
+	// toàn bộ quyền của người đó sau lượt này. Lấy bộ thu ngân cũ rồi thêm một
+	// quyền kho — đúng việc màn hình làm khi tick thêm một ô.
+	duongQuyen := fmt.Sprintf("/api/v1/admin/users/%d/quyen", a.nhanVien)
+	res = h.goi(t, admin, http.MethodPut, duongQuyen, map[string]any{
+		"quyen": append(domain.QuyenThuNgan(), "ton-kho.xem"),
 	})
 	if res.ma != http.StatusOK {
-		t.Fatalf("gán nhóm phải trả 200, nhận %d\n%s", res.ma, catBot(res.than))
+		t.Fatalf("cấp quyền phải trả 200, nhận %d\n%s", res.ma, catBot(res.than))
 	}
 
 	// 5. Và đây là phần chứng minh: nhân viên mở được kho, vẫn bán được hàng, và
 	// KHÔNG đụng được vào nhân sự.
 	nv := h.dangNhapVoi(t, a.ma, "nhanvien")
 
-	// Quyền của chính mình phải là HỢP của hai nhóm. Đây là chỗ chứng minh chuỗi
-	// nối liền: tick trên màn hình -> bảng nhóm -> bảng nối -> tập quyền lúc chạy.
+	// Chuỗi nối liền: tick trên màn hình -> user_permissions -> tập quyền lúc chạy.
 	res = h.goi(t, nv, http.MethodGet, "/api/v1/admin/quyen-cua-toi", nil)
 	if res.ma != http.StatusOK {
 		t.Fatalf("đọc quyền của chính mình phải trả 200, nhận %d\n%s", res.ma, catBot(res.than))
 	}
 	if !contains(res.than, "ton-kho.xem") {
-		t.Fatalf("quyền của nhóm Thủ kho vừa gán không tới được người dùng: %s", catBot(res.than))
+		t.Fatalf("quyền vừa tick thêm không tới được người dùng: %s", catBot(res.than))
 	}
 	if !contains(res.than, "don-hang.xem") {
-		t.Fatalf("gán thêm nhóm đã lấy mất quyền của nhóm cũ — hai nhóm phải CỘNG vào nhau: %s",
-			catBot(res.than))
+		t.Fatalf("lượt cấp đã lấy mất quyền cũ gửi kèm trong danh sách: %s", catBot(res.than))
 	}
 
 	// Đường quầy vẫn mở (nhóm Thu ngân), đường nhân sự vẫn đóng.
@@ -110,14 +111,17 @@ func TestNhomQuyenChuoiDayDu(t *testing.T) {
 	// thêm vào đây một khẳng định `/admin/inventory` KHÔNG còn 403 — nếu lúc đó
 	// nó vẫn 403 thì nghĩa là quyền chưa thật sự mở được đường nào.
 
-	// 7. Nhóm đang có người mang thì không xoá được, và câu từ chối nói ra con số.
+	// 7. Nhóm chỉ là MẪU nên xoá lúc nào cũng được — không lấy đi quyền của ai.
 	res = h.goi(t, admin, http.MethodDelete,
 		fmt.Sprintf("/api/v1/admin/nhom-quyen/%d", tao.Data.ID), nil)
-	if res.ma != http.StatusConflict {
-		t.Fatalf("xoá nhóm còn người dùng phải trả 409, nhận %d\n%s", res.ma, catBot(res.than))
+	if res.ma != http.StatusOK {
+		t.Fatalf("xoá nhóm mẫu phải trả 200, nhận %d\n%s", res.ma, catBot(res.than))
 	}
-	if !contains(res.than, "1 tài khoản") {
-		t.Fatalf("câu từ chối phải nói còn mấy người đang dùng, nhận: %s", catBot(res.than))
+
+	// Và người đã được cấp quyền vẫn giữ nguyên quyền của họ.
+	res = h.goi(t, nv, http.MethodGet, "/api/v1/admin/quyen-cua-toi", nil)
+	if !contains(res.than, "ton-kho.xem") {
+		t.Fatalf("xoá nhóm mẫu đã lấy mất quyền của người dùng: %s", catBot(res.than))
 	}
 }
 
@@ -150,30 +154,28 @@ func TestNhomQuyenCoLapGiuaHaiCuaHang(t *testing.T) {
 		t.Fatalf("đọc nhóm của tiệm khác phải trả 404, nhận %d", res.ma)
 	}
 
-	// Và gán nhóm của tiệm B cho người của tiệm A: phải hỏng, không được lặng lẽ
-	// nhận. Đây là đường mà một id đoán bừa có thể mở toang quyền theo bảng của
-	// tiệm khác.
+	// Và cấp quyền cho người của tiệm B bằng token tiệm A: phải hỏng, không được
+	// lặng lẽ nhận. Đây là đường mà một id đoán bừa có thể mở toang quyền ở tiệm
+	// khác.
 	res = h.goi(t, tokenA, http.MethodPut,
-		fmt.Sprintf("/api/v1/admin/users/%d/nhom-quyen", a.nhanVien),
-		map[string]any{"nhom_quyen": []uint{b.nhomQuanLy}})
+		fmt.Sprintf("/api/v1/admin/users/%d/quyen", b.nhanVien),
+		map[string]any{"quyen": []string{"ton-kho.xem"}})
 	if res.ma != http.StatusNotFound {
-		t.Fatalf("gán nhóm của tiệm khác phải trả 404, nhận %d\n%s", res.ma, catBot(res.than))
+		t.Fatalf("cấp quyền cho người của tiệm khác phải trả 404, nhận %d\n%s", res.ma, catBot(res.than))
 	}
 }
 
-// Hồ sơ nhân sự phải TRẢ VỀ nhóm quyền của tài khoản gắn với nó.
+// Tài khoản mới cấp KHÔNG tự có quyền nào, và quyền chỉ tới sau khi có người
+// tick cho họ.
 //
-// Bài này canh đúng kiểu lỗi đã xảy ra một lần: dữ liệu ghi đúng dưới database
-// nhưng mất trên đường về màn hình. Hộp thoại sửa dùng chính danh sách này để
-// tick sẵn, nên thiếu nó thì mở hồ sơ ra rồi bấm Lưu là thu sạch quyền của
-// người ta — một lượt bấm bình thường, không ai định làm vậy, không có gì báo.
-func TestHoSoNhanSuTraKemNhomQuyen(t *testing.T) {
+// Bài này canh đúng kiểu lỗi nguy hiểm nhất của một hệ phân quyền: người mới
+// lặng lẽ nhận sẵn một bộ quyền mà không ai định cấp.
+func TestTaiKhoanMoiKhongTuCoQuyen(t *testing.T) {
 	h := dungHeThong(t)
 	a, _ := haiCuaHang(t, h)
 
 	admin := h.dangNhapVoi(t, a.ma, "quantri")
 
-	// Hồ sơ có tài khoản — nhóm quyền chỉ có nghĩa khi người đó đăng nhập được.
 	res := h.goi(t, admin, http.MethodPost, "/api/v1/admin/nhan-su", map[string]any{
 		"full_name": "Trần Thị Bình " + a.vet,
 		"position":  "thu_ngan",
@@ -189,55 +191,60 @@ func TestHoSoNhanSuTraKemNhomQuyen(t *testing.T) {
 
 	var tao struct {
 		Data struct {
-			ID        uint   `json:"id"`
-			UserID    *uint  `json:"user_id"`
-			NhomQuyen []uint `json:"nhom_quyen"`
+			ID     uint  `json:"id"`
+			UserID *uint `json:"user_id"`
 		} `json:"data"`
 	}
 	_ = json.Unmarshal([]byte(res.than), &tao)
 	if tao.Data.UserID == nil {
 		t.Fatalf("hồ sơ chưa gắn tài khoản: %+v", tao.Data)
 	}
-	// Tài khoản vừa cấp chưa được giao nhóm nào.
-	if len(tao.Data.NhomQuyen) != 0 {
-		t.Fatalf("tài khoản mới cấp không được tự mang nhóm nào, nhận %v", tao.Data.NhomQuyen)
-	}
 
-	// Giao HAI nhóm cùng lúc — đó là điều một ô chọn đơn không diễn đạt nổi.
-	res = h.goi(t, admin, http.MethodPut,
-		fmt.Sprintf("/api/v1/admin/users/%d/nhom-quyen", *tao.Data.UserID),
-		map[string]any{"nhom_quyen": []uint{a.nhomThuNgan, a.nhomQuanLy}})
+	duong := fmt.Sprintf("/api/v1/admin/users/%d/quyen", *tao.Data.UserID)
+
+	res = h.goi(t, admin, http.MethodGet, duong, nil)
 	if res.ma != http.StatusOK {
-		t.Fatalf("gán nhóm phải trả 200, nhận %d: %s", res.ma, catBot(res.than))
+		t.Fatalf("đọc quyền của tài khoản phải trả 200, nhận %d: %s", res.ma, catBot(res.than))
 	}
 
-	// Và đọc lại từ DANH SÁCH — đúng đường mà màn hình đi.
-	res = h.goi(t, admin, http.MethodGet, "/api/v1/admin/nhan-su", nil)
-	if res.ma != http.StatusOK {
-		t.Fatalf("danh sách nhân sự phải trả 200, nhận %d", res.ma)
-	}
-
-	var ds struct {
-		Data []struct {
-			ID        uint   `json:"id"`
-			NhomQuyen []uint `json:"nhom_quyen"`
+	var doc struct {
+		Data struct {
+			ToanQuyen bool     `json:"toan_quyen"`
+			Quyen     []string `json:"quyen"`
 		} `json:"data"`
 	}
-	if err := json.Unmarshal([]byte(res.than), &ds); err != nil {
-		t.Fatalf("không đọc được danh sách: %v", err)
+	_ = json.Unmarshal([]byte(res.than), &doc)
+	if doc.Data.ToanQuyen || len(doc.Data.Quyen) != 0 {
+		t.Fatalf("tài khoản mới cấp không được tự có quyền nào, nhận %+v", doc.Data)
 	}
 
-	thay := false
-	for _, ns := range ds.Data {
-		if ns.ID != tao.Data.ID {
-			continue
-		}
-		thay = true
-		if len(ns.NhomQuyen) != 2 {
-			t.Fatalf("hồ sơ phải trả về đủ HAI nhóm vừa giao, nhận %v", ns.NhomQuyen)
-		}
+	// Tick cho họ hai quyền rồi đọc lại — đúng đường mà màn hình đi.
+	res = h.goi(t, admin, http.MethodPut, duong,
+		map[string]any{"quyen": []string{"don-hang.xem", "ton-kho.xem"}})
+	if res.ma != http.StatusOK {
+		t.Fatalf("cấp quyền phải trả 200, nhận %d: %s", res.ma, catBot(res.than))
 	}
-	if !thay {
-		t.Fatal("không thấy hồ sơ vừa tạo trong danh sách")
+
+	res = h.goi(t, admin, http.MethodGet, duong, nil)
+	doc.Data.Quyen = nil
+	_ = json.Unmarshal([]byte(res.than), &doc)
+	if len(doc.Data.Quyen) != 2 {
+		t.Fatalf("phải đọc lại đúng hai quyền vừa tick, nhận %v", doc.Data.Quyen)
+	}
+}
+
+// Không ai tự sửa quyền của CHÍNH MÌNH: phiên đang chạy bằng token cũ nên màn
+// hình vẫn trông bình thường, tới lần đăng nhập sau mới phát hiện mất đường vào.
+func TestKhongTuSuaQuyenCuaChinhMinh(t *testing.T) {
+	h := dungHeThong(t)
+	a, _ := haiCuaHang(t, h)
+
+	admin := h.dangNhapVoi(t, a.ma, "quantri")
+
+	res := h.goi(t, admin, http.MethodPut,
+		fmt.Sprintf("/api/v1/admin/users/%d/quyen", a.quanTri),
+		map[string]any{"quyen": []string{"don-hang.xem"}})
+	if res.ma != http.StatusForbidden {
+		t.Fatalf("tự sửa quyền của mình phải trả 403, nhận %d\n%s", res.ma, catBot(res.than))
 	}
 }

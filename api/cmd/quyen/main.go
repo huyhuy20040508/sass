@@ -28,19 +28,20 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 )
 
-// Vai trò nào vào nhóm nào. Đây là HỢP ĐỒNG của lượt di trú: sau khi chạy,
+// Vai trò nào được cấp gì. Đây là HỢP ĐỒNG của lượt di trú: sau khi chạy,
 // không ai mất quyền và cũng không ai được thêm quyền so với hôm trước.
 //
-// super_admin (1) cũng được gán, dù lúc chạy nó đi thẳng không tra bảng — để
-// trống thì màn hình Nhân sự hiện một ô Nhóm quyền rỗng cho chính chủ tiệm, và
-// người đọc sẽ tưởng mình chưa được cấp gì.
-var nhomTheoVaiTro = map[int]string{
-	1: domain.NhomQuyenQuanLy,
-	2: domain.NhomQuyenQuanLy,
-	3: domain.NhomQuyenThuNgan,
-	// 4 = khách hàng: không gán. Họ không có đường nào vào khu quản trị, và gán
-	// nhóm cho vài nghìn người mua hàng là dựng một quan hệ không ai đọc.
-}
+// Từ migration 0017, quyền gán THẲNG cho người: vai quản trị nhận cờ toàn quyền
+// (mọi quyền hiện có và sẽ có), thu ngân nhận đúng danh sách của vai `staff` cũ.
+// Hai nhóm mẫu vẫn được dựng để màn hình phân quyền có sẵn bộ điền nhanh.
+//
+// super_admin (1) cũng được cấp, dù lúc chạy nó đi thẳng không tra bảng — để
+// trống thì màn hình Phân quyền hiện một bảng rỗng cho chính chủ tiệm, và người
+// đọc sẽ tưởng mình chưa được cấp gì.
+var toanQuyenTheoVaiTro = map[int]bool{1: true, 2: true}
+
+// 4 = khách hàng: không cấp. Họ không có đường nào vào khu quản trị.
+var quyenTheoVaiTro = map[int][]string{3: domain.QuyenThuNgan()}
 
 func main() {
 	ghi := flag.Bool("ghi", false, "ghi thật; bỏ trống thì chỉ xem trước")
@@ -137,14 +138,25 @@ func gieoChoCuaHang(db *sql.DB, tenantID uint, ghi bool) (int, int, error) {
 		}
 	}
 
-	for roleID, ma := range nhomTheoVaiTro {
-		n, err := ganNhom(db, tenantID, roleID, maNhomID[ma], ghi)
+	for roleID, toan := range toanQuyenTheoVaiTro {
+		n, err := capQuyen(db, tenantID, roleID, nil, toan, ghi)
 		if err != nil {
 			return 0, 0, err
 		}
 		if n > 0 {
-			fmt.Printf("  [cửa hàng %d] vai trò %d -> nhóm %-9s : %d tài khoản\n",
-				tenantID, roleID, ma, n)
+			fmt.Printf("  [cửa hàng %d] vai trò %d -> toàn quyền : %d tài khoản\n", tenantID, roleID, n)
+		}
+		soNguoi += n
+	}
+
+	for roleID, ds := range quyenTheoVaiTro {
+		n, err := capQuyen(db, tenantID, roleID, ds, false, ghi)
+		if err != nil {
+			return 0, 0, err
+		}
+		if n > 0 {
+			fmt.Printf("  [cửa hàng %d] vai trò %d -> %d quyền : %d tài khoản\n",
+				tenantID, roleID, len(ds), n)
 		}
 		soNguoi += n
 	}
@@ -195,34 +207,68 @@ func timHoacTaoNhom(db *sql.DB, tenantID uint, nm domain.NhomMacDinh, ghi bool) 
 	return id, false, nil
 }
 
-// ganNhom xếp những tài khoản CHƯA thuộc nhóm nào vào nhóm ứng với vai trò.
+// capQuyen cấp quyền cho những tài khoản CHƯA được cấp gì.
 //
-// Một người mang được nhiều nhóm, nên lệnh này chỉ gieo cho ai chưa có nhóm nào
-// — nó là lượt di trú, không phải công cụ phân quyền.
-func ganNhom(db *sql.DB, tenantID uint, roleID int, groupID uint, ghi bool) (int, error) {
-	// `NOT EXISTS` là điều kiện làm cho lệnh chạy lại được: ai đã được xếp vào
-	// nhóm nào rồi — kể cả cửa hàng tự đổi sang nhóm khác — thì không bị kéo về.
+// Lệnh này là lượt DI TRÚ, không phải công cụ phân quyền: ai đã có quyền rồi —
+// kể cả cửa hàng tự sửa lại — thì không bị kéo về. Điều kiện `NOT EXISTS` cùng
+// `toan_quyen = 0` là thứ làm cho nó chạy lại được bao nhiêu lần cũng như nhau.
+func capQuyen(db *sql.DB, tenantID uint, roleID int, quyen []string, toanQuyen, ghi bool) (int, error) {
 	dieuKien := `FROM users u
 		WHERE u.tenant_id = ? AND u.role_id = ? AND u.deleted_at IS NULL
-		  AND NOT EXISTS (SELECT 1 FROM user_permission_groups g WHERE g.user_id = u.id)`
+		  AND u.toan_quyen = 0
+		  AND NOT EXISTS (SELECT 1 FROM user_permissions p WHERE p.user_id = u.id)`
 
-	if !ghi || groupID == 0 {
-		var n int
-		err := db.QueryRow("SELECT COUNT(*) "+dieuKien, tenantID, roleID).Scan(&n)
-
-		return n, err
+	var n int
+	if err := db.QueryRow("SELECT COUNT(*) "+dieuKien, tenantID, roleID).Scan(&n); err != nil {
+		return 0, err
+	}
+	if !ghi || n == 0 {
+		return n, nil
 	}
 
-	res, err := db.Exec(`INSERT INTO user_permission_groups
-		(tenant_id, user_id, group_id, created_at, updated_at)
-		SELECT u.tenant_id, u.id, ?, NOW(3), NOW(3) `+dieuKien,
-		groupID, tenantID, roleID)
+	ids, err := idTaiKhoan(db, dieuKien, tenantID, roleID)
 	if err != nil {
 		return 0, err
 	}
-	n, err := res.RowsAffected()
 
-	return int(n), err
+	for _, id := range ids {
+		if toanQuyen {
+			if _, err := db.Exec("UPDATE users SET toan_quyen = 1 WHERE id = ?", id); err != nil {
+				return 0, err
+			}
+
+			continue
+		}
+		for _, q := range quyen {
+			if _, err := db.Exec(`INSERT IGNORE INTO user_permissions
+				(tenant_id, user_id, permission, created_at, updated_at)
+				VALUES (?, ?, ?, NOW(3), NOW(3))`, tenantID, id, q); err != nil {
+				return 0, err
+			}
+		}
+	}
+
+	return len(ids), nil
+}
+
+// idTaiKhoan lấy id những tài khoản khớp điều kiện của capQuyen.
+func idTaiKhoan(db *sql.DB, dieuKien string, tenantID uint, roleID int) ([]uint, error) {
+	rows, err := db.Query("SELECT u.id "+dieuKien, tenantID, roleID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var ds []uint
+	for rows.Next() {
+		var id uint
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ds = append(ds, id)
+	}
+
+	return ds, rows.Err()
 }
 
 func soQuyen(nm domain.NhomMacDinh) int {

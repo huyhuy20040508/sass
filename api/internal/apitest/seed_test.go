@@ -566,10 +566,13 @@ func gieoNhomQuyen(t *testing.T, db *gorm.DB, ctx context.Context, c *cuaHang, q
 	c.nhomQuanLy = nhom[domain.NhomQuyenQuanLy]
 	c.nhomThuNgan = nhom[domain.NhomQuyenThuNgan]
 
-	for id, groupID := range map[uint]uint{
-		quanTriID:  c.nhomQuanLy,
-		nhanVienID: c.nhomThuNgan,
-	} {
-		tao(t, db, ctx, &domain.NhomQuyenCuaNguoi{UserID: id, GroupID: groupID})
+	// Quyền gán THẲNG cho người (migration 0017): quản trị nhận cờ toàn quyền,
+	// thu ngân nhận đúng danh sách của vai `staff` cũ. Hai nhóm trên chỉ là mẫu.
+	if err := db.WithContext(ctx).Model(&domain.User{}).
+		Where("id = ?", quanTriID).Update("toan_quyen", true).Error; err != nil {
+		t.Fatalf("bật toàn quyền cho quản trị: %v", err)
+	}
+	for _, q := range domain.QuyenThuNgan() {
+		tao(t, db, ctx, &domain.QuyenRieng{UserID: nhanVienID, Permission: q})
 	}
 }

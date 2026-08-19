@@ -181,6 +181,14 @@
                             ])
                             ->values()
                             ->all(),
+                        // Phân quyền: chọn chi nhánh → nhân viên → tick từng việc.
+                        // Đứng ngay sau các trang cấu hình vì cùng một loại việc —
+                        // dựng bộ khung của tiệm, không phải bán hàng hằng ngày.
+                        [
+                            'href' => route('admin.phan-quyen.index'),
+                            'label' => \App\Http\Controllers\PhanQuyenController::TITLE,
+                            'active' => request()->routeIs('admin.phan-quyen.*'),
+                        ],
                         // "Người dùng & vai trò" ĐÃ BỎ KHỎI MENU (17/08/2026).
                         //
                         // Chủ tiệm mua phần mềm để quản lý NHÂN VIÊN, không phải để

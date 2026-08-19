@@ -141,13 +141,12 @@ func TestThieuQuyenTraVe403(t *testing.T) {
 	h := dungHeThong(t)
 	a, _ := haiCuaHang(t, h)
 
-	// Tài khoản "nhanvien" của cửa hàng thử đang mang nhóm Thu ngân. Thu sạch
-	// quyền của nhóm ấy để dựng cảnh "có nhóm, không quyền nào" — khác với "chưa
-	// gán nhóm", và đây mới là cảnh cửa hàng thật đi qua khi họ bỏ hết tick.
+	// Tài khoản "nhanvien" của cửa hàng thử đang có bộ quyền thu ngân. Thu sạch
+	// để dựng cảnh cửa hàng thật đi qua khi họ bỏ hết tick.
 	ctx := tenant.WithID(context.Background(), a.id)
-	if err := h.db.WithContext(ctx).Where("group_id = ?", a.nhomThuNgan).
-		Delete(&domain.NhomQuyenItem{}).Error; err != nil {
-		t.Fatalf("không thu được quyền của nhóm: %v", err)
+	if err := h.db.WithContext(ctx).Where("user_id = ?", a.nhanVien).
+		Delete(&domain.QuyenRieng{}).Error; err != nil {
+		t.Fatalf("không thu được quyền của tài khoản: %v", err)
 	}
 
 	token := h.dangNhapVoi(t, a.ma, "nhanvien")
@@ -183,8 +182,8 @@ func TestThieuQuyenTraVe403(t *testing.T) {
 
 	// Cấp lại ĐÚNG MỘT quyền thì đúng một đường mở ra — và mở NGAY với chính
 	// token cũ. Đó là toàn bộ lý do lượt đọc quyền không có cache.
-	if err := h.db.WithContext(ctx).Create(&domain.NhomQuyenItem{
-		GroupID: a.nhomThuNgan, Permission: "ca-lam-viec.xem",
+	if err := h.db.WithContext(ctx).Create(&domain.QuyenRieng{
+		UserID: a.nhanVien, Permission: "ca-lam-viec.xem",
 	}).Error; err != nil {
 		t.Fatalf("không cấp được quyền: %v", err)
 	}
@@ -199,7 +198,8 @@ func TestThieuQuyenTraVe403(t *testing.T) {
 
 // TestQuanTriVanDayDuQuyen — chốt hồi quy của lượt di trú.
 //
-// Nhóm "Quản lý" mang cờ full_access, tức MỌI quyền hiện có và sẽ có. Bài này
+// Quản trị viên mang cờ toàn quyền trên chính tài khoản, tức MỌI quyền hiện có
+// và sẽ có. Bài này
 // bảo đảm lượt bật chốt không lấy mất gì của quản trị viên: họ vào được cả ba
 // cụm mà hôm qua họ vào được.
 func TestQuanTriVanDayDuQuyen(t *testing.T) {

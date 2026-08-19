@@ -19,36 +19,30 @@ func NewQuyenRepository(db *gorm.DB) domain.QuyenRepository {
 
 // dongQuyen là hình dạng thô của lượt đọc nóng.
 //
-// Con trỏ ở cả hai cột: LEFT JOIN nên người chưa gán nhóm cho NULL, và NULL
-// khác hẳn `false` — cái sau nghĩa là có nhóm nhưng nhóm ấy không toàn quyền.
+// Con trỏ ở cột quyền: LEFT JOIN nên người chưa được tick ô nào cho NULL.
 type dongQuyen struct {
-	FullAccess *bool
+	ToanQuyen  bool
 	Permission *string
 }
 
 // BoQuyenCuaNguoi đọc tập quyền của một tài khoản — lượt đọc chạy ở MỌI request
 // vào một đường có gắn quyền.
 //
-// Một lượt đi database. Đi từ `users` sang `permission_groups` rồi `..._items`,
-// tất cả trên khoá chính hoặc index phủ.
-//
-// Người mang nhiều nhóm thì câu này trả về nhiều dòng, và tập quyền là HỢP của
-// chúng — cờ full_access chỉ cần MỘT nhóm có là đủ.
+// Một lượt đi database, đi từ `users` sang `user_permissions` trên index phủ.
+// Từ migration 0017, quyền gán THẲNG cho người: không còn chặng nhóm ở giữa.
 //
 // DÒNG NGUY HIỂM NHẤT của cả thiết kế là hai điều kiện `tenant_id = ?` trong
-// mệnh đề JOIN. tenant.WithoutScope tắt bộ lọc tự động của GORM cho cả câu, nên
-// thiếu chúng thì một dòng trỏ chéo cửa hàng (dữ liệu hỏng, hoặc ai đó ghi tay)
-// sẽ nạp quyền của TIỆM KHÁC. Có bài kiểm riêng cho đúng chỗ này.
+// mệnh đề JOIN và WHERE. tenant.WithoutScope tắt bộ lọc tự động của GORM cho cả
+// câu, nên thiếu chúng thì một dòng trỏ chéo cửa hàng (dữ liệu hỏng, hoặc ai đó
+// ghi tay) sẽ nạp quyền của TIỆM KHÁC. Có bài kiểm riêng cho đúng chỗ này.
 func (r *quyenRepository) BoQuyenCuaNguoi(ctx context.Context, userID, tenantID uint) (domain.BoQuyen, error) {
 	ctx = tenant.WithoutScope(ctx, "đọc quyền của tài khoản: điều kiện tenant_id khai tường minh trong câu")
 
 	var rows []dongQuyen
 	err := r.db.WithContext(ctx).
 		Table("users AS u").
-		Joins("LEFT JOIN user_permission_groups ug ON ug.user_id = u.id AND ug.tenant_id = ?", tenantID).
-		Joins("LEFT JOIN permission_groups g ON g.id = ug.group_id AND g.tenant_id = ?", tenantID).
-		Joins("LEFT JOIN permission_group_items i ON i.group_id = g.id").
-		Select("g.full_access AS full_access, i.permission AS permission").
+		Joins("LEFT JOIN user_permissions p ON p.user_id = u.id AND p.tenant_id = ?", tenantID).
+		Select("u.toan_quyen AS toan_quyen, p.permission AS permission").
 		Where("u.id = ? AND u.tenant_id = ? AND u.deleted_at IS NULL", userID, tenantID).
 		Find(&rows).Error
 	if err != nil {
@@ -60,7 +54,7 @@ func (r *quyenRepository) BoQuyenCuaNguoi(ctx context.Context, userID, tenantID 
 	toanQuyen := false
 	ds := make([]string, 0, len(rows))
 	for _, d := range rows {
-		if d.FullAccess != nil && *d.FullAccess {
+		if d.ToanQuyen {
 			toanQuyen = true
 		}
 		if d.Permission != nil {
@@ -182,76 +176,63 @@ func (r *quyenRepository) DatQuyenChoNhom(ctx context.Context, groupID uint, quy
 	})
 }
 
-func (r *quyenRepository) DemThanhVien(ctx context.Context, groupID uint) (int64, error) {
-	var n int64
-	err := r.db.WithContext(ctx).Model(&domain.NhomQuyenCuaNguoi{}).
-		Where("group_id = ?", groupID).Distinct("user_id").Count(&n).Error
+// QuyenRiengCuaNguoi đọc quyền đã tick cho một người, kèm cờ toàn quyền.
+func (r *quyenRepository) QuyenRiengCuaNguoi(ctx context.Context, userID uint) (bool, []string, error) {
+	var u struct {
+		ToanQuyen bool
+	}
+	err := r.db.WithContext(ctx).Table("users").
+		Select("toan_quyen").Where("id = ?", userID).Take(&u).Error
+	if err != nil {
+		return false, nil, err
+	}
 
-	return n, err
-}
-
-func (r *quyenRepository) NhomCuaNguoi(ctx context.Context, userID uint) ([]uint, error) {
-	var ds []uint
-	err := r.db.WithContext(ctx).Model(&domain.NhomQuyenCuaNguoi{}).
+	var ds []string
+	err = r.db.WithContext(ctx).Model(&domain.QuyenRieng{}).
 		Where("user_id = ?", userID).
-		Order("group_id ASC").
-		Pluck("group_id", &ds).Error
+		Order("permission ASC").
+		Pluck("permission", &ds).Error
 	if err != nil {
-		return nil, err
+		return false, nil, err
 	}
 
-	return ds, nil
+	return u.ToanQuyen, ds, nil
 }
 
-// NhomTheoNguoi đọc nhóm của nhiều người trong một lượt.
-func (r *quyenRepository) NhomTheoNguoi(ctx context.Context, userIDs []uint) (map[uint][]uint, error) {
-	ra := map[uint][]uint{}
-	if len(userIDs) == 0 {
-		return ra, nil
-	}
-
-	var rows []domain.NhomQuyenCuaNguoi
-	err := r.db.WithContext(ctx).
-		Where("user_id IN ?", userIDs).
-		Order("user_id ASC, group_id ASC").
-		Find(&rows).Error
-	if err != nil {
-		return nil, err
-	}
-	for _, d := range rows {
-		ra[d.UserID] = append(ra[d.UserID], d.GroupID)
-	}
-
-	return ra, nil
-}
-
-// DatNhomChoNguoi thay TOÀN BỘ danh sách nhóm của một người, trong một giao dịch.
+// DatQuyenChoNguoi thay TOÀN BỘ quyền của một người, trong một giao dịch.
 //
-// "Xoá sạch rồi ghi lại" thay vì so chênh lệch: một người mang vài nhóm là
-// cùng, còn phép so là chỗ đẻ ra lỗi kiểu "bỏ tick mà nhóm vẫn còn".
+// "Xoá sạch rồi ghi lại" thay vì so chênh lệch: một người có vài chục quyền là
+// cùng, còn phép so là chỗ đẻ ra lỗi kiểu "bỏ tick mà quyền vẫn còn".
+//
+// Lượt này cũng GỠ cờ toàn quyền: người dùng vừa nói rõ họ muốn một danh sách
+// cụ thể, giữ cờ lại thì danh sách ấy không có tác dụng gì.
 //
 // Danh sách rỗng = thu hết quyền. Khác hẳn khoá tài khoản: người đó vẫn đăng
 // nhập được, chỉ là không mở được trang nào.
-func (r *quyenRepository) DatNhomChoNguoi(ctx context.Context, userID uint, groupIDs []uint) error {
+func (r *quyenRepository) DatQuyenChoNguoi(ctx context.Context, userID uint, quyen []string) error {
 	tenantID, err := tenantBatBuoc(ctx)
 	if err != nil {
 		return err
 	}
 
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("user_id = ?", userID).
-			Delete(&domain.NhomQuyenCuaNguoi{}).Error; err != nil {
+		if err := tx.Table("users").Where("id = ?", userID).
+			Update("toan_quyen", false).Error; err != nil {
 			return translateQuyenErr(err)
 		}
-		if len(groupIDs) == 0 {
+		if err := tx.Where("user_id = ?", userID).
+			Delete(&domain.QuyenRieng{}).Error; err != nil {
+			return translateQuyenErr(err)
+		}
+		if len(quyen) == 0 {
 			return nil
 		}
 
-		rows := make([]domain.NhomQuyenCuaNguoi, 0, len(groupIDs))
-		for _, gid := range groupIDs {
-			r := domain.NhomQuyenCuaNguoi{UserID: userID, GroupID: gid}
-			r.TenantID = tenantID
-			rows = append(rows, r)
+		rows := make([]domain.QuyenRieng, 0, len(quyen))
+		for _, q := range quyen {
+			row := domain.QuyenRieng{UserID: userID, Permission: q}
+			row.TenantID = tenantID
+			rows = append(rows, row)
 		}
 
 		return translateQuyenErr(tx.Create(&rows).Error)
@@ -279,10 +260,6 @@ func translateQuyenErr(err error) error {
 		return nil
 	case errors.Is(err, gorm.ErrDuplicatedKey):
 		return domain.ErrConflict
-	// Xoá một nhóm còn người mang: khoá ngoại từ `users` chặn lại. Đây là câu
-	// trả lời nghiệp vụ, không phải sự cố.
-	case errors.Is(err, gorm.ErrForeignKeyViolated):
-		return domain.ErrNhomQuyenDangDung
 	default:
 		return err
 	}

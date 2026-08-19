@@ -196,12 +196,6 @@ func handleServiceError(c *gin.Context, err error) {
 		response.ValidationError(c, map[string]string{
 			"code": "Mã này đã có nhóm quyền khác dùng, vui lòng đặt mã khác",
 		})
-	case errors.Is(err, domain.ErrNhomQuyenDangDung):
-		// err đã kèm số tài khoản đang mang nhóm — in ra, vì người đọc cần biết
-		// phải chuyển mấy người trước khi xoá được.
-		response.Error(c, 409, "Nhóm quyền này đang có "+
-			strings.TrimPrefix(err.Error(), domain.ErrNhomQuyenDangDung.Error()+": ")+
-			" dùng. Chuyển họ sang nhóm khác trước đã")
 	case errors.Is(err, domain.ErrNhomQuyenHeThong):
 		response.Error(c, 422, "Đây là nhóm quyền hệ thống dựng sẵn — sửa được tên và quyền, nhưng không xoá được")
 	case errors.Is(err, domain.ErrNhanSuDangMoCa):
