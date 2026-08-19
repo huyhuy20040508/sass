@@ -249,7 +249,12 @@ func (r *purchaseReturnRepository) Create(ctx context.Context, rt *domain.Purcha
 		if err := tx.Create(rt).Error; err != nil {
 			return err
 		}
-		rt.ReturnCode = fmt.Sprintf("PR%s%04d", time.Now().Format("20060102"), rt.ID)
+		ma, err := maChungTu(ctx, tx, domain.LoaiTraHangNCC, rt.ShopID, &domain.PurchaseReturn{}, "return_code",
+			fmt.Sprintf("PR%s%04d", time.Now().Format("20060102"), rt.ID))
+		if err != nil {
+			return err
+		}
+		rt.ReturnCode = ma
 		if err := tx.Model(rt).Update("return_code", rt.ReturnCode).Error; err != nil {
 			return err
 		}

@@ -1262,6 +1262,28 @@ class ApiClient
         return $this->delete("/admin/chi-nhanh/{$id}");
     }
 
+    // ---------- Quy tắc đánh số chứng từ ----------
+
+    /** Danh mục loại đánh số được + mọi quy tắc đã lưu của cửa hàng. */
+    public function quyTacMa(): Response
+    {
+        return $this->get('/admin/quy-tac-ma');
+    }
+
+    /**
+     * Lưu bảng quy tắc của MỘT chi nhánh.
+     *
+     * Gửi trạng thái cuối cùng: loại có trong $quyTac là bật, loại vắng mặt là
+     * tắt. API tự xếp dòng nào thuộc chi nhánh, dòng nào dùng chung toàn cửa hàng.
+     */
+    public function luuQuyTacMa(int $shopID, array $quyTac): Response
+    {
+        return $this->put('/admin/quy-tac-ma', [
+            'shop_id' => $shopID,
+            'quy_tac' => array_values($quyTac),
+        ]);
+    }
+
     /** Danh sách vai trò kèm số tài khoản đang mang vai trò đó. */
     public function roles(): Response
     {

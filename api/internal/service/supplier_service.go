@@ -19,10 +19,13 @@ type SupplierService interface {
 
 type supplierService struct {
 	repo domain.SupplierRepository
+	// quyTac là quy tắc đánh số của cửa hàng. Chưa bật thì mã vẫn đặt theo cách
+	// cũ (NCC001…), nên cửa hàng không đụng màn cấu hình không thấy gì khác đi.
+	quyTac domain.QuyTacMaRepository
 }
 
-func NewSupplierService(repo domain.SupplierRepository) SupplierService {
-	return &supplierService{repo: repo}
+func NewSupplierService(repo domain.SupplierRepository, quyTac domain.QuyTacMaRepository) SupplierService {
+	return &supplierService{repo: repo, quyTac: quyTac}
 }
 
 func (s *supplierService) List(ctx context.Context, f domain.SupplierFilter) ([]domain.Supplier, error) {
@@ -36,7 +39,7 @@ func (s *supplierService) GetByID(ctx context.Context, id uint) (*domain.Supplie
 func (s *supplierService) Create(ctx context.Context, req *dto.SupplierRequest) (*domain.Supplier, error) {
 	code := strings.ToUpper(strings.TrimSpace(req.Code))
 	if code == "" {
-		next, err := s.repo.NextCode(ctx)
+		next, err := s.maTuSinh(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -102,6 +105,22 @@ func (s *supplierService) Update(ctx context.Context, id uint, req *dto.Supplier
 		return nil, err
 	}
 	return s.repo.FindByID(ctx, id)
+}
+
+// maTuSinh đặt mã cho nhà cung cấp mới: theo quy tắc của cửa hàng nếu đã bật,
+// không thì giữ dải NCC001 sẵn có.
+func (s *supplierService) maTuSinh(ctx context.Context) (string, error) {
+	ma, err := s.quyTac.SinhMa(ctx, domain.LoaiNhaCungCap, 0, func(ma string) (bool, error) {
+		return s.repo.ExistsByCode(ctx, ma, 0)
+	})
+	if err != nil {
+		return "", err
+	}
+	if ma != "" {
+		return ma, nil
+	}
+
+	return s.repo.NextCode(ctx)
 }
 
 func (s *supplierService) Delete(ctx context.Context, id uint) error {

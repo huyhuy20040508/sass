@@ -312,7 +312,12 @@ func (r *purchaseOrderRepository) Create(ctx context.Context, po *domain.Purchas
 		if err := tx.Create(po).Error; err != nil {
 			return err
 		}
-		po.POCode = fmt.Sprintf("PO%s%04d", time.Now().Format("20060102"), po.ID)
+		ma, err := maChungTu(ctx, tx, domain.LoaiPhieuDatMua, po.ShopID, &domain.PurchaseOrder{}, "po_code",
+			fmt.Sprintf("PO%s%04d", time.Now().Format("20060102"), po.ID))
+		if err != nil {
+			return err
+		}
+		po.POCode = ma
 		if err := tx.Model(po).Update("po_code", po.POCode).Error; err != nil {
 			return err
 		}

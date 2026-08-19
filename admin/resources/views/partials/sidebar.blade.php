@@ -181,6 +181,13 @@
                             ])
                             ->values()
                             ->all(),
+                        // Thông số chung: bộ khung của tiệm theo bản ERP cũ. Mới có
+                        // trang Quy tắc đánh số chứng từ, các trang còn lại làm sau.
+                        [
+                            'href' => route('admin.thong-so-chung.index'),
+                            'label' => \App\Http\Controllers\ThongSoChungController::TITLE,
+                            'active' => request()->routeIs('admin.thong-so-chung.*'),
+                        ],
                         // Phân quyền: chọn chi nhánh → nhân viên → tick từng việc.
                         // Đứng ngay sau các trang cấu hình vì cùng một loại việc —
                         // dựng bộ khung của tiệm, không phải bán hàng hằng ngày.

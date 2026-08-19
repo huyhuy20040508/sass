@@ -44,6 +44,8 @@ type nhanSuService struct {
 	// đường riêng (NhomQuyenService) — nhóm quyền thuộc về tài khoản, còn đây là
 	// sổ con người.
 	quyen domain.QuyenRepository
+	// quyTac là quy tắc đánh số của cửa hàng. Chưa bật thì mã vẫn là NV0001…
+	quyTac domain.QuyTacMaRepository
 }
 
 func NewNhanSuService(
@@ -51,8 +53,9 @@ func NewNhanSuService(
 	chiNhanh domain.ChiNhanhRepository,
 	users UserService,
 	quyen domain.QuyenRepository,
+	quyTac domain.QuyTacMaRepository,
 ) NhanSuService {
-	return &nhanSuService{repo: repo, chiNhanh: chiNhanh, users: users, quyen: quyen}
+	return &nhanSuService{repo: repo, chiNhanh: chiNhanh, users: users, quyen: quyen, quyTac: quyTac}
 }
 
 // Tiền tố mã tự sinh; bốn chữ số đủ cho 9999 người.
@@ -440,7 +443,7 @@ func (s *nhanSuService) taoTaiKhoan(ctx context.Context, req *dto.NhanSuRequest,
 func (s *nhanSuService) chotMa(ctx context.Context, ma string, excludeID uint) (string, error) {
 	ma = strings.ToUpper(strings.TrimSpace(ma))
 	if ma == "" {
-		return s.maTiepTheo(ctx)
+		return s.maTuSinh(ctx)
 	}
 
 	trung, err := s.repo.ExistsByCode(ctx, ma, excludeID)
@@ -452,6 +455,22 @@ func (s *nhanSuService) chotMa(ctx context.Context, ma string, excludeID uint) (
 	}
 
 	return ma, nil
+}
+
+// maTuSinh đặt mã cho hồ sơ mới: theo quy tắc của cửa hàng nếu đã bật, không thì
+// giữ dải NV0001 sẵn có.
+func (s *nhanSuService) maTuSinh(ctx context.Context) (string, error) {
+	ma, err := s.quyTac.SinhMa(ctx, domain.LoaiNhanVien, 0, func(ma string) (bool, error) {
+		return s.repo.ExistsByCode(ctx, ma, 0)
+	})
+	if err != nil {
+		return "", err
+	}
+	if ma != "" {
+		return ma, nil
+	}
+
+	return s.maTiepTheo(ctx)
 }
 
 // maTiepTheo sinh mã cho hồ sơ mới: NV0001, NV0002…

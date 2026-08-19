@@ -65,6 +65,8 @@ type Handlers struct {
 	// NhomQuyen — phân quyền theo chức năng: cây quyền, nhóm quyền của cửa hàng,
 	// và việc gán nhóm cho từng tài khoản.
 	NhomQuyen *handler.NhomQuyenHandler
+	// QuyTacMa — quy tắc đánh số chứng từ (Cài đặt → Thông số chung).
+	QuyTacMa *handler.QuyTacMaHandler
 	// Ca là ca làm việc + sổ quỹ tiền mặt — cụm trả lời câu hỏi cuối ngày: tiền
 	// trong két có khớp sổ không, và nếu lệch thì lệch trong lượt trực của ai.
 	Ca      *handler.CaLamViecHandler
@@ -682,6 +684,11 @@ func New(
 			q.Dat(manage, http.MethodGet, "/chi-nhanh/:id", "chi-nhanh.xem", h.ChiNhanh.Get)
 			q.Dat(manage, http.MethodPut, "/chi-nhanh/:id", "chi-nhanh.sua", h.ChiNhanh.Update)
 			q.Dat(manage, http.MethodDelete, "/chi-nhanh/:id", "chi-nhanh.xoa", h.ChiNhanh.Delete)
+
+			// Quy tắc đánh số chứng từ. Đọc cũng ở `manage`: đây là bộ khung của
+			// tiệm, không phải thứ quầy bán cần biết.
+			q.Dat(manage, http.MethodGet, "/quy-tac-ma", "quy-tac-ma.xem", h.QuyTacMa.List)
+			q.Dat(manage, http.MethodPut, "/quy-tac-ma", "quy-tac-ma.sua", h.QuyTacMa.Update)
 
 			// Nhân sự — HỒ SƠ NGƯỜI ĐI LÀM, khác hẳn /users (tài khoản đăng
 			// nhập): một người có thể có hồ sơ mà không có tài khoản. Cùng nhóm

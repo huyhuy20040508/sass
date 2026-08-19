@@ -302,6 +302,7 @@ func main() {
 	roleRepo := repository.NewRoleRepository(db)
 	verifyRepo := repository.NewEmailVerificationRepository(db)
 	categoryRepo := repository.NewCategoryRepository(db)
+	quyTacMaRepo := repository.NewQuyTacMaRepository(db)
 	brandRepo := repository.NewBrandRepository(db)
 	productRepo := repository.NewProductRepository(db)
 	orderRepo := repository.NewOrderRepository(db)
@@ -340,7 +341,7 @@ func main() {
 	// khu điều hành trả 503 nói đúng lý do, chứ KHÔNG rơi về cách cũ là mượn
 	// super_admin của một cửa hàng — cách đó chính là lỗ hổng đã đóng ở 0007.
 	authSvc := service.NewAuthService(userRepo, nguoiDieuHanhRepo, tenantRepo, roleRepo, verifyRepo, mailSender, jwtMgr, cfg.JWT, cfg.Mail, !cfg.App.IsProduction(), settingSvc, fbClient, ggClient)
-	categorySvc := service.NewCategoryService(categoryRepo)
+	categorySvc := service.NewCategoryService(categoryRepo, quyTacMaRepo)
 	brandSvc := service.NewBrandService(brandRepo)
 	bannerSvc := service.NewBannerService(bannerRepo)
 	// Cửa xét HẠN MỨC HỢP ĐỒNG — chỗ ba con số đã ký (chi nhánh / tài khoản /
@@ -363,12 +364,15 @@ func main() {
 		))
 	}
 
-	productSvc := service.NewProductService(productRepo, categoryRepo, brandRepo, hanMucSvc)
+	productSvc := service.NewProductService(productRepo, categoryRepo, brandRepo, hanMucSvc, quyTacMaRepo)
 	// Chi nhánh: các ĐIỂM BÁN trong một cửa hàng. Đây là thứ gói Chuỗi bán, và
 	// cũng là nơi hạn mức `max_shops` lần đầu có việc để làm — trước nó, con số
 	// ấy canh một thao tác mà không màn hình nào làm được.
 	chiNhanhSvc := service.NewChiNhanhService(chiNhanhRepo, hanMucSvc)
 	caSvc := service.NewCaLamViecService(caRepo, userRepo, chiNhanhRepo)
+	// Quy tắc đánh số chứng từ — chiNhanhRepo để chốt chi nhánh có thật trước khi
+	// ghi một bộ quy tắc không màn hình nào đọc tới.
+	quyTacMaSvc := service.NewQuyTacMaService(quyTacMaRepo, chiNhanhRepo)
 	// Chương trình khuyến mãi: vừa là module quản trị, vừa là thứ tính giá sau giảm
 	// cho cả trang bán hàng lẫn lúc đặt hàng. categoryRepo để chương trình khai ở
 	// danh mục cha phủ được tới sản phẩm nằm trong danh mục cháu.
@@ -385,7 +389,7 @@ func main() {
 	// trò cấp được, tên đăng nhập, email trùng, hạn mức tài khoản của hợp đồng),
 	// và chép lại năm luật đó ở tầng nhân sự là chép thiếu một cái.
 	quyenRepo := repository.NewQuyenRepository(db)
-	nhanSuSvc := service.NewNhanSuService(nhanSuRepo, chiNhanhRepo, userSvc, quyenRepo)
+	nhanSuSvc := service.NewNhanSuService(nhanSuRepo, chiNhanhRepo, userSvc, quyenRepo, quyTacMaRepo)
 	nhomQuyenSvc := service.NewNhomQuyenService(quyenRepo, userRepo)
 	// Hub SSE + service thông báo: đơn mới hiện ngay trên trang admin và trạng thái
 	// đơn hiện ngay ở trang tài khoản của khách, không cần tải lại trang.
@@ -401,7 +405,7 @@ func main() {
 	orderSvc := service.NewOrderService(orderRepo, returnRepo, mailSender, cfg.Mail, notifSvc, settingSvc, paymentSvc, promotionSvc, voucherSvc)
 	returnSvc := service.NewOrderReturnService(returnRepo, notifSvc, settingSvc)
 	inventorySvc := service.NewInventoryService(inventoryRepo)
-	supplierSvc := service.NewSupplierService(supplierRepo)
+	supplierSvc := service.NewSupplierService(supplierRepo, quyTacMaRepo)
 	// Yêu cầu khách gửi từ storefront (Liên hệ / Thu mua) + danh sách nhận tin.
 	contactSvc := service.NewContactService(contactRepo, newsletterRepo)
 	// purchaseSvc cần supplierRepo để chụp tên nhà cung cấp vào phiếu ngay lúc lập:
@@ -447,6 +451,7 @@ func main() {
 		ChiNhanh:  handler.NewChiNhanhHandler(chiNhanhSvc),
 		NhanSu:    handler.NewNhanSuHandler(nhanSuSvc),
 		NhomQuyen: handler.NewNhomQuyenHandler(nhomQuyenSvc),
+		QuyTacMa:  handler.NewQuyTacMaHandler(quyTacMaSvc),
 		Ca:        handler.NewCaLamViecHandler(caSvc),
 		Payment:   handler.NewPaymentHandler(paymentSvc),
 		Banner:    handler.NewBannerHandler(bannerSvc),

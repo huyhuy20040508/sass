@@ -29,9 +29,6 @@ class CategoryController extends Controller
     /** Slug của các nhóm gốc — dùng để gắn cờ khóa. */
     public const PROTECTED_SLUGS = ['hang-ban', 'hang-hoa-khac'];
 
-    /** Tiền tố mã nhóm tự sinh: NH0001, NH0002, ... */
-    public const CODE_PREFIX = 'NH';
-
     public function __construct(protected ApiClient $api) {}
 
     /** Danh sách nhóm (phẳng) — view tự dựng cây từ parent_id. */
@@ -70,11 +67,8 @@ class CategoryController extends Controller
     {
         $data = $this->validated($request);
 
-        // Nhóm chính và các nhóm con mới lấy mã liên tiếp trong cùng một dải.
-        $seq = $this->maxCodeSeq();
-
         try {
-            $res = $this->createWithCode($data, $seq);
+            $res = $this->api->createCategory($data);
         } catch (\Throwable $e) {
             Log::error('Create category failed', ['msg' => $e->getMessage()]);
 
@@ -86,7 +80,7 @@ class CategoryController extends Controller
         }
 
         $newId = (int) data_get($res->json('data'), 'id');
-        $child = $this->saveChildren($request, $newId, $seq);
+        $child = $this->saveChildren($request, $newId);
 
         if ($child['fail'] > 0) {
             return redirect()->route('admin.categories.index')
@@ -306,54 +300,9 @@ class CategoryController extends Controller
         return $res->json('message') ?: $fallback;
     }
 
-    /** Mã nhóm thứ $seq: NH0001, NH0002, ... */
-    protected function codeOf(int $seq): string
-    {
-        return self::CODE_PREFIX . str_pad((string) $seq, 4, '0', STR_PAD_LEFT);
-    }
-
-    /** Số thứ tự lớn nhất đang dùng trong mã NHxxxx (0 nếu chưa có nhóm nào). */
-    protected function maxCodeSeq(): int
-    {
-        $max = 0;
-
-        try {
-            $res = $this->api->categories(all: true);
-            $all = $res->successful() ? ($res->json('data') ?? []) : [];
-        } catch (\Throwable $e) {
-            Log::warning('Read max category code failed', ['msg' => $e->getMessage()]);
-
-            return 0;
-        }
-
-        foreach ($all as $c) {
-            if (preg_match('/^' . self::CODE_PREFIX . '(\d+)$/i', (string) ($c['slug'] ?? ''), $m)) {
-                $max = max($max, (int) $m[1]);
-            }
-        }
-
-        return $max;
-    }
-
-    /**
-     * Tạo một nhóm với mã tự sinh, $seq tự tăng theo tham chiếu.
-     * Trùng mã (409) thì lấy số kế tiếp thử lại — hai người thêm cùng lúc có thể
-     * cùng đọc ra một số lớn nhất.
-     */
-    protected function createWithCode(array $payload, int &$seq)
-    {
-        $res = null;
-
-        for ($i = 0; $i < 5; $i++) {
-            $payload['slug'] = $this->codeOf(++$seq);
-            $res = $this->api->createCategory($payload);
-            if ($res->successful() || $res->status() !== 409) {
-                return $res;
-            }
-        }
-
-        return $res;
-    }
+    // Mã nhóm KHÔNG sinh ở đây nữa: API đặt mã (theo quy tắc đánh số của cửa
+    // hàng, hoặc dải NH0001 nếu chưa bật quy tắc). Hai bên cùng sinh mã là hai
+    // dải số cãi nhau — xem ThongSoChungController.
 
     /** Lấy một nhóm theo id, null nếu không đọc được. */
     protected function fetch(int $id): ?array
@@ -372,10 +321,10 @@ class CategoryController extends Controller
 
     /**
      * Lưu các dòng "nhóm con" từ modal dưới nhóm $parentId.
-     * Dòng có id -> cập nhật (giữ mã cũ); dòng chưa có id -> tạo mới với mã tự sinh
-     * nối tiếp $seq. (Không tự xóa dòng bị gỡ.)
+     * Dòng có id -> cập nhật (giữ mã cũ); dòng chưa có id -> tạo mới, mã do API đặt.
+     * (Không tự xóa dòng bị gỡ.)
      */
-    protected function saveChildren(Request $request, int $parentId, int $seq = 0): array
+    protected function saveChildren(Request $request, int $parentId): array
     {
         $rows = $this->childRows($request);
 
@@ -401,7 +350,7 @@ class CategoryController extends Controller
                     $payload['slug'] = $ch['code'];   // dòng cũ giữ nguyên mã
                     $res = $this->api->updateCategory($ch['id'], $payload);
                 } else {
-                    $res = $this->createWithCode($payload, $seq);
+                    $res = $this->api->createCategory($payload);
                 }
                 $res->successful() ? $ok++ : $fail++;
             } catch (\Throwable $e) {
