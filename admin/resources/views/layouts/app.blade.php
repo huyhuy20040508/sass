@@ -81,6 +81,46 @@
             .pg-info { width: 100%; text-align: center; }
             .pg-right { width: 100%; justify-content: center; }
         }
+
+        /* ---- Phân trang kiểu bản cũ v2 (.pgv2-*) ----
+           Dải số trang liền khối, canh giữa hàng, mũi tên chevron, cửa sổ ±2 trang —
+           lấy cách bày của v2 (Bootstrap .pagination). MÀU giữ của bản hiện tại.
+           Đứng CẠNH .pg-* chứ không thay: các trang chưa dựng lại vẫn dùng .pg-*.
+           Chuyển hết rồi thì xoá khối .pg-* đi. */
+        .pgv2 {
+            display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding: 14px 20px;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+        .pgv2-side { flex: 1 1 0; min-width: 0; display: flex; align-items: center; }
+        .pgv2-side--right { justify-content: flex-end; }
+        .pgv2-info { font-size: 13px; color: #8c8c8c; white-space: nowrap; }
+        .pgv2-info b { color: #262626; font-weight: 600; }
+        .pgv2-size {
+            height: 32px; border: 1px solid #d9d9d9; border-radius: 6px; background-color: #fff;
+            padding: 0 30px 0 12px; font-size: 13px; color: #262626; cursor: pointer; outline: none;
+            appearance: none; -webkit-appearance: none;
+            background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23595959' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='m6 9 6 6 6-6'/></svg>");
+            background-repeat: no-repeat; background-position: right 8px center;
+        }
+        .pgv2-nav { display: flex; align-items: center; }
+        .pgv2-item {
+            min-width: 34px; height: 34px; padding: 0 10px; margin-left: -1px;
+            display: inline-flex; align-items: center; justify-content: center;
+            border: 1px solid #d9d9d9; background: #fff; color: #1890ff;
+            font-size: 13px; font-weight: 500; line-height: 1; text-decoration: none; cursor: pointer;
+            transition: background .15s, color .15s, border-color .15s;
+        }
+        .pgv2-item:first-child { margin-left: 0; border-radius: 6px 0 0 6px; }
+        .pgv2-item:last-child { border-radius: 0 6px 6px 0; }
+        .pgv2-item:hover:not(.is-active):not(.is-gap) { background: #f0f5ff; }
+        /* z-index để viền ô đang chọn không bị ô kế bên đè lên */
+        .pgv2-item.is-active { position: relative; z-index: 1; background: #1890ff; border-color: #1890ff; color: #fff; cursor: default; }
+        .pgv2-item.is-gap { color: #bfbfbf; cursor: default; }
+        .pgv2-item svg { display: block; }
+        @media (max-width: 820px) {
+            .pgv2 { justify-content: center; }
+            .pgv2-side, .pgv2-side--right { flex: 0 0 auto; justify-content: center; }
+        }
     </style>
 </head>
 <body>

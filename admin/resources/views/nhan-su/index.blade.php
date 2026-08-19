@@ -13,7 +13,6 @@
         $so = fn ($n) => number_format((float) $n, 0, ',', '.');
         $dt = fn ($s) => filled($s) ? \Illuminate\Support\Carbon::parse($s)->format('d/m/Y') : '';
 
-        $dangLam = collect($list)->where('status', 'dang_lam')->count();
 
         // Hàng lọc chính giữ ô tìm + trạng thái; phần còn lại nằm trong "Nâng cao",
         // hàng đó tự mở kèm con số trên nút khi đang có điều kiện lọc.
@@ -31,7 +30,7 @@
         <div class="nsu-head">
             <h1 class="nsu-title">{{ $TITLE }}</h1>
             <span class="nsu-sum">
-                Đang làm: <b>{{ $so($dangLam) }}</b>/{{ $so(count($list)) }} người
+                Đang làm: <b>{{ $so($dangLam) }}</b>/{{ $so($tong) }} người
             </span>
         </div>
 
@@ -181,7 +180,7 @@
                                 <input type="checkbox" form="nsuBulkForm" name="ids[]"
                                        value="{{ $ns['id'] }}" data-nsu-chon>
                             </td>
-                            <td class="tc nsu-muted">{{ $i + 1 }}</td>
+                            <td class="tc nsu-muted">{{ $stt + $i + 1 }}</td>
                             {{-- Mã nhân viên ĐỨNG CỘT RIÊNG: nó là thứ để đối chiếu với
                                  bảng lương và bảng chấm công, nên phải xếp thẳng hàng và
                                  sắp/dò được. Nhét xuống dòng phụ dưới tên thì mắt phải
@@ -296,6 +295,12 @@
                 </tbody>
             </table>
         </div>
+
+        @include('partials.pagination-v2', [
+            'meta' => $meta,
+            'noun' => 'người',
+            'perPageOptions' => \App\Http\Controllers\NhanSuController::MUC_SO_DONG,
+        ])
     </div>
 
     {{-- Modal thêm / sửa --}}

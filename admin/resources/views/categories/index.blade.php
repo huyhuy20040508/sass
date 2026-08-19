@@ -188,7 +188,7 @@
         .grp-rowbtn.grp-edit:hover { border-color: #91d5ff; background: #e6f7ff; color: #1890ff; }
         .grp-rowbtn.grp-del:hover { border-color: #ffa39e; background: #fff1f0; color: #ff4d4f; }
 
-        /* Phân trang: dùng component chung .pg-* (khai báo ở layout) */
+        /* Phân trang: dùng lớp chung .pgv2-* (khai báo ở layout) */
 
         /* ---- Modal ---- */
         .grp-overlay { position: fixed; inset: 0; z-index: 1080; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(0,0,0,.4); }
@@ -286,6 +286,7 @@
             // ---------- Icons (lucide) ----------
             const ic = {
                 chevronRight: (s = 14) => `<svg viewBox="0 0 24 24" width="${s}" height="${s}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>`,
+                chevronLeft: (s = 14) => `<svg viewBox="0 0 24 24" width="${s}" height="${s}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>`,
                 chevronDown: (s = 14) => `<svg viewBox="0 0 24 24" width="${s}" height="${s}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>`,
                 pencil: (s = 16) => `<svg viewBox="0 0 24 24" width="${s}" height="${s}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>`,
                 trash: (s = 16) => `<svg viewBox="0 0 24 24" width="${s}" height="${s}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>`,
@@ -516,37 +517,45 @@
                 const from = (first + 1).toLocaleString('vi-VN');
                 const to = Math.min(first + size, total).toLocaleString('vi-VN');
                 const opts = [10, 20, 30, 40, 50].map((n) => `<option value="${n}" ${n === state.perPage ? 'selected' : ''}>Hiển thị ${n}</option>`).join('');
+                // Nút lùi/tiến chỉ hiện khi còn trang để đi, đúng như component của bản v2.
                 let nav = '';
                 if (totalPages > 1) {
-                    const list = pageList(state.page, totalPages);
-                    const btns = list.map((p) => p === '...'
-                        ? '<span class="pg-gap">…</span>'
-                        : `<button type="button" class="pg-btn ${p === state.page ? 'is-active' : ''}" data-page="${p}">${p}</button>`
-                    ).join('');
-                    nav = `<nav class="pg-nav" aria-label="Điều hướng trang">
-                        <button type="button" class="pg-btn" data-page="${state.page - 1}" ${state.page <= 1 ? 'disabled' : ''} aria-label="Trang trước">‹</button>
-                        ${btns}
-                        <button type="button" class="pg-btn" data-page="${state.page + 1}" ${state.page >= totalPages ? 'disabled' : ''} aria-label="Trang sau">›</button>
-                    </nav>`;
+                    const item = (cls, page, inner, label) =>
+                        `<button type="button" class="pgv2-item ${cls}" data-page="${page}"${label ? ` aria-label="${label}"` : ''}>${inner}</button>`;
+                    const parts = [];
+                    if (state.page > 1) parts.push(item('', state.page - 1, ic.chevronLeft(14), 'Trang trước'));
+                    for (const p of pageList(state.page, totalPages)) {
+                        parts.push(p === '...'
+                            ? '<span class="pgv2-item is-gap">…</span>'
+                            : item(p === state.page ? 'is-active' : '', p, p, ''));
+                    }
+                    if (state.page < totalPages) parts.push(item('', state.page + 1, ic.chevronRight(14), 'Trang sau'));
+                    nav = `<nav class="pgv2-nav" aria-label="Điều hướng trang">${parts.join('')}</nav>`;
                 }
-                $footer.innerHTML = `<div class="pg">
-                    <select class="pg-size" id="grpPerPage" aria-label="Số dòng mỗi trang">${opts}</select>
-                    <div class="pg-right">
-                        <span class="pg-info"><b>${from}–${to}</b> / ${total.toLocaleString('vi-VN')} nhóm</span>
-                        ${nav}
+
+                $footer.innerHTML = `<div class="pgv2">
+                    <div class="pgv2-side">
+                        <select class="pgv2-size" id="grpPerPage" aria-label="Số dòng mỗi trang">${opts}</select>
+                    </div>
+                    ${nav}
+                    <div class="pgv2-side pgv2-side--right">
+                        <span class="pgv2-info"><b>${from}–${to}</b> / ${total.toLocaleString('vi-VN')} nhóm</span>
                     </div>
                 </div>`;
             }
 
+            // Cửa sổ ±2 trang quanh trang hiện tại — đúng component phân trang của bản v2.
             function pageList(page, total) {
                 const out = [];
-                const push = (p) => out.push(p);
-                if (total <= 7) { for (let i = 1; i <= total; i++) push(i); return out; }
-                push(1);
-                if (page > 3) push('...');
-                for (let i = Math.max(2, page - 1); i <= Math.min(total - 1, page + 1); i++) push(i);
-                if (page < total - 2) push('...');
-                push(total);
+                if (total <= 7) {
+                    for (let i = 1; i <= total; i++) out.push(i);
+                    return out;
+                }
+                out.push(1);
+                if (page > 4) out.push('...');
+                for (let i = Math.max(2, page - 2); i <= Math.min(total - 1, page + 2); i++) out.push(i);
+                if (page < total - 3) out.push('...');
+                out.push(total);
                 return out;
             }
 

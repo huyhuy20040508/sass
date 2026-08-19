@@ -66,6 +66,11 @@ class NhanSuController extends Controller
      */
     public const DANG_LAM = 'dang_lam';
 
+    /** Số dòng mỗi trang mặc định và các mức cho ô chọn. */
+    public const SO_DONG_MOI_TRANG = 20;
+
+    public const MUC_SO_DONG = [10, 20, 30, 40, 50];
+
     public const DA_NGHI = 'da_nghi';
 
     public const GIOI_TINH = [
@@ -165,8 +170,25 @@ class NhanSuController extends Controller
             $error = 'Không tải được danh sách nhân sự. Kiểm tra kết nối API.';
         }
 
+        // API trả cả danh sách (cố ý không phân trang), nên cắt trang tại đây.
+        // Con số ở header đếm trên TOÀN danh sách, không phải trang đang xem.
+        $tong = count($list);
+        $dangLam = collect($list)->where('status', self::DANG_LAM)->count();
+        $soDong = $this->soDongMoiTrang($request);
+        $soTrang = max(1, (int) ceil($tong / $soDong));
+        $trang = min(max(1, (int) $request->query('page', 1)), $soTrang);
+
         $view = view('nhan-su.index', [
-            'list' => $list,
+            'list' => array_slice($list, ($trang - 1) * $soDong, $soDong),
+            'tong' => $tong,
+            'dangLam' => $dangLam,
+            'stt' => ($trang - 1) * $soDong,
+            'meta' => [
+                'page' => $trang,
+                'total_pages' => $soTrang,
+                'total' => $tong,
+                'page_size' => $soDong,
+            ],
             'filters' => $filters,
             'chiNhanh' => $this->chiNhanh(),
             'quyen' => self::QUYEN,
@@ -470,6 +492,14 @@ class NhanSuController extends Controller
      * Bộ lọc — cùng tên khoá với query của API. Giá trị lạ trên URL bị bỏ đi:
      * gửi thẳng thì API trả danh sách rỗng, nhìn giống hệt "cửa hàng chưa có ai".
      */
+    /** Số dòng mỗi trang, chỉ nhận các mức có trong ô chọn. */
+    protected function soDongMoiTrang(Request $request): int
+    {
+        $n = (int) $request->query('page_size', self::SO_DONG_MOI_TRANG);
+
+        return in_array($n, self::MUC_SO_DONG, true) ? $n : self::SO_DONG_MOI_TRANG;
+    }
+
     protected function filters(Request $request): array
     {
         $caLam = (string) $request->query('work_shift', '');
