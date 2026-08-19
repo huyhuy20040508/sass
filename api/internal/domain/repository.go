@@ -1084,6 +1084,9 @@ type CategoryRepository interface {
 	FindByID(ctx context.Context, id uint) (*Category, error)
 	FindBySlug(ctx context.Context, slug string) (*Category, error)
 	ExistsBySlug(ctx context.Context, slug string, excludeID uint) (bool, error)
+	// NextCode là mã nhóm kế tiếp của dải mặc định NH0001 — dùng khi cửa hàng
+	// chưa bật quy tắc mã nhóm hàng hoá.
+	NextCode(ctx context.Context) (string, error)
 	Create(ctx context.Context, c *Category) error
 	Update(ctx context.Context, c *Category) error
 	Delete(ctx context.Context, id uint) error

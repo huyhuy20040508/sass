@@ -206,6 +206,12 @@ var DanhMucQuyen = []KhuQuyen{
 						Prefix: "cau-hinh", Ten: "Cấu hình cửa hàng",
 						Viec: []string{QuyenSua},
 					},
+					{
+						// Tách "xem" khỏi "sửa": mã chứng từ đã đi vào giấy tờ, đổi
+						// quy tắc là đổi cả dải số của những phiếu lập sau đó.
+						Prefix: "quy-tac-ma", Ten: "Quy tắc đánh số chứng từ",
+						Viec: []string{QuyenXem, QuyenSua},
+					},
 				},
 			},
 		},

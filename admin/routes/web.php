@@ -27,6 +27,7 @@ use App\Http\Controllers\ReportController;
 use App\Http\Controllers\ReturnController;
 use App\Http\Controllers\SettingController;
 use App\Http\Controllers\SupplierController;
+use App\Http\Controllers\ThongSoChungController;
 use App\Http\Controllers\ThuNganController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\VoucherController;
@@ -362,6 +363,14 @@ Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:quan_ly'])->prefix('ad
         Route::post('/settings/upload-logo', [SettingController::class, 'uploadLogo'])->name('settings.uploadLogo');
         Route::get('/settings/{group}', [SettingController::class, 'page'])->name('settings.page');
         Route::put('/settings/{group}', [SettingController::class, 'update'])->name('settings.update');
+
+        // Thông số chung — bộ khung của tiệm, dựng lại theo bản ERP cũ.
+        // Mới có trang Quy tắc đánh số chứng từ; xem ThongSoChungController::PAGES.
+        Route::get('/thong-so-chung', [ThongSoChungController::class, 'index'])->name('thong-so-chung.index');
+        Route::get('/thong-so-chung/quy-tac-danh-so', [ThongSoChungController::class, 'quyTacDanhSo'])
+            ->name('thong-so-chung.quy-tac-danh-so');
+        Route::put('/thong-so-chung/quy-tac-danh-so', [ThongSoChungController::class, 'luuQuyTacDanhSo'])
+            ->name('thong-so-chung.luuQuyTacDanhSo');
 
         // Phân quyền theo chức năng — định nghĩa NHÓM QUYỀN của cửa hàng.
         // Gán nhóm cho từng người thì làm ở hồ sơ nhân sự, không phải ở đây.

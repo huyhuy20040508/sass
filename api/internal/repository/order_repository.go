@@ -380,7 +380,12 @@ func (r *orderRepository) Create(ctx context.Context, o *domain.Order) error {
 			return err
 		}
 
-		o.OrderCode = fmt.Sprintf("DH%s%04d", time.Now().Format("20060102"), o.ID)
+		ma, err := maChungTu(ctx, tx, domain.LoaiDonHang, o.ShopID, &domain.Order{}, "order_code",
+			fmt.Sprintf("DH%s%04d", time.Now().Format("20060102"), o.ID))
+		if err != nil {
+			return err
+		}
+		o.OrderCode = ma
 		if err := tx.Model(o).Update("order_code", o.OrderCode).Error; err != nil {
 			return err
 		}
@@ -648,7 +653,12 @@ func (r *orderRepository) Checkout(
 		if err := tx.Create(o).Error; err != nil {
 			return err
 		}
-		o.OrderCode = fmt.Sprintf("DH%s%04d", time.Now().Format("20060102"), o.ID)
+		ma, err := maChungTu(ctx, tx, domain.LoaiDonHang, o.ShopID, &domain.Order{}, "order_code",
+			fmt.Sprintf("DH%s%04d", time.Now().Format("20060102"), o.ID))
+		if err != nil {
+			return err
+		}
+		o.OrderCode = ma
 		if err := tx.Model(o).Update("order_code", o.OrderCode).Error; err != nil {
 			return err
 		}

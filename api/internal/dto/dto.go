@@ -410,7 +410,9 @@ type ProductRequest struct {
 	BrandID          *uint    `json:"brand_id"`
 	Name             string   `json:"name" binding:"required,max=200"`
 	Slug             string   `json:"slug" binding:"required,max=191"`
-	SKU              string   `json:"sku" binding:"required,max=64"`
+	// SKU bỏ trống = sinh theo quy tắc mã hàng hoá; chưa bật quy tắc thì API trả
+	// 422 đòi nhập tay. Lúc SỬA, bỏ trống là giữ mã cũ.
+	SKU              string   `json:"sku" binding:"omitempty,max=64"`
 	ShortDescription string   `json:"short_description" binding:"omitempty,max=500"`
 	Description      string   `json:"description"`
 	Team             string   `json:"team" binding:"omitempty,max=150"`
@@ -507,7 +509,9 @@ type ProductBulkDeleteRequest struct {
 
 type CategoryRequest struct {
 	Name        string `json:"name" binding:"required,max=150"`
-	Slug        string `json:"slug" binding:"required,max=191"`
+	// Slug là MÃ NHÓM. Bỏ trống = hệ thống đặt (theo quy tắc đánh số của cửa
+	// hàng, hoặc dải NH0001 nếu chưa bật quy tắc).
+	Slug        string `json:"slug" binding:"omitempty,max=191"`
 	ParentID    *uint  `json:"parent_id"`
 	Description string `json:"description" binding:"omitempty,max=500"`
 	Image       string `json:"image" binding:"omitempty,max=255"`
@@ -2380,4 +2384,37 @@ type DoiHangResponse struct {
 	AmountTendered *float64 `json:"amount_tendered,omitempty"`
 	ChangeAmount   *float64 `json:"change_amount,omitempty"`
 	Message        string   `json:"message"`
+}
+
+// ---------- Quy tắc đánh số chứng từ ----------
+
+// QuyTacMaResponse — dữ liệu màn cấu hình: danh mục loại + quy tắc đã lưu.
+//
+// Trả về TOÀN BỘ quy tắc của cửa hàng trong một lượt (mọi chi nhánh, cả bật lẫn
+// tắt): màn hình đổi chi nhánh liên tục, đọc lại mỗi lần là một vòng mạng cho
+// mấy chục dòng dữ liệu.
+type QuyTacMaResponse struct {
+	Loai   []domain.LoaiMa   `json:"loai"`
+	QuyTac []domain.QuyTacMa `json:"quy_tac"`
+}
+
+// QuyTacMaItem — một dòng trong bảng quy tắc.
+type QuyTacMaItem struct {
+	DocType string `json:"doc_type" binding:"required,max=40" example:"don-hang"`
+	Prefix  string `json:"prefix" binding:"omitempty,max=20" example:"DH"`
+	// ValuePart: so-thu-tu | ngay-thang-nam | thang-nam.
+	ValuePart string `json:"value_part" binding:"required,max=20" example:"so-thu-tu"`
+	// Length là tổng số ký tự phần GIỮA (ngày + số đếm).
+	Length int    `json:"length" binding:"required,min=3,max=20" example:"6"`
+	Suffix string `json:"suffix" binding:"omitempty,max=20"`
+}
+
+// LuuQuyTacMaRequest — trạng thái CUỐI CÙNG của những phạm vi màn hình đang hiện.
+//
+// Loại nào có trong `quy_tac` là bật, loại nào vắng mặt là tắt. Phạm vi của từng
+// dòng do danh mục quyết định (danh mục dùng chung / chứng từ theo chi nhánh),
+// không nghe theo dữ liệu gửi lên.
+type LuuQuyTacMaRequest struct {
+	ShopID uint           `json:"shop_id" binding:"required,min=1"`
+	QuyTac []QuyTacMaItem `json:"quy_tac" binding:"omitempty,dive"`
 }

@@ -3,6 +3,9 @@ package repository
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strconv"
+	"strings"
 
 	"gorm.io/gorm"
 
@@ -53,6 +56,28 @@ func (r *categoryRepository) ExistsBySlug(ctx context.Context, slug string, excl
 	}
 	err := q.Count(&count).Error
 	return count > 0, err
+}
+
+// NextCode dò mã lớn nhất trong dải NH rồi cộng một.
+//
+// Unscoped: mã của nhóm đã xoá mềm vẫn giữ chỗ trong khoá duy nhất.
+func (r *categoryRepository) NextCode(ctx context.Context) (string, error) {
+	var codes []string
+	if err := r.db.WithContext(ctx).Unscoped().
+		Model(&domain.Category{}).
+		Where("slug REGEXP ?", "^NH[0-9]+$").
+		Pluck("slug", &codes).Error; err != nil {
+		return "", err
+	}
+
+	max := 0
+	for _, c := range codes {
+		if n, err := strconv.Atoi(strings.TrimPrefix(c, "NH")); err == nil && n > max {
+			max = n
+		}
+	}
+
+	return fmt.Sprintf("NH%04d", max+1), nil
 }
 
 func (r *categoryRepository) Create(ctx context.Context, c *domain.Category) error {

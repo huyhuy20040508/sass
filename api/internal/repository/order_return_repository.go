@@ -301,7 +301,12 @@ func (r *orderReturnRepository) Create(
 		if err := tx.Create(rt).Error; err != nil {
 			return err
 		}
-		rt.ReturnCode = fmt.Sprintf("RT%s%04d", time.Now().Format("20060102"), rt.ID)
+		ma, err := maChungTu(ctx, tx, domain.LoaiTraHangKhach, rt.ShopID, &domain.OrderReturn{}, "return_code",
+			fmt.Sprintf("RT%s%04d", time.Now().Format("20060102"), rt.ID))
+		if err != nil {
+			return err
+		}
+		rt.ReturnCode = ma
 		if err := tx.Model(rt).Update("return_code", rt.ReturnCode).Error; err != nil {
 			return err
 		}

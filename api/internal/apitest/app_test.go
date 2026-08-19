@@ -321,11 +321,12 @@ func dungHeThongVoi(t *testing.T, banHang, dieuHanh bool) *heThong {
 	caRepo := repository.NewCaLamViecRepository(db)
 	contactRepo := repository.NewContactRepository(db)
 	newsletterRepo := repository.NewNewsletterRepository(db)
+	quyTacMaRepo := repository.NewQuyTacMaRepository(db)
 
 	settingSvc := service.NewSettingService(settingRepo)
 	authSvc := service.NewAuthService(userRepo, nguoiDieuHanhRepo, tenantRepo, roleRepo, verifyRepo, mailSender, jwtMgr,
 		cfg.JWT, cfg.Mail, true, settingSvc, fbClient, ggClient)
-	categorySvc := service.NewCategoryService(categoryRepo)
+	categorySvc := service.NewCategoryService(categoryRepo, quyTacMaRepo)
 	brandSvc := service.NewBrandService(brandRepo)
 	bannerSvc := service.NewBannerService(bannerRepo)
 	// Cửa xét hạn mức hợp đồng chỉ có khi có control plane, y như main.go. Bộ
@@ -339,7 +340,7 @@ func dungHeThongVoi(t *testing.T, banHang, dieuHanh bool) *heThong {
 			productRepo, userRepo, chiNhanhRepo, cfg.App.Code)
 	}
 
-	productSvc := service.NewProductService(productRepo, categoryRepo, brandRepo, hanMucSvc)
+	productSvc := service.NewProductService(productRepo, categoryRepo, brandRepo, hanMucSvc, quyTacMaRepo)
 	promotionSvc := service.NewPromotionService(promotionRepo, categoryRepo)
 	voucherSvc := service.NewVoucherService(voucherRepo)
 	customerSvc := service.NewCustomerService(userRepo)
@@ -350,7 +351,7 @@ func dungHeThongVoi(t *testing.T, banHang, dieuHanh bool) *heThong {
 	orderSvc := service.NewOrderService(orderRepo, returnRepo, mailSender, cfg.Mail, notifSvc, settingSvc, paymentSvc, promotionSvc, voucherSvc)
 	returnSvc := service.NewOrderReturnService(returnRepo, notifSvc, settingSvc)
 	inventorySvc := service.NewInventoryService(inventoryRepo)
-	supplierSvc := service.NewSupplierService(supplierRepo)
+	supplierSvc := service.NewSupplierService(supplierRepo, quyTacMaRepo)
 	contactSvc := service.NewContactService(contactRepo, newsletterRepo)
 	purchaseSvc := service.NewPurchaseOrderService(purchaseRepo, supplierRepo)
 	receiptSvc := service.NewGoodsReceiptService(receiptRepo)
@@ -377,9 +378,11 @@ func dungHeThongVoi(t *testing.T, banHang, dieuHanh bool) *heThong {
 		ChiNhanh: handler.NewChiNhanhHandler(service.NewChiNhanhService(chiNhanhRepo, hanMucSvc)),
 		NhanSu: handler.NewNhanSuHandler(service.NewNhanSuService(
 			repository.NewNhanVienRepository(db), chiNhanhRepo, userSvc,
-			repository.NewQuyenRepository(db))),
+			repository.NewQuyenRepository(db), quyTacMaRepo)),
 		NhomQuyen: handler.NewNhomQuyenHandler(
 			service.NewNhomQuyenService(repository.NewQuyenRepository(db), userRepo)),
+		QuyTacMa: handler.NewQuyTacMaHandler(
+			service.NewQuyTacMaService(quyTacMaRepo, chiNhanhRepo)),
 		Ca:        handler.NewCaLamViecHandler(service.NewCaLamViecService(caRepo, userRepo, chiNhanhRepo)),
 		Payment:   handler.NewPaymentHandler(paymentSvc),
 		Banner:    handler.NewBannerHandler(bannerSvc),

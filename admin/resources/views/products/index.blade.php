@@ -963,6 +963,9 @@
     <script>
         (function () {
             const CSRF = @json(csrf_token());
+            // Cửa hàng đã bật quy tắc mã hàng hoá (Cài đặt → Thông số chung):
+            // ô SKU khoá lại, mã do máy chủ đặt lúc lưu.
+            const MA_TU_SINH = @json($maTuSinh ?? false);
 
         // Trần phía trình duyệt, khớp với ImageStore::MAX_UPLOAD_KB bên PHP. Chặn ở
         // đây chỉ để khỏi tải một file khổng lồ lên rồi mới bị từ chối; ảnh vẫn được
@@ -1578,8 +1581,10 @@ if (words.length >= 2) teamPart = words.slice(0, 2).map((w) => w[0]).join('');
                                         <p class="prd-err" data-err="mName"></p>
                                     </div>
                                     <div>
-                                        <label class="prd-field-label" for="mSku">SKU <span class="prd-req">*</span></label>
-                                        <input type="text" id="mSku" class="prd-input" placeholder="Tự tạo — có thể sửa" value="${esc(g('sku'))}">
+                                        <label class="prd-field-label" for="mSku">SKU ${MA_TU_SINH ? '' : '<span class="prd-req">*</span>'}</label>
+                                        <input type="text" id="mSku" class="prd-input" value="${esc(g('sku'))}"
+                                               placeholder="${MA_TU_SINH ? 'Hệ thống tự đặt theo quy tắc đánh số' : 'Tự tạo — có thể sửa'}"
+                                               ${MA_TU_SINH && !isEdit ? 'readonly' : ''}>
                                         <p class="prd-err" data-err="mSku"></p>
                                         <p class="prd-hint">Mỗi sản phẩm một SKU riêng. Hai sản phẩm cùng đội, cùng mùa, cùng loại áo sẽ sinh ra SKU giống nhau — thêm ký tự phân biệt vào.</p>
                                     </div>
@@ -1883,7 +1888,9 @@ if (words.length >= 2) teamPart = words.slice(0, 2).map((w) => w[0]).join('');
                     if (brandAddBtn) brandAddBtn.addEventListener('click', () => openBrandQuickModal(addBrandToSelect));
 
                     // SKU tự tạo từ đội bóng · loại áo · mùa giải (vẫn sửa tay được).
-                    let skuDirty = isEdit; // khi sửa: giữ SKU cũ, không tự đè.
+                    // Quy tắc đánh số đang bật thì mã do máy chủ đặt — trình duyệt
+                    // không ghép mã nữa, nếu không người dùng thấy một mã rồi lưu ra mã khác.
+                    let skuDirty = isEdit || MA_TU_SINH;
                     const skuEl = document.getElementById('mSku');
                     if (skuEl) skuEl.addEventListener('input', () => { skuDirty = true; });
                     const refreshSku = () => { if (!skuDirty && skuEl) skuEl.value = genSku(); };
@@ -2198,7 +2205,7 @@ if (words.length >= 2) teamPart = words.slice(0, 2).map((w) => w[0]).join('');
                 const name = val('mName');
                 if (!name) { showFieldError(dialog, 'mName', 'Vui lòng nhập tên sản phẩm.'); return; }
                 const sku = val('mSku');
-                if (!sku) { showFieldError(dialog, 'mSku', 'Vui lòng nhập mã SKU.'); return; }
+                if (!sku && !MA_TU_SINH) { showFieldError(dialog, 'mSku', 'Vui lòng nhập mã SKU.'); return; }
                 const categoryId = document.getElementById('mCategory').value;
                 if (!categoryId) { showFieldError(dialog, 'mCategory', 'Vui lòng chọn danh mục.'); return; }
                 const basePrice = digitsOnly(document.getElementById('mBasePrice').value);

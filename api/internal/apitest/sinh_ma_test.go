@@ -1,0 +1,272 @@
+package apitest
+
+import (
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"strconv"
+	"testing"
+	"time"
+
+	"sass-api/internal/domain"
+	"sass-api/internal/middleware"
+)
+
+// Bài kiểm QUY TẮC ĐÁNH SỐ CÓ HIỆU LỰC THẬT.
+//
+// Màn cấu hình lưu được không nói lên điều gì: thứ cửa hàng mua là mã chứng từ
+// và mã danh mục ra đúng hình dạng họ đặt. Mỗi bài dưới đây bật một quy tắc rồi
+// tạo dữ liệu qua ĐÚNG đường mà trang quản trị đi, và đọc mã sinh ra.
+//
+// Bài nào cũng kiểm luôn cảnh CHƯA BẬT: cửa hàng không đụng tới màn cấu hình
+// phải thấy mã y như trước, nếu không thì lượt nâng cấp này làm hỏng dữ liệu của
+// mọi cửa hàng đang chạy.
+
+// batQuyTac bật một quy tắc cho chi nhánh đang chọn.
+func batQuyTac(t *testing.T, h *heThong, c *cuaHang, docType, tienTo string, dai int) {
+	t.Helper()
+
+	res := h.goi(t, c.token, http.MethodPut, "/api/v1/admin/quy-tac-ma", map[string]any{
+		"shop_id": c.chiNhanh,
+		"quy_tac": []map[string]any{
+			{"doc_type": docType, "prefix": tienTo, "value_part": domain.PhanSoThuTu, "length": dai, "suffix": ""},
+		},
+	})
+	if res.ma != http.StatusOK {
+		t.Fatalf("bật quy tắc %s hỏng: %d\n%s", docType, res.ma, catBot(res.than))
+	}
+}
+
+// maCuaPhanHoi đọc một trường chuỗi trong `data` của phản hồi.
+func maCuaPhanHoi(t *testing.T, than, truong string) string {
+	t.Helper()
+
+	var body struct {
+		Data map[string]any `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(than), &body); err != nil {
+		t.Fatalf("không đọc được phản hồi: %v\n%s", err, catBot(than))
+	}
+	ma, _ := body.Data[truong].(string)
+
+	return ma
+}
+
+// TestSinhMa_NhaCungCap — mã NCC theo quy tắc, và giữ dải NCC001 khi chưa bật.
+func TestSinhMa_NhaCungCap(t *testing.T) {
+	h := dungHeThong(t)
+	a, _ := haiCuaHang(t, h)
+
+	taoNCC := func(ten string) string {
+		res := h.goi(t, a.token, http.MethodPost, "/api/v1/admin/suppliers", map[string]any{
+			"name": ten + " " + a.vet,
+		})
+		if res.ma != http.StatusCreated {
+			t.Fatalf("tạo nhà cung cấp hỏng: %d\n%s", res.ma, catBot(res.than))
+		}
+
+		return maCuaPhanHoi(t, res.than, "code")
+	}
+
+	// Chưa bật quy tắc: giữ nguyên cách đặt mã sẵn có.
+	if ma := taoNCC("Công ty A"); ma != "NCC001" {
+		t.Fatalf("chưa bật quy tắc thì mã phải là NCC001, nhận %q", ma)
+	}
+
+	batQuyTac(t, h, a, domain.LoaiNhaCungCap, "NCC", 5)
+
+	if ma := taoNCC("Công ty B"); ma != "NCC00001" {
+		t.Fatalf("mã theo quy tắc phải là NCC00001, nhận %q", ma)
+	}
+	if ma := taoNCC("Công ty C"); ma != "NCC00002" {
+		t.Fatalf("số phải tăng dần, nhận %q", ma)
+	}
+}
+
+// TestSinhMa_NhanVien — mã nhân viên theo quy tắc.
+func TestSinhMa_NhanVien(t *testing.T) {
+	h := dungHeThong(t)
+	a, _ := haiCuaHang(t, h)
+
+	taoNV := func(ten string) string {
+		res := h.goi(t, a.token, http.MethodPost, "/api/v1/admin/nhan-su", map[string]any{
+			"full_name": ten + " " + a.vet,
+			"status":    "dang_lam",
+			"shop_id":   a.chiNhanh,
+		})
+		if res.ma != http.StatusCreated {
+			t.Fatalf("tạo hồ sơ nhân sự hỏng: %d\n%s", res.ma, catBot(res.than))
+		}
+
+		return maCuaPhanHoi(t, res.than, "code")
+	}
+
+	if ma := taoNV("Người thứ nhất"); ma != "NV0001" {
+		t.Fatalf("chưa bật quy tắc thì mã phải là NV0001, nhận %q", ma)
+	}
+
+	batQuyTac(t, h, a, domain.LoaiNhanVien, "NS-", 3)
+
+	if ma := taoNV("Người thứ hai"); ma != "NS-001" {
+		t.Fatalf("mã theo quy tắc phải là NS-001, nhận %q", ma)
+	}
+}
+
+// TestSinhMa_NhomHangHoa — mã nhóm bỏ trống thì hệ thống đặt: dải NH0001 khi
+// chưa bật quy tắc, theo quy tắc khi đã bật.
+func TestSinhMa_NhomHangHoa(t *testing.T) {
+	h := dungHeThong(t)
+	a, _ := haiCuaHang(t, h)
+
+	taoNhom := func(ten string) string {
+		res := h.goi(t, a.token, http.MethodPost, "/api/v1/admin/categories", map[string]any{
+			"name": ten + " " + a.vet,
+		})
+		if res.ma != http.StatusCreated {
+			t.Fatalf("tạo nhóm hàng hoá hỏng: %d\n%s", res.ma, catBot(res.than))
+		}
+
+		return maCuaPhanHoi(t, res.than, "slug")
+	}
+
+	if ma := taoNhom("Nhóm một"); ma != "NH0001" {
+		t.Fatalf("chưa bật quy tắc thì mã nhóm phải là NH0001, nhận %q", ma)
+	}
+
+	batQuyTac(t, h, a, domain.LoaiNhomHangHoa, "NHOM", 4)
+
+	if ma := taoNhom("Nhóm hai"); ma != "NHOM0001" {
+		t.Fatalf("mã theo quy tắc phải là NHOM0001, nhận %q", ma)
+	}
+}
+
+// TestSinhMa_HangHoa — SKU bỏ trống: chưa bật quy tắc thì đòi nhập tay, bật rồi
+// thì hệ thống đặt.
+func TestSinhMa_HangHoa(t *testing.T) {
+	h := dungHeThong(t)
+	a, _ := haiCuaHang(t, h)
+
+	taoHang := func(ten string) traLoi {
+		return h.goi(t, a.token, http.MethodPost, "/api/v1/admin/products", map[string]any{
+			"name": ten + " " + a.vet, "slug": ten + "-" + a.vet,
+			"category_id": a.danhMuc, "base_price": 100000,
+		})
+	}
+
+	res := taoHang("hang-mot")
+	if res.ma != http.StatusUnprocessableEntity {
+		t.Fatalf("chưa bật quy tắc mà bỏ trống SKU phải trả 422, nhận %d\n%s", res.ma, catBot(res.than))
+	}
+
+	batQuyTac(t, h, a, domain.LoaiHangHoa, "HH", 6)
+
+	res = taoHang("hang-hai")
+	if res.ma != http.StatusCreated {
+		t.Fatalf("bật quy tắc rồi mà tạo hàng hoá vẫn hỏng: %d\n%s", res.ma, catBot(res.than))
+	}
+	if ma := maCuaPhanHoi(t, res.than, "sku"); ma != "HH000001" {
+		t.Fatalf("SKU theo quy tắc phải là HH000001, nhận %q", ma)
+	}
+}
+
+// TestSinhMa_ChungTuTheoChiNhanh — phiếu đặt mua lấy quy tắc của ĐÚNG chi nhánh
+// lập phiếu, và mỗi chi nhánh đếm riêng.
+func TestSinhMa_ChungTuTheoChiNhanh(t *testing.T) {
+	h := dungHeThong(t)
+	a, _ := haiCuaHang(t, h)
+
+	// Chi nhánh thứ hai để chứng minh hai nơi hai dải số.
+	res := h.goi(t, a.token, http.MethodPost, "/api/v1/admin/chi-nhanh",
+		map[string]any{"name": "Kho phụ " + a.vet})
+	if res.ma != http.StatusCreated {
+		t.Fatalf("mở chi nhánh thứ hai hỏng: %d\n%s", res.ma, catBot(res.than))
+	}
+	khoPhu := uint(0)
+	if v, err := strconv.Atoi(fmt.Sprint(maSoCuaPhanHoi(t, res.than, "id"))); err == nil {
+		khoPhu = uint(v)
+	}
+
+	luuQuyTac := func(shopID uint, tienTo string) {
+		res := h.goi(t, a.token, http.MethodPut, "/api/v1/admin/quy-tac-ma", map[string]any{
+			"shop_id": shopID,
+			"quy_tac": []map[string]any{
+				{"doc_type": domain.LoaiPhieuDatMua, "prefix": tienTo,
+					"value_part": domain.PhanSoThuTu, "length": 4, "suffix": ""},
+			},
+		})
+		if res.ma != http.StatusOK {
+			t.Fatalf("bật quy tắc phiếu đặt mua hỏng: %d\n%s", res.ma, catBot(res.than))
+		}
+	}
+	luuQuyTac(a.chiNhanh, "PDA")
+	luuQuyTac(khoPhu, "PDB")
+
+	lapPhieu := func(shopID uint) string {
+		res := h.goiVoiHeader(t, a.token, http.MethodPost, "/api/v1/admin/purchases", map[string]any{
+			"supplier_id": a.nhaCungCap,
+			"status":      "ordered",
+			"items":       []map[string]any{{"variant_id": a.bienThe, "quantity": 2, "unit_cost": 50000}},
+		}, map[string]string{middleware.HeaderChiNhanh: strconv.Itoa(int(shopID))})
+		if res.ma != http.StatusCreated {
+			t.Fatalf("lập phiếu đặt mua hỏng: %d\n%s", res.ma, catBot(res.than))
+		}
+
+		return maCuaPhanHoi(t, res.than, "po_code")
+	}
+
+	if ma := lapPhieu(a.chiNhanh); ma != "PDA0001" {
+		t.Fatalf("phiếu của chi nhánh gốc phải là PDA0001, nhận %q", ma)
+	}
+	if ma := lapPhieu(a.chiNhanh); ma != "PDA0002" {
+		t.Fatalf("số của một chi nhánh phải tăng dần, nhận %q", ma)
+	}
+	// Chi nhánh khác đếm riêng từ 1 — đó là lý do quy tắc chứng từ chia theo nơi.
+	if ma := lapPhieu(khoPhu); ma != "PDB0001" {
+		t.Fatalf("phiếu của kho phụ phải là PDB0001, nhận %q", ma)
+	}
+}
+
+// TestSinhMa_TheoNgay — kiểu "ngày tháng năm": mã mang mốc ngày, số đếm lấy chỗ
+// còn lại của độ dài.
+func TestSinhMa_TheoNgay(t *testing.T) {
+	h := dungHeThong(t)
+	a, _ := haiCuaHang(t, h)
+
+	res := h.goi(t, a.token, http.MethodPut, "/api/v1/admin/quy-tac-ma", map[string]any{
+		"shop_id": a.chiNhanh,
+		"quy_tac": []map[string]any{
+			{"doc_type": domain.LoaiNhaCungCap, "prefix": "NCC",
+				"value_part": domain.PhanNgayThangNam, "length": 11, "suffix": ""},
+		},
+	})
+	if res.ma != http.StatusOK {
+		t.Fatalf("bật quy tắc theo ngày hỏng: %d\n%s", res.ma, catBot(res.than))
+	}
+
+	res = h.goi(t, a.token, http.MethodPost, "/api/v1/admin/suppliers",
+		map[string]any{"name": "Công ty ngày " + a.vet})
+	if res.ma != http.StatusCreated {
+		t.Fatalf("tạo nhà cung cấp hỏng: %d\n%s", res.ma, catBot(res.than))
+	}
+
+	// 11 ký tự phần giữa: 8 cho ddmmyyyy, 3 còn lại cho số đếm.
+	mong := "NCC" + time.Now().Format("02012006") + "001"
+	if ma := maCuaPhanHoi(t, res.than, "code"); ma != mong {
+		t.Fatalf("mã theo ngày phải là %s, nhận %q", mong, ma)
+	}
+}
+
+// maSoCuaPhanHoi đọc một trường số trong `data`.
+func maSoCuaPhanHoi(t *testing.T, than, truong string) float64 {
+	t.Helper()
+
+	var body struct {
+		Data map[string]any `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(than), &body); err != nil {
+		t.Fatalf("không đọc được phản hồi: %v\n%s", err, catBot(than))
+	}
+	so, _ := body.Data[truong].(float64)
+
+	return so
+}

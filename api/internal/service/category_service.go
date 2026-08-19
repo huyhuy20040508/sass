@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"strings"
 
 	"sass-api/internal/domain"
 	"sass-api/internal/dto"
@@ -18,10 +19,13 @@ type CategoryService interface {
 
 type categoryService struct {
 	repo domain.CategoryRepository
+	// quyTac là quy tắc đánh số của cửa hàng. Chưa bật thì mã nhóm vẫn là dải
+	// NH0001 mà trang quản trị đang dùng.
+	quyTac domain.QuyTacMaRepository
 }
 
-func NewCategoryService(repo domain.CategoryRepository) CategoryService {
-	return &categoryService{repo: repo}
+func NewCategoryService(repo domain.CategoryRepository, quyTac domain.QuyTacMaRepository) CategoryService {
+	return &categoryService{repo: repo, quyTac: quyTac}
 }
 
 func (s *categoryService) List(ctx context.Context, onlyActive bool) ([]domain.Category, error) {
@@ -33,6 +37,16 @@ func (s *categoryService) Get(ctx context.Context, id uint) (*domain.Category, e
 }
 
 func (s *categoryService) Create(ctx context.Context, req dto.CategoryRequest) (*domain.Category, error) {
+	// Mã nhóm bỏ trống = để hệ thống đặt. Trang quản trị luôn đi đường này: mã
+	// nhóm không phải thứ người dùng gõ.
+	if strings.TrimSpace(req.Slug) == "" {
+		ma, err := s.maTuSinh(ctx)
+		if err != nil {
+			return nil, err
+		}
+		req.Slug = ma
+	}
+
 	exists, err := s.repo.ExistsBySlug(ctx, req.Slug, 0)
 	if err != nil {
 		return nil, err
@@ -53,6 +67,22 @@ func (s *categoryService) Create(ctx context.Context, req dto.CategoryRequest) (
 		return nil, err
 	}
 	return c, nil
+}
+
+// maTuSinh đặt mã cho nhóm mới: theo quy tắc của cửa hàng nếu đã bật, không thì
+// giữ dải NH0001 sẵn có.
+func (s *categoryService) maTuSinh(ctx context.Context) (string, error) {
+	ma, err := s.quyTac.SinhMa(ctx, domain.LoaiNhomHangHoa, 0, func(ma string) (bool, error) {
+		return s.repo.ExistsBySlug(ctx, ma, 0)
+	})
+	if err != nil {
+		return "", err
+	}
+	if ma != "" {
+		return ma, nil
+	}
+
+	return s.repo.NextCode(ctx)
 }
 
 func (s *categoryService) Update(ctx context.Context, id uint, req dto.CategoryRequest) (*domain.Category, error) {

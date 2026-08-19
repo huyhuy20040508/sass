@@ -31,6 +31,9 @@ type productService struct {
 	// hanMuc xét hạn mức sản phẩm của hợp đồng. nil = máy chủ chưa nối được
 	// control plane, khi đó không có hợp đồng nào đọc được nên không ép gì cả.
 	hanMuc HanMucService
+	// quyTac là quy tắc đánh số của cửa hàng: bật thì SKU tự sinh và ô mã ở màn
+	// nhập khoá lại, tắt thì người dùng phải tự gõ như hiện nay.
+	quyTac domain.QuyTacMaRepository
 }
 
 func NewProductService(
@@ -38,8 +41,12 @@ func NewProductService(
 	categoryRepo domain.CategoryRepository,
 	brandRepo domain.BrandRepository,
 	hanMuc HanMucService,
+	quyTac domain.QuyTacMaRepository,
 ) ProductService {
-	return &productService{repo: repo, categoryRepo: categoryRepo, brandRepo: brandRepo, hanMuc: hanMuc}
+	return &productService{
+		repo: repo, categoryRepo: categoryRepo, brandRepo: brandRepo,
+		hanMuc: hanMuc, quyTac: quyTac,
+	}
 }
 
 func (s *productService) List(ctx context.Context, f domain.ProductFilter) ([]domain.Product, int64, error) {
@@ -99,6 +106,20 @@ func (s *productService) Create(ctx context.Context, req dto.ProductRequest) (*d
 	if err := s.validateRefs(ctx, req); err != nil {
 		return nil, err
 	}
+	// SKU bỏ trống: sinh theo quy tắc mã hàng hoá. Chưa bật quy tắc thì vẫn bắt
+	// nhập tay — không tự bịa một mã mà cửa hàng không chọn hình dạng.
+	if strings.TrimSpace(req.SKU) == "" {
+		ma, err := s.quyTac.SinhMa(ctx, domain.LoaiHangHoa, 0, func(ma string) (bool, error) {
+			return s.repo.ExistsBySKU(ctx, ma, 0)
+		})
+		if err != nil {
+			return nil, err
+		}
+		if ma == "" {
+			return nil, domain.ErrSKUBatBuoc
+		}
+		req.SKU = ma
+	}
 	if err := s.checkUnique(ctx, req, 0); err != nil {
 		return nil, err
 	}
@@ -114,7 +135,7 @@ func (s *productService) Create(ctx context.Context, req dto.ProductRequest) (*d
 		return nil, err
 	}
 	if req.Variants != nil {
-		if err := s.repo.ReplaceVariants(ctx, p.ID, buildVariants(*req.Variants)); err != nil {
+		if err := s.repo.ReplaceVariants(ctx, p.ID, buildVariants(*req.Variants, req.SKU)); err != nil {
 			return nil, err
 		}
 	}
@@ -134,6 +155,11 @@ func (s *productService) Update(ctx context.Context, id uint, req dto.ProductReq
 	if err := s.validateRefs(ctx, req); err != nil {
 		return nil, err
 	}
+	// SKU bỏ trống lúc SỬA = giữ mã cũ, không sinh mã mới: mã đã in trên tem và
+	// trên phiếu nhập, tự đổi là hàng trong kho không tra ra được nữa.
+	if strings.TrimSpace(req.SKU) == "" {
+		req.SKU = p.SKU
+	}
 	if err := s.checkUnique(ctx, req, id); err != nil {
 		return nil, err
 	}
@@ -142,7 +168,7 @@ func (s *productService) Update(ctx context.Context, id uint, req dto.ProductReq
 		return nil, err
 	}
 	if req.Variants != nil {
-		if err := s.repo.ReplaceVariants(ctx, p.ID, buildVariants(*req.Variants)); err != nil {
+		if err := s.repo.ReplaceVariants(ctx, p.ID, buildVariants(*req.Variants, req.SKU)); err != nil {
 			return nil, err
 		}
 	}
@@ -208,6 +234,28 @@ func (s *productService) checkUnique(ctx context.Context, req dto.ProductRequest
 	return nil
 }
 
+// maBienThe đặt mã cho biến thể chưa có mã riêng: <mã cha>-<màu>-<size>.
+//
+// Cùng công thức với trang quản trị, để mã của hàng thêm từ màn hình và hàng
+// thêm qua API không thành hai kiểu.
+func maBienThe(skuCha string, v dto.VariantRequest) string {
+	if strings.TrimSpace(v.SKU) != "" {
+		return v.SKU
+	}
+	if strings.TrimSpace(skuCha) == "" {
+		return ""
+	}
+
+	phan := []string{skuCha}
+	for _, p := range []string{v.Color, v.Size} {
+		if p = strings.TrimSpace(p); p != "" {
+			phan = append(phan, p)
+		}
+	}
+
+	return strings.ToUpper(strings.ReplaceAll(strings.Join(phan, "-"), " ", "-"))
+}
+
 // buildImages chuyển dữ liệu request sang entity ảnh.
 func buildImages(reqs []dto.ImageRequest) []domain.ProductImage {
 	out := make([]domain.ProductImage, 0, len(reqs))
@@ -244,12 +292,13 @@ func chuoiHoacNil(s string) *string {
 //
 // StockQuantity cố ý để zero-value: ReplaceVariants bỏ qua cột này nên dòng
 // thêm mới lấy DEFAULT 0 của DB, dòng cũ giữ nguyên tồn kho đang có.
-func buildVariants(reqs []dto.VariantRequest) []domain.ProductVariant {
+// buildVariants dựng biến thể; skuCha điền cho dòng chưa có mã riêng.
+func buildVariants(reqs []dto.VariantRequest, skuCha string) []domain.ProductVariant {
 	out := make([]domain.ProductVariant, 0, len(reqs))
 	for _, v := range reqs {
 		out = append(out, domain.ProductVariant{
 			ID:  v.ID,
-			SKU: v.SKU,
+			SKU: maBienThe(skuCha, v),
 			// Mã vạch để trống phải vào DB là NULL chứ không phải chuỗi rỗng: cột
 			// UNIQUE, mà MySQL chỉ coi các NULL là khác nhau. Ghi "" thì biến thể
 			// thứ hai chưa dán mã đụng ràng buộc với biến thể thứ nhất.

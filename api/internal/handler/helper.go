@@ -198,6 +198,30 @@ func handleServiceError(c *gin.Context, err error) {
 		})
 	case errors.Is(err, domain.ErrNhomQuyenHeThong):
 		response.Error(c, 422, "Đây là nhóm quyền hệ thống dựng sẵn — sửa được tên và quyền, nhưng không xoá được")
+	case errors.Is(err, domain.ErrSKUBatBuoc):
+		response.ValidationError(c, map[string]string{
+			"sku": "Nhập mã hàng hoá, hoặc bật quy tắc mã hàng hoá ở Cài đặt → Thông số chung để hệ thống tự đặt",
+		})
+	case errors.Is(err, domain.ErrHetSoDe):
+		response.Error(c, 409, "Mã sinh theo quy tắc đang trùng với mã đã có. Đổi tiền tố hoặc hậu tố ở Cài đặt → Thông số chung rồi thử lại")
+	// Quy tắc đánh số chứng từ — cả ba đều là ô nhập sai, tô đỏ đúng ô đó.
+	case errors.Is(err, domain.ErrLoaiMaLa):
+		response.ValidationError(c, map[string]string{
+			"doc_type": "Loại chứng từ này không có trong danh mục đánh số của phần mềm",
+		})
+	case errors.Is(err, domain.ErrPhanGiaTriLa):
+		response.ValidationError(c, map[string]string{
+			"value_part": "Phần giá trị chỉ nhận số thứ tự, ngày tháng năm hoặc tháng năm",
+		})
+	case errors.Is(err, domain.ErrDoDaiMaLa):
+		response.ValidationError(c, map[string]string{
+			"length": "Số ký tự phần giá trị phải từ " +
+				strconv.Itoa(domain.DoDaiMaToiThieu) + " đến " + strconv.Itoa(domain.DoDaiMaToiDa),
+		})
+	case errors.Is(err, domain.ErrTienToLa):
+		response.ValidationError(c, map[string]string{
+			"prefix": "Tiền tố và hậu tố chỉ gồm chữ không dấu, số, gạch ngang hoặc gạch dưới",
+		})
 	case errors.Is(err, domain.ErrNhanSuDangMoCa):
 		response.Error(c, 409, "Nhân viên này còn một ca chưa đóng. Đóng ca đó trước đã — xoá bây giờ là khoá luôn tài khoản của chính người đang giữ két")
 	case errors.Is(err, domain.ErrNhanSuDaGhiSoQuy):

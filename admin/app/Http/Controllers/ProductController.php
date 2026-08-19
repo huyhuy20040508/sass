@@ -508,8 +508,13 @@ class ProductController extends Controller
         $brandId = $v['brand_id'] ?? null;
         $salePrice = $v['sale_price'] ?? null;
         $costPrice = $v['cost_price'] ?? null;
-        // SKU tự sinh từ đội bóng · loại áo · mùa giải nếu người dùng để trống.
-        $sku = filled($v['sku'] ?? null) ? trim($v['sku']) : $this->productSku($v);
+        // SKU: người dùng gõ thì tôn trọng. Bỏ trống thì hoặc để API đặt theo quy
+        // tắc mã hàng hoá của cửa hàng, hoặc — khi chưa bật quy tắc — ghép từ đội
+        // bóng · loại áo · mùa giải như trước nay.
+        $sku = filled($v['sku'] ?? null) ? trim($v['sku']) : '';
+        if ($sku === '' && ! $this->maTuSinh()) {
+            $sku = $this->productSku($v);
+        }
 
         // Thư viện ảnh; nếu chưa có ảnh đại diện thì lấy ảnh chính (hoặc ảnh đầu) làm thumbnail.
         $images = $this->imageRows($request);
@@ -685,6 +690,13 @@ class ProductController extends Controller
      */
     protected function variantSku(string $productSku, string $size, string $color): string
     {
+        // Mã cha để trống = máy chủ sắp đặt mã theo quy tắc đánh số. Ghép ở đây
+        // thì ra "DO-M" — một mã không dính gì tới sản phẩm; để trống cho máy chủ
+        // ghép lại sau khi nó biết mã cha.
+        if (trim($productSku) === '') {
+            return '';
+        }
+
         $parts = array_filter([$productSku, $color, $size], fn ($p) => trim((string) $p) !== '');
         $sku = Str::upper($this->slugify(implode('-', $parts)));
 
@@ -807,7 +819,36 @@ class ProductController extends Controller
             'statusHints' => self::STATUS_HINTS,
             'sorts' => self::SORTS,
             'perPageOptions' => self::PER_PAGE_OPTIONS,
+            'maTuSinh' => $this->maTuSinh(),
         ]);
+    }
+
+    /**
+     * Cửa hàng đã bật quy tắc mã hàng hoá chưa (Cài đặt → Thông số chung).
+     *
+     * Bật rồi thì ô SKU khoá lại và để API đặt mã; chưa bật thì màn hình giữ
+     * cách cũ — tự ghép từ đội bóng · loại áo · mùa giải.
+     */
+    protected function maTuSinh(): bool
+    {
+        try {
+            $res = $this->api->quyTacMa();
+            if (! $res->successful()) {
+                return false;
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Read quy tac ma failed', ['msg' => $e->getMessage()]);
+
+            return false;
+        }
+
+        foreach ($res->json('data.quy_tac') ?? [] as $q) {
+            if (($q['doc_type'] ?? '') === 'hang-hoa' && ($q['is_active'] ?? false)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /** Danh mục (phẳng) cho dropdown lọc — im lặng nếu API lỗi. */

@@ -98,7 +98,12 @@ func (r *orderRepository) DoiHang(
 		if err := tx.Create(rt).Error; err != nil {
 			return err
 		}
-		rt.ReturnCode = fmt.Sprintf("RT%s%04d", time.Now().Format("20060102"), rt.ID)
+		maTra, err := maChungTu(ctx, tx, domain.LoaiTraHangKhach, rt.ShopID, &domain.OrderReturn{}, "return_code",
+			fmt.Sprintf("RT%s%04d", time.Now().Format("20060102"), rt.ID))
+		if err != nil {
+			return err
+		}
+		rt.ReturnCode = maTra
 		if err := tx.Model(rt).Update("return_code", rt.ReturnCode).Error; err != nil {
 			return err
 		}
@@ -125,7 +130,12 @@ func (r *orderRepository) DoiHang(
 		if err := tx.Create(don).Error; err != nil {
 			return err
 		}
-		don.OrderCode = fmt.Sprintf("DH%s%04d", time.Now().Format("20060102"), don.ID)
+		maDon, err := maChungTu(ctx, tx, domain.LoaiDonHang, don.ShopID, &domain.Order{}, "order_code",
+			fmt.Sprintf("DH%s%04d", time.Now().Format("20060102"), don.ID))
+		if err != nil {
+			return err
+		}
+		don.OrderCode = maDon
 		if err := tx.Model(don).Update("order_code", don.OrderCode).Error; err != nil {
 			return err
 		}
