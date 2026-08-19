@@ -406,10 +406,10 @@ type VoucherResponse struct {
 // ---------- Product ----------
 
 type ProductRequest struct {
-	CategoryID       uint     `json:"category_id" binding:"required"`
-	BrandID          *uint    `json:"brand_id"`
-	Name             string   `json:"name" binding:"required,max=200"`
-	Slug             string   `json:"slug" binding:"required,max=191"`
+	CategoryID uint   `json:"category_id" binding:"required"`
+	BrandID    *uint  `json:"brand_id"`
+	Name       string `json:"name" binding:"required,max=200"`
+	Slug       string `json:"slug" binding:"required,max=191"`
 	// SKU bỏ trống = sinh theo quy tắc mã hàng hoá; chưa bật quy tắc thì API trả
 	// 422 đòi nhập tay. Lúc SỬA, bỏ trống là giữ mã cũ.
 	SKU              string   `json:"sku" binding:"omitempty,max=64"`
@@ -508,7 +508,7 @@ type ProductBulkDeleteRequest struct {
 // ---------- Category ----------
 
 type CategoryRequest struct {
-	Name        string `json:"name" binding:"required,max=150"`
+	Name string `json:"name" binding:"required,max=150"`
 	// Slug là MÃ NHÓM. Bỏ trống = hệ thống đặt (theo quy tắc đánh số của cửa
 	// hàng, hoặc dải NH0001 nếu chưa bật quy tắc).
 	Slug        string `json:"slug" binding:"omitempty,max=191"`
