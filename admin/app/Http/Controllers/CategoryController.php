@@ -3,32 +3,38 @@
 namespace App\Http\Controllers;
 
 use App\Services\ApiClient;
-use App\Services\ImageStore;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 
 /**
- * Quản lý danh mục sản phẩm — giao diện & luồng port 1:1 từ màn "Nhóm hàng hóa"
- * (GroupsSection) của dự án OrderTable: cây loại lớn/nhóm bên trái + bảng nhóm con
- * bên phải, modal tạo/sửa kèm bảng "Nhóm con".
+ * Quản lý nhóm hàng hóa — bố cục và luồng theo bản cũ v2 (màn "Nhóm sản phẩm"):
+ * cây nhóm bên trái + bảng nhóm con bên phải, modal thêm/sửa kèm bảng "Nhóm con".
  *
  * Toàn bộ dữ liệu đọc/ghi qua Go API (không truy cập MySQL trực tiếp).
- * Danh mục cấp 1 mặc định đóng vai trò "loại lớn" (rule=parent) — bị khóa,
- * chỉ dùng để chứa nhóm con; các danh mục còn lại là "nhóm" (rule=children) CRUD tự do.
+ * Hai nhóm gốc cố định (xem ROOTS) đóng vai "loại lớn": bị khóa, chỉ để chứa
+ * nhóm con; các nhóm còn lại CRUD tự do, lồng bao nhiêu cấp cũng được.
  */
 class CategoryController extends Controller
 {
-    /** Danh mục cấp 1 mặc định — khóa: không sửa/xóa/đổi trạng thái (đóng vai trò "loại lớn"). */
-    public const PROTECTED_SLUGS = ['cau-lac-bo', 'doi-tuyen-quoc-gia', 'phu-kien'];
+    /**
+     * Hai nhóm gốc cố định (slug => tên) — khóa: không sửa/xóa/đổi trạng thái.
+     * Đóng vai "loại lớn" như odr_menu_group_parents của bản v2, nhưng ở đây là
+     * danh mục cấp 1 bình thường nên mỗi cửa hàng phải có sẵn hai dòng này.
+     */
+    public const ROOTS = [
+        'hang-ban' => 'Hàng bán',
+        'hang-hoa-khac' => 'Hàng hóa khác',
+    ];
 
-    /** Số cấp danh mục tối đa (loại lớn -> nhóm -> nhóm con). */
-    public const MAX_DEPTH = 3;
+    /** Slug của các nhóm gốc — dùng để gắn cờ khóa. */
+    public const PROTECTED_SLUGS = ['hang-ban', 'hang-hoa-khac'];
+
+    /** Tiền tố mã nhóm tự sinh: NH0001, NH0002, ... */
+    public const CODE_PREFIX = 'NH';
 
     public function __construct(protected ApiClient $api) {}
 
-    /** Danh sách danh mục (phẳng) — view tự dựng cây từ parent_id. */
+    /** Danh sách nhóm (phẳng) — view tự dựng cây từ parent_id. */
     public function index()
     {
         $categories = [];
@@ -37,15 +43,16 @@ class CategoryController extends Controller
             $res = $this->api->categories(all: true);
             if ($res->successful()) {
                 $categories = $res->json('data') ?? [];
+                $categories = $this->ensureRoots($categories);
             }
         } catch (\Throwable $e) {
             Log::error('Load categories failed', ['msg' => $e->getMessage()]);
 
             return view('categories.index', ['categories' => []])
-                ->with('error', 'Không tải được danh sách danh mục. Kiểm tra kết nối API.');
+                ->with('error', 'Không tải được danh sách nhóm hàng hóa. Kiểm tra kết nối API.');
         }
 
-        // Gắn cờ "protected" cho các danh mục mặc định (loại lớn).
+        // Gắn cờ "protected" cho hai nhóm gốc cố định.
         $categories = collect($categories)->map(function ($c) {
             $c['protected'] = in_array($c['slug'] ?? '', self::PROTECTED_SLUGS, true);
 
@@ -56,19 +63,18 @@ class CategoryController extends Controller
     }
 
     /**
-     * Tạo danh mục (nhóm) + các nhóm con nhập kèm trong modal.
-     * parent_id = node đang chọn trên cây (loại lớn -> nhóm cấp 1; nhóm -> nhóm con).
+     * Tạo nhóm hàng hóa + các nhóm con nhập kèm trong modal.
+     * parent_id = nhóm đang chọn trên cây.
      */
     public function store(Request $request)
     {
         $data = $this->validated($request);
 
-        if ($data['parent_id'] !== null && $this->depthOf($data['parent_id']) >= self::MAX_DEPTH) {
-            return back()->withInput()->with('error', 'Chỉ cho phép tối đa ' . self::MAX_DEPTH . ' cấp danh mục.');
-        }
+        // Nhóm chính và các nhóm con mới lấy mã liên tiếp trong cùng một dải.
+        $seq = $this->maxCodeSeq();
 
         try {
-            $res = $this->api->createCategory($data);
+            $res = $this->createWithCode($data, $seq);
         } catch (\Throwable $e) {
             Log::error('Create category failed', ['msg' => $e->getMessage()]);
 
@@ -76,35 +82,36 @@ class CategoryController extends Controller
         }
 
         if (! $res->successful()) {
-            return back()->withInput()->with('error', $res->json('message') ?: 'Tạo danh mục thất bại.');
+            return back()->withInput()->with('error', $this->apiError($res, 'Tạo nhóm hàng hóa thất bại.'));
         }
 
         $newId = (int) data_get($res->json('data'), 'id');
-        $child = $this->saveChildren($request, $newId);
+        $child = $this->saveChildren($request, $newId, $seq);
 
         if ($child['fail'] > 0) {
             return redirect()->route('admin.categories.index')
                 ->with('focus_parent', $data['parent_id'])
-                ->with('error', "Đã thêm danh mục nhưng {$child['fail']} nhóm con lưu không thành công.");
+                ->with('error', "Đã thêm nhóm nhưng {$child['fail']} nhóm con lưu không thành công.");
         }
 
         return redirect()->route('admin.categories.index')
             ->with('focus_parent', $data['parent_id'])
-            ->with('success', 'Đã thêm danh mục.');
+            ->with('success', 'Đã thêm nhóm hàng hóa.');
     }
 
-    /** Cập nhật danh mục + upsert các nhóm con trong modal. */
+    /** Cập nhật nhóm hàng hóa + upsert các nhóm con trong modal. */
     public function update(Request $request, int $id)
     {
-        if ($this->isProtected($id)) {
-            return back()->with('error', 'Đây là danh mục mặc định, không thể chỉnh sửa.');
+        $current = $this->fetch($id);
+
+        if ($current !== null && in_array($current['slug'] ?? '', self::PROTECTED_SLUGS, true)) {
+            return back()->with('error', 'Đây là nhóm gốc cố định, không thể chỉnh sửa.');
         }
 
         $data = $this->validated($request);
-
-        if ($data['parent_id'] !== null && $this->depthOf($data['parent_id']) >= self::MAX_DEPTH) {
-            return back()->withInput()->with('error', 'Chỉ cho phép tối đa ' . self::MAX_DEPTH . ' cấp danh mục.');
-        }
+        // Mã và ảnh không sửa được ở màn này — chuyển tiếp giá trị cũ để khỏi ghi rỗng đè lên.
+        $data['slug'] = (string) ($current['slug'] ?? '');
+        $data['image'] = (string) ($current['image'] ?? '');
 
         try {
             $res = $this->api->updateCategory($id, $data);
@@ -115,7 +122,7 @@ class CategoryController extends Controller
         }
 
         if (! $res->successful()) {
-            return back()->withInput()->with('error', $res->json('message') ?: 'Cập nhật danh mục thất bại.');
+            return back()->withInput()->with('error', $this->apiError($res, 'Cập nhật nhóm hàng hóa thất bại.'));
         }
 
         $child = $this->saveChildren($request, $id);
@@ -123,28 +130,28 @@ class CategoryController extends Controller
         if ($child['fail'] > 0) {
             return redirect()->route('admin.categories.index')
                 ->with('focus_parent', $data['parent_id'])
-                ->with('error', "Đã cập nhật danh mục nhưng {$child['fail']} nhóm con lưu không thành công.");
+                ->with('error', "Đã cập nhật nhóm nhưng {$child['fail']} nhóm con lưu không thành công.");
         }
 
         return redirect()->route('admin.categories.index')
             ->with('focus_parent', $data['parent_id'])
-            ->with('success', 'Đã cập nhật danh mục.');
+            ->with('success', 'Đã cập nhật nhóm hàng hóa.');
     }
 
-    /** Xóa danh mục. */
+    /** Xóa một nhóm hàng hóa. */
     public function destroy(int $id)
     {
         if ($this->isProtected($id)) {
-            return back()->with('error', 'Đây là danh mục mặc định, không thể xóa.');
+            return back()->with('error', 'Đây là nhóm gốc cố định, không thể xóa.');
         }
 
         return $this->send(
             fn () => $this->api->deleteCategory($id),
-            'Đã xóa danh mục.'
+            'Đã xóa nhóm hàng hóa.'
         );
     }
 
-    /** Xóa nhiều danh mục đã chọn trên bảng (bulk). */
+    /** Xóa nhiều nhóm đã chọn trên bảng (bulk). */
     public function bulkDestroy(Request $request)
     {
         $ids = collect($request->input('ids', []))
@@ -154,7 +161,7 @@ class CategoryController extends Controller
             ->all();
 
         if (empty($ids)) {
-            return back()->with('error', 'Chưa chọn danh mục nào để xóa.');
+            return back()->with('error', 'Chưa chọn nhóm nào để xóa.');
         }
 
         $ok = 0;
@@ -177,51 +184,225 @@ class CategoryController extends Controller
 
         if ($fail > 0) {
             return redirect()->route('admin.categories.index')
-                ->with('error', "Đã xóa {$ok} nhóm; {$fail} nhóm xóa không thành công (đang chứa nhóm con hoặc sản phẩm).");
+                ->with('error', "Đã xóa {$ok} nhóm; {$fail} nhóm xóa không thành công (là nhóm gốc, hoặc đang chứa nhóm con).");
         }
 
         return redirect()->route('admin.categories.index')->with('success', "Đã xóa {$ok} nhóm.");
     }
 
     /**
-     * Nhận file ảnh từ modal, lưu vào public disk (public/storage/categories),
-     * trả URL tuyệt đối để gán vào trường image của danh mục.
+     * Xóa toàn bộ nhóm con trực tiếp của một nhóm — nút "Xóa tất cả" trong modal.
+     * Theo bản v2: chỉ cần một nhóm con còn nhánh cấp dưới là dừng, không xóa gì.
      */
-    public function uploadImage(Request $request)
+    public function destroyChildren(int $id)
     {
-        $request->validate([
-            'image' => ImageStore::rules(),
-        ], ImageStore::messages());
+        try {
+            $res = $this->api->categories(all: true);
+            $all = $res->successful() ? ($res->json('data') ?? []) : [];
+        } catch (\Throwable $e) {
+            Log::error('Load categories failed', ['msg' => $e->getMessage()]);
 
-        return response()->json(['url' => ImageStore::put($request->file('image'), 'categories')]);
+            return back()->with('error', 'Không kết nối được máy chủ API.');
+        }
+
+        $childIds = collect($all)
+            ->filter(fn ($c) => (int) ($c['parent_id'] ?? 0) === $id)
+            ->pluck('id')
+            ->map(fn ($v) => (int) $v)
+            ->all();
+
+        if (empty($childIds)) {
+            return back()->with('error', 'Nhóm này chưa có nhóm con nào.');
+        }
+
+        $hasGrandChild = collect($all)->contains(fn ($c) => in_array((int) ($c['parent_id'] ?? 0), $childIds, true));
+
+        if ($hasGrandChild) {
+            return back()->with('error', 'Có nhóm con đang chứa nhóm cấp dưới — hãy xóa cấp dưới trước.');
+        }
+
+        $ok = 0;
+        $fail = 0;
+
+        foreach ($childIds as $childId) {
+            try {
+                $res = $this->api->deleteCategory($childId);
+                $res->successful() ? $ok++ : $fail++;
+            } catch (\Throwable $e) {
+                Log::warning('Delete child category failed', ['id' => $childId, 'msg' => $e->getMessage()]);
+                $fail++;
+            }
+        }
+
+        $redirect = redirect()->route('admin.categories.index')->with('focus_parent', $id);
+
+        return $fail > 0
+            ? $redirect->with('error', "Đã xóa {$ok} nhóm con; {$fail} nhóm xóa không thành công.")
+            : $redirect->with('success', "Đã xóa {$ok} nhóm con.");
     }
 
     // ---------- Helpers ----------
 
     /**
-     * Lưu các dòng "nhóm con" từ modal dưới danh mục $parentId.
-     * Dòng có id -> cập nhật; dòng chưa có id -> tạo mới. (Không tự xóa dòng bị gỡ.)
+     * Bảo đảm cửa hàng có đủ hai nhóm gốc cố định (Hàng bán / Hàng hóa khác).
+     * Chạy khi mở trang, chỉ ghi khi thiếu — mỗi cửa hàng là một tenant riêng nên
+     * không seed sẵn được từ migration.
+     *
+     * @param  array $categories danh sách phẳng vừa nạp
+     * @return array danh sách đã có đủ gốc
      */
-    protected function saveChildren(Request $request, int $parentId): array
+    protected function ensureRoots(array $categories): array
     {
+        $existing = collect($categories)->pluck('slug')->all();
+        $created = false;
+
+        foreach (self::ROOTS as $slug => $name) {
+            if (in_array($slug, $existing, true)) {
+                continue;
+            }
+            try {
+                $res = $this->api->createCategory([
+                    'name' => $name,
+                    'slug' => $slug,
+                    'parent_id' => null,
+                    'description' => '',
+                    'image' => '',
+                    'sort_order' => 0,
+                    'is_active' => true,
+                ]);
+                if ($res->successful()) {
+                    $created = true;
+                }
+            } catch (\Throwable $e) {
+                Log::warning('Create root category failed', ['slug' => $slug, 'msg' => $e->getMessage()]);
+            }
+        }
+
+        if (! $created) {
+            return $categories;
+        }
+
+        try {
+            $res = $this->api->categories(all: true);
+
+            return $res->successful() ? ($res->json('data') ?? $categories) : $categories;
+        } catch (\Throwable $e) {
+            Log::warning('Reload categories after seeding roots failed', ['msg' => $e->getMessage()]);
+
+            return $categories;
+        }
+    }
+
+    /**
+     * Câu lỗi cho người dùng từ phản hồi API. API trả 409 kèm câu nói về "slug"
+     * (thuật ngữ tầng dữ liệu) — mã ở màn này tự sinh nên nói lại cho dễ hiểu.
+     */
+    protected function apiError($res, string $fallback): string
+    {
+        if ($res->status() === 409) {
+            return 'Mã nhóm bị trùng do có người vừa thêm cùng lúc. Vui lòng bấm Lưu lại.';
+        }
+
+        return $res->json('message') ?: $fallback;
+    }
+
+    /** Mã nhóm thứ $seq: NH0001, NH0002, ... */
+    protected function codeOf(int $seq): string
+    {
+        return self::CODE_PREFIX . str_pad((string) $seq, 4, '0', STR_PAD_LEFT);
+    }
+
+    /** Số thứ tự lớn nhất đang dùng trong mã NHxxxx (0 nếu chưa có nhóm nào). */
+    protected function maxCodeSeq(): int
+    {
+        $max = 0;
+
+        try {
+            $res = $this->api->categories(all: true);
+            $all = $res->successful() ? ($res->json('data') ?? []) : [];
+        } catch (\Throwable $e) {
+            Log::warning('Read max category code failed', ['msg' => $e->getMessage()]);
+
+            return 0;
+        }
+
+        foreach ($all as $c) {
+            if (preg_match('/^' . self::CODE_PREFIX . '(\d+)$/i', (string) ($c['slug'] ?? ''), $m)) {
+                $max = max($max, (int) $m[1]);
+            }
+        }
+
+        return $max;
+    }
+
+    /**
+     * Tạo một nhóm với mã tự sinh, $seq tự tăng theo tham chiếu.
+     * Trùng mã (409) thì lấy số kế tiếp thử lại — hai người thêm cùng lúc có thể
+     * cùng đọc ra một số lớn nhất.
+     */
+    protected function createWithCode(array $payload, int &$seq)
+    {
+        $res = null;
+
+        for ($i = 0; $i < 5; $i++) {
+            $payload['slug'] = $this->codeOf(++$seq);
+            $res = $this->api->createCategory($payload);
+            if ($res->successful() || $res->status() !== 409) {
+                return $res;
+            }
+        }
+
+        return $res;
+    }
+
+    /** Lấy một nhóm theo id, null nếu không đọc được. */
+    protected function fetch(int $id): ?array
+    {
+        try {
+            $res = $this->api->category($id);
+            if ($res->successful()) {
+                return $res->json('data');
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Load category failed', ['id' => $id, 'msg' => $e->getMessage()]);
+        }
+
+        return null;
+    }
+
+    /**
+     * Lưu các dòng "nhóm con" từ modal dưới nhóm $parentId.
+     * Dòng có id -> cập nhật (giữ mã cũ); dòng chưa có id -> tạo mới với mã tự sinh
+     * nối tiếp $seq. (Không tự xóa dòng bị gỡ.)
+     */
+    protected function saveChildren(Request $request, int $parentId, int $seq = 0): array
+    {
+        $rows = $this->childRows($request);
+
+        if (empty($rows)) {
+            return ['ok' => 0, 'fail' => 0];
+        }
+
         $ok = 0;
         $fail = 0;
 
-        foreach ($this->childRows($request) as $ch) {
+        foreach ($rows as $ch) {
             $payload = [
                 'name' => $ch['name'],
-                'slug' => filled($ch['code']) ? $this->slugify($ch['code']) : $this->slugify($ch['name']),
                 'parent_id' => $parentId,
                 'description' => $ch['description'],
-                'image' => '',
+                'image' => $ch['image'],
                 'sort_order' => $ch['sort_order'],
                 'is_active' => $ch['is_active'],
             ];
 
             try {
-                $res = $ch['id']
-                    ? $this->api->updateCategory($ch['id'], $payload)
-                    : $this->api->createCategory($payload);
+                if ($ch['id']) {
+                    $payload['slug'] = $ch['code'];   // dòng cũ giữ nguyên mã
+                    $res = $this->api->updateCategory($ch['id'], $payload);
+                } else {
+                    $res = $this->createWithCode($payload, $seq);
+                }
                 $res->successful() ? $ok++ : $fail++;
             } catch (\Throwable $e) {
                 Log::warning('Save child category failed', ['msg' => $e->getMessage()]);
@@ -243,6 +424,7 @@ class CategoryController extends Controller
         $out = [];
         foreach ($rows as $r) {
             $name = trim((string) ($r['name'] ?? ''));
+            // Thiếu tên thì bỏ qua — view đã chặn trước, đây là chốt chặn cuối.
             if ($name === '') {
                 continue;
             }
@@ -252,6 +434,7 @@ class CategoryController extends Controller
                 'name' => $name,
                 'sort_order' => (int) ($r['sort_order'] ?? 0),
                 'description' => (string) ($r['description'] ?? ''),
+                'image' => (string) ($r['image'] ?? ''),
                 'is_active' => filled($r['is_active'] ?? null) ? (bool) $r['is_active'] : true,
             ];
         }
@@ -259,42 +442,7 @@ class CategoryController extends Controller
         return $out;
     }
 
-    /**
-     * Độ sâu (cấp) của một danh mục: cấp 1 = danh mục gốc (parent_id null).
-     * Đi ngược chuỗi parent_id trên toàn bộ danh mục. Trả 0 nếu không tìm thấy.
-     */
-    protected function depthOf(int $id): int
-    {
-        try {
-            $res = $this->api->categories(all: true);
-            if (! $res->successful()) {
-                return 0;
-            }
-            $all = collect($res->json('data') ?? [])->keyBy('id');
-        } catch (\Throwable $e) {
-            Log::warning('Compute category depth failed', ['id' => $id, 'msg' => $e->getMessage()]);
-
-            return 0;
-        }
-
-        $depth = 0;
-        $cur = $all->get($id);
-        // Chặn vòng lặp vô hạn nếu dữ liệu parent_id bị lỗi (tối đa = số danh mục).
-        $guard = $all->count() + 1;
-
-        while ($cur && $guard-- > 0) {
-            $depth++;
-            $pid = $cur['parent_id'] ?? null;
-            if ($pid === null) {
-                break;
-            }
-            $cur = $all->get((int) $pid);
-        }
-
-        return $depth;
-    }
-
-    /** Kiểm tra 1 danh mục có phải danh mục mặc định (bị khóa) không. */
+    /** Kiểm tra một nhóm có phải nhóm gốc cố định (bị khóa) không. */
     protected function isProtected(int $id): bool
     {
         try {
@@ -309,30 +457,27 @@ class CategoryController extends Controller
         return false;
     }
 
-    /** Chuẩn hóa & validate dữ liệu danh mục chính từ form. */
+    /** Chuẩn hóa & validate dữ liệu nhóm chính từ form. */
     protected function validated(Request $request): array
     {
         $v = \Illuminate\Support\Facades\Validator::make($request->all(), [
             'name' => ['required', 'string', 'max:150'],
-            'slug' => ['nullable', 'string', 'max:191'],
             'parent_id' => ['nullable', 'integer'],
             'description' => ['nullable', 'string', 'max:500'],
-            'image' => ['nullable', 'string', 'max:255'],
             'sort_order' => ['nullable', 'integer'],
             'is_active' => ['nullable'],
         ], [
-            'name.required' => 'Vui lòng nhập tên danh mục.',
-            'name.max' => 'Tên danh mục tối đa 150 ký tự.',
-            'slug.max' => 'Slug tối đa 191 ký tự.',
+            'name.required' => 'Vui lòng nhập tên nhóm hàng hóa.',
+            'name.max' => 'Tên nhóm hàng hóa tối đa 150 ký tự.',
             'description.max' => 'Mô tả tối đa 500 ký tự.',
         ])->stopOnFirstFailure()->validate();
 
+        // Không có 'slug': mã do máy chủ tự sinh (store) hoặc giữ nguyên (update).
         return [
             'name' => $v['name'],
-            'slug' => filled($v['slug'] ?? null) ? $this->slugify($v['slug']) : $this->slugify($v['name']),
             'parent_id' => filled($v['parent_id'] ?? null) ? (int) $v['parent_id'] : null,
             'description' => $v['description'] ?? '',
-            'image' => $v['image'] ?? '',
+            'image' => '',
             'sort_order' => (int) ($v['sort_order'] ?? 0),
             'is_active' => $request->boolean('is_active'),
         ];
@@ -356,26 +501,5 @@ class CategoryController extends Controller
         $message = $res->json('message') ?: 'Thao tác thất bại.';
 
         return back()->withInput()->with('error', $message);
-    }
-
-    /**
-     * Tạo slug hỗ trợ tiếng Việt.
-     * Str::slug trên một số môi trường không phiên âm được dấu tiếng Việt
-     * (ụ, ể, ử... bị bỏ), nên ta chuyển sang ASCII trước.
-     */
-    protected function slugify(string $text): string
-    {
-        $map = [
-            'a' => 'áàạảãâấầậẩẫăắằặẳẵ', 'e' => 'éèẹẻẽêếềệểễ',
-            'i' => 'íìịỉĩ', 'o' => 'óòọỏõôốồộổỗơớờợởỡ',
-            'u' => 'úùụủũưứừựửữ', 'y' => 'ýỳỵỷỹ', 'd' => 'đ',
-        ];
-
-        $text = mb_strtolower($text, 'UTF-8');
-        foreach ($map as $ascii => $chars) {
-            $text = preg_replace('/[' . $chars . ']/u', $ascii, $text);
-        }
-
-        return Str::slug($text);
     }
 }

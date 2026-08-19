@@ -150,10 +150,10 @@ Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:quan_ly'])->prefix('ad
     Route::middleware('admin.manage')->group(function () {
         // Danh mục sản phẩm
         Route::get('/categories', [CategoryController::class, 'index'])->name('categories.index');
-        Route::post('/categories/upload-image', [CategoryController::class, 'uploadImage'])->name('categories.uploadImage');
         Route::post('/categories', [CategoryController::class, 'store'])->name('categories.store');
         Route::post('/categories/bulk-destroy', [CategoryController::class, 'bulkDestroy'])->name('categories.bulkDestroy');
         Route::put('/categories/{id}', [CategoryController::class, 'update'])->name('categories.update');
+        Route::delete('/categories/{id}/children', [CategoryController::class, 'destroyChildren'])->name('categories.destroyChildren');
         Route::delete('/categories/{id}', [CategoryController::class, 'destroy'])->name('categories.destroy');
 
         // Sản phẩm
