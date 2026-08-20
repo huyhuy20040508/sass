@@ -588,10 +588,10 @@ func (s *orderService) Quote(ctx context.Context, req *dto.CartQuoteRequest) (*d
 	lines := make([]domain.CheckoutLine, 0, len(req.Items))
 	for _, it := range req.Items {
 		lines = append(lines, domain.CheckoutLine{
-			VariantID: it.ProductVariantID,
-			Slug:      it.Slug,
+			VariantID:   it.ProductVariantID,
+			Slug:        it.Slug,
 			VariantName: it.VariantName,
-			Quantity:  it.Quantity,
+			Quantity:    it.Quantity,
 		})
 	}
 

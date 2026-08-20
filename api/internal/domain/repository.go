@@ -25,13 +25,13 @@ type ProductFilter struct {
 	// IsMultiVariant tách hàng nhiều biến thể khỏi hàng đơn (nil = không lọc).
 	IsMultiVariant *bool
 	IsFeatured     *bool
-	IsActive   *bool // lọc chính xác theo trạng thái (nil = không lọc)
-	OnSale     *bool // true = chỉ sản phẩm đang giảm giá (sale_price hợp lệ < base_price)
-	MinPrice   *float64
-	MaxPrice   *float64
-	Sort       string // newest | price_asc | price_desc | best_selling
-	Page       int
-	PageSize   int
+	IsActive       *bool // lọc chính xác theo trạng thái (nil = không lọc)
+	OnSale         *bool // true = chỉ sản phẩm đang giảm giá (sale_price hợp lệ < base_price)
+	MinPrice       *float64
+	MaxPrice       *float64
+	Sort           string // newest | price_asc | price_desc | best_selling
+	Page           int
+	PageSize       int
 
 	// IncludeInactive = true: bỏ ràng buộc is_active mặc định (admin xem cả sản phẩm ẩn).
 	// Bị bỏ qua khi IsActive != nil (lúc đó lọc theo IsActive).
