@@ -748,19 +748,6 @@ class ApiClient
         return $this->get('/admin/orders/stats');
     }
 
-    /**
-     * Doanh thu + số đơn theo từng ngày trong `days` ngày gần nhất.
-     *
-     * Kỳ LUÔN kết thúc ở hôm nay nên không diễn đạt được "hôm qua" hay một khoảng
-     * bất kỳ. Trang Tổng quan vì thế đã chuyển sang reportRevenue() (nhận from/to);
-     * giữ lại đây vì endpoint bên API vẫn còn và vẫn đúng cho nhu cầu "N ngày gần
-     * nhất" — cần khoảng tuỳ ý thì dùng reportRevenue().
-     */
-    public function orderRevenue(int $days = 30): Response
-    {
-        return $this->get('/admin/orders/revenue', ['days' => $days]);
-    }
-
     /** Chi tiết đơn hàng (kèm sản phẩm, lịch sử trạng thái, trạng thái kế tiếp). */
     public function order(int $id): Response
     {

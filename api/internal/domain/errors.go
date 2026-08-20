@@ -156,8 +156,6 @@ var (
 	// Cổng thanh toán từ chối hoặc không gọi tới được. Đơn VẪN được tạo — chỉ là
 	// chưa có link để trả tiền, khách trả sau hoặc đổi hình thức khác.
 	ErrPaymentGateway = errors.New("không tạo được link thanh toán")
-	// Link thanh toán đã khép lại (khách bấm huỷ, hoặc để quá hạn).
-	ErrPaymentLinkClosed = errors.New("link thanh toán không còn hiệu lực")
 	// Khách tự huỷ đơn: đơn đã qua giai đoạn được phép tự huỷ (đang chuẩn bị trở đi).
 	ErrCancelNotAllowed = errors.New("đơn không còn ở giai đoạn khách tự huỷ được")
 

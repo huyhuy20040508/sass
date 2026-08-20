@@ -242,7 +242,7 @@
             <input type="hidden" name="sort" value="{{ $filters['sort'] }}">
 
             {{-- Giữ per_page khi đổi bộ lọc --}}
-            <input type="hidden" name="per_page" value="{{ $filters['per_page'] }}" id="prdPerPageHidden">
+            <input type="hidden" name="per_page" value="{{ $filters['per_page'] }}">
         </form>
 
         {{-- Bảng --}}
@@ -409,7 +409,7 @@
 
     {{-- Modal Import file --}}
     <div class="prd-overlay" id="prdImportOverlay" style="display:none;">
-        <div class="prd-dialog prd-dialog-sm" id="prdImportDialog">
+        <div class="prd-dialog prd-dialog-sm">
             <div class="prd-modal-head">
                 <h4 class="prd-modal-title">Nhập hàng hóa từ file</h4>
                 <button type="button" class="prd-modal-x" id="prdImportX">
@@ -710,12 +710,6 @@
             background: #fff; box-shadow: 0 10px 40px rgba(0,0,0,.2);
             scrollbar-width: thin; scrollbar-color: #d0d0d0 transparent;
         }
-        /* Tiêu đề nhóm trong modal */
-        .prd-section-title {
-            margin: 2px 0 0; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
-            color: #8c8c8c; padding-bottom: 6px; border-bottom: 1px solid #f0f0f0;
-        }
-
         /* Thanh cuộn đẹp — modal & bảng (WebKit + Firefox) */
         .prd-dialog::-webkit-scrollbar { width: 11px; }
         .prd-dialog::-webkit-scrollbar-track { background: transparent; }
@@ -752,7 +746,6 @@
             display: flex; flex-direction: column; gap: 12px;
         }
         .prd-side-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-        .prd-msel-sm { height: 30px; font-size: 12px; padding: 0 26px 0 8px; width: 132px; }
         .prd-body { min-width: 0; display: flex; flex-direction: column; gap: 14px; }
         .prd-grid4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
         /* Định mức tồn: v2 gộp min và max vào một ô, giữ nguyên. */
@@ -827,8 +820,6 @@
         .prd-conv-empty { margin: 4px 0 0; font-size: 12px; color: #bfbfbf; }
 
         .prd-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-        .prd-grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-        .prd-col-2 { grid-column: span 2; }
         .prd-field-label { display: block; margin-bottom: 4px; font-size: 13px; font-weight: 500; color: #262626; }
         .prd-req { color: #ff4d4f; }
         .prd-input, .prd-textarea, .prd-msel {
@@ -853,8 +844,6 @@
         .prd-input-suffix { position: absolute; right: 12px; top: 0; height: 36px; display: inline-flex; align-items: center; font-size: 13px; color: #8c8c8c; pointer-events: none; }
         .prd-hint { margin: 4px 0 0; font-size: 11px; color: #8c8c8c; }
 
-        /* Ảnh đại diện trong modal */
-        .prd-img-field { display: flex; align-items: center; gap: 14px; }
         .prd-img-preview {
             width: 84px; height: 84px; flex-shrink: 0; border: 1px solid #d9d9d9; border-radius: 8px;
             overflow: hidden; display: flex; align-items: center; justify-content: center;
@@ -867,12 +856,9 @@
             border: 2px solid #d9d9d9; border-top-color: #1890ff; animation: prdspin .7s linear infinite;
         }
         @keyframes prdspin { to { transform: rotate(360deg); } }
-        .prd-img-actions { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
-        .prd-img-btns { display: flex; gap: 8px; }
         .prd-img-remove { color: #ff4d4f; }
         .prd-img-remove:hover { border-color: #ffa39e; }
 
-        .prd-switch-row { display: flex; align-items: center; gap: 10px; }
         .prd-switch-label { font-size: 13px; color: #595959; }
 
         /* Biến thể — tổ hợp thuộc tính */
@@ -929,7 +915,6 @@
             display: inline-flex; align-items: center; justify-content: center; transition: background .15s;
         }
         .prd-var-del:hover { background: #fff1f0; }
-        .prd-var-add { align-self: flex-start; margin-top: 2px; }
         #mVariants:empty { display: none; }
 
         .prd-modal-foot {
@@ -952,9 +937,9 @@
         .prd-status-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; background: #bfbfbf; }
         /* Xanh = đang bán, vàng = tạm ẩn, xám = ngừng kinh doanh. Cùng bộ màu với
            ô tồn kho để cả bảng đọc theo một quy ước. */
-        .prd-status-active .prd-status-dot,     .prd-dot-active       { background: #52c41a; }
-        .prd-status-hidden .prd-status-dot,     .prd-dot-hidden       { background: #faad14; }
-        .prd-status-discontinued .prd-status-dot, .prd-dot-discontinued { background: #bfbfbf; }
+        .prd-status-active .prd-status-dot       { background: #52c41a; }
+        .prd-status-hidden .prd-status-dot       { background: #faad14; }
+        .prd-status-discontinued .prd-status-dot { background: #bfbfbf; }
         .prd-status-active { border-color: #d9f7be; background: #f6ffed; color: #389e0d; }
         .prd-status-hidden { border-color: #ffe7ba; background: #fffbe6; color: #d46b08; }
         .prd-status-discontinued { border-color: #e8e8e8; background: #fafafa; color: #8c8c8c; }
@@ -1018,7 +1003,6 @@
         .prd-pp-item { display: flex; flex-direction: column; gap: 1px; }
         .prd-pp-item small { font-size: 11px; color: #8c8c8c; }
         .prd-pp-item b { font-size: 14px; font-weight: 700; color: #262626; }
-        .prd-pp-off { color: #cf1322 !important; }
         .prd-pp-loss { color: #cf1322 !important; }
         .prd-pp-note { font-size: 11.5px; color: #cf1322; }
 
@@ -1044,15 +1028,11 @@
             .prd-col-4 { grid-column: span 1; }
         }
         @media (max-width: 720px) {
-            .prd-grid3 { grid-template-columns: 1fr 1fr; }
-            .prd-grid3 .prd-col-2 { grid-column: span 2; }
             .prd-tabs { overflow-x: auto; padding: 0 10px; }
             .prd-tab { padding: 11px 10px; white-space: nowrap; }
         }
         @media (max-width: 560px) {
-            .prd-grid2, .prd-grid3 { grid-template-columns: 1fr; }
-            .prd-grid3 .prd-col-2 { grid-column: span 1; }
-            .prd-grid2 .prd-col-2 { grid-column: span 1; }
+            .prd-grid2 { grid-template-columns: 1fr; }
         }
     </style>
 
@@ -1505,7 +1485,7 @@ const RETURN_URL = @json(route('admin.products.index', request()->query()));
                 const totalStock = existingVariants.reduce((s, v) => s + Math.max(0, Number(v.stock_quantity || 0)), 0);
 
                 $modalMount.innerHTML = `
-                    <div class="prd-overlay" id="prdOverlay">
+                    <div class="prd-overlay">
                         <div class="prd-dialog" id="prdDialog">
                             <div class="prd-modal-head">
                                 <div class="prd-modal-headmain">
@@ -1625,7 +1605,7 @@ const RETURN_URL = @json(route('admin.products.index', request()->query()));
                                                 {{-- Thẻ hàng hóa: nhãn người bán tự dán, thu ngân sẽ bày
                                                      thành dãy phím lọc. Tick thẻ có sẵn hoặc gõ thẻ mới. --}}
                                                 <label class="prd-field-label">Thẻ hàng hóa</label>
-                                                <div class="prd-pick" id="mTagsPick" data-pick="tags">
+                                                <div class="prd-pick" data-pick="tags">
                                                     <button type="button" class="prd-pick-btn" ${isView ? 'disabled' : ''}>
                                                         <span class="prd-pick-text">Chưa dán thẻ</span>
                                                         <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
@@ -1663,7 +1643,7 @@ const RETURN_URL = @json(route('admin.products.index', request()->query()));
                                                 {{-- Chi nhánh QUẢN LÝ mặt hàng. Không tick gì = mọi chi
                                                      nhánh — cửa hàng một chi nhánh không phải đụng tới. --}}
                                                 <label class="prd-field-label">Chi nhánh</label>
-                                                <div class="prd-pick" id="mShopsPick" data-pick="shops">
+                                                <div class="prd-pick" data-pick="shops">
                                                     <button type="button" class="prd-pick-btn" ${isView ? 'disabled' : ''}>
                                                         <span class="prd-pick-text">Mọi chi nhánh</span>
                                                         <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
