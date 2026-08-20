@@ -1500,7 +1500,7 @@
                     return;
                 }
                 tbody.innerHTML = items.map((it) => {
-                    const meta = [it.variant_sku, it.size, it.color].filter(Boolean).join(' · ');
+                    const meta = [it.variant_sku, it.variant_name].filter(Boolean).join(' · ');
                     const done = (Number(it.received_quantity) || 0) >= (Number(it.quantity) || 0);
                     return `<tr>
                             <td>
@@ -1778,7 +1778,7 @@
                     $('rUpdateCost').checked = true;
 
                     $('rItems').innerHTML = rows.map((it, i) => {
-                        const meta = [it.variant_sku, it.size, it.color].filter(Boolean).join(' · ');
+                        const meta = [it.variant_sku, it.variant_name].filter(Boolean).join(' · ');
                         return `<tr data-row="${i}" class="is-off">
                                 <td class="po-i-qty"><input type="checkbox" class="po-check r-pick" data-i="${i}"></td>
                                 <td>
@@ -1903,8 +1903,7 @@
                         variant_id: it.product_variant_id,
                         name: it.product_name,
                         sku: it.variant_sku,
-                        size: it.size,
-                        color: it.color,
+                        variant_name: it.variant_name,
                         stock: null,             // tồn kho hiện tại chỉ có ở luồng chọn hàng
                         quantity: it.quantity,
                         unit_cost: it.unit_cost,
@@ -1995,7 +1994,7 @@
                             const data = res.data || [];
                             renderVariantList(data.length
                                 ? data.map((v) => {
-                                    const meta = [v.sku, v.size, v.color].filter(Boolean).join(' · ');
+                                    const meta = [v.sku, v.variant_name].filter(Boolean).join(' · ');
                                     const cost = v.cost_price != null ? money(v.cost_price) : 'chưa khai giá vốn';
                                     return `<div class="po-ac-item" role="option" data-variant="${encodeURIComponent(JSON.stringify(v))}">
                                             <b>${esc(v.product_name)}</b>
@@ -2022,8 +2021,7 @@
                             variant_id: v.variant_id,
                             name: v.product_name,
                             sku: v.sku,
-                            size: v.size,
-                            color: v.color,
+                            variant_name: v.variant_name,
                             stock: v.stock,
                             quantity: 1,
                             unit_cost: Number(v.cost_price) || 0,
@@ -2036,7 +2034,7 @@
                     const tbody = $('fItems');
                     $('fItemsEmpty').hidden = lines.length > 0;
                     tbody.innerHTML = lines.map((l, i) => {
-                        const meta = [l.sku, l.size, l.color].filter(Boolean).join(' · ');
+                        const meta = [l.sku, l.variant_name].filter(Boolean).join(' · ');
                         const cost = Math.max(0, Number(l.unit_cost) || 0);
                         return `<tr data-row="${i}">
                                 <td>

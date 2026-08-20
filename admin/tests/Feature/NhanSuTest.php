@@ -100,8 +100,8 @@ class NhanSuTest extends TestCase
         $this->assertStringNotContainsString('nsu-small">NV0001', $html);
 
         // Số thứ tự đếm từ 1.
-        $this->assertMatchesRegularExpression('#<td class="tc nsu-muted">\s*1\s*</td>#u', $html);
-        $this->assertMatchesRegularExpression('#<td class="tc nsu-muted">\s*2\s*</td>#u', $html);
+        $this->assertMatchesRegularExpression('#<td class="nsu-c-stt nsu-muted">\s*1\s*</td>#u', $html);
+        $this->assertMatchesRegularExpression('#<td class="nsu-c-stt nsu-muted">\s*2\s*</td>#u', $html);
     }
 
     /**
@@ -820,5 +820,49 @@ class NhanSuTest extends TestCase
         $res = $this->withSession($phien)->get('/admin/staff');
 
         $this->assertContains($res->getStatusCode(), [302, 403]);
+    }
+
+    /**
+     * Mỗi cột khai bề rộng theo %, cộng lại ĐÚNG 100.
+     *
+     * Bỏ trống một cột là cột đó nuốt hết phần dư, các cột còn lại dồn cục lại
+     * một bên — bảng hở ra một khoảng chết. Cộng quá 100 thì bảng tràn, cộng
+     * thiếu thì cột cuối phình ra.
+     */
+    public function test_cot_chia_theo_phan_tram_cong_du_100(): void
+    {
+        $this->fakeApi([
+            ['id' => 12, 'code' => 'NV0001', 'full_name' => 'Người thứ nhất', 'status' => 'dang_lam'],
+        ]);
+
+        $html = $this->withSession($this->phienQuanTri())
+            ->get('/admin/staff')->assertOk()->getContent();
+
+        // Bề rộng cột lấy từ CSS, không nhét style thẳng vào từng ô.
+        preg_match_all('/td\.(nsu-c-[a-z]+)\s*\{\s*width:\s*([0-9.]+)%/', $html, $m);
+        $rong = array_combine($m[1], array_map('floatval', $m[2]));
+
+        // Đủ mười cột của bảng, không sót cột nào.
+        preg_match_all('/<th class="(nsu-c-[a-z]+)"/', $html, $cot);
+        $this->assertCount(10, $cot[1]);
+        foreach ($cot[1] as $lop) {
+            $this->assertArrayHasKey($lop, $rong, "Cột {$lop} chưa khai bề rộng");
+        }
+
+        $this->assertSame(100.0, array_sum($rong));
+    }
+
+    /** Bảng canh giữa và chia cột cố định — cùng khuôn với các trang danh sách khác. */
+    public function test_bang_canh_giua_va_chia_cot_co_dinh(): void
+    {
+        $this->fakeApi([
+            ['id' => 12, 'code' => 'NV0001', 'full_name' => 'Người thứ nhất', 'status' => 'dang_lam'],
+        ]);
+
+        $html = $this->withSession($this->phienQuanTri())
+            ->get('/admin/staff')->assertOk()->getContent();
+
+        $this->assertStringContainsString('table-layout: fixed', $html);
+        $this->assertStringContainsString('padding: 14px 10px; vertical-align: middle; text-align: center;', $html);
     }
 }

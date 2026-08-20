@@ -565,7 +565,12 @@ func New(
 			q.Dat(manage, http.MethodGet, "/products/:id", "san-pham.xem", h.Product.Get)
 			q.Dat(manage, http.MethodPut, "/products/:id", "san-pham.sua", h.Product.Update)
 			q.Dat(manage, http.MethodPut, "/products/:id/status", "san-pham.sua", h.Product.UpdateStatus)
+			// Hai mũi tên lên/xuống trên bảng danh sách — chỉ đổi cột sort.
+			q.Dat(manage, http.MethodPut, "/products/:id/sort", "san-pham.sua", h.Product.DoiChoThuTu)
 			q.Dat(manage, http.MethodDelete, "/products/:id", "san-pham.xoa", h.Product.Delete)
+			// Thẻ hàng hóa — đứng riêng chứ không nằm dưới /products/... vì Gin
+			// không cho một nhánh vừa có đoạn tĩnh vừa có tham số :id.
+			q.Dat(manage, http.MethodGet, "/the-hang-hoa", "san-pham.xem", h.Product.DanhSachThe)
 
 			// Khách hàng — hồ sơ cá nhân của người mua, chỉ quản trị viên xem được.
 			q.Dat(manage, http.MethodGet, "/customers", "khach-hang.xem", h.Customer.List)

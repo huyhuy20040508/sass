@@ -167,9 +167,13 @@ func (r *inventoryRepository) List(ctx context.Context, f domain.InventoryFilter
 
 	q := applyInventoryFilter(r.baseQuery(ctx), f, ton).
 		Joins("LEFT JOIN categories c ON c.id = p.category_id").
+		// Đơn vị tính đi kèm để màn kho ghi được "12 Hộp" chứ không phải một con
+		// số trần. LEFT JOIN: mặt hàng chưa khai đơn vị vẫn phải hiện ra.
+		Joins("LEFT JOIN product_units u ON u.id = p.unit_id").
 		Select(`v.id AS variant_id, v.product_id, p.name AS product_name, p.slug,
 			COALESCE(NULLIF(v.image, ''), NULLIF(p.thumbnail, ''), '') AS thumbnail,
-			v.sku, v.size, v.color, COALESCE(p.kit_type, '') AS kit_type,
+			v.sku, COALESCE(v.name, '') AS variant_name,
+			COALESCE(u.name, '') AS unit_name,
 			COALESCE(c.name, '') AS category_name,
 			` + ton + ` AS stock_quantity, v.is_active, p.is_active AS product_active,
 			` + effectivePriceExpr + ` AS price,
@@ -211,10 +215,12 @@ func (r *inventoryRepository) FindItem(ctx context.Context, variantID uint) (*do
 	var items []domain.InventoryItem
 	err := r.baseQuery(ctx).
 		Joins("LEFT JOIN categories c ON c.id = p.category_id").
+		Joins("LEFT JOIN product_units u ON u.id = p.unit_id").
 		Where("v.id = ?", variantID).
 		Select(`v.id AS variant_id, v.product_id, p.name AS product_name, p.slug,
 			COALESCE(NULLIF(v.image, ''), NULLIF(p.thumbnail, ''), '') AS thumbnail,
-			v.sku, v.size, v.color, COALESCE(p.kit_type, '') AS kit_type,
+			v.sku, COALESCE(v.name, '') AS variant_name,
+			COALESCE(u.name, '') AS unit_name,
 			COALESCE(c.name, '') AS category_name,
 			` + ton + ` AS stock_quantity, v.is_active, p.is_active AS product_active,
 			` + effectivePriceExpr + ` AS price,

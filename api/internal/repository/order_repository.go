@@ -136,11 +136,39 @@ func syncOrderStock(tx *gorm.DB, o *domain.Order, desired map[uint]int, txType, 
 		}
 	}
 
+	// Mặt hàng tắt "Trừ kho" thì lượt bán KHÔNG đụng vào kho — hàng dịch vụ, hàng
+	// đặt gia công. Hỏi một lượt cho cả đơn thay vì hỏi từng dòng: đơn mười món
+	// thì mười lượt truy vấn giữa một giao dịch đang giữ khoá trên bảng tồn.
+	//
+	// Unscoped vì mặt hàng có thể đã xoá mềm sau khi đơn được đặt — huỷ đơn vẫn
+	// phải trả hàng về đúng như lúc trừ.
+	productIDs := make([]uint, 0, len(variants))
+	for _, v := range variants {
+		productIDs = append(productIDs, v.ProductID)
+	}
+	khongTruKho := make(map[uint]bool)
+	if len(productIDs) > 0 {
+		var ids []uint
+		if err := tx.Unscoped().Model(&domain.Product{}).
+			Where("id IN ? AND is_stock_deducted = ?", productIDs, false).
+			Pluck("id", &ids).Error; err != nil {
+			return err
+		}
+		for _, id := range ids {
+			khongTruKho[id] = true
+		}
+	}
+
 	for _, v := range variants {
 		delta := deltas[v.ID]
 		// Nhưng không cho LẤY THÊM hàng từ biến thể đã ngừng bán.
 		if delta < 0 && v.DeletedAt.Valid {
 			return domain.ErrVariantNotFound
+		}
+		// Không trừ kho thì cũng KHÔNG ghi bút toán: sổ kho phải là bản ghi của
+		// hàng thật đã đi ra đi vào, không phải nhật ký bán hàng.
+		if khongTruKho[v.ProductID] {
+			continue
 		}
 
 		before, after, err := ghiTonChiNhanh(tx, shopID, v.ID, delta, false)
@@ -242,7 +270,7 @@ func syncSoldCount(tx *gorm.DB, o *domain.Order, from, to string) error {
 	return nil
 }
 
-// variantLabel dựng tên hiển thị "Sản phẩm (size / màu)" cho thông báo thiếu hàng.
+// variantLabel dựng tên hiển thị "Mặt hàng (tên biến thể)" cho thông báo thiếu hàng.
 func variantLabel(tx *gorm.DB, v domain.ProductVariant) (string, error) {
 	var name string
 	err := tx.Table("products").Select("name").Where("id = ?", v.ProductID).Scan(&name).Error
@@ -252,15 +280,8 @@ func variantLabel(tx *gorm.DB, v domain.ProductVariant) (string, error) {
 	if strings.TrimSpace(name) == "" {
 		name = v.SKU
 	}
-	opts := make([]string, 0, 2)
-	if v.Size != "" {
-		opts = append(opts, v.Size)
-	}
-	if v.Color != "" {
-		opts = append(opts, v.Color)
-	}
-	if len(opts) > 0 {
-		name += " (" + strings.Join(opts, " / ") + ")"
+	if ten := strings.TrimSpace(v.Name); ten != "" {
+		name += " (" + ten + ")"
 	}
 	return name, nil
 }
@@ -405,7 +426,7 @@ func (r *orderRepository) Create(ctx context.Context, o *domain.Order) error {
 }
 
 // loadCheckoutVariants tra biến thể + GIÁ HIỆN TẠI cho từng dòng giỏ hàng, theo
-// product_variant_id nếu client biết, không thì theo slug + size + màu.
+// product_variant_id nếu client biết, không thì theo slug + tên biến thể.
 //
 // Hàm này bỏ qua (không báo lỗi) những dòng không tra được — sản phẩm đã ẩn, đã
 // xoá hoặc biến thể không còn: nơi gọi tự quyết định coi đó là lỗi (đặt hàng) hay
@@ -428,11 +449,8 @@ func loadCheckoutVariants(tx *gorm.DB, lines []domain.CheckoutLine, lock bool) (
 		q := tx.Joins("JOIN products p ON p.id = product_variants.product_id").
 			Where("p.slug = ? AND p.deleted_at IS NULL AND p.is_active = 1", strings.TrimSpace(l.Slug)).
 			Where("product_variants.is_active = 1")
-		if s := strings.TrimSpace(l.Size); s != "" {
-			q = q.Where("product_variants.size = ?", s)
-		}
-		if c := strings.TrimSpace(l.Color); c != "" {
-			q = q.Where("product_variants.color = ?", c)
+		if ten := strings.TrimSpace(l.VariantName); ten != "" {
+			q = q.Where("product_variants.name = ?", ten)
 		}
 		if err := q.Order("product_variants.id").First(&v).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -529,7 +547,7 @@ func loadCheckoutVariants(tx *gorm.DB, lines []domain.CheckoutLine, lock bool) (
 
 		resolved[v.ID] = domain.CheckoutVariant{
 			VariantID: v.ID, ProductID: v.ProductID, ProductName: p.Name, Slug: p.Slug,
-			SKU: v.SKU, Size: v.Size, Color: v.Color, Thumbnail: p.Thumbnail,
+			SKU: v.SKU, VariantName: v.Name, Thumbnail: p.Thumbnail,
 			// Danh mục đi kèm để tầng service đối chiếu phạm vi chương trình
 			// khuyến mãi mà không phải hỏi lại bảng products.
 			CategoryID: p.CategoryID,

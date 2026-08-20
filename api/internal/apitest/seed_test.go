@@ -158,12 +158,15 @@ func gieo(t *testing.T, db *gorm.DB, ma string) *cuaHang {
 		CategoryID: danhMuc.ID,
 		Name:       "Sản phẩm " + c.vet, Slug: c.slug, SKU: "sku-" + c.vet,
 		BasePrice: 100000, Status: domain.ProductStatusActive, IsActive: true,
+		// Mặt hàng bình thường: bán ra CÓ trừ kho. Bool zero-value là false
+		// nên dựng tay mà quên là bài kiểm tồn kho im lặng không trừ gì.
+		IsStockDeducted: true,
 	}
 	tao(t, db, ctx, sanPham)
 	c.sanPham = sanPham.ID
 
 	bienThe := &domain.ProductVariant{
-		ProductID: sanPham.ID, SKU: "sku-" + c.vet + "-m", Size: "M",
+		ProductID: sanPham.ID, SKU: "sku-" + c.vet + "-m", Name: "M",
 		StockQuantity: 20, IsActive: true,
 	}
 	tao(t, db, ctx, bienThe)
@@ -360,11 +363,14 @@ func boSung(t *testing.T, db *gorm.DB, c *cuaHang) {
 		CategoryID: c.danhMuc, Name: "Sản phẩm " + hau, Slug: "sp-" + hau, SKU: "sku-" + hau,
 		BasePrice: 200000, CostPrice: conTro(120000.0),
 		Status: domain.ProductStatusActive, IsActive: true,
+		// Mặt hàng bình thường: bán ra CÓ trừ kho. Bool zero-value là false
+		// nên dựng tay mà quên là bài kiểm tồn kho im lặng không trừ gì.
+		IsStockDeducted: true,
 	}
 	tao(t, db, ctx, sanPham)
 
 	bienThe := &domain.ProductVariant{
-		ProductID: sanPham.ID, SKU: "sku-" + hau + "-l", Size: "L",
+		ProductID: sanPham.ID, SKU: "sku-" + hau + "-l", Name: "L",
 		StockQuantity: 7, IsActive: true,
 	}
 	tao(t, db, ctx, bienThe)
@@ -383,7 +389,7 @@ func boSung(t *testing.T, db *gorm.DB, c *cuaHang) {
 	tao(t, db, ctx, don)
 	dong := &domain.OrderItem{
 		OrderID: don.ID, ProductID: &sanPham.ID, ProductVariantID: &bienThe.ID,
-		ProductName: "Sản phẩm " + hau, VariantSKU: bienThe.SKU, Size: "L",
+		ProductName: "Sản phẩm " + hau, VariantSKU: bienThe.SKU, VariantName: "L",
 		UnitPrice: 200000, Quantity: 2, TotalPrice: 400000,
 	}
 	tao(t, db, ctx, dong)
@@ -492,7 +498,7 @@ func gieoDon(t *testing.T, db *gorm.DB, ctx context.Context, c *cuaHang, ma, tra
 
 	tao(t, db, ctx, &domain.OrderItem{
 		OrderID: don.ID, ProductID: &c.sanPham, ProductVariantID: &c.bienThe,
-		ProductName: "Sản phẩm " + c.vet, VariantSKU: "sku-" + c.vet + "-m", Size: "M",
+		ProductName: "Sản phẩm " + c.vet, VariantSKU: "sku-" + c.vet + "-m", VariantName: "M",
 		UnitPrice: 100000, Quantity: 1, TotalPrice: 100000,
 	})
 
@@ -518,7 +524,7 @@ func gieoPhieuDat(t *testing.T, db *gorm.DB, ctx context.Context, c *cuaHang, ma
 
 	dong := &domain.PurchaseOrderItem{
 		PurchaseOrderID: phieu.ID, ProductID: &c.sanPham, ProductVariantID: &c.bienThe,
-		ProductName: "Sản phẩm " + c.vet, VariantSKU: "sku-" + c.vet + "-m", Size: "M",
+		ProductName: "Sản phẩm " + c.vet, VariantSKU: "sku-" + c.vet + "-m", VariantName: "M",
 		UnitCost: 60000, Quantity: 5, ReceivedQuantity: daNhan, TotalCost: 300000,
 	}
 	tao(t, db, ctx, dong)

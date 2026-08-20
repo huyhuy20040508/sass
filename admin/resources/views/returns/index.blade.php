@@ -1525,7 +1525,7 @@
                     return;
                 }
                 tbody.innerHTML = items.map((it) => {
-                    const meta = [it.variant_sku, it.size, it.color].filter(Boolean).join(' · ');
+                    const meta = [it.variant_sku, it.variant_name].filter(Boolean).join(' · ');
                     return `<tr>
                             <td>
                                 <span class="rt-item-name">${esc(it.product_name || '—')}</span>
@@ -2067,7 +2067,7 @@
 
                 function renderRows() {
                     $('ncItems').innerHTML = rows.map((it, i) => {
-                        const meta = [it.variant_sku, it.size, it.color].filter(Boolean).join(' · ');
+                        const meta = [it.variant_sku, it.variant_name].filter(Boolean).join(' · ');
                         return `<tr data-row="${i}" class="is-off">
                             <td class="rt-i-qty"><input type="checkbox" class="rt-check rt-pick" data-i="${i}"></td>
                             <td>

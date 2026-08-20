@@ -200,7 +200,7 @@ func (r *purchaseReturnRepository) Returnable(ctx context.Context, purchaseOrder
 		Where("i.purchase_order_id = ? AND i.received_quantity > 0", purchaseOrderID).
 		Select(`i.id AS purchase_order_item_id, i.product_id, i.product_variant_id,
 			i.product_name, COALESCE(i.variant_sku, '') AS variant_sku,
-			COALESCE(i.size, '') AS size, COALESCE(i.color, '') AS color,
+			COALESCE(i.variant_name, '') AS variant_name,
 			COALESCE(i.thumbnail, '') AS thumbnail, i.unit_cost,
 			i.received_quantity AS received,
 			COALESCE((

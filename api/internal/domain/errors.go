@@ -15,11 +15,26 @@ var (
 
 	// SKU trùng. Trước đây chỉ có UNIQUE ở DB đỡ, nên người dùng nhận về đúng một
 	// câu "Đã có lỗi xảy ra" mà không biết phải sửa gì — trong khi SKU tự sinh
-	// theo đội bóng · loại áo · mùa giải thì đụng nhau là chuyện thường ngày.
+	// ghép từ tên hàng thì đụng nhau là chuyện thường ngày.
 	ErrSKUExists = errors.New("SKU đã tồn tại")
+
+	// Đã ở đầu (hoặc cuối) danh sách nên không đổi chỗ được nữa. Không phải lỗi
+	// hệ thống — nói thẳng cho người bấm biết là hết đường đi.
+	ErrDaODau  = errors.New("mặt hàng đã ở đầu danh sách")
+	ErrDaOCuoi = errors.New("mặt hàng đã ở cuối danh sách")
+	// Hướng đổi chỗ ngoài hai giá trị up | down.
+	ErrHuongKhongHopLe = errors.New("hướng di chuyển không hợp lệ")
 
 	// Trạng thái sản phẩm ngoài danh sách active | hidden | discontinued.
 	ErrProductStatusInvalid = errors.New("trạng thái sản phẩm không hợp lệ")
+
+	// Tổ hợp thuộc tính của biến thể trỏ vào một giá trị không có thật, hoặc vào
+	// giá trị của MỘT thuộc tính khác với thuộc tính khai kèm ("Màu" = "128GB").
+	ErrBienTheSaiThuocTinh = errors.New("giá trị thuộc tính của biến thể không hợp lệ")
+
+	// Một biến thể mang hai giá trị của CÙNG một thuộc tính ("128GB" và "256GB"
+	// cùng lúc) — đó là dữ liệu hỏng chứ không phải một biến thể.
+	ErrBienTheTrungThuocTinh = errors.New("một biến thể chỉ được mang một giá trị cho mỗi thuộc tính")
 
 	// Tài khoản nội bộ: khoá/xoá/hạ vai trò người super admin đang hoạt động cuối
 	// cùng sẽ không còn ai mở lại được hệ thống.

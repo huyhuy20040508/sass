@@ -27,8 +27,8 @@ func TestGoodsReceiptDungLaiTungDotNhan(t *testing.T) {
 
 	// Hai biến thể để đợt nhận có nhiều dòng hàng.
 	variants := []domain.ProductVariant{
-		{ProductID: productID, SKU: "TEST-RCPT-M", Size: "M", IsActive: true},
-		{ProductID: productID, SKU: "TEST-RCPT-L", Size: "L", IsActive: true},
+		{ProductID: productID, SKU: "TEST-RCPT-M", Name: "M", IsActive: true},
+		{ProductID: productID, SKU: "TEST-RCPT-L", Name: "L", IsActive: true},
 	}
 	for i := range variants {
 		if err := db.WithContext(ctxTest()).Create(&variants[i]).Error; err != nil {

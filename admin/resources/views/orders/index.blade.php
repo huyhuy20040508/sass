@@ -2527,7 +2527,7 @@
                     return;
                 }
                 tbody.innerHTML = items.map((it) => {
-                    const meta = [it.variant_sku, it.size, it.color].filter(Boolean).join(' · ');
+                    const meta = [it.variant_sku, it.variant_name].filter(Boolean).join(' · ');
                     const custom = [it.custom_player_name, it.custom_player_number].filter(Boolean).join(' ');
                     return `<tr>
                             <td>
@@ -2873,7 +2873,7 @@
                     items.length = 0;
                     (o.items || []).forEach((it) => items.push({
                         variantId: it.product_variant_id, productId: it.product_id, name: it.product_name || '',
-                        sku: it.variant_sku || '', size: it.size || '', color: it.color || '',
+                        sku: it.variant_sku || '', variantName: it.variant_name || '',
                         thumbnail: it.thumbnail || '',
                         unitPrice: Number(it.unit_price) || 0, qty: Number(it.quantity) || 1,
                         customName: it.custom_player_name || '', customNumber: it.custom_player_number || '',
@@ -2922,7 +2922,7 @@
                     const tb = $('ncItems');
                     $('ncItemsEmpty').style.display = items.length ? 'none' : '';
                     tb.innerHTML = items.map((it, i) => {
-                        const meta = [it.sku, it.size, it.color].filter(Boolean).join(' · ');
+                        const meta = [it.sku, it.variantName].filter(Boolean).join(' · ');
                         return `<tr>
                             <td>
                                 <span class="ord-item-name">${esc(it.name)}</span>
@@ -2935,8 +2935,7 @@
                                 <input type="hidden" name="items[${i}][product_id]" value="${it.productId || ''}">
                                 <input type="hidden" name="items[${i}][product_name]" value="${esc(it.name)}">
                                 <input type="hidden" name="items[${i}][variant_sku]" value="${esc(it.sku)}">
-                                <input type="hidden" name="items[${i}][size]" value="${esc(it.size)}">
-                                <input type="hidden" name="items[${i}][color]" value="${esc(it.color)}">
+                                <input type="hidden" name="items[${i}][variant_name]" value="${esc(it.variantName)}">
                                 <input type="hidden" name="items[${i}][thumbnail]" value="${esc(it.thumbnail)}">
                                 <input type="hidden" name="items[${i}][unit_price]" value="${it.unitPrice}">
                                 <input type="hidden" name="items[${i}][custom_player_name]" value="${esc(it.customName)}" data-hid="name-${i}">
@@ -2990,7 +2989,7 @@
                     if (exist) { exist.qty += 1; }
                     else items.push({
                         variantId: v.id, productId: p.id, name: p.name,
-                        sku: v.sku || '', size: v.size || '', color: v.color || '',
+                        sku: v.sku || '', variantName: v.name || '',
                         thumbnail: p.thumbnail || v.image || '',
                         unitPrice: Number(price) || 0, qty: 1, customName: '', customNumber: '',
                     });
@@ -3057,7 +3056,7 @@
                         const variants = (p.variants || []).filter((v) => v.id);
                         const vhtml = variants.length
                             ? `<div class="ord-ac-variants">${variants.map((v) => {
-                                const vlabel = [v.size, v.color].filter(Boolean).join(' / ') || v.sku || 'Mặc định';
+                                const vlabel = v.name || v.sku || 'Hàng đơn';
                                 const out = (Number(v.stock) <= 0);
                                 const payload = encodeURIComponent(JSON.stringify({
                                     p: { id: p.id, name: p.name, base_price: p.base_price, sale_price: p.sale_price, thumbnail: p.thumbnail },

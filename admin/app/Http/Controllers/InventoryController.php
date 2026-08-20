@@ -711,15 +711,14 @@ class InventoryController extends Controller
         return response()->streamDownload(function () use ($rows, $low) {
             $out = fopen('php://output', 'w');
             fwrite($out, "\xEF\xBB\xBF");
-            fputcsv($out, ['SKU', 'Sản phẩm', 'Loại áo', 'Size', 'Màu', 'Danh mục', 'Tồn kho', 'Mức tồn', 'Giá bán', 'Giá vốn', 'Giá trị vốn tồn kho', 'Trạng thái', 'Lần cuối phát sinh']);
+            fputcsv($out, ['Mã hàng', 'Tên hàng hóa', 'Biến thể', 'ĐVT', 'Nhóm hàng', 'Tồn kho', 'Mức tồn', 'Giá bán', 'Giá vốn', 'Giá trị vốn tồn kho', 'Trạng thái', 'Lần cuối phát sinh']);
             foreach ($rows as $r) {
                 $qty = (int) ($r['stock_quantity'] ?? 0);
                 fputcsv($out, [
                     $r['sku'] ?? '',
                     $r['product_name'] ?? '',
-                    ProductController::KIT_TYPES[$r['kit_type'] ?? ''] ?? '',
-                    $r['size'] ?? '',
-                    $r['color'] ?? '',
+                    $r['variant_name'] ?? '',
+                    $r['unit_name'] ?? '',
                     $r['category_name'] ?? '',
                     $qty,
                     self::STOCK_STATES[self::stockState($qty, $low)] ?? '',

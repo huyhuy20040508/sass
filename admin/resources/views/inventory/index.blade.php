@@ -27,9 +27,6 @@
         $TITLE = \App\Http\Controllers\InventoryController::TITLE;
         $EMPTY_TEXT = \App\Http\Controllers\InventoryController::EMPTY_TEXT;
 
-        // Loại áo của sản phẩm cha — API trả sẵn kèm mỗi dòng kho.
-        $KIT_TYPES = \App\Http\Controllers\ProductController::KIT_TYPES;
-
         $low = $filters['low_stock'];
         // Ngưỡng đang cấu hình (trang Cài đặt) có thể không nằm trong danh sách chọn
         // sẵn — phải chèn vào, nếu không select hiện một mức khác với mức đang lọc.
@@ -318,10 +315,10 @@
                             $vid = (int) ($it['variant_id'] ?? 0);
                             $qty = (int) ($it['stock_quantity'] ?? 0);
                             $state = \App\Http\Controllers\InventoryController::stockState($qty, $low);
+                            // Tên biến thể + đơn vị tính: API trả sẵn kèm mỗi dòng kho.
                             $variantParts = array_filter([
-                                $KIT_TYPES[$it['kit_type'] ?? ''] ?? '',
-                                $it['size'] ?? '',
-                                $it['color'] ?? '',
+                                $it['variant_name'] ?? '',
+                                $it['unit_name'] ?? '',
                             ]);
                         @endphp
                         <tr data-id="{{ $vid }}">
@@ -1082,7 +1079,6 @@
             const LOW = {{ $low }};
             const TX_TYPES = @json($TX_TYPES);
             const TX_SOURCES = @json($TX_SOURCES);
-            const KIT_TYPES = @json($KIT_TYPES);
 
             // ---------- Bộ lọc realtime ----------
             // Không có nút "Áp dụng": đổi select là lọc ngay, gõ tìm kiếm thì chờ
@@ -1365,7 +1361,7 @@
             const ledger = { id: 0, token: 0, page: 1, total: 0, loading: false, seen: new Set() };
 
             function variantText(it) {
-                return [KIT_TYPES[it.kit_type] || '', it.size || '', it.color || ''].filter(Boolean).join(' / ') || '—';
+                return [it.variant_name || '', it.unit_name || ''].filter(Boolean).join(' · ') || '—';
             }
 
             function stateOf(qty) {

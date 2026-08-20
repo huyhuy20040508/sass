@@ -20,8 +20,11 @@ type ProductFilter struct {
 	// hàng ("còn món nào chưa biết để đâu?"), mà nhồi nó vào cùng một trường với
 	// id thì mọi nơi đọc trường ấy phải nhớ thêm một luật ngầm.
 	NoLocation bool
-	KitType    string
-	IsFeatured *bool
+	// UnitID lọc theo đơn vị tính (nil = không lọc).
+	UnitID *uint
+	// IsMultiVariant tách hàng nhiều biến thể khỏi hàng đơn (nil = không lọc).
+	IsMultiVariant *bool
+	IsFeatured     *bool
 	IsActive   *bool // lọc chính xác theo trạng thái (nil = không lọc)
 	OnSale     *bool // true = chỉ sản phẩm đang giảm giá (sale_price hợp lệ < base_price)
 	MinPrice   *float64
@@ -37,6 +40,11 @@ type ProductFilter struct {
 	// Status lọc chính xác theo trạng thái kinh doanh (rỗng = không lọc). Chi tiết
 	// hơn IsActive: tạm ẩn và ngừng kinh doanh đều có is_active = 0.
 	Status string
+
+	// Statuses lọc theo NHIỀU trạng thái cùng lúc — bản cũ bày trạng thái thành
+	// các ô tick, người dùng bỏ tick "Ngừng kinh doanh" là còn lại hai mức.
+	// Có phần tử thì Status bị bỏ qua.
+	Statuses []string
 
 	// Slim = true: bỏ nạp kèm biến thể và thư viện ảnh. Trang danh sách ngoài cửa
 	// hàng chỉ cần ảnh đại diện + giá, nạp cả hai thứ kia cho 12 sản phẩm là kéo
@@ -90,13 +98,14 @@ type CustomerStats struct {
 }
 
 // CheckoutLine — một dòng hàng khách muốn mua, ở dạng "định danh" chứ chưa có giá.
-// Biến thể được xác định bằng ID nếu có, không thì tra theo slug sản phẩm + size + màu.
+// Biến thể được xác định bằng ID nếu có, không thì tra theo slug mặt hàng + tên biến thể.
 type CheckoutLine struct {
 	VariantID uint
 	Slug      string
-	Size      string
-	Color     string
-	Quantity  int
+	// VariantName là TÊN biến thể ("128GB · Đen") — đường tra dự phòng khi client
+	// chỉ biết slug mặt hàng chứ không cầm id biến thể.
+	VariantName string
+	Quantity    int
 	// DiscountPercent là mức bớt giá của RIÊNG dòng này, do người bán ở quầy bấm.
 	// Luôn 0 với đơn khách đặt trên web: ở đó không có ai để bấm, và một trường
 	// giảm giá mà client tự gửi lên được là một cách tự phát mã giảm giá.
@@ -116,10 +125,9 @@ type CheckoutVariant struct {
 	// Barcode chỉ được điền ở đường QUÉT MÃ (ScanVariant) — luồng đặt hàng không
 	// cần tới nó, và không đọc thừa một cột cho mọi dòng giỏ hàng chỉ vì một màn
 	// hình dùng tới.
-	Barcode   string
-	Size      string
-	Color     string
-	Thumbnail string
+	Barcode     string
+	VariantName string
+	Thumbnail   string
 	// CategoryID lấy sẵn để đối chiếu phạm vi chương trình khuyến mãi mà không
 	// phải hỏi thêm bảng products lần nữa ngay giữa giao dịch đặt hàng.
 	CategoryID uint
@@ -321,8 +329,7 @@ type ReturnableItem struct {
 	ProductVariantID *uint   `json:"product_variant_id"`
 	ProductName      string  `json:"product_name"`
 	VariantSKU       string  `json:"variant_sku"`
-	Size             string  `json:"size"`
-	Color            string  `json:"color"`
+	VariantName      string  `json:"variant_name"`
 	Thumbnail        string  `json:"thumbnail"`
 	UnitPrice        float64 `json:"unit_price"`
 	Quantity         int     `json:"quantity"`          // số đã mua
@@ -469,8 +476,7 @@ type PurchaseVariant struct {
 	ProductID   uint   `json:"product_id"`
 	ProductName string `json:"product_name"`
 	SKU         string `json:"sku"`
-	Size        string `json:"size"`
-	Color       string `json:"color"`
+	VariantName string `json:"variant_name"`
 	Thumbnail   string `json:"thumbnail"`
 	// CostPrice là giá vốn hiệu lực đang khai (nil = chưa khai) — dùng để gợi ý
 	// giá nhập cho người lập phiếu.
@@ -557,8 +563,7 @@ type PurchaseReturnable struct {
 	ProductVariantID    *uint   `json:"product_variant_id"`
 	ProductName         string  `json:"product_name"`
 	VariantSKU          string  `json:"variant_sku"`
-	Size                string  `json:"size"`
-	Color               string  `json:"color"`
+	VariantName         string  `json:"variant_name"`
 	Thumbnail           string  `json:"thumbnail"`
 	UnitCost            float64 `json:"unit_cost"`
 	Received            int     `json:"received"`
@@ -635,8 +640,7 @@ type GoodsReceiptItem struct {
 	ProductID      *uint   `json:"product_id"`
 	ProductName    string  `json:"product_name"`
 	SKU            string  `json:"sku"`
-	Size           string  `json:"size"`
-	Color          string  `json:"color"`
+	VariantName    string  `json:"variant_name"`
 	Thumbnail      string  `json:"thumbnail"`
 	Quantity       int     `json:"quantity"`
 	UnitCost       float64 `json:"unit_cost"`
@@ -708,11 +712,10 @@ type InventoryItem struct {
 	Slug        string `json:"slug"`
 	Thumbnail   string `json:"thumbnail"`
 	SKU         string `json:"sku"`
-	Size        string `json:"size"`
-	Color       string `json:"color"`
-	// KitType là loại áo của sản phẩm cha (fan | player), lấy sẵn để giao diện
-	// kho phân biệt được FAN với PLAYER mà không phải gọi thêm.
-	KitType       string `json:"kit_type"`
+	VariantName string `json:"variant_name"`
+	// UnitName là tên đơn vị tính của mặt hàng cha ("Cái", "Hộp"), lấy sẵn để
+	// màn kho ghi được "12 Hộp" chứ không phải một con số trần.
+	UnitName      string `json:"unit_name"`
 	CategoryName  string `json:"category_name"`
 	StockQuantity int    `json:"stock_quantity"`
 	// Price là giá HIỆU LỰC của biến thể: giá riêng của biến thể nếu có, không thì
@@ -1127,6 +1130,25 @@ type ProductRepository interface {
 	// ReplaceImages đồng bộ thư viện ảnh của sản phẩm: upsert ảnh trong danh sách,
 	// xoá (hard-delete) các ảnh cũ không còn.
 	ReplaceImages(ctx context.Context, productID uint, images []ProductImage) error
+	// DoiChoThuTu đổi chỗ mặt hàng với mặt hàng liền kề theo thứ tự tự xếp.
+	// huong = "up" (lên trên) | "down" (xuống dưới). Đã ở đầu/cuối thì trả
+	// ErrDaODau — tầng trên dịch thành một câu nói rõ, không phải lỗi 500.
+	DoiChoThuTu(ctx context.Context, id uint, huong string) error
+	// ThuTuKeTiep trả giá trị sort cho mặt hàng mới (lớn hơn mọi giá trị đang
+	// có) để hàng vừa thêm nằm ngay đầu danh sách.
+	ThuTuKeTiep(ctx context.Context) (int, error)
+	// ReplaceShops ghi lại NGUYÊN cụm chi nhánh quản lý mặt hàng.
+	//
+	// Danh sách rỗng = gỡ hết, và mặt hàng trở lại thuộc MỌI chi nhánh — đó là
+	// ý nghĩa của "không có dòng nào" ở bảng product_shops.
+	ReplaceShops(ctx context.Context, productID uint, shopIDs []uint) error
+	// ReplaceTags dán lại NGUYÊN cụm thẻ của mặt hàng, nhận TÊN thẻ.
+	//
+	// Tên chưa có trong cửa hàng thì mở dòng mới ở product_tags; tên đã có thì
+	// trúng lại dòng cũ (so không phân biệt hoa thường) chứ không đẻ thêm thẻ.
+	ReplaceTags(ctx context.Context, productID uint, names []string) error
+	// DanhSachThe trả mọi thẻ hàng hóa của cửa hàng, sắp theo tên.
+	DanhSachThe(ctx context.Context) ([]ProductTag, error)
 }
 
 // BannerFilter là điều kiện lọc danh sách banner.

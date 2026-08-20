@@ -367,7 +367,7 @@ func main() {
 	}
 
 	// viTriRepo để kiểm vị trí gán cho mặt hàng có thật và thuộc đúng cửa hàng.
-	productSvc := service.NewProductService(productRepo, categoryRepo, hanMucSvc, quyTacMaRepo, viTriRepo)
+	productSvc := service.NewProductService(productRepo, categoryRepo, hanMucSvc, quyTacMaRepo, viTriRepo, donViTinhRepo, thuocTinhRepo, chiNhanhRepo)
 	// Chi nhánh: các ĐIỂM BÁN trong một cửa hàng. Đây là thứ gói Chuỗi bán, và
 	// cũng là nơi hạn mức `max_shops` lần đầu có việc để làm — trước nó, con số
 	// ấy canh một thao tác mà không màn hình nào làm được.

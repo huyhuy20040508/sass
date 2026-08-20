@@ -48,6 +48,41 @@
         select[data-ph] option { color: #212529; }
         select[data-ph] option[value=""] { color: #9ca3af; }
 
+        /* ===== Cặp nút ở chân hộp thoại — QUY TẮC CHUNG TOÀN HỆ THỐNG =====
+           Nút BỎ ĐI (Đóng / Huỷ) tô ĐỎ, nút ĐỒNG Ý (Xác nhận / Lưu / Tạo) tô XANH.
+           Hộp thoại mới cứ đặt hai nút vào chân `*-modal-foot` là ra đúng màu, đừng
+           khai màu riêng nữa.
+
+           Đè bằng !important vì mỗi màn đang có bộ nút riêng (prd-btn-ghost,
+           grp-btn-ghost, po-btn-primary…): sửa một chỗ ở đây thì hai mươi màn cùng
+           đổi, chứ sửa rải ra là lệch nhau dần. */
+        [class*="-modal-foot"] [class*="-btn-ghost"]:not(#fSaveDraft),
+        .btn-huy {
+            border: 1px solid #ff4d4f !important;
+            background: #ff4d4f !important;
+            color: #fff !important;
+        }
+        [class*="-modal-foot"] [class*="-btn-ghost"]:not(#fSaveDraft):hover,
+        .btn-huy:hover {
+            border-color: #ff7875 !important;
+            background: #ff7875 !important;
+        }
+        [class*="-modal-foot"] [class*="-btn-primary"],
+        .btn-xacnhan {
+            border: 1px solid #1890ff !important;
+            background: #1890ff !important;
+            color: #fff !important;
+        }
+        [class*="-modal-foot"] [class*="-btn-primary"]:hover,
+        .btn-xacnhan:hover {
+            border-color: #40a9ff !important;
+            background: #40a9ff !important;
+        }
+        /* Nút đang khoá vẫn phải nhìn ra là đang khoá. */
+        [class*="-modal-foot"] [class*="-btn-ghost"][disabled],
+        [class*="-modal-foot"] [class*="-btn-primary"][disabled],
+        .btn-huy[disabled], .btn-xacnhan[disabled] { opacity: .5; cursor: not-allowed; }
+
         /* ===== Phân trang đồng bộ TOÀN HỆ THỐNG (dùng class .pg-*) ===== */
         /* Một component phân trang chuẩn cho mọi trang danh sách: trái = chọn số dòng
            + thông tin "X–Y / Z"; phải = nút ‹ 1 2 … › (trang hiện tại nền xanh đặc). */

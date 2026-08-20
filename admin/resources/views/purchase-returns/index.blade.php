@@ -978,7 +978,7 @@
                 });
 
                 $('prFormItems').innerHTML = rows.map((it, i) => {
-                    const meta = [it.variant_sku, it.size, it.color].filter(Boolean).join(' · ');
+                    const meta = [it.variant_sku, it.variant_name].filter(Boolean).join(' · ');
                     return `<tr data-row="${i}" class="is-off">
                             <td class="pr-i-qty"><input type="checkbox" class="pr-check pr-pick-row" data-i="${i}"></td>
                             <td>
@@ -1109,7 +1109,7 @@
                 let qty = 0;
                 $('vItems').innerHTML = items.length ? items.map((it) => {
                     qty += Number(it.quantity) || 0;
-                    const meta = [it.variant_sku, it.size, it.color].filter(Boolean).join(' · ');
+                    const meta = [it.variant_sku, it.variant_name].filter(Boolean).join(' · ');
                     return `<tr>
                             <td>
                                 <span class="pr-item-name">${esc(it.product_name || '—')}</span>

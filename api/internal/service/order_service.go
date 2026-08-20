@@ -212,8 +212,7 @@ func (s *orderService) Checkout(ctx context.Context, req *dto.CheckoutRequest, u
 		lines = append(lines, domain.CheckoutLine{
 			VariantID:          it.ProductVariantID,
 			Slug:               it.Slug,
-			Size:               it.Size,
-			Color:              it.Color,
+			VariantName:        it.VariantName,
 			Quantity:           it.Quantity,
 			CustomPlayerName:   it.CustomPlayerName,
 			CustomPlayerNumber: it.CustomPlayerNumber,
@@ -564,8 +563,7 @@ func (s *orderService) POSScan(ctx context.Context, code string) (*dto.POSScanRe
 		ProductName:      giaCuoi.ProductName,
 		SKU:              giaCuoi.SKU,
 		Barcode:          cv.Barcode,
-		Size:             giaCuoi.Size,
-		Color:            giaCuoi.Color,
+		VariantName:      giaCuoi.VariantName,
 		Thumbnail:        giaCuoi.Thumbnail,
 		Price:            giaCuoi.Price,
 		Stock:            giaCuoi.Stock,
@@ -592,8 +590,7 @@ func (s *orderService) Quote(ctx context.Context, req *dto.CartQuoteRequest) (*d
 		lines = append(lines, domain.CheckoutLine{
 			VariantID: it.ProductVariantID,
 			Slug:      it.Slug,
-			Size:      it.Size,
-			Color:     it.Color,
+			VariantName: it.VariantName,
 			Quantity:  it.Quantity,
 		})
 	}
@@ -618,8 +615,7 @@ func (s *orderService) Quote(ctx context.Context, req *dto.CartQuoteRequest) (*d
 	for _, l := range lines {
 		item := dto.CartQuoteItem{
 			Slug:              strings.TrimSpace(l.Slug),
-			Size:              strings.TrimSpace(l.Size),
-			Color:             strings.TrimSpace(l.Color),
+			VariantName:       strings.TrimSpace(l.VariantName),
 			RequestedQuantity: l.Quantity,
 		}
 
@@ -640,8 +636,7 @@ func (s *orderService) Quote(ctx context.Context, req *dto.CartQuoteRequest) (*d
 		item.ProductVariantID = cv.VariantID
 		item.ProductName = cv.ProductName
 		item.Thumbnail = cv.Thumbnail
-		item.Size = cv.Size
-		item.Color = cv.Color
+		item.VariantName = cv.VariantName
 		item.UnitPrice = cv.Price
 		item.Stock = cv.Stock
 		item.Quantity = qty
@@ -875,17 +870,10 @@ func (s *orderService) sendOrderMail(ctx context.Context, o *domain.Order) {
 		data.BankTransferNote = settingText(ctx, s.settings, SettingBankTransferNote)
 	}
 	for _, it := range o.Items {
-		opts := make([]string, 0, 2)
-		if v := strings.TrimSpace(it.Size); v != "" {
-			opts = append(opts, "Size "+v)
-		}
-		if v := strings.TrimSpace(it.Color); v != "" {
-			opts = append(opts, v)
-		}
 		custom := strings.TrimSpace(strings.TrimSpace(it.CustomPlayerName) + " " + strings.TrimSpace(it.CustomPlayerNumber))
 		data.Items = append(data.Items, mailer.OrderItemData{
 			Name:    it.ProductName,
-			Options: strings.Join(opts, " / "),
+			Options: strings.TrimSpace(it.VariantName),
 			Custom:  custom,
 			Qty:     it.Quantity,
 			Price:   it.UnitPrice,
@@ -1154,21 +1142,14 @@ func lowStockAlerts(o *domain.Order, threshold int) (out, low []lowStockAlert) {
 	return out, low
 }
 
-// orderItemLabel dựng tên đọc được cho một dòng hàng: "Áo đấu (M / Trắng)".
+// orderItemLabel dựng tên đọc được cho một dòng hàng: "iPhone 15 (128GB · Đen)".
 func orderItemLabel(it domain.OrderItem) string {
 	name := strings.TrimSpace(it.ProductName)
 	if name == "" {
 		name = it.VariantSKU
 	}
-	opts := make([]string, 0, 2)
-	if it.Size != "" {
-		opts = append(opts, it.Size)
-	}
-	if it.Color != "" {
-		opts = append(opts, it.Color)
-	}
-	if len(opts) > 0 {
-		name += " (" + strings.Join(opts, " / ") + ")"
+	if ten := strings.TrimSpace(it.VariantName); ten != "" {
+		name += " (" + ten + ")"
 	}
 	return name
 }
@@ -1310,8 +1291,7 @@ func buildOrderItems(found map[uint]domain.CheckoutVariant, lines []domain.Check
 			ProductVariantID: &varID,
 			ProductName:      p.cv.ProductName,
 			VariantSKU:       p.cv.SKU,
-			Size:             p.cv.Size,
-			Color:            p.cv.Color,
+			VariantName:      p.cv.VariantName,
 			Thumbnail:        p.cv.Thumbnail,
 			UnitPrice:        p.cv.Price,
 			// Giá vốn CHỤP LẠI ngay đây, trong cùng giao dịch đã khoá biến thể: đây
@@ -1336,16 +1316,12 @@ func matchVariant(found map[uint]domain.CheckoutVariant, l domain.CheckoutLine) 
 		return cv, ok
 	}
 	slug := strings.TrimSpace(l.Slug)
-	size := strings.TrimSpace(l.Size)
-	color := strings.TrimSpace(l.Color)
+	ten := strings.TrimSpace(l.VariantName)
 	for _, cv := range found {
 		if cv.Slug != slug {
 			continue
 		}
-		if size != "" && cv.Size != size {
-			continue
-		}
-		if color != "" && cv.Color != color {
+		if ten != "" && cv.VariantName != ten {
 			continue
 		}
 		return cv, true
@@ -1414,8 +1390,7 @@ func (s *orderService) Create(ctx context.Context, req *dto.OrderCreateRequest) 
 			ProductVariantID:   &vid,
 			ProductName:        strings.TrimSpace(it.ProductName),
 			VariantSKU:         strings.TrimSpace(it.VariantSKU),
-			Size:               strings.TrimSpace(it.Size),
-			Color:              strings.TrimSpace(it.Color),
+			VariantName:        strings.TrimSpace(it.VariantName),
 			Thumbnail:          strings.TrimSpace(it.Thumbnail),
 			UnitPrice:          it.UnitPrice,
 			Quantity:           it.Quantity,
@@ -1488,8 +1463,7 @@ func (s *orderService) Update(ctx context.Context, id uint, req *dto.OrderUpdate
 				ProductVariantID:   &vid,
 				ProductName:        strings.TrimSpace(it.ProductName),
 				VariantSKU:         strings.TrimSpace(it.VariantSKU),
-				Size:               strings.TrimSpace(it.Size),
-				Color:              strings.TrimSpace(it.Color),
+				VariantName:        strings.TrimSpace(it.VariantName),
 				Thumbnail:          strings.TrimSpace(it.Thumbnail),
 				UnitPrice:          it.UnitPrice,
 				Quantity:           it.Quantity,

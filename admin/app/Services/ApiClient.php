@@ -600,8 +600,11 @@ class ApiClient
 
     /**
      * Danh sách sản phẩm (lọc/tìm/phân trang phía server).
-     * $query hỗ trợ: keyword, category_id, kit_type, active, all,
-     * featured, min_price, max_price, sort, page, page_size.
+     * $query hỗ trợ: keyword, category_id, location_id, unit_id, multi_variant,
+     * active, all, featured, status, min_price, max_price, sort, page, page_size.
+     *
+     * keyword tìm cả trên MÃ VẠCH của biến thể — đó là đường dùng nhiều nhất
+     * ngoài quầy, người bán quét mã dán trên món hàng chứ không gõ tên.
      */
     public function products(array $query = []): Response
     {
@@ -629,6 +632,37 @@ class ApiClient
     public function setProductStatus(int $id, string $status): Response
     {
         return $this->put("/admin/products/{$id}/status", ['status' => $status]);
+    }
+
+    /**
+     * Thẻ hàng hóa của cửa hàng ("Bán chạy nhất", "Món mới"…).
+     *
+     * Chỉ có đường ĐỌC: thẻ sinh ra từ chính lượt lưu mặt hàng — gõ tên mới ở ô
+     * thẻ trong hộp thoại là máy chủ mở thẻ mới.
+     */
+    public function theHangHoa(): Response
+    {
+        return $this->get('/admin/the-hang-hoa');
+    }
+
+    /**
+     * Bật/tắt bán hàng bằng CỜ — công tắc trạng thái ngoài bảng danh sách.
+     *
+     * Khác setProductStatus ở chỗ không nói mức nào: tắt mà mặt hàng đang "ngừng
+     * kinh doanh" thì API giữ nguyên mức ấy, chỉ hàng đang bán mới xuống "tạm ẩn".
+     */
+    public function setProductActive(int $id, bool $active): Response
+    {
+        return $this->put("/admin/products/{$id}/status", ['is_active' => $active]);
+    }
+
+    /**
+     * Đổi thứ tự mặt hàng trên bảng danh sách: đưa lên trên (`up`) hoặc xuống
+     * dưới (`down`) một bậc. API đổi chỗ hai giá trị sort, không đánh số lại.
+     */
+    public function moveProductSort(int $id, string $huong): Response
+    {
+        return $this->put("/admin/products/{$id}/sort", ['huong' => $huong]);
     }
 
     /** Xoá nhiều sản phẩm trong MỘT lượt gọi (API chạy trong một giao dịch). */

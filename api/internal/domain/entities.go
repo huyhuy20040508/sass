@@ -363,17 +363,22 @@ type UserAddress struct {
 type Category struct {
 	ID uint `json:"id" gorm:"primaryKey"`
 	TenantOwned
-	ParentID    *uint          `json:"parent_id"`
-	Name        string         `json:"name"`
-	Slug        string         `json:"slug"`
-	Description string         `json:"description"`
-	Image       string         `json:"image"`
-	SortOrder   int            `json:"sort_order"`
-	IsActive    bool           `json:"is_active"`
-	Children    []Category     `json:"children,omitempty" gorm:"foreignKey:ParentID"`
-	CreatedAt   time.Time      `json:"created_at"`
-	UpdatedAt   time.Time      `json:"updated_at"`
-	DeletedAt   gorm.DeletedAt `json:"-" gorm:"index"`
+	ParentID    *uint  `json:"parent_id"`
+	Name        string `json:"name"`
+	Slug        string `json:"slug"`
+	Description string `json:"description"`
+	// VAT là mức thuế MẶC ĐỊNH của nhóm: khai mặt hàng và chọn nhóm này thì ô
+	// thuế tự điền theo đây, vẫn sửa đè được ở từng mặt hàng.
+	//
+	// Cùng quy ước với Product.VAT: số dương là phần trăm, -1 = KCT, -2 = KKKNT.
+	VAT       int            `json:"vat" gorm:"column:vat"`
+	Image     string         `json:"image"`
+	SortOrder int            `json:"sort_order"`
+	IsActive  bool           `json:"is_active"`
+	Children  []Category     `json:"children,omitempty" gorm:"foreignKey:ParentID"`
+	CreatedAt time.Time      `json:"created_at"`
+	UpdatedAt time.Time      `json:"updated_at"`
+	DeletedAt gorm.DeletedAt `json:"-" gorm:"index"`
 }
 
 // Trạng thái kinh doanh của một sản phẩm.
@@ -411,18 +416,25 @@ type Product struct {
 	Category   *Category `json:"category,omitempty" gorm:"foreignKey:CategoryID"`
 	// LocationID là chỗ để hàng (Hàng hóa → Vị trí). nil = chưa gán, và đó là
 	// trạng thái hợp lệ: cửa hàng không quản kho theo kệ thì để trống cả cột.
-	LocationID       *uint      `json:"location_id"`
-	Location         *ViTri     `json:"location,omitempty" gorm:"foreignKey:LocationID"`
-	Name             string     `json:"name"`
-	Slug             string     `json:"slug"`
-	SKU              string     `json:"sku" gorm:"column:sku"`
-	ShortDescription string     `json:"short_description"`
-	Description      string     `json:"description"`
-	Team             string     `json:"team"`
-	Season           string     `json:"season"`
-	KitType          EnumOrNull `json:"kit_type"`
-	BasePrice        float64    `json:"base_price"`
-	SalePrice        *float64   `json:"sale_price"`
+	LocationID *uint  `json:"location_id"`
+	Location   *ViTri `json:"location,omitempty" gorm:"foreignKey:LocationID"`
+	// UnitID là đơn vị tính (Hàng hóa → Đơn vị). nil = chưa khai.
+	UnitID *uint      `json:"unit_id"`
+	Unit   *DonViTinh `json:"unit,omitempty" gorm:"foreignKey:UnitID"`
+	// UnitConversions là khối "Quy đổi đơn vị hàng hoá": 1 Thùng = 24 Cái.
+	// Xem domain/quy_doi_don_vi.go.
+	UnitConversions  DanhSachQuyDoi `json:"unit_conversions" gorm:"column:unit_conversions;serializer:json"`
+	Name             string         `json:"name"`
+	Slug             string         `json:"slug"`
+	SKU              string         `json:"sku" gorm:"column:sku"`
+	ShortDescription string         `json:"short_description"`
+	Description      string         `json:"description"`
+	BasePrice        float64        `json:"base_price"`
+	SalePrice        *float64       `json:"sale_price"`
+	// VAT là % thuế GTGT của mặt hàng. Hai giá trị âm là MÃ chứ không phải phần
+	// trăm: MucKhongChiuThue (-1, KCT) và MucKhongKeKhai (-2, KKKNT). Quy chúng
+	// về 0 là mất phân biệt với mức "0%".
+	VAT int `json:"vat" gorm:"column:vat"`
 	// FinalPrice / PromotionName KHÔNG nằm trong bảng products (`gorm:"-"`) — chúng
 	// được tính lúc đọc từ các chương trình khuyến mãi đang chạy.
 	//
@@ -447,19 +459,49 @@ type Product struct {
 	IsActive bool `json:"is_active"`
 	// Status tách "tạm ẩn ít hôm" khỏi "ngừng kinh doanh hẳn" — hai việc trước
 	// đây trông giống hệt nhau trong danh sách vì cùng là is_active = 0.
-	Status          string           `json:"status"`
-	IsFeatured      bool             `json:"is_featured"`
-	ViewCount       uint             `json:"view_count"`
-	SoldCount       uint             `json:"sold_count"`
+	Status     string `json:"status"`
+	IsFeatured bool   `json:"is_featured"`
+	// IsMultiVariant nói Ý ĐỊNH của người khai: mặt hàng này bán theo tổ hợp
+	// thuộc tính (dung lượng, màu, size…) hay chỉ là một món đơn.
+	//
+	// Không suy ra từ số dòng biến thể được: hàng nhiều thuộc tính đang khai dở
+	// có thể mới có một tổ hợp, đếm ra 1 giống hệt hàng thường.
+	IsMultiVariant bool `json:"is_multi_variant"`
+	// PrintLabel — có in tem cho mặt hàng này không. Phần mềm CHƯA có chức năng
+	// in tem; cờ này mới là chỗ cất giá trị (bản cũ có công tắc nên giữ lại).
+	PrintLabel bool `json:"print_label"`
+	// IsStockDeducted — bán ra có trừ tồn kho không. Tắt = hàng dịch vụ, hàng
+	// đặt gia công: bán bao nhiêu cũng không đụng vào kho.
+	//
+	// CÓ HIỆU LỰC THẬT: xem nơi trừ kho của luồng đặt hàng (order_repository).
+	IsStockDeducted bool `json:"is_stock_deducted"`
+	// IsSerial — quản lý theo số seri/IMEI. Chưa có bảng serial nào nên cờ này
+	// cũng mới là chỗ cất giá trị.
+	IsSerial  bool `json:"is_serial"`
+	ViewCount uint `json:"view_count"`
+	SoldCount uint `json:"sold_count"`
+	// Sort là thứ tự người bán TỰ XẾP bằng hai mũi tên lên/xuống trên bảng.
+	// Danh sách sắp theo cột này GIẢM DẦN — số lớn nằm trên.
+	Sort            int              `json:"sort"`
 	RatingAvg       float64          `json:"rating_avg"`
 	RatingCount     uint             `json:"rating_count"`
 	MetaTitle       string           `json:"meta_title"`
 	MetaDescription string           `json:"meta_description"`
 	Variants        []ProductVariant `json:"variants,omitempty" gorm:"foreignKey:ProductID"`
 	Images          []ProductImage   `json:"images,omitempty" gorm:"foreignKey:ProductID"`
-	CreatedAt       time.Time        `json:"created_at"`
-	UpdatedAt       time.Time        `json:"updated_at"`
-	DeletedAt       gorm.DeletedAt   `json:"-" gorm:"index"`
+	// Shops là những chi nhánh QUẢN LÝ mặt hàng này. RỖNG = mọi chi nhánh, chứ
+	// không phải "không chi nhánh nào" — xem bảng product_shops ở migration 0032.
+	//
+	// Chỉ ĐỌC qua đường này. Ghi thì gọi ReplaceShops: GORM tự lưu quan hệ
+	// many2many bằng cách chèn thẳng vào bảng nối, mà bảng nối có tenant_id
+	// NOT NULL và câu chèn kiểu ấy không đi qua plugin đóng dấu cửa hàng.
+	Shops []ChiNhanh `json:"shops,omitempty" gorm:"many2many:product_shops;joinForeignKey:product_id;joinReferences:shop_id"`
+	// Tags là thẻ dán lên mặt hàng ("Bán chạy nhất", "Món mới") — thu ngân sẽ
+	// bày thành dãy phím lọc. Cùng quy ước chỉ-đọc như Shops: ghi bằng ReplaceTags.
+	Tags      []ProductTag   `json:"tags,omitempty" gorm:"many2many:product_tag_links;joinForeignKey:product_id;joinReferences:tag_id"`
+	CreatedAt time.Time      `json:"created_at"`
+	UpdatedAt time.Time      `json:"updated_at"`
+	DeletedAt gorm.DeletedAt `json:"-" gorm:"index"`
 }
 
 type ProductVariant struct {
@@ -474,10 +516,26 @@ type ProductVariant struct {
 	// khác nhau. Dùng "" thì biến thể thứ hai chưa dán mã sẽ đụng ràng buộc với
 	// biến thể thứ nhất, và người dùng nhận một lỗi trùng mã vạch cho hai món
 	// đều không có mã vạch nào.
-	Barcode *string  `json:"barcode"`
-	Size    string   `json:"size"`
-	Color   string   `json:"color"`
-	Price   *float64 `json:"price"`
+	Barcode *string `json:"barcode"`
+	// Name là tên biến thể dựng từ tổ hợp thuộc tính: "128GB · Đen". Rỗng =
+	// mặt hàng không có biến thể, dòng này là dòng mặc định.
+	//
+	// Lưu sẵn chứ không ghép lại mỗi lần đọc: tên biến thể xuất hiện ở phiếu
+	// nhập, phiếu kiểm kho, màn thu ngân và mọi báo cáo — nối bảng ba tầng
+	// (variant → thuộc tính → giá trị) ở từng chỗ ấy là vừa chậm vừa dễ lệch.
+	Name string `json:"name"`
+	// IsDefault đánh dấu dòng duy nhất của mặt hàng KHÔNG có biến thể.
+	//
+	// Bất biến của khuôn bán lẻ: mọi mặt hàng luôn có ít nhất một dòng ở đây,
+	// vì tồn kho, phiếu nhập, đơn bán và báo cáo đều khoá theo biến thể — mặt
+	// hàng không có dòng nào là mặt hàng không nhập được, không bán được.
+	IsDefault bool `json:"is_default"`
+	// Pos là thứ tự bày ra trong bảng biến thể và ở ô chọn ngoài quầy.
+	Pos int `json:"pos"`
+	// Attributes là tổ hợp thuộc tính của biến thể ("Dung lượng"="128GB",
+	// "Màu"="Đen"). Rỗng với dòng mặc định.
+	Attributes []ProductVariantAttribute `json:"attributes,omitempty" gorm:"foreignKey:VariantID"`
+	Price      *float64                  `json:"price"`
 	// CostPrice ghi đè giá vốn của sản phẩm cha khi biến thể có giá vốn riêng.
 	// nil = theo sản phẩm cha.
 	// Cũng bị xoá khỏi phản hồi công khai như Product.CostPrice.
@@ -504,6 +562,73 @@ type ProductVariant struct {
 	UpdatedAt     time.Time      `json:"updated_at"`
 	DeletedAt     gorm.DeletedAt `json:"-" gorm:"index"`
 }
+
+// ProductVariantAttribute — một chiều của biến thể ("Dung lượng" = "128GB").
+//
+// Bảng nối chứ không phải mấy cột attr1/attr2/attr3: số chiều do cửa hàng
+// quyết, tiệm quần áo dùng 2, tiệm điện thoại dùng 3-4, mà cột cố định thì
+// thêm chiều là lại một lượt ALTER trên bảng thật.
+//
+// Luôn ghi lại NGUYÊN cụm theo biến thể (xoá hết rồi chèn lại) nên không có
+// xoá mềm — xem ReplaceVariants.
+type ProductVariantAttribute struct {
+	ID uint `json:"id" gorm:"primaryKey"`
+	TenantOwned
+	VariantID   uint `json:"variant_id"`
+	AttributeID uint `json:"attribute_id"`
+	ValueID     uint `json:"value_id"`
+	// Tên thuộc tính và tên giá trị nạp kèm để màn hình dựng lại bảng biến thể
+	// mà không phải gọi thêm lượt nào.
+	Attribute *ThuocTinh       `json:"attribute,omitempty" gorm:"foreignKey:AttributeID"`
+	Value     *ThuocTinhGiaTri `json:"value,omitempty" gorm:"foreignKey:ValueID"`
+	CreatedAt time.Time        `json:"created_at"`
+	UpdatedAt time.Time        `json:"updated_at"`
+}
+
+func (ProductVariantAttribute) TableName() string { return "product_variant_attributes" }
+
+// ProductShop gắn một mặt hàng vào một chi nhánh.
+//
+// Tồn tại dưới dạng entity riêng (chứ không để GORM tự lo bảng nối) vì dòng ở
+// đây phải mang tenant_id, mà chỉ entity nhúng TenantOwned mới được plugin đóng
+// dấu cửa hàng lúc INSERT.
+type ProductShop struct {
+	ID uint `json:"id" gorm:"primaryKey"`
+	TenantOwned
+	ProductID uint      `json:"product_id"`
+	ShopID    uint      `json:"shop_id"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+func (ProductShop) TableName() string { return "product_shops" }
+
+// ProductTag là một thẻ hàng hóa của cửa hàng: "Bán chạy nhất", "Món mới"…
+//
+// Bảng tra chứ không phải chuỗi tự do trên từng mặt hàng: thẻ được gõ tay ở mỗi
+// lượt khai, để tự do thì "Bán chạy" và "bán chạy" thành hai thẻ và dãy phím lọc
+// ngoài quầy đầy thẻ rác.
+type ProductTag struct {
+	ID uint `json:"id" gorm:"primaryKey"`
+	TenantOwned
+	Name      string    `json:"name"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+func (ProductTag) TableName() string { return "product_tags" }
+
+// ProductTagLink nối mặt hàng với thẻ. Cùng lý do tồn tại với ProductShop.
+type ProductTagLink struct {
+	ID uint `json:"id" gorm:"primaryKey"`
+	TenantOwned
+	ProductID uint      `json:"product_id"`
+	TagID     uint      `json:"tag_id"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+func (ProductTagLink) TableName() string { return "product_tag_links" }
 
 type ProductImage struct {
 	ID uint `json:"id" gorm:"primaryKey"`
@@ -819,15 +944,16 @@ const (
 type OrderItem struct {
 	ID uint `json:"id" gorm:"primaryKey"`
 	TenantOwned
-	OrderID          uint    `json:"order_id"`
-	ProductID        *uint   `json:"product_id"`
-	ProductVariantID *uint   `json:"product_variant_id"`
-	ProductName      string  `json:"product_name"`
-	VariantSKU       string  `json:"variant_sku" gorm:"column:variant_sku"`
-	Size             string  `json:"size"`
-	Color            string  `json:"color"`
-	Thumbnail        string  `json:"thumbnail"`
-	UnitPrice        float64 `json:"unit_price"`
+	OrderID          uint   `json:"order_id"`
+	ProductID        *uint  `json:"product_id"`
+	ProductVariantID *uint  `json:"product_variant_id"`
+	ProductName      string `json:"product_name"`
+	VariantSKU       string `json:"variant_sku" gorm:"column:variant_sku"`
+	// VariantName chụp lại TÊN biến thể lúc lập chứng từ ("128GB · Đen").
+	// Rỗng = hàng không có biến thể.
+	VariantName string  `json:"variant_name"`
+	Thumbnail   string  `json:"thumbnail"`
+	UnitPrice   float64 `json:"unit_price"`
 	// CostPrice là giá vốn một đơn vị CHỤP LẠI tại thời điểm bán.
 	//
 	// Có nó thì lãi gộp của tháng trước không tự đổi khi nhập lô mới đắt hơn. nil =
@@ -942,20 +1068,20 @@ const (
 type OrderReturnItem struct {
 	ID uint `json:"id" gorm:"primaryKey"`
 	TenantOwned
-	ReturnID         uint      `json:"return_id"`
-	OrderItemID      uint      `json:"order_item_id"`
-	ProductID        *uint     `json:"product_id"`
-	ProductVariantID *uint     `json:"product_variant_id"`
-	ProductName      string    `json:"product_name"`
-	VariantSKU       string    `json:"variant_sku" gorm:"column:variant_sku"`
-	Size             string    `json:"size"`
-	Color            string    `json:"color"`
-	Thumbnail        string    `json:"thumbnail"`
-	UnitPrice        float64   `json:"unit_price"`
-	Quantity         int       `json:"quantity"`
-	TotalPrice       float64   `json:"total_price"`
-	CreatedAt        time.Time `json:"created_at"`
-	UpdatedAt        time.Time `json:"updated_at"`
+	ReturnID         uint   `json:"return_id"`
+	OrderItemID      uint   `json:"order_item_id"`
+	ProductID        *uint  `json:"product_id"`
+	ProductVariantID *uint  `json:"product_variant_id"`
+	ProductName      string `json:"product_name"`
+	VariantSKU       string `json:"variant_sku" gorm:"column:variant_sku"`
+	// VariantName chụp lại TÊN biến thể lúc lập chứng từ ("128GB · Đen").
+	VariantName string    `json:"variant_name"`
+	Thumbnail   string    `json:"thumbnail"`
+	UnitPrice   float64   `json:"unit_price"`
+	Quantity    int       `json:"quantity"`
+	TotalPrice  float64   `json:"total_price"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 // TableName: bảng trong schema là số ít (order_return_history), giống
@@ -1070,16 +1196,17 @@ const (
 type PurchaseOrderItem struct {
 	ID uint `json:"id" gorm:"primaryKey"`
 	TenantOwned
-	PurchaseOrderID  uint    `json:"purchase_order_id"`
-	ProductID        *uint   `json:"product_id"`
-	ProductVariantID *uint   `json:"product_variant_id"`
-	ProductName      string  `json:"product_name"`
-	VariantSKU       string  `json:"variant_sku" gorm:"column:variant_sku"`
-	Size             string  `json:"size"`
-	Color            string  `json:"color"`
-	Thumbnail        string  `json:"thumbnail"`
-	UnitCost         float64 `json:"unit_cost"`
-	Quantity         int     `json:"quantity"`
+	PurchaseOrderID  uint   `json:"purchase_order_id"`
+	ProductID        *uint  `json:"product_id"`
+	ProductVariantID *uint  `json:"product_variant_id"`
+	ProductName      string `json:"product_name"`
+	VariantSKU       string `json:"variant_sku" gorm:"column:variant_sku"`
+	// VariantName chụp lại TÊN biến thể lúc lập chứng từ ("128GB · Đen").
+	// Rỗng = hàng không có biến thể.
+	VariantName string  `json:"variant_name"`
+	Thumbnail   string  `json:"thumbnail"`
+	UnitCost    float64 `json:"unit_cost"`
+	Quantity    int     `json:"quantity"`
 	// ReceivedQuantity cộng dồn qua các đợt nhận; bằng Quantity là dòng đã đủ hàng.
 	ReceivedQuantity int       `json:"received_quantity"`
 	TotalCost        float64   `json:"total_cost"`
@@ -1258,7 +1385,7 @@ const (
 	PurchaseRefundPaid    = "paid"
 )
 
-// PurchaseReturnItem — một dòng hàng trả lại nhà cung cấp. Tên/SKU/size/màu và
+// PurchaseReturnItem — một dòng hàng trả lại nhà cung cấp. Tên/SKU/tên biến thể và
 // giá nhập đều là bản chụp của dòng phiếu đặt gốc.
 type PurchaseReturnItem struct {
 	ID uint `json:"id" gorm:"primaryKey"`
@@ -1270,9 +1397,9 @@ type PurchaseReturnItem struct {
 	ProductVariantID    *uint  `json:"product_variant_id"`
 	ProductName         string `json:"product_name"`
 	VariantSKU          string `json:"variant_sku" gorm:"column:variant_sku"`
-	Size                string `json:"size"`
-	Color               string `json:"color"`
-	Thumbnail           string `json:"thumbnail"`
+	// VariantName chụp lại TÊN biến thể lúc lập chứng từ ("128GB · Đen").
+	VariantName string `json:"variant_name"`
+	Thumbnail   string `json:"thumbnail"`
 
 	Quantity  int     `json:"quantity"`
 	UnitCost  float64 `json:"unit_cost"`

@@ -8,7 +8,6 @@
     viết tay giữa các kệ. In sẵn số vào đó thì phiếu chỉ còn là bản sao màn hình.
 --}}
 @php
-    $KIT_TYPES = \App\Http\Controllers\ProductController::KIT_TYPES;
     $nf = fn ($v) => number_format((int) $v, 0, ',', '.');
 
     // Tên / địa chỉ / liên hệ của cửa hàng — đọc từ Cài đặt, xem ApiClient::shopInfo().
@@ -195,9 +194,8 @@
                 @foreach($rows as $i => $r)
                     @php
                         $variant = array_filter([
-                            $KIT_TYPES[$r['kit_type'] ?? ''] ?? '',
-                            $r['size'] ?? '',
-                            $r['color'] ?? '',
+                            $r['variant_name'] ?? '',
+                            $r['unit_name'] ?? '',
                         ]);
                     @endphp
                     <tr>

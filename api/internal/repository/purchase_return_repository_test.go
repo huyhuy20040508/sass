@@ -25,7 +25,7 @@ func TestPurchaseReturnTruKhoDungMotLan(t *testing.T) {
 	ctx := ctxTest()
 	productID := seedProduct(t, db)
 
-	v := domain.ProductVariant{ProductID: productID, SKU: "TEST-PRET-M", Size: "M", IsActive: true}
+	v := domain.ProductVariant{ProductID: productID, SKU: "TEST-PRET-M", Name: "M", IsActive: true}
 	if err := db.WithContext(ctxTest()).Create(&v).Error; err != nil {
 		t.Fatalf("không tạo được biến thể: %v", err)
 	}

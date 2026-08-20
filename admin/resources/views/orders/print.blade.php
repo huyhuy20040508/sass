@@ -210,8 +210,7 @@
                             $line = (float) ($it['total_price'] ?? $price * $qty);
                             $props = array_filter([
                                 ($it['variant_sku'] ?? '') !== '' ? 'SKU: ' . $it['variant_sku'] : '',
-                                ($it['color'] ?? '') !== '' ? 'Màu: ' . $it['color'] : '',
-                                ($it['size'] ?? '') !== '' ? 'Size: ' . $it['size'] : '',
+                                ($it['variant_name'] ?? '') !== '' ? 'Biến thể: ' . $it['variant_name'] : '',
                                 ($it['custom_player_name'] ?? '') !== '' || ($it['custom_player_number'] ?? '') !== ''
                                     ? 'In áo: ' . trim(($it['custom_player_name'] ?? '') . ' ' . (($it['custom_player_number'] ?? '') !== '' ? '#' . $it['custom_player_number'] : ''))
                                     : '',

@@ -59,6 +59,7 @@ func (s *categoryService) Create(ctx context.Context, req dto.CategoryRequest) (
 		Name:        req.Name,
 		Slug:        req.Slug,
 		Description: req.Description,
+		VAT:         intOrDefault(req.VAT, 0),
 		Image:       req.Image,
 		SortOrder:   req.SortOrder,
 		IsActive:    boolOrDefault(req.IsActive, true),
@@ -101,6 +102,7 @@ func (s *categoryService) Update(ctx context.Context, id uint, req dto.CategoryR
 	c.Name = req.Name
 	c.Slug = req.Slug
 	c.Description = req.Description
+	c.VAT = intOrDefault(req.VAT, c.VAT)
 	c.Image = req.Image
 	c.SortOrder = req.SortOrder
 	c.IsActive = boolOrDefault(req.IsActive, c.IsActive)
@@ -118,6 +120,17 @@ func (s *categoryService) Delete(ctx context.Context, id uint) error {
 }
 
 func boolOrDefault(v *bool, def bool) bool {
+	if v == nil {
+		return def
+	}
+	return *v
+}
+
+// intOrDefault mở con trỏ số nguyên; nil = giữ giá trị đang có.
+//
+// Con trỏ chứ không phải int thường: 0 là một mức thuế HỢP LỆ (0%), nên "khai
+// 0%" và "không gửi trường này" phải phân biệt được.
+func intOrDefault(v *int, def int) int {
 	if v == nil {
 		return def
 	}

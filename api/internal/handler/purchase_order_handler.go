@@ -102,7 +102,7 @@ func (h *PurchaseOrderHandler) Stats(c *gin.Context) {
 }
 
 // @Summary		Tìm sản phẩm để đưa vào phiếu đặt hàng
-// @Description	Trả về BIẾN THỂ (size/màu) đang bán kèm tồn kho hiện tại và giá vốn đang khai — màn hình lập phiếu dùng giá vốn làm giá nhập gợi ý. Hàng sắp hết xếp lên đầu vì đó chính là thứ cần đặt thêm.
+// @Description	Trả về BIẾN THỂ đang bán kèm tồn kho hiện tại và giá vốn đang khai — màn hình lập phiếu dùng giá vốn làm giá nhập gợi ý. Hàng sắp hết xếp lên đầu vì đó chính là thứ cần đặt thêm.
 // @Tags			Admin - Purchases
 // @Accept			json
 // @Produce		json

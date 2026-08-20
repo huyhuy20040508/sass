@@ -2642,7 +2642,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Liệt kê tồn kho theo TỪNG BIẾN THỂ (size/màu/phiên bản) kèm thông tin sản phẩm cha, giá bán hiệu lực, giá vốn hiệu lực và giá trị hàng đang nằm trong kho. Mặc định sắp xếp tồn ít lên trước.\n` + "`" + `stock_value` + "`" + ` tính theo GIÁ VỐN (` + "`" + `cost_price` + "`" + ` của biến thể, không có thì của sản phẩm cha) × tồn kho — giá trị tồn kho về kế toán phải theo giá vốn chứ không phải giá bán. ` + "`" + `cost_price` + "`" + ` rỗng nghĩa là chưa khai giá vốn, biến thể đó đóng góp 0₫ vào giá trị kho.\n` + "`" + `stock=low` + "`" + ` lọc theo ngưỡng ` + "`" + `low_stock` + "`" + ` (mặc định 5): tồn còn lớn hơn 0 nhưng không vượt ngưỡng. ` + "`" + `stock=out` + "`" + ` là đã hết sạch, ` + "`" + `stock=in` + "`" + ` là còn trên ngưỡng.",
+                "description": "Liệt kê tồn kho theo TỪNG BIẾN THỂ (tổ hợp thuộc tính) kèm thông tin mặt hàng cha, giá bán hiệu lực, giá vốn hiệu lực và giá trị hàng đang nằm trong kho. Mặc định sắp xếp tồn ít lên trước.\n` + "`" + `stock_value` + "`" + ` tính theo GIÁ VỐN (` + "`" + `cost_price` + "`" + ` của biến thể, không có thì của sản phẩm cha) × tồn kho — giá trị tồn kho về kế toán phải theo giá vốn chứ không phải giá bán. ` + "`" + `cost_price` + "`" + ` rỗng nghĩa là chưa khai giá vốn, biến thể đó đóng góp 0₫ vào giá trị kho.\n` + "`" + `stock=low` + "`" + ` lọc theo ngưỡng ` + "`" + `low_stock` + "`" + ` (mặc định 5): tồn còn lớn hơn 0 nhưng không vượt ngưỡng. ` + "`" + `stock=out` + "`" + ` là đã hết sạch, ` + "`" + `stock=in` + "`" + ` là còn trên ngưỡng.",
                 "consumes": [
                     "application/json"
                 ],
@@ -5314,7 +5314,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Biến thể chỉ khai size + màu. Tồn kho của biến thể mới luôn bằng 0 — muốn có hàng bán phải qua nghiệp vụ kho (` + "`" + `POST /admin/purchases` + "`" + ` rồi nhận hàng, hoặc ` + "`" + `POST /admin/inventory/adjust` + "`" + `).\nTrả 409 khi cửa hàng đã dùng hết hạn mức sản phẩm của hợp đồng (` + "`" + `max_products` + "`" + `); thông báo kèm số đang dùng và trần.",
+                "description": "Biến thể khai bằng TỔ HỢP THUỘC TÍNH (` + "`" + `attributes` + "`" + `); không gửi tổ hợp nào = hàng đơn, server tự dựng một dòng mặc định. Tồn kho của biến thể mới luôn bằng 0 — muốn có hàng bán phải qua nghiệp vụ kho (` + "`" + `POST /admin/purchases` + "`" + ` rồi nhận hàng, hoặc ` + "`" + `POST /admin/inventory/adjust` + "`" + `).\nTrả 409 khi cửa hàng đã dùng hết hạn mức sản phẩm của hợp đồng (` + "`" + `max_products` + "`" + `); thông báo kèm số đang dùng và trần.",
                 "consumes": [
                     "application/json"
                 ],
@@ -5668,6 +5668,64 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/products/{id}/sort": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Đưa mặt hàng lên trên (` + "`" + `up` + "`" + `) hoặc xuống dưới (` + "`" + `down` + "`" + `) một bậc. Đổi chỗ hai giá trị ` + "`" + `sort` + "`" + `, không đánh số lại cả bảng.\nTrả 409 khi mặt hàng đã ở đầu (hoặc cuối) danh sách.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Products"
+                ],
+                "summary": "Đổi thứ tự hàng hoá trên bảng danh sách",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID sản phẩm",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Hướng di chuyển",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.DoiChoThuTuRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
@@ -6315,7 +6373,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Tạo phiếu trả cho một phiếu đặt hàng nhập. Tên/SKU/size/màu/giá nhập do server chụp lại từ dòng phiếu đặt gốc, client chỉ gửi ` + "`" + `purchase_order_item_id` + "`" + ` + ` + "`" + `quantity` + "`" + `.\n` + "`" + `status=returned` + "`" + ` là \"trả hàng ngay\": phiếu được lập rồi chốt luôn trong một lần gọi — tồn kho bị TRỪ ở bước chốt đó. Bỏ trống hoặc ` + "`" + `draft` + "`" + ` thì chỉ lưu nháp, chưa đụng tới kho.\nTrả vượt số còn trả được của dòng phiếu đặt → 409. Kho không đủ hàng để trừ → 409.",
+                "description": "Tạo phiếu trả cho một phiếu đặt hàng nhập. Tên/SKU/tên biến thể/giá nhập do server chụp lại từ dòng phiếu đặt gốc, client chỉ gửi ` + "`" + `purchase_order_item_id` + "`" + ` + ` + "`" + `quantity` + "`" + `.\n` + "`" + `status=returned` + "`" + ` là \"trả hàng ngay\": phiếu được lập rồi chốt luôn trong một lần gọi — tồn kho bị TRỪ ở bước chốt đó. Bỏ trống hoặc ` + "`" + `draft` + "`" + ` thì chỉ lưu nháp, chưa đụng tới kho.\nTrả vượt số còn trả được của dòng phiếu đặt → 409. Kho không đủ hàng để trừ → 409.",
                 "consumes": [
                     "application/json"
                 ],
@@ -7061,7 +7119,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Trả về BIẾN THỂ (size/màu) đang bán kèm tồn kho hiện tại và giá vốn đang khai — màn hình lập phiếu dùng giá vốn làm giá nhập gợi ý. Hàng sắp hết xếp lên đầu vì đó chính là thứ cần đặt thêm.",
+                "description": "Trả về BIẾN THỂ đang bán kèm tồn kho hiện tại và giá vốn đang khai — màn hình lập phiếu dùng giá vốn làm giá nhập gợi ý. Hàng sắp hết xếp lên đầu vì đó chính là thứ cần đặt thêm.",
                 "consumes": [
                     "application/json"
                 ],
@@ -9350,6 +9408,43 @@ const docTemplate = `{
                     },
                     "409": {
                         "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/the-hang-hoa": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Mọi thẻ cửa hàng đang dùng (\"Bán chạy nhất\", \"Món mới\"…), sắp theo tên. Thẻ SINH RA từ lượt lưu mặt hàng — gõ tên mới ở ô thẻ là có thẻ mới — nên đường này chỉ đọc.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Products"
+                ],
+                "summary": "Danh sách thẻ hàng hóa",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
@@ -13105,7 +13200,7 @@ const docTemplate = `{
         },
         "/orders/quote": {
             "post": {
-                "description": "Tra lại GIÁ và TỒN KHO hiện tại cho từng dòng giỏ hàng rồi tính thử số tiền server sẽ tính nếu khách đặt ngay bây giờ.\nGiỏ hàng của storefront nằm ở localStorage nên giá lưu trong đó là bản chụp lúc khách thêm hàng; admin đổi giá xong thì con số ấy đã cũ.\nTrang thanh toán gọi endpoint này khi mở để cập nhật lại giỏ, thay vì để khách phát hiện chênh lệch ở màn đặt hàng thành công.\nMỗi dòng trả về issue: rỗng (bình thường), \"limited\" (không đủ số lượng), \"out_of_stock\" (hết hàng), \"unavailable\" (không còn bán).\nNên gửi product_variant_id như khi đặt hàng — thiếu ID thì dòng nào có nhiều phiên bản cùng size/màu sẽ báo giá theo biến thể ID nhỏ nhất.\nKHÔNG tạo đơn, KHÔNG giữ hàng — số tiền chính thức vẫn do luồng đặt hàng tính lại.",
+                "description": "Tra lại GIÁ và TỒN KHO hiện tại cho từng dòng giỏ hàng rồi tính thử số tiền server sẽ tính nếu khách đặt ngay bây giờ.\nGiỏ hàng của storefront nằm ở localStorage nên giá lưu trong đó là bản chụp lúc khách thêm hàng; admin đổi giá xong thì con số ấy đã cũ.\nTrang thanh toán gọi endpoint này khi mở để cập nhật lại giỏ, thay vì để khách phát hiện chênh lệch ở màn đặt hàng thành công.\nMỗi dòng trả về issue: rỗng (bình thường), \"limited\" (không đủ số lượng), \"out_of_stock\" (hết hàng), \"unavailable\" (không còn bán).\nNên gửi product_variant_id như khi đặt hàng — thiếu ID thì dòng nào có nhiều biến thể trùng tên sẽ báo giá theo biến thể ID nhỏ nhất.\nKHÔNG tạo đơn, KHÔNG giữ hàng — số tiền chính thức vẫn do luồng đặt hàng tính lại.",
                 "consumes": [
                     "application/json"
                 ],
@@ -14774,7 +14869,7 @@ const docTemplate = `{
         },
         "/products": {
             "get": {
-                "description": "Lọc theo từ khóa, danh mục, thương hiệu, loại áo, khoảng giá; hỗ trợ phân trang \u0026 sắp xếp.\n` + "`" + `cost_price` + "`" + ` (giá vốn, ở cả sản phẩm lẫn biến thể) CHỈ trả về khi gọi kèm token của nhân viên quản trị; các trường hợp khác luôn là null.",
+                "description": "Lọc theo từ khóa (tên/mã hàng/mã vạch biến thể), danh mục, vị trí, đơn vị tính, khoảng giá; hỗ trợ phân trang \u0026 sắp xếp.\n` + "`" + `cost_price` + "`" + ` (giá vốn, ở cả sản phẩm lẫn biến thể) CHỈ trả về khi gọi kèm token của nhân viên quản trị; các trường hợp khác luôn là null.",
                 "produces": [
                     "application/json"
                 ],
@@ -14785,7 +14880,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Tìm theo tên/đội/SKU",
+                        "description": "Tìm theo tên, mã hàng, mã/mã vạch biến thể",
                         "name": "keyword",
                         "in": "query"
                     },
@@ -14797,14 +14892,32 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "description": "Nhiều danh mục, ngăn bằng dấu phẩy",
+                        "name": "category_ids",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Nhiều trạng thái, ngăn bằng dấu phẩy",
+                        "name": "statuses",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
                         "description": "ID vị trí để hàng, hoặc ` + "`" + `none` + "`" + ` để lấy riêng phần chưa gán vị trí",
                         "name": "location_id",
                         "in": "query"
                     },
                     {
-                        "type": "string",
-                        "description": "Loại áo: fan (FAN) | player (PLAYER)",
-                        "name": "kit_type",
+                        "type": "integer",
+                        "description": "ID đơn vị tính",
+                        "name": "unit_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "true = chỉ hàng nhiều biến thể",
+                        "name": "multi_variant",
                         "in": "query"
                     },
                     {
@@ -14857,7 +14970,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "newest|price_asc|price_desc|best_selling",
+                        "description": "newest|name_asc|name_desc|group_asc|group_desc|price_asc|price_desc|best_selling",
                         "name": "sort",
                         "in": "query"
                     },
@@ -15744,9 +15857,6 @@ const docTemplate = `{
                 "amount": {
                     "type": "number"
                 },
-                "color": {
-                    "type": "string"
-                },
                 "product_id": {
                     "type": "integer"
                 },
@@ -15762,9 +15872,6 @@ const docTemplate = `{
                 "quantity_before": {
                     "type": "integer"
                 },
-                "size": {
-                    "type": "string"
-                },
                 "sku": {
                     "type": "string"
                 },
@@ -15779,6 +15886,9 @@ const docTemplate = `{
                 },
                 "variant_id": {
                     "type": "integer"
+                },
+                "variant_name": {
+                    "type": "string"
                 }
             }
         },
@@ -15890,19 +16000,12 @@ const docTemplate = `{
                 "category_name": {
                     "type": "string"
                 },
-                "color": {
-                    "type": "string"
-                },
                 "cost_price": {
                     "description": "CostPrice là giá VỐN hiệu lực: giá vốn riêng của biến thể nếu có, không thì\ncủa sản phẩm cha. nil = CHƯA KHAI giá vốn (khác với giá vốn bằng 0).",
                     "type": "number"
                 },
                 "is_active": {
                     "type": "boolean"
-                },
-                "kit_type": {
-                    "description": "KitType là loại áo của sản phẩm cha (fan | player), lấy sẵn để giao diện\nkho phân biệt được FAN với PLAYER mà không phải gọi thêm.",
-                    "type": "string"
                 },
                 "last_moved_at": {
                     "description": "LastMovedAt là lần cuối biến thể này có bút toán kho (nil = chưa từng).",
@@ -15922,9 +16025,6 @@ const docTemplate = `{
                 "product_name": {
                     "type": "string"
                 },
-                "size": {
-                    "type": "string"
-                },
                 "sku": {
                     "type": "string"
                 },
@@ -15941,8 +16041,15 @@ const docTemplate = `{
                 "thumbnail": {
                     "type": "string"
                 },
+                "unit_name": {
+                    "description": "UnitName là tên đơn vị tính của mặt hàng cha (\"Cái\", \"Hộp\"), lấy sẵn để\nmàn kho ghi được \"12 Hộp\" chứ không phải một con số trần.",
+                    "type": "string"
+                },
                 "variant_id": {
                     "type": "integer"
+                },
+                "variant_name": {
+                    "type": "string"
                 }
             }
         },
@@ -16209,9 +16316,6 @@ const docTemplate = `{
         "domain.OrderItem": {
             "type": "object",
             "properties": {
-                "color": {
-                    "type": "string"
-                },
                 "cost_price": {
                     "description": "CostPrice là giá vốn một đơn vị CHỤP LẠI tại thời điểm bán.\n\nCó nó thì lãi gộp của tháng trước không tự đổi khi nhập lô mới đắt hơn. nil =\ndòng bán trước khi có cột này, hoặc đi qua đường tạo đơn thủ công (nơi người\nnhập gõ giá bán chứ không tra giá vốn) — báo cáo lùi về giá vốn hiện tại cho\nnhững dòng ấy, đúng như nó vẫn tính từ trước tới nay.",
                     "type": "number"
@@ -16250,9 +16354,6 @@ const docTemplate = `{
                 "quantity": {
                     "type": "integer"
                 },
-                "size": {
-                    "type": "string"
-                },
                 "thumbnail": {
                     "type": "string"
                 },
@@ -16264,6 +16365,10 @@ const docTemplate = `{
                     "type": "number"
                 },
                 "updated_at": {
+                    "type": "string"
+                },
+                "variant_name": {
+                    "description": "VariantName chụp lại TÊN biến thể lúc lập chứng từ (\"128GB · Đen\").\nRỗng = hàng không có biến thể.",
                     "type": "string"
                 },
                 "variant_sku": {
@@ -16414,9 +16519,6 @@ const docTemplate = `{
         "domain.OrderReturnItem": {
             "type": "object",
             "properties": {
-                "color": {
-                    "type": "string"
-                },
                 "created_at": {
                     "type": "string"
                 },
@@ -16441,9 +16543,6 @@ const docTemplate = `{
                 "return_id": {
                     "type": "integer"
                 },
-                "size": {
-                    "type": "string"
-                },
                 "thumbnail": {
                     "type": "string"
                 },
@@ -16454,6 +16553,10 @@ const docTemplate = `{
                     "type": "number"
                 },
                 "updated_at": {
+                    "type": "string"
+                },
+                "variant_name": {
+                    "description": "VariantName chụp lại TÊN biến thể lúc lập chứng từ (\"128GB · Đen\").",
                     "type": "string"
                 },
                 "variant_sku": {
@@ -16548,13 +16651,13 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "by_category": {
-                    "description": "Hai lát cắt cùng dạng: ` + "`" + `key` + "`" + ` là id danh mục hoặc chính giá trị (size),\n` + "`" + `label` + "`" + ` là tên đọc được.",
+                    "description": "Hai lát cắt cùng dạng: ` + "`" + `key` + "`" + ` là id danh mục hoặc chính TÊN BIẾN THỂ,\n` + "`" + `label` + "`" + ` là tên đọc được.",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/domain.ReportSlice"
                     }
                 },
-                "by_size": {
+                "by_variant": {
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/domain.ReportSlice"
@@ -16716,9 +16819,6 @@ const docTemplate = `{
         "domain.PurchaseOrderItem": {
             "type": "object",
             "properties": {
-                "color": {
-                    "type": "string"
-                },
                 "created_at": {
                     "type": "string"
                 },
@@ -16744,9 +16844,6 @@ const docTemplate = `{
                     "description": "ReceivedQuantity cộng dồn qua các đợt nhận; bằng Quantity là dòng đã đủ hàng.",
                     "type": "integer"
                 },
-                "size": {
-                    "type": "string"
-                },
                 "thumbnail": {
                     "type": "string"
                 },
@@ -16757,6 +16854,10 @@ const docTemplate = `{
                     "type": "number"
                 },
                 "updated_at": {
+                    "type": "string"
+                },
+                "variant_name": {
+                    "description": "VariantName chụp lại TÊN biến thể lúc lập chứng từ (\"128GB · Đen\").\nRỗng = hàng không có biến thể.",
                     "type": "string"
                 },
                 "variant_sku": {
@@ -16870,9 +16971,6 @@ const docTemplate = `{
         "domain.PurchaseReturnItem": {
             "type": "object",
             "properties": {
-                "color": {
-                    "type": "string"
-                },
                 "created_at": {
                     "type": "string"
                 },
@@ -16898,9 +16996,6 @@ const docTemplate = `{
                 "quantity": {
                     "type": "integer"
                 },
-                "size": {
-                    "type": "string"
-                },
                 "thumbnail": {
                     "type": "string"
                 },
@@ -16911,6 +17006,10 @@ const docTemplate = `{
                     "type": "number"
                 },
                 "updated_at": {
+                    "type": "string"
+                },
+                "variant_name": {
+                    "description": "VariantName chụp lại TÊN biến thể lúc lập chứng từ (\"128GB · Đen\").",
                     "type": "string"
                 },
                 "variant_sku": {
@@ -16952,9 +17051,6 @@ const docTemplate = `{
         "domain.PurchaseReturnable": {
             "type": "object",
             "properties": {
-                "color": {
-                    "type": "string"
-                },
                 "product_id": {
                     "type": "integer"
                 },
@@ -16976,9 +17072,6 @@ const docTemplate = `{
                 "returned": {
                     "type": "integer"
                 },
-                "size": {
-                    "type": "string"
-                },
                 "stock": {
                     "type": "integer"
                 },
@@ -16987,6 +17080,9 @@ const docTemplate = `{
                 },
                 "unit_cost": {
                     "type": "number"
+                },
+                "variant_name": {
+                    "type": "string"
                 },
                 "variant_sku": {
                     "type": "string"
@@ -17031,9 +17127,6 @@ const docTemplate = `{
         "domain.PurchaseVariant": {
             "type": "object",
             "properties": {
-                "color": {
-                    "type": "string"
-                },
                 "cost_price": {
                     "description": "CostPrice là giá vốn hiệu lực đang khai (nil = chưa khai) — dùng để gợi ý\ngiá nhập cho người lập phiếu.",
                     "type": "number"
@@ -17042,9 +17135,6 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "product_name": {
-                    "type": "string"
-                },
-                "size": {
                     "type": "string"
                 },
                 "sku": {
@@ -17058,6 +17148,9 @@ const docTemplate = `{
                 },
                 "variant_id": {
                     "type": "integer"
+                },
+                "variant_name": {
+                    "type": "string"
                 }
             }
         },
@@ -17225,9 +17318,6 @@ const docTemplate = `{
         "domain.ReturnableItem": {
             "type": "object",
             "properties": {
-                "color": {
-                    "type": "string"
-                },
                 "order_item_id": {
                     "type": "integer"
                 },
@@ -17252,14 +17342,14 @@ const docTemplate = `{
                     "description": "số đang/đã trả",
                     "type": "integer"
                 },
-                "size": {
-                    "type": "string"
-                },
                 "thumbnail": {
                     "type": "string"
                 },
                 "unit_price": {
                     "type": "number"
+                },
+                "variant_name": {
+                    "type": "string"
                 },
                 "variant_sku": {
                     "type": "string"
@@ -17885,9 +17975,6 @@ const docTemplate = `{
                     "description": "Available = false khi sản phẩm không còn bán hoặc đã hết sạch hàng.",
                     "type": "boolean"
                 },
-                "color": {
-                    "type": "string"
-                },
                 "issue": {
                     "description": "Issue mô tả ngắn thay đổi của dòng này: \"\" | unavailable | out_of_stock | limited",
                     "type": "string"
@@ -17908,9 +17995,6 @@ const docTemplate = `{
                 "requested_quantity": {
                     "type": "integer"
                 },
-                "size": {
-                    "type": "string"
-                },
                 "slug": {
                     "type": "string"
                 },
@@ -17923,6 +18007,9 @@ const docTemplate = `{
                 "unit_price": {
                     "description": "UnitPrice là ĐƠN GIÁ HIỆN TẠI trong database — chính là giá sẽ tính khi đặt.",
                     "type": "number"
+                },
+                "variant_name": {
+                    "type": "string"
                 }
             }
         },
@@ -18001,6 +18088,12 @@ const docTemplate = `{
                 },
                 "sort_order": {
                     "type": "integer"
+                },
+                "vat": {
+                    "description": "VAT là mức thuế mặc định của nhóm (xem domain.Category.VAT). Bỏ trống =\ngiữ mức đang có khi SỬA, hoặc 0% khi TẠO.",
+                    "type": "integer",
+                    "maximum": 100,
+                    "minimum": -2
                 }
             }
         },
@@ -18133,10 +18226,6 @@ const docTemplate = `{
                 "quantity"
             ],
             "properties": {
-                "color": {
-                    "type": "string",
-                    "maxLength": 50
-                },
                 "custom_player_name": {
                     "type": "string",
                     "maxLength": 50
@@ -18146,7 +18235,7 @@ const docTemplate = `{
                     "maxLength": 10
                 },
                 "product_variant_id": {
-                    "description": "Ưu tiên product_variant_id nếu client biết; không thì tra theo slug + size + color.",
+                    "description": "Ưu tiên product_variant_id nếu client biết; không thì tra theo slug + tên biến thể.",
                     "type": "integer"
                 },
                 "quantity": {
@@ -18154,13 +18243,13 @@ const docTemplate = `{
                     "maximum": 99,
                     "minimum": 1
                 },
-                "size": {
-                    "type": "string",
-                    "maxLength": 50
-                },
                 "slug": {
                     "type": "string",
                     "maxLength": 191
+                },
+                "variant_name": {
+                    "type": "string",
+                    "maxLength": 255
                 }
             }
         },
@@ -18785,6 +18874,21 @@ const docTemplate = `{
                 "tong_tien": {
                     "type": "number",
                     "example": 29970000
+                }
+            }
+        },
+        "dto.DoiChoThuTuRequest": {
+            "type": "object",
+            "required": [
+                "huong"
+            ],
+            "properties": {
+                "huong": {
+                    "type": "string",
+                    "enum": [
+                        "up",
+                        "down"
+                    ]
                 }
             }
         },
@@ -20248,10 +20352,6 @@ const docTemplate = `{
                 "quantity"
             ],
             "properties": {
-                "color": {
-                    "type": "string",
-                    "maxLength": 50
-                },
                 "custom_player_name": {
                     "type": "string",
                     "maxLength": 50
@@ -20274,10 +20374,6 @@ const docTemplate = `{
                     "type": "integer",
                     "minimum": 1
                 },
-                "size": {
-                    "type": "string",
-                    "maxLength": 50
-                },
                 "thumbnail": {
                     "type": "string",
                     "maxLength": 500
@@ -20285,6 +20381,10 @@ const docTemplate = `{
                 "unit_price": {
                     "type": "number",
                     "minimum": 0
+                },
+                "variant_name": {
+                    "type": "string",
+                    "maxLength": 255
                 },
                 "variant_sku": {
                     "type": "string",
@@ -20567,9 +20667,6 @@ const docTemplate = `{
                 "barcode": {
                     "type": "string"
                 },
-                "color": {
-                    "type": "string"
-                },
                 "price": {
                     "description": "Price là giá bán thật: giá riêng của biến thể (nếu có) đã trừ khuyến mãi\nđang chạy.",
                     "type": "number"
@@ -20583,9 +20680,6 @@ const docTemplate = `{
                 "product_variant_id": {
                     "type": "integer"
                 },
-                "size": {
-                    "type": "string"
-                },
                 "sku": {
                     "type": "string"
                 },
@@ -20593,6 +20687,9 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "thumbnail": {
+                    "type": "string"
+                },
+                "variant_name": {
                     "type": "string"
                 }
             }
@@ -20838,12 +20935,15 @@ const docTemplate = `{
                 "is_featured": {
                     "type": "boolean"
                 },
-                "kit_type": {
-                    "type": "string",
-                    "enum": [
-                        "fan",
-                        "player"
-                    ]
+                "is_multi_variant": {
+                    "description": "IsMultiVariant nói mặt hàng bán theo tổ hợp thuộc tính hay là món đơn.\nnil = giữ nguyên (khi SỬA) hoặc suy từ danh sách biến thể gửi kèm (khi TẠO).",
+                    "type": "boolean"
+                },
+                "is_serial": {
+                    "type": "boolean"
+                },
+                "is_stock_deducted": {
+                    "type": "boolean"
                 },
                 "location_id": {
                     "description": "LocationID là chỗ để hàng (Hàng hóa → Vị trí). Con trỏ để phân biệt:\n  nil -\u003e không đụng tới vị trí (giữ nguyên cái đang có khi SỬA).\n  0   -\u003e gỡ vị trí, trả mặt hàng về \"chưa gán\".\n  \u003e0  -\u003e gán vào vị trí ấy.",
@@ -20861,13 +20961,20 @@ const docTemplate = `{
                     "type": "string",
                     "maxLength": 200
                 },
+                "print_label": {
+                    "description": "Ba công tắc ở cột trái hộp thoại. nil = giữ nguyên khi SỬA; khi TẠO lấy\nmặc định của bản cũ: in tem BẬT, trừ kho BẬT, seri TẮT.",
+                    "type": "boolean"
+                },
                 "sale_price": {
                     "type": "number",
                     "minimum": 0
                 },
-                "season": {
-                    "type": "string",
-                    "maxLength": 20
+                "shop_ids": {
+                    "description": "ShopIDs là chi nhánh QUẢN LÝ mặt hàng. nil = không đụng tới (giữ nguyên\nkhi SỬA); [] = gỡ hết, nghĩa là mặt hàng thuộc MỌI chi nhánh.",
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
                 },
                 "short_description": {
                     "type": "string",
@@ -20891,20 +20998,40 @@ const docTemplate = `{
                         "discontinued"
                     ]
                 },
-                "team": {
-                    "type": "string",
-                    "maxLength": 150
+                "tags": {
+                    "description": "Tags là TÊN thẻ chứ không phải id: hộp thoại cho gõ thẻ mới ngay tại chỗ.\nTên chưa có thì máy chủ tự mở dòng mới; tên đã có thì trúng lại dòng cũ.\nnil = không đụng tới; [] = gỡ hết thẻ.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 },
                 "thumbnail": {
                     "type": "string",
                     "maxLength": 255
                 },
+                "unit_conversions": {
+                    "description": "UnitConversions là khối \"Quy đổi đơn vị hàng hoá\" (1 Thùng = 24 Cái).\nnil = không đụng tới (giữ nguyên khi SỬA); [] = xoá hết.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.QuyDoiDonViRequest"
+                    }
+                },
+                "unit_id": {
+                    "description": "UnitID là đơn vị tính. Cùng quy ước con trỏ như LocationID:\n  nil -\u003e không đụng tới (giữ nguyên cái đang có khi SỬA)\n  0   -\u003e gỡ đơn vị, trả mặt hàng về \"chưa khai\"\n  \u003e0  -\u003e gán đơn vị ấy",
+                    "type": "integer"
+                },
                 "variants": {
-                    "description": "Biến thể (size/màu). Con trỏ để phân biệt:\n  nil     -\u003e không đụng tới biến thể (vd: chỉ bật/tắt trạng thái).\n  [] hoặc [...] -\u003e đồng bộ đúng theo danh sách (thêm/sửa/xoá).",
+                    "description": "Biến thể (tổ hợp thuộc tính). Con trỏ để phân biệt:\n  nil     -\u003e không đụng tới biến thể (vd: chỉ bật/tắt trạng thái).\n  [] hoặc [...] -\u003e đồng bộ đúng theo danh sách (thêm/sửa/xoá).",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/dto.VariantRequest"
                     }
+                },
+                "vat": {
+                    "description": "VAT là % thuế GTGT. Hai giá trị âm là MÃ chứ không phải phần trăm:\n-1 = KCT (không chịu thuế), -2 = KKKNT (không kê khai, không nộp thuế).\nnil = giữ nguyên mức đang có (khi SỬA) hoặc 0% (khi TẠO).",
+                    "type": "integer",
+                    "maximum": 100,
+                    "minimum": -2
                 }
             }
         },
@@ -21346,6 +21473,21 @@ const docTemplate = `{
                     "description": "TrangThai: active | inactive. In ra để người sắp đặt lại mật khẩu thấy tài\nkhoản đang bị khoá — đặt lại mật khẩu KHÔNG mở khoá hộ.",
                     "type": "string",
                     "example": "active"
+                }
+            }
+        },
+        "dto.QuyDoiDonViRequest": {
+            "type": "object",
+            "required": [
+                "quantity",
+                "unit_id"
+            ],
+            "properties": {
+                "quantity": {
+                    "type": "number"
+                },
+                "unit_id": {
+                    "type": "integer"
                 }
             }
         },
@@ -22576,20 +22718,35 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.VariantRequest": {
+        "dto.VariantAttributeRequest": {
             "type": "object",
             "required": [
-                "size"
+                "attribute_id",
+                "value_id"
             ],
             "properties": {
+                "attribute_id": {
+                    "type": "integer"
+                },
+                "value_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "dto.VariantRequest": {
+            "type": "object",
+            "properties": {
+                "attributes": {
+                    "description": "Attributes là TỔ HỢP thuộc tính của biến thể. Rỗng = dòng mặc định của\nmặt hàng không có biến thể.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.VariantAttributeRequest"
+                    }
+                },
                 "barcode": {
                     "description": "Barcode là mã vạch in trên hàng — cái máy quét ở quầy đọc được. Để trống\nnghĩa là chưa dán mã, và hai biến thể cùng để trống là chuyện bình thường;\nnhưng hai biến thể đang bán không được mang cùng một mã (DB chặn).",
                     "type": "string",
                     "maxLength": 64
-                },
-                "color": {
-                    "type": "string",
-                    "maxLength": 50
                 },
                 "cost_price": {
                     "description": "CostPrice bỏ trống = lấy giá vốn của sản phẩm cha.",
@@ -22607,13 +22764,18 @@ const docTemplate = `{
                 "is_active": {
                     "type": "boolean"
                 },
+                "name": {
+                    "description": "Name là tên biến thể. Bỏ trống thì server tự ghép từ Attributes bên dưới\n(\"128GB · Đen\") — màn hình không phải tự nghĩ ra công thức đặt tên, và\nhàng thêm từ giao diện với hàng thêm qua API không thành hai kiểu.",
+                    "type": "string",
+                    "maxLength": 255
+                },
+                "pos": {
+                    "description": "Pos là thứ tự bày ra. Bỏ trống thì lấy theo thứ tự gửi lên.",
+                    "type": "integer"
+                },
                 "price": {
                     "type": "number",
                     "minimum": 0
-                },
-                "size": {
-                    "type": "string",
-                    "maxLength": 20
                 },
                 "sku": {
                     "type": "string",

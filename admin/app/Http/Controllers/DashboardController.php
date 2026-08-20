@@ -347,7 +347,7 @@ class DashboardController extends Controller
             $rows[] = [
                 'product' => $it['product_name'] ?? '',
                 'sku' => $it['sku'] ?? '',
-                'variant' => trim(implode(' / ', array_filter([$it['size'] ?? '', $it['color'] ?? '']))),
+                'variant' => trim((string) ($it['variant_name'] ?? '')),
                 'stock' => $stock,
             ];
             if (\count($rows) >= self::LOW_STOCK_ROWS) {

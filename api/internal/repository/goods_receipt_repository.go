@@ -302,7 +302,7 @@ func (r *goodsReceiptRepository) items(ctx context.Context, b domain.GoodsReceip
 	var rows []domain.GoodsReceiptItem
 	err := q.Select(`t.id AS transaction_id, t.product_variant_id AS variant_id, v.product_id,
 			COALESCE(p.name, '') AS product_name, COALESCE(v.sku, '') AS sku,
-			COALESCE(v.size, '') AS size, COALESCE(v.color, '') AS color,
+			COALESCE(v.name, '') AS variant_name,
 			COALESCE(NULLIF(v.image, ''), NULLIF(p.thumbnail, ''), '') AS thumbnail,
 			t.quantity, COALESCE(t.unit_cost, 0) AS unit_cost,
 			t.quantity * COALESCE(t.unit_cost, 0) AS amount,

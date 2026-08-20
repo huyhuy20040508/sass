@@ -125,6 +125,19 @@ func handleServiceError(c *gin.Context, err error) {
 		response.Error(c, 409, "SKU này đã có sản phẩm khác dùng, vui lòng đặt SKU khác")
 	case errors.Is(err, domain.ErrProductStatusInvalid):
 		response.ValidationError(c, map[string]string{"status": "Trạng thái sản phẩm không hợp lệ"})
+	// Bấm mũi tên khi đã ở đầu/cuối danh sách: nói thẳng, đừng trả "có lỗi xảy ra".
+	case errors.Is(err, domain.ErrDaODau):
+		response.Error(c, 409, "Mặt hàng đã ở đầu danh sách")
+	case errors.Is(err, domain.ErrDaOCuoi):
+		response.Error(c, 409, "Mặt hàng đã ở cuối danh sách")
+	case errors.Is(err, domain.ErrQuyDoiTrungDonVi):
+		response.Error(c, 422, "Mỗi đơn vị chỉ được khai quy đổi một lần")
+	case errors.Is(err, domain.ErrQuyDoiTrungDonViChinh):
+		response.Error(c, 422, "Không khai quy đổi cho chính đơn vị tính của mặt hàng")
+	case errors.Is(err, domain.ErrQuyDoiSoLuong):
+		response.Error(c, 422, "Số lượng quy đổi phải lớn hơn 0")
+	case errors.Is(err, domain.ErrHuongKhongHopLe):
+		response.ValidationError(c, map[string]string{"huong": "Hướng di chuyển không hợp lệ"})
 	case errors.Is(err, domain.ErrConflict):
 		response.Error(c, 409, "Dữ liệu đang được tham chiếu hoặc bị trùng, không thể thực hiện")
 	case errors.Is(err, domain.ErrInvalidCredentials):

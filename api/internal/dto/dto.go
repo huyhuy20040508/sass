@@ -404,14 +404,38 @@ type ProductRequest struct {
 	Slug       string `json:"slug" binding:"required,max=191"`
 	// SKU bỏ trống = sinh theo quy tắc mã hàng hoá; chưa bật quy tắc thì API trả
 	// 422 đòi nhập tay. Lúc SỬA, bỏ trống là giữ mã cũ.
-	SKU              string   `json:"sku" binding:"omitempty,max=64"`
-	ShortDescription string   `json:"short_description" binding:"omitempty,max=500"`
-	Description      string   `json:"description"`
-	Team             string   `json:"team" binding:"omitempty,max=150"`
-	Season           string   `json:"season" binding:"omitempty,max=20"`
-	KitType          string   `json:"kit_type" binding:"omitempty,oneof=fan player"`
-	BasePrice        float64  `json:"base_price" binding:"gte=0"`
-	SalePrice        *float64 `json:"sale_price" binding:"omitempty,gte=0"`
+	SKU              string `json:"sku" binding:"omitempty,max=64"`
+	ShortDescription string `json:"short_description" binding:"omitempty,max=500"`
+	Description      string `json:"description"`
+	// UnitID là đơn vị tính. Cùng quy ước con trỏ như LocationID:
+	//   nil -> không đụng tới (giữ nguyên cái đang có khi SỬA)
+	//   0   -> gỡ đơn vị, trả mặt hàng về "chưa khai"
+	//   >0  -> gán đơn vị ấy
+	UnitID *uint `json:"unit_id"`
+	// UnitConversions là khối "Quy đổi đơn vị hàng hoá" (1 Thùng = 24 Cái).
+	// nil = không đụng tới (giữ nguyên khi SỬA); [] = xoá hết.
+	UnitConversions *[]QuyDoiDonViRequest `json:"unit_conversions" binding:"omitempty,dive"`
+	// VAT là % thuế GTGT. Hai giá trị âm là MÃ chứ không phải phần trăm:
+	// -1 = KCT (không chịu thuế), -2 = KKKNT (không kê khai, không nộp thuế).
+	// nil = giữ nguyên mức đang có (khi SỬA) hoặc 0% (khi TẠO).
+	VAT       *int     `json:"vat" binding:"omitempty,gte=-2,lte=100"`
+	BasePrice float64  `json:"base_price" binding:"gte=0"`
+	SalePrice *float64 `json:"sale_price" binding:"omitempty,gte=0"`
+	// ShopIDs là chi nhánh QUẢN LÝ mặt hàng. nil = không đụng tới (giữ nguyên
+	// khi SỬA); [] = gỡ hết, nghĩa là mặt hàng thuộc MỌI chi nhánh.
+	ShopIDs *[]uint `json:"shop_ids" binding:"omitempty,dive,gt=0"`
+	// Tags là TÊN thẻ chứ không phải id: hộp thoại cho gõ thẻ mới ngay tại chỗ.
+	// Tên chưa có thì máy chủ tự mở dòng mới; tên đã có thì trúng lại dòng cũ.
+	// nil = không đụng tới; [] = gỡ hết thẻ.
+	Tags *[]string `json:"tags" binding:"omitempty,dive,max=50"`
+	// IsMultiVariant nói mặt hàng bán theo tổ hợp thuộc tính hay là món đơn.
+	// nil = giữ nguyên (khi SỬA) hoặc suy từ danh sách biến thể gửi kèm (khi TẠO).
+	IsMultiVariant *bool `json:"is_multi_variant"`
+	// Ba công tắc ở cột trái hộp thoại. nil = giữ nguyên khi SỬA; khi TẠO lấy
+	// mặc định của bản cũ: in tem BẬT, trừ kho BẬT, seri TẮT.
+	PrintLabel      *bool `json:"print_label"`
+	IsStockDeducted *bool `json:"is_stock_deducted"`
+	IsSerial        *bool `json:"is_serial"`
 	// CostPrice là giá vốn dùng tính giá trị tồn kho. Bỏ trống = chưa khai giá vốn
 	// (khác với 0), lúc đó biến thể của sản phẩm không được cộng vào giá trị kho.
 	CostPrice *float64 `json:"cost_price" binding:"omitempty,gte=0"`
@@ -426,7 +450,7 @@ type ProductRequest struct {
 	MetaTitle       string `json:"meta_title" binding:"omitempty,max=255"`
 	MetaDescription string `json:"meta_description" binding:"omitempty,max=320"`
 
-	// Biến thể (size/màu). Con trỏ để phân biệt:
+	// Biến thể (tổ hợp thuộc tính). Con trỏ để phân biệt:
 	//   nil     -> không đụng tới biến thể (vd: chỉ bật/tắt trạng thái).
 	//   [] hoặc [...] -> đồng bộ đúng theo danh sách (thêm/sửa/xoá).
 	Variants *[]VariantRequest `json:"variants"`
@@ -444,23 +468,28 @@ type ImageRequest struct {
 	IsPrimary bool   `json:"is_primary"`
 }
 
-// VariantRequest là một biến thể của sản phẩm (mỗi size/màu một dòng).
+// VariantRequest là một biến thể của mặt hàng — mỗi TỔ HỢP thuộc tính một dòng.
 //
 // Cố ý KHÔNG có stock_quantity: tồn kho chỉ đi qua nghiệp vụ kho (nhập hàng,
 // điều chỉnh/kiểm kho, đơn hàng, trả hàng) để mọi biến động đều có vết trong
 // inventory_transactions. Biến thể mới luôn bắt đầu ở tồn 0.
-//
-// Cũng không còn `version`: fan/player đã chuyển lên cấp sản phẩm (kit_type).
 type VariantRequest struct {
 	ID  uint   `json:"id"` // >0 = cập nhật dòng cũ; 0 = thêm mới
 	SKU string `json:"sku" binding:"omitempty,max=64"`
 	// Barcode là mã vạch in trên hàng — cái máy quét ở quầy đọc được. Để trống
 	// nghĩa là chưa dán mã, và hai biến thể cùng để trống là chuyện bình thường;
 	// nhưng hai biến thể đang bán không được mang cùng một mã (DB chặn).
-	Barcode string   `json:"barcode" binding:"omitempty,max=64"`
-	Size    string   `json:"size" binding:"required,max=20"`
-	Color   string   `json:"color" binding:"omitempty,max=50"`
-	Price   *float64 `json:"price" binding:"omitempty,gte=0"`
+	Barcode string `json:"barcode" binding:"omitempty,max=64"`
+	// Name là tên biến thể. Bỏ trống thì server tự ghép từ Attributes bên dưới
+	// ("128GB · Đen") — màn hình không phải tự nghĩ ra công thức đặt tên, và
+	// hàng thêm từ giao diện với hàng thêm qua API không thành hai kiểu.
+	Name string `json:"name" binding:"omitempty,max=255"`
+	// Attributes là TỔ HỢP thuộc tính của biến thể. Rỗng = dòng mặc định của
+	// mặt hàng không có biến thể.
+	Attributes []VariantAttributeRequest `json:"attributes" binding:"omitempty,dive"`
+	// Pos là thứ tự bày ra. Bỏ trống thì lấy theo thứ tự gửi lên.
+	Pos   *int     `json:"pos"`
+	Price *float64 `json:"price" binding:"omitempty,gte=0"`
 	// CostPrice bỏ trống = lấy giá vốn của sản phẩm cha.
 	CostPrice  *float64 `json:"cost_price" binding:"omitempty,gte=0"`
 	WeightGram int      `json:"weight_gram" binding:"gte=0"`
@@ -468,28 +497,31 @@ type VariantRequest struct {
 	IsActive   *bool    `json:"is_active"`
 }
 
+// QuyDoiDonViRequest — một dòng quy đổi: 1 <unit_id> = <quantity> đơn vị tính chính.
+type QuyDoiDonViRequest struct {
+	UnitID   uint    `json:"unit_id" binding:"required"`
+	Quantity float64 `json:"quantity" binding:"required,gt=0"`
+}
+
+// VariantAttributeRequest — một chiều của biến thể ("Dung lượng" = "128GB").
+type VariantAttributeRequest struct {
+	AttributeID uint `json:"attribute_id" binding:"required"`
+	ValueID     uint `json:"value_id" binding:"required"`
+}
+
+// DoiChoThuTuRequest — bấm mũi tên lên/xuống trên bảng danh sách hàng hoá.
+type DoiChoThuTuRequest struct {
+	Huong string `json:"huong" binding:"required,oneof=up down"`
+}
+
 // ProductStatusRequest chỉ dùng để đổi trạng thái kinh doanh của sản phẩm —
 // tránh gửi lại toàn bộ read-model khi chỉ cần bật/tắt hoặc ngừng kinh doanh.
 //
-// Nhận một trong hai: `status` (đủ 3 mức) hoặc `is_active` (cờ cũ, chỉ bật/tắt).
-// Gửi cả hai thì `status` thắng.
+// Nhận một trong hai: `status` (đặt thẳng một trong 3 mức) hoặc `is_active` (cờ
+// bật/tắt của công tắc hai nấc — xem SetActive). Gửi cả hai thì `status` thắng.
 type ProductStatusRequest struct {
 	Status   string `json:"status" binding:"omitempty,oneof=active hidden discontinued"`
 	IsActive *bool  `json:"is_active"`
-}
-
-// Resolve trả về trạng thái cuối cùng và cho biết yêu cầu có hợp lệ không.
-func (r ProductStatusRequest) Resolve() (string, bool) {
-	if r.Status != "" {
-		return r.Status, true
-	}
-	if r.IsActive == nil {
-		return "", false
-	}
-	if *r.IsActive {
-		return "active", true
-	}
-	return "hidden", true
 }
 
 // ProductBulkDeleteRequest — danh sách id sản phẩm cần xoá trong một lượt.
@@ -506,9 +538,12 @@ type CategoryRequest struct {
 	Slug        string `json:"slug" binding:"omitempty,max=191"`
 	ParentID    *uint  `json:"parent_id"`
 	Description string `json:"description" binding:"omitempty,max=500"`
-	Image       string `json:"image" binding:"omitempty,max=255"`
-	SortOrder   int    `json:"sort_order"`
-	IsActive    *bool  `json:"is_active"`
+	// VAT là mức thuế mặc định của nhóm (xem domain.Category.VAT). Bỏ trống =
+	// giữ mức đang có khi SỬA, hoặc 0% khi TẠO.
+	VAT       *int   `json:"vat" binding:"omitempty,gte=-2,lte=100"`
+	Image     string `json:"image" binding:"omitempty,max=255"`
+	SortOrder int    `json:"sort_order"`
+	IsActive  *bool  `json:"is_active"`
 }
 
 // ---------- Customer ----------
@@ -873,8 +908,7 @@ type OrderItemRequest struct {
 	ProductVariantID   uint    `json:"product_variant_id" binding:"required"`
 	ProductName        string  `json:"product_name" binding:"required,max=255"`
 	VariantSKU         string  `json:"variant_sku" binding:"omitempty,max=100"`
-	Size               string  `json:"size" binding:"omitempty,max=50"`
-	Color              string  `json:"color" binding:"omitempty,max=50"`
+	VariantName        string  `json:"variant_name" binding:"omitempty,max=255"`
 	Thumbnail          string  `json:"thumbnail" binding:"omitempty,max=500"`
 	UnitPrice          float64 `json:"unit_price" binding:"gte=0"`
 	Quantity           int     `json:"quantity" binding:"required,min=1"`
@@ -886,11 +920,10 @@ type OrderItemRequest struct {
 // Chỉ nhận định danh sản phẩm và số lượng; TÊN, GIÁ, SKU đều do server tra lại
 // từ database. Không bao giờ tin giá client gửi lên.
 type CheckoutItemRequest struct {
-	// Ưu tiên product_variant_id nếu client biết; không thì tra theo slug + size + color.
+	// Ưu tiên product_variant_id nếu client biết; không thì tra theo slug + tên biến thể.
 	ProductVariantID   uint   `json:"product_variant_id"`
 	Slug               string `json:"slug" binding:"omitempty,max=191"`
-	Size               string `json:"size" binding:"omitempty,max=50"`
-	Color              string `json:"color" binding:"omitempty,max=50"`
+	VariantName        string `json:"variant_name" binding:"omitempty,max=255"`
 	Quantity           int    `json:"quantity" binding:"required,min=1,max=99"`
 	CustomPlayerName   string `json:"custom_player_name" binding:"omitempty,max=50"`
 	CustomPlayerNumber string `json:"custom_player_number" binding:"omitempty,max=10"`
@@ -1012,8 +1045,7 @@ type CartQuoteRequest struct {
 // CartQuoteItem — kết quả đối chiếu MỘT dòng giỏ hàng theo dữ liệu hiện tại.
 type CartQuoteItem struct {
 	Slug             string `json:"slug"`
-	Size             string `json:"size"`
-	Color            string `json:"color"`
+	VariantName      string `json:"variant_name"`
 	ProductVariantID uint   `json:"product_variant_id"`
 	ProductName      string `json:"product_name"`
 	Thumbnail        string `json:"thumbnail"`
@@ -1106,7 +1138,7 @@ type POSCheckoutRequest struct {
 // Không dùng lại CheckoutItemRequest vì hai chỗ khác nhau ở đúng hai điểm, và
 // cả hai đều quan trọng:
 //
-//   - product_variant_id BẮT BUỘC. Storefront cho tra theo slug + size + màu vì
+//   - product_variant_id BẮT BUỘC. Storefront cho tra theo slug + tên biến thể vì
 //     khách bấm từ trang sản phẩm và trình duyệt không phải lúc nào cũng biết id.
 //     Ở quầy thì món hàng luôn đến từ ô tìm kiếm hoặc từ máy quét, cả hai đều trả
 //     về id — nhận thêm đường slug chỉ là mở một lối vào mơ hồ hơn cho cùng việc.
@@ -1134,8 +1166,7 @@ type POSScanResponse struct {
 	ProductName      string `json:"product_name"`
 	SKU              string `json:"sku"`
 	Barcode          string `json:"barcode,omitempty"`
-	Size             string `json:"size"`
-	Color            string `json:"color"`
+	VariantName      string `json:"variant_name"`
 	Thumbnail        string `json:"thumbnail"`
 	// Price là giá bán thật: giá riêng của biến thể (nếu có) đã trừ khuyến mãi
 	// đang chạy.
@@ -1317,7 +1348,7 @@ type PurchaseReturnItemRequest struct {
 
 // PurchaseReturnRequest — payload lập/sửa phiếu trả hàng nhập.
 //
-// Tên/SKU/size/màu/giá nhập KHÔNG nhận từ client: server chụp lại từ dòng phiếu
+// Tên/SKU/tên biến thể/giá nhập KHÔNG nhận từ client: server chụp lại từ dòng phiếu
 // đặt gốc, nếu không phiếu trả và sổ kho lại nói về hai món khác nhau.
 type PurchaseReturnRequest struct {
 	PurchaseOrderID uint `json:"purchase_order_id" binding:"required,min=1"`

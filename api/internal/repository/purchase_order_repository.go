@@ -184,7 +184,7 @@ func (r *purchaseOrderRepository) Histories(ctx context.Context, purchaseID uint
 // lập phiếu phải là tồn CỦA KHO SẼ NHẬN HÀNG VỀ, xem tonPhieuNhap.
 func purchaseVariantSelect(ton string) string {
 	return `v.id AS variant_id, v.product_id, p.name AS product_name,
-	v.sku, v.size, v.color,
+	v.sku, COALESCE(v.name, '') AS variant_name,
 	COALESCE(NULLIF(v.image, ''), NULLIF(p.thumbnail, ''), '') AS thumbnail,
 	` + effectiveCostExpr + ` AS cost_price,
 	` + ton + ` AS stock`
