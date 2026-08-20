@@ -533,7 +533,7 @@ class ProductController extends Controller
                 'thumbnail' => '', 'status' => 'hidden',
                 'is_multi_variant' => ! empty($variants),
                 'meta_title' => '', 'meta_description' => '',
-                'variants' => $variants, 'images' => [],
+                'variants' => $variants,
             ];
 
             try {
@@ -631,10 +631,6 @@ class ProductController extends Controller
             'variants.*.attributes' => ['nullable', 'array'],
             'variants.*.attributes.*.attribute_id' => ['required', 'integer', 'min:1'],
             'variants.*.attributes.*.value_id' => ['required', 'integer', 'min:1'],
-            'images' => ['nullable', 'array'],
-            'images.*.id' => ['nullable', 'integer'],
-            'images.*.url' => ['required', 'string', 'max:255'],
-            'images.*.sort_order' => ['nullable', 'integer'],
         ], [
             'name.required' => 'Vui lòng nhập tên hàng hóa.',
             'name.max' => 'Tên hàng hóa tối đa 200 ký tự.',
@@ -669,28 +665,12 @@ class ProductController extends Controller
             $sku = $this->productSku($v);
         }
 
-        // Thư viện ảnh; nếu chưa có ảnh đại diện thì lấy ảnh chính (hoặc ảnh đầu) làm thumbnail.
-        $images = $this->imageRows($request);
+        // Mặt hàng chỉ có MỘT ảnh — ô "Ảnh đại diện", đi theo trường `thumbnail`
+        // đúng như bản cũ v2. Khoá `images` (thư viện nhiều ảnh) KHÔNG bao giờ được
+        // gửi: bên API nó nghĩa là "ghi đè cả thư viện", mà màn hình này không quản
+        // lý thư viện nên nó không có quyền nói câu ấy.
         $thumbnail = $v['thumbnail'] ?? '';
-        if ($thumbnail === '' && ! empty($images)) {
-            $primary = collect($images)->firstWhere('is_primary', true);
-            $thumbnail = $primary['url'] ?? $images[0]['url'];
-        }
 
-        // ---- Ảnh & biến thể: CHỈ gửi khi màn hình thật sự nắm được chúng ----
-        //
-        // Bên API, gửi `images: []` nghĩa là "xoá sạch thư viện ảnh" (ReplaceImages
-        // xoá cứng mọi dòng không nằm trong danh sách). Mà modal sửa mặt hàng chỉ
-        // gom được những ảnh ĐANG HIỂN THỊ trên màn hình — nên mỗi lần khung thư
-        // viện chưa kịp dựng (API chưa chạy nên modal rơi về bản đã tải sẵn, lỗi JS
-        // giữa chừng...) là nó gửi lên mảng rỗng và toàn bộ ảnh của mặt hàng bị xoá
-        // trong im lặng. Đã có lần mất thật.
-        //
-        // Nên phân biệt hai việc khác hẳn nhau:
-        //   - "tôi muốn xoá hết ảnh"      -> modal gửi images_loaded=1 kèm mảng rỗng
-        //   - "tôi không tải được ảnh"    -> modal KHÔNG gửi images_loaded
-        // Trường hợp sau thì bỏ hẳn khoá `images` khỏi payload; API thấy thiếu khoá
-        // là bỏ qua bước đồng bộ ảnh và giữ nguyên những gì đang có.
         $payload = [
             'category_id' => (int) $v['category_id'],
             // Luôn gửi, kể cả 0: modal bày ô Vị trí và ô ĐVT ở mọi lượt sửa nên "để
@@ -767,9 +747,6 @@ class ProductController extends Controller
 
         // Mảng rỗng vẫn gửi — đó là cách nói "xoá hết" hợp lệ. Chỉ khi màn hình
         // KHÔNG khai là đã nắm được dữ liệu thì mới bỏ khoá đi.
-        if ($request->boolean('images_loaded')) {
-            $payload['images'] = $images;
-        }
         if ($request->boolean('variants_loaded')) {
             $rows = $this->variantRows($request, $sku);
             $payload['variants'] = $rows;
@@ -779,41 +756,6 @@ class ProductController extends Controller
         }
 
         return $payload;
-    }
-
-    /**
-     * Chuẩn hoá thư viện ảnh từ form. Bỏ ảnh trống; đảm bảo có đúng 1 ảnh chính
-     * (nếu chưa đánh dấu ảnh nào thì lấy ảnh đầu).
-     */
-    protected function imageRows(Request $request): array
-    {
-        $rows = $request->input('images', []);
-        if (! is_array($rows)) {
-            return [];
-        }
-
-        $out = [];
-        $i = 0;
-        foreach ($rows as $r) {
-            $url = trim((string) ($r['url'] ?? ''));
-            if ($url === '') {
-                continue;
-            }
-            $out[] = [
-                'id' => filled($r['id'] ?? null) ? (int) $r['id'] : 0,
-                'url' => $url,
-                'alt' => (string) ($r['alt'] ?? ''),
-                'sort_order' => (int) ($r['sort_order'] ?? $i),
-                'is_primary' => filled($r['is_primary'] ?? null) ? (bool) $r['is_primary'] : false,
-            ];
-            $i++;
-        }
-
-        if (! empty($out) && ! collect($out)->contains('is_primary', true)) {
-            $out[0]['is_primary'] = true;
-        }
-
-        return $out;
     }
 
     /**

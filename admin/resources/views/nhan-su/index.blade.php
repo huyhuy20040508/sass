@@ -803,11 +803,6 @@
            trông y hệt một người đang đi làm bình thường. */
         .nsu-locked { color: #cf1322; font-weight: 600; }
 
-        .nsu-tag { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px; white-space: nowrap; }
-        .nsu-tag.is-dang_lam { background: #f6ffed; color: #389e0d; border: 1px solid #b7eb8f; }
-        .nsu-tag.is-tam_nghi { background: #fff7e6; color: #d46b08; border: 1px solid #ffd591; }
-        .nsu-tag.is-da_nghi { background: #fafafa; color: #8c8c8c; border: 1px solid #e8e8e8; }
-
         .nsu-actions { display: flex; align-items: center; justify-content: center; gap: 4px; }
         .nsu-inline-form { display: inline; margin: 0; }
         .nsu-btn-icon {
@@ -842,10 +837,6 @@
         .nsu-modal-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; border-bottom: 1px solid #f0f0f0; }
         .nsu-modal-title { margin: 0; font-size: 15px; font-weight: 700; }
         .nsu-modal-x { border: 0; background: none; color: #8c8c8c; cursor: pointer; line-height: 0; }
-        /* Form dài hơn màn hình laptop nên phần thân tự cuộn, còn hàng nút luôn
-           nhìn thấy — không thì phải cuộn cả trang mới bấm được Lưu. */
-        .nsu-modal-body { padding: 16px; display: flex; flex-direction: column; gap: 14px; overflow-y: auto; }
-
         /* Tab gạch chân, ép lại cỡ chữ cho khớp các ô nhập. */
         .nsu-tabs {
             display: flex; gap: 4px; list-style: none;
@@ -872,8 +863,6 @@
         .nsu-col:first-child { padding-left: 0; }
         .nsu-col:last-child { padding-right: 0; }
         .nsu-col + .nsu-col { border-left: 1px solid #f5f5f5; }
-        /* Tiêu đề cột đã có gap 14px của .nsu-col lo khoảng cách. */
-        .nsu-col .nsu-group { margin-bottom: 0; }
         .nsu-ghi-chu { margin-top: 18px; padding-top: 16px; border-top: 1px solid #f5f5f5; }
 
         /* Ô ảnh nhân viên — khung vuông, ảnh phủ kín chứ không méo. */
@@ -905,7 +894,6 @@
             display: inline-flex; align-items: center; gap: 7px;
             font-size: 13px; color: #262626; cursor: pointer;
         }
-        .nsu-nhom-quyen-note { color: #8c8c8c; font-style: normal; font-size: 12px; }
         /* Ô đang bị luật khoá lại (Cả ngày vs Sáng/Chiều) — mờ đi và con trỏ nói
            rõ là bấm không được, chứ không phải ô hỏng. */
         .nsu-nhom-quyen-item.is-khoa { color: #bfbfbf; cursor: not-allowed; }
@@ -964,11 +952,6 @@
         .nsu-form-chi-doc .nsu-nhom-quyen-item { color: #262626; cursor: default; }
         .nsu-form-chi-doc .nsu-nhom-quyen-item.is-khoa { color: #bfbfbf; }
 
-        .nsu-group {
-            margin: 0 0 12px; padding-bottom: 6px; border-bottom: 1px solid #f5f5f5;
-            font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #8c8c8c;
-        }
-        .nsu-grid + .nsu-group { margin-top: 20px; }
         .nsu-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
         .nsu-field-label { display: block; font-size: 12.5px; font-weight: 600; color: #434343; margin-bottom: 5px; }
         .nsu-req { color: #ff4d4f; }
@@ -976,7 +959,6 @@
             width: 100%; height: 36px; border: 1px solid #d9d9d9; border-radius: 4px;
             padding: 0 12px; font-size: 13px; outline: none; background-color: #fff; color: #262626;
         }
-        .nsu-textarea { height: auto; padding: 8px 12px; resize: vertical; }
         .nsu-hint { margin: 4px 0 0; font-size: 12px; color: #8c8c8c; }
         .nsu-hint a { color: #0d6efd; }
         /* Dòng "đã có tài khoản" — chỉ để đọc. */
