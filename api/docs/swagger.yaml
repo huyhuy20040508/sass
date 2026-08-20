@@ -448,6 +448,21 @@ definitions:
     type: object
   domain.LoaiMa:
     properties:
+      bat_tat_duoc:
+        description: |-
+          BatTatDuoc = màn cấu hình có bày ô tick bật/tắt cho loại này không.
+
+          Chỉ ba loại có: hàng hoá, nhà cung cấp, nhân viên. Đó là những chỗ mã do
+          người dùng GÕ TAY khi không bật quy tắc — tắt quy tắc là trả ô mã lại cho
+          họ (hàng hoá tắt rồi mà bỏ trống SKU thì API báo ErrSKUBatBuoc).
+
+          Những loại còn lại KHÔNG có ô tick và luôn nằm sẵn trong bảng quy tắc:
+          nhóm hàng hoá, thuộc tính, đơn vị tính bỏ trống mã là phần mềm đặt hộ
+          theo dải sẵn có (NH001, TT001, DV001…), còn chứng từ thì vốn tự sinh mã.
+          Ở những chỗ ấy quy tắc chỉ đổi HÌNH DẠNG mã, không bật/tắt việc sinh mã —
+          bày một ô tick không tắt được cái gì chỉ khiến người dùng tưởng tắt xong
+          là được gõ tay.
+        type: boolean
       dung_chung:
         description: |-
           DungChung = true: một quy tắc cho cả cửa hàng (shop_id = 0). Hàng hoá hay
@@ -1563,6 +1578,61 @@ definitions:
         description: |-
           Status: active | suspended. suspended = khách hết hạn hoặc ngừng trả tiền —
           chặn đăng nhập nhưng KHÔNG xoá dữ liệu, đóng tiền lại là mở.
+        type: string
+    type: object
+  domain.ThuocTinh:
+    properties:
+      code:
+        description: Code là mã ngắn người dùng tự đặt (SIZE, DA, TOPPING…), luôn
+          viết hoa.
+        type: string
+      created_at:
+        type: string
+      id:
+        type: integer
+      in_use:
+        description: |-
+          InUse = đang bị thứ khác trỏ tới nên không xoá được. Hôm nay chưa bảng nào
+          trỏ tới thuộc tính (biến thể mặt hàng và định lượng nguyên liệu đều chưa
+          dựng) nên nó luôn false; màn quản trị đã đọc sẵn cờ này để khoá nút xoá,
+          dựng biến thể xong thì chỉ việc đếm ở repository.
+        type: boolean
+      is_active:
+        description: |-
+          IsActive = có bày ra ở ô chọn thuộc tính lúc khai mặt hàng không. Tắt chứ
+          không xoá khi một thuộc tính thôi dùng: mặt hàng cũ vẫn phải tra ra tên.
+        type: boolean
+      name:
+        type: string
+      raw_material:
+        description: |-
+          RawMaterial = thuộc tính này được dùng để khai định lượng nguyên vật liệu
+          cho món. Giữ đúng nghĩa cột raw_material_quantification của bản cũ.
+        type: boolean
+      updated_at:
+        type: string
+      values:
+        description: |-
+          GiaTri là các giá trị con, luôn trả kèm: một thuộc tính không có giá trị
+          nào thì chẳng dùng được vào việc gì, nên tách ra thành lượt gọi riêng chỉ
+          tổ khiến mọi màn hình phải gọi hai lần.
+        items:
+          $ref: '#/definitions/domain.ThuocTinhGiaTri'
+        type: array
+    type: object
+  domain.ThuocTinhGiaTri:
+    properties:
+      attribute_id:
+        type: integer
+      code:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: integer
+      name:
+        type: string
+      updated_at:
         type: string
     type: object
   domain.User:
@@ -5423,6 +5493,46 @@ definitions:
         example: Thuế đơn bán hàng
         type: string
     type: object
+  dto.ThuocTinhGiaTriItem:
+    properties:
+      code:
+        maxLength: 32
+        type: string
+      id:
+        type: integer
+      name:
+        maxLength: 100
+        type: string
+    required:
+    - name
+    type: object
+  dto.ThuocTinhRequest:
+    properties:
+      code:
+        maxLength: 20
+        type: string
+      is_active:
+        description: IsActive bỏ trống = true (thuộc tính mới mặc định đang dùng).
+        type: boolean
+      name:
+        maxLength: 100
+        type: string
+      raw_material:
+        description: |-
+          RawMaterial = dùng thuộc tính này để khai định lượng nguyên vật liệu.
+          Bỏ trống = false.
+        type: boolean
+      values:
+        description: |-
+          Bỏ trống hẳn trường này = KHÔNG đụng tới danh sách giá trị (lượt sửa chỉ
+          đổi tên chẳng hạn). Gửi mảng rỗng mới là "xoá hết giá trị".
+        items:
+          $ref: '#/definitions/dto.ThuocTinhGiaTriItem'
+        maxItems: 100
+        type: array
+    required:
+    - name
+    type: object
   dto.TrangThaiDonViTinhRequest:
     properties:
       is_active:
@@ -5431,6 +5541,13 @@ definitions:
     - is_active
     type: object
   dto.TrangThaiThueRequest:
+    properties:
+      is_active:
+        type: boolean
+    required:
+    - is_active
+    type: object
+  dto.TrangThaiThuocTinhRequest:
     properties:
       is_active:
         type: boolean
@@ -12290,6 +12407,226 @@ paths:
       summary: Bật/tắt một loại thuế
       tags:
       - Admin - Thuế
+  /admin/thuoc-tinh:
+    get:
+      description: |-
+        Mỗi dòng trả kèm luôn danh sách giá trị (`values`) — thuộc tính không có giá trị nào thì chẳng dùng được vào việc gì, tách thành lượt gọi riêng chỉ tổ khiến màn hình phải gọi hai lần.
+        Đặt `active=true` để chỉ lấy thuộc tính đang bật (ô chọn lúc khai mặt hàng), `raw_material=true` để chỉ lấy thuộc tính dùng định lượng nguyên vật liệu.
+        Cố ý KHÔNG phân trang: danh sách thuộc tính của một cửa hàng chỉ vài chục dòng, trang quản trị tự cắt trang.
+      parameters:
+      - description: Tên hoặc mã thuộc tính
+        in: query
+        name: keyword
+        type: string
+      - description: true = chỉ thuộc tính đang bật
+        in: query
+        name: active
+        type: boolean
+      - description: true = chỉ thuộc tính dùng định lượng nguyên vật liệu
+        in: query
+        name: raw_material
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/domain.ThuocTinh'
+                  type: array
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Danh sách thuộc tính
+      tags:
+      - Admin - Thuộc tính
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Mã tự viết hoa và phải khác mọi mã đã có TRONG CỬA HÀNG NÀY, kể cả mã của thuộc tính đã xoá. Bỏ trống thì server đặt hộ (theo quy tắc đánh số của cửa hàng nếu đã bật, không thì dải TT001).
+        `values` là danh sách giá trị khai kèm; giá trị nào bỏ trống mã thì server đặt hộ theo dạng SIZE01, SIZE02…
+      parameters:
+      - description: Thông tin thuộc tính
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.ThuocTinhRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/domain.ThuocTinh'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Body'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Thêm thuộc tính
+      tags:
+      - Admin - Thuộc tính
+  /admin/thuoc-tinh/{id}:
+    delete:
+      description: Xoá mềm thuộc tính và xoá hẳn các giá trị của nó. Thuộc tính đã
+        thôi dùng nhưng còn muốn tra lại thì nên TẮT thay vì xoá.
+      parameters:
+      - description: ID thuộc tính
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Body'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Xoá thuộc tính
+      tags:
+      - Admin - Thuộc tính
+    get:
+      parameters:
+      - description: ID thuộc tính
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/domain.ThuocTinh'
+              type: object
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Chi tiết một thuộc tính
+      tags:
+      - Admin - Thuộc tính
+    put:
+      consumes:
+      - application/json
+      description: |-
+        `values` là trạng thái CUỐI CÙNG của bảng giá trị: dòng có id thì sửa, không id thì thêm, giá trị cũ vắng mặt trong danh sách nghĩa là bị xoá.
+        Bỏ HẲN trường `values` thì bảng giá trị không bị đụng tới; gửi mảng rỗng mới là xoá hết.
+      parameters:
+      - description: ID thuộc tính
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Thông tin thuộc tính
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.ThuocTinhRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/domain.ThuocTinh'
+              type: object
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Sửa thuộc tính
+      tags:
+      - Admin - Thuộc tính
+  /admin/thuoc-tinh/{id}/trang-thai:
+    put:
+      consumes:
+      - application/json
+      description: Tắt = thôi bày ở ô chọn thuộc tính lúc khai mặt hàng. Dòng vẫn
+        còn nên mặt hàng cũ vẫn tra ra được tên thuộc tính.
+      parameters:
+      - description: ID thuộc tính
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Trạng thái
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.TrangThaiThuocTinhRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/domain.ThuocTinh'
+              type: object
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Bật/tắt một thuộc tính
+      tags:
+      - Admin - Thuộc tính
   /admin/users:
     get:
       description: |-

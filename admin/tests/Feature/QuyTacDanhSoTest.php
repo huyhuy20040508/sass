@@ -33,8 +33,11 @@ class QuyTacDanhSoTest extends TestCase
             ]]),
             '*/admin/quy-tac-ma*' => Http::response(['data' => [
                 'loai' => [
-                    ['ma' => 'hang-hoa', 'ten' => 'Hàng hóa', 'dung_chung' => true, 'tien_to_goi_y' => 'HH'],
-                    ['ma' => 'nhan-vien', 'ten' => 'Nhân viên', 'dung_chung' => true, 'tien_to_goi_y' => 'NV'],
+                    ['ma' => 'hang-hoa', 'ten' => 'Hàng hóa', 'dung_chung' => true, 'bat_tat_duoc' => true, 'tien_to_goi_y' => 'HH'],
+                    ['ma' => 'nhan-vien', 'ten' => 'Nhân viên', 'dung_chung' => true, 'bat_tat_duoc' => true, 'tien_to_goi_y' => 'NV'],
+                    // Danh mục dùng chung nhưng KHÔNG bật/tắt được: mã bỏ trống thì
+                    // phần mềm đặt hộ theo dải sẵn có, quy tắc chỉ đổi hình dạng.
+                    ['ma' => 'thuoc-tinh', 'ten' => 'Thuộc tính', 'dung_chung' => true, 'bat_tat_duoc' => false, 'tien_to_goi_y' => 'TT'],
                     ['ma' => 'don-hang', 'ten' => 'Đơn hàng', 'dung_chung' => false, 'tien_to_goi_y' => 'DH'],
                 ],
                 'quy_tac' => [
@@ -98,6 +101,28 @@ class QuyTacDanhSoTest extends TestCase
         $this->assertMatchesRegularExpression('/data-loai="nhan-vien"[^>]*\bhidden\b/', $html);
         $this->assertMatchesRegularExpression('/data-tick="hang-hoa"\s+checked/', $html);
         $this->assertDoesNotMatchRegularExpression('/data-tick="nhan-vien"\s+checked/', $html);
+    }
+
+    /**
+     * Danh mục KHÔNG bật/tắt được thì không có ô tick, và dòng của nó luôn nằm
+     * sẵn trong bảng quy tắc.
+     *
+     * Ô tick nghĩa là "tắt đi để gõ tay", mà thuộc tính / đơn vị tính / nhóm hàng
+     * hoá bỏ trống mã là phần mềm vẫn đặt hộ — bày ô tick ở đó chỉ khiến người
+     * dùng tưởng tắt xong là được gõ tay.
+     */
+    public function test_danh_muc_khong_bat_tat_duoc_thi_khong_co_o_tick(): void
+    {
+        $this->fakeApi();
+
+        $html = $this->withSession($this->phienQuanTri())
+            ->get('/admin/parameters/numbering-rules')->getContent();
+
+        $this->assertStringNotContainsString('data-tick="thuoc-tinh"', $html);
+        $this->assertMatchesRegularExpression('/data-loai="thuoc-tinh"(?![^>]*\bhidden\b)/', $html);
+        // Và ô nhập của nó không bị khoá — sửa được ngay, không phải tick gì trước.
+        $this->assertStringContainsString('name="rules[thuoc-tinh][prefix]"', $html);
+        $this->assertDoesNotMatchRegularExpression('/name="rules\[thuoc-tinh\]\[prefix\]"[^>]*\bdisabled\b/', $html);
     }
 
     /** Lưu gửi đúng hình dạng API cần, rồi quay lại đúng chi nhánh vừa sửa. */

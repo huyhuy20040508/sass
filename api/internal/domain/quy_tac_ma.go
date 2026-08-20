@@ -34,6 +34,7 @@ const (
 	LoaiHangHoa      = "hang-hoa"
 	LoaiNhomHangHoa  = "nhom-hang-hoa"
 	LoaiDonViTinh    = "don-vi-tinh"
+	LoaiThuocTinh    = "thuoc-tinh"
 	LoaiNhaCungCap   = "nha-cung-cap"
 	LoaiNhanVien     = "nhan-vien"
 	LoaiDonHang      = "don-hang"
@@ -50,6 +51,19 @@ type LoaiMa struct {
 	// nhân viên là dữ liệu mọi chi nhánh cùng tra, hai chi nhánh đặt hai tiền tố
 	// khác nhau thì mã của cùng một bảng nhảy loạn.
 	DungChung bool `json:"dung_chung"`
+	// BatTatDuoc = màn cấu hình có bày ô tick bật/tắt cho loại này không.
+	//
+	// Chỉ ba loại có: hàng hoá, nhà cung cấp, nhân viên. Đó là những chỗ mã do
+	// người dùng GÕ TAY khi không bật quy tắc — tắt quy tắc là trả ô mã lại cho
+	// họ (hàng hoá tắt rồi mà bỏ trống SKU thì API báo ErrSKUBatBuoc).
+	//
+	// Những loại còn lại KHÔNG có ô tick và luôn nằm sẵn trong bảng quy tắc:
+	// nhóm hàng hoá, thuộc tính, đơn vị tính bỏ trống mã là phần mềm đặt hộ
+	// theo dải sẵn có (NH001, TT001, DV001…), còn chứng từ thì vốn tự sinh mã.
+	// Ở những chỗ ấy quy tắc chỉ đổi HÌNH DẠNG mã, không bật/tắt việc sinh mã —
+	// bày một ô tick không tắt được cái gì chỉ khiến người dùng tưởng tắt xong
+	// là được gõ tay.
+	BatTatDuoc bool `json:"bat_tat_duoc"`
 	// TienToGoiY điền sẵn vào ô lúc người dùng vừa bật quy tắc.
 	TienToGoiY string `json:"tien_to_goi_y"`
 }
@@ -60,12 +74,14 @@ type LoaiMa struct {
 // loại chưa tồn tại thì người dùng cấu hình xong ngồi chờ một thứ không bao giờ
 // chạy.
 var DanhMucLoaiMa = []LoaiMa{
-	// Danh mục — dùng chung toàn cửa hàng.
-	{Ma: LoaiHangHoa, Ten: "Hàng hóa", DungChung: true, TienToGoiY: "HH"},
+	// Danh mục — dùng chung toàn cửa hàng. Chỉ ba loại có ô tick bật/tắt (xem
+	// LoaiMa.BatTatDuoc); ba loại còn lại luôn nằm sẵn trong bảng quy tắc.
+	{Ma: LoaiHangHoa, Ten: "Hàng hóa", DungChung: true, BatTatDuoc: true, TienToGoiY: "HH"},
 	{Ma: LoaiNhomHangHoa, Ten: "Nhóm hàng hóa", DungChung: true, TienToGoiY: "NH"},
+	{Ma: LoaiThuocTinh, Ten: "Thuộc tính", DungChung: true, TienToGoiY: "TT"},
 	{Ma: LoaiDonViTinh, Ten: "Đơn vị tính", DungChung: true, TienToGoiY: "DV"},
-	{Ma: LoaiNhaCungCap, Ten: "Nhà cung cấp", DungChung: true, TienToGoiY: "NCC"},
-	{Ma: LoaiNhanVien, Ten: "Nhân viên", DungChung: true, TienToGoiY: "NV"},
+	{Ma: LoaiNhaCungCap, Ten: "Nhà cung cấp", DungChung: true, BatTatDuoc: true, TienToGoiY: "NCC"},
+	{Ma: LoaiNhanVien, Ten: "Nhân viên", DungChung: true, BatTatDuoc: true, TienToGoiY: "NV"},
 
 	// Chứng từ — theo từng chi nhánh, vì mã nói ra phiếu phát sinh ở đâu.
 	{Ma: LoaiDonHang, Ten: "Đơn hàng", TienToGoiY: "DH"},
