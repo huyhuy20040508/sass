@@ -33,6 +33,8 @@ type productService struct {
 	// quyTac là quy tắc đánh số của cửa hàng: bật thì SKU tự sinh và ô mã ở màn
 	// nhập khoá lại, tắt thì người dùng phải tự gõ như hiện nay.
 	quyTac domain.QuyTacMaRepository
+	// viTri để kiểm vị trí gán cho mặt hàng có thật và thuộc đúng cửa hàng này.
+	viTri domain.ViTriRepository
 }
 
 func NewProductService(
@@ -40,10 +42,11 @@ func NewProductService(
 	categoryRepo domain.CategoryRepository,
 	hanMuc HanMucService,
 	quyTac domain.QuyTacMaRepository,
+	viTri domain.ViTriRepository,
 ) ProductService {
 	return &productService{
 		repo: repo, categoryRepo: categoryRepo,
-		hanMuc: hanMuc, quyTac: quyTac,
+		hanMuc: hanMuc, quyTac: quyTac, viTri: viTri,
 	}
 }
 
@@ -331,7 +334,10 @@ func (s *productService) Duplicate(ctx context.Context, id uint) (*domain.Produc
 	newName := fmt.Sprintf("%s (Bản sao)", orig.Name)
 
 	newProduct := &domain.Product{
-		CategoryID:       orig.CategoryID,
+		CategoryID: orig.CategoryID,
+		// Bản sao để cùng chỗ với bản gốc: nhân bản là để khai nhanh một món
+		// tương tự, mà món tương tự thì gần như luôn nằm cùng kệ.
+		LocationID:       orig.LocationID,
 		Name:             newName,
 		Slug:             newSlug,
 		SKU:              newSKU,
@@ -399,10 +405,19 @@ func (s *productService) Delete(ctx context.Context, id uint) error {
 	return s.repo.Delete(ctx, id)
 }
 
-// validateRefs kiểm tra category_id tồn tại.
+// validateRefs kiểm tra category_id và location_id tồn tại.
 func (s *productService) validateRefs(ctx context.Context, req dto.ProductRequest) error {
 	if _, err := s.categoryRepo.FindByID(ctx, req.CategoryID); err != nil {
 		return err // ErrNotFound -> handler trả 404
+	}
+
+	// Vị trí là tuỳ chọn: nil = không đụng tới, 0 = gỡ ra. Chỉ id > 0 mới phải
+	// tra — và tra qua repo có bộ lọc tenant, nên id của cửa hàng khác rơi vào
+	// ErrNotFound chứ không gán trộm được.
+	if req.LocationID != nil && *req.LocationID > 0 {
+		if _, err := s.viTri.FindByID(ctx, *req.LocationID); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -412,6 +427,17 @@ func (s *productService) validateRefs(ctx context.Context, req dto.ProductReques
 // isCreate=true chỉ khi tạo mới (đặt mặc định cho các cờ boolean khi nil).
 func applyProductRequest(p *domain.Product, req dto.ProductRequest, isCreate bool) {
 	p.CategoryID = req.CategoryID
+	// Vị trí theo quy ước con trỏ: vắng mặt = giữ nguyên, 0 = gỡ ra, >0 = gán.
+	// Không gộp hai nghĩa sau lại: modal sửa nào không dựng được ô Vị trí mà vẫn
+	// gửi 0 thì mọi lượt Lưu là một lượt gỡ vị trí trong im lặng.
+	if req.LocationID != nil {
+		if *req.LocationID == 0 {
+			p.LocationID = nil
+		} else {
+			id := *req.LocationID
+			p.LocationID = &id
+		}
+	}
 	p.Name = req.Name
 	p.Slug = req.Slug
 	p.SKU = req.SKU

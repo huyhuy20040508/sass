@@ -4,8 +4,12 @@
 -- một bộ khác nhau (tiệm cà phê cần "Mức đá", tiệm này cần "RAM"), nên không
 -- gieo cho mọi tenant.
 --
--- Cách chạy (đổi @tenant thành id cửa hàng cần gieo):
+-- Cách chạy (mặc định gieo cho cửa hàng id 1):
 --   mysql -u root --default-character-set=utf8mb4 selliotech < database/seed-thuoc-tinh-dien-thoai-may-tinh.sql
+--
+-- Cửa hàng khác thì đặt @tenant trước, không phải sửa tệp:
+--   { echo "SET @tenant := 2;"; cat database/seed-thuoc-tinh-dien-thoai-may-tinh.sql; } \
+--     | mysql -u root --default-character-set=utf8mb4 selliotech
 --
 -- Chạy lại bao nhiêu lần cũng được: thuộc tính hay giá trị đã có thì bỏ qua,
 -- không tạo bản thứ hai và không đụng tới thứ người dùng đã sửa.
@@ -13,7 +17,9 @@
 -- Mã đặt theo đúng cách tầng Go đặt hộ: mã thuộc tính viết hoa không dấu, mã
 -- giá trị là <mã thuộc tính> + số thứ tự hai chữ số (RAM01, RAM02…).
 
-SET @tenant := 1;
+-- IFNULL chứ không gán thẳng: đặt @tenant trước khi nạp tệp thì giá trị ấy
+-- thắng, còn không thì rơi về cửa hàng 1.
+SET @tenant := IFNULL(@tenant, 1);
 
 -- them_tt: thêm một thuộc tính nếu cửa hàng chưa có mã ấy.
 DROP PROCEDURE IF EXISTS them_tt;

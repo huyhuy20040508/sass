@@ -242,6 +242,18 @@ func handleServiceError(c *gin.Context, err error) {
 		response.ValidationError(c, map[string]string{
 			"name": "Tên đơn vị này đã có trong cửa hàng",
 		})
+	// Vị trí — cùng hai lỗi trùng với đơn vị tính.
+	case errors.Is(err, domain.ErrViTriTrungMa):
+		response.ValidationError(c, map[string]string{
+			"code": "Mã vị trí này đã có trong cửa hàng (tính cả vị trí đã xoá)",
+		})
+	case errors.Is(err, domain.ErrViTriTrungTen):
+		response.ValidationError(c, map[string]string{
+			"name": "Tên vị trí này đã có trong cửa hàng",
+		})
+	case errors.Is(err, domain.ErrViTriDangDung):
+		response.Error(c, 409, "Còn mặt hàng để ở vị trí này nên không xoá được. "+
+			"Chuyển chúng sang vị trí khác trước, hoặc TẮT vị trí này đi nếu chỉ muốn thôi bày nó ra")
 	// Thuộc tính — bốn lỗi trùng, tô đỏ đúng ô người vừa gõ. Hai lỗi của giá trị
 	// con trỏ vào cả bảng giá trị chứ không vào một dòng: màn hình không đánh số
 	// dòng nên chỉ vào "dòng thứ ba" cũng chẳng giúp ai.

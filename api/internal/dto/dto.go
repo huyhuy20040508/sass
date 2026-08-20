@@ -394,7 +394,12 @@ type VoucherResponse struct {
 // ---------- Product ----------
 
 type ProductRequest struct {
-	CategoryID uint   `json:"category_id" binding:"required"`
+	CategoryID uint `json:"category_id" binding:"required"`
+	// LocationID là chỗ để hàng (Hàng hóa → Vị trí). Con trỏ để phân biệt:
+	//   nil -> không đụng tới vị trí (giữ nguyên cái đang có khi SỬA).
+	//   0   -> gỡ vị trí, trả mặt hàng về "chưa gán".
+	//   >0  -> gán vào vị trí ấy.
+	LocationID *uint  `json:"location_id"`
 	Name       string `json:"name" binding:"required,max=200"`
 	Slug       string `json:"slug" binding:"required,max=191"`
 	// SKU bỏ trống = sinh theo quy tắc mã hàng hoá; chưa bật quy tắc thì API trả
@@ -2467,6 +2472,26 @@ type DonViTinhRequest struct {
 // TrangThaiDonViTinhRequest — công tắc bật/tắt trên bảng danh sách.
 // Con trỏ vì cùng lý do với TrangThaiThueRequest.
 type TrangThaiDonViTinhRequest struct {
+	IsActive *bool `json:"is_active" binding:"required"`
+}
+
+// ---------- Vị trí (Hàng hóa → Vị trí) ----------
+
+// ViTriRequest — payload tạo/sửa vị trí.
+//
+// Cùng luật với DonViTinhRequest: mã bỏ trống thì server tự đặt (theo quy tắc
+// đánh số của cửa hàng nếu đã bật, không thì dải VT001), bỏ trống lúc SỬA là giữ
+// nguyên mã cũ. Gõ tay thì chỉ nhận chữ cái + chữ số, server tự viết hoa.
+type ViTriRequest struct {
+	Code string `json:"code" binding:"omitempty,max=20,alphanum"`
+	Name string `json:"name" binding:"required,max=100"`
+	// IsActive bỏ trống = true (vị trí mới mặc định đang dùng).
+	IsActive *bool `json:"is_active"`
+}
+
+// TrangThaiViTriRequest — công tắc bật/tắt trên bảng danh sách.
+// Con trỏ vì cùng lý do với TrangThaiThueRequest.
+type TrangThaiViTriRequest struct {
 	IsActive *bool `json:"is_active" binding:"required"`
 }
 

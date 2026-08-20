@@ -54,7 +54,8 @@
         {{-- Bộ lọc --}}
         @php
             // Đếm số bộ lọc nâng cao đang bật -> tự mở hàng nâng cao + hiện badge.
-            $advCount = ($filters['kit_type'] !== '' ? 1 : 0)
+            $advCount = ($filters['location_id'] !== '' ? 1 : 0)
+                + ($filters['kit_type'] !== '' ? 1 : 0)
                 + ($filters['status'] !== 'all' ? 1 : 0)
                 + ($filters['featured'] !== '' ? 1 : 0)
                 + ($filters['sort'] !== 'newest' ? 1 : 0);
@@ -138,6 +139,19 @@
 
             {{-- Hàng nâng cao: các bộ lọc còn lại (ẩn cho tới khi bấm "Nâng cao") --}}
             <div class="prd-toolbar-adv {{ $advOpen ? 'is-open' : '' }}" id="prdAdvRow">
+                {{-- Vị trí để hàng. "Chưa gán vị trí" là lựa chọn có thật chứ không
+                     phải trạng thái thiếu dữ liệu: đó đúng là câu người đi soạn hàng
+                     hỏi — còn món nào chưa biết để đâu. --}}
+                <select name="location_id" class="prd-select" title="Lọc theo vị trí để hàng">
+                    <option value="">Tất cả vị trí</option>
+                    <option value="none" {{ $filters['location_id'] === 'none' ? 'selected' : '' }}>Chưa gán vị trí</option>
+                    @foreach($locations as $loc)
+                        <option value="{{ $loc['id'] }}" {{ $filters['location_id'] === (string) $loc['id'] ? 'selected' : '' }}>
+                            {{ $loc['code'] }} · {{ $loc['name'] }}
+                        </option>
+                    @endforeach
+                </select>
+
                 <select name="kit_type" class="prd-select" title="Lọc theo loại áo">
                     <option value="">Tất cả loại áo</option>
                     @foreach($kitTypes as $val => $label)
@@ -181,6 +195,7 @@
                         <th class="prd-c-name">Sản phẩm</th>
                         <th class="prd-c-sku">SKU</th>
                         <th class="prd-c-cat">Danh mục</th>
+                        <th class="prd-c-loc">Vị trí</th>
                         <th class="prd-c-price">Giá</th>
                         <th class="prd-c-stock">Tồn kho</th>
                         <th class="prd-c-kit">Loại áo</th>
@@ -247,6 +262,15 @@
                             </td>
                             <td class="prd-c-sku" data-view="{{ $p['id'] }}" title="Xem chi tiết sản phẩm"><span class="prd-code">{{ $p['sku'] }}</span></td>
                             <td class="prd-c-cat">{{ $p['category']['name'] ?? '—' }}</td>
+                            <td class="prd-c-loc">
+                                @if(!empty($p['location']['name']))
+                                    {{-- Mã ở chip, tên làm tooltip: bảng đã chật, mà đi soạn
+                                         hàng thì người ta đọc mã trên kệ chứ không đọc tên. --}}
+                                    <span class="prd-loc" title="{{ $p['location']['name'] }}">{{ $p['location']['code'] ?? '—' }}</span>
+                                @else
+                                    <span class="prd-loc-empty" title="Chưa gán vị trí">—</span>
+                                @endif
+                            </td>
                             <td class="prd-c-price">
                                 <span class="prd-price-sale">{{ number_format($now, 0, ',', '.') }}₫</span>
                                 @if($sale)
@@ -319,8 +343,8 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="14" class="prd-empty">
-                                @if($filters['keyword'] !== '' || $filters['category_id'] || $filters['kit_type'] || $filters['status'] !== 'all' || $filters['featured'] !== '')
+                            <td colspan="15" class="prd-empty">
+                                @if($filters['keyword'] !== '' || $filters['category_id'] || $filters['location_id'] !== '' || $filters['kit_type'] || $filters['status'] !== 'all' || $filters['featured'] !== '')
                                     Không tìm thấy sản phẩm nào khớp bộ lọc. Thử xoá bớt điều kiện lọc.
                                 @else
                                     Chưa có sản phẩm nào. Bấm “Thêm sản phẩm” để tạo mới.
@@ -478,6 +502,7 @@
         .prd-table.hide-img    .prd-c-img,
         .prd-table.hide-sku    .prd-c-sku,
         .prd-table.hide-cat    .prd-c-cat,
+        .prd-table.hide-loc    .prd-c-loc,
         .prd-table.hide-price  .prd-c-price,
         .prd-table.hide-stock  .prd-c-stock,
         .prd-table.hide-kit    .prd-c-kit,
@@ -527,6 +552,7 @@
         .prd-table th.prd-c-name,   .prd-table td.prd-c-name   { min-width: 200px; max-width: 320px; overflow: hidden; text-overflow: ellipsis; }
         .prd-table th.prd-c-sku,    .prd-table td.prd-c-sku    { width: 1%; }
         .prd-table th.prd-c-cat,    .prd-table td.prd-c-cat    { width: 1%; }
+        .prd-table th.prd-c-loc,    .prd-table td.prd-c-loc    { width: 1%; text-align: center; }
         .prd-table th.prd-c-price,  .prd-table td.prd-c-price  { width: 1%; }
         .prd-table th.prd-c-stock,  .prd-table td.prd-c-stock  { width: 1%; text-align: center; }
         .prd-table th.prd-c-kit,    .prd-table td.prd-c-kit    { width: 1%; }
@@ -537,6 +563,11 @@
         .prd-check { width: 16px; height: 16px; cursor: pointer; accent-color: #1890ff; }
         .prd-thumb { width: 40px; height: 40px; border-radius: 6px; object-fit: cover; border: 1px solid #f0f0f0; }
         .prd-thumb-empty { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 6px; background: #f5f5f5; color: #bfbfbf; }
+
+        /* Chip mã vị trí — cùng dáng với .prd-code nhưng tông xanh lá để phân biệt
+           "món này ở đâu" với "món này mã gì" khi liếc qua bảng. */
+        .prd-loc { display: inline-block; font-size: 12px; background: #f6ffed; border: 1px solid #d9f7be; border-radius: 3px; padding: 2px 8px; color: #389e0d; white-space: nowrap; }
+        .prd-loc-empty { color: #bfbfbf; }
 
         .prd-name { display: block; font-weight: 500; color: #262626; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .prd-sub { display: block; margin-top: 2px; font-size: 12px; color: #8c8c8c; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -956,6 +987,7 @@ const RETURN_URL = @json(route('admin.products.index', request()->query()));
             const BY_ID = new Map(PRODUCTS.map((p) => [p.id, p]));
             // Dữ liệu cho modal thêm/sửa.
             const CATEGORIES = @json($orderedCats);            // [{id, name, level}] đã xếp theo cây
+            const LOCATIONS = @json($locations);               // [{id, code, name}] — chỉ vị trí đang bật
             const KIT_TYPES = @json($kitTypes);                // { value: label }
             const STATUSES = @json($statuses);                 // { active: 'Đang bán', ... }
             const STATUS_HINTS = @json($statusHints);          // câu giải thích từng mức
@@ -1366,6 +1398,24 @@ if (words.length >= 2) teamPart = words.slice(0, 2).map((w) => w[0]).join('');
                     return `<option value="${c.id}" ${sel}>${pad}${esc(c.name)}</option>`;
                 }).join('');
 
+                // Ô chọn vị trí. LOCATIONS chỉ chứa vị trí ĐANG BẬT, nên sản phẩm đang
+                // để ở một vị trí vừa bị tắt sẽ không tìm thấy dòng của nó — và lượt
+                // Lưu tiếp theo âm thầm gỡ mất vị trí ấy. Chèn lại dòng đó vào đầu
+                // danh sách, ghi rõ là đã tắt.
+                const locId = (isEdit || isView) && p && p.location_id != null ? Number(p.location_id) : 0;
+                const locList = LOCATIONS.slice();
+                if (locId > 0 && !locList.some((l) => Number(l.id) === locId)) {
+                    const cu = p && p.location ? p.location : null;
+                    locList.unshift({ id: locId, code: (cu && cu.code) || '', name: ((cu && cu.name) || 'Vị trí không còn bày ra') + ' (đã tắt)' });
+                }
+                const locOpts = ['<option value="0">Chưa gán vị trí</option>'].concat(
+                    locList.map((l) => {
+                        const sel = locId === Number(l.id) ? 'selected' : '';
+                        const nhan = l.code ? `${esc(l.code)} · ${esc(l.name)}` : esc(l.name);
+                        return `<option value="${l.id}" ${sel}>${nhan}</option>`;
+                    })
+                ).join('');
+
                 const kitOpts = ['<option value="">Chọn loại áo</option>'].concat(
                     Object.entries(KIT_TYPES).map(([val, label]) => {
                         const sel = (isEdit || isView) && p && p.kit_type === val ? 'selected' : '';
@@ -1480,6 +1530,11 @@ if (words.length >= 2) teamPart = words.slice(0, 2).map((w) => w[0]).join('');
                                         <label class="prd-field-label" for="mCategory">Danh mục <span class="prd-req">*</span></label>
                                         <select id="mCategory" class="prd-msel">${catOpts}</select>
                                         <p class="prd-err" data-err="mCategory"></p>
+                                    </div>
+                                    <div>
+                                        <label class="prd-field-label" for="mLocation">Vị trí</label>
+                                        <select id="mLocation" class="prd-msel">${locOpts}</select>
+                                        <p class="prd-hint">Chỗ để hàng trong kho hoặc trên quầy. Khai ở Hàng hóa → Vị trí.</p>
                                     </div>
                                     <div>
                                         <label class="prd-field-label" for="mKit">Loại áo</label>
@@ -2094,6 +2149,9 @@ if (words.length >= 2) teamPart = words.slice(0, 2).map((w) => w[0]).join('');
                     name,
                     sku,
                     category_id: categoryId,
+                    // Luôn gửi, kể cả 0 ("chưa gán"): ô này có mặt ở mọi lượt sửa nên
+                    // để trống là ý muốn thật, không phải màn hình dựng hụt.
+                    location_id: Number(document.getElementById('mLocation').value || 0),
                     slug: dialog.dataset.slug || '',
                     team: val('mTeam'),
                     season: val('mSeason'),
@@ -2257,13 +2315,14 @@ if (words.length >= 2) teamPart = words.slice(0, 2).map((w) => w[0]).join('');
                     { key: 'img', label: 'Ảnh' },
                     { key: 'sku', label: 'SKU' },
                     { key: 'cat', label: 'Danh mục' },
+                    { key: 'loc', label: 'Vị trí' },
                     { key: 'price', label: 'Giá' },
                     { key: 'stock', label: 'Tồn kho' },
                     { key: 'kit', label: 'Loại áo' },
                     { key: 'feat', label: 'Nổi bật' },
                     { key: 'status', label: 'Trạng thái' },
                 ];
-                const TOTAL_COLS = 14; // gồm cả 3 cột không tắt được
+                const TOTAL_COLS = 15; // gồm cả 3 cột không tắt được
 
                 const table = document.querySelector('.prd-table');
                 const list = document.getElementById('prdColsList');

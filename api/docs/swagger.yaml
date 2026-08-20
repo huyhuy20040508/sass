@@ -457,8 +457,9 @@ definitions:
           họ (hàng hoá tắt rồi mà bỏ trống SKU thì API báo ErrSKUBatBuoc).
 
           Những loại còn lại KHÔNG có ô tick và luôn nằm sẵn trong bảng quy tắc:
-          nhóm hàng hoá, thuộc tính, đơn vị tính bỏ trống mã là phần mềm đặt hộ
-          theo dải sẵn có (NH001, TT001, DV001…), còn chứng từ thì vốn tự sinh mã.
+          nhóm hàng hoá, thuộc tính, đơn vị tính, vị trí bỏ trống mã là phần mềm đặt
+          hộ theo dải sẵn có (NH001, TT001, DV001, VT001…), còn chứng từ thì vốn tự
+          sinh mã.
           Ở những chỗ ấy quy tắc chỉ đổi HÌNH DẠNG mã, không bật/tắt việc sinh mã —
           bày một ô tick không tắt được cái gì chỉ khiến người dùng tưởng tắt xong
           là được gõ tay.
@@ -1683,6 +1684,31 @@ definitions:
           Username là ô THỨ HAI của màn hình đăng nhập 3 ô, chỉ duy nhất trong một
           tenant. NULL = tài khoản khách hàng (khách mua sắm đăng nhập bằng email):
           UNIQUE chỉ cho lọt đúng một dòng chuỗi rỗng nên bắt buộc phải là NULL.
+        type: string
+    type: object
+  domain.ViTri:
+    properties:
+      code:
+        description: Code là mã ngắn người dùng tự đặt (KEA1, KHOLANH…), luôn viết
+          hoa.
+        type: string
+      created_at:
+        type: string
+      id:
+        type: integer
+      in_use:
+        description: |-
+          InUse = đang có mặt hàng trỏ tới nên không xoá được. Màn quản trị đọc cờ
+          này để xám hẳn nút xoá kèm lý do, thay vì cho bấm rồi mới báo lỗi.
+        type: boolean
+      is_active:
+        description: |-
+          IsActive = có bày ra ở ô chọn vị trí của mặt hàng không. Tắt chứ không xoá
+          khi một vị trí thôi dùng: mặt hàng cũ vẫn phải tra ra được tên vị trí.
+        type: boolean
+      name:
+        type: string
+      updated_at:
         type: string
     type: object
   domain.VoucherStats:
@@ -4292,6 +4318,13 @@ definitions:
         - fan
         - player
         type: string
+      location_id:
+        description: |-
+          LocationID là chỗ để hàng (Hàng hóa → Vị trí). Con trỏ để phân biệt:
+            nil -> không đụng tới vị trí (giữ nguyên cái đang có khi SỬA).
+            0   -> gỡ vị trí, trả mặt hàng về "chưa gán".
+            >0  -> gán vào vị trí ấy.
+        type: integer
       meta_description:
         maxLength: 320
         type: string
@@ -5554,6 +5587,13 @@ definitions:
     required:
     - is_active
     type: object
+  dto.TrangThaiViTriRequest:
+    properties:
+      is_active:
+        type: boolean
+    required:
+    - is_active
+    type: object
   dto.UpdateContactStatusRequest:
     properties:
       admin_note:
@@ -5727,6 +5767,20 @@ definitions:
     required:
     - code
     - email
+    type: object
+  dto.ViTriRequest:
+    properties:
+      code:
+        maxLength: 20
+        type: string
+      is_active:
+        description: IsActive bỏ trống = true (vị trí mới mặc định đang dùng).
+        type: boolean
+      name:
+        maxLength: 100
+        type: string
+    required:
+    - name
     type: object
   dto.VoucherAvailableItem:
     properties:
@@ -13117,6 +13171,218 @@ paths:
       summary: Thống kê tài khoản nội bộ
       tags:
       - Admin - Users
+  /admin/vi-tri:
+    get:
+      description: |-
+        Tìm theo tên hoặc mã. Đặt `active=true` để chỉ lấy vị trí đang bật — ô chọn vị trí lúc khai mặt hàng dùng tham số này.
+        Cố ý KHÔNG phân trang: danh sách vị trí của một cửa hàng chỉ vài chục dòng, trang quản trị tự cắt trang.
+      parameters:
+      - description: Tên hoặc mã vị trí
+        in: query
+        name: keyword
+        type: string
+      - description: true = chỉ vị trí đang bật
+        in: query
+        name: active
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/domain.ViTri'
+                  type: array
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Danh sách vị trí
+      tags:
+      - Admin - Vị trí
+    post:
+      consumes:
+      - application/json
+      description: Mã tự viết hoa và phải khác mọi mã đã có TRONG CỬA HÀNG NÀY, kể
+        cả mã của vị trí đã xoá. Tên so không phân biệt hoa thường nhưng có phân biệt
+        dấu.
+      parameters:
+      - description: Thông tin vị trí
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.ViTriRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/domain.ViTri'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Body'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Thêm vị trí
+      tags:
+      - Admin - Vị trí
+  /admin/vi-tri/{id}:
+    delete:
+      description: Xoá mềm. Vị trí đã thôi dùng nhưng còn muốn tra lại thì nên TẮT
+        thay vì xoá.
+      parameters:
+      - description: ID vị trí
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Body'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Xoá vị trí
+      tags:
+      - Admin - Vị trí
+    get:
+      parameters:
+      - description: ID vị trí
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/domain.ViTri'
+              type: object
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Chi tiết một vị trí
+      tags:
+      - Admin - Vị trí
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: ID vị trí
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Thông tin vị trí
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.ViTriRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/domain.ViTri'
+              type: object
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Sửa vị trí
+      tags:
+      - Admin - Vị trí
+  /admin/vi-tri/{id}/trang-thai:
+    put:
+      consumes:
+      - application/json
+      description: Tắt = thôi bày ở ô chọn vị trí lúc khai mặt hàng. Dòng vẫn còn
+        nên mặt hàng cũ vẫn tra ra được tên vị trí.
+      parameters:
+      - description: ID vị trí
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Trạng thái
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.TrangThaiViTriRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/domain.ViTri'
+              type: object
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Bật/tắt một vị trí
+      tags:
+      - Admin - Vị trí
   /admin/vouchers:
     get:
       description: |-
@@ -15692,6 +15958,11 @@ paths:
         in: query
         name: category_id
         type: integer
+      - description: ID vị trí để hàng, hoặc `none` để lấy riêng phần chưa gán vị
+          trí
+        in: query
+        name: location_id
+        type: string
       - description: 'Loại áo: fan (FAN) | player (PLAYER)'
         in: query
         name: kit_type

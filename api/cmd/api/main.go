@@ -305,6 +305,7 @@ func main() {
 	quyTacMaRepo := repository.NewQuyTacMaRepository(db)
 	thueRepo := repository.NewThueRepository(db)
 	donViTinhRepo := repository.NewDonViTinhRepository(db)
+	viTriRepo := repository.NewViTriRepository(db)
 	thuocTinhRepo := repository.NewThuocTinhRepository(db)
 	productRepo := repository.NewProductRepository(db)
 	orderRepo := repository.NewOrderRepository(db)
@@ -365,7 +366,8 @@ func main() {
 		))
 	}
 
-	productSvc := service.NewProductService(productRepo, categoryRepo, hanMucSvc, quyTacMaRepo)
+	// viTriRepo để kiểm vị trí gán cho mặt hàng có thật và thuộc đúng cửa hàng.
+	productSvc := service.NewProductService(productRepo, categoryRepo, hanMucSvc, quyTacMaRepo, viTriRepo)
 	// Chi nhánh: các ĐIỂM BÁN trong một cửa hàng. Đây là thứ gói Chuỗi bán, và
 	// cũng là nơi hạn mức `max_shops` lần đầu có việc để làm — trước nó, con số
 	// ấy canh một thao tác mà không màn hình nào làm được.
@@ -379,6 +381,8 @@ func main() {
 	// Đơn vị tính — bảng tra của riêng từng cửa hàng, không seed sẵn dòng nào.
 	// quyTacMaRepo để mã bỏ trống được đặt theo quy tắc đánh số của cửa hàng.
 	donViTinhSvc := service.NewDonViTinhService(donViTinhRepo, quyTacMaRepo)
+	// Vị trí — cùng khuôn với đơn vị tính: bảng tra mã + tên của riêng cửa hàng.
+	viTriSvc := service.NewViTriService(viTriRepo, quyTacMaRepo)
 	// Thuộc tính — cùng khuôn với đơn vị tính, thêm tầng giá trị con.
 	thuocTinhSvc := service.NewThuocTinhService(thuocTinhRepo, quyTacMaRepo)
 	// Chương trình khuyến mãi: vừa là module quản trị, vừa là thứ tính giá sau giảm
@@ -461,6 +465,7 @@ func main() {
 		QuyTacMa:  handler.NewQuyTacMaHandler(quyTacMaSvc),
 		Thue:      handler.NewThueHandler(thueSvc),
 		DonViTinh: handler.NewDonViTinhHandler(donViTinhSvc),
+		ViTri:     handler.NewViTriHandler(viTriSvc),
 		ThuocTinh: handler.NewThuocTinhHandler(thuocTinhSvc),
 		Ca:        handler.NewCaLamViecHandler(caSvc),
 		Payment:   handler.NewPaymentHandler(paymentSvc),

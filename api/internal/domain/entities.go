@@ -407,8 +407,12 @@ func IsValidProductStatus(s string) bool {
 type Product struct {
 	ID uint `json:"id" gorm:"primaryKey"`
 	TenantOwned
-	CategoryID       uint       `json:"category_id"`
-	Category         *Category  `json:"category,omitempty" gorm:"foreignKey:CategoryID"`
+	CategoryID uint      `json:"category_id"`
+	Category   *Category `json:"category,omitempty" gorm:"foreignKey:CategoryID"`
+	// LocationID là chỗ để hàng (Hàng hóa → Vị trí). nil = chưa gán, và đó là
+	// trạng thái hợp lệ: cửa hàng không quản kho theo kệ thì để trống cả cột.
+	LocationID       *uint      `json:"location_id"`
+	Location         *ViTri     `json:"location,omitempty" gorm:"foreignKey:LocationID"`
 	Name             string     `json:"name"`
 	Slug             string     `json:"slug"`
 	SKU              string     `json:"sku" gorm:"column:sku"`

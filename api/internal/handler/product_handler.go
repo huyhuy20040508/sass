@@ -50,6 +50,7 @@ func stripCost(p *domain.Product) {
 //	@Produce		json
 //	@Param			keyword		query		string	false	"Tìm theo tên/đội/SKU"
 //	@Param			category_id	query		int		false	"ID danh mục (tự gộp sản phẩm của mọi danh mục con/cháu)"
+//	@Param			location_id	query		string	false	"ID vị trí để hàng, hoặc `none` để lấy riêng phần chưa gán vị trí"
 //	@Param			kit_type	query		string	false	"Loại áo: fan (FAN) | player (PLAYER)"
 //	@Param			min_price	query		number	false	"Giá tối thiểu"
 //	@Param			max_price	query		number	false	"Giá tối đa"
@@ -72,6 +73,8 @@ func (h *ProductHandler) List(c *gin.Context) {
 		Slim:            c.Query("slim") == "true",
 		Sort:            c.Query("sort"),
 		CategoryID:      queryUintPtr(c, "category_id"),
+		LocationID:      queryUintPtr(c, "location_id"),
+		NoLocation:      c.Query("location_id") == "none",
 		MinPrice:        queryFloatPtr(c, "min_price"),
 		MaxPrice:        queryFloatPtr(c, "max_price"),
 		IsFeatured:      queryBoolPtr(c, "featured"),

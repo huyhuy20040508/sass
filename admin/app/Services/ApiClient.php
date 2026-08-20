@@ -383,6 +383,43 @@ class ApiClient
         return $this->delete("/admin/don-vi-tinh/{$id}");
     }
 
+    // ---------- Vị trí (Hàng hóa -> Vị trí) ----------
+
+    /**
+     * Danh sách vị trí để hàng. $onlyActive = true để chỉ lấy vị trí đang bật
+     * (ô chọn vị trí lúc khai mặt hàng dùng cái này).
+     *
+     * API cố ý không phân trang, cùng lý do với đơn vị tính.
+     */
+    public function viTri(string $keyword = '', bool $onlyActive = false): Response
+    {
+        return $this->get('/admin/vi-tri', array_filter([
+            'keyword' => $keyword,
+            'active' => $onlyActive ? 'true' : null,
+        ]));
+    }
+
+    public function taoViTri(array $payload): Response
+    {
+        return $this->post('/admin/vi-tri', $payload);
+    }
+
+    public function suaViTri(int $id, array $payload): Response
+    {
+        return $this->put("/admin/vi-tri/{$id}", $payload);
+    }
+
+    /** Công tắc bật/tắt trên bảng. */
+    public function doiTrangThaiViTri(int $id, bool $isActive): Response
+    {
+        return $this->put("/admin/vi-tri/{$id}/trang-thai", ['is_active' => $isActive]);
+    }
+
+    public function xoaViTri(int $id): Response
+    {
+        return $this->delete("/admin/vi-tri/{$id}");
+    }
+
     // ---------- Thuộc tính (Hàng hóa -> Thuộc tính) ----------
 
     /**
