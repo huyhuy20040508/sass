@@ -57,7 +57,7 @@ class GoiDichVuTest extends TestCase
             'fields' => [],
         ]);
 
-        $res = $this->withSession($this->phienChuTiem())->get('/admin/goi-dich-vu');
+        $res = $this->withSession($this->phienChuTiem())->get('/admin/subscription');
 
         $res->assertOk();
         $res->assertSee('Cửa hàng');
@@ -99,7 +99,7 @@ class GoiDichVuTest extends TestCase
             'fields' => [],
         ]);
 
-        $res = $this->withSession($this->phienChuTiem())->get('/admin/goi-dich-vu');
+        $res = $this->withSession($this->phienChuTiem())->get('/admin/subscription');
 
         $res->assertOk();
         $res->assertSee('Đã quá hạn');
@@ -113,7 +113,7 @@ class GoiDichVuTest extends TestCase
     {
         $this->traLoiApi(['hop_dong' => null, 'bang_gia' => [], 'fields' => []]);
 
-        $res = $this->withSession($this->phienChuTiem())->get('/admin/goi-dich-vu');
+        $res = $this->withSession($this->phienChuTiem())->get('/admin/subscription');
 
         $res->assertOk();
         $res->assertSee('Chưa có hợp đồng nào trong sổ nhà cung cấp');
@@ -130,7 +130,7 @@ class GoiDichVuTest extends TestCase
             '*/admin/goi-dich-vu' => Http::response(['success' => false, 'message' => 'not found'], 404),
         ]);
 
-        $res = $this->withSession($this->phienChuTiem())->get('/admin/goi-dich-vu');
+        $res = $this->withSession($this->phienChuTiem())->get('/admin/subscription');
 
         $res->assertOk();
         $res->assertSee('Máy chủ chưa tra được sổ hợp đồng của nhà cung cấp', false);
@@ -161,7 +161,7 @@ class GoiDichVuTest extends TestCase
             ],
         ]);
 
-        $res = $this->withSession($this->phienChuTiem())->get('/admin/goi-dich-vu');
+        $res = $this->withSession($this->phienChuTiem())->get('/admin/subscription');
 
         $res->assertOk();
         $res->assertSee('Gói của bạn');

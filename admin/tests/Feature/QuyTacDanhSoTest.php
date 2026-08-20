@@ -55,8 +55,8 @@ class QuyTacDanhSoTest extends TestCase
     {
         $this->fakeApi();
 
-        $this->withSession($this->phienQuanTri())->get('/admin/thong-so-chung')
-            ->assertRedirect('/admin/thong-so-chung/quy-tac-danh-so');
+        $this->withSession($this->phienQuanTri())->get('/admin/parameters')
+            ->assertRedirect('/admin/parameters/numbering-rules');
     }
 
     /** Bảng chi nhánh ở trên, bảng quy tắc ở dưới — đúng bố cục bản cũ. */
@@ -64,7 +64,7 @@ class QuyTacDanhSoTest extends TestCase
     {
         $this->fakeApi();
 
-        $res = $this->withSession($this->phienQuanTri())->get('/admin/thong-so-chung/quy-tac-danh-so');
+        $res = $this->withSession($this->phienQuanTri())->get('/admin/parameters/numbering-rules');
 
         $res->assertOk();
         $res->assertSee('Kho miền Bắc', false);
@@ -80,7 +80,7 @@ class QuyTacDanhSoTest extends TestCase
     {
         $this->fakeApi();
 
-        $res = $this->withSession($this->phienQuanTri())->get('/admin/thong-so-chung/quy-tac-danh-so?cn=8');
+        $res = $this->withSession($this->phienQuanTri())->get('/admin/parameters/numbering-rules?cn=8');
 
         $res->assertOk();
         $res->assertSee('value="DHN"', false);
@@ -93,7 +93,7 @@ class QuyTacDanhSoTest extends TestCase
         $this->fakeApi();
 
         $html = $this->withSession($this->phienQuanTri())
-            ->get('/admin/thong-so-chung/quy-tac-danh-so')->getContent();
+            ->get('/admin/parameters/numbering-rules')->getContent();
 
         $this->assertMatchesRegularExpression('/data-loai="nhan-vien"[^>]*\bhidden\b/', $html);
         $this->assertMatchesRegularExpression('/data-tick="hang-hoa"\s+checked/', $html);
@@ -106,7 +106,7 @@ class QuyTacDanhSoTest extends TestCase
         $this->fakeApi();
 
         $res = $this->withSession($this->phienQuanTri())
-            ->put('/admin/thong-so-chung/quy-tac-danh-so', [
+            ->put('/admin/parameters/numbering-rules', [
                 'shop_id' => 8,
                 'rules' => [
                     'hang-hoa' => ['prefix' => 'HH', 'value_part' => 'so-thu-tu', 'length' => 6, 'suffix' => ''],
@@ -114,7 +114,7 @@ class QuyTacDanhSoTest extends TestCase
                 ],
             ]);
 
-        $res->assertRedirect('/admin/thong-so-chung/quy-tac-danh-so?cn=8');
+        $res->assertRedirect('/admin/parameters/numbering-rules?cn=8');
         $res->assertSessionHas('success');
 
         Http::assertSent(function ($request) {
@@ -136,7 +136,7 @@ class QuyTacDanhSoTest extends TestCase
         $this->fakeApi();
 
         $res = $this->withSession($this->phienQuanTri())
-            ->put('/admin/thong-so-chung/quy-tac-danh-so', [
+            ->put('/admin/parameters/numbering-rules', [
                 'shop_id' => 5,
                 'rules' => [
                     'don-hang' => ['prefix' => 'DH', 'value_part' => 'so-thu-tu', 'length' => 99, 'suffix' => ''],
@@ -152,7 +152,7 @@ class QuyTacDanhSoTest extends TestCase
         Log::spy();
         Http::fake(['*' => Http::response(['message' => 'Hỏng'], 500)]);
 
-        $res = $this->withSession($this->phienQuanTri())->get('/admin/thong-so-chung/quy-tac-danh-so');
+        $res = $this->withSession($this->phienQuanTri())->get('/admin/parameters/numbering-rules');
 
         $res->assertOk();
         $res->assertSee('Chưa tải được dữ liệu', false);

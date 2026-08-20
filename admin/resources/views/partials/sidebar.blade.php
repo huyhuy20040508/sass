@@ -6,7 +6,7 @@
 --}}
 @php
     // Vai trò của người đang đăng nhập. Nhân viên (staff) là THU NGÂN: chỗ làm
-    // việc của họ là module Thu ngân (/thu-ngan), và trong khu quản trị này menu
+    // việc của họ là module Thu ngân (/cashier), và trong khu quản trị này menu
     // của họ chỉ còn Tổng quan và Đơn hàng. Sản phẩm, Marketing, Kho, Trả hàng,
     // Khách hàng, Báo cáo và Cài đặt đều đã bị route chặn bằng middleware
     // `admin.manage`, ở đây bỏ luôn khỏi menu để không mời bấm vào chỗ sẽ bị đá ra.
@@ -32,7 +32,7 @@
                     // trả hàng là tiền ra khỏi két nên chỉ quản trị viên thấy mục đó.
                     //
                     // BÁN TẠI QUẦY VÀ CA LÀM VIỆC KHÔNG CÒN Ở ĐÂY: cả hai đã sang
-                    // module Thu ngân (/thu-ngan), đi bằng nút đổi module ở góc phải
+                    // module Thu ngân (/cashier), đi bằng nút đổi module ở góc phải
                     // thanh trên cùng. Để lại một bản sao trong menu này thì hai lối
                     // vào cùng một trang, mà một trong hai sẽ lạc hậu.
                     'label' => 'Đơn hàng', 'icon' => 'orders', 'count' => (int) ($pendingOrders ?? 0),
@@ -202,7 +202,7 @@
                         // Chủ tiệm mua phần mềm để quản lý NHÂN VIÊN, không phải để
                         // quản lý tài khoản: hai trang cùng nói về một con người mà
                         // bắt tạo hai lần ở hai chỗ. Việc cấp tài khoản đăng nhập nay
-                        // là một khối trong hồ sơ nhân sự (/admin/nhan-su).
+                        // là một khối trong hồ sơ nhân sự (/admin/staff).
                         //
                         // Route /admin/users vẫn còn sống nhưng KHÔNG có lối vào:
                         // trang nhân sự chưa lưu được gì (chưa có bảng + API), nên gỡ

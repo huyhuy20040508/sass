@@ -35,24 +35,24 @@ Route::middleware('platform.auth')->name('platform.')->group(function () {
 
     /*
      * Cài đặt của NHÀ CUNG CẤP — không thuộc phần mềm nào, nên nằm ngoài nhóm
-     * `khach-hang-order`.
+     * `order-customers`.
      *
      * Hôm nay đúng một trang: phương thức thanh toán (khách trả tiền gia hạn vào
-     * đâu). Prefix `cai-dat` đã đặt sẵn để trang thứ hai — hồ sơ nhà cung cấp,
+     * đâu). Prefix `settings` đã đặt sẵn để trang thứ hai — hồ sơ nhà cung cấp,
      * mẫu email — về đúng chỗ mà không phải đổi đường của trang này.
      *
      * POST chứ không PUT: form HTML thường, trình duyệt chỉ gửi được GET/POST.
      * Việc đi tiếp sang Go bằng phương thức nào là chuyện của ApiClient.
      */
-    Route::prefix('cai-dat')->name('cai-dat.')->group(function () {
-        Route::get('/thanh-toan', [CauHinhController::class, 'thanhToan'])->name('thanh-toan');
-        Route::post('/thanh-toan', [CauHinhController::class, 'luuThanhToan'])->name('thanh-toan.luu');
+    Route::prefix('settings')->name('cai-dat.')->group(function () {
+        Route::get('/payment', [CauHinhController::class, 'thanhToan'])->name('thanh-toan');
+        Route::post('/payment', [CauHinhController::class, 'luuThanhToan'])->name('thanh-toan.luu');
     });
 
     /*
      * QLTK khách hàng order — sổ tài khoản khách của phần mềm Sellio Order.
      *
-     * Prefix `khach-hang-order` chứ không phải `order`: đường /order đọc như
+     * Prefix `order-customers` chứ không phải `order`: đường /order đọc như
      * khu quản lý ĐƠN HÀNG, mà đây là khu quản lý KHÁCH của phần mềm tên Order.
      *
      * Mã app nằm trong controller (KhachHangOrderController::APP), không đưa
@@ -60,19 +60,19 @@ Route::middleware('platform.auth')->name('platform.')->group(function () {
      * bộ màn hình riêng có tên riêng ở thanh trái, chứ không phải cùng một trang
      * đổi tham số — thanh trái không nói được người ta đang xem phần mềm nào.
      */
-    Route::prefix('khach-hang-order')->name('khach-hang-order.')->group(function () {
-        Route::get('/nguoi-dung-thu', [KhachHangOrderController::class, 'nguoiDungThu'])->name('nguoi-dung-thu');
-        Route::get('/nguoi-chinh-thuc', [KhachHangOrderController::class, 'nguoiChinhThuc'])->name('nguoi-chinh-thuc');
-        Route::get('/goi-dich-vu', [KhachHangOrderController::class, 'goiDichVu'])->name('goi-dich-vu');
-        Route::get('/tinh-nang-goi', [KhachHangOrderController::class, 'tinhNangGoi'])->name('tinh-nang-goi');
+    Route::prefix('order-customers')->name('khach-hang-order.')->group(function () {
+        Route::get('/trials', [KhachHangOrderController::class, 'nguoiDungThu'])->name('nguoi-dung-thu');
+        Route::get('/subscribers', [KhachHangOrderController::class, 'nguoiChinhThuc'])->name('nguoi-chinh-thuc');
+        Route::get('/plans', [KhachHangOrderController::class, 'goiDichVu'])->name('goi-dich-vu');
+        Route::get('/plan-features', [KhachHangOrderController::class, 'tinhNangGoi'])->name('tinh-nang-goi');
         // POST chứ không PUT: đây là form HTML thường, trình duyệt chỉ gửi được
         // GET/POST. Việc đổi nó thành PUT là chuyện của ApiClient khi gọi sang Go.
-        Route::post('/tinh-nang-goi/{plan}', [KhachHangOrderController::class, 'luuTinhNangGoi'])
+        Route::post('/plan-features/{plan}', [KhachHangOrderController::class, 'luuTinhNangGoi'])
             ->whereNumber('plan')->name('tinh-nang-goi.luu');
         // Sửa MỘT mức giá (tên, giá, dùng thử, còn bán hay không) — khác
         // `tinh-nang-goi.luu` là ghi ĐIỀU KHOẢN của gói. POST vì form HTML
         // thường; ApiClient đổi sang PUT khi đi tiếp sang Go.
-        Route::post('/goi-dich-vu/{plan}', [KhachHangOrderController::class, 'luuGoi'])
+        Route::post('/plans/{plan}', [KhachHangOrderController::class, 'luuGoi'])
             ->whereNumber('plan')->name('goi-dich-vu.luu');
         Route::get('/database', [KhachHangOrderController::class, 'database'])->name('database');
 
@@ -88,7 +88,7 @@ Route::middleware('platform.auth')->name('platform.')->group(function () {
          * và khai hai route trỏ vào hai hàm khác nhau ở đây chỉ tạo ra hai chỗ
          * để lệch nhau.
          */
-        Route::post('/dung-thu', [KhachHangOrderController::class, 'taoDungThu'])->name('dung-thu.tao');
+        Route::post('/trials', [KhachHangOrderController::class, 'taoDungThu'])->name('dung-thu.tao');
 
         /*
          * Xuất danh sách ra tệp Excel đọc được (.csv).
@@ -97,7 +97,7 @@ Route::middleware('platform.auth')->name('platform.')->group(function () {
          * đúng thứ đang thấy sau khi lọc, và danh sách đó dài hơn giới hạn an
          * toàn của một địa chỉ URL khi bảng có vài trăm dòng.
          */
-        Route::post('/xuat-hop-dong', [KhachHangOrderController::class, 'xuatHopDong'])->name('hop-dong.xuat');
+        Route::post('/contracts/export', [KhachHangOrderController::class, 'xuatHopDong'])->name('hop-dong.xuat');
 
         /*
          * Chi tiết một hợp đồng — TRANG RIÊNG, không phải hộp thoại.
@@ -105,15 +105,15 @@ Route::middleware('platform.auth')->name('platform.')->group(function () {
          * Có URL nghĩa là gửi được cho đồng nghiệp, mở được ở tab mới, và nút
          * Back của trình duyệt đưa về đúng danh sách vừa đứng.
          */
-        Route::get('/hop-dong/{hopDong}', [KhachHangOrderController::class, 'chiTiet'])
+        Route::get('/contracts/{hopDong}', [KhachHangOrderController::class, 'chiTiet'])
             ->whereNumber('hopDong')->name('hop-dong.chi-tiet');
-        Route::post('/hop-dong/{hopDong}', [KhachHangOrderController::class, 'luuChiTiet'])
+        Route::post('/contracts/{hopDong}', [KhachHangOrderController::class, 'luuChiTiet'])
             ->whereNumber('hopDong')->name('hop-dong.luu');
-        Route::post('/hop-dong/{hopDong}/gia-han', [KhachHangOrderController::class, 'giaHan'])
+        Route::post('/contracts/{hopDong}/renew', [KhachHangOrderController::class, 'giaHan'])
             ->whereNumber('hopDong')->name('hop-dong.gia-han');
-        Route::post('/hop-dong/{hopDong}/huy', [KhachHangOrderController::class, 'huy'])
+        Route::post('/contracts/{hopDong}/cancel', [KhachHangOrderController::class, 'huy'])
             ->whereNumber('hopDong')->name('hop-dong.huy');
-        Route::post('/hop-dong/{hopDong}/doi-mat-khau', [KhachHangOrderController::class, 'doiMatKhauKhach'])
+        Route::post('/contracts/{hopDong}/password', [KhachHangOrderController::class, 'doiMatKhauKhach'])
             ->whereNumber('hopDong')->name('hop-dong.doi-mat-khau');
 
         /*
@@ -127,11 +127,11 @@ Route::middleware('platform.auth')->name('platform.')->group(function () {
          * lại thì mỗi lần gia hạn báo một khoản doanh thu chưa ai trả.
          */
         // Thêm khách MỚI kèm hợp đồng chính thức — đối ứng của `dung-thu.tao`.
-        Route::post('/chinh-thuc', [KhachHangOrderController::class, 'taoChinhThuc'])->name('chinh-thuc.tao');
+        Route::post('/subscribers', [KhachHangOrderController::class, 'taoChinhThuc'])->name('chinh-thuc.tao');
         // Ký hợp đồng cho cửa hàng ĐÃ CÓ. Đường duy nhất dùng được cho khách cũ
         // quay lại: mã cửa hàng của họ đã bị chiếm nên đường trên sẽ từ chối.
-        Route::post('/hop-dong/ky', [KhachHangOrderController::class, 'kyHopDong'])->name('hop-dong.ky');
-        Route::post('/hop-dong/{hopDong}/thu-tien', [KhachHangOrderController::class, 'thuTien'])
+        Route::post('/contracts/sign', [KhachHangOrderController::class, 'kyHopDong'])->name('hop-dong.ky');
+        Route::post('/contracts/{hopDong}/payment', [KhachHangOrderController::class, 'thuTien'])
             ->whereNumber('hopDong')->name('hop-dong.thu-tien');
     });
 });

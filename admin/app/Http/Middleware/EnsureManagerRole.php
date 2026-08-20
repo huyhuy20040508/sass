@@ -9,7 +9,7 @@ use Symfony\Component\HttpFoundation\Response;
 /**
  * Chặn thu ngân (staff) khỏi mọi thứ ngoài cụm quầy.
  *
- * Vai trò `staff` làm việc ở module Thu ngân (/thu-ngan — bán tại quầy, ca làm
+ * Vai trò `staff` làm việc ở module Thu ngân (/cashier — bán tại quầy, ca làm
  * việc, đơn quầy; cả module CỐ Ý không có middleware này). Trong khu quản trị họ
  * chỉ còn mở được Tổng quan, Đơn hàng và hồ sơ của chính mình. Hàng hoá, tiếp
  * thị, kho, mua vào, trả hàng, khách hàng, người dùng, báo cáo và cấu hình đều

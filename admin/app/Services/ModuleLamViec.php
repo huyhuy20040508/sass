@@ -5,7 +5,7 @@ namespace App\Services;
 /**
  * Phần mềm có HAI module, và người dùng đứng trong đúng một module tại một lúc.
  *
- *  - THU NGÂN (`/thu-ngan`): việc của người đứng quầy cả ngày — bán hàng, mở /
+ *  - THU NGÂN (`/cashier`): việc của người đứng quầy cả ngày — bán hàng, mở /
  *    đóng ca và ghi sổ quỹ, tra lại đơn vừa bán. Màn hình tối, không sidebar,
  *    mỗi thao tác một phím.
  *  - QUẢN TRỊ (`/admin`): việc của chủ tiệm — hàng hoá, kho, khách, báo cáo,

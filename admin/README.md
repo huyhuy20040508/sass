@@ -32,7 +32,7 @@ php artisan serve --port=8001
   mình. Hàng hoá, kho, mua vào, trả hàng, khách hàng, báo cáo và cấu hình đều nằm
   sau middleware này. Go API chặn song song ở nhóm `manage` trong
   `internal/router/router.go` — đó mới là chốt thật, tầng này chỉ để báo sớm và ẩn menu.
-- Trang: `/login`, `/admin/dashboard`, `/thu-ngan/ban-hang`.
+- Trang: `/login`, `/admin/dashboard`, `/cashier/sales`.
 
 ## Hai module
 Phần mềm chia làm hai khu, người dùng đứng trong đúng một khu tại một lúc
@@ -40,7 +40,7 @@ Phần mềm chia làm hai khu, người dùng đứng trong đúng một khu t�
 
 | Module | Đường dẫn | Gồm | Vỏ trang |
 |---|---|---|---|
-| **Thu ngân** | `/thu-ngan` | Bán tại quầy, Ca làm việc & sổ quỹ, Đơn quầy | `layouts/thu-ngan` — nền tối, không sidebar |
+| **Thu ngân** | `/cashier` | Bán tại quầy, Ca làm việc & sổ quỹ, Đơn quầy | `layouts/thu-ngan` — nền tối, không sidebar |
 | **Quản trị** | `/admin` | Hàng hoá, kho, khách hàng, báo cáo, cấu hình | `layouts/app` — sidebar + topbar |
 
 Đổi qua lại bằng nút ở góc phải thanh trên cùng (`partials/module-switch`, dùng
