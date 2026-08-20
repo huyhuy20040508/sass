@@ -297,7 +297,7 @@ class ProductController extends Controller
         return response()->streamDownload(function () use ($all, $kit, $statuses) {
             $out = fopen('php://output', 'w');
             fwrite($out, "\xEF\xBB\xBF"); // BOM để Excel đọc đúng tiếng Việt
-            fputcsv($out, ['Mã SP', 'SKU', 'Tên sản phẩm', 'Danh mục', 'Đội bóng', 'Mùa giải', 'Loại áo', 'Giá gốc', 'Giá KM', 'Giá vốn', 'Tổng tồn kho', 'Trạng thái', 'Nổi bật']);
+            fputcsv($out, ['Mã SP', 'SKU', 'Tên sản phẩm', 'Danh mục', 'Vị trí', 'Đội bóng', 'Mùa giải', 'Loại áo', 'Giá gốc', 'Giá KM', 'Giá vốn', 'Tổng tồn kho', 'Trạng thái', 'Nổi bật']);
             foreach ($all as $p) {
                 $stock = collect($p['variants'] ?? [])->sum('stock_quantity');
                 fputcsv($out, [
@@ -305,6 +305,9 @@ class ProductController extends Controller
                     $p['sku'] ?? '',
                     $p['name'] ?? '',
                     data_get($p, 'category.name', ''),
+                    // Mã + tên: người cầm tệp đi soạn hàng đọc mã trên kệ, còn tên là
+                    // để đối chiếu khi mã dán bị mờ.
+                    trim(data_get($p, 'location.code', '').' '.data_get($p, 'location.name', '')),
                     $p['team'] ?? '',
                     $p['season'] ?? '',
                     $kit[$p['kit_type'] ?? ''] ?? ($p['kit_type'] ?? ''),
@@ -329,9 +332,12 @@ class ProductController extends Controller
             $out = fopen('php://output', 'w');
             fwrite($out, "\xEF\xBB\xBF");
             // Không có cột tồn kho: sản phẩm nhập vào luôn ở tồn 0, phải qua kho.
-            fputcsv($out, ['name', 'category_id', 'team', 'season', 'kit_type', 'base_price', 'sale_price', 'cost_price', 'sizes']);
-            fputcsv($out, ['Áo Real Madrid Sân Nhà 2024/2025 - FAN', '4', 'Real Madrid', '2024/2025', 'fan', '850000', '799000', '520000', 'S,M,L,XL']);
-            fputcsv($out, ['Áo Man City Sân Khách 2024/2025 - PLAYER', '3', 'Manchester City', '2024/2025', 'player', '820000', '', '', 'M,L']);
+            // location_code nhận MÃ vị trí chứ không phải id — khác category_id ở
+            // trên là cố ý: mã vị trí là thứ người ta đọc thấy trên kệ và trên màn
+            // hình, còn id thì phải đi tra. Bỏ trống = chưa gán vị trí.
+            fputcsv($out, ['name', 'category_id', 'location_code', 'team', 'season', 'kit_type', 'base_price', 'sale_price', 'cost_price', 'sizes']);
+            fputcsv($out, ['Áo Real Madrid Sân Nhà 2024/2025 - FAN', '4', 'VT001', 'Real Madrid', '2024/2025', 'fan', '850000', '799000', '520000', 'S,M,L,XL']);
+            fputcsv($out, ['Áo Man City Sân Khách 2024/2025 - PLAYER', '3', '', 'Manchester City', '2024/2025', 'player', '820000', '', '', 'M,L']);
             fclose($out);
         }, 'mau-nhap-san-pham.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
     }
@@ -357,6 +363,24 @@ class ProductController extends Controller
         $idx = array_flip($header);
         $get = fn (array $row, string $key) => isset($idx[$key]) ? trim((string) ($row[$idx[$key]] ?? '')) : '';
         $num = fn (string $s) => (float) preg_replace('/[^\d.]/', '', $s);
+
+        // Bảng tra MÃ VỊ TRÍ -> id, dựng MỘT lần trước vòng lặp. Tra từng dòng là
+        // mỗi dòng một lượt gọi API cho một bảng chỉ vài chục dòng.
+        //
+        // Lấy cả vị trí đã tắt: tệp nhập có thể nói tới một kệ vừa tạm ngừng bày ra
+        // ở ô chọn, mà từ chối dòng ấy thì người dùng không hiểu vì sao mã họ đang
+        // nhìn thấy trên màn Vị trí lại bị coi là sai.
+        $viTriTheoMa = [];
+        try {
+            $resVT = $this->api->viTri();
+            if ($resVT->successful()) {
+                foreach ($resVT->json('data') ?? [] as $vt) {
+                    $viTriTheoMa[mb_strtoupper((string) ($vt['code'] ?? ''))] = (int) ($vt['id'] ?? 0);
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Load locations for product import failed', ['msg' => $e->getMessage()]);
+        }
 
         $ok = 0;
         // Ghi lại DÒNG NÀO sai và SAI VÌ GÌ. Chỉ đếm số dòng lỗi thì với tệp vài
@@ -384,6 +408,20 @@ class ProductController extends Controller
                 continue;
             }
 
+            // Mã lạ thì BÁO LỖI dòng đó chứ không lặng lẽ nhập vào với vị trí trống:
+            // người dùng khai một chỗ để hàng cụ thể, nhập xong mà mất là họ không
+            // biết để đi sửa.
+            $maViTri = mb_strtoupper($get($row, 'location_code'));
+            $locationId = 0;
+            if ($maViTri !== '') {
+                if (! isset($viTriTheoMa[$maViTri])) {
+                    $errors[] = 'Dòng '.$lineNo($i).' ('.$name.'): không có vị trí mã "'.$maViTri.'".';
+
+                    continue;
+                }
+                $locationId = $viTriTheoMa[$maViTri];
+            }
+
             $team = $get($row, 'team');
             $season = $get($row, 'season');
             $kit = $get($row, 'kit_type');
@@ -406,6 +444,7 @@ class ProductController extends Controller
 
             $payload = [
                 'category_id' => $categoryId,
+                'location_id' => $locationId,
                 'name' => $name,
                 'slug' => $this->slugify($name),
                 'sku' => $sku,
@@ -456,6 +495,8 @@ class ProductController extends Controller
             'name' => ['required', 'string', 'max:200'],
             'sku' => ['nullable', 'string', 'max:64'],
             'category_id' => ['required', 'integer', 'min:1'],
+            // 0 = gỡ vị trí (ô chọn để trống). Không có 'min:1' vì thế.
+            'location_id' => ['nullable', 'integer', 'min:0'],
             'slug' => ['nullable', 'string', 'max:191'],
             'short_description' => ['nullable', 'string', 'max:500'],
             'description' => ['nullable', 'string'],
@@ -487,6 +528,7 @@ class ProductController extends Controller
             'sku.max' => 'SKU tối đa 64 ký tự.',
             'category_id.required' => 'Vui lòng chọn danh mục.',
             'category_id.min' => 'Vui lòng chọn danh mục.',
+            'location_id.integer' => 'Vị trí không hợp lệ.',
             'base_price.required' => 'Vui lòng nhập giá gốc.',
             'base_price.numeric' => 'Giá gốc không hợp lệ.',
             'base_price.min' => 'Giá gốc không được âm.',
@@ -535,6 +577,9 @@ class ProductController extends Controller
         // là bỏ qua bước đồng bộ ảnh và giữ nguyên những gì đang có.
         $payload = [
             'category_id' => (int) $v['category_id'],
+            // Luôn gửi, kể cả 0: modal bày ô Vị trí ở mọi lượt sửa nên "để trống"
+            // là ý muốn thật sự của người dùng, không phải màn hình dựng hụt.
+            'location_id' => (int) ($v['location_id'] ?? 0),
             'name' => $v['name'],
             'slug' => filled($v['slug'] ?? null) ? $this->slugify($v['slug']) : $this->slugify($v['name']),
             'sku' => $sku,
@@ -750,9 +795,18 @@ class ProductController extends Controller
             $featured = '';
         }
 
+        // Vị trí nhận ba dạng: '' (không lọc), 'none' (chưa gán vị trí), hoặc id.
+        // Giữ nguyên dạng CHUỖI tới tận query gửi API: ép sang int là 'none' hoá 0
+        // và bộ lọc "chưa gán" biến mất trong im lặng.
+        $location = (string) $request->query('location_id', '');
+        if ($location !== 'none' && (int) $location <= 0) {
+            $location = '';
+        }
+
         return [
             'keyword' => trim((string) $request->query('keyword', '')),
             'category_id' => (int) $request->query('category_id', 0),
+            'location_id' => $location,
             'kit_type' => $kitType,
             'status' => $status,
             'featured' => $featured,
@@ -776,6 +830,9 @@ class ProductController extends Controller
         }
         if ($f['category_id'] > 0) {
             $q['category_id'] = $f['category_id'];
+        }
+        if ($f['location_id'] !== '') {
+            $q['location_id'] = $f['location_id'];
         }
         if ($f['kit_type'] !== '') {
             $q['kit_type'] = $f['kit_type'];
@@ -803,6 +860,7 @@ class ProductController extends Controller
             'meta' => $meta,
             'filters' => $filters,
             'categories' => $this->loadCategories(),
+            'locations' => $this->loadLocations(),
             'kitTypes' => self::KIT_TYPES,
             'statuses' => self::STATUSES,
             'statusHints' => self::STATUS_HINTS,
@@ -850,6 +908,27 @@ class ProductController extends Controller
             }
         } catch (\Throwable $e) {
             Log::warning('Load categories for product filter failed', ['msg' => $e->getMessage()]);
+        }
+
+        return [];
+    }
+
+    /**
+     * Vị trí để hàng cho ô chọn trong modal và bộ lọc.
+     *
+     * Chỉ lấy vị trí ĐANG BẬT: tắt một vị trí nghĩa là thôi bày nó ra lúc khai
+     * mặt hàng. Mặt hàng đã gắn vị trí đã tắt vẫn giữ nguyên — modal tự chèn lại
+     * dòng ấy vào ô chọn để lượt Lưu sau không gỡ mất (xem view).
+     */
+    protected function loadLocations(): array
+    {
+        try {
+            $res = $this->api->viTri(onlyActive: true);
+            if ($res->successful()) {
+                return $res->json('data') ?? [];
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Load locations for product form failed', ['msg' => $e->getMessage()]);
         }
 
         return [];

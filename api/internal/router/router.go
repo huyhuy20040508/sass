@@ -70,6 +70,8 @@ type Handlers struct {
 	ThuocTinh *handler.ThuocTinhHandler
 	// DonViTinh — đơn vị tính (Hàng hóa → Đơn vị).
 	DonViTinh *handler.DonViTinhHandler
+	// ViTri — chỗ để hàng trong cửa hàng/kho (Hàng hóa → Vị trí).
+	ViTri *handler.ViTriHandler
 	// Thue — thuế suất (Hàng hóa → Thuế).
 	Thue *handler.ThueHandler
 	// Ca là ca làm việc + sổ quỹ tiền mặt — cụm trả lời câu hỏi cuối ngày: tiền
@@ -499,6 +501,15 @@ func New(
 			q.Dat(manage, http.MethodPut, "/don-vi-tinh/:id", "don-vi-tinh.sua", h.DonViTinh.Update)
 			q.Dat(manage, http.MethodPut, "/don-vi-tinh/:id/trang-thai", "don-vi-tinh.sua", h.DonViTinh.DoiTrangThai)
 			q.Dat(manage, http.MethodDelete, "/don-vi-tinh/:id", "don-vi-tinh.xoa", h.DonViTinh.Delete)
+
+			// Vị trí — chỗ để hàng ("Kệ A - Tầng 1", "Kho lạnh"). Cùng khuôn và
+			// cùng tầng quyền với đơn vị tính: khung phân loại của mặt hàng.
+			q.Dat(manage, http.MethodGet, "/vi-tri", "vi-tri.xem", h.ViTri.List)
+			q.Dat(manage, http.MethodPost, "/vi-tri", "vi-tri.them", h.ViTri.Create)
+			q.Dat(manage, http.MethodGet, "/vi-tri/:id", "vi-tri.xem", h.ViTri.Get)
+			q.Dat(manage, http.MethodPut, "/vi-tri/:id", "vi-tri.sua", h.ViTri.Update)
+			q.Dat(manage, http.MethodPut, "/vi-tri/:id/trang-thai", "vi-tri.sua", h.ViTri.DoiTrangThai)
+			q.Dat(manage, http.MethodDelete, "/vi-tri/:id", "vi-tri.xoa", h.ViTri.Delete)
 
 			// Thuế suất — bộ mức bày ra ở ô chọn thuế của đơn bán, đơn mua và
 			// từng mặt hàng. Cùng tầng với danh mục: đây là khung, không phải

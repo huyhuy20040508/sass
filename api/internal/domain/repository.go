@@ -13,15 +13,22 @@ type ProductFilter struct {
 	// con/cháu (cây danh mục tối đa 3 cấp: Câu lạc bộ → giải đấu → CLB).
 	// Có phần tử thì repo lọc IN theo danh sách này thay cho CategoryID.
 	CategoryIDs []uint
-	KitType     string
-	IsFeatured  *bool
-	IsActive    *bool // lọc chính xác theo trạng thái (nil = không lọc)
-	OnSale      *bool // true = chỉ sản phẩm đang giảm giá (sale_price hợp lệ < base_price)
-	MinPrice    *float64
-	MaxPrice    *float64
-	Sort        string // newest | price_asc | price_desc | best_selling
-	Page        int
-	PageSize    int
+	// LocationID lọc theo chỗ để hàng (nil = không lọc).
+	LocationID *uint
+	// NoLocation = chỉ lấy sản phẩm CHƯA gán vị trí. Là bộ lọc riêng chứ không
+	// nhét vào LocationID = 0: "chưa gán" là câu hỏi có thật của người đi soạn
+	// hàng ("còn món nào chưa biết để đâu?"), mà nhồi nó vào cùng một trường với
+	// id thì mọi nơi đọc trường ấy phải nhớ thêm một luật ngầm.
+	NoLocation bool
+	KitType    string
+	IsFeatured *bool
+	IsActive   *bool // lọc chính xác theo trạng thái (nil = không lọc)
+	OnSale     *bool // true = chỉ sản phẩm đang giảm giá (sale_price hợp lệ < base_price)
+	MinPrice   *float64
+	MaxPrice   *float64
+	Sort       string // newest | price_asc | price_desc | best_selling
+	Page       int
+	PageSize   int
 
 	// IncludeInactive = true: bỏ ràng buộc is_active mặc định (admin xem cả sản phẩm ẩn).
 	// Bị bỏ qua khi IsActive != nil (lúc đó lọc theo IsActive).

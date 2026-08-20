@@ -35,6 +35,7 @@ const (
 	LoaiNhomHangHoa  = "nhom-hang-hoa"
 	LoaiDonViTinh    = "don-vi-tinh"
 	LoaiThuocTinh    = "thuoc-tinh"
+	LoaiViTri        = "vi-tri"
 	LoaiNhaCungCap   = "nha-cung-cap"
 	LoaiNhanVien     = "nhan-vien"
 	LoaiDonHang      = "don-hang"
@@ -58,8 +59,9 @@ type LoaiMa struct {
 	// họ (hàng hoá tắt rồi mà bỏ trống SKU thì API báo ErrSKUBatBuoc).
 	//
 	// Những loại còn lại KHÔNG có ô tick và luôn nằm sẵn trong bảng quy tắc:
-	// nhóm hàng hoá, thuộc tính, đơn vị tính bỏ trống mã là phần mềm đặt hộ
-	// theo dải sẵn có (NH001, TT001, DV001…), còn chứng từ thì vốn tự sinh mã.
+	// nhóm hàng hoá, thuộc tính, đơn vị tính, vị trí bỏ trống mã là phần mềm đặt
+	// hộ theo dải sẵn có (NH001, TT001, DV001, VT001…), còn chứng từ thì vốn tự
+	// sinh mã.
 	// Ở những chỗ ấy quy tắc chỉ đổi HÌNH DẠNG mã, không bật/tắt việc sinh mã —
 	// bày một ô tick không tắt được cái gì chỉ khiến người dùng tưởng tắt xong
 	// là được gõ tay.
@@ -80,6 +82,7 @@ var DanhMucLoaiMa = []LoaiMa{
 	{Ma: LoaiNhomHangHoa, Ten: "Nhóm hàng hóa", DungChung: true, TienToGoiY: "NH"},
 	{Ma: LoaiThuocTinh, Ten: "Thuộc tính", DungChung: true, TienToGoiY: "TT"},
 	{Ma: LoaiDonViTinh, Ten: "Đơn vị tính", DungChung: true, TienToGoiY: "DV"},
+	{Ma: LoaiViTri, Ten: "Vị trí", DungChung: true, TienToGoiY: "VT"},
 	{Ma: LoaiNhaCungCap, Ten: "Nhà cung cấp", DungChung: true, BatTatDuoc: true, TienToGoiY: "NCC"},
 	{Ma: LoaiNhanVien, Ten: "Nhân viên", DungChung: true, BatTatDuoc: true, TienToGoiY: "NV"},
 

@@ -323,6 +323,7 @@ func dungHeThongVoi(t *testing.T, banHang, dieuHanh bool) *heThong {
 	quyTacMaRepo := repository.NewQuyTacMaRepository(db)
 	thueRepo := repository.NewThueRepository(db)
 	donViTinhRepo := repository.NewDonViTinhRepository(db)
+	viTriRepo := repository.NewViTriRepository(db)
 	thuocTinhRepo := repository.NewThuocTinhRepository(db)
 
 	settingSvc := service.NewSettingService(settingRepo)
@@ -341,7 +342,7 @@ func dungHeThongVoi(t *testing.T, banHang, dieuHanh bool) *heThong {
 			productRepo, userRepo, chiNhanhRepo, cfg.App.Code)
 	}
 
-	productSvc := service.NewProductService(productRepo, categoryRepo, hanMucSvc, quyTacMaRepo)
+	productSvc := service.NewProductService(productRepo, categoryRepo, hanMucSvc, quyTacMaRepo, viTriRepo)
 	promotionSvc := service.NewPromotionService(promotionRepo, categoryRepo)
 	voucherSvc := service.NewVoucherService(voucherRepo)
 	customerSvc := service.NewCustomerService(userRepo)
@@ -385,6 +386,7 @@ func dungHeThongVoi(t *testing.T, banHang, dieuHanh bool) *heThong {
 			service.NewQuyTacMaService(quyTacMaRepo, chiNhanhRepo)),
 		Thue:      handler.NewThueHandler(service.NewThueService(thueRepo)),
 		DonViTinh: handler.NewDonViTinhHandler(service.NewDonViTinhService(donViTinhRepo, quyTacMaRepo)),
+		ViTri:     handler.NewViTriHandler(service.NewViTriService(viTriRepo, quyTacMaRepo)),
 		ThuocTinh: handler.NewThuocTinhHandler(service.NewThuocTinhService(thuocTinhRepo, quyTacMaRepo)),
 		Ca:        handler.NewCaLamViecHandler(service.NewCaLamViecService(caRepo, userRepo, chiNhanhRepo)),
 		Payment:   handler.NewPaymentHandler(paymentSvc),

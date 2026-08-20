@@ -10672,6 +10672,353 @@
                 }
             }
         },
+        "/admin/vi-tri": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Tìm theo tên hoặc mã. Đặt `active=true` để chỉ lấy vị trí đang bật — ô chọn vị trí lúc khai mặt hàng dùng tham số này.\nCố ý KHÔNG phân trang: danh sách vị trí của một cửa hàng chỉ vài chục dòng, trang quản trị tự cắt trang.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Vị trí"
+                ],
+                "summary": "Danh sách vị trí",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Tên hoặc mã vị trí",
+                        "name": "keyword",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "true = chỉ vị trí đang bật",
+                        "name": "active",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/domain.ViTri"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Mã tự viết hoa và phải khác mọi mã đã có TRONG CỬA HÀNG NÀY, kể cả mã của vị trí đã xoá. Tên so không phân biệt hoa thường nhưng có phân biệt dấu.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Vị trí"
+                ],
+                "summary": "Thêm vị trí",
+                "parameters": [
+                    {
+                        "description": "Thông tin vị trí",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.ViTriRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/domain.ViTri"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/vi-tri/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Vị trí"
+                ],
+                "summary": "Chi tiết một vị trí",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID vị trí",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/domain.ViTri"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Vị trí"
+                ],
+                "summary": "Sửa vị trí",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID vị trí",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Thông tin vị trí",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.ViTriRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/domain.ViTri"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Xoá mềm. Vị trí đã thôi dùng nhưng còn muốn tra lại thì nên TẮT thay vì xoá.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Vị trí"
+                ],
+                "summary": "Xoá vị trí",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID vị trí",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/vi-tri/{id}/trang-thai": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Tắt = thôi bày ở ô chọn vị trí lúc khai mặt hàng. Dòng vẫn còn nên mặt hàng cũ vẫn tra ra được tên vị trí.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Vị trí"
+                ],
+                "summary": "Bật/tắt một vị trí",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID vị trí",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Trạng thái",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.TrangThaiViTriRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/domain.ViTri"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/vouchers": {
             "get": {
                 "security": [
@@ -14448,6 +14795,12 @@
                     },
                     {
                         "type": "string",
+                        "description": "ID vị trí để hàng, hoặc `none` để lấy riêng phần chưa gán vị trí",
+                        "name": "location_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
                         "description": "Loại áo: fan (FAN) | player (PLAYER)",
                         "name": "kit_type",
                         "in": "query"
@@ -15647,7 +16000,7 @@
             "type": "object",
             "properties": {
                 "bat_tat_duoc": {
-                    "description": "BatTatDuoc = màn cấu hình có bày ô tick bật/tắt cho loại này không.\n\nChỉ ba loại có: hàng hoá, nhà cung cấp, nhân viên. Đó là những chỗ mã do\nngười dùng GÕ TAY khi không bật quy tắc — tắt quy tắc là trả ô mã lại cho\nhọ (hàng hoá tắt rồi mà bỏ trống SKU thì API báo ErrSKUBatBuoc).\n\nNhững loại còn lại KHÔNG có ô tick và luôn nằm sẵn trong bảng quy tắc:\nnhóm hàng hoá, thuộc tính, đơn vị tính bỏ trống mã là phần mềm đặt hộ\ntheo dải sẵn có (NH001, TT001, DV001…), còn chứng từ thì vốn tự sinh mã.\nỞ những chỗ ấy quy tắc chỉ đổi HÌNH DẠNG mã, không bật/tắt việc sinh mã —\nbày một ô tick không tắt được cái gì chỉ khiến người dùng tưởng tắt xong\nlà được gõ tay.",
+                    "description": "BatTatDuoc = màn cấu hình có bày ô tick bật/tắt cho loại này không.\n\nChỉ ba loại có: hàng hoá, nhà cung cấp, nhân viên. Đó là những chỗ mã do\nngười dùng GÕ TAY khi không bật quy tắc — tắt quy tắc là trả ô mã lại cho\nhọ (hàng hoá tắt rồi mà bỏ trống SKU thì API báo ErrSKUBatBuoc).\n\nNhững loại còn lại KHÔNG có ô tick và luôn nằm sẵn trong bảng quy tắc:\nnhóm hàng hoá, thuộc tính, đơn vị tính, vị trí bỏ trống mã là phần mềm đặt\nhộ theo dải sẵn có (NH001, TT001, DV001, VT001…), còn chứng từ thì vốn tự\nsinh mã.\nỞ những chỗ ấy quy tắc chỉ đổi HÌNH DẠNG mã, không bật/tắt việc sinh mã —\nbày một ô tick không tắt được cái gì chỉ khiến người dùng tưởng tắt xong\nlà được gõ tay.",
                     "type": "boolean"
                 },
                 "dung_chung": {
@@ -17298,6 +17651,35 @@
                 },
                 "username": {
                     "description": "Username là ô THỨ HAI của màn hình đăng nhập 3 ô, chỉ duy nhất trong một\ntenant. NULL = tài khoản khách hàng (khách mua sắm đăng nhập bằng email):\nUNIQUE chỉ cho lọt đúng một dòng chuỗi rỗng nên bắt buộc phải là NULL.",
+                    "type": "string"
+                }
+            }
+        },
+        "domain.ViTri": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "description": "Code là mã ngắn người dùng tự đặt (KEA1, KHOLANH…), luôn viết hoa.",
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "in_use": {
+                    "description": "InUse = đang có mặt hàng trỏ tới nên không xoá được. Màn quản trị đọc cờ\nnày để xám hẳn nút xoá kèm lý do, thay vì cho bấm rồi mới báo lỗi.",
+                    "type": "boolean"
+                },
+                "is_active": {
+                    "description": "IsActive = có bày ra ở ô chọn vị trí của mặt hàng không. Tắt chứ không xoá\nkhi một vị trí thôi dùng: mặt hàng cũ vẫn phải tra ra được tên vị trí.",
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "updated_at": {
                     "type": "string"
                 }
             }
@@ -20461,6 +20843,10 @@
                         "player"
                     ]
                 },
+                "location_id": {
+                    "description": "LocationID là chỗ để hàng (Hàng hóa → Vị trí). Con trỏ để phân biệt:\n  nil -\u003e không đụng tới vị trí (giữ nguyên cái đang có khi SỬA).\n  0   -\u003e gỡ vị trí, trả mặt hàng về \"chưa gán\".\n  \u003e0  -\u003e gán vào vị trí ấy.",
+                    "type": "integer"
+                },
                 "meta_description": {
                     "type": "string",
                     "maxLength": 320
@@ -22018,6 +22404,17 @@
                 }
             }
         },
+        "dto.TrangThaiViTriRequest": {
+            "type": "object",
+            "required": [
+                "is_active"
+            ],
+            "properties": {
+                "is_active": {
+                    "type": "boolean"
+                }
+            }
+        },
         "dto.UpdateContactStatusRequest": {
             "type": "object",
             "required": [
@@ -22238,6 +22635,26 @@
                 },
                 "email": {
                     "type": "string"
+                }
+            }
+        },
+        "dto.ViTriRequest": {
+            "type": "object",
+            "required": [
+                "name"
+            ],
+            "properties": {
+                "code": {
+                    "type": "string",
+                    "maxLength": 20
+                },
+                "is_active": {
+                    "description": "IsActive bỏ trống = true (vị trí mới mặc định đang dùng).",
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 100
                 }
             }
         },

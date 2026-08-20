@@ -7,6 +7,7 @@ import (
 	"sass-api/internal/domain"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type productRepository struct{ db *gorm.DB }
@@ -34,6 +35,14 @@ func (r *productRepository) List(ctx context.Context, f domain.ProductFilter) ([
 		q = q.Where("category_id IN ?", f.CategoryIDs)
 	} else if f.CategoryID != nil {
 		q = q.Where("category_id = ?", *f.CategoryID)
+	}
+	// Vị trí: lọc theo một chỗ cụ thể, hoặc lấy riêng phần CHƯA gán chỗ nào.
+	// Hai bộ lọc rời nhau chứ không phải hai giá trị của một trường — xem
+	// ProductFilter.NoLocation.
+	if f.NoLocation {
+		q = q.Where("location_id IS NULL")
+	} else if f.LocationID != nil {
+		q = q.Where("location_id = ?", *f.LocationID)
 	}
 	if f.KitType != "" {
 		q = q.Where("kit_type = ?", f.KitType)
@@ -79,7 +88,7 @@ func (r *productRepository) List(ctx context.Context, f domain.ProductFilter) ([
 
 	// Danh mục & thương hiệu luôn nạp: thẻ sản phẩm hiển thị chúng, và tầng
 	// khuyến mãi cần để biết chương trình có áp cho sản phẩm này không.
-	q = q.Preload("Category")
+	q = q.Preload("Category").Preload("Location")
 	if !f.Slim {
 		q = q.Preload("Variants", func(db *gorm.DB) *gorm.DB { return db.Order("id ASC") }).
 			Preload("Images", func(db *gorm.DB) *gorm.DB { return db.Order("sort_order ASC, id ASC") })
@@ -93,7 +102,7 @@ func (r *productRepository) List(ctx context.Context, f domain.ProductFilter) ([
 func (r *productRepository) FindByID(ctx context.Context, id uint) (*domain.Product, error) {
 	var p domain.Product
 	err := r.db.WithContext(ctx).
-		Preload("Category").
+		Preload("Category").Preload("Location").
 		Preload("Variants").Preload("Images").
 		First(&p, id).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -105,7 +114,7 @@ func (r *productRepository) FindByID(ctx context.Context, id uint) (*domain.Prod
 func (r *productRepository) FindBySlug(ctx context.Context, slug string) (*domain.Product, error) {
 	var p domain.Product
 	err := r.db.WithContext(ctx).
-		Preload("Category").
+		Preload("Category").Preload("Location").
 		Preload("Variants").Preload("Images").
 		Where("slug = ?", slug).First(&p).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -157,8 +166,16 @@ func (r *productRepository) Create(ctx context.Context, p *domain.Product) error
 	return r.db.WithContext(ctx).Create(p).Error
 }
 
+// Update ghi ĐÚNG dòng products, không đụng tới quan hệ.
+//
+// Omit(clause.Associations) là bắt buộc chứ không phải dọn dẹp: `p` vừa đi qua
+// FindByID nên Category/Location đã được preload sẵn, mà GORM thì tự lưu quan
+// hệ belongs-to TRƯỚC rồi lấy id của nó ghi đè lại khoá ngoại. Nghĩa là gỡ vị
+// trí (location_id = nil) bị chính đối tượng Location cũ còn nằm trong struct
+// gán ngược trở lại — sửa xong nhìn vẫn y nguyên. Biến thể và thư viện ảnh cũng
+// có đường ghi riêng (ReplaceVariants/ReplaceImages), không để Save đụng vào.
 func (r *productRepository) Update(ctx context.Context, p *domain.Product) error {
-	return r.db.WithContext(ctx).Save(p).Error
+	return r.db.WithContext(ctx).Omit(clause.Associations).Save(p).Error
 }
 
 // SetStatus ghi trạng thái kinh doanh và cờ hiển thị trong cùng một lệnh.

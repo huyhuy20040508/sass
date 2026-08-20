@@ -32,6 +32,7 @@ use App\Http\Controllers\ThueController;
 use App\Http\Controllers\ThuNganController;
 use App\Http\Controllers\ThuocTinhController;
 use App\Http\Controllers\UserController;
+use App\Http\Controllers\ViTriController;
 use App\Http\Controllers\VoucherController;
 use Illuminate\Support\Facades\Route;
 
@@ -176,6 +177,15 @@ Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:quan_ly'])->prefix('ad
         Route::put('/units/{id}/status', [DonViTinhController::class, 'toggleStatus'])->whereNumber('id')->name('don-vi-tinh.toggleStatus');
         Route::put('/units/{id}', [DonViTinhController::class, 'update'])->whereNumber('id')->name('don-vi-tinh.update');
         Route::delete('/units/{id}', [DonViTinhController::class, 'destroy'])->whereNumber('id')->name('don-vi-tinh.destroy');
+
+        // Vị trí — chỗ để hàng ("Kệ A - Tầng 1", "Kho lạnh"). Bản cũ v2 không có
+        // màn này; dựng theo đúng khuôn Đơn vị tính ngay trên.
+        Route::get('/locations', [ViTriController::class, 'index'])->name('vi-tri.index');
+        Route::post('/locations', [ViTriController::class, 'store'])->name('vi-tri.store');
+        Route::post('/locations/bulk-destroy', [ViTriController::class, 'bulkDestroy'])->name('vi-tri.bulkDestroy');
+        Route::put('/locations/{id}/status', [ViTriController::class, 'toggleStatus'])->whereNumber('id')->name('vi-tri.toggleStatus');
+        Route::put('/locations/{id}', [ViTriController::class, 'update'])->whereNumber('id')->name('vi-tri.update');
+        Route::delete('/locations/{id}', [ViTriController::class, 'destroy'])->whereNumber('id')->name('vi-tri.destroy');
 
         // Thuế suất — bốn loại cố định, chỉ sửa bộ mức và bật/tắt (không thêm/xoá).
         Route::get('/taxes', [ThueController::class, 'index'])->name('thue.index');
