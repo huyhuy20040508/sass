@@ -100,7 +100,7 @@ class PhanQuyenTest extends TestCase
     {
         $this->fakeApi();
 
-        $res = $this->withSession($this->phienQuanTri())->get('/admin/phan-quyen');
+        $res = $this->withSession($this->phienQuanTri())->get('/admin/permissions');
 
         $res->assertOk();
         $res->assertSee('Kho miền Bắc', false);
@@ -114,7 +114,7 @@ class PhanQuyenTest extends TestCase
     {
         $this->fakeApi();
 
-        $res = $this->withSession($this->phienQuanTri())->get('/admin/phan-quyen?nv=12');
+        $res = $this->withSession($this->phienQuanTri())->get('/admin/permissions?nv=12');
 
         $res->assertOk();
         $res->assertSee('Phân quyền cho: Nguyễn Văn An', false);
@@ -145,7 +145,7 @@ class PhanQuyenTest extends TestCase
         $this->fakeApi();
 
         $res = $this->withSession($this->phienQuanTri())
-            ->put('/admin/phan-quyen/nhan-vien/41/quyen', [
+            ->put('/admin/permissions/users/41', [
                 'nv' => 12,
                 'quyen' => ['don-hang.xem', 'ton-kho.xem'],
             ]);
@@ -167,7 +167,7 @@ class PhanQuyenTest extends TestCase
     {
         $this->fakeApi();
 
-        $this->withSession($this->phienQuanTri())->put('/admin/phan-quyen/nhan-vien/41/quyen', ['nv' => 12]);
+        $this->withSession($this->phienQuanTri())->put('/admin/permissions/users/41', ['nv' => 12]);
 
         Http::assertSent(fn ($req) => $req->method() === 'PUT'
             && str_ends_with($req->url(), '/admin/users/41/quyen')
@@ -184,7 +184,7 @@ class PhanQuyenTest extends TestCase
     {
         $this->fakeApi();
 
-        $res = $this->withSession($this->phienQuanTri())->get('/admin/phan-quyen?nv=13');
+        $res = $this->withSession($this->phienQuanTri())->get('/admin/permissions?nv=13');
 
         $res->assertOk();
         $res->assertSee('chưa có tài khoản đăng nhập', false);
@@ -196,7 +196,7 @@ class PhanQuyenTest extends TestCase
     {
         $this->fakeApi();
 
-        $res = $this->withSession($this->phienQuanTri())->get('/admin/phan-quyen?nv=14');
+        $res = $this->withSession($this->phienQuanTri())->get('/admin/permissions?nv=14');
 
         $res->assertOk();
         $res->assertSee('Không tự sửa quyền của chính mình', false);
@@ -213,7 +213,7 @@ class PhanQuyenTest extends TestCase
     {
         $this->fakeApi();
 
-        $res = $this->withSession($this->phienQuanTri())->get('/admin/phan-quyen?nv=15');
+        $res = $this->withSession($this->phienQuanTri())->get('/admin/permissions?nv=15');
 
         $res->assertOk();
         $res->assertSee('chỉ được giao khu', false);
@@ -240,7 +240,7 @@ class PhanQuyenTest extends TestCase
     {
         $this->fakeApi();
 
-        $res = $this->withSession($this->phienQuanTri())->get('/admin/phan-quyen?nv=15');
+        $res = $this->withSession($this->phienQuanTri())->get('/admin/permissions?nv=15');
 
         $res->assertOk();
         $res->assertSee('<input type="hidden" name="quyen[]" value="san-pham.xem">', false);
@@ -251,7 +251,7 @@ class PhanQuyenTest extends TestCase
     {
         $this->fakeApi();
 
-        $res = $this->withSession($this->phienQuanTri())->get('/admin/phan-quyen?nv=12');
+        $res = $this->withSession($this->phienQuanTri())->get('/admin/permissions?nv=12');
 
         $res->assertOk();
         $res->assertDontSee('chỉ được giao khu', false);
@@ -287,7 +287,7 @@ class PhanQuyenTest extends TestCase
             '*' => Http::response(['data' => []]),
         ]);
 
-        $res = $this->withSession($this->phienQuanTri())->get('/admin/phan-quyen');
+        $res = $this->withSession($this->phienQuanTri())->get('/admin/permissions');
 
         $res->assertOk();
         $res->assertSee('Khởi động lại API', false);
@@ -299,7 +299,7 @@ class PhanQuyenTest extends TestCase
     {
         $this->fakeApi();
 
-        $res = $this->withSession($this->phienQuanTri())->get('/admin/phan-quyen');
+        $res = $this->withSession($this->phienQuanTri())->get('/admin/permissions');
 
         $res->assertSee(route('admin.phan-quyen.index'), false);
     }
@@ -309,7 +309,7 @@ class PhanQuyenTest extends TestCase
     {
         Http::fake(['*' => Http::response(['message' => 'Lỗi máy chủ'], 500)]);
 
-        $res = $this->withSession($this->phienQuanTri())->get('/admin/phan-quyen');
+        $res = $this->withSession($this->phienQuanTri())->get('/admin/permissions');
 
         $res->assertOk();
         $res->assertSee('Lỗi máy chủ', false);
@@ -326,7 +326,7 @@ class PhanQuyenTest extends TestCase
         Http::fake(['*' => Http::response(['message' => 'Không tự đặt quyền cho chính mình'], 403)]);
 
         $res = $this->withSession($this->phienQuanTri())
-            ->put('/admin/phan-quyen/nhan-vien/41/quyen', ['nv' => 12, 'quyen' => []]);
+            ->put('/admin/permissions/users/41', ['nv' => 12, 'quyen' => []]);
 
         $res->assertSessionHas('error', 'Không tự đặt quyền cho chính mình');
     }

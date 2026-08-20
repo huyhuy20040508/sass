@@ -55,7 +55,7 @@ class AdminSmokeTest extends TestCase
         'admin.' => '/admin/dashboard',
         'admin.reports.index' => '/admin/reports/revenue',
         'admin.settings.index' => '/admin/settings/general',
-        'thu-ngan.' => '/thu-ngan/ban-hang',
+        'thu-ngan.' => '/cashier/sales',
     ];
 
     /**
@@ -191,7 +191,7 @@ class AdminSmokeTest extends TestCase
     public function test_route_cong_khai_hoat_dong(): void
     {
         $this->get('/login')->assertOk();
-        $this->get('/quen-mat-khau')->assertOk();
+        $this->get('/forgot-password')->assertOk();
         $this->get('/up')->assertOk();
         $this->get('/')->assertRedirect('/admin');
     }
@@ -346,13 +346,13 @@ class AdminSmokeTest extends TestCase
 
         $cam = [
             // Người & cấu hình — đã đóng từ trước.
-            '/admin/users', '/admin/customers', '/admin/settings', '/admin/chi-nhanh',
-            '/admin/nhan-su',
-            '/admin/reports/revenue', '/admin/goi-dich-vu',
+            '/admin/users', '/admin/customers', '/admin/settings', '/admin/branches',
+            '/admin/staff',
+            '/admin/reports/revenue', '/admin/subscription',
             // Hàng hoá & tiếp thị.
             '/admin/products', '/admin/categories',
-            '/admin/khuyen-mai', '/admin/voucher', '/admin/banners',
-            '/admin/contacts', '/admin/dang-ky-nhan-tin',
+            '/admin/promotions', '/admin/vouchers', '/admin/banners',
+            '/admin/contacts', '/admin/newsletter',
             // Trả hàng, kho và mua vào.
             '/admin/returns', '/admin/inventory', '/admin/purchases',
             '/admin/suppliers', '/admin/receipts', '/admin/purchase-returns',
@@ -375,7 +375,7 @@ class AdminSmokeTest extends TestCase
         // được TRỌN module đó, còn trong khu quản trị thì đúng ba trang dưới đây.
         $mo = [
             '/admin/dashboard', '/admin/orders', '/admin/profile',
-            '/thu-ngan/ban-hang', '/thu-ngan/ca-lam-viec', '/thu-ngan/don-hang',
+            '/cashier/sales', '/cashier/shifts', '/cashier/orders',
         ];
 
         foreach ($mo as $uri) {

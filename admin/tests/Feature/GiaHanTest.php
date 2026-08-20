@@ -59,7 +59,7 @@ class GiaHanTest extends TestCase
     {
         $this->apiTraDon();
 
-        $res = $this->withSession($this->phien())->post('/admin/goi-dich-vu/gia-han', [
+        $res = $this->withSession($this->phien())->post('/admin/subscription/renew', [
             'plan_id' => 2, 'so_luong' => 3, 'don_vi' => 'thang',
         ]);
 
@@ -77,7 +77,7 @@ class GiaHanTest extends TestCase
     {
         $this->apiTraDon();
 
-        $res = $this->withSession($this->phien())->get('/admin/goi-dich-vu/thanh-toan/12');
+        $res = $this->withSession($this->phien())->get('/admin/subscription/payment/12');
 
         $res->assertOk();
         $res->assertSee('1.497.000₫');
@@ -103,7 +103,7 @@ class GiaHanTest extends TestCase
     {
         $this->apiTraDon();
 
-        $res = $this->withSession($this->phien())->get('/admin/goi-dich-vu/thanh-toan/12');
+        $res = $this->withSession($this->phien())->get('/admin/subscription/payment/12');
 
         $res->assertOk();
         $res->assertSee('Cửa hàng thanh toán');
@@ -128,7 +128,7 @@ class GiaHanTest extends TestCase
     {
         $this->apiTraDon(['qr_code' => '', 'so_tai_khoan' => '', 'chu_tai_khoan' => '', 'noi_dung' => '']);
 
-        $res = $this->withSession($this->phien())->get('/admin/goi-dich-vu/thanh-toan/12');
+        $res = $this->withSession($this->phien())->get('/admin/subscription/payment/12');
 
         $res->assertOk();
         $res->assertSee('Trả tiền qua cổng');
@@ -155,7 +155,7 @@ class GiaHanTest extends TestCase
             '*' => Http::response(['success' => true, 'data' => []], 200),
         ]);
 
-        $res = $this->withSession($this->phien())->get('/admin/goi-dich-vu/thanh-toan/6');
+        $res = $this->withSession($this->phien())->get('/admin/subscription/payment/6');
 
         $res->assertOk();
         $res->assertSee('10.000₫');
@@ -168,7 +168,7 @@ class GiaHanTest extends TestCase
     {
         $this->apiTraDon(['trang_thai' => 'da_thanh_toan', 'da_tra' => true]);
 
-        $res = $this->withSession($this->phien())->get('/admin/goi-dich-vu/thanh-toan/12');
+        $res = $this->withSession($this->phien())->get('/admin/subscription/payment/12');
 
         $res->assertOk();
         $res->assertSee('Đã gia hạn xong');
@@ -187,15 +187,15 @@ class GiaHanTest extends TestCase
         $this->apiTraDon();
 
         $this->withSession($this->phien(khoa: true))
-            ->post('/admin/goi-dich-vu/gia-han', ['plan_id' => 2, 'so_luong' => 3, 'don_vi' => 'thang'])
+            ->post('/admin/subscription/renew', ['plan_id' => 2, 'so_luong' => 3, 'don_vi' => 'thang'])
             ->assertRedirect(route('admin.goi-dich-vu.thanh-toan', 12));
 
         $this->withSession($this->phien(khoa: true))
-            ->get('/admin/goi-dich-vu/thanh-toan/12')
+            ->get('/admin/subscription/payment/12')
             ->assertOk();
 
         $this->withSession($this->phien(khoa: true))
-            ->getJson('/admin/goi-dich-vu/don/12')
+            ->getJson('/admin/subscription/order/12')
             ->assertOk();
     }
 
@@ -210,7 +210,7 @@ class GiaHanTest extends TestCase
     {
         $this->apiTraDon();
 
-        $this->withSession($this->phien())->post('/admin/goi-dich-vu/gia-han', [
+        $this->withSession($this->phien())->post('/admin/subscription/renew', [
             'plan_id' => 2, 'so_luong' => 1, 'don_vi' => 'nam',
         ]);
 
@@ -225,7 +225,7 @@ class GiaHanTest extends TestCase
     {
         $this->apiTraDon();
 
-        $res = $this->withSession($this->phien())->post('/admin/goi-dich-vu/gia-han', [
+        $res = $this->withSession($this->phien())->post('/admin/subscription/renew', [
             'plan_id' => 2, 'so_luong' => 5, 'don_vi' => 'nam',
         ]);
 
@@ -249,7 +249,7 @@ class GiaHanTest extends TestCase
             'fields' => [],
         ]], 200), '*' => Http::response(['success' => true, 'data' => []], 200)]);
 
-        $res = $this->withSession($this->phien())->get('/admin/goi-dich-vu');
+        $res = $this->withSession($this->phien())->get('/admin/subscription');
 
         $res->assertOk();
         $res->assertDontSee('Chuyển gói');
@@ -279,7 +279,7 @@ class GiaHanTest extends TestCase
             'fields' => [],
         ]], 200)]);
 
-        $res = $this->withSession($this->phien())->get('/admin/goi-dich-vu');
+        $res = $this->withSession($this->phien())->get('/admin/subscription');
 
         $res->assertOk();
         $res->assertSee('Gia hạn');

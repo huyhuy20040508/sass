@@ -84,7 +84,7 @@ class KhoaKhiHetHanTest extends TestCase
     {
         $this->apiTraGoiDichVu();
 
-        $res = $this->withSession($this->phienKhoa())->get('/admin/goi-dich-vu');
+        $res = $this->withSession($this->phienKhoa())->get('/admin/subscription');
 
         $res->assertOk();
         $res->assertSee('Phần mềm đã hết hạn');
@@ -127,7 +127,7 @@ class KhoaKhiHetHanTest extends TestCase
         $phien = $this->phienKhoa();
         unset($phien['phien.cua_hang_khoa']);
 
-        $res = $this->withSession($phien)->get('/admin/goi-dich-vu');
+        $res = $this->withSession($phien)->get('/admin/subscription');
 
         $res->assertOk();
         $res->assertDontSee('Phần mềm đã hết hạn');

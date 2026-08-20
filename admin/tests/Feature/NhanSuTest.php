@@ -60,7 +60,7 @@ class NhanSuTest extends TestCase
             'username' => 'an.nv',
         ]]);
 
-        $res = $this->withSession($this->phienQuanTri())->get('/admin/nhan-su');
+        $res = $this->withSession($this->phienQuanTri())->get('/admin/staff');
 
         $res->assertOk();
         $res->assertSee('NV0001', false);
@@ -89,7 +89,7 @@ class NhanSuTest extends TestCase
         ]);
 
         $html = $this->withSession($this->phienQuanTri())
-            ->get('/admin/nhan-su')->assertOk()->getContent();
+            ->get('/admin/staff')->assertOk()->getContent();
 
         $this->assertStringContainsString('>STT<', $html);
         $this->assertStringContainsString('>Mã NV<', $html);
@@ -133,7 +133,7 @@ class NhanSuTest extends TestCase
             ],
         ]);
 
-        $res = $this->withSession($this->phienQuanTri())->get('/admin/nhan-su');
+        $res = $this->withSession($this->phienQuanTri())->get('/admin/staff');
         $html = $res->assertOk()->getContent();
 
         // Hai người có cửa quản lý, hai người có cửa quầy — đếm đúng số huy hiệu.
@@ -155,11 +155,11 @@ class NhanSuTest extends TestCase
         $phien = $this->phienQuanTri();
         $phien['api.user']['access_areas'] = 'quan_ly';
 
-        $this->withSession($phien)->get('/thu-ngan/ban-hang')
+        $this->withSession($phien)->get('/cashier/sales')
             ->assertRedirect(route('admin.dashboard'));
 
         // Còn khu quản trị thì vẫn vào bình thường.
-        $this->withSession($phien)->get('/admin/nhan-su')->assertOk();
+        $this->withSession($phien)->get('/admin/staff')->assertOk();
     }
 
     /** Chiều ngược lại: chỉ tích "Thu ngân" thì khu quản trị đóng. */
@@ -173,7 +173,7 @@ class NhanSuTest extends TestCase
 
         // Về QUẦY chứ không về Tổng quan: Tổng quan cũng nằm sau cửa `quan_ly`,
         // đưa họ tới đó là bắt đi thêm một vòng để nhận cùng câu từ chối.
-        $this->withSession($phien)->get('/admin/nhan-su')
+        $this->withSession($phien)->get('/admin/staff')
             ->assertRedirect(route('thu-ngan.ban-hang.index'));
     }
 
@@ -194,7 +194,7 @@ class NhanSuTest extends TestCase
         $phien['api.user']['access_areas'] = 'thu_ngan';
 
         // Menu ở quầy: có Đăng xuất, không có Tài khoản của tôi.
-        $quay = $this->withSession($phien)->get('/thu-ngan/ban-hang');
+        $quay = $this->withSession($phien)->get('/cashier/sales');
         $quay->assertSuccessful();
         $quay->assertSee('Đăng xuất', false);
         $quay->assertDontSee('Tài khoản của tôi', false);
@@ -205,7 +205,7 @@ class NhanSuTest extends TestCase
         // Người có cửa quản trị thì vẫn xem hồ sơ bình thường.
         $phienQL = $this->phienQuanTri();
         $phienQL['api.user']['access_areas'] = 'quan_ly,thu_ngan';
-        $this->withSession($phienQL)->get('/thu-ngan/ban-hang')
+        $this->withSession($phienQL)->get('/cashier/sales')
             ->assertSee('Tài khoản của tôi', false);
     }
 
@@ -227,10 +227,10 @@ class NhanSuTest extends TestCase
         $phien = $this->phienQuanTri();
         $phien['api.user']['access_areas'] = 'kho';
 
-        $this->withSession($phien)->get('/admin/nhan-su')
+        $this->withSession($phien)->get('/admin/staff')
             ->assertRedirect(route('login'));
 
-        $this->withSession($phien)->get('/thu-ngan/ban-hang')
+        $this->withSession($phien)->get('/cashier/sales')
             ->assertRedirect(route('login'));
     }
 
@@ -244,7 +244,7 @@ class NhanSuTest extends TestCase
         $this->fakeApi();
 
         // phienQuanTri() cố ý KHÔNG có khoá access_areas.
-        $this->withSession($this->phienQuanTri())->get('/thu-ngan/ban-hang')
+        $this->withSession($this->phienQuanTri())->get('/cashier/sales')
             ->assertSuccessful();
     }
 
@@ -260,14 +260,14 @@ class NhanSuTest extends TestCase
         $this->fakeApi();
         \Illuminate\Support\Facades\Storage::fake('public');
 
-        $tai = $this->withSession($this->phienQuanTri())->post('/admin/nhan-su/anh', [
+        $tai = $this->withSession($this->phienQuanTri())->post('/admin/staff/photo', [
             'anh' => \Illuminate\Http\UploadedFile::fake()->image('an.jpg', 400, 400),
         ])->assertOk();
 
         $duong = $tai->json('url');
         $this->assertNotEmpty($duong, 'Lượt tải ảnh phải trả về đường dẫn');
 
-        $this->withSession($this->phienQuanTri())->post('/admin/nhan-su', [
+        $this->withSession($this->phienQuanTri())->post('/admin/staff', [
             'full_name' => 'Nguyễn Văn An',
             'status' => 'dang_lam',
             'shop_id' => '3',
@@ -303,7 +303,7 @@ class NhanSuTest extends TestCase
             'work_shift' => 'sang,chieu', 'quyen' => ['thu_ngan'], 'username' => 'an.nv',
         ]]);
 
-        $res = $this->withSession($this->phienQuanTri())->get('/admin/nhan-su')->assertOk();
+        $res = $this->withSession($this->phienQuanTri())->get('/admin/staff')->assertOk();
 
         // Nút con mắt trên dòng, mang theo nguyên hồ sơ.
         $res->assertSee('data-nsu-xem', false);
@@ -372,7 +372,7 @@ class NhanSuTest extends TestCase
         ]);
 
         $html = $this->withSession($this->phienQuanTri())
-            ->get('/admin/nhan-su')->assertOk()->getContent();
+            ->get('/admin/staff')->assertOk()->getContent();
 
         $this->assertStringContainsString('id="nsuBulkForm"', $html);
         $this->assertStringContainsString('form="nsuBulkForm"', $html);
@@ -437,7 +437,7 @@ class NhanSuTest extends TestCase
         $this->fakeApi();
 
         $this->withSession($this->phienQuanTri())
-            ->get('/admin/nhan-su?keyword=an&status=dang_lam&work_shift=sang&shop_id=3')
+            ->get('/admin/staff?keyword=an&status=dang_lam&work_shift=sang&shop_id=3')
             ->assertOk();
 
         Http::assertSent(function ($request) {
@@ -457,7 +457,7 @@ class NhanSuTest extends TestCase
     {
         $this->fakeApi();
 
-        $res = $this->withSession($this->phienQuanTri())->post('/admin/nhan-su', [
+        $res = $this->withSession($this->phienQuanTri())->post('/admin/staff', [
             'full_name' => 'Nguyễn Văn An',
             'status' => 'dang_lam',
             'shop_id' => '3',
@@ -497,7 +497,7 @@ class NhanSuTest extends TestCase
     {
         $this->fakeApi();
 
-        $this->withSession($this->phienQuanTri())->post('/admin/nhan-su', [
+        $this->withSession($this->phienQuanTri())->post('/admin/staff', [
             'full_name' => 'Nguyễn Văn An',
             'status' => 'dang_lam',
             'shop_id' => '3',
@@ -533,7 +533,7 @@ class NhanSuTest extends TestCase
     {
         $this->fakeApi();
 
-        $this->withSession($this->phienQuanTri())->post('/admin/nhan-su', [
+        $this->withSession($this->phienQuanTri())->post('/admin/staff', [
             'full_name' => 'Nguyễn Văn An',
             'status' => 'dang_lam',
             'shop_id' => '3',
@@ -561,7 +561,7 @@ class NhanSuTest extends TestCase
     {
         $this->fakeApi();
 
-        $this->withSession($this->phienQuanTri())->post('/admin/nhan-su', [
+        $this->withSession($this->phienQuanTri())->post('/admin/staff', [
             'full_name' => 'Nguyễn Văn An',
             'status' => 'dang_lam',
             'shop_id' => '3',
@@ -584,7 +584,7 @@ class NhanSuTest extends TestCase
     {
         $this->fakeApi();
 
-        $this->withSession($this->phienQuanTri())->put('/admin/nhan-su/12', [
+        $this->withSession($this->phienQuanTri())->put('/admin/staff/12', [
             'full_name' => 'Nguyễn Văn An',
             'status' => 'dang_lam',
             'shop_id' => '3',
@@ -613,18 +613,18 @@ class NhanSuTest extends TestCase
         ];
 
         $this->withSession($this->phienQuanTri())
-            ->post('/admin/nhan-su', ['status' => 'dang_lam', 'shop_id' => '3'])
+            ->post('/admin/staff', ['status' => 'dang_lam', 'shop_id' => '3'])
             ->assertSessionHasErrors('full_name');
 
         // Chi nhánh bắt buộc: hồ sơ không khai nơi làm việc thì bảng chấm công và
         // báo cáo theo chi nhánh sau này không xếp người đó vào đâu được.
         $this->withSession($this->phienQuanTri())
-            ->post('/admin/nhan-su', ['full_name' => 'Nguyễn Văn An', 'status' => 'dang_lam'])
+            ->post('/admin/staff', ['full_name' => 'Nguyễn Văn An', 'status' => 'dang_lam'])
             ->assertSessionHasErrors('shop_id');
 
         // Ca lạ không được lọt xuống cột SET của API.
         $this->withSession($this->phienQuanTri())
-            ->post('/admin/nhan-su', array_replace($hoSo, ['work_shift' => ['ca_dem']]))
+            ->post('/admin/staff', array_replace($hoSo, ['work_shift' => ['ca_dem']]))
             ->assertSessionHasErrors('work_shift.0');
 
         // "Cả ngày" đã gồm sáng và chiều nên không đứng chung với hai ca kia. Màn
@@ -632,28 +632,28 @@ class NhanSuTest extends TestCase
         // để lọt thì cột chứa "sang,ca_ngay", một chuỗi không trả lời được câu hỏi
         // đơn giản nhất của bảng chấm công: người này trực mấy buổi?
         $this->withSession($this->phienQuanTri())
-            ->post('/admin/nhan-su', array_replace($hoSo, ['work_shift' => ['sang', 'ca_ngay']]))
+            ->post('/admin/staff', array_replace($hoSo, ['work_shift' => ['sang', 'ca_ngay']]))
             ->assertSessionHasErrors('work_shift');
 
         // Một mình "cả ngày" thì bình thường.
         $this->withSession($this->phienQuanTri())
-            ->post('/admin/nhan-su', array_replace($hoSo, ['work_shift' => ['ca_ngay']]))
+            ->post('/admin/staff', array_replace($hoSo, ['work_shift' => ['ca_ngay']]))
             ->assertSessionHasNoErrors();
 
         // Cấp tài khoản: thiếu tên đăng nhập, email hay ô tick quyền đều bị chặn
         // ngay tại form.
         $this->withSession($this->phienQuanTri())
-            ->post('/admin/nhan-su', $hoSo + ['co_tai_khoan' => '1'])
+            ->post('/admin/staff', $hoSo + ['co_tai_khoan' => '1'])
             ->assertSessionHasErrors(['username', 'email', 'quyen']);
 
         // Không bật công tắc: hai ô đó rỗng vẫn qua.
         $this->withSession($this->phienQuanTri())
-            ->post('/admin/nhan-su', $hoSo + ['username' => '', 'email' => ''])
+            ->post('/admin/staff', $hoSo + ['username' => '', 'email' => ''])
             ->assertSessionHasNoErrors();
 
         // Tên đăng nhập có khoảng trắng thì chặn ngay tại form.
         $this->withSession($this->phienQuanTri())
-            ->post('/admin/nhan-su', $hoSo + [
+            ->post('/admin/staff', $hoSo + [
                 'co_tai_khoan' => '1', 'username' => 'an nv', 'email' => 'an@x.test',
             ])
             ->assertSessionHasErrors('username');
@@ -670,7 +670,7 @@ class NhanSuTest extends TestCase
         $this->fakeApi();
 
         $res = $this->withSession($this->phienQuanTri())
-            ->put('/admin/nhan-su/12/trang-thai', ['status' => 'da_nghi']);
+            ->put('/admin/staff/12/status', ['status' => 'da_nghi']);
 
         $res->assertRedirect(route('admin.nhan-su.index'));
         $res->assertSessionHas('success');
@@ -683,7 +683,7 @@ class NhanSuTest extends TestCase
 
         // Trạng thái lạ thì chặn ngay ở Shop Admin, không phiền tới API.
         $this->withSession($this->phienQuanTri())
-            ->put('/admin/nhan-su/12/trang-thai', ['status' => 'nghi_choi'])
+            ->put('/admin/staff/12/status', ['status' => 'nghi_choi'])
             ->assertSessionHasErrors('status');
     }
 
@@ -700,7 +700,7 @@ class NhanSuTest extends TestCase
         $this->fakeApi();
 
         $this->withSession($this->phienQuanTri())
-            ->put('/admin/nhan-su/12/trang-thai', ['status' => 'dang_lam', 'mo_tai_khoan' => '1'])
+            ->put('/admin/staff/12/status', ['status' => 'dang_lam', 'mo_tai_khoan' => '1'])
             ->assertSessionHas('success');
 
         Http::assertSent(function ($request) {
@@ -711,7 +711,7 @@ class NhanSuTest extends TestCase
 
         // Không trả lời = không mở.
         $this->withSession($this->phienQuanTri())
-            ->put('/admin/nhan-su/12/trang-thai', ['status' => 'dang_lam'])
+            ->put('/admin/staff/12/status', ['status' => 'dang_lam'])
             ->assertSessionHas('success');
 
         Http::assertSent(function ($request) {
@@ -737,7 +737,7 @@ class NhanSuTest extends TestCase
             'user_status' => 'inactive',
         ]]);
 
-        $this->withSession($this->phienQuanTri())->get('/admin/nhan-su')
+        $this->withSession($this->phienQuanTri())->get('/admin/staff')
             ->assertOk()
             ->assertSee('đã khoá', false);
     }
@@ -763,7 +763,7 @@ class NhanSuTest extends TestCase
             'user_status' => 'active',
         ]]);
 
-        $res = $this->withSession($this->phienQuanTri())->get('/admin/nhan-su');
+        $res = $this->withSession($this->phienQuanTri())->get('/admin/staff');
 
         $res->assertOk();
         $res->assertSee('id="nsuConfirm"', false);
@@ -787,7 +787,7 @@ class NhanSuTest extends TestCase
         ]);
 
         $this->withSession($this->phienQuanTri())
-            ->post('/admin/nhan-su', [
+            ->post('/admin/staff', [
                 'full_name' => 'Nguyễn Văn An', 'position' => 'thu_ngan', 'status' => 'dang_lam',
                 'shop_id' => '3', 'code' => 'NV0001',
             ])
@@ -802,7 +802,7 @@ class NhanSuTest extends TestCase
     {
         $this->fakeApi();
 
-        $this->withSession($this->phienQuanTri())->get('/admin/nhan-su')
+        $this->withSession($this->phienQuanTri())->get('/admin/staff')
             ->assertDontSee('/admin/users', false);
     }
 
@@ -817,7 +817,7 @@ class NhanSuTest extends TestCase
         $phien = $this->phienQuanTri();
         $phien['api.user'] = ['id' => 9, 'full_name' => 'Thu ngân', 'role' => ['name' => 'staff']];
 
-        $res = $this->withSession($phien)->get('/admin/nhan-su');
+        $res = $this->withSession($phien)->get('/admin/staff');
 
         $this->assertContains($res->getStatusCode(), [302, 403]);
     }

@@ -140,7 +140,7 @@
     <script>
         (function () {
             const CSRF = '{{ csrf_token() }}';
-            const BASE = '{{ url('/admin/dang-ky-nhan-tin') }}';
+            const BASE = '{{ url('/admin/newsletter') }}';
             const $filter = document.getElementById('nlFilter');
 
             // ---------- Bộ lọc: đổi select -> chạy ngay; gõ tìm kiếm -> chờ 400ms ----------
@@ -193,7 +193,7 @@
                     highlightText: btn.getAttribute('data-mail'),
                     confirmText: 'Gỡ ngay',
                 }).then((ok) => {
-                    if (ok) postForm(`${BASE}/${btn.getAttribute('data-off')}/go`, 'PUT');
+                    if (ok) postForm(`${BASE}/${btn.getAttribute('data-off')}/unsubscribe`, 'PUT');
                 });
             });
         })();
