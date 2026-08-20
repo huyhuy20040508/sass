@@ -205,6 +205,7 @@ Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:quan_ly'])->prefix('ad
         Route::post('/products', [ProductController::class, 'store'])->name('products.store');
         Route::post('/products/{id}/duplicate', [ProductController::class, 'duplicate'])->name('products.duplicate');
         Route::put('/products/{id}/toggle-status', [ProductController::class, 'toggleStatus'])->name('products.toggleStatus');
+        Route::put('/products/{id}/sort', [ProductController::class, 'moveSort'])->name('products.moveSort');
         Route::put('/products/{id}', [ProductController::class, 'update'])->name('products.update');
         Route::delete('/products/{id}', [ProductController::class, 'destroy'])->name('products.destroy');
 

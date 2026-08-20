@@ -132,8 +132,8 @@ func TestDecorateTinhGiaRiengChoTungBienThe(t *testing.T) {
 		BasePrice:  1000000,
 		SalePrice:  f64Ptr(800000),
 		Variants: []domain.ProductVariant{
-			{Size: "M"},                          // theo giá sản phẩm
-			{Size: "XXL", Price: f64Ptr(900000)}, // khai giá riêng, đắt hơn
+			{Name: "M"},                          // theo giá sản phẩm
+			{Name: "XXL", Price: f64Ptr(900000)}, // khai giá riêng, đắt hơn
 		},
 	}
 	m.decorate(p)
@@ -171,8 +171,8 @@ func TestDecorateKhongCoKhuyenMaiVanGiuGiaRieng(t *testing.T) {
 		ID:        9,
 		BasePrice: 500000,
 		Variants: []domain.ProductVariant{
-			{Size: "M"},
-			{Size: "XXL", Price: f64Ptr(550000)},
+			{Name: "M"},
+			{Name: "XXL", Price: f64Ptr(550000)},
 		},
 	}
 	m.decorate(p)

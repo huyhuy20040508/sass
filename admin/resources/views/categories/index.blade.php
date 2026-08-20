@@ -44,7 +44,6 @@
                     <button type="button" id="grpAddBtn" class="grp-btn-primary">Thêm nhóm hàng hóa</button>
                 </div>
             </div>
-
             <div class="grp-table-wrap" id="grpTableWrap"></div>
             <div id="grpFooter"></div>
         </div>
@@ -204,6 +203,7 @@
         .grp-banner { border-radius: 4px; background: #f0f5ff; padding: 8px 12px; font-size: 12px; color: #1890ff; }
         .grp-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
         .grp-field-label { display: block; margin-bottom: 4px; font-size: 13px; font-weight: 500; color: #262626; }
+        .grp-hint { margin: 4px 0 0; font-size: 11px; color: #8c8c8c; }
         .grp-req { color: #ff4d4f; }
         .grp-input {
             height: 36px; width: 100%; border: 1px solid #d9d9d9; border-radius: 4px; padding: 0 12px; font-size: 13px; outline: none; transition: border-color .15s;
@@ -316,6 +316,7 @@
                         parent_id: c.parent_id == null ? null : c.parent_id,
                         sort_order: c.sort_order || 0,
                         description: c.description || '',
+                        vat: c.vat == null ? 0 : Number(c.vat),
                         image: c.image || '',
                         children: (byParent.get(c.id) || [])
                             .filter((ch) => !next.has(ch.id))
@@ -325,6 +326,16 @@
 
                 return (byParent.get(0) || []).map((c) => make(c, new Set()));
             }
+            // Bộ mức thuế đang bật ở màn Hàng hóa → Thuế. Hai mã âm là KCT/KKKNT.
+            const VAT_RATES = @json($vatRates ?? []);
+            const VAT_LABELS = @json(\App\Support\MucThue::NHAN);
+            const vatText = (v) => {
+                const n = Number(v);
+                if (n === -1) return 'KCT';
+                if (n === -2) return 'KKKNT';
+                return n + '%';
+            };
+
             const TREE = buildTree();
 
             function findNode(key) {
@@ -708,6 +719,16 @@
                         </div>
                     </div>`;
 
+                // Nhóm mới kế thừa mức thuế của nhóm cha; nhóm cũ giữ mức của nó.
+                // Mức đang dùng mà vừa bị bỏ tick ở màn Thuế thì vẫn phải hiện ra,
+                // không thì mở hộp thoại lên rồi bấm Lưu là đổi thuế trong im lặng.
+                const vatNow = isEdit ? Number(node.vat || 0) : Number((parent && parent.vat) || 0);
+                const vatList = VAT_RATES.slice();
+                if (!vatList.includes(vatNow)) vatList.unshift(vatNow);
+                const vatOpts = vatList
+                    .map((v) => `<option value="${v}" ${v === vatNow ? 'selected' : ''}>${esc(VAT_LABELS[v] || vatText(v))}</option>`)
+                    .join('');
+
                 $modalMount.innerHTML = `
                     <div class="grp-overlay" id="grpOverlay">
                         <div class="grp-dialog" id="grpDialog">
@@ -727,10 +748,17 @@
                                         <input type="text" id="grpDraftName" class="grp-input" placeholder="VD: Cà phê, Trà sữa" value="${isEdit ? esc(node.name) : ''}">
                                     </div>
                                 </div>
-                                <div>
-                                    <label class="grp-field-label">Trạng thái</label>
+                                <div class="grp-grid2">
                                     <div>
-                                        <button type="button" class="grp-switch ${!isEdit || node.status ? 'on' : ''}" id="grpDraftStatus" data-active="${!isEdit || node.status ? 1 : 0}"><span class="grp-switch-knob"></span></button>
+                                        <label class="grp-field-label">Thuế GTGT</label>
+                                        <select id="grpDraftVat" class="grp-input">${vatOpts}</select>
+                                        <p class="grp-hint">Khai mặt hàng và chọn nhóm này thì ô thuế tự điền theo đây.</p>
+                                    </div>
+                                    <div>
+                                        <label class="grp-field-label">Trạng thái</label>
+                                        <div>
+                                            <button type="button" class="grp-switch ${!isEdit || node.status ? 'on' : ''}" id="grpDraftStatus" data-active="${!isEdit || node.status ? 1 : 0}"><span class="grp-switch-knob"></span></button>
+                                        </div>
                                     </div>
                                 </div>
                                 ${subSection}
@@ -823,6 +851,7 @@
                 if (!name) { toastErr('Vui lòng nhập tên nhóm hàng hóa'); return; }
 
                 const statusOn = document.getElementById('grpDraftStatus').dataset.active === '1';
+                const vatChon = Number(document.getElementById('grpDraftVat').value || 0);
 
                 // Thu các dòng "Nhóm con". Dòng đã lưu gửi kèm dữ liệu ẩn để khỏi bị ghi rỗng.
                 const children = [];
@@ -833,12 +862,14 @@
                     children.push({
                         id: d.subId || '', code: d.subCode || '', name: subName,
                         sort_order: d.subSort || 0, description: d.subDesc || '',
+                        // Nhóm con kế thừa mức thuế vừa chọn cho nhóm cha.
+                        vat: vatChon,
                         image: d.subImage || '', is_active: d.subId ? (d.subActive || 0) : 1,
                     });
                 }
 
                 const main = {
-                    name, parent_id: dialog.dataset.parentId,
+                    name, parent_id: dialog.dataset.parentId, vat: vatChon,
                     sort_order: dialog.dataset.sortOrder, description: dialog.dataset.description, is_active: statusOn,
                 };
 

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\ApiClient;
+use App\Support\MucThue;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
@@ -45,7 +46,7 @@ class CategoryController extends Controller
         } catch (\Throwable $e) {
             Log::error('Load categories failed', ['msg' => $e->getMessage()]);
 
-            return view('categories.index', ['categories' => []])
+            return view('categories.index', ['categories' => [], 'vatRates' => MucThue::boMuc($this->api)])
                 ->with('error', 'Không tải được danh sách nhóm hàng hóa. Kiểm tra kết nối API.');
         }
 
@@ -56,7 +57,10 @@ class CategoryController extends Controller
             return $c;
         })->all();
 
-        return view('categories.index', ['categories' => $categories]);
+        return view('categories.index', [
+            'categories' => $categories,
+            'vatRates' => MucThue::boMuc($this->api),
+        ]);
     }
 
     /**
@@ -340,6 +344,9 @@ class CategoryController extends Controller
                 'name' => $ch['name'],
                 'parent_id' => $parentId,
                 'description' => $ch['description'],
+                // Nhóm con kế thừa mức thuế của nhóm cha: thuế đi theo ngành hàng,
+                // mà nhóm con thì cùng ngành với cha nó. Sửa riêng được sau.
+                'vat' => $ch['vat'],
                 'image' => $ch['image'],
                 'sort_order' => $ch['sort_order'],
                 'is_active' => $ch['is_active'],
@@ -383,6 +390,8 @@ class CategoryController extends Controller
                 'name' => $name,
                 'sort_order' => (int) ($r['sort_order'] ?? 0),
                 'description' => (string) ($r['description'] ?? ''),
+                // Mức thuế của nhóm cha, do view gửi kèm mỗi dòng con.
+                'vat' => filled($r['vat'] ?? null) ? (int) $r['vat'] : null,
                 'image' => (string) ($r['image'] ?? ''),
                 'is_active' => filled($r['is_active'] ?? null) ? (bool) $r['is_active'] : true,
             ];
@@ -413,12 +422,15 @@ class CategoryController extends Controller
             'name' => ['required', 'string', 'max:150'],
             'parent_id' => ['nullable', 'integer'],
             'description' => ['nullable', 'string', 'max:500'],
+            // -2 và -1 là mã KKKNT / KCT, không phải phần trăm âm.
+            'vat' => ['nullable', 'integer', 'min:-2', 'max:100'],
             'sort_order' => ['nullable', 'integer'],
             'is_active' => ['nullable'],
         ], [
             'name.required' => 'Vui lòng nhập tên nhóm hàng hóa.',
             'name.max' => 'Tên nhóm hàng hóa tối đa 150 ký tự.',
             'description.max' => 'Mô tả tối đa 500 ký tự.',
+            'vat.integer' => 'Mức thuế không hợp lệ.',
         ])->stopOnFirstFailure()->validate();
 
         // Không có 'slug': mã do máy chủ tự sinh (store) hoặc giữ nguyên (update).
@@ -426,6 +438,8 @@ class CategoryController extends Controller
             'name' => $v['name'],
             'parent_id' => filled($v['parent_id'] ?? null) ? (int) $v['parent_id'] : null,
             'description' => $v['description'] ?? '',
+            // null = không đụng tới mức thuế (đường đổi trạng thái không gửi ô này).
+            'vat' => filled($v['vat'] ?? null) ? (int) $v['vat'] : null,
             'image' => '',
             'sort_order' => (int) ($v['sort_order'] ?? 0),
             'is_active' => $request->boolean('is_active'),

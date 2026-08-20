@@ -621,7 +621,7 @@ func (h *OrderHandler) MyCancel(c *gin.Context) {
 // @Description	Giỏ hàng của storefront nằm ở localStorage nên giá lưu trong đó là bản chụp lúc khách thêm hàng; admin đổi giá xong thì con số ấy đã cũ.
 // @Description	Trang thanh toán gọi endpoint này khi mở để cập nhật lại giỏ, thay vì để khách phát hiện chênh lệch ở màn đặt hàng thành công.
 // @Description	Mỗi dòng trả về issue: rỗng (bình thường), "limited" (không đủ số lượng), "out_of_stock" (hết hàng), "unavailable" (không còn bán).
-// @Description	Nên gửi product_variant_id như khi đặt hàng — thiếu ID thì dòng nào có nhiều phiên bản cùng size/màu sẽ báo giá theo biến thể ID nhỏ nhất.
+// @Description	Nên gửi product_variant_id như khi đặt hàng — thiếu ID thì dòng nào có nhiều biến thể trùng tên sẽ báo giá theo biến thể ID nhỏ nhất.
 // @Description	KHÔNG tạo đơn, KHÔNG giữ hàng — số tiền chính thức vẫn do luồng đặt hàng tính lại.
 // @Tags			Orders
 // @Accept			json

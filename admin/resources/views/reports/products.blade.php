@@ -31,13 +31,13 @@
             'ratio' => Chart::share($c['revenue'] ?? 0, $catMax),
         ])->all();
 
-        // Size xếp theo SỐ MÓN chứ không theo tiền: cần biết nên nhập nhiều size
-        // nào, mà size đắt tiền không đồng nghĩa với size bán chạy.
-        $sizes = collect($report['by_size'] ?? [])->sortByDesc('units')->values();
+        // Biến thể xếp theo SỐ MÓN chứ không theo tiền: cần biết nên nhập nhiều
+        // biến thể nào, mà biến thể đắt tiền không đồng nghĩa với biến thể bán chạy.
+        $sizes = collect($report['by_variant'] ?? [])->sortByDesc('units')->values();
         $sizeMax = max(1, (int) $sizes->max('units'));
         $sizeTotal = $sizes->sum('units');
         $sizeRows = $sizes->map(fn ($s) => [
-            'label' => $s['label'] !== '' ? $s['label'] : 'Không rõ size',
+            'label' => $s['label'] !== '' ? $s['label'] : 'Hàng đơn (không biến thể)',
             'value' => Chart::int($s['units'] ?? 0),
             'extra' => Chart::pct(Chart::share($s['units'] ?? 0, $sizeTotal)),
             'ratio' => Chart::share($s['units'] ?? 0, $sizeMax),
@@ -239,8 +239,8 @@
             ])
 
             @include('reports.partials.bars', [
-                'title' => 'Theo size',
-                'sub' => 'Xếp theo SỐ MÓN — đây là con số dùng để quyết định nhập size nào.',
+                'title' => 'Theo biến thể',
+                'sub' => 'Xếp theo SỐ MÓN — đây là con số dùng để quyết định nhập biến thể nào.',
                 'rows' => $sizeRows,
                 'empty' => 'Kỳ này chưa bán được món nào.',
             ])

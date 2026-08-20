@@ -22,7 +22,7 @@ func NewInventoryHandler(svc service.InventoryService) *InventoryHandler {
 }
 
 // @Summary		Danh sách tồn kho
-// @Description	Liệt kê tồn kho theo TỪNG BIẾN THỂ (size/màu/phiên bản) kèm thông tin sản phẩm cha, giá bán hiệu lực, giá vốn hiệu lực và giá trị hàng đang nằm trong kho. Mặc định sắp xếp tồn ít lên trước.
+// @Description	Liệt kê tồn kho theo TỪNG BIẾN THỂ (tổ hợp thuộc tính) kèm thông tin mặt hàng cha, giá bán hiệu lực, giá vốn hiệu lực và giá trị hàng đang nằm trong kho. Mặc định sắp xếp tồn ít lên trước.
 // @Description	`stock_value` tính theo GIÁ VỐN (`cost_price` của biến thể, không có thì của sản phẩm cha) × tồn kho — giá trị tồn kho về kế toán phải theo giá vốn chứ không phải giá bán. `cost_price` rỗng nghĩa là chưa khai giá vốn, biến thể đó đóng góp 0₫ vào giá trị kho.
 // @Description	`stock=low` lọc theo ngưỡng `low_stock` (mặc định 5): tồn còn lớn hơn 0 nhưng không vượt ngưỡng. `stock=out` là đã hết sạch, `stock=in` là còn trên ngưỡng.
 // @Tags			Admin - Inventory

@@ -276,8 +276,7 @@ class OrderController extends Controller
                 'product_id' => isset($it['product_id']) ? (int) $it['product_id'] : null,
                 'product_name' => $it['product_name'],
                 'variant_sku' => $it['variant_sku'] ?? '',
-                'size' => $it['size'] ?? '',
-                'color' => $it['color'] ?? '',
+                'variant_name' => $it['variant_name'] ?? '',
                 'thumbnail' => $it['thumbnail'] ?? '',
                 'unit_price' => (float) $it['unit_price'],
                 'quantity' => (int) $it['quantity'],
@@ -341,8 +340,7 @@ class OrderController extends Controller
                 'product_id' => isset($it['product_id']) ? (int) $it['product_id'] : null,
                 'product_name' => $it['product_name'],
                 'variant_sku' => $it['variant_sku'] ?? '',
-                'size' => $it['size'] ?? '',
-                'color' => $it['color'] ?? '',
+                'variant_name' => $it['variant_name'] ?? '',
                 'thumbnail' => $it['thumbnail'] ?? '',
                 'unit_price' => (float) $it['unit_price'],
                 'quantity' => (int) $it['quantity'],
@@ -401,8 +399,7 @@ class OrderController extends Controller
             $variants = array_map(fn ($v) => [
                 'id' => $v['id'] ?? 0,
                 'sku' => $v['sku'] ?? '',
-                'size' => $v['size'] ?? '',
-                'color' => $v['color'] ?? '',
+                'name' => $v['name'] ?? '',
                 'price' => $v['price'] ?? null,
                 // final_price là GIÁ BÁN THẬT của biến thể: giá riêng của nó (nếu có)
                 // đè giá sản phẩm, rồi chương trình khuyến mãi đang chạy trừ tiếp —

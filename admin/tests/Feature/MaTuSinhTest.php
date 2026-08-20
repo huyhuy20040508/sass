@@ -9,8 +9,8 @@ use Tests\TestCase;
  * Quy tắc đánh số CÓ HIỆU LỰC ở các màn nhập liệu.
  *
  * Bật quy tắc mà màn hình vẫn tự bịa mã của nó thì cấu hình chỉ là một trang
- * trang trí. Hai màn có tự đặt mã là Hàng hoá (SKU ghép từ đội bóng · loại áo ·
- * mùa giải) và Nhóm hàng hoá (dải NH0001) — bài này canh đúng hai chỗ đó.
+ * trang trí. Hai màn có tự đặt mã là Hàng hoá (mã ghép từ tên hàng) và Nhóm
+ * hàng hoá (dải NH0001) — bài này canh đúng hai chỗ đó.
  *
  * Mã sinh ra thế nào là việc của API (api/internal/apitest/sinh_ma_test.go).
  */
@@ -43,17 +43,16 @@ class MaTuSinhTest extends TestCase
     protected function donHangHoa(): array
     {
         return [
-            'name' => 'Áo sân nhà Arsenal',
-            'team' => 'Arsenal',
-            'season' => '2026',
-            'kit_type' => 'fan',
+            'name' => 'Arsenal Sân Nhà',
             'category_id' => 3,
+            'unit_id' => 0,
+            'vat' => 10,
             'base_price' => 500000,
             // Cờ của modal: "màn hình đã nắm danh sách biến thể", không có nó thì
             // controller cố ý bỏ khoá variants ra khỏi payload.
             'variants_loaded' => 1,
             'variants' => [
-                ['id' => 0, 'size' => 'M', 'color' => 'Đỏ', 'barcode' => '', 'price' => '', 'cost_price' => ''],
+                ['id' => 0, 'name' => '', 'sku' => '', 'barcode' => '', 'price' => '', 'cost_price' => '', 'attributes' => []],
             ],
         ];
     }
@@ -70,7 +69,7 @@ class MaTuSinhTest extends TestCase
                 return false;
             }
 
-            // Mã sản phẩm VÀ mã biến thể đều để trống — cả hai do máy chủ đặt.
+            // Mã mặt hàng VÀ mã biến thể đều để trống — cả hai do máy chủ đặt.
             return ($request->data()['sku'] ?? null) === ''
                 && ($request->data()['variants'][0]['sku'] ?? null) === '';
         });
@@ -89,7 +88,8 @@ class MaTuSinhTest extends TestCase
             }
             $sku = $request->data()['sku'] ?? '';
 
-            return $sku !== '' && str_contains($sku, 'ARSE');
+            // Ghép từ chữ cái đầu của tên: "Arsenal Sân Nhà" -> "ASN-####".
+            return (bool) preg_match('/^ASN-\d{4}$/', $sku);
         });
     }
 

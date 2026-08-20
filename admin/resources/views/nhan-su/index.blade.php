@@ -149,20 +149,20 @@
                      đâu, còn làm không. --}}
                 <thead>
                     <tr>
-                        <th class="tc" style="width:38px">
+                        <th class="nsu-c-check">
                             {{-- Chọn hết những dòng ĐANG HIỆN, không phải cả cửa hàng:
                                  bảng đang lọc thì "hết" nghĩa là hết phần đang xem. --}}
                             <input type="checkbox" id="nsuChonHet" title="Chọn hết dòng đang hiện">
                         </th>
-                        <th class="tc" style="width:48px">STT</th>
-                        <th style="width:100px">Mã NV</th>
-                        <th style="min-width:180px">Họ tên</th>
-                        <th style="width:170px">Phân quyền</th>
-                        <th style="width:150px">Ca làm việc</th>
-                        <th style="width:130px">Điện thoại</th>
-                        <th style="width:160px">Chi nhánh</th>
-                        <th class="tc" style="width:110px">Trạng thái</th>
-                        <th class="tc" style="width:90px">Thao tác</th>
+                        <th class="nsu-c-stt">STT</th>
+                        <th class="nsu-c-code">Mã NV</th>
+                        <th class="nsu-c-name">Họ tên</th>
+                        <th class="nsu-c-quyen">Phân quyền</th>
+                        <th class="nsu-c-ca">Ca làm việc</th>
+                        <th class="nsu-c-phone">Điện thoại</th>
+                        <th class="nsu-c-shop">Chi nhánh</th>
+                        <th class="nsu-c-status">Trạng thái</th>
+                        <th class="nsu-c-act">Thao tác</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -176,23 +176,23 @@
                             $tkKhoa = $tenDangNhap !== '' && ($ns['user_status'] ?? 'active') !== 'active';
                         @endphp
                         <tr>
-                            <td class="tc">
+                            <td class="nsu-c-check">
                                 <input type="checkbox" form="nsuBulkForm" name="ids[]"
                                        value="{{ $ns['id'] }}" data-nsu-chon>
                             </td>
-                            <td class="tc nsu-muted">{{ $stt + $i + 1 }}</td>
+                            <td class="nsu-c-stt nsu-muted">{{ $stt + $i + 1 }}</td>
                             {{-- Mã nhân viên ĐỨNG CỘT RIÊNG: nó là thứ để đối chiếu với
                                  bảng lương và bảng chấm công, nên phải xếp thẳng hàng và
                                  sắp/dò được. Nhét xuống dòng phụ dưới tên thì mắt phải
                                  nhảy zíc-zắc khi dò một danh sách mã. --}}
-                            <td><code class="nsu-code">{{ $ns['code'] ?: '—' }}</code></td>
-                            <td>
+                            <td class="nsu-c-code"><code class="nsu-code">{{ $ns['code'] ?: '—' }}</code></td>
+                            <td class="nsu-c-name">
                                 {{-- Không có ảnh ở đây: bảng để QUÉT MẮT tìm người, mà một
                                      cột ảnh tròn đẩy mỗi hàng cao thêm và làm chậm đúng
                                      việc ấy. Ảnh xem trong hộp chi tiết. --}}
                                 <div class="nsu-name">{{ $ns['full_name'] }}</div>
                             </td>
-                            <td>
+                            <td class="nsu-c-quyen">
                                 {{-- Không có tài khoản thì nói thẳng bằng huy hiệu xám;
                                      để trống trông như dữ liệu bị thiếu. --}}
                                 @if($tenDangNhap !== '')
@@ -211,7 +211,7 @@
                                     <span class="nsu-badge is-none">Không đăng nhập</span>
                                 @endif
                             </td>
-                            <td>
+                            <td class="nsu-c-ca">
                                 {{-- Cột SET đọc lên là "sang,chieu" — tách ra, đổi sang
                                      nhãn tiếng Việt, mỗi ca một thẻ nhỏ. --}}
                                 @php
@@ -224,9 +224,9 @@
                                     <span class="nsu-muted">Chưa xếp ca</span>
                                 @endforelse
                             </td>
-                            <td>{{ ($ns['phone'] ?? '') ?: '—' }}</td>
-                            <td class="nsu-muted">{{ ($ns['shop_name'] ?? '') ?: '—' }}</td>
-                            <td class="tc">
+                            <td class="nsu-c-phone">{{ ($ns['phone'] ?? '') ?: '—' }}</td>
+                            <td class="nsu-c-shop nsu-muted">{{ ($ns['shop_name'] ?? '') ?: '—' }}</td>
+                            <td class="nsu-c-status">
                                 {{-- Công tắc: mỗi dòng một form riêng, gửi đúng một trường
                                      sang /trang-thai. JS hỏng thì vẫn còn nút submit.
 
@@ -252,39 +252,44 @@
                                     <noscript><button type="submit" class="nsu-btn-ghost">Đổi</button></noscript>
                                 </form>
                             </td>
-                            <td class="nsu-actions">
-                                {{-- Xem chi tiết. Đứng TRƯỚC nút Sửa vì nó là việc
-                                     không đổi gì cả — tra một số điện thoại hay xem
-                                     mức lương thì không có lý do gì phải mở ra một
-                                     cái form đầy ô sửa được.
+                            {{-- Hàng nút nằm trong lớp bọc chứ không để display:flex
+                                 thẳng lên <td>: ô đặt flex thì thôi làm ô bảng, mất
+                                 luôn phần chia cột. --}}
+                            <td class="nsu-c-act">
+                                <div class="nsu-actions">
+                                    {{-- Xem chi tiết. Đứng TRƯỚC nút Sửa vì nó là việc
+                                         không đổi gì cả — tra một số điện thoại hay xem
+                                         mức lương thì không có lý do gì phải mở ra một
+                                         cái form đầy ô sửa được.
 
-                                     Dựng từ chính dòng dữ liệu đã có trong trang, không
-                                     gọi thêm API: danh sách đã mang đủ mọi ô. --}}
-                                <button type="button" class="nsu-btn-icon" title="Xem chi tiết"
-                                        data-nsu-xem data-ho-so="{{ json_encode($ns, JSON_UNESCAPED_UNICODE) }}">
-                                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
-                                </button>
-
-                                <button type="button" class="nsu-btn-icon" title="Sửa"
-                                        data-nsu-edit data-ho-so="{{ json_encode($ns, JSON_UNESCAPED_UNICODE) }}">
-                                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-                                </button>
-
-                                {{-- Form riêng từng dòng: nút dùng chung + id nhét bằng JS
-                                     thì lúc JS hỏng sẽ xoá nhầm dòng cuối cùng đã gán. --}}
-                                <form method="POST" action="{{ route('admin.nhan-su.destroy', $ns['id']) }}"
-                                      class="nsu-inline-form" data-nsu-xoa
-                                      data-ten="{{ $ns['full_name'] }}">
-                                    @csrf
-                                    @method('DELETE')
-                                    {{-- Xoá hồ sơ thì tệp ảnh cũng thành mồ côi: không hồ
-                                         sơ nào trỏ tới, không màn hình nào hiện ra. Gửi kèm
-                                         đường dẫn để controller dọn luôn. --}}
-                                    <input type="hidden" name="avatar" value="{{ $ns['avatar'] ?? '' }}">
-                                    <button type="submit" class="nsu-btn-icon is-danger" title="Xoá">
-                                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M6 6v14a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V6"/><path d="M10 11v6M14 11v6"/></svg>
+                                         Dựng từ chính dòng dữ liệu đã có trong trang, không
+                                         gọi thêm API: danh sách đã mang đủ mọi ô. --}}
+                                    <button type="button" class="nsu-btn-icon" title="Xem chi tiết"
+                                            data-nsu-xem data-ho-so="{{ json_encode($ns, JSON_UNESCAPED_UNICODE) }}">
+                                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
                                     </button>
-                                </form>
+
+                                    <button type="button" class="nsu-btn-icon" title="Sửa"
+                                            data-nsu-edit data-ho-so="{{ json_encode($ns, JSON_UNESCAPED_UNICODE) }}">
+                                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                                    </button>
+
+                                    {{-- Form riêng từng dòng: nút dùng chung + id nhét bằng JS
+                                         thì lúc JS hỏng sẽ xoá nhầm dòng cuối cùng đã gán. --}}
+                                    <form method="POST" action="{{ route('admin.nhan-su.destroy', $ns['id']) }}"
+                                          class="nsu-inline-form" data-nsu-xoa
+                                          data-ten="{{ $ns['full_name'] }}">
+                                        @csrf
+                                        @method('DELETE')
+                                        {{-- Xoá hồ sơ thì tệp ảnh cũng thành mồ côi: không hồ
+                                             sơ nào trỏ tới, không màn hình nào hiện ra. Gửi kèm
+                                             đường dẫn để controller dọn luôn. --}}
+                                        <input type="hidden" name="avatar" value="{{ $ns['avatar'] ?? '' }}">
+                                        <button type="submit" class="nsu-btn-icon is-danger" title="Xoá">
+                                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M6 6v14a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V6"/><path d="M10 11v6M14 11v6"/></svg>
+                                        </button>
+                                    </form>
+                                </div>
                             </td>
                         </tr>
                     @empty
@@ -738,31 +743,54 @@
         .nsu-btn-ghost.is-danger:hover { background: #ff7875; color: #fff; border-color: transparent; }
 
         .nsu-table-wrap { padding: 0 20px 24px; overflow-x: auto; }
-        /* Chín cột vẫn vừa một màn hình laptop nên KHÔNG ép min-width rộng như bảng
+        /* Cùng khuôn với mọi trang danh sách khác: rộng hết khung, mọi ô canh giữa,
+           bề rộng khai theo % và cộng đúng 100%. Để một cột không khai width là cột
+           đó nuốt hết phần dư, các cột còn lại dồn cục.
+
+           Chín cột vẫn vừa một màn hình laptop nên KHÔNG ép min-width rộng như bảng
            cũ (1120px, luôn phải cuộn ngang mới thấy nút Sửa). Vẫn giữ overflow-x của
            khung ngoài cho màn hình thật hẹp. */
-        .nsu-table { width: 100%; min-width: 900px; border-collapse: collapse; font-size: 13.5px; }
-        .nsu-table th {
-            text-align: left; font-weight: 600; color: #595959; background: #fafafa;
-            padding: 11px 12px; border-bottom: 1px solid #f0f0f0; white-space: nowrap;
+        .nsu-table { width: 100%; min-width: 1000px; border-collapse: collapse; font-size: 13.5px; table-layout: fixed; }
+        /* MỘT mực đệm cho cả tiêu đề lẫn ô dữ liệu — hai mực khác nhau là hàng tiêu
+           đề trông lệch hẳn so với phần thân. */
+        .nsu-table th, .nsu-table td {
+            padding: 14px 10px; vertical-align: middle; text-align: center;
         }
-        .nsu-table td { padding: 14px 12px; border-bottom: 1px solid #f5f5f5; vertical-align: middle; }
+        .nsu-table th {
+            font-weight: 600; color: #595959; background: #fafafa;
+            border-bottom: 1px solid #f0f0f0; white-space: nowrap;
+        }
+        .nsu-table td { border-bottom: 1px solid #f5f5f5; }
         .nsu-table tbody tr:hover td { background: #fafafa; }
+
+        /* Cột nào cũng phải có phần của mình, cộng lại đúng 100%. */
+        .nsu-table th.nsu-c-check,  .nsu-table td.nsu-c-check  { width: 4%; }
+        .nsu-table th.nsu-c-stt,    .nsu-table td.nsu-c-stt    { width: 4%; }
+        .nsu-table th.nsu-c-code,   .nsu-table td.nsu-c-code   { width: 10%; }
+        .nsu-table th.nsu-c-name,   .nsu-table td.nsu-c-name   { width: 16%; }
+        .nsu-table th.nsu-c-quyen,  .nsu-table td.nsu-c-quyen  { width: 15%; }
+        .nsu-table th.nsu-c-ca,     .nsu-table td.nsu-c-ca     { width: 11%; }
+        .nsu-table th.nsu-c-phone,  .nsu-table td.nsu-c-phone  { width: 10%; }
+        .nsu-table th.nsu-c-shop,   .nsu-table td.nsu-c-shop   { width: 12%; }
+        .nsu-table th.nsu-c-status, .nsu-table td.nsu-c-status { width: 7%; }
+        .nsu-table th.nsu-c-act,    .nsu-table td.nsu-c-act    { width: 11%; }
+        /* Chữ dài hơn cột thì cắt bằng ba chấm chứ không xuống dòng: một ô xuống
+           dòng là cả hàng cao thêm, cả bảng nhấp nhô. */
+        .nsu-c-code, .nsu-c-name, .nsu-c-phone, .nsu-c-shop {
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .nsu-c-phone { font-variant-numeric: tabular-nums; }
         .nsu-name { font-weight: 600; }
         .nsu-small { font-size: 12px; }
         .nsu-muted { color: #8c8c8c; }
         .nsu-code { font-size: 12px; background: #f5f5f5; border-radius: 3px; padding: 2px 6px; color: #595959; }
         .nsu-empty { text-align: center; color: #8c8c8c; padding: 32px 12px; }
 
-        /* Căn cột theo bảng của order v2. */
-        .nsu-table .tc { text-align: center; }
-        .nsu-table .tr { text-align: right; }
-
         /* Huy hiệu phân quyền — bảng màu của badge account_type bên order v2. */
         /* Một người giữ hai vai thì hai huy hiệu nằm cạnh nhau — cần margin, không
            thì chúng dính vào nhau khi cột hẹp. */
         .nsu-badge {
-            display: inline-block; margin: 1px 4px 1px 0; padding: 2px 8px; border-radius: 4px;
+            display: inline-block; margin: 1px 2px; padding: 2px 8px; border-radius: 4px;
             font-size: 12px; font-weight: 600; white-space: nowrap;
             background: #f1f3f5; color: #495057;
         }
@@ -780,7 +808,7 @@
         .nsu-tag.is-tam_nghi { background: #fff7e6; color: #d46b08; border: 1px solid #ffd591; }
         .nsu-tag.is-da_nghi { background: #fafafa; color: #8c8c8c; border: 1px solid #e8e8e8; }
 
-        .nsu-actions { display: flex; align-items: center; gap: 4px; }
+        .nsu-actions { display: flex; align-items: center; justify-content: center; gap: 4px; }
         .nsu-inline-form { display: inline; margin: 0; }
         .nsu-btn-icon {
             display: inline-flex; align-items: center; justify-content: center;
@@ -915,9 +943,8 @@
         .nsu-modal-foot { display: flex; justify-content: center; gap: 8px; padding: 12px 20px; border-top: 1px solid #f0f0f0; background: #fafafa; border-radius: 0 0 6px 6px; }
 
         /* Hộp xác nhận: cùng khung với hộp thêm/sửa, chỉ hẹp lại vì nó chỉ chứa
-           mấy dòng chữ. Nút Đồng ý tô ĐỎ khi lượt bấm khoá tài khoản hay xoá hồ
-           sơ — hai nút xanh giống hệt nhau thì người đọc bấm theo vị trí, không
-           theo chữ. */
+           mấy dòng chữ. Cặp nút theo quy tắc chung — Huỷ đỏ, Đồng ý xanh — khai
+           một chỗ ở layout dùng chung, đừng tô lại ở đây. */
         .nsu-dialog.is-confirm { max-width: 460px; }
 
         /* CHẾ ĐỘ CHỈ ĐỌC — vẫn là hộp thoại thêm/sửa, chỉ khoá lại.
@@ -1079,7 +1106,6 @@
 
                 hopHoiOk.textContent = o.nutDongY || 'Đồng ý';
                 hopHoiHuy.textContent = o.nutHuy || 'Huỷ';
-                hopHoiOk.classList.toggle('is-danger', !!o.nguyHiem);
                 hopHoi.style.display = 'flex';
                 hopHoiOk.focus();
             }
@@ -1119,7 +1145,6 @@
                                 'Tài khoản đăng nhập “' + taiKhoan + '” bị khoá ngay: người này không mở được quầy bán bằng mật khẩu cũ nữa.',
                             ],
                             nutDongY: 'Nghỉ việc & khoá tài khoản',
-                            nguyHiem: true,
                         }, function (dongY) {
                             // Trả công tắc về đúng chỗ cũ, đừng để nó nói dối trạng thái.
                             if (!dongY) {
@@ -1169,7 +1194,6 @@
                             'Tài khoản đăng nhập (nếu có) KHÔNG bị đụng tới. Người đã nghỉ thì nên gạt công tắc sang “đã nghỉ việc” — xoá là dành cho hồ sơ nhập nhầm.',
                         ],
                         nutDongY: 'Xoá hồ sơ',
-                        nguyHiem: true,
                     }, function (dongY) {
                         // f.submit() không chạy lại lượt kiểm này nên không cần cờ chặn.
                         if (dongY) f.submit();
@@ -1498,7 +1522,6 @@
                                     + 'là một lượt bấm riêng.',
                             ],
                         nutDongY: xoa ? 'Xoá' : 'Đánh dấu nghỉ việc',
-                        nguyHiem: true,
                     }, function (dongY) {
                         if (!dongY) return;
                         bulkForm.action = xoa ? XOA_HANG_LOAT : TRANG_THAI_HANG_LOAT;

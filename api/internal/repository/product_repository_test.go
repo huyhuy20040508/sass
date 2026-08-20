@@ -133,7 +133,6 @@ func seedProduct(t *testing.T, db *gorm.DB) uint {
 		Name:       "SP kiểm thử tồn kho",
 		Slug:       "sp-kiem-thu-ton-kho",
 		SKU:        "TEST-STOCK-SKU",
-		KitType:    "fan",
 		BasePrice:  100000,
 		// PHẢI khai, dù cột có DEFAULT 'active': GORM đưa mọi trường vào câu
 		// INSERT kể cả trường bỏ trống, nên database nhận chuỗi rỗng và không
@@ -148,6 +147,9 @@ func seedProduct(t *testing.T, db *gorm.DB) uint {
 		// Muốn máy mình bắt được loại lỗi này thì ép strict ngay trong DSN:
 		//   TEST_DB_DSN="...?parseTime=true&sql_mode='STRICT_TRANS_TABLES'"
 		Status: domain.ProductStatusActive,
+		// Mặt hàng bình thường: bán ra CÓ trừ kho. Bool zero-value là false
+		// nên dựng tay mà quên là bài kiểm tồn kho im lặng không trừ gì.
+		IsStockDeducted: true,
 	}
 	db.WithContext(ctxTest()).Where("slug = ?", p.Slug).Unscoped().Delete(&domain.Product{})
 	if err := db.WithContext(ctxTest()).Create(p).Error; err != nil {
@@ -172,13 +174,13 @@ func TestReplaceVariantsKhongDungToiTonKho(t *testing.T) {
 
 	// Tạo biến thể lần đầu — tồn phải lấy DEFAULT 0 của DB.
 	if err := repo.ReplaceVariants(ctx, productID, []domain.ProductVariant{
-		{SKU: "TEST-STOCK-SKU-M", Size: "M", IsActive: true},
+		{SKU: "TEST-STOCK-SKU-M", Name: "M", IsActive: true},
 	}); err != nil {
 		t.Fatalf("tạo biến thể lỗi: %v", err)
 	}
 
 	var v domain.ProductVariant
-	if err := db.WithContext(ctxTest()).Where("product_id = ? AND size = ?", productID, "M").First(&v).Error; err != nil {
+	if err := db.WithContext(ctxTest()).Where("product_id = ? AND name = ?", productID, "M").First(&v).Error; err != nil {
 		t.Fatalf("không đọc được biến thể vừa tạo: %v", err)
 	}
 	if v.StockQuantity != 0 {
@@ -195,7 +197,7 @@ func TestReplaceVariantsKhongDungToiTonKho(t *testing.T) {
 	// kho (StockQuantity là zero-value) — đúng như buildVariants dựng ra.
 	gia := 199000.0
 	if err := repo.ReplaceVariants(ctx, productID, []domain.ProductVariant{
-		{ID: v.ID, SKU: "TEST-STOCK-SKU-M", Size: "M", Price: &gia, IsActive: true},
+		{ID: v.ID, SKU: "TEST-STOCK-SKU-M", Name: "M", Price: &gia, IsActive: true},
 	}); err != nil {
 		t.Fatalf("sửa biến thể lỗi: %v", err)
 	}
@@ -212,31 +214,31 @@ func TestReplaceVariantsKhongDungToiTonKho(t *testing.T) {
 	}
 }
 
-// Xoá một size rồi thêm lại đúng size/SKU đó phải chạy được. Biến thể bị gỡ chỉ
+// Xoá một biến thể rồi thêm lại đúng tên/mã đó phải chạy được. Biến thể bị gỡ chỉ
 // bị xoá mềm (sổ kho và giỏ hàng còn trỏ vào), nên unique key phải tính cả
 // deleted_at — nếu không thì thêm lại sẽ vướng lỗi trùng khoá.
-func TestReplaceVariantsThemLaiSizeDaXoa(t *testing.T) {
+func TestReplaceVariantsThemLaiBienTheDaXoa(t *testing.T) {
 	db := testDB(t)
 	repo := NewProductRepository(db)
 	ctx := ctxTest()
 	productID := seedProduct(t, db)
 
 	if err := repo.ReplaceVariants(ctx, productID, []domain.ProductVariant{
-		{SKU: "TEST-STOCK-SKU-L", Size: "L", IsActive: true},
+		{SKU: "TEST-STOCK-SKU-L", Name: "L", IsActive: true},
 	}); err != nil {
 		t.Fatalf("tạo biến thể lỗi: %v", err)
 	}
 
-	// Gửi danh sách rỗng -> size L bị xoá mềm.
+	// Gửi danh sách rỗng -> biến thể L bị xoá mềm.
 	if err := repo.ReplaceVariants(ctx, productID, []domain.ProductVariant{}); err != nil {
 		t.Fatalf("xoá biến thể lỗi: %v", err)
 	}
 
-	// Thêm lại đúng size + SKU đó.
+	// Thêm lại đúng tên + mã đó.
 	if err := repo.ReplaceVariants(ctx, productID, []domain.ProductVariant{
-		{SKU: "TEST-STOCK-SKU-L", Size: "L", IsActive: true},
+		{SKU: "TEST-STOCK-SKU-L", Name: "L", IsActive: true},
 	}); err != nil {
-		t.Fatalf("thêm lại size đã xoá bị lỗi: %v", err)
+		t.Fatalf("thêm lại biến thể đã xoá bị lỗi: %v", err)
 	}
 
 	var dem int64

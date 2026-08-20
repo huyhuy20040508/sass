@@ -149,7 +149,7 @@
 
     @foreach($items as $it)
         @php
-            $tenBienThe = collect([$it['size'] ?? '', $it['color'] ?? ''])->filter()->implode(' / ');
+            $tenBienThe = trim((string) ($it['variant_name'] ?? ''));
             $sl = (int) $it['quantity'];
             $gia = (float) $it['unit_price'];
             $bot = (float) ($it['discount_amount'] ?? 0);

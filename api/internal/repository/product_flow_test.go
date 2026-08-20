@@ -31,6 +31,9 @@ func newProduct(t *testing.T, db *gorm.DB, slug, sku string) *domain.Product {
 		BasePrice:  100000,
 		Status:     domain.ProductStatusActive,
 		IsActive:   true,
+		// Mặt hàng bình thường: bán ra CÓ trừ kho. Bool zero-value là false
+		// nên dựng tay mà quên là bài kiểm tồn kho im lặng không trừ gì.
+		IsStockDeducted: true,
 	}
 	if err := db.WithContext(ctxTest()).Create(p).Error; err != nil {
 		t.Fatalf("không tạo được sản phẩm %s: %v", sku, err)
@@ -209,7 +212,7 @@ func TestListSlimKhongNapBienTheVaAnh(t *testing.T) {
 
 	p := newProduct(t, db, "sp-test-slim", "TEST-SLIM")
 	if err := db.WithContext(ctxTest()).Create(&domain.ProductVariant{
-		ProductID: p.ID, SKU: "TEST-SLIM-M", Size: "M", IsActive: true,
+		ProductID: p.ID, SKU: "TEST-SLIM-M", Name: "M", IsActive: true,
 	}).Error; err != nil {
 		t.Fatalf("không tạo được biến thể: %v", err)
 	}
@@ -317,7 +320,7 @@ func TestSuaSanPhamKhongDapNgayTaoCuaBienTheVaAnh(t *testing.T) {
 
 	// Lần 1: tạo biến thể + ảnh.
 	if err := repo.ReplaceVariants(ctx, p.ID, []domain.ProductVariant{
-		{SKU: "TEST-NGAY-TAO-M", Size: "M", IsActive: true},
+		{SKU: "TEST-NGAY-TAO-M", Name: "M", IsActive: true},
 	}); err != nil {
 		t.Fatalf("tạo biến thể lỗi: %v", err)
 	}
@@ -339,7 +342,7 @@ func TestSuaSanPhamKhongDapNgayTaoCuaBienTheVaAnh(t *testing.T) {
 
 	// Lần 2: sửa như trang quản trị gửi lên — có id, không có created_at.
 	if err := repo.ReplaceVariants(ctx, p.ID, []domain.ProductVariant{
-		{ID: variantID, SKU: "TEST-NGAY-TAO-M", Size: "M", Color: "Trắng", IsActive: true},
+		{ID: variantID, SKU: "TEST-NGAY-TAO-M", Name: "M · Trắng", IsActive: true},
 	}); err != nil {
 		t.Fatalf("sửa biến thể lỗi (đây chính là lỗi 500 ngoài trang thật): %v", err)
 	}
@@ -361,18 +364,18 @@ func TestSuaSanPhamKhongDapNgayTaoCuaBienTheVaAnh(t *testing.T) {
 	}
 
 	// Dữ liệu sửa vẫn phải lưu được — đừng chữa lỗi bằng cách bỏ luôn phần ghi.
-	if got.Variants[0].Color != "Trắng" {
-		t.Fatalf("màu biến thể không lưu: %q", got.Variants[0].Color)
+	if got.Variants[0].Name != "M · Trắng" {
+		t.Fatalf("tên biến thể không lưu: %q", got.Variants[0].Name)
 	}
 	if got.Images[0].SortOrder != 2 || got.Images[0].URL != "https://vi.du/anh-1-sua.jpg" {
 		t.Fatalf("ảnh không lưu: sort=%d url=%s", got.Images[0].SortOrder, got.Images[0].URL)
 	}
 }
 
-// Gỡ giá riêng / bỏ màu / tắt biến thể đều phải lưu được.
+// Gỡ giá riêng / xoá tên biến thể / tắt biến thể đều phải lưu được.
 //
 // Updates() với struct bỏ qua mọi trường zero-value, nên nếu ai đó đổi map sang
-// struct thì xoá màu hay gỡ giá riêng sẽ im lặng không có tác dụng.
+// struct thì xoá tên hay gỡ giá riêng sẽ im lặng không có tác dụng.
 func TestSuaBienTheLuuDuocGiaTriRong(t *testing.T) {
 	db := testDB(t)
 	repo := NewProductRepository(db)
@@ -381,24 +384,24 @@ func TestSuaBienTheLuuDuocGiaTriRong(t *testing.T) {
 
 	gia := 650000.0
 	if err := repo.ReplaceVariants(ctx, p.ID, []domain.ProductVariant{
-		{SKU: "TEST-GIATRI-RONG-L", Size: "L", Color: "Đỏ", Price: &gia, IsActive: true},
+		{SKU: "TEST-GIATRI-RONG-L", Name: "L · Đỏ", Price: &gia, IsActive: true},
 	}); err != nil {
 		t.Fatalf("tạo biến thể lỗi: %v", err)
 	}
 	got, _ := repo.FindByID(ctx, p.ID)
 	id := got.Variants[0].ID
 
-	// Bỏ màu, gỡ giá riêng, tắt biến thể — cả ba đều là zero-value.
+	// Xoá tên biến thể, gỡ giá riêng, tắt biến thể — cả ba đều là zero-value.
 	if err := repo.ReplaceVariants(ctx, p.ID, []domain.ProductVariant{
-		{ID: id, SKU: "TEST-GIATRI-RONG-L", Size: "L", Color: "", Price: nil, IsActive: false},
+		{ID: id, SKU: "TEST-GIATRI-RONG-L", Name: "", Price: nil, IsActive: false},
 	}); err != nil {
 		t.Fatalf("sửa biến thể lỗi: %v", err)
 	}
 
 	got, _ = repo.FindByID(ctx, p.ID)
 	v := got.Variants[0]
-	if v.Color != "" {
-		t.Fatalf("xoá màu không ăn: %q", v.Color)
+	if v.Name != "" {
+		t.Fatalf("xoá tên biến thể không ăn: %q", v.Name)
 	}
 	if v.Price != nil {
 		t.Fatalf("gỡ giá riêng không ăn: %v", *v.Price)

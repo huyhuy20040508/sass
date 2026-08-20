@@ -157,7 +157,7 @@ func (h *PurchaseReturnHandler) Get(c *gin.Context) {
 }
 
 // @Summary		Lập phiếu trả hàng nhập
-// @Description	Tạo phiếu trả cho một phiếu đặt hàng nhập. Tên/SKU/size/màu/giá nhập do server chụp lại từ dòng phiếu đặt gốc, client chỉ gửi `purchase_order_item_id` + `quantity`.
+// @Description	Tạo phiếu trả cho một phiếu đặt hàng nhập. Tên/SKU/tên biến thể/giá nhập do server chụp lại từ dòng phiếu đặt gốc, client chỉ gửi `purchase_order_item_id` + `quantity`.
 // @Description	`status=returned` là "trả hàng ngay": phiếu được lập rồi chốt luôn trong một lần gọi — tồn kho bị TRỪ ở bước chốt đó. Bỏ trống hoặc `draft` thì chỉ lưu nháp, chưa đụng tới kho.
 // @Description	Trả vượt số còn trả được của dòng phiếu đặt → 409. Kho không đủ hàng để trừ → 409.
 // @Tags			Admin - Purchase Returns

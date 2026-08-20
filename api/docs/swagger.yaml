@@ -259,8 +259,6 @@ definitions:
     properties:
       amount:
         type: number
-      color:
-        type: string
       product_id:
         type: integer
       product_name:
@@ -271,8 +269,6 @@ definitions:
         type: integer
       quantity_before:
         type: integer
-      size:
-        type: string
       sku:
         type: string
       thumbnail:
@@ -283,6 +279,8 @@ definitions:
         type: number
       variant_id:
         type: integer
+      variant_name:
+        type: string
     type: object
   domain.GoodsReceiptStats:
     properties:
@@ -356,8 +354,6 @@ definitions:
     properties:
       category_name:
         type: string
-      color:
-        type: string
       cost_price:
         description: |-
           CostPrice là giá VỐN hiệu lực: giá vốn riêng của biến thể nếu có, không thì
@@ -365,11 +361,6 @@ definitions:
         type: number
       is_active:
         type: boolean
-      kit_type:
-        description: |-
-          KitType là loại áo của sản phẩm cha (fan | player), lấy sẵn để giao diện
-          kho phân biệt được FAN với PLAYER mà không phải gọi thêm.
-        type: string
       last_moved_at:
         description: LastMovedAt là lần cuối biến thể này có bút toán kho (nil = chưa
           từng).
@@ -387,8 +378,6 @@ definitions:
         type: integer
       product_name:
         type: string
-      size:
-        type: string
       sku:
         type: string
       slug:
@@ -403,8 +392,15 @@ definitions:
         type: number
       thumbnail:
         type: string
+      unit_name:
+        description: |-
+          UnitName là tên đơn vị tính của mặt hàng cha ("Cái", "Hộp"), lấy sẵn để
+          màn kho ghi được "12 Hộp" chứ không phải một con số trần.
+        type: string
       variant_id:
         type: integer
+      variant_name:
+        type: string
     type: object
   domain.InventoryStats:
     properties:
@@ -625,8 +621,6 @@ definitions:
     type: object
   domain.OrderItem:
     properties:
-      color:
-        type: string
       cost_price:
         description: |-
           CostPrice là giá vốn một đơn vị CHỤP LẠI tại thời điểm bán.
@@ -663,8 +657,6 @@ definitions:
         type: integer
       quantity:
         type: integer
-      size:
-        type: string
       thumbnail:
         type: string
       total_price:
@@ -674,6 +666,11 @@ definitions:
       unit_price:
         type: number
       updated_at:
+        type: string
+      variant_name:
+        description: |-
+          VariantName chụp lại TÊN biến thể lúc lập chứng từ ("128GB · Đen").
+          Rỗng = hàng không có biến thể.
         type: string
       variant_sku:
         type: string
@@ -779,8 +776,6 @@ definitions:
     type: object
   domain.OrderReturnItem:
     properties:
-      color:
-        type: string
       created_at:
         type: string
       id:
@@ -797,8 +792,6 @@ definitions:
         type: integer
       return_id:
         type: integer
-      size:
-        type: string
       thumbnail:
         type: string
       total_price:
@@ -806,6 +799,10 @@ definitions:
       unit_price:
         type: number
       updated_at:
+        type: string
+      variant_name:
+        description: VariantName chụp lại TÊN biến thể lúc lập chứng từ ("128GB ·
+          Đen").
         type: string
       variant_sku:
         type: string
@@ -869,12 +866,12 @@ definitions:
     properties:
       by_category:
         description: |-
-          Hai lát cắt cùng dạng: `key` là id danh mục hoặc chính giá trị (size),
+          Hai lát cắt cùng dạng: `key` là id danh mục hoặc chính TÊN BIẾN THỂ,
           `label` là tên đọc được.
         items:
           $ref: '#/definitions/domain.ReportSlice'
         type: array
-      by_size:
+      by_variant:
         items:
           $ref: '#/definitions/domain.ReportSlice'
         type: array
@@ -984,8 +981,6 @@ definitions:
     type: object
   domain.PurchaseOrderItem:
     properties:
-      color:
-        type: string
       created_at:
         type: string
       id:
@@ -1004,8 +999,6 @@ definitions:
         description: ReceivedQuantity cộng dồn qua các đợt nhận; bằng Quantity là
           dòng đã đủ hàng.
         type: integer
-      size:
-        type: string
       thumbnail:
         type: string
       total_cost:
@@ -1013,6 +1006,11 @@ definitions:
       unit_cost:
         type: number
       updated_at:
+        type: string
+      variant_name:
+        description: |-
+          VariantName chụp lại TÊN biến thể lúc lập chứng từ ("128GB · Đen").
+          Rỗng = hàng không có biến thể.
         type: string
       variant_sku:
         type: string
@@ -1093,8 +1091,6 @@ definitions:
     type: object
   domain.PurchaseReturnItem:
     properties:
-      color:
-        type: string
       created_at:
         type: string
       id:
@@ -1113,8 +1109,6 @@ definitions:
         type: integer
       quantity:
         type: integer
-      size:
-        type: string
       thumbnail:
         type: string
       total_cost:
@@ -1122,6 +1116,10 @@ definitions:
       unit_cost:
         type: number
       updated_at:
+        type: string
+      variant_name:
+        description: VariantName chụp lại TÊN biến thể lúc lập chứng từ ("128GB ·
+          Đen").
         type: string
       variant_sku:
         type: string
@@ -1151,8 +1149,6 @@ definitions:
     type: object
   domain.PurchaseReturnable:
     properties:
-      color:
-        type: string
       product_id:
         type: integer
       product_name:
@@ -1167,14 +1163,14 @@ definitions:
         type: integer
       returned:
         type: integer
-      size:
-        type: string
       stock:
         type: integer
       thumbnail:
         type: string
       unit_cost:
         type: number
+      variant_name:
+        type: string
       variant_sku:
         type: string
     type: object
@@ -1206,8 +1202,6 @@ definitions:
     type: object
   domain.PurchaseVariant:
     properties:
-      color:
-        type: string
       cost_price:
         description: |-
           CostPrice là giá vốn hiệu lực đang khai (nil = chưa khai) — dùng để gợi ý
@@ -1217,8 +1211,6 @@ definitions:
         type: integer
       product_name:
         type: string
-      size:
-        type: string
       sku:
         type: string
       stock:
@@ -1227,6 +1219,8 @@ definitions:
         type: string
       variant_id:
         type: integer
+      variant_name:
+        type: string
     type: object
   domain.QuyTacMa:
     properties:
@@ -1338,8 +1332,6 @@ definitions:
     type: object
   domain.ReturnableItem:
     properties:
-      color:
-        type: string
       order_item_id:
         type: integer
       product_id:
@@ -1357,12 +1349,12 @@ definitions:
       returned_quantity:
         description: số đang/đã trả
         type: integer
-      size:
-        type: string
       thumbnail:
         type: string
       unit_price:
         type: number
+      variant_name:
+        type: string
       variant_sku:
         type: string
     type: object
@@ -1860,8 +1852,6 @@ definitions:
         description: Available = false khi sản phẩm không còn bán hoặc đã hết sạch
           hàng.
         type: boolean
-      color:
-        type: string
       issue:
         description: 'Issue mô tả ngắn thay đổi của dòng này: "" | unavailable | out_of_stock
           | limited'
@@ -1879,8 +1869,6 @@ definitions:
         type: integer
       requested_quantity:
         type: integer
-      size:
-        type: string
       slug:
         type: string
       stock:
@@ -1891,6 +1879,8 @@ definitions:
         description: UnitPrice là ĐƠN GIÁ HIỆN TẠI trong database — chính là giá sẽ
           tính khi đặt.
         type: number
+      variant_name:
+        type: string
     type: object
   dto.CartQuoteRequest:
     properties:
@@ -1947,6 +1937,13 @@ definitions:
         maxLength: 191
         type: string
       sort_order:
+        type: integer
+      vat:
+        description: |-
+          VAT là mức thuế mặc định của nhóm (xem domain.Category.VAT). Bỏ trống =
+          giữ mức đang có khi SỬA, hoặc 0% khi TẠO.
+        maximum: 100
+        minimum: -2
         type: integer
     required:
     - name
@@ -2054,9 +2051,6 @@ definitions:
     type: object
   dto.CheckoutItemRequest:
     properties:
-      color:
-        maxLength: 50
-        type: string
       custom_player_name:
         maxLength: 50
         type: string
@@ -2065,17 +2059,17 @@ definitions:
         type: string
       product_variant_id:
         description: Ưu tiên product_variant_id nếu client biết; không thì tra theo
-          slug + size + color.
+          slug + tên biến thể.
         type: integer
       quantity:
         maximum: 99
         minimum: 1
         type: integer
-      size:
-        maxLength: 50
-        type: string
       slug:
         maxLength: 191
+        type: string
+      variant_name:
+        maxLength: 255
         type: string
     required:
     - quantity
@@ -2566,6 +2560,16 @@ definitions:
       tong_tien:
         example: 29970000
         type: number
+    type: object
+  dto.DoiChoThuTuRequest:
+    properties:
+      huong:
+        enum:
+        - up
+        - down
+        type: string
+    required:
+    - huong
     type: object
   dto.DoiHangRequest:
     properties:
@@ -3849,9 +3853,6 @@ definitions:
     type: object
   dto.OrderItemRequest:
     properties:
-      color:
-        maxLength: 50
-        type: string
       custom_player_name:
         maxLength: 50
         type: string
@@ -3868,15 +3869,15 @@ definitions:
       quantity:
         minimum: 1
         type: integer
-      size:
-        maxLength: 50
-        type: string
       thumbnail:
         maxLength: 500
         type: string
       unit_price:
         minimum: 0
         type: number
+      variant_name:
+        maxLength: 255
+        type: string
       variant_sku:
         maxLength: 100
         type: string
@@ -4112,8 +4113,6 @@ definitions:
     properties:
       barcode:
         type: string
-      color:
-        type: string
       price:
         description: |-
           Price là giá bán thật: giá riêng của biến thể (nếu có) đã trừ khuyến mãi
@@ -4125,13 +4124,13 @@ definitions:
         type: string
       product_variant_id:
         type: integer
-      size:
-        type: string
       sku:
         type: string
       stock:
         type: integer
       thumbnail:
+        type: string
+      variant_name:
         type: string
     type: object
   dto.PaymentStatusResponse:
@@ -4313,11 +4312,15 @@ definitions:
         type: boolean
       is_featured:
         type: boolean
-      kit_type:
-        enum:
-        - fan
-        - player
-        type: string
+      is_multi_variant:
+        description: |-
+          IsMultiVariant nói mặt hàng bán theo tổ hợp thuộc tính hay là món đơn.
+          nil = giữ nguyên (khi SỬA) hoặc suy từ danh sách biến thể gửi kèm (khi TẠO).
+        type: boolean
+      is_serial:
+        type: boolean
+      is_stock_deducted:
+        type: boolean
       location_id:
         description: |-
           LocationID là chỗ để hàng (Hàng hóa → Vị trí). Con trỏ để phân biệt:
@@ -4334,12 +4337,21 @@ definitions:
       name:
         maxLength: 200
         type: string
+      print_label:
+        description: |-
+          Ba công tắc ở cột trái hộp thoại. nil = giữ nguyên khi SỬA; khi TẠO lấy
+          mặc định của bản cũ: in tem BẬT, trừ kho BẬT, seri TẮT.
+        type: boolean
       sale_price:
         minimum: 0
         type: number
-      season:
-        maxLength: 20
-        type: string
+      shop_ids:
+        description: |-
+          ShopIDs là chi nhánh QUẢN LÝ mặt hàng. nil = không đụng tới (giữ nguyên
+          khi SỬA); [] = gỡ hết, nghĩa là mặt hàng thuộc MỌI chi nhánh.
+        items:
+          type: integer
+        type: array
       short_description:
         maxLength: 500
         type: string
@@ -4361,20 +4373,47 @@ definitions:
         - hidden
         - discontinued
         type: string
-      team:
-        maxLength: 150
-        type: string
+      tags:
+        description: |-
+          Tags là TÊN thẻ chứ không phải id: hộp thoại cho gõ thẻ mới ngay tại chỗ.
+          Tên chưa có thì máy chủ tự mở dòng mới; tên đã có thì trúng lại dòng cũ.
+          nil = không đụng tới; [] = gỡ hết thẻ.
+        items:
+          type: string
+        type: array
       thumbnail:
         maxLength: 255
         type: string
+      unit_conversions:
+        description: |-
+          UnitConversions là khối "Quy đổi đơn vị hàng hoá" (1 Thùng = 24 Cái).
+          nil = không đụng tới (giữ nguyên khi SỬA); [] = xoá hết.
+        items:
+          $ref: '#/definitions/dto.QuyDoiDonViRequest'
+        type: array
+      unit_id:
+        description: |-
+          UnitID là đơn vị tính. Cùng quy ước con trỏ như LocationID:
+            nil -> không đụng tới (giữ nguyên cái đang có khi SỬA)
+            0   -> gỡ đơn vị, trả mặt hàng về "chưa khai"
+            >0  -> gán đơn vị ấy
+        type: integer
       variants:
         description: |-
-          Biến thể (size/màu). Con trỏ để phân biệt:
+          Biến thể (tổ hợp thuộc tính). Con trỏ để phân biệt:
             nil     -> không đụng tới biến thể (vd: chỉ bật/tắt trạng thái).
             [] hoặc [...] -> đồng bộ đúng theo danh sách (thêm/sửa/xoá).
         items:
           $ref: '#/definitions/dto.VariantRequest'
         type: array
+      vat:
+        description: |-
+          VAT là % thuế GTGT. Hai giá trị âm là MÃ chứ không phải phần trăm:
+          -1 = KCT (không chịu thuế), -2 = KKKNT (không kê khai, không nộp thuế).
+          nil = giữ nguyên mức đang có (khi SỬA) hoặc 0% (khi TẠO).
+        maximum: 100
+        minimum: -2
+        type: integer
     required:
     - category_id
     - name
@@ -4708,6 +4747,16 @@ definitions:
           khoản đang bị khoá — đặt lại mật khẩu KHÔNG mở khoá hộ.
         example: active
         type: string
+    type: object
+  dto.QuyDoiDonViRequest:
+    properties:
+      quantity:
+        type: number
+      unit_id:
+        type: integer
+    required:
+    - quantity
+    - unit_id
     type: object
   dto.QuyTacMaItem:
     properties:
@@ -5719,17 +5768,31 @@ definitions:
     required:
     - status
     type: object
+  dto.VariantAttributeRequest:
+    properties:
+      attribute_id:
+        type: integer
+      value_id:
+        type: integer
+    required:
+    - attribute_id
+    - value_id
+    type: object
   dto.VariantRequest:
     properties:
+      attributes:
+        description: |-
+          Attributes là TỔ HỢP thuộc tính của biến thể. Rỗng = dòng mặc định của
+          mặt hàng không có biến thể.
+        items:
+          $ref: '#/definitions/dto.VariantAttributeRequest'
+        type: array
       barcode:
         description: |-
           Barcode là mã vạch in trên hàng — cái máy quét ở quầy đọc được. Để trống
           nghĩa là chưa dán mã, và hai biến thể cùng để trống là chuyện bình thường;
           nhưng hai biến thể đang bán không được mang cùng một mã (DB chặn).
         maxLength: 64
-        type: string
-      color:
-        maxLength: 50
         type: string
       cost_price:
         description: CostPrice bỏ trống = lấy giá vốn của sản phẩm cha.
@@ -5743,20 +5806,25 @@ definitions:
         type: string
       is_active:
         type: boolean
+      name:
+        description: |-
+          Name là tên biến thể. Bỏ trống thì server tự ghép từ Attributes bên dưới
+          ("128GB · Đen") — màn hình không phải tự nghĩ ra công thức đặt tên, và
+          hàng thêm từ giao diện với hàng thêm qua API không thành hai kiểu.
+        maxLength: 255
+        type: string
+      pos:
+        description: Pos là thứ tự bày ra. Bỏ trống thì lấy theo thứ tự gửi lên.
+        type: integer
       price:
         minimum: 0
         type: number
-      size:
-        maxLength: 20
-        type: string
       sku:
         maxLength: 64
         type: string
       weight_gram:
         minimum: 0
         type: integer
-    required:
-    - size
     type: object
   dto.VerifyEmailRequest:
     properties:
@@ -8038,7 +8106,7 @@ paths:
       consumes:
       - application/json
       description: |-
-        Liệt kê tồn kho theo TỪNG BIẾN THỂ (size/màu/phiên bản) kèm thông tin sản phẩm cha, giá bán hiệu lực, giá vốn hiệu lực và giá trị hàng đang nằm trong kho. Mặc định sắp xếp tồn ít lên trước.
+        Liệt kê tồn kho theo TỪNG BIẾN THỂ (tổ hợp thuộc tính) kèm thông tin mặt hàng cha, giá bán hiệu lực, giá vốn hiệu lực và giá trị hàng đang nằm trong kho. Mặc định sắp xếp tồn ít lên trước.
         `stock_value` tính theo GIÁ VỐN (`cost_price` của biến thể, không có thì của sản phẩm cha) × tồn kho — giá trị tồn kho về kế toán phải theo giá vốn chứ không phải giá bán. `cost_price` rỗng nghĩa là chưa khai giá vốn, biến thể đó đóng góp 0₫ vào giá trị kho.
         `stock=low` lọc theo ngưỡng `low_stock` (mặc định 5): tồn còn lớn hơn 0 nhưng không vượt ngưỡng. `stock=out` là đã hết sạch, `stock=in` là còn trên ngưỡng.
       parameters:
@@ -9748,7 +9816,7 @@ paths:
       consumes:
       - application/json
       description: |-
-        Biến thể chỉ khai size + màu. Tồn kho của biến thể mới luôn bằng 0 — muốn có hàng bán phải qua nghiệp vụ kho (`POST /admin/purchases` rồi nhận hàng, hoặc `POST /admin/inventory/adjust`).
+        Biến thể khai bằng TỔ HỢP THUỘC TÍNH (`attributes`); không gửi tổ hợp nào = hàng đơn, server tự dựng một dòng mặc định. Tồn kho của biến thể mới luôn bằng 0 — muốn có hàng bán phải qua nghiệp vụ kho (`POST /admin/purchases` rồi nhận hàng, hoặc `POST /admin/inventory/adjust`).
         Trả 409 khi cửa hàng đã dùng hết hạn mức sản phẩm của hợp đồng (`max_products`); thông báo kèm số đang dùng và trần.
       parameters:
       - description: Dữ liệu sản phẩm
@@ -9951,6 +10019,45 @@ paths:
       security:
       - BearerAuth: []
       summary: Sao chép sản phẩm
+      tags:
+      - Admin - Products
+  /admin/products/{id}/sort:
+    put:
+      consumes:
+      - application/json
+      description: |-
+        Đưa mặt hàng lên trên (`up`) hoặc xuống dưới (`down`) một bậc. Đổi chỗ hai giá trị `sort`, không đánh số lại cả bảng.
+        Trả 409 khi mặt hàng đã ở đầu (hoặc cuối) danh sách.
+      parameters:
+      - description: ID sản phẩm
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Hướng di chuyển
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.DoiChoThuTuRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Body'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Đổi thứ tự hàng hoá trên bảng danh sách
       tags:
       - Admin - Products
   /admin/products/{id}/status:
@@ -10391,7 +10498,7 @@ paths:
       consumes:
       - application/json
       description: |-
-        Tạo phiếu trả cho một phiếu đặt hàng nhập. Tên/SKU/size/màu/giá nhập do server chụp lại từ dòng phiếu đặt gốc, client chỉ gửi `purchase_order_item_id` + `quantity`.
+        Tạo phiếu trả cho một phiếu đặt hàng nhập. Tên/SKU/tên biến thể/giá nhập do server chụp lại từ dòng phiếu đặt gốc, client chỉ gửi `purchase_order_item_id` + `quantity`.
         `status=returned` là "trả hàng ngay": phiếu được lập rồi chốt luôn trong một lần gọi — tồn kho bị TRỪ ở bước chốt đó. Bỏ trống hoặc `draft` thì chỉ lưu nháp, chưa đụng tới kho.
         Trả vượt số còn trả được của dòng phiếu đặt → 409. Kho không đủ hàng để trừ → 409.
       parameters:
@@ -11125,9 +11232,9 @@ paths:
     get:
       consumes:
       - application/json
-      description: Trả về BIẾN THỂ (size/màu) đang bán kèm tồn kho hiện tại và giá
-        vốn đang khai — màn hình lập phiếu dùng giá vốn làm giá nhập gợi ý. Hàng sắp
-        hết xếp lên đầu vì đó chính là thứ cần đặt thêm.
+      description: Trả về BIẾN THỂ đang bán kèm tồn kho hiện tại và giá vốn đang khai
+        — màn hình lập phiếu dùng giá vốn làm giá nhập gợi ý. Hàng sắp hết xếp lên
+        đầu vì đó chính là thứ cần đặt thêm.
       parameters:
       - description: Tên sản phẩm / SKU biến thể / SKU sản phẩm
         in: query
@@ -12331,6 +12438,31 @@ paths:
       summary: Sửa nhà cung cấp
       tags:
       - Admin - Suppliers
+  /admin/the-hang-hoa:
+    get:
+      description: Mọi thẻ cửa hàng đang dùng ("Bán chạy nhất", "Món mới"…), sắp theo
+        tên. Thẻ SINH RA từ lượt lưu mặt hàng — gõ tên mới ở ô thẻ là có thẻ mới —
+        nên đường này chỉ đọc.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Body'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Danh sách thẻ hàng hóa
+      tags:
+      - Admin - Products
   /admin/thue:
     get:
       description: |-
@@ -14774,7 +14906,7 @@ paths:
         Giỏ hàng của storefront nằm ở localStorage nên giá lưu trong đó là bản chụp lúc khách thêm hàng; admin đổi giá xong thì con số ấy đã cũ.
         Trang thanh toán gọi endpoint này khi mở để cập nhật lại giỏ, thay vì để khách phát hiện chênh lệch ở màn đặt hàng thành công.
         Mỗi dòng trả về issue: rỗng (bình thường), "limited" (không đủ số lượng), "out_of_stock" (hết hàng), "unavailable" (không còn bán).
-        Nên gửi product_variant_id như khi đặt hàng — thiếu ID thì dòng nào có nhiều phiên bản cùng size/màu sẽ báo giá theo biến thể ID nhỏ nhất.
+        Nên gửi product_variant_id như khi đặt hàng — thiếu ID thì dòng nào có nhiều biến thể trùng tên sẽ báo giá theo biến thể ID nhỏ nhất.
         KHÔNG tạo đơn, KHÔNG giữ hàng — số tiền chính thức vẫn do luồng đặt hàng tính lại.
       parameters:
       - description: Danh sách sản phẩm trong giỏ
@@ -15947,10 +16079,10 @@ paths:
   /products:
     get:
       description: |-
-        Lọc theo từ khóa, danh mục, thương hiệu, loại áo, khoảng giá; hỗ trợ phân trang & sắp xếp.
+        Lọc theo từ khóa (tên/mã hàng/mã vạch biến thể), danh mục, vị trí, đơn vị tính, khoảng giá; hỗ trợ phân trang & sắp xếp.
         `cost_price` (giá vốn, ở cả sản phẩm lẫn biến thể) CHỈ trả về khi gọi kèm token của nhân viên quản trị; các trường hợp khác luôn là null.
       parameters:
-      - description: Tìm theo tên/đội/SKU
+      - description: Tìm theo tên, mã hàng, mã/mã vạch biến thể
         in: query
         name: keyword
         type: string
@@ -15958,15 +16090,27 @@ paths:
         in: query
         name: category_id
         type: integer
+      - description: Nhiều danh mục, ngăn bằng dấu phẩy
+        in: query
+        name: category_ids
+        type: string
+      - description: Nhiều trạng thái, ngăn bằng dấu phẩy
+        in: query
+        name: statuses
+        type: string
       - description: ID vị trí để hàng, hoặc `none` để lấy riêng phần chưa gán vị
           trí
         in: query
         name: location_id
         type: string
-      - description: 'Loại áo: fan (FAN) | player (PLAYER)'
+      - description: ID đơn vị tính
         in: query
-        name: kit_type
-        type: string
+        name: unit_id
+        type: integer
+      - description: true = chỉ hàng nhiều biến thể
+        in: query
+        name: multi_variant
+        type: boolean
       - description: Giá tối thiểu
         in: query
         name: min_price
@@ -16000,7 +16144,7 @@ paths:
         in: query
         name: slim
         type: boolean
-      - description: newest|price_asc|price_desc|best_selling
+      - description: newest|name_asc|name_desc|group_asc|group_desc|price_asc|price_desc|best_selling
         in: query
         name: sort
         type: string

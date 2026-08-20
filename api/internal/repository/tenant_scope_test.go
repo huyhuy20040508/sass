@@ -426,10 +426,13 @@ func TestLocTenant_PreloadCungBiLoc(t *testing.T) {
 	sp := &domain.Product{
 		CategoryID: danhMuc.ID,
 		Name:       "SP preload", Slug: "loc-preload-sp", SKU: "LOC-PRELOAD-SP",
-		KitType: "fan", BasePrice: 1000,
+		BasePrice: 1000,
 		// Bắt buộc dưới MySQL strict — xem chú thích ở seedProduct
 		// (product_repository_test.go).
 		Status: domain.ProductStatusActive,
+		// Mặt hàng bình thường: bán ra CÓ trừ kho. Bool zero-value là false
+		// nên dựng tay mà quên là bài kiểm tồn kho im lặng không trừ gì.
+		IsStockDeducted: true,
 	}
 	if err := db.WithContext(mot).Create(sp).Error; err != nil {
 		t.Fatalf("tạo sản phẩm lỗi: %v", err)
@@ -442,11 +445,11 @@ func TestLocTenant_PreloadCungBiLoc(t *testing.T) {
 		db.WithContext(mot).Unscoped().Delete(&domain.Category{}, danhMuc.ID)
 	})
 
-	cuaMot := &domain.ProductVariant{ProductID: sp.ID, SKU: "LOC-PRELOAD-M", Size: "M", IsActive: true}
+	cuaMot := &domain.ProductVariant{ProductID: sp.ID, SKU: "LOC-PRELOAD-M", Name: "M", IsActive: true}
 	if err := db.WithContext(mot).Create(cuaMot).Error; err != nil {
 		t.Fatalf("tạo biến thể của cửa hàng 1 lỗi: %v", err)
 	}
-	cuaHai := &domain.ProductVariant{ProductID: sp.ID, SKU: "LOC-PRELOAD-L", Size: "L", IsActive: true}
+	cuaHai := &domain.ProductVariant{ProductID: sp.ID, SKU: "LOC-PRELOAD-L", Name: "L", IsActive: true}
 	if err := db.WithContext(hai).Create(cuaHai).Error; err != nil {
 		t.Fatalf("tạo biến thể của cửa hàng 2 lỗi: %v", err)
 	}

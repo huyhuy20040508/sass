@@ -704,7 +704,7 @@
                 $('rcUpdateCost').checked = true;
 
                 $('rcItems').innerHTML = rows.map((it, i) => {
-                    const meta = [it.variant_sku, it.size, it.color].filter(Boolean).join(' · ');
+                    const meta = [it.variant_sku, it.variant_name].filter(Boolean).join(' · ');
                     return `<tr data-row="${i}" class="is-off">
                             <td class="rc-i-qty"><input type="checkbox" class="rc-check rc-pick-row" data-i="${i}"></td>
                             <td>
@@ -805,7 +805,7 @@
 
                 const items = data.items || [];
                 $('vItems').innerHTML = items.length ? items.map((it) => {
-                    const meta = [it.sku, it.size, it.color].filter(Boolean).join(' · ');
+                    const meta = [it.sku, it.variant_name].filter(Boolean).join(' · ');
                     return `<tr>
                             <td>
                                 <span class="rc-item-name">${esc(it.product_name || '—')}</span>

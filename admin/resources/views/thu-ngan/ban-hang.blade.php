@@ -760,7 +760,7 @@
                 return Number(p.base_price || 0);
             };
 
-            const nhan = (v) => [v.size, v.color].filter(Boolean).join(' / ') || (v.sku || 'Mặc định');
+            const nhan = (v) => v.name || v.sku || 'Hàng đơn';
 
             const veKetQua = (list) => {
                 const box = $('posResults');
@@ -831,7 +831,7 @@
                         them({
                             id: Number(d.product_variant_id),
                             ten: d.product_name || '',
-                            opt: [d.size, d.color].filter(Boolean).join(' / ') || (d.sku || ''),
+                            opt: d.variant_name || d.sku || '',
                             gia: Number(d.price || 0),
                             ton: Number(d.stock || 0),
                         });
