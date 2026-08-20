@@ -2469,3 +2469,44 @@ type DonViTinhRequest struct {
 type TrangThaiDonViTinhRequest struct {
 	IsActive *bool `json:"is_active" binding:"required"`
 }
+
+// ---------- Thuộc tính (Hàng hóa → Thuộc tính) ----------
+
+// ThuocTinhGiaTriItem — một giá trị của thuộc tính ("Kích cỡ" → "Nhỏ").
+//
+// ID > 0 là giá trị CŨ (sửa tại chỗ), bỏ trống là giá trị MỚI. Mã bỏ trống thì
+// server đặt hộ theo dạng <mã thuộc tính><số thứ tự>: SIZE01, SIZE02…
+type ThuocTinhGiaTriItem struct {
+	ID   uint   `json:"id"`
+	Code string `json:"code" binding:"omitempty,max=32,alphanum"`
+	Name string `json:"name" binding:"required,max=100"`
+}
+
+// ThuocTinhRequest — payload tạo/sửa thuộc tính, kèm NGUYÊN danh sách giá trị.
+//
+// `values` là trạng thái CUỐI CÙNG của bảng giá trị: dòng có id thì sửa, không
+// id thì thêm, và giá trị cũ VẮNG MẶT trong danh sách nghĩa là bị xoá. Bản cũ
+// v2 bắn một lượt AJAX xoá ngay lúc người dùng bấm dấu × nên bấm nhầm rồi đóng
+// hộp thoại cũng không lấy lại được.
+//
+// Mã bỏ trống thì server tự đặt: theo quy tắc đánh số của cửa hàng nếu đã bật ở
+// Cài đặt → Thông số chung, không thì dải TT001. Bỏ trống lúc SỬA là giữ nguyên
+// mã cũ, không sinh mã mới.
+type ThuocTinhRequest struct {
+	Code string `json:"code" binding:"omitempty,max=20,alphanum"`
+	Name string `json:"name" binding:"required,max=100"`
+	// IsActive bỏ trống = true (thuộc tính mới mặc định đang dùng).
+	IsActive *bool `json:"is_active"`
+	// RawMaterial = dùng thuộc tính này để khai định lượng nguyên vật liệu.
+	// Bỏ trống = false.
+	RawMaterial *bool `json:"raw_material"`
+	// Bỏ trống hẳn trường này = KHÔNG đụng tới danh sách giá trị (lượt sửa chỉ
+	// đổi tên chẳng hạn). Gửi mảng rỗng mới là "xoá hết giá trị".
+	Values *[]ThuocTinhGiaTriItem `json:"values" binding:"omitempty,max=100,dive"`
+}
+
+// TrangThaiThuocTinhRequest — công tắc bật/tắt trên bảng danh sách.
+// Con trỏ vì cùng lý do với TrangThaiThueRequest.
+type TrangThaiThuocTinhRequest struct {
+	IsActive *bool `json:"is_active" binding:"required"`
+}

@@ -305,6 +305,7 @@ func main() {
 	quyTacMaRepo := repository.NewQuyTacMaRepository(db)
 	thueRepo := repository.NewThueRepository(db)
 	donViTinhRepo := repository.NewDonViTinhRepository(db)
+	thuocTinhRepo := repository.NewThuocTinhRepository(db)
 	productRepo := repository.NewProductRepository(db)
 	orderRepo := repository.NewOrderRepository(db)
 	paymentRepo := repository.NewPaymentRepository(db)
@@ -378,6 +379,8 @@ func main() {
 	// Đơn vị tính — bảng tra của riêng từng cửa hàng, không seed sẵn dòng nào.
 	// quyTacMaRepo để mã bỏ trống được đặt theo quy tắc đánh số của cửa hàng.
 	donViTinhSvc := service.NewDonViTinhService(donViTinhRepo, quyTacMaRepo)
+	// Thuộc tính — cùng khuôn với đơn vị tính, thêm tầng giá trị con.
+	thuocTinhSvc := service.NewThuocTinhService(thuocTinhRepo, quyTacMaRepo)
 	// Chương trình khuyến mãi: vừa là module quản trị, vừa là thứ tính giá sau giảm
 	// cho cả trang bán hàng lẫn lúc đặt hàng. categoryRepo để chương trình khai ở
 	// danh mục cha phủ được tới sản phẩm nằm trong danh mục cháu.
@@ -458,6 +461,7 @@ func main() {
 		QuyTacMa:  handler.NewQuyTacMaHandler(quyTacMaSvc),
 		Thue:      handler.NewThueHandler(thueSvc),
 		DonViTinh: handler.NewDonViTinhHandler(donViTinhSvc),
+		ThuocTinh: handler.NewThuocTinhHandler(thuocTinhSvc),
 		Ca:        handler.NewCaLamViecHandler(caSvc),
 		Payment:   handler.NewPaymentHandler(paymentSvc),
 		Banner:    handler.NewBannerHandler(bannerSvc),

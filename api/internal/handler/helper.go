@@ -242,6 +242,29 @@ func handleServiceError(c *gin.Context, err error) {
 		response.ValidationError(c, map[string]string{
 			"name": "Tên đơn vị này đã có trong cửa hàng",
 		})
+	// Thuộc tính — bốn lỗi trùng, tô đỏ đúng ô người vừa gõ. Hai lỗi của giá trị
+	// con trỏ vào cả bảng giá trị chứ không vào một dòng: màn hình không đánh số
+	// dòng nên chỉ vào "dòng thứ ba" cũng chẳng giúp ai.
+	case errors.Is(err, domain.ErrThuocTinhTrungMa):
+		response.ValidationError(c, map[string]string{
+			"code": "Mã thuộc tính này đã có trong cửa hàng (tính cả thuộc tính đã xoá)",
+		})
+	case errors.Is(err, domain.ErrThuocTinhTrungTen):
+		response.ValidationError(c, map[string]string{
+			"name": "Tên thuộc tính này đã có trong cửa hàng",
+		})
+	case errors.Is(err, domain.ErrGiaTriTrungMa):
+		response.ValidationError(c, map[string]string{
+			"values": "Có hai giá trị trùng mã nhau. Mỗi giá trị một mã, hoặc bỏ trống để hệ thống đặt hộ",
+		})
+	case errors.Is(err, domain.ErrGiaTriTrungTen):
+		response.ValidationError(c, map[string]string{
+			"values": "Có hai giá trị trùng tên nhau",
+		})
+	case errors.Is(err, domain.ErrGiaTriLaCuaThuocTinhKhac):
+		response.ValidationError(c, map[string]string{
+			"values": "Danh sách gửi lên có giá trị không thuộc thuộc tính đang sửa",
+		})
 	case errors.Is(err, domain.ErrNhanSuDangMoCa):
 		response.Error(c, 409, "Nhân viên này còn một ca chưa đóng. Đóng ca đó trước đã — xoá bây giờ là khoá luôn tài khoản của chính người đang giữ két")
 	case errors.Is(err, domain.ErrNhanSuDaGhiSoQuy):

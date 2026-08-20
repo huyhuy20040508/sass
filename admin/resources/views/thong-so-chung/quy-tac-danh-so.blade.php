@@ -24,11 +24,15 @@
             return old('rules.'.$l['ma'].'.'.$o, $cu[$o] ?? $mac);
         };
 
-        // Loại dùng chung chỉ hiện khi đang bật — đúng khối "Quy tắc mã danh mục"
-        // của bản cũ. Loại chứng từ luôn hiện: mấy phiếu đó vốn đã tự sinh mã,
-        // quy tắc chỉ đổi hình dạng chứ không bật/tắt việc sinh.
-        $dangBat = function (array $l) use ($dangLuu, $cnChon) {
-            if (! ($l['dung_chung'] ?? false)) {
+        // Chỉ loại CÓ ô tick mới ẩn/hiện theo trạng thái bật. Những loại còn lại
+        // luôn nằm sẵn trong bảng: chứng từ vốn đã tự sinh mã, còn nhóm hàng hoá /
+        // thuộc tính / đơn vị tính thì bỏ trống mã là phần mềm đặt hộ theo dải sẵn
+        // có — ở đó quy tắc chỉ đổi HÌNH DẠNG mã chứ không bật/tắt việc sinh mã.
+        // API quyết định loại nào có tick (LoaiMa.BatTatDuoc), không phải màn hình.
+        $coTick = fn (array $l) => ($l['dung_chung'] ?? false) && ($l['bat_tat_duoc'] ?? false);
+
+        $dangBat = function (array $l) use ($dangLuu, $coTick) {
+            if (! $coTick($l)) {
                 return true;
             }
             if (old('rules') !== null) {
@@ -38,7 +42,7 @@
             return (bool) ($dangLuu[0][$l['ma']]['is_active'] ?? false);
         };
 
-        $danhMuc = collect($loai)->filter(fn ($l) => $l['dung_chung'] ?? false);
+        $danhMuc = collect($loai)->filter($coTick);
     @endphp
 
     <div class="tsc">
@@ -127,6 +131,8 @@
                                 <p class="tsc-note">
                                     Tick ô nào thì phần mềm tự đặt mã cho danh mục đó và ô mã ở màn nhập khoá lại.
                                     Bỏ tick là quay về gõ tay — mã đã đặt cho những bản ghi cũ vẫn giữ nguyên.
+                                    Những danh mục không có ở đây thì mã vẫn tự đặt được khi để trống, nên chúng
+                                    nằm sẵn trong bảng bên dưới; sửa ở đó là đổi hình dạng mã.
                                 </p>
                             </div>
                         @endif
@@ -269,7 +275,9 @@
                     o(tr, 'length').value = cu ? cu.length : MAC_DINH_DAI;
                     o(tr, 'suffix').value = cu ? cu.suffix : '';
 
-                    var bat = l.dung_chung ? !!(cu && cu.is_active) : true;
+                    // Chỉ loại có ô tick mới theo trạng thái đã lưu; loại không có
+                    // tick thì luôn hiện (xem $coTick ở phần Blade bên trên).
+                    var bat = (l.dung_chung && l.bat_tat_duoc) ? !!(cu && cu.is_active) : true;
                     batDong(tr, bat);
                     var tick = form.querySelector('[data-tick="' + l.ma + '"]');
                     if (tick) tick.checked = bat;

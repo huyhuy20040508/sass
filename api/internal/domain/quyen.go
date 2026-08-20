@@ -105,8 +105,12 @@ var DanhMucQuyen = []KhuQuyen{
 						Viec: []string{QuyenThem, QuyenSua, QuyenXoa},
 					},
 					{
-						// Đứng giữa Danh mục và Thuế suất, đúng thứ tự của thanh
-						// điều hướng — người tick không phải đi tìm.
+						// Thuộc tính rồi Đơn vị tính rồi Thuế suất — đúng thứ tự của
+						// thanh điều hướng, người tick không phải đi tìm.
+						Prefix: "thuoc-tinh", Ten: "Thuộc tính",
+						Viec: []string{QuyenXem, QuyenThem, QuyenSua, QuyenXoa},
+					},
+					{
 						Prefix: "don-vi-tinh", Ten: "Đơn vị tính",
 						Viec: []string{QuyenXem, QuyenThem, QuyenSua, QuyenXoa},
 					},

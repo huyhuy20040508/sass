@@ -30,6 +30,7 @@ use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\ThongSoChungController;
 use App\Http\Controllers\ThueController;
 use App\Http\Controllers\ThuNganController;
+use App\Http\Controllers\ThuocTinhController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\VoucherController;
 use Illuminate\Support\Facades\Route;
@@ -157,6 +158,15 @@ Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:quan_ly'])->prefix('ad
         Route::put('/categories/{id}', [CategoryController::class, 'update'])->name('categories.update');
         Route::delete('/categories/{id}/children', [CategoryController::class, 'destroyChildren'])->name('categories.destroyChildren');
         Route::delete('/categories/{id}', [CategoryController::class, 'destroy'])->name('categories.destroy');
+
+        // Thuộc tính — bảng tra hai tầng: thuộc tính (Kích cỡ, Mức đá) và các giá
+        // trị của nó (S/M/L). Đứng ngay sau Nhóm hàng hóa, đúng thứ tự bản cũ v2.
+        Route::get('/attributes', [ThuocTinhController::class, 'index'])->name('thuoc-tinh.index');
+        Route::post('/attributes', [ThuocTinhController::class, 'store'])->name('thuoc-tinh.store');
+        Route::post('/attributes/bulk-destroy', [ThuocTinhController::class, 'bulkDestroy'])->name('thuoc-tinh.bulkDestroy');
+        Route::put('/attributes/{id}/status', [ThuocTinhController::class, 'toggleStatus'])->whereNumber('id')->name('thuoc-tinh.toggleStatus');
+        Route::put('/attributes/{id}', [ThuocTinhController::class, 'update'])->whereNumber('id')->name('thuoc-tinh.update');
+        Route::delete('/attributes/{id}', [ThuocTinhController::class, 'destroy'])->whereNumber('id')->name('thuoc-tinh.destroy');
 
         // Đơn vị tính — bảng tra gắn cho mặt hàng. Đứng giữa Nhóm hàng hóa và
         // Thuế, đúng thứ tự của bản cũ v2 (Menu QR: hàng hoá → nhóm → đơn vị → thuế).

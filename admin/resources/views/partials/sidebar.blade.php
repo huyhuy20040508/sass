@@ -54,6 +54,7 @@
                     'children' => [
                         ['href' => route('admin.products.index'), 'label' => 'Danh sách sản phẩm', 'active' => request()->routeIs('admin.products.*')],
                         ['href' => route('admin.categories.index'), 'label' => 'Nhóm hàng hóa', 'active' => request()->routeIs('admin.categories.*')],
+                        ['href' => route('admin.thuoc-tinh.index'), 'label' => \App\Http\Controllers\ThuocTinhController::TITLE, 'active' => request()->routeIs('admin.thuoc-tinh.*')],
                         ['href' => route('admin.don-vi-tinh.index'), 'label' => \App\Http\Controllers\DonViTinhController::TITLE, 'active' => request()->routeIs('admin.don-vi-tinh.*')],
                         ['href' => route('admin.thue.index'), 'label' => 'Thuế', 'active' => request()->routeIs('admin.thue.*')],
                     ],

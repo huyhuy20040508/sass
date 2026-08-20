@@ -9565,6 +9565,360 @@
                 }
             }
         },
+        "/admin/thuoc-tinh": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Mỗi dòng trả kèm luôn danh sách giá trị (`values`) — thuộc tính không có giá trị nào thì chẳng dùng được vào việc gì, tách thành lượt gọi riêng chỉ tổ khiến màn hình phải gọi hai lần.\nĐặt `active=true` để chỉ lấy thuộc tính đang bật (ô chọn lúc khai mặt hàng), `raw_material=true` để chỉ lấy thuộc tính dùng định lượng nguyên vật liệu.\nCố ý KHÔNG phân trang: danh sách thuộc tính của một cửa hàng chỉ vài chục dòng, trang quản trị tự cắt trang.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Thuộc tính"
+                ],
+                "summary": "Danh sách thuộc tính",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Tên hoặc mã thuộc tính",
+                        "name": "keyword",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "true = chỉ thuộc tính đang bật",
+                        "name": "active",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "true = chỉ thuộc tính dùng định lượng nguyên vật liệu",
+                        "name": "raw_material",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/domain.ThuocTinh"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Mã tự viết hoa và phải khác mọi mã đã có TRONG CỬA HÀNG NÀY, kể cả mã của thuộc tính đã xoá. Bỏ trống thì server đặt hộ (theo quy tắc đánh số của cửa hàng nếu đã bật, không thì dải TT001).\n`values` là danh sách giá trị khai kèm; giá trị nào bỏ trống mã thì server đặt hộ theo dạng SIZE01, SIZE02…",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Thuộc tính"
+                ],
+                "summary": "Thêm thuộc tính",
+                "parameters": [
+                    {
+                        "description": "Thông tin thuộc tính",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.ThuocTinhRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/domain.ThuocTinh"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/thuoc-tinh/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Thuộc tính"
+                ],
+                "summary": "Chi tiết một thuộc tính",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID thuộc tính",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/domain.ThuocTinh"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "`values` là trạng thái CUỐI CÙNG của bảng giá trị: dòng có id thì sửa, không id thì thêm, giá trị cũ vắng mặt trong danh sách nghĩa là bị xoá.\nBỏ HẲN trường `values` thì bảng giá trị không bị đụng tới; gửi mảng rỗng mới là xoá hết.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Thuộc tính"
+                ],
+                "summary": "Sửa thuộc tính",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID thuộc tính",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Thông tin thuộc tính",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.ThuocTinhRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/domain.ThuocTinh"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Xoá mềm thuộc tính và xoá hẳn các giá trị của nó. Thuộc tính đã thôi dùng nhưng còn muốn tra lại thì nên TẮT thay vì xoá.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Thuộc tính"
+                ],
+                "summary": "Xoá thuộc tính",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID thuộc tính",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/thuoc-tinh/{id}/trang-thai": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Tắt = thôi bày ở ô chọn thuộc tính lúc khai mặt hàng. Dòng vẫn còn nên mặt hàng cũ vẫn tra ra được tên thuộc tính.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Thuộc tính"
+                ],
+                "summary": "Bật/tắt một thuộc tính",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID thuộc tính",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Trạng thái",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.TrangThaiThuocTinhRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/domain.ThuocTinh"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/users": {
             "get": {
                 "security": [
@@ -15292,6 +15646,10 @@
         "domain.LoaiMa": {
             "type": "object",
             "properties": {
+                "bat_tat_duoc": {
+                    "description": "BatTatDuoc = màn cấu hình có bày ô tick bật/tắt cho loại này không.\n\nChỉ ba loại có: hàng hoá, nhà cung cấp, nhân viên. Đó là những chỗ mã do\nngười dùng GÕ TAY khi không bật quy tắc — tắt quy tắc là trả ô mã lại cho\nhọ (hàng hoá tắt rồi mà bỏ trống SKU thì API báo ErrSKUBatBuoc).\n\nNhững loại còn lại KHÔNG có ô tick và luôn nằm sẵn trong bảng quy tắc:\nnhóm hàng hoá, thuộc tính, đơn vị tính bỏ trống mã là phần mềm đặt hộ\ntheo dải sẵn có (NH001, TT001, DV001…), còn chứng từ thì vốn tự sinh mã.\nỞ những chỗ ấy quy tắc chỉ đổi HÌNH DẠNG mã, không bật/tắt việc sinh mã —\nbày một ô tick không tắt được cái gì chỉ khiến người dùng tưởng tắt xong\nlà được gõ tay.",
+                    "type": "boolean"
+                },
                 "dung_chung": {
                     "description": "DungChung = true: một quy tắc cho cả cửa hàng (shop_id = 0). Hàng hoá hay\nnhân viên là dữ liệu mọi chi nhánh cùng tra, hai chi nhánh đặt hai tiền tố\nkhác nhau thì mã của cùng một bảng nhảy loạn.",
                     "type": "boolean"
@@ -16819,6 +17177,69 @@
                 },
                 "status": {
                     "description": "Status: active | suspended. suspended = khách hết hạn hoặc ngừng trả tiền —\nchặn đăng nhập nhưng KHÔNG xoá dữ liệu, đóng tiền lại là mở.",
+                    "type": "string"
+                }
+            }
+        },
+        "domain.ThuocTinh": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "description": "Code là mã ngắn người dùng tự đặt (SIZE, DA, TOPPING…), luôn viết hoa.",
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "in_use": {
+                    "description": "InUse = đang bị thứ khác trỏ tới nên không xoá được. Hôm nay chưa bảng nào\ntrỏ tới thuộc tính (biến thể mặt hàng và định lượng nguyên liệu đều chưa\ndựng) nên nó luôn false; màn quản trị đã đọc sẵn cờ này để khoá nút xoá,\ndựng biến thể xong thì chỉ việc đếm ở repository.",
+                    "type": "boolean"
+                },
+                "is_active": {
+                    "description": "IsActive = có bày ra ở ô chọn thuộc tính lúc khai mặt hàng không. Tắt chứ\nkhông xoá khi một thuộc tính thôi dùng: mặt hàng cũ vẫn phải tra ra tên.",
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "raw_material": {
+                    "description": "RawMaterial = thuộc tính này được dùng để khai định lượng nguyên vật liệu\ncho món. Giữ đúng nghĩa cột raw_material_quantification của bản cũ.",
+                    "type": "boolean"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "values": {
+                    "description": "GiaTri là các giá trị con, luôn trả kèm: một thuộc tính không có giá trị\nnào thì chẳng dùng được vào việc gì, nên tách ra thành lượt gọi riêng chỉ\ntổ khiến mọi màn hình phải gọi hai lần.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.ThuocTinhGiaTri"
+                    }
+                }
+            }
+        },
+        "domain.ThuocTinhGiaTri": {
+            "type": "object",
+            "properties": {
+                "attribute_id": {
+                    "type": "integer"
+                },
+                "code": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "updated_at": {
                     "type": "string"
                 }
             }
@@ -21513,6 +21934,57 @@
                 }
             }
         },
+        "dto.ThuocTinhGiaTriItem": {
+            "type": "object",
+            "required": [
+                "name"
+            ],
+            "properties": {
+                "code": {
+                    "type": "string",
+                    "maxLength": 32
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 100
+                }
+            }
+        },
+        "dto.ThuocTinhRequest": {
+            "type": "object",
+            "required": [
+                "name"
+            ],
+            "properties": {
+                "code": {
+                    "type": "string",
+                    "maxLength": 20
+                },
+                "is_active": {
+                    "description": "IsActive bỏ trống = true (thuộc tính mới mặc định đang dùng).",
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "raw_material": {
+                    "description": "RawMaterial = dùng thuộc tính này để khai định lượng nguyên vật liệu.\nBỏ trống = false.",
+                    "type": "boolean"
+                },
+                "values": {
+                    "description": "Bỏ trống hẳn trường này = KHÔNG đụng tới danh sách giá trị (lượt sửa chỉ\nđổi tên chẳng hạn). Gửi mảng rỗng mới là \"xoá hết giá trị\".",
+                    "type": "array",
+                    "maxItems": 100,
+                    "items": {
+                        "$ref": "#/definitions/dto.ThuocTinhGiaTriItem"
+                    }
+                }
+            }
+        },
         "dto.TrangThaiDonViTinhRequest": {
             "type": "object",
             "required": [
@@ -21525,6 +21997,17 @@
             }
         },
         "dto.TrangThaiThueRequest": {
+            "type": "object",
+            "required": [
+                "is_active"
+            ],
+            "properties": {
+                "is_active": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "dto.TrangThaiThuocTinhRequest": {
             "type": "object",
             "required": [
                 "is_active"

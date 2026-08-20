@@ -383,6 +383,51 @@ class ApiClient
         return $this->delete("/admin/don-vi-tinh/{$id}");
     }
 
+    // ---------- Thuộc tính (Hàng hóa -> Thuộc tính) ----------
+
+    /**
+     * Danh sách thuộc tính, mỗi dòng kèm luôn `values` là các giá trị con.
+     * $onlyActive = true để chỉ lấy thuộc tính đang bật (ô chọn lúc khai mặt
+     * hàng dùng cái này).
+     *
+     * API cố ý không phân trang, cùng lý do với đơn vị tính: danh sách chỉ vài
+     * chục dòng nên trang quản trị tự cắt trang, và ô tìm kiếm vẫn tìm trên
+     * TOÀN bộ danh sách.
+     */
+    public function thuocTinh(string $keyword = '', bool $onlyActive = false): Response
+    {
+        return $this->get('/admin/thuoc-tinh', array_filter([
+            'keyword' => $keyword,
+            'active' => $onlyActive ? 'true' : null,
+        ]));
+    }
+
+    public function taoThuocTinh(array $payload): Response
+    {
+        return $this->post('/admin/thuoc-tinh', $payload);
+    }
+
+    /**
+     * Sửa thuộc tính. `values` trong payload là trạng thái CUỐI CÙNG của bảng
+     * giá trị: dòng có id thì sửa, không id thì thêm, giá trị cũ vắng mặt thì
+     * xoá. Bỏ hẳn khoá `values` là không đụng tới bảng giá trị.
+     */
+    public function suaThuocTinh(int $id, array $payload): Response
+    {
+        return $this->put("/admin/thuoc-tinh/{$id}", $payload);
+    }
+
+    /** Công tắc bật/tắt trên bảng. */
+    public function doiTrangThaiThuocTinh(int $id, bool $isActive): Response
+    {
+        return $this->put("/admin/thuoc-tinh/{$id}/trang-thai", ['is_active' => $isActive]);
+    }
+
+    public function xoaThuocTinh(int $id): Response
+    {
+        return $this->delete("/admin/thuoc-tinh/{$id}");
+    }
+
     // ---------- Thuế suất ----------
 
     /**
