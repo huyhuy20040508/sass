@@ -1,0 +1,46 @@
+-- =====================================================================
+--  0036_bo-cot-ton-gop-2026-08-21.sql
+--  Ngày: 21/08/2026
+-- =====================================================================
+--  KHÔNG viết CREATE DATABASE hay USE ở đây: công cụ đã kết nối sẵn đúng
+--  database của môi trường đang chạy (cục bộ / thử / thật đều khác tên).
+--
+--  MySQL không cho DDL nằm trong transaction, nên tệp chạy dở là dở thật.
+--  Viết sao cho chạy lại được nếu có thể: IF NOT EXISTS, IF EXISTS...
+--
+--  Tệp này đã chạy ở đâu đó rồi thì TUYỆT ĐỐI không sửa nội dung nữa —
+--  công cụ giữ vân tay và sẽ báo lệch. Cần thêm gì thì viết tệp mới.
+-- =====================================================================
+--
+--  BỎ CỘT `product_variants.stock_quantity`
+--
+--  Đây là BƯỚC 3 — bước cuối — của đợt chuyển đã ghi sẵn trong 0002 và
+--  làm dở ở 0005. Từ 0005, số hàng nằm ở `variant_stocks` (mỗi chi nhánh
+--  một dòng) và cột này chỉ còn là BẢN CỘNG SẴN do repository ghi lại sau
+--  mỗi lần đụng kho.
+--
+--  VÌ SAO BỎ: hai chỗ cùng giữ một sự thật thì sớm muộn lệch nhau. Bản
+--  cộng luôn đúng cho tới ngày có một đường ghi mới quên cập nhật nó —
+--  và ngày đó không ai biết, vì màn hình vẫn hiện một con số trông rất
+--  hợp lý. Cái sai chỉ lộ ra lúc có người đếm hàng thật trong kho.
+--
+--  ĐỌC KỸ THỨ TỰ TRIỂN KHAI. Script triển khai chạy migration TRƯỚC rồi
+--  mới đổi binary (deploy/scripts/02-trien-khai.sh), nên tệp này chỉ được
+--  đi cùng lượt phát hành mà bản code KHÔNG CÒN ĐỌC cột này đã chạy xong
+--  ngoài máy thật. Thả chung một lượt với bản code đó thì trong khoảng
+--  vài chục giây giữa hai bước, binary cũ vẫn đang phục vụ và mọi truy
+--  vấn sản phẩm sẽ hỏng vì cột vừa biến mất.
+--
+--  VÌ SAO KHÔNG ĐỐI CHIẾU LẠI TRƯỚC KHI XOÁ: cột này là dữ liệu DẪN XUẤT,
+--  cộng ra từ variant_stocks. Nếu hai bên có lệch thì bên đúng luôn là
+--  variant_stocks (nguồn sự thật từ 0005, và là nơi duy nhất luồng bán
+--  hàng đọc để trừ kho). Lấy con số cache "sửa lại" nguồn sự thật là làm
+--  hỏng dữ liệu đang đúng, nên ở đây chỉ xoá.
+--
+--  MẤT GÌ KHÔNG: không. Cần lại con số cũ thì
+--      SELECT product_variant_id, SUM(quantity) FROM variant_stocks
+--      GROUP BY product_variant_id;
+--  cho ra đúng thứ cột này đang giữ.
+-- =====================================================================
+
+ALTER TABLE product_variants DROP COLUMN stock_quantity;
