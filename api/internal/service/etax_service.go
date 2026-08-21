@@ -37,6 +37,23 @@ type EtaxService interface {
 	PhatHanh(ctx context.Context, orderID uint) (*domain.EtaxInvoice, error)
 	// TuPhatHanh là đường cho chỗ ĐƠN VỪA THU TIỀN gọi tới; nuốt mọi lỗi.
 	TuPhatHanh(ctx context.Context, orderID uint)
+
+	// Đời sau của một tờ hoá đơn — xem etax_hoa_don.go.
+
+	// Ky ký một tờ đã lưu nháp rồi gửi cơ quan thuế.
+	Ky(ctx context.Context, orderID uint) (*domain.EtaxInvoice, error)
+	// DongBo hỏi lại cổng xem cơ quan thuế đã cấp mã chưa.
+	DongBo(ctx context.Context, orderID uint) (*domain.EtaxInvoice, error)
+	// ThayThe xuất một tờ THAY CHO tờ hiện tại, dựng lại từ đơn hàng hôm nay.
+	ThayThe(ctx context.Context, orderID uint, req *dto.EtaxThayTheRequest) (*domain.EtaxInvoice, error)
+	// DieuChinh xuất một tờ điều chỉnh; không khai dòng nào = điều chỉnh về 0.
+	DieuChinh(ctx context.Context, orderID uint, req *dto.EtaxDieuChinhRequest) (*domain.EtaxInvoice, error)
+	// BanIn tải bản PDF; chuyenDoi = bản hoá đơn chuyển đổi ra giấy.
+	BanIn(ctx context.Context, orderID uint, chuyenDoi bool) ([]byte, error)
+	// BanXML tải bản XML gốc đã ký.
+	BanXML(ctx context.Context, orderID uint) ([]byte, error)
+	// TraCuuMST tra tên và địa chỉ đăng ký của một mã số thuế.
+	TraCuuMST(ctx context.Context, mst string) (*minvoice.ThongTinMST, error)
 }
 
 type etaxService struct {

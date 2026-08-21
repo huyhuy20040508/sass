@@ -164,11 +164,130 @@ class OrderController extends Controller
         return response()->json(['message' => $message], 422);
     }
 
+    /** Ký tờ nháp rồi gửi cơ quan thuế. */
+    public function kyHoaDon(int $id)
+    {
+        return $this->thaoTacHoaDon(fn () => $this->api->kyHoaDon($id), 'Ký hoá đơn không thành công.');
+    }
+
+    /** Hỏi lại cổng xem cơ quan thuế đã cấp mã chưa. */
+    public function dongBoHoaDon(int $id)
+    {
+        return $this->thaoTacHoaDon(fn () => $this->api->dongBoHoaDon($id), 'Chưa hỏi được cổng hoá đơn.');
+    }
+
+    /** Thay thế hoá đơn — dựng lại tờ mới từ đơn hàng hôm nay. */
+    public function thayTheHoaDon(Request $request, int $id)
+    {
+        $data = $request->validate([
+            'ly_do' => ['required', 'string', 'max:250'],
+            'so_van_ban' => ['nullable', 'string', 'max:250'],
+        ]);
+
+        return $this->thaoTacHoaDon(
+            fn () => $this->api->thayTheHoaDon($id, $data),
+            'Thay thế hoá đơn không thành công.'
+        );
+    }
+
+    /**
+     * Điều chỉnh hoá đơn. Không gửi dòng nào = điều chỉnh về 0 (tương đương huỷ).
+     */
+    public function dieuChinhHoaDon(Request $request, int $id)
+    {
+        $data = $request->validate([
+            'ly_do' => ['required', 'string', 'max:250'],
+        ]);
+
+        return $this->thaoTacHoaDon(
+            fn () => $this->api->dieuChinhHoaDon($id, $data),
+            'Điều chỉnh hoá đơn không thành công.'
+        );
+    }
+
+    /**
+     * Bản PDF của hoá đơn, trả thẳng ra trình duyệt để mở trong tab mới.
+     *
+     * Hỏng thì trả về CHỮ chứ không phải một tệp PDF rỗng: người dùng mở tab mới
+     * và nhìn thấy một trang trắng thì không biết chuyện gì đã xảy ra.
+     */
+    public function pdfHoaDon(Request $request, int $id)
+    {
+        try {
+            $res = $this->api->pdfHoaDon($id, $request->boolean('chuyen_doi'));
+        } catch (\Throwable $e) {
+            Log::error('Load etax pdf failed', ['id' => $id, 'msg' => $e->getMessage()]);
+
+            return response('Không kết nối được API.', 502);
+        }
+
+        if (! $res->successful()) {
+            return response($res->json('message') ?: 'Không lấy được bản in hoá đơn.', $res->status());
+        }
+
+        return response($res->body(), 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="hoa-don.pdf"',
+        ]);
+    }
+
+    /** Bản XML gốc đã ký — tệp kế toán lưu trữ. */
+    public function xmlHoaDon(int $id)
+    {
+        try {
+            $res = $this->api->xmlHoaDon($id);
+        } catch (\Throwable $e) {
+            Log::error('Load etax xml failed', ['id' => $id, 'msg' => $e->getMessage()]);
+
+            return response('Không kết nối được API.', 502);
+        }
+
+        if (! $res->successful()) {
+            return response($res->json('message') ?: 'Không lấy được bản XML hoá đơn.', $res->status());
+        }
+
+        return response($res->body(), 200, [
+            'Content-Type' => 'application/xml',
+            'Content-Disposition' => 'attachment; filename="hoa-don.xml"',
+        ]);
+    }
+
+    /**
+     * Một lượt thao tác trên tờ hoá đơn: gọi API, in nguyên văn câu của nó ra.
+     *
+     * Câu của cổng hoá đơn là thứ nói được phải làm gì tiếp ("chưa chọn ký
+     * hiệu", "hoá đơn này đã ký rồi"), nên đừng thay nó bằng một câu chung.
+     */
+    protected function thaoTacHoaDon(callable $goi, string $macDinh)
+    {
+        try {
+            $res = $goi();
+        } catch (\Throwable $e) {
+            Log::error('Etax action failed', ['msg' => $e->getMessage()]);
+
+            return response()->json(['message' => 'Không kết nối được API. Vui lòng thử lại.'], 502);
+        }
+
+        if ($res->successful()) {
+            return response()->json([
+                'message' => $res->json('message') ?: 'Đã xong.',
+                'data' => $res->json('data'),
+            ]);
+        }
+
+        $loi = $res->json('errors');
+        $message = is_array($loi) && $loi
+            ? implode(' ', $loi)
+            : ($res->json('message') ?: $macDinh);
+
+        return response()->json(['message' => $message], 422);
+    }
+
     /** Trang in hóa đơn cho 1 hoặc NHIỀU đơn (mở tab mới, tự bật hộp thoại in).
      *  Dùng chung cho nút "In đơn" (1 đơn qua {id}) và "In hàng loạt" (?ids=1,2,3). */
     public function print(Request $request, ?int $id = null)
     {
-        $orders = $this->fetchOrdersForPrint($request, $id, 'in hoá đơn');
+        $orders = $this->fetchOrdersForPrint($request, $id, 'in hoá đơn', true);
 
         return view('orders.print', [
             'orders' => $orders,
@@ -245,7 +364,7 @@ class OrderController extends Controller
 
     /** Đọc danh sách đơn để in: ưu tiên ?ids=1,2,3 (in hàng loạt), nếu không có thì
      *  dùng {id} trên URL (in một đơn). Giữ đúng thứ tự ids người dùng chọn. */
-    protected function fetchOrdersForPrint(Request $request, ?int $id, string $viec): array
+    protected function fetchOrdersForPrint(Request $request, ?int $id, string $viec, bool $kemHoaDon = false): array
     {
         $ids = [];
         $raw = (string) $request->query('ids', '');
@@ -271,6 +390,11 @@ class OrderController extends Controller
             try {
                 $res = $this->api->order($oid);
                 if ($res->successful() && ($o = $res->json('data'))) {
+                    // Hoá đơn điện tử chỉ lấy cho bản IN ĐƠN: tem giao hàng không
+                    // in mã cơ quan thuế, và mỗi đơn ở đây là thêm một lượt gọi.
+                    if ($kemHoaDon) {
+                        $o['etax'] = $this->hoaDonCuaDon($oid);
+                    }
                     $orders[] = $o;
                 }
             } catch (\Throwable $e) {

@@ -2789,6 +2789,82 @@
                 }
             }
         },
+        "/admin/etax/tra-cuu-mst": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Trả tên đơn vị và địa chỉ đã đăng ký với cơ quan thuế, để điền hộ thông tin người mua.\nM-Invoice chỉ mở API này cho các địa chỉ IP đã đăng ký trước — 503 nghĩa là máy chủ chưa được mở.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Hoá đơn điện tử"
+                ],
+                "summary": "Tra cứu mã số thuế",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Mã số thuế cần tra",
+                        "name": "mst",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/minvoice.ThongTinMST"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/goi-dich-vu": {
             "get": {
                 "security": [
@@ -3538,6 +3614,12 @@
                         "type": "integer",
                         "description": "Số item/trang (mặc định 20, tối đa 100)",
                         "name": "page_size",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Xem sổ của đúng một chi nhánh (bỏ trống: theo chi nhánh đang làm việc)",
+                        "name": "shop_id",
                         "in": "query"
                     }
                 ],
@@ -5526,6 +5608,468 @@
                     },
                     "422": {
                         "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/orders/{id}/etax/adjust": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Không gửi `dong` = điều chỉnh VỀ 0 (tương đương huỷ): đảo dấu đúng các dòng đã ghi trên tờ cũ.\nGửi `dong` = tự khai phần chênh lệch (số âm là giảm, số dương là tăng).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Hoá đơn điện tử"
+                ],
+                "summary": "Điều chỉnh hoá đơn",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID đơn hàng",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Lý do và các dòng điều chỉnh",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.EtaxDieuChinhRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/domain.EtaxInvoice"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "502": {
+                        "description": "Bad Gateway",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/orders/{id}/etax/pdf": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Trả về THẲNG tệp PDF, không bọc JSON — màn hình mở nó trong tab mới.\n`chuyen_doi=1` lấy bản hoá đơn chuyển đổi ra giấy (có chữ ký và dấu bên bán).",
+                "produces": [
+                    "application/pdf"
+                ],
+                "tags": [
+                    "Admin - Hoá đơn điện tử"
+                ],
+                "summary": "Bản PDF của hoá đơn",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID đơn hàng",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "1 = bản chuyển đổi",
+                        "name": "chuyen_doi",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "file"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "502": {
+                        "description": "Bad Gateway",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/orders/{id}/etax/replace": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Xuất một tờ MỚI thay cho tờ hiện tại, dựng lại từ đơn hàng hôm nay.\nChỉ thay được tờ đã được cơ quan thuế cấp mã, và chỉ tờ Gốc hoặc tờ Thay thế.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Hoá đơn điện tử"
+                ],
+                "summary": "Thay thế hoá đơn",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID đơn hàng",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Lý do thay thế",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.EtaxThayTheRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/domain.EtaxInvoice"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "502": {
+                        "description": "Bad Gateway",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/orders/{id}/etax/sign": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Chỉ chạy được với chữ ký số MỀM (file p12 hoặc dịch vụ EASY/ICA/INTRUST).\nKhách ký bằng USB token phải ký ở trang của nhà cung cấp.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Hoá đơn điện tử"
+                ],
+                "summary": "Ký hoá đơn nháp và gửi cơ quan thuế",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID đơn hàng",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/domain.EtaxInvoice"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "502": {
+                        "description": "Bad Gateway",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/orders/{id}/etax/sync": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Cơ quan thuế cấp mã không tức thì và không báo về, nên phải tự hỏi lại.\nCó `tax_auth_code` thì hoá đơn mới thật sự có hiệu lực.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Hoá đơn điện tử"
+                ],
+                "summary": "Hỏi lại cổng về trạng thái hoá đơn",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID đơn hàng",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/domain.EtaxInvoice"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "502": {
+                        "description": "Bad Gateway",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/orders/{id}/etax/xml": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Tệp XML đã ký — thứ kế toán lưu trữ. Hoá đơn chưa ký thì chưa có.",
+                "produces": [
+                    "application/xml"
+                ],
+                "tags": [
+                    "Admin - Hoá đơn điện tử"
+                ],
+                "summary": "Bản XML gốc của hoá đơn",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID đơn hàng",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "file"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "502": {
+                        "description": "Bad Gateway",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
@@ -16552,14 +17096,25 @@
         "domain.EtaxInvoice": {
             "type": "object",
             "properties": {
+                "auto_print": {
+                    "description": "AutoPrint KHÔNG phải cột: nó là công tắc của chi nhánh, chép sang đây để\nmàn hình biết có phải tự mở bản in sau khi phát hành hay không. Đọc thêm\nmột lượt kết nối ở phía màn hình thì tốn một lượt gọi cho mỗi lần mở đơn.",
+                    "type": "boolean"
+                },
                 "connection_id": {
                     "type": "integer"
                 },
                 "created_at": {
                     "type": "string"
                 },
+                "doc_status": {
+                    "type": "integer"
+                },
                 "error": {
                     "type": "string"
+                },
+                "gateway_status": {
+                    "description": "Hai trạng thái NGUYÊN BẢN của cổng, giữ số chứ không dịch: GatewayStatus là\nđường gửi CQT, DocStatus là loại tờ. Dịch sẵn thì mất thông tin khi họ đổi\ncách hiểu, mà đây là thứ phải đối chiếu được với màn hình nhà cung cấp.",
+                    "type": "integer"
                 },
                 "id": {
                     "type": "integer"
@@ -16571,6 +17126,9 @@
                     "type": "string"
                 },
                 "issued_at": {
+                    "type": "string"
+                },
+                "lookup_code": {
                     "type": "string"
                 },
                 "order_id": {
@@ -16586,6 +17144,10 @@
                     "type": "string"
                 },
                 "symbol": {
+                    "type": "string"
+                },
+                "tax_auth_code": {
+                    "description": "TaxAuthCode (macqt) là mã cơ quan thuế cấp — thứ quyết định tờ hoá đơn có\nhiệu lực hay chưa. LookupCode (sobaomat) in lên bill để khách tự tra.",
                     "type": "string"
                 },
                 "total_amount": {
@@ -16793,6 +17355,10 @@
                 "change": {
                     "type": "integer"
                 },
+                "shop_id": {
+                    "description": "ShopID là kho THẬT SỰ bị sửa — luôn trả về, kể cả khi client không gửi lên.\nGiao diện dựa vào nó để cập nhật đúng dòng: một biến thể có mặt ở nhiều dòng\n(mỗi kho một dòng) nên chỉ variant_id thôi thì không trỏ được vào dòng nào.",
+                    "type": "integer"
+                },
                 "sku": {
                     "type": "string"
                 },
@@ -16832,6 +17398,13 @@
                     "type": "integer"
                 },
                 "reference_type": {
+                    "type": "string"
+                },
+                "shop_id": {
+                    "description": "ShopID/ShopName là CHI NHÁNH phát sinh bút toán. Luôn trả về, kể cả khi\nđang xem sổ của đúng một kho: màn hình cần nói được \"đây là sổ của kho\nnào\", còn lúc xem gộp thì thiếu nó là mỗi dòng \"trước 40 → sau 41\" không\nbiết thuộc kho nào và cặp số đọc lên mâu thuẫn với con số trên bảng.",
+                    "type": "integer"
+                },
+                "shop_name": {
                     "type": "string"
                 },
                 "type": {
@@ -20139,6 +20712,65 @@
                 }
             }
         },
+        "dto.EtaxDieuChinhRequest": {
+            "type": "object",
+            "required": [
+                "ly_do"
+            ],
+            "properties": {
+                "dong": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.EtaxDongDieuChinhDTO"
+                    }
+                },
+                "ly_do": {
+                    "type": "string",
+                    "maxLength": 250,
+                    "example": "Điều chỉnh giảm đơn giá"
+                }
+            }
+        },
+        "dto.EtaxDongDieuChinhDTO": {
+            "type": "object",
+            "required": [
+                "ten_hang"
+            ],
+            "properties": {
+                "don_gia": {
+                    "type": "number",
+                    "example": 250000
+                },
+                "don_vi_tinh": {
+                    "type": "string",
+                    "maxLength": 50,
+                    "example": "Cái"
+                },
+                "ma_thue": {
+                    "description": "MaThue theo bảng của cổng: \"10\" \"8\" \"5\" \"0\", \"-1\" không chịu thuế,\n\"-2\" không kê khai nộp thuế.",
+                    "type": "string",
+                    "maxLength": 5,
+                    "example": "10"
+                },
+                "so_luong": {
+                    "type": "number",
+                    "example": -1
+                },
+                "ten_hang": {
+                    "type": "string",
+                    "maxLength": 500,
+                    "example": "Quần bò"
+                },
+                "thanh_tien": {
+                    "type": "number",
+                    "example": -250000
+                },
+                "tien_thue": {
+                    "type": "number",
+                    "example": -25000
+                }
+            }
+        },
         "dto.EtaxKetNoiRequest": {
             "type": "object",
             "required": [
@@ -20173,6 +20805,25 @@
                 "username": {
                     "type": "string",
                     "maxLength": 150
+                }
+            }
+        },
+        "dto.EtaxThayTheRequest": {
+            "type": "object",
+            "required": [
+                "ly_do"
+            ],
+            "properties": {
+                "ly_do": {
+                    "type": "string",
+                    "maxLength": 250,
+                    "example": "Sai thông tin người mua"
+                },
+                "so_van_ban": {
+                    "description": "SoVanBan là số biên bản thoả thuận với khách, nếu hai bên có lập.",
+                    "type": "string",
+                    "maxLength": 250,
+                    "example": "BBTT00001"
                 }
             }
         },
@@ -20677,6 +21328,11 @@
                     "type": "integer",
                     "example": 50
                 },
+                "shop_id": {
+                    "description": "ShopID: chỉnh ĐÚNG kho này. Bỏ trống thì rơi về chi nhánh đang làm việc —\nđường đi của cửa hàng một chi nhánh, nơi màn hình không có gì để chọn.",
+                    "type": "integer",
+                    "example": 2
+                },
                 "type": {
                     "description": "Type là loại bút toán ghi sổ kho. Bỏ trống thì server tự suy: \"set\" ghi\n\"adjustment\", \"delta\" ghi \"import\" khi cộng và \"export\" khi trừ.",
                     "type": "string",
@@ -20708,6 +21364,10 @@
                     ]
                 },
                 "quantity": {
+                    "type": "integer"
+                },
+                "shop_id": {
+                    "description": "ShopID theo TỪNG DÒNG chứ không đặt chung cho cả yêu cầu: bảng tồn kho gom\nnhóm theo chi nhánh, người dùng tick vài dòng của kho này rồi vài dòng của\nkho kia rồi bấm một lần. Bỏ trống = chi nhánh đang làm việc.",
                     "type": "integer"
                 },
                 "variant_id": {
@@ -24066,6 +24726,26 @@
             "properties": {
                 "is_active": {
                     "type": "boolean"
+                }
+            }
+        },
+        "minvoice.ThongTinMST": {
+            "type": "object",
+            "properties": {
+                "cqthue_ql": {
+                    "type": "string"
+                },
+                "dia_chi": {
+                    "type": "string"
+                },
+                "ma_so_thue": {
+                    "type": "string"
+                },
+                "nguoi_dai_dien": {
+                    "type": "string"
+                },
+                "ten_cty": {
+                    "type": "string"
                 }
             }
         },

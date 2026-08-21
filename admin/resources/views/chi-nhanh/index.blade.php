@@ -590,8 +590,9 @@
                     </label>
 
                     <p class="cn-hint">
-                        Hai công tắc này ghi vào cấu hình ngay; phần phát hành hoá đơn từ đơn hàng
-                        sẽ đọc chúng khi làm xong.
+                        Tự phát hành chỉ chạy được với chữ ký số MỀM (file p12, hoặc dịch vụ
+                        EASY / ICA / INTRUST). Ký bằng USB token thì đơn vẫn lưu thành hoá đơn
+                        nháp, bấm <b>Ký và gửi</b> ở màn Đơn hàng để phát hành.
                     </p>
 
                     <div class="cn-etax-phu">

@@ -613,6 +613,16 @@ func New(
 			// HÀNH thì ở `manage`: nó ghi doanh thu với cơ quan thuế.
 			q.Dat(admin, http.MethodGet, "/orders/:id/etax", "don-hang.xem", h.ETax.HoaDon)
 			q.Dat(manage, http.MethodPost, "/orders/:id/etax", "don-hang.sua", h.ETax.PhatHanh)
+			// Đời sau của tờ hoá đơn. Ký, thay thế và điều chỉnh đều ghi lại với
+			// cơ quan thuế nên đi cùng quyền phát hành. Bản PDF và bản XML thì chỉ
+			// ĐỌC, nên theo quyền xem đơn: nhân viên quầy phải in được hoá đơn
+			// đưa khách mà không cần quyền sửa gì.
+			q.Dat(manage, http.MethodPost, "/orders/:id/etax/sign", "don-hang.sua", h.ETax.Ky)
+			q.Dat(manage, http.MethodPost, "/orders/:id/etax/sync", "don-hang.sua", h.ETax.DongBoHoaDon)
+			q.Dat(manage, http.MethodPost, "/orders/:id/etax/replace", "don-hang.sua", h.ETax.ThayThe)
+			q.Dat(manage, http.MethodPost, "/orders/:id/etax/adjust", "don-hang.sua", h.ETax.DieuChinh)
+			q.Dat(admin, http.MethodGet, "/orders/:id/etax/pdf", "don-hang.xem", h.ETax.BanIn)
+			q.Dat(admin, http.MethodGet, "/orders/:id/etax/xml", "don-hang.xem", h.ETax.BanXML)
 			// Món còn trả được của một đơn — màn hình lập phiếu trả dựng form từ đây.
 			// Đi theo nhóm `manage` cùng chính trang Trả hàng ngay dưới: nhân viên
 			// không lập được phiếu thì cũng không cần cái form đó.
@@ -745,6 +755,9 @@ func New(
 			q.Dat(manage, http.MethodPut, "/chi-nhanh/:id/etax", "chi-nhanh.sua", h.ETax.Update)
 			q.Dat(manage, http.MethodPost, "/chi-nhanh/:id/etax/sync", "chi-nhanh.sua", h.ETax.Sync)
 			q.Dat(manage, http.MethodDelete, "/chi-nhanh/:id/etax", "chi-nhanh.sua", h.ETax.Delete)
+			// Tra cứu mã số thuế KHÔNG gắn với chi nhánh nào: nó chỉ đọc dữ liệu
+			// công khai của cơ quan thuế qua máy chủ dùng chung của M-Invoice.
+			q.Dat(manage, http.MethodGet, "/etax/tra-cuu-mst", "chi-nhanh.xem", h.ETax.TraCuuMST)
 
 			// Quy tắc đánh số chứng từ. Đọc cũng ở `manage`: đây là bộ khung của
 			// tiệm, không phải thứ quầy bán cần biết.

@@ -194,7 +194,7 @@ func handleServiceError(c *gin.Context, err error) {
 		response.ValidationError(c, map[string]string{
 			"area_scope": "Khai vị trí thì phải khai cả phạm vi hoạt động, và ngược lại",
 		})
-	// Hoá đơn điện tử — bốn lỗi, bốn cách chữa khác nhau.
+	// Hoá đơn điện tử — mỗi lỗi một cách chữa khác nhau.
 	case errors.Is(err, domain.ErrETaxChuaCoKhoa):
 		response.Error(c, 503, "Máy chủ chưa khai khoá mã hoá (ETAX_SECRET_KEY) nên chưa lưu được mật khẩu cổng hoá đơn điện tử. Liên hệ nhà cung cấp phần mềm.")
 	case errors.Is(err, domain.ErrETaxNhaCungCapLa):
@@ -207,6 +207,29 @@ func handleServiceError(c *gin.Context, err error) {
 		response.ValidationError(c, map[string]string{
 			"template_symbol": "Ký hiệu này không có trong danh sách đã đăng ký — bấm Đồng bộ mẫu rồi chọn lại",
 		})
+	// Phát hành và sửa hoá đơn. Mỗi lỗi một cách chữa, và không lỗi nào trong số
+	// này là "lỗi hệ thống" — để chúng rơi xuống nhánh 500 mặc định là biến một
+	// việc người dùng tự làm được thành một cuộc gọi hỗ trợ.
+	case errors.Is(err, domain.ErrETaxChuaNoi):
+		response.Error(c, 409, "Chi nhánh của đơn này chưa kết nối hoá đơn điện tử — vào Quản lý chi nhánh để nối")
+	case errors.Is(err, domain.ErrETaxChuaChonKyHieu):
+		response.Error(c, 409, "Chi nhánh này chưa chọn ký hiệu phát hành — vào Quản lý chi nhánh để chọn")
+	case errors.Is(err, domain.ErrDonChuaThuTien):
+		response.Error(c, 409, "Đơn chưa thanh toán nên chưa phát hành hoá đơn được")
+	case errors.Is(err, domain.ErrHoaDonDaPhatHanh):
+		response.Error(c, 409, "Đơn này đã phát hành hoá đơn rồi")
+	case errors.Is(err, domain.ErrHoaDonChuaLap):
+		response.Error(c, 404, "Đơn này chưa phát hành hoá đơn")
+	case errors.Is(err, domain.ErrHoaDonThieuMa):
+		response.Error(c, 409, "Hoá đơn này chưa có mã bên cổng — hãy phát hành lại")
+	case errors.Is(err, domain.ErrHoaDonDaKy):
+		response.Error(c, 409, "Hoá đơn này đã ký rồi")
+	case errors.Is(err, domain.ErrHoaDonChuaKy):
+		response.Error(c, 409, "Hoá đơn chưa ký nên chưa có bản XML")
+	case errors.Is(err, domain.ErrHoaDonKhongSuaDuoc):
+		response.Error(c, 409, "Chỉ thay thế hoặc điều chỉnh được hoá đơn đã được cơ quan thuế cấp mã")
+	case errors.Is(err, domain.ErrHoaDonKhongThayTheDuoc):
+		response.Error(c, 409, "Hoá đơn này không thay thế được nữa — chỉ tờ gốc hoặc tờ thay thế mới thay được")
 	case errors.Is(err, domain.ErrChiNhanhCuoiCung):
 		response.Error(c, 409, "Đây là chi nhánh đang hoạt động cuối cùng — đóng nó xong thì cửa hàng không còn điểm bán nào để ghi đơn hàng hay tồn kho")
 	// Nhân sự. Ba lỗi, ba cách chữa khác nhau: đổi mã, chọn người khác, hoặc bỏ

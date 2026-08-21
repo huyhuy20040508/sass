@@ -642,6 +642,43 @@ type EtaxCaiDatRequest struct {
 	AutoPrint   *bool `json:"auto_print"`
 }
 
+// EtaxThayTheRequest — thay tờ hoá đơn hiện tại bằng một tờ dựng lại từ đơn
+// hàng HÔM NAY.
+//
+// LyDo bắt buộc vì nó in lên chính tờ thay thế: người đọc hoá đơn phải biết vì
+// sao có tờ này, và cơ quan thuế cũng đọc trường ấy.
+type EtaxThayTheRequest struct {
+	LyDo string `json:"ly_do" binding:"required,max=250" example:"Sai thông tin người mua"`
+	// SoVanBan là số biên bản thoả thuận với khách, nếu hai bên có lập.
+	SoVanBan string `json:"so_van_ban" binding:"omitempty,max=250" example:"BBTT00001"`
+}
+
+// EtaxDieuChinhRequest — điều chỉnh tờ hoá đơn hiện tại.
+//
+// KHÔNG gửi `dong` = điều chỉnh VỀ 0 (tương đương huỷ): hệ thống đọc lại đúng
+// các dòng đã ghi trên tờ cũ rồi đảo dấu. Gửi `dong` = tự khai phần chênh lệch,
+// dùng cho các ca điều chỉnh tăng/giảm từng khoản.
+type EtaxDieuChinhRequest struct {
+	LyDo string                 `json:"ly_do" binding:"required,max=250" example:"Điều chỉnh giảm đơn giá"`
+	Dong []EtaxDongDieuChinhDTO `json:"dong" binding:"omitempty,dive"`
+}
+
+// EtaxDongDieuChinhDTO — MỘT dòng chênh lệch trên tờ điều chỉnh.
+//
+// Số âm là điều chỉnh giảm, số dương là điều chỉnh tăng. Đây là phần CHÊNH
+// LỆCH, không phải giá trị mới của dòng hàng.
+type EtaxDongDieuChinhDTO struct {
+	TenHang   string  `json:"ten_hang" binding:"required,max=500" example:"Quần bò"`
+	DonViTinh string  `json:"don_vi_tinh" binding:"omitempty,max=50" example:"Cái"`
+	SoLuong   float64 `json:"so_luong" example:"-1"`
+	DonGia    float64 `json:"don_gia" example:"250000"`
+	ThanhTien float64 `json:"thanh_tien" example:"-250000"`
+	TienThue  float64 `json:"tien_thue" example:"-25000"`
+	// MaThue theo bảng của cổng: "10" "8" "5" "0", "-1" không chịu thuế,
+	// "-2" không kê khai nộp thuế.
+	MaThue string `json:"ma_thue" binding:"omitempty,max=5" example:"10"`
+}
+
 // ---------- Nhân sự (hồ sơ người đi làm) ----------
 
 // NhanSuRequest — payload tạo/sửa MỘT HỒ SƠ NHÂN VIÊN.

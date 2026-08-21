@@ -1466,6 +1466,48 @@ class ApiClient
         return $this->post("/admin/orders/{$orderID}/etax", []);
     }
 
+    /** Ký tờ nháp rồi gửi cơ quan thuế. Chỉ chạy với chữ ký số mềm. */
+    public function kyHoaDon(int $orderID): Response
+    {
+        return $this->post("/admin/orders/{$orderID}/etax/sign", []);
+    }
+
+    /** Hỏi lại cổng xem cơ quan thuế đã cấp mã chưa. */
+    public function dongBoHoaDon(int $orderID): Response
+    {
+        return $this->post("/admin/orders/{$orderID}/etax/sync", []);
+    }
+
+    /** Xuất một tờ THAY CHO tờ hiện tại, dựng lại từ đơn hàng hôm nay. */
+    public function thayTheHoaDon(int $orderID, array $data): Response
+    {
+        return $this->post("/admin/orders/{$orderID}/etax/replace", $data);
+    }
+
+    /** Điều chỉnh tờ hiện tại; không gửi `dong` = điều chỉnh về 0. */
+    public function dieuChinhHoaDon(int $orderID, array $data): Response
+    {
+        return $this->post("/admin/orders/{$orderID}/etax/adjust", $data);
+    }
+
+    /** Bản PDF của hoá đơn. Trả về tệp, không phải JSON. */
+    public function pdfHoaDon(int $orderID, bool $chuyenDoi = false): Response
+    {
+        return $this->get("/admin/orders/{$orderID}/etax/pdf", $chuyenDoi ? ['chuyen_doi' => '1'] : []);
+    }
+
+    /** Bản XML gốc đã ký của hoá đơn. */
+    public function xmlHoaDon(int $orderID): Response
+    {
+        return $this->get("/admin/orders/{$orderID}/etax/xml");
+    }
+
+    /** Tra tên và địa chỉ đăng ký của một mã số thuế. */
+    public function traCuuMST(string $mst): Response
+    {
+        return $this->get('/admin/etax/tra-cuu-mst', ['mst' => $mst]);
+    }
+
     // ---------- Quy tắc đánh số chứng từ ----------
 
     /** Danh mục loại đánh số được + mọi quy tắc đã lưu của cửa hàng. */
