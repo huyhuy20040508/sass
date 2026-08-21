@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 
 	"sass-api/internal/middleware"
@@ -258,5 +259,176 @@ func TestChiNhanhCuaTiemKhacKhongDungDuoc(t *testing.T) {
 	// chẳng chứng minh được gì (một middleware từ chối tất cũng "an toàn").
 	if res = h.goiChiNhanh(t, a.token, a.chiNhanh, http.MethodGet, "/api/v1/admin/inventory", nil); res.ma != http.StatusOK {
 		t.Fatalf("đối chứng hỏng: chi nhánh của chính mình trả %d\n%s", res.ma, catBot(res.than))
+	}
+}
+
+// manTonChiNhanh gọi màn "Tồn kho chi nhánh" và trả về phần thân đã đọc.
+//
+// Đọc đúng hình dạng mà trang Blade đang đọc (data.dong / data.chi_nhanh): đổi
+// tên trường bên API mà quên trang thì bảng trống trơn chứ không lỗi, nên hình
+// dạng phải nằm trong bài kiểm.
+func manTonChiNhanh(t *testing.T, h *heThong, c *cuaHang, query string) struct {
+	Data struct {
+		Dong []struct {
+			ShopID      uint   `json:"shop_id"`
+			ShopName    string `json:"shop_name"`
+			VariantID   uint   `json:"variant_id"`
+			ProductName string `json:"product_name"`
+			Quantity    int    `json:"quantity"`
+		} `json:"dong"`
+		ChiNhanh []struct {
+			ShopID   uint   `json:"shop_id"`
+			ShopName string `json:"shop_name"`
+			SoDong   int64  `json:"so_dong"`
+			TongTon  int64  `json:"tong_ton"`
+		} `json:"chi_nhanh"`
+		Total int64 `json:"total"`
+	} `json:"data"`
+} {
+	t.Helper()
+
+	var out struct {
+		Data struct {
+			Dong []struct {
+				ShopID      uint   `json:"shop_id"`
+				ShopName    string `json:"shop_name"`
+				VariantID   uint   `json:"variant_id"`
+				ProductName string `json:"product_name"`
+				Quantity    int    `json:"quantity"`
+			} `json:"dong"`
+			ChiNhanh []struct {
+				ShopID   uint   `json:"shop_id"`
+				ShopName string `json:"shop_name"`
+				SoDong   int64  `json:"so_dong"`
+				TongTon  int64  `json:"tong_ton"`
+			} `json:"chi_nhanh"`
+			Total int64 `json:"total"`
+		} `json:"data"`
+	}
+
+	res := h.goi(t, c.token, http.MethodGet, "/api/v1/admin/inventory/chi-nhanh"+query, nil)
+	if res.ma != http.StatusOK {
+		t.Fatalf("màn tồn kho chi nhánh trả %d\n%s", res.ma, catBot(res.than))
+	}
+	if err := json.Unmarshal([]byte(res.than), &out); err != nil {
+		t.Fatalf("không đọc được phản hồi: %v\n%s", err, catBot(res.than))
+	}
+
+	return out
+}
+
+// tonTrenMan tìm số tồn của một biến thể TẠI một chi nhánh trong bảng.
+//
+// Trả về (số, có thấy dòng không): thiếu dòng KHÁC tồn 0, và phân biệt được hai
+// thứ đó chính là điều bài kiểm dưới đây quan tâm nhất.
+func tonTrenMan(dong []struct {
+	ShopID      uint   `json:"shop_id"`
+	ShopName    string `json:"shop_name"`
+	VariantID   uint   `json:"variant_id"`
+	ProductName string `json:"product_name"`
+	Quantity    int    `json:"quantity"`
+}, shopID, variantID uint,
+) (int, bool) {
+	for _, d := range dong {
+		if d.ShopID == shopID && d.VariantID == variantID {
+			return d.Quantity, true
+		}
+	}
+
+	return 0, false
+}
+
+// TestManTonKhoChiNhanh — màn "Tồn kho chi nhánh" phải trả lời được câu hỏi của
+// chính nó: SỐ HÀNG ĐANG NẰM Ở ĐÂU.
+//
+// Ba điều được chốt ở đây, đều là chỗ dễ hỏng mà không báo lỗi:
+//
+//   - Chi nhánh CHƯA TỪNG nhập món hàng vẫn phải có dòng, với số 0. Nó không có
+//     dòng nào trong variant_stocks, nên chỉ cần viết JOIN thay vì LEFT JOIN là
+//     kho đó biến mất khỏi bảng — và người đi nhập hàng không bao giờ nhìn thấy
+//     chỗ đang thiếu.
+//   - Tổng ở đầu mỗi nhóm phải là tổng của TOÀN bộ lọc, khớp với dòng đang hiện.
+//   - Lưới (chi nhánh × biến thể) được dựng bằng một phép nhân KHÔNG có khoá
+//     nối, nên phải chứng minh nó không kéo chi nhánh của cửa hàng khác vào.
+func TestManTonKhoChiNhanh(t *testing.T) {
+	h := dungHeThong(t)
+	a, b := haiCuaHang(t, h)
+
+	res := h.goi(t, a.token, http.MethodPost, "/api/v1/admin/chi-nhanh",
+		map[string]any{"name": "Kho phu " + a.vet, "code": "kho-phu"})
+	if res.ma != http.StatusCreated {
+		t.Fatalf("mở chi nhánh thứ hai trả %d\n%s", res.ma, catBot(res.than))
+	}
+	var tao struct {
+		Data struct {
+			ID uint `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(res.than), &tao); err != nil {
+		t.Fatalf("không đọc được chi nhánh vừa mở: %v", err)
+	}
+	goc, phu := a.chiNhanh, tao.Data.ID
+
+	// 1. Chi nhánh vừa mở chưa có hàng: phải CÓ DÒNG, số 0.
+	man := manTonChiNhanh(t, h, a, "")
+	if len(man.Data.ChiNhanh) != 2 {
+		t.Fatalf("phải gom thành 2 nhóm chi nhánh, đang có %d", len(man.Data.ChiNhanh))
+	}
+	if got, ok := tonTrenMan(man.Data.Dong, goc, a.bienThe); !ok || got != 20 {
+		t.Fatalf("chi nhánh gốc phải có dòng 20, đang là %d (thấy dòng: %v)", got, ok)
+	}
+	if got, ok := tonTrenMan(man.Data.Dong, phu, a.bienThe); !ok {
+		t.Fatalf("chi nhánh mới mở BIẾN MẤT khỏi bảng — nó phải hiện ra với số 0 để còn biết mà nhập hàng")
+	} else if got != 0 {
+		t.Fatalf("chi nhánh mới mở phải là 0, đang là %d", got)
+	}
+
+	// 2. Nhập 7 vào chi nhánh phụ — bảng và tổng của nhóm phải đổi theo, đúng
+	//    bằng nhau.
+	res = h.goiChiNhanh(t, a.token, phu, http.MethodPut,
+		fmt.Sprintf("/api/v1/admin/inventory/%d", a.bienThe),
+		map[string]any{"mode": "delta", "quantity": 7})
+	if res.ma != http.StatusOK {
+		t.Fatalf("nhập hàng vào chi nhánh phụ trả %d\n%s", res.ma, catBot(res.than))
+	}
+
+	man = manTonChiNhanh(t, h, a, "")
+	if got, _ := tonTrenMan(man.Data.Dong, phu, a.bienThe); got != 7 {
+		t.Fatalf("chi nhánh phụ phải là 7, đang là %d", got)
+	}
+	if got, _ := tonTrenMan(man.Data.Dong, goc, a.bienThe); got != 20 {
+		t.Fatalf("RÒ KHO: nhập vào chi nhánh phụ mà chi nhánh gốc thành %d", got)
+	}
+	for _, g := range man.Data.ChiNhanh {
+		if g.ShopID == goc && g.TongTon != 20 {
+			t.Fatalf("tổng của chi nhánh gốc phải là 20, đang là %d", g.TongTon)
+		}
+		if g.ShopID == phu && g.TongTon != 7 {
+			t.Fatalf("tổng của chi nhánh phụ phải là 7, đang là %d", g.TongTon)
+		}
+	}
+
+	// 3. Lọc đích danh một chi nhánh: bảng chỉ còn kho đó.
+	man = manTonChiNhanh(t, h, a, fmt.Sprintf("?shops=%d", phu))
+	if len(man.Data.ChiNhanh) != 1 || man.Data.ChiNhanh[0].ShopID != phu {
+		t.Fatalf("lọc theo một chi nhánh mà vẫn trả %d nhóm", len(man.Data.ChiNhanh))
+	}
+	for _, d := range man.Data.Dong {
+		if d.ShopID != phu {
+			t.Fatalf("lọc chi nhánh %d mà bảng vẫn có dòng của chi nhánh %d", phu, d.ShopID)
+		}
+	}
+
+	// 4. Cửa hàng KHÁC không được thấy chi nhánh hay hàng của cửa hàng này.
+	manB := manTonChiNhanh(t, h, b, "")
+	for _, g := range manB.Data.ChiNhanh {
+		if g.ShopID == goc || g.ShopID == phu {
+			t.Fatalf("RÒ DỮ LIỆU: cửa hàng khác thấy chi nhánh %d của cửa hàng này", g.ShopID)
+		}
+	}
+	for _, d := range manB.Data.Dong {
+		if d.VariantID == a.bienThe || strings.Contains(d.ProductName, a.vet) {
+			t.Fatalf("RÒ DỮ LIỆU: cửa hàng khác thấy hàng %q của cửa hàng này", d.ProductName)
+		}
 	}
 }

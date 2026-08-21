@@ -454,6 +454,150 @@ func (r *inventoryRepository) Adjust(ctx context.Context, items []domain.Invento
 	return out, nil
 }
 
+// TonTheoChiNhanh dựng lưới (chi nhánh × biến thể) cho màn "Tồn kho chi nhánh".
+//
+// VÌ SAO LẤY DANH SÁCH CHI NHÁNH BẰNG MỘT CÂU RIÊNG rồi mới ghép vào câu chính:
+// bảng này phải hiện cả những ô KHÔNG có dòng trong variant_stocks — chi nhánh
+// chưa từng nhập món đó vẫn phải đứng đó với số 0, vì đấy đúng là dòng người đi
+// nhập hàng cần nhìn thấy. Muốn vậy phải NHÂN chi nhánh với biến thể, tức là một
+// phép ghép không có khoá nối. Mà bộ lọc tenant của GORM chỉ chèn điều kiện cho
+// BẢNG CHÍNH của câu truy vấn (xem tenant_scope.go), nên ghép thẳng bảng `shops`
+// vào đây là mở đường cho chi nhánh của khách khác lọt vào lưới.
+//
+// Lấy trước bằng một câu CÓ lọc tenant thì id thu được đã chắc chắn thuộc đúng
+// cửa hàng, ghép vào câu chính bằng %d là an toàn: uint không sinh ra được ký tự
+// nào ngoài chữ số. Tên và mã chi nhánh cũng ghép ở Go luôn, khỏi phải JOIN lại
+// bảng shops lần nữa.
+func (r *inventoryRepository) TonTheoChiNhanh(ctx context.Context, f domain.TonChiNhanhFilter) (domain.KetQuaTonChiNhanh, error) {
+	out := domain.KetQuaTonChiNhanh{
+		Dong:     []domain.DongTonChiNhanh{},
+		ChiNhanh: []domain.TomTatChiNhanh{},
+	}
+
+	shopQ := r.db.WithContext(ctx).Model(&domain.ChiNhanh{}).Order("id ASC")
+	if len(f.ShopIDs) > 0 {
+		// Chọn đích danh thì lấy đúng những chi nhánh đó, KỂ CẢ chi nhánh đã đóng:
+		// hàng còn kẹt trong một điểm bán vừa đóng là thứ người ta cần tra nhất.
+		shopQ = shopQ.Where("id IN ?", f.ShopIDs)
+	} else {
+		shopQ = shopQ.Where("is_active = ?", true)
+	}
+
+	var shops []domain.ChiNhanh
+	if err := shopQ.Find(&shops).Error; err != nil {
+		return out, err
+	}
+	if len(shops) == 0 {
+		return out, nil
+	}
+
+	nhanh := make([]string, 0, len(shops))
+	for _, cn := range shops {
+		nhanh = append(nhanh, fmt.Sprintf("SELECT %d AS shop_id", cn.ID))
+	}
+
+	// Tồn ở đây LUÔN là tồn của một chi nhánh cụ thể — khác trang Tồn kho, nơi
+	// biểu thức đổi theo chi nhánh đang làm việc. Màn này nhìn nhiều chi nhánh
+	// cùng lúc nên "bản cộng cả cửa hàng" không có chỗ đứng.
+	const ton = tonTheoChiNhanh
+
+	base := func() *gorm.DB {
+		return r.db.WithContext(ctx).
+			Table("product_variants AS v").
+			Joins("JOIN products p ON p.id = v.product_id AND p.deleted_at IS NULL").
+			Joins("JOIN (" + strings.Join(nhanh, " UNION ALL ") + ") s ON 1 = 1").
+			Joins("LEFT JOIN variant_stocks vs ON vs.product_variant_id = v.id AND vs.shop_id = s.shop_id").
+			Where("v.deleted_at IS NULL")
+	}
+
+	// Dùng lại đúng bộ điều kiện của trang Tồn kho: hai màn cùng nói về một thứ
+	// nên "sắp hết" phải nghĩa giống nhau ở cả hai chỗ.
+	loc := domain.InventoryFilter{
+		Keyword:    f.Keyword,
+		CategoryID: f.CategoryID,
+		Stock:      f.Stock,
+		LowStock:   f.LowStock,
+	}
+
+	var total int64
+	if err := applyInventoryFilter(base(), loc, ton).Count(&total).Error; err != nil {
+		return out, err
+	}
+	out.Total = total
+
+	// Tổng của TỪNG chi nhánh tính trên toàn bộ bộ lọc chứ không trên trang đang
+	// xem — đầu mỗi nhóm ghi "Chi nhánh A (137)", mà 137 tụt xuống 20 khi lật
+	// trang thì người đọc hiểu là kho vừa mất hàng.
+	type gop struct {
+		ShopID  uint
+		SoDong  int64
+		TongTon int64
+		GiaTri  float64
+	}
+	var gops []gop
+	err := applyInventoryFilter(base(), loc, ton).
+		Select("s.shop_id AS shop_id, COUNT(*) AS so_dong, " +
+			"COALESCE(SUM(" + ton + "), 0) AS tong_ton, " +
+			"COALESCE(SUM(" + stockValueExpr(ton) + "), 0) AS gia_tri").
+		Group("s.shop_id").
+		Scan(&gops).Error
+	if err != nil {
+		return out, err
+	}
+
+	theoID := make(map[uint]gop, len(gops))
+	for _, g := range gops {
+		theoID[g.ShopID] = g
+	}
+	ten := make(map[uint]domain.ChiNhanh, len(shops))
+	for _, cn := range shops {
+		ten[cn.ID] = cn
+		g := theoID[cn.ID]
+		out.ChiNhanh = append(out.ChiNhanh, domain.TomTatChiNhanh{
+			ShopID:   cn.ID,
+			ShopCode: cn.Code,
+			ShopName: cn.Name,
+			SoDong:   g.SoDong,
+			TongTon:  g.TongTon,
+			GiaTri:   g.GiaTri,
+		})
+	}
+
+	if total == 0 {
+		return out, nil
+	}
+
+	// Chi nhánh đứng trước mọi kiểu sắp xếp khác: bảng gom theo nhóm chi nhánh
+	// nên hàng của một kho phải nằm liền nhau, nếu không tiêu đề nhóm sẽ lặp lại
+	// giữa trang.
+	q := applyInventoryFilter(base(), loc, ton).
+		Joins("LEFT JOIN categories c ON c.id = p.category_id").
+		Joins("LEFT JOIN product_units u ON u.id = p.unit_id").
+		Select(`s.shop_id, v.id AS variant_id, v.product_id, v.sku,
+			p.name AS product_name, COALESCE(v.name, '') AS variant_name,
+			COALESCE(u.name, '') AS unit_name, COALESCE(c.name, '') AS category_name,
+			COALESCE(NULLIF(v.image, ''), NULLIF(p.thumbnail, ''), '') AS thumbnail,
+			` + ton + ` AS quantity, v.is_active,
+			` + effectiveCostExpr + ` AS cost_price,
+			` + stockValueExpr(ton) + ` AS stock_value`).
+		Order("s.shop_id ASC, " + inventoryOrder(f.Sort, ton)).
+		Limit(f.PageSize).
+		Offset((f.Page - 1) * f.PageSize)
+
+	dong := make([]domain.DongTonChiNhanh, 0, f.PageSize)
+	if err := q.Scan(&dong).Error; err != nil {
+		return out, err
+	}
+	for i := range dong {
+		cn := ten[dong[i].ShopID]
+		dong[i].ShopCode = cn.Code
+		dong[i].ShopName = cn.Name
+	}
+	out.Dong = dong
+
+	return out, nil
+}
+
 // actorRef đổi id người thực hiện sang con trỏ; 0 nghĩa là không xác định được
 // (bút toán vẫn phải ghi, chỉ là không gắn tên ai).
 func actorRef(id uint) *uint {

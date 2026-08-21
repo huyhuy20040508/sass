@@ -85,11 +85,18 @@
                     'title' => 'Lọc theo ngày nhận hàng',
                 ])
 
-                <select name="sort" class="rc-select" title="Sắp xếp">
-                    @foreach($SORTS as $value => $label)
-                        <option value="{{ $value }}" {{ $filters['sort'] === $value ? 'selected' : '' }}>{{ $label }}</option>
-                    @endforeach
-                </select>
+                @php
+                    // Bộ lọc phụ đang bật -> tự mở hàng "Nâng cao" + hiện badge đếm.
+                    $advCount = $filters['sort'] !== 'newest' ? 1 : 0;
+                    $advOpen = $advCount > 0;
+                @endphp
+                <button type="button" id="rcAdvToggle" class="rc-adv-btn {{ $advOpen ? 'is-open' : '' }}"
+                        aria-expanded="{{ $advOpen ? 'true' : 'false' }}">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M7 12h10M11 18h2"/></svg>
+                    Nâng cao
+                    <svg class="rc-adv-caret" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                    @if($advCount > 0)<span class="rc-adv-count">{{ $advCount }}</span>@endif
+                </button>
 
                 @if($hasFilter)
                     <a href="{{ route('admin.receipts.index') }}" class="rc-clear">Xoá lọc</a>
@@ -119,6 +126,16 @@
                         </div>
                     </div>
                 </div>
+            </div>
+
+            {{-- Hàng nâng cao: kiểu sắp xếp. Nó không phải điều kiện lọc mà là cách
+                 đọc bảng, nên đứng chung hàng với các ô lọc chỉ tổ chiếm chỗ. --}}
+            <div class="rc-toolbar-adv {{ $advOpen ? 'is-open' : '' }}" id="rcAdvRow">
+                <select name="sort" class="rc-select" title="Sắp xếp">
+                    @foreach($SORTS as $value => $label)
+                        <option value="{{ $value }}" {{ $filters['sort'] === $value ? 'selected' : '' }}>{{ $label }}</option>
+                    @endforeach
+                </select>
             </div>
 
             <input type="hidden" name="page_size" value="{{ $meta['page_size'] }}">
@@ -369,6 +386,20 @@
         .rc-filter { padding: 0 20px 12px; margin-bottom: 12px; border-bottom: 1px solid #eee; }
         .rc-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
         .rc-toolbar-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+        .rc-toolbar-adv { display: none; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 12px; }
+        .rc-toolbar-adv.is-open { display: flex; }
+        .rc-adv-btn {
+            height: 34px; display: inline-flex; align-items: center; gap: 6px; border: 1px solid #d9d9d9;
+            border-radius: 4px; background: #fff; padding: 0 12px; font-size: 13px; color: #595959;
+            cursor: pointer; transition: border-color .15s, color .15s;
+        }
+        .rc-adv-btn:hover, .rc-adv-btn.is-open { border-color: #1890ff; color: #1890ff; }
+        .rc-adv-caret { transition: transform .2s; }
+        .rc-adv-btn.is-open .rc-adv-caret { transform: rotate(180deg); }
+        .rc-adv-count {
+            display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px;
+            padding: 0 5px; border-radius: 9999px; background: #1890ff; color: #fff; font-size: 11px; font-weight: 600;
+        }
 
         .rc-searchbox { display: flex; border-radius: 4px; }
         .rc-searchbox:focus-within { box-shadow: 0 0 0 4px rgba(13,110,253,.25); }
@@ -442,27 +473,30 @@
         .rc-table-wrap::-webkit-scrollbar { height: 11px; }
         .rc-table-wrap::-webkit-scrollbar-thumb { background-color: #dcdcdc; border-radius: 8px; border: 3px solid #fff; }
 
-        .rc-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        /* Bảng — cùng khuôn với mọi trang danh sách: mọi ô canh giữa, bề rộng khai
+           theo % và cộng đúng 100%. */
+        .rc-table { width: 100%; min-width: 1000px; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
+        .rc-table thead tr { background: #f0f0f0; color: #262626; }
         .rc-table thead th {
-            text-align: left; padding: 13px 18px; border-bottom: 1px solid #f0f0f0; background: #fafafa;
-            font-size: 12px; font-weight: 600; color: #8c8c8c; white-space: nowrap;
+            text-align: center; padding: 14px 10px; font-size: 13px; font-weight: 700;
+            color: #262626; white-space: nowrap;
         }
         .rc-table tbody td {
-            padding: 16px 18px; border-bottom: 1px solid #f5f5f5; vertical-align: middle;
-            white-space: nowrap; line-height: 1.5;
+            padding: 14px 10px; border-bottom: 1px solid #f0f0f0; vertical-align: middle;
+            text-align: center; white-space: nowrap; line-height: 1.5;
         }
-        .rc-table tbody tr:hover { background: #fafcff; }
+        .rc-table tbody tr:hover { background: #fafafa; }
 
-        .rc-table th.rc-c-stt,    .rc-table td.rc-c-stt    { width: 1%; text-align: center; color: #8c8c8c; }
-        .rc-table th.rc-c-code,   .rc-table td.rc-c-code   { width: 1%; }
-        .rc-table th.rc-c-sup,    .rc-table td.rc-c-sup    { width: 100%; max-width: 0; min-width: 200px; overflow: hidden; }
-        .rc-table th.rc-c-lines,  .rc-table td.rc-c-lines  { width: 1%; text-align: center; }
-        .rc-table th.rc-c-qty,    .rc-table td.rc-c-qty    { width: 1%; text-align: center; }
-        .rc-table th.rc-c-amount, .rc-table td.rc-c-amount { width: 1%; text-align: right; }
-        .rc-table th.rc-c-user,   .rc-table td.rc-c-user   { width: 1%; }
-        .rc-table th.rc-c-status, .rc-table td.rc-c-status { width: 1%; text-align: center; }
-        .rc-table th.rc-c-date,   .rc-table td.rc-c-date   { width: 1%; text-align: center; color: #595959; }
-        .rc-table th.rc-c-act,    .rc-table td.rc-c-act    { width: 1%; text-align: center; }
+        .rc-table th.rc-c-stt,    .rc-table td.rc-c-stt    { width: 5%; color: #8c8c8c; }
+        .rc-table th.rc-c-code,   .rc-table td.rc-c-code   { width: 12%; overflow: hidden; text-overflow: ellipsis; }
+        .rc-table th.rc-c-sup,    .rc-table td.rc-c-sup    { width: 20%; overflow: hidden; text-overflow: ellipsis; }
+        .rc-table th.rc-c-lines,  .rc-table td.rc-c-lines  { width: 8%; }
+        .rc-table th.rc-c-qty,    .rc-table td.rc-c-qty    { width: 8%; font-variant-numeric: tabular-nums; }
+        .rc-table th.rc-c-amount, .rc-table td.rc-c-amount { width: 12%; font-variant-numeric: tabular-nums; }
+        .rc-table th.rc-c-user,   .rc-table td.rc-c-user   { width: 12%; overflow: hidden; text-overflow: ellipsis; }
+        .rc-table th.rc-c-status, .rc-table td.rc-c-status { width: 9%; }
+        .rc-table th.rc-c-date,   .rc-table td.rc-c-date   { width: 10%; color: #595959; }
+        .rc-table th.rc-c-act,    .rc-table td.rc-c-act    { width: 4%; }
 
         .rc-c-code, .rc-c-sup { cursor: pointer; }
         .rc-code { display: block; font-weight: 600; color: #1890ff; }
@@ -483,7 +517,7 @@
 
         .rc-rowbtn {
             width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center;
-            border: 1px solid #e5e7eb; border-radius: 6px; background: #fff; color: #595959; cursor: pointer;
+            border: 1px solid #d9d9d9; border-radius: 4px; background: #fff; color: #595959; cursor: pointer;
             transition: border-color .15s, color .15s;
         }
         .rc-rowbtn:hover { border-color: #1890ff; color: #1890ff; }
@@ -604,6 +638,24 @@
                 const d = new Date(s);
                 return isNaN(d) ? '—' : d.toLocaleString('vi-VN', { hour12: false });
             };
+
+            // Nút "Nâng cao": ẩn/hiện hàng bộ lọc phụ, nhớ lựa chọn qua localStorage.
+            (function () {
+                const btn = $('rcAdvToggle');
+                const row = $('rcAdvRow');
+                if (!btn || !row) return;
+                const setOpen = (open) => {
+                    row.classList.toggle('is-open', open);
+                    btn.classList.toggle('is-open', open);
+                    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+                };
+                if (!row.classList.contains('is-open') && localStorage.getItem('rc-adv-open') === '1') setOpen(true);
+                btn.addEventListener('click', () => {
+                    const open = !row.classList.contains('is-open');
+                    setOpen(open);
+                    localStorage.setItem('rc-adv-open', open ? '1' : '0');
+                });
+            })();
 
             // ---------- Bộ lọc: đổi select/ngày -> chạy ngay; gõ tìm kiếm -> chờ 400ms ----------
             // Khoảng ngày tự submit trong partials/date-range, ở đây chỉ lo các ô select.

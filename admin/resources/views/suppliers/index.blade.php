@@ -66,20 +66,18 @@
                     @endforeach
                 </select>
 
-                <select name="debt" class="sup-select" title="Lọc theo công nợ">
-                    <option value="all" {{ $filters['debt'] === 'all' ? 'selected' : '' }}>Tất cả công nợ</option>
-                    @foreach($DEBTS as $value => $label)
-                        <option value="{{ $value }}" {{ $filters['debt'] === $value ? 'selected' : '' }}>
-                            {{ $label }} ({{ number_format($stats[$value] ?? 0, 0, ',', '.') }})
-                        </option>
-                    @endforeach
-                </select>
-
-                <select name="sort" class="sup-select" title="Sắp xếp">
-                    @foreach($SORTS as $value => $label)
-                        <option value="{{ $value }}" {{ $filters['sort'] === $value ? 'selected' : '' }}>{{ $label }}</option>
-                    @endforeach
-                </select>
+                @php
+                    // Bộ lọc phụ đang bật -> tự mở hàng "Nâng cao" + hiện badge đếm.
+                    $advCount = ($filters['debt'] !== 'all' ? 1 : 0) + ($filters['sort'] !== 'name_asc' ? 1 : 0);
+                    $advOpen = $advCount > 0;
+                @endphp
+                <button type="button" id="supAdvToggle" class="sup-adv-btn {{ $advOpen ? 'is-open' : '' }}"
+                        aria-expanded="{{ $advOpen ? 'true' : 'false' }}">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M7 12h10M11 18h2"/></svg>
+                    Nâng cao
+                    <svg class="sup-adv-caret" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                    @if($advCount > 0)<span class="sup-adv-count">{{ $advCount }}</span>@endif
+                </button>
 
                 @if($hasFilter)
                     <a href="{{ route('admin.suppliers.index') }}" class="sup-clear">Xoá lọc</a>
@@ -105,6 +103,26 @@
                         </div>
                     </div>
                 </div>
+            </div>
+
+            {{-- Hàng nâng cao: công nợ và kiểu sắp xếp. Hai thứ này hỏi câu phụ
+                 ("ai đang nợ", "xếp theo gì") nên giấu đi cho hàng chính còn chỗ,
+                 đúng như bản cũ v2 gom lọc phụ vào một khối riêng. --}}
+            <div class="sup-toolbar-adv {{ $advOpen ? 'is-open' : '' }}" id="supAdvRow">
+                <select name="debt" class="sup-select" title="Lọc theo công nợ">
+                    <option value="all" {{ $filters['debt'] === 'all' ? 'selected' : '' }}>Tất cả công nợ</option>
+                    @foreach($DEBTS as $value => $label)
+                        <option value="{{ $value }}" {{ $filters['debt'] === $value ? 'selected' : '' }}>
+                            {{ $label }} ({{ number_format($stats[$value] ?? 0, 0, ',', '.') }})
+                        </option>
+                    @endforeach
+                </select>
+
+                <select name="sort" class="sup-select" title="Sắp xếp">
+                    @foreach($SORTS as $value => $label)
+                        <option value="{{ $value }}" {{ $filters['sort'] === $value ? 'selected' : '' }}>{{ $label }}</option>
+                    @endforeach
+                </select>
             </div>
 
             {{-- Giữ số dòng/trang khi đổi bộ lọc --}}
@@ -337,6 +355,20 @@
         .sup-filter { padding: 0 20px 12px; margin-bottom: 12px; border-bottom: 1px solid #eee; }
         .sup-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
         .sup-toolbar-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+        .sup-toolbar-adv { display: none; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 12px; }
+        .sup-toolbar-adv.is-open { display: flex; }
+        .sup-adv-btn {
+            height: 34px; display: inline-flex; align-items: center; gap: 6px; border: 1px solid #d9d9d9;
+            border-radius: 4px; background: #fff; padding: 0 12px; font-size: 13px; color: #595959;
+            cursor: pointer; transition: border-color .15s, color .15s;
+        }
+        .sup-adv-btn:hover, .sup-adv-btn.is-open { border-color: #1890ff; color: #1890ff; }
+        .sup-adv-caret { transition: transform .2s; }
+        .sup-adv-btn.is-open .sup-adv-caret { transform: rotate(180deg); }
+        .sup-adv-count {
+            display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px;
+            padding: 0 5px; border-radius: 9999px; background: #1890ff; color: #fff; font-size: 11px; font-weight: 600;
+        }
 
         .sup-searchbox { display: flex; border-radius: 4px; }
         .sup-searchbox:focus-within { box-shadow: 0 0 0 4px rgba(13,110,253,.25); }
@@ -414,30 +446,32 @@
         .sup-table-wrap::-webkit-scrollbar { height: 11px; }
         .sup-table-wrap::-webkit-scrollbar-thumb { background-color: #dcdcdc; border-radius: 8px; border: 3px solid #fff; }
 
-        .sup-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        /* Bảng — cùng khuôn với mọi trang danh sách: mọi ô canh giữa, bề rộng khai
+           theo % và cộng đúng 100%. Cột không khai width sẽ nuốt hết phần dư. */
+        .sup-table { width: 100%; min-width: 1000px; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
+        .sup-table thead tr { background: #f0f0f0; color: #262626; }
         .sup-table thead th {
-            text-align: left; padding: 13px 18px; border-bottom: 1px solid #f0f0f0; background: #fafafa;
-            font-size: 12px; font-weight: 600; color: #8c8c8c; white-space: nowrap;
+            text-align: center; padding: 14px 10px; font-size: 13px; font-weight: 700;
+            color: #262626; white-space: nowrap;
         }
         .sup-table tbody td {
-            padding: 16px 18px; border-bottom: 1px solid #f5f5f5; vertical-align: middle;
-            white-space: nowrap; line-height: 1.5;
+            padding: 14px 10px; border-bottom: 1px solid #f0f0f0; vertical-align: middle;
+            text-align: center; white-space: nowrap; line-height: 1.5;
         }
-        .sup-table tbody tr:hover { background: #fafcff; }
+        .sup-table tbody tr:hover { background: #fafafa; }
         .sup-table tbody tr.is-selected, .sup-table tbody tr.is-selected:hover { background: #e6f7ff; }
 
-        /* Mọi cột co vừa nội dung, riêng "Nhà cung cấp" hút hết khoảng dư. */
-        .sup-table th.sup-c-check,   .sup-table td.sup-c-check   { width: 1%; text-align: center; }
-        .sup-table th.sup-c-stt,     .sup-table td.sup-c-stt     { width: 1%; text-align: center; color: #8c8c8c; }
-        .sup-table th.sup-c-name,    .sup-table td.sup-c-name    { width: 100%; max-width: 0; min-width: 220px; overflow: hidden; }
-        .sup-table th.sup-c-contact, .sup-table td.sup-c-contact { width: 1%; }
-        .sup-table th.sup-c-phone,   .sup-table td.sup-c-phone   { width: 1%; }
-        .sup-table th.sup-c-count,   .sup-table td.sup-c-count   { width: 1%; text-align: center; }
-        .sup-table th.sup-c-amount,  .sup-table td.sup-c-amount  { width: 1%; text-align: right; }
-        .sup-table th.sup-c-debt,    .sup-table td.sup-c-debt    { width: 1%; text-align: right; }
-        .sup-table th.sup-c-date,    .sup-table td.sup-c-date    { width: 1%; text-align: center; color: #595959; }
-        .sup-table th.sup-c-status,  .sup-table td.sup-c-status  { width: 1%; text-align: center; }
-        .sup-table th.sup-c-act,     .sup-table td.sup-c-act     { width: 1%; text-align: center; }
+        .sup-table th.sup-c-check,   .sup-table td.sup-c-check   { width: 4%; }
+        .sup-table th.sup-c-stt,     .sup-table td.sup-c-stt     { width: 4%; color: #8c8c8c; }
+        .sup-table th.sup-c-name,    .sup-table td.sup-c-name    { width: 20%; overflow: hidden; text-overflow: ellipsis; }
+        .sup-table th.sup-c-contact, .sup-table td.sup-c-contact { width: 13%; overflow: hidden; text-overflow: ellipsis; }
+        .sup-table th.sup-c-phone,   .sup-table td.sup-c-phone   { width: 10%; }
+        .sup-table th.sup-c-count,   .sup-table td.sup-c-count   { width: 7%; }
+        .sup-table th.sup-c-amount,  .sup-table td.sup-c-amount  { width: 11%; font-variant-numeric: tabular-nums; }
+        .sup-table th.sup-c-debt,    .sup-table td.sup-c-debt    { width: 11%; font-variant-numeric: tabular-nums; }
+        .sup-table th.sup-c-date,    .sup-table td.sup-c-date    { width: 9%; color: #595959; }
+        .sup-table th.sup-c-status,  .sup-table td.sup-c-status  { width: 7%; }
+        .sup-table th.sup-c-act,     .sup-table td.sup-c-act     { width: 4%; }
 
         .sup-check { width: 15px; height: 15px; cursor: pointer; accent-color: #1890ff; margin: 0; }
         .sup-muted { color: #bfbfbf; }
@@ -473,15 +507,15 @@
         .sup-switch.on .sup-switch-knob { transform: translateX(23px); }
 
         .sup-rowacts { display: inline-flex; align-items: center; gap: 6px; }
+        /* Nút hành động: ô vuông bo góc CÓ VIỀN, icon xám — cùng bộ với các trang
+           danh sách khác. Màu chỉ hiện lúc rê chuột, và chỉ nút xoá mới đỏ. */
         .sup-rowbtn {
-            width: 30px; height: 30px; border: 0; background: none; border-radius: 4px; padding: 0;
-            cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
-            transition: background .15s, color .15s;
+            width: 30px; height: 30px; border: 1px solid #d9d9d9; background: #fff; border-radius: 4px; padding: 0;
+            cursor: pointer; color: #595959; display: inline-flex; align-items: center; justify-content: center;
+            transition: border-color .15s, color .15s;
         }
-        .sup-rowbtn.sup-edit { color: #1890ff; }
-        .sup-rowbtn.sup-edit:hover { background: #e6f7ff; }
-        .sup-rowbtn.sup-del { color: #ff4d4f; }
-        .sup-rowbtn.sup-del:hover { background: #fff1f0; }
+        .sup-rowbtn:hover { border-color: #1890ff; color: #1890ff; }
+        .sup-rowbtn.sup-del:hover { border-color: #ff4d4f; color: #ff4d4f; }
 
         /* Dòng trống trải hết bảng nên phải cho xuống dòng, không nowrap như ô dữ liệu. */
         .sup-empty { padding: 48px 12px; text-align: center; color: #8c8c8c; white-space: normal; }
@@ -585,6 +619,24 @@
             const money = (v) => (Number(v) || 0).toLocaleString('vi-VN') + '₫';
 
             // ---------- Bộ lọc: đổi select -> chạy ngay; gõ tìm kiếm -> chờ 400ms ----------
+            // Nút "Nâng cao": ẩn/hiện hàng bộ lọc phụ, nhớ lựa chọn qua localStorage.
+            (function () {
+                const btn = document.getElementById('supAdvToggle');
+                const row = document.getElementById('supAdvRow');
+                if (!btn || !row) return;
+                const setOpen = (open) => {
+                    row.classList.toggle('is-open', open);
+                    btn.classList.toggle('is-open', open);
+                    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+                };
+                if (!row.classList.contains('is-open') && localStorage.getItem('sup-adv-open') === '1') setOpen(true);
+                btn.addEventListener('click', () => {
+                    const open = !row.classList.contains('is-open');
+                    setOpen(open);
+                    localStorage.setItem('sup-adv-open', open ? '1' : '0');
+                });
+            })();
+
             $filter.querySelectorAll('select').forEach((sel) => {
                 sel.addEventListener('change', () => $filter.submit());
             });

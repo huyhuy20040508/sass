@@ -992,35 +992,31 @@
         .po-table-wrap { width: 100%; padding: 0 20px; overflow-x: auto; scrollbar-width: thin; }
         .po-table-wrap::-webkit-scrollbar { height: 11px; }
         .po-table-wrap::-webkit-scrollbar-thumb { background-color: #dcdcdc; border-radius: 8px; border: 3px solid #fff; }
-        .po-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-        /* Bảng phải THOÁNG như trang Tồn kho: ô rộng 18px hai bên, dòng cao 16px
-           trên dưới, chữ không dính vào vạch cột bên cạnh. Cột "Thao tác" hẹp nên
-           nới nhẹ hơn để nút không bị đẩy khỏi màn hình. */
+        /* Bảng — cùng khuôn với mọi trang danh sách: mọi ô canh giữa, bề rộng khai
+           theo % và cộng đúng 100%. Cột không khai width sẽ nuốt hết phần dư và
+           các cột còn lại dồn cục lại. */
+        .po-table { width: 100%; min-width: 1080px; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
+        .po-table thead tr { background: #f0f0f0; color: #262626; }
         .po-table thead th {
-            text-align: left; padding: 13px 18px; border-bottom: 1px solid #f0f0f0;
-            font-size: 12px; font-weight: 600; color: #8c8c8c; white-space: nowrap; background: #fafafa;
+            text-align: center; padding: 14px 10px; font-size: 13px; font-weight: 700;
+            color: #262626; white-space: nowrap;
         }
         .po-table tbody td {
-            padding: 16px 18px; border-bottom: 1px solid #f5f5f5; vertical-align: middle;
-            white-space: nowrap; line-height: 1.5;
+            padding: 14px 10px; border-bottom: 1px solid #f0f0f0; vertical-align: middle;
+            text-align: center; white-space: nowrap; line-height: 1.5;
         }
-        .po-table tbody tr:hover { background: #fafcff; }
+        .po-table tbody tr:hover { background: #fafafa; }
 
-        /* Cột bảng — cùng khuôn với trang Tồn kho / Sản phẩm:
-           - th và td của MỘT cột phải khai CÙNG `text-align`, nếu không tiêu đề
-             căn trái mà số/nút bên dưới căn phải là bảng trông lệch ngay.
-           - Mọi cột `width: 1%` (co vừa nội dung), riêng "Nhà cung cấp" `width: 100%`
-             hút hết khoảng dư nên không còn cột nào bị trình duyệt dàn rộng vô cớ. */
-        .po-table th.po-c-check,  .po-table td.po-c-check  { width: 1%; text-align: center; }
-        .po-table th.po-c-stt,    .po-table td.po-c-stt    { width: 1%; text-align: center; color: #8c8c8c; }
-        .po-table th.po-c-code,   .po-table td.po-c-code   { width: 1%; }
-        .po-table th.po-c-sup,    .po-table td.po-c-sup    { width: 100%; max-width: 0; min-width: 200px; overflow: hidden; }
-        .po-table th.po-c-qty,    .po-table td.po-c-qty    { width: 1%; text-align: center; }
-        .po-table th.po-c-amount, .po-table td.po-c-amount { width: 1%; text-align: right; }
-        .po-table th.po-c-pay,    .po-table td.po-c-pay    { width: 1%; text-align: center; }
-        .po-table th.po-c-status, .po-table td.po-c-status { width: 1%; text-align: center; }
-        .po-table th.po-c-date,   .po-table td.po-c-date   { width: 1%; text-align: center; color: #595959; }
-        .po-table th.po-c-act,    .po-table td.po-c-act    { width: 1%; text-align: center; }
+        .po-table th.po-c-check,  .po-table td.po-c-check  { width: 4%; }
+        .po-table th.po-c-stt,    .po-table td.po-c-stt    { width: 4%; color: #8c8c8c; }
+        .po-table th.po-c-code,   .po-table td.po-c-code   { width: 13%; overflow: hidden; text-overflow: ellipsis; }
+        .po-table th.po-c-sup,    .po-table td.po-c-sup    { width: 20%; overflow: hidden; text-overflow: ellipsis; }
+        .po-table th.po-c-qty,    .po-table td.po-c-qty    { width: 11%; }
+        .po-table th.po-c-amount, .po-table td.po-c-amount { width: 11%; font-variant-numeric: tabular-nums; }
+        .po-table th.po-c-pay,    .po-table td.po-c-pay    { width: 10%; }
+        .po-table th.po-c-status, .po-table td.po-c-status { width: 10%; }
+        .po-table th.po-c-date,   .po-table td.po-c-date   { width: 9%; color: #595959; }
+        .po-table th.po-c-act,    .po-table td.po-c-act    { width: 8%; }
 
         .po-c-code, .po-c-sup { cursor: pointer; }
         .po-code { display: block; font-weight: 600; color: #1890ff; }
@@ -1033,7 +1029,7 @@
         .po-bar i { display: block; height: 100%; background: #52c41a; }
         .po-rowbtn {
             width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center;
-            border: 1px solid #e5e7eb; border-radius: 6px; background: #fff; color: #595959; cursor: pointer;
+            border: 1px solid #d9d9d9; border-radius: 4px; background: #fff; color: #595959; cursor: pointer;
             transition: border-color .15s, color .15s;
         }
         .po-rowbtn:hover { border-color: #1890ff; color: #1890ff; }

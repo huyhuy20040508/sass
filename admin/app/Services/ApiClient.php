@@ -931,6 +931,18 @@ class ApiClient
         return $this->get('/admin/inventory', $query);
     }
 
+    /**
+     * Tồn kho TÁCH RA theo từng chi nhánh — màn "Tồn kho chi nhánh".
+     *
+     * Khác inventory() ở chỗ một biến thể trả về nhiều dòng, mỗi chi nhánh một
+     * dòng. `shops` là danh sách id ngăn bằng dấu phẩy; bỏ trống thì API lấy mọi
+     * chi nhánh đang mở.
+     */
+    public function tonKhoChiNhanh(array $query = []): Response
+    {
+        return $this->get('/admin/inventory/chi-nhanh', $query);
+    }
+
     /** Thống kê tồn kho toàn hệ thống (không phụ thuộc bộ lọc đang áp). */
     public function inventoryStats(int $lowStock = 5): Response
     {

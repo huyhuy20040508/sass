@@ -13,6 +13,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DonViTinhController;
 use App\Http\Controllers\GoiDichVuController;
 use App\Http\Controllers\InventoryController;
+use App\Http\Controllers\TonKhoChiNhanhController;
 use App\Http\Controllers\NhanSuController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\OrderController;
@@ -281,6 +282,11 @@ Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:quan_ly'])->prefix('ad
 
         // Tồn kho — đơn vị quản lý là biến thể sản phẩm (size/màu/phiên bản).
         Route::get('/inventory', [InventoryController::class, 'index'])->name('inventory.index');
+
+        // Tồn kho chi nhánh — cùng số hàng của trang trên nhưng tách ra theo từng
+        // điểm bán. Hai đường này đặt TRƯỚC /inventory/{id} cho khỏi bị nuốt.
+        Route::get('/inventory/branches', [TonKhoChiNhanhController::class, 'index'])->name('ton-kho-chi-nhanh.index');
+        Route::get('/inventory/branches/export', [TonKhoChiNhanhController::class, 'export'])->name('ton-kho-chi-nhanh.export');
         Route::get('/inventory/export', [InventoryController::class, 'export'])->name('inventory.export');
         Route::get('/inventory/import-template', [InventoryController::class, 'importTemplate'])->name('inventory.importTemplate');
         Route::post('/inventory/import', [InventoryController::class, 'import'])->name('inventory.import');
@@ -520,7 +526,7 @@ Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:quan_ly'])->prefix('ad
 Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:thu_ngan'])->prefix('cashier')->name('thu-ngan.')->group(function () {
     Route::get('/', fn () => redirect()->route('thu-ngan.ban-hang.index'));
 
-    // Bán tại quầy — trang mặc định của module.
+    // Bán hàng — trang mặc định của module.
     //
     // Dùng lại thẳng đường tìm sản phẩm của trang tạo đơn (admin.orders.searchProducts)
     // thay vì đẻ thêm một endpoint song song: hai màn hình hỏi cùng một câu, và
@@ -532,7 +538,7 @@ Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:thu_ngan'])->prefix('c
     Route::get('/sales/{id}/receipt', [BanTaiQuayController::class, 'phieu'])
         ->whereNumber('id')->name('ban-hang.phieu');
 
-    // Ca làm việc & sổ quỹ — nơi đối chiếu tiền trong két với sổ.
+    // Điều phối ca & sổ quỹ — nơi đối chiếu tiền trong két với sổ.
     Route::get('/shifts', [CaLamViecController::class, 'index'])->name('ca-lam-viec.index');
     // /current, /open, /close, /cash-log đứng TRƯỚC /{id} để không bị hiểu là một id.
     Route::get('/shifts/current', [CaLamViecController::class, 'hienTai'])->name('ca-lam-viec.hienTai');
@@ -541,7 +547,7 @@ Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:thu_ngan'])->prefix('c
     Route::post('/shifts/cash-log', [CaLamViecController::class, 'ghiSoQuy'])->name('ca-lam-viec.soQuy');
     Route::get('/shifts/{id}', [CaLamViecController::class, 'show'])->whereNumber('id')->name('ca-lam-viec.show');
 
-    // Đơn quầy — chỉ những đơn bán ra từ chính module này, để tra lại và in lại
+    // Lịch sử đơn — chỉ những đơn bán ra từ chính module này, để tra lại và in lại
     // phiếu. Khác trang Đơn hàng bên quản trị: ở đó là đơn giao hàng cần xử lý,
     // còn đơn quầy thì xong ngay lúc tạo.
     Route::get('/orders', [ThuNganController::class, 'donHang'])->name('don-hang.index');

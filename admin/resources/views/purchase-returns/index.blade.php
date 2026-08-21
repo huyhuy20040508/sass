@@ -617,20 +617,20 @@
             width: 100%; min-width: 1320px; table-layout: fixed; border-collapse: collapse;
             font-size: 13px; --pr-line: 19.5px;
         }
+        .pr-table thead tr { background: #f0f0f0; color: #262626; }
         .pr-table thead th {
-            text-align: left; padding: 13px 18px; border-bottom: 1px solid #f0f0f0; background: #fafafa;
-            font-size: 12px; font-weight: 600; color: #8c8c8c; white-space: nowrap;
-            overflow: hidden; text-overflow: ellipsis;
+            text-align: center; padding: 14px 10px; font-size: 13px; font-weight: 700;
+            color: #262626; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
         {{-- vertical-align: top, KHÔNG middle — trong một hàng có ô 2 dòng (mã phiếu +
              dòng phụ, số tiền hoàn + badge) lẫn ô 1 dòng. middle canh giữa RIÊNG từng
              ô theo chiều cao nội dung của nó, nên dòng chữ đầu mỗi ô nằm mỗi nơi một
              kiểu. top cho mọi ô bắt đầu từ cùng một mép trên. --}}
         .pr-table tbody td {
-            padding: 16px 18px; border-bottom: 1px solid #f5f5f5; vertical-align: top;
-            white-space: nowrap; line-height: 1.5; overflow: hidden;
+            padding: 14px 10px; border-bottom: 1px solid #f0f0f0; vertical-align: top;
+            text-align: center; white-space: nowrap; line-height: 1.5; overflow: hidden;
         }
-        .pr-table tbody tr:hover { background: #fafcff; }
+        .pr-table tbody tr:hover { background: #fafafa; }
 
         {{-- Badge và nút cao hơn một dòng chữ nên nếu để nguyên sẽ tụt xuống so với
              chữ ở các ô bên cạnh. vertical-align: top bỏ khoảng thừa do canh theo
@@ -648,16 +648,16 @@
             margin-bottom: calc((var(--pr-line) - 30px) / 2);
         }
 
-        .pr-table th.pr-c-stt,    .pr-table td.pr-c-stt    { width: 5%; text-align: center; color: #8c8c8c; }
+        .pr-table th.pr-c-stt,    .pr-table td.pr-c-stt    { width: 5%; color: #8c8c8c; }
         .pr-table th.pr-c-code,   .pr-table td.pr-c-code   { width: 16%; }
         .pr-table th.pr-c-sup,    .pr-table td.pr-c-sup    { width: 15%; }
         .pr-table th.pr-c-reason, .pr-table td.pr-c-reason { width: 9%; text-overflow: ellipsis; }
-        .pr-table th.pr-c-qty,    .pr-table td.pr-c-qty    { width: 6%; text-align: center; }
-        .pr-table th.pr-c-amount, .pr-table td.pr-c-amount { width: 8%; text-align: right; }
-        .pr-table th.pr-c-refund, .pr-table td.pr-c-refund { width: 9%; text-align: right; }
-        .pr-table th.pr-c-status, .pr-table td.pr-c-status { width: 8%; text-align: center; }
-        .pr-table th.pr-c-date,   .pr-table td.pr-c-date   { width: 10%; text-align: center; color: #595959; }
-        .pr-table th.pr-c-act,    .pr-table td.pr-c-act    { width: 14%; text-align: center; overflow: visible; }
+        .pr-table th.pr-c-qty,    .pr-table td.pr-c-qty    { width: 6%; }
+        .pr-table th.pr-c-amount, .pr-table td.pr-c-amount { width: 8%; font-variant-numeric: tabular-nums; }
+        .pr-table th.pr-c-refund, .pr-table td.pr-c-refund { width: 9%; font-variant-numeric: tabular-nums; }
+        .pr-table th.pr-c-status, .pr-table td.pr-c-status { width: 8%; }
+        .pr-table th.pr-c-date,   .pr-table td.pr-c-date   { width: 10%; color: #595959; }
+        .pr-table th.pr-c-act,    .pr-table td.pr-c-act    { width: 14%; overflow: visible; }
 
         .pr-c-code, .pr-c-sup { cursor: pointer; }
         .pr-code { display: block; font-weight: 600; color: #1890ff; overflow: hidden; text-overflow: ellipsis; }
@@ -680,7 +680,7 @@
 
         .pr-rowbtn {
             height: 30px; display: inline-flex; align-items: center; justify-content: center; gap: 4px;
-            padding: 0 8px; border: 1px solid #e5e7eb; border-radius: 6px; background: #fff; color: #595959;
+            padding: 0 8px; border: 1px solid #d9d9d9; border-radius: 4px; background: #fff; color: #595959;
             font-size: 12px; cursor: pointer; transition: border-color .15s, color .15s;
         }
         .pr-rowbtn:hover { border-color: #1890ff; color: #1890ff; }

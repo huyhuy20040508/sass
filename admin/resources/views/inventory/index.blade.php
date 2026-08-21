@@ -375,6 +375,7 @@
                                 {{ !empty($it['last_moved_at']) ? \Illuminate\Support\Carbon::parse($it['last_moved_at'])->format('d/m/Y') : '—' }}
                             </td>
                             <td class="inv-c-act">
+                                <div class="inv-rowacts">
                                 <button type="button" class="inv-rowbtn" data-adjust="{{ $vid }}"
                                     data-name="{{ $it['product_name'] ?? '' }}" data-sku="{{ $it['sku'] ?? '' }}"
                                     data-variant="{{ implode(' / ', $variantParts) }}" data-qty="{{ $qty }}"
@@ -393,6 +394,7 @@
                                         <path d="M8 7h8M8 11h5" />
                                     </svg>
                                 </button>
+                                </div>
                             </td>
                         </tr>
                     @empty
@@ -856,37 +858,35 @@
         .inv-table-wrap::-webkit-scrollbar { height: 11px; }
         .inv-table-wrap::-webkit-scrollbar-thumb { background-color: #dcdcdc; border-radius: 8px; border: 3px solid #fff; }
 
-        .inv-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        /* Bảng — cùng khuôn với mọi trang danh sách: rộng hết khung, MỌI Ô CANH
+           GIỮA, bề rộng khai theo % và cộng đúng 100%. Để một cột không có width
+           là cột đó nuốt hết phần dư và các cột còn lại dồn cục lại. */
+        .inv-table { width: 100%; min-width: 1080px; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
         .inv-table thead tr { background: #f0f0f0; color: #262626; }
-        /* Bảng dữ liệu phải THOÁNG: dòng cao, ô rộng rãi, các cột không dính vào nhau.
-           Khoảng thở dồn vào chiều DỌC (16px) vì bảng có 12 cột — nới ngang quá tay
-           thì "Thao tác" bị đẩy ra ngoài màn hình, phải cuộn mới bấm được. */
-        .inv-table th, .inv-table td { padding: 16px 18px; vertical-align: middle; white-space: nowrap; line-height: 1.5; }
-        .inv-table th { font-weight: 700; text-align: left; padding-top: 13px; padding-bottom: 13px; }
+        .inv-table th, .inv-table td { padding: 14px 10px; vertical-align: middle; white-space: nowrap; text-align: center; line-height: 1.5; }
+        .inv-table th { font-weight: 700; }
         .inv-table tbody tr { border-bottom: 1px solid #f0f0f0; }
         .inv-table tbody tr:hover { background: #fafafa; }
         .inv-table tbody tr.is-selected, .inv-table tbody tr.is-selected:hover { background: #e6f7ff; }
 
-        .inv-c-check { width: 38px; text-align: center; }
         .inv-check { width: 16px; height: 16px; cursor: pointer; accent-color: #1890ff; margin: 0; }
-        .inv-table th.inv-c-stt, .inv-table td.inv-c-stt { width: 1%; text-align: center; color: #8c8c8c; }
-        .inv-table th.inv-c-img, .inv-table td.inv-c-img { width: 1%; padding-right: 0; }
-        /* Cột "Sản phẩm" co giãn hút hết khoảng dư -> bảng phủ đều chiều ngang.
-           min-width giữ cho tên sản phẩm không bị bóp thành vài ký tự khi màn hẹp. */
-        .inv-table th.inv-c-name, .inv-table td.inv-c-name { width: 100%; max-width: 0; min-width: 220px; overflow: hidden; }
-        .inv-table th.inv-c-variant, .inv-table td.inv-c-variant { width: 1%; color: #595959; }
-        .inv-table th.inv-c-group, .inv-table td.inv-c-group { width: 1%; }
-        .inv-table th.inv-c-qty, .inv-table td.inv-c-qty { width: 1%; text-align: center; }
-        .inv-table th.inv-c-price, .inv-table td.inv-c-price { width: 1%; text-align: right; color: #595959; }
-        .inv-table th.inv-c-value, .inv-table td.inv-c-value { width: 1%; text-align: right; }
-        .inv-table th.inv-c-status, .inv-table td.inv-c-status { width: 1%; text-align: center; }
-        .inv-table th.inv-c-date, .inv-table td.inv-c-date { width: 1%; color: #8c8c8c; }
-        .inv-table th.inv-c-act, .inv-table td.inv-c-act { width: 1%; text-align: center; }
+        .inv-table th.inv-c-check,   .inv-table td.inv-c-check   { width: 4%; }
+        .inv-table th.inv-c-stt,     .inv-table td.inv-c-stt     { width: 4%; color: #8c8c8c; }
+        .inv-table th.inv-c-img,     .inv-table td.inv-c-img     { width: 5%; }
+        .inv-table th.inv-c-name,    .inv-table td.inv-c-name    { width: 20%; overflow: hidden; text-overflow: ellipsis; }
+        .inv-table th.inv-c-variant, .inv-table td.inv-c-variant { width: 10%; color: #595959; overflow: hidden; text-overflow: ellipsis; }
+        .inv-table th.inv-c-group,   .inv-table td.inv-c-group   { width: 10%; overflow: hidden; text-overflow: ellipsis; }
+        .inv-table th.inv-c-qty,     .inv-table td.inv-c-qty     { width: 8%; }
+        .inv-table th.inv-c-price,   .inv-table td.inv-c-price   { width: 9%; color: #595959; font-variant-numeric: tabular-nums; }
+        .inv-table th.inv-c-value,   .inv-table td.inv-c-value   { width: 10%; font-variant-numeric: tabular-nums; }
+        .inv-table th.inv-c-status,  .inv-table td.inv-c-status  { width: 7%; }
+        .inv-table th.inv-c-date,    .inv-table td.inv-c-date    { width: 8%; color: #8c8c8c; }
+        .inv-table th.inv-c-act,     .inv-table td.inv-c-act     { width: 5%; }
 
         .inv-c-img[data-view], .inv-c-name[data-view] { cursor: pointer; }
         .inv-c-name[data-view]:hover .inv-name { color: #1890ff; text-decoration: underline; }
 
-        .inv-thumb { width: 36px; height: 36px; border-radius: 6px; object-fit: cover; border: 1px solid #f0f0f0; display: block; }
+        .inv-thumb { width: 36px; height: 36px; border-radius: 6px; object-fit: cover; border: 1px solid #f0f0f0; display: inline-block; vertical-align: middle; }
         .inv-thumb-empty { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 6px; background: #f5f5f5; color: #bfbfbf; border: 1px solid #f0f0f0; }
 
         .inv-name { display: block; font-weight: 500; color: #262626; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -911,12 +911,13 @@
         .inv-badge.tone-done { border-color: #b7eb8f; color: #389e0d; background: #f6ffed; }
         .inv-badge.tone-stop { border-color: #ffa39e; color: #cf1322; background: #fff1f0; }
 
+        .inv-rowacts { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
         .inv-rowbtn {
-            width: 30px; height: 30px; border: 0; background: none; border-radius: 4px; padding: 0; cursor: pointer;
-            color: #1890ff; display: inline-flex; align-items: center; justify-content: center; text-decoration: none;
-            transition: background .15s;
+            width: 30px; height: 30px; border: 1px solid #d9d9d9; background: #fff; border-radius: 4px; padding: 0;
+            cursor: pointer; color: #595959; display: inline-flex; align-items: center; justify-content: center;
+            text-decoration: none; transition: border-color .15s, color .15s;
         }
-        .inv-rowbtn:hover { background: #e6f7ff; }
+        .inv-rowbtn:hover { border-color: #1890ff; color: #1890ff; }
         .inv-empty { padding: 48px 12px; text-align: center; color: #8c8c8c; white-space: normal; }
 
         /* Modal */
