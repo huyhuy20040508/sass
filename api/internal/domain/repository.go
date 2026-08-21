@@ -756,7 +756,13 @@ type InventoryStats struct {
 // InventoryHistory — một dòng sổ kho đã ghép sẵn tên người thực hiện và mã chứng
 // từ liên quan (mã đơn / mã phiếu trả), để giao diện đọc được ngay.
 type InventoryHistory struct {
-	ID             uint      `json:"id"`
+	ID uint `json:"id"`
+	// ShopID/ShopName là CHI NHÁNH phát sinh bút toán. Luôn trả về, kể cả khi
+	// đang xem sổ của đúng một kho: màn hình cần nói được "đây là sổ của kho
+	// nào", còn lúc xem gộp thì thiếu nó là mỗi dòng "trước 40 → sau 41" không
+	// biết thuộc kho nào và cặp số đọc lên mâu thuẫn với con số trên bảng.
+	ShopID         uint      `json:"shop_id"`
+	ShopName       string    `json:"shop_name"`
 	Type           string    `json:"type"`
 	Quantity       int       `json:"quantity"`
 	QuantityBefore int       `json:"quantity_before"`
@@ -889,7 +895,12 @@ type InventoryRepository interface {
 	Stats(ctx context.Context, lowStock int) (InventoryStats, error)
 	FindItem(ctx context.Context, variantID uint) (*InventoryItem, error)
 	// Histories trả sổ kho của một biến thể, mới -> cũ.
-	Histories(ctx context.Context, variantID uint, page, pageSize int) ([]InventoryHistory, int64, error)
+	//
+	// shopID = 0 nghĩa là "theo chi nhánh đang làm việc trong ctx", không có thì
+	// gộp mọi chi nhánh. Truyền số khác 0 để xem sổ của ĐÚNG một kho bất kể người
+	// dùng đang đứng ở đâu — màn "Tồn kho chi nhánh" nhìn nhiều kho cùng lúc nên
+	// không thể hỏi qua chi nhánh đang làm việc.
+	Histories(ctx context.Context, variantID, shopID uint, page, pageSize int) ([]InventoryHistory, int64, error)
 
 	// Adjust chỉnh tồn kho trong MỘT transaction, tất-cả-hoặc-không: khoá các biến
 	// thể theo ID tăng dần (cùng thứ tự với luồng đặt hàng nên không khoá chéo),

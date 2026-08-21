@@ -199,6 +199,7 @@ func (h *InventoryHandler) Get(c *gin.Context) {
 // @Success		200			{object}	response.Body{data=[]domain.InventoryHistory,meta=response.Pagination}
 // @Failure		404			{object}	response.Body
 // @Security		BearerAuth
+// @Param			shop_id		query		int	false	"Xem sổ của đúng một chi nhánh (bỏ trống: theo chi nhánh đang làm việc)"
 // @Router			/admin/inventory/{id}/history [get]
 func (h *InventoryHandler) History(c *gin.Context) {
 	id, ok := parseUintParam(c, "id")
@@ -207,7 +208,12 @@ func (h *InventoryHandler) History(c *gin.Context) {
 	}
 	page, pageSize := pageParams(c, 20, 100)
 
-	rows, total, err := h.svc.Histories(c.Request.Context(), id, page, pageSize)
+	// shop_id: xem sổ của ĐÚNG một kho bất kể người dùng đang đứng ở chi nhánh
+	// nào. Màn "Tồn kho chi nhánh" nhìn nhiều kho cùng lúc nên không hỏi qua
+	// header chi nhánh đang làm việc được. Bỏ trống thì theo header như cũ.
+	shopID, _ := strconv.ParseUint(c.Query("shop_id"), 10, 64)
+
+	rows, total, err := h.svc.Histories(c.Request.Context(), id, uint(shopID), page, pageSize)
 	if err != nil {
 		respondInventoryError(c, err, "Lỗi truy vấn sổ kho")
 		return

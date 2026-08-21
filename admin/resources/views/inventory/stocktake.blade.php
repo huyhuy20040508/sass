@@ -34,6 +34,13 @@
         }
     }
     $scopeText = $scope ? implode(' · ', $scope) : 'toàn bộ kho';
+
+    // KHO NÀO — con số tồn in trên phiếu là của chi nhánh đang làm việc, hoặc là
+    // bản cộng của mọi chi nhánh khi chưa chọn kho nào. Tờ giấy này rời khỏi màn
+    // hình và đi theo người đi đếm giữa các kệ: thiếu dòng này thì hai kho in ra
+    // hai tờ giống hệt nhau, và số đếm được ghi vào nhầm tờ là chuyện sớm muộn.
+    $khoIn = \App\Services\ChiNhanhDangLam::ten();
+    $nhieuChiNhanh = count(\App\Services\ChiNhanhDangLam::danhSach()['ds']) > 1;
     $truncated = $total > count($rows);
 @endphp
 <!DOCTYPE html>
@@ -156,6 +163,9 @@
                 @if ($shopContact !== '')<p>{{ $shopContact }}</p>@endif
             </div>
             <div class="st-meta">
+                @if($nhieuChiNhanh)
+                    <p><b>Kho: {{ $khoIn ?? 'gộp mọi chi nhánh' }}</b></p>
+                @endif
                 <p>Ngày in: {{ now()->format('H:i d/m/Y') }}</p>
                 <p>Số dòng: {{ $nf(count($rows)) }}</p>
             </div>

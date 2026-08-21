@@ -59,8 +59,35 @@
 
     <div class="inv">
         {{-- Header: tên trang + số liệu toàn kho (không phụ thuộc bộ lọc đang áp) --}}
+        @php
+            // Cửa hàng nhiều chi nhánh: MỌI con số trên trang này (cột tồn, bộ lọc
+            // sắp hết, giá trị kho, sổ kho) đổi ý nghĩa theo chi nhánh đang làm việc
+            // — tồn của một điểm bán, hay bản cộng của cả cửa hàng. Trang phải tự
+            // nói ra mình đang hiển thị cái nào; trước đây nó im lặng và manh mối
+            // duy nhất là ô chọn nhỏ trên thanh trên cùng.
+            $cnDs = \App\Services\ChiNhanhDangLam::danhSach();
+            $nhieuChiNhanh = count($cnDs['ds']) > 1;
+            $khoDangXem = \App\Services\ChiNhanhDangLam::ten();
+        @endphp
         <div class="inv-head">
-            <h1 class="inv-title">{{ $TITLE }}</h1>
+            <div class="inv-head-left">
+                <h1 class="inv-title">{{ $TITLE }}</h1>
+
+                @if($nhieuChiNhanh)
+                    <span class="inv-kho {{ $khoDangXem === null ? 'is-gop' : '' }}"
+                          title="{{ $khoDangXem === null
+                                ? 'Mọi con số trên trang đang là TỔNG của mọi chi nhánh. Chọn một chi nhánh ở thanh trên cùng để xem riêng kho đó.'
+                                : 'Mọi con số trên trang là của riêng kho này. Đổi ở thanh trên cùng để xem kho khác.' }}">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-6h6v6"/></svg>
+                        {{ $khoDangXem === null ? 'Gộp mọi chi nhánh' : 'Kho: '.$khoDangXem }}
+                    </span>
+
+                    <a href="{{ route('admin.ton-kho-chi-nhanh.index') }}" class="inv-kho-link">
+                        Xem tách theo chi nhánh
+                        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+                    </a>
+                @endif
+            </div>
             <div class="inv-sum">
                 <a href="{{ $stateLink('all') }}" class="inv-sum-item {{ $filters['stock'] === 'all' ? 'is-on' : '' }}">
                     <span class="inv-sum-lb">Tổng biến thể</span>
@@ -676,6 +703,12 @@
                             <thead>
                                 <tr>
                                     <th class="inv-l-time">Thời gian</th>
+                                    {{-- Xem gộp thì mỗi dòng thuộc một kho khác nhau, mà cặp
+                                         "Thay đổi / Còn lại" là số của RIÊNG kho đó. Không nói ra
+                                         kho nào thì sổ đọc lên như những con số mâu thuẫn. --}}
+                                    @if($nhieuChiNhanh && $khoDangXem === null)
+                                        <th class="inv-l-shop">Chi nhánh</th>
+                                    @endif
                                     <th class="inv-l-what">Việc đã làm</th>
                                     <th class="inv-l-delta">Thay đổi</th>
                                     <th class="inv-l-after">Còn lại</th>
@@ -684,7 +717,7 @@
                                 </tr>
                             </thead>
                             <tbody id="vLedger">
-                                <tr><td colspan="6" class="inv-ledger-empty">Đang tải…</td></tr>
+                                <tr><td colspan="{{ $nhieuChiNhanh && $khoDangXem === null ? 7 : 6 }}" class="inv-ledger-empty">Đang tải…</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -725,6 +758,21 @@
         }
 
         /* Header */
+        .inv-head-left { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        /* Nhãn kho đang xem — đứng cạnh tên trang chứ không nhét vào thanh lọc:
+           nó không phải điều kiện lọc mà là PHẠM VI của mọi con số bên dưới. */
+        .inv-kho {
+            display: inline-flex; align-items: center; gap: 6px; border-radius: 4px;
+            background: #f0f5ff; color: #1d39c4; padding: 3px 10px; font-size: 12px; font-weight: 500;
+        }
+        .inv-kho.is-gop { background: #f5f5f5; color: #595959; }
+        .inv-kho svg { flex-shrink: 0; }
+        .inv-kho-link {
+            display: inline-flex; align-items: center; gap: 4px; font-size: 12px;
+            color: #1890ff; text-decoration: none;
+        }
+        .inv-kho-link:hover { text-decoration: underline; }
+
         .inv-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding: 14px 20px; }
         .inv-title { margin: 0; font-size: 16px; font-weight: 700; color: #262626; line-height: 34px; }
 
@@ -1048,6 +1096,7 @@
         .inv-ledger .inv-l-after { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; color: #262626; }
         .inv-ledger .inv-l-ref { color: #595959; }
         .inv-ledger .inv-l-who { color: #8c8c8c; }
+        .inv-ledger .inv-l-shop { color: #1d39c4; white-space: nowrap; }
         .inv-ledger-empty { padding: 28px 12px !important; text-align: center; color: #bfbfbf; white-space: normal; }
 
         .inv-view-sec { display: flex; flex-direction: column; gap: 10px; }
@@ -1401,12 +1450,16 @@
             function renderHistories(rows) {
                 const box = $('vLedger');
                 if (!rows || !rows.length) {
-                    box.innerHTML = '<tr><td colspan="6" class="inv-ledger-empty">'
+                    box.innerHTML = `<tr><td colspan="${SO_COT}" class="inv-ledger-empty">`
                         + 'Biến thể này chưa từng có hàng ra vào kho.</td></tr>';
                     return;
                 }
                 box.innerHTML = ledgerRows(rows);
             }
+
+            // Đang xem gộp mọi chi nhánh: sổ kho phải kèm tên kho của từng dòng.
+            const SO_CO_KHO = @json($nhieuChiNhanh && $khoDangXem === null);
+            const SO_COT = SO_CO_KHO ? 7 : 6;
 
             function ledgerRows(rows) {
                 return rows.map((h) => {
@@ -1414,6 +1467,7 @@
                     const sign = q > 0 ? '+' : (q < 0 ? '−' : '');
                     return `<tr>
                         <td class="inv-l-time">${whenText(h.created_at)}</td>
+                        ${SO_CO_KHO ? `<td class="inv-l-shop">${h.shop_name ? esc(h.shop_name) : '—'}</td>` : ''}
                         <td class="inv-l-what">
                             <span class="inv-l-type">${esc(TX_TYPES[h.type] || h.type)}</span>
                             ${h.note ? `<span class="inv-l-note">${esc(h.note)}</span>` : ''}
@@ -1502,7 +1556,7 @@
                 ledger.token += 1;
                 const token = ledger.token;
                 $('vMoreWrap').hidden = true;
-                $('vLedger').innerHTML = '<tr><td colspan="6" class="inv-ledger-empty">Đang tải…</td></tr>';
+                $('vLedger').innerHTML = `<tr><td colspan="${SO_COT}" class="inv-ledger-empty">Đang tải…</td></tr>`;
                 ['vName', 'vSku', 'vCategory', 'vQty', 'vPrice', 'vCost', 'vValue'].forEach((k) => {
                     $(k).textContent = '—';
                 });
@@ -1546,7 +1600,7 @@
                     .catch(() => {
                         if (ledger.token !== token) return;
                         $('vMoreWrap').hidden = true;
-                        $('vLedger').innerHTML = '<tr><td colspan="6" class="inv-ledger-empty">'
+                        $('vLedger').innerHTML = `<tr><td colspan="${SO_COT}" class="inv-ledger-empty">`
                             + 'Không tải được sổ kho. Vui lòng thử lại.</td></tr>';
                     });
             }

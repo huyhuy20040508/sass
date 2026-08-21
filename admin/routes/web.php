@@ -289,6 +289,9 @@ Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:quan_ly'])->prefix('ad
         // điểm bán. Hai đường này đặt TRƯỚC /inventory/{id} cho khỏi bị nuốt.
         Route::get('/inventory/branches', [TonKhoChiNhanhController::class, 'index'])->name('ton-kho-chi-nhanh.index');
         Route::get('/inventory/branches/export', [TonKhoChiNhanhController::class, 'export'])->name('ton-kho-chi-nhanh.export');
+        // Sổ kho của một biến thể tại MỘT chi nhánh — hộp thoại trên trang gọi vào đây.
+        Route::get('/inventory/branches/{id}/history', [TonKhoChiNhanhController::class, 'history'])
+            ->whereNumber('id')->name('ton-kho-chi-nhanh.history');
         Route::get('/inventory/export', [InventoryController::class, 'export'])->name('inventory.export');
         Route::get('/inventory/import-template', [InventoryController::class, 'importTemplate'])->name('inventory.importTemplate');
         Route::post('/inventory/import', [InventoryController::class, 'import'])->name('inventory.import');

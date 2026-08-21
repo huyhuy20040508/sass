@@ -65,6 +65,9 @@ class TonKhoChiNhanhController extends Controller
 
     public const PAGE_SIZE = 50;
 
+    /** Số bút toán mỗi lượt nạp trong hộp thoại sổ kho — cùng mức với trang Tồn kho. */
+    public const LEDGER_PAGE_SIZE = 20;
+
     public function __construct(protected ApiClient $api) {}
 
     public function index(Request $request)
@@ -138,6 +141,43 @@ class TonKhoChiNhanhController extends Controller
             }
             fclose($out);
         }, $fileName, ['Content-Type' => 'text/csv; charset=UTF-8']);
+    }
+
+    /**
+     * JSON: sổ kho của MỘT biến thể TẠI MỘT chi nhánh.
+     *
+     * Phải gửi `shop_id` đích danh chứ không dựa vào chi nhánh đang làm việc: màn
+     * này nhìn nhiều kho cùng lúc, người dùng bấm vào dòng của kho nào thì phải ra
+     * sổ của kho đó — trong khi chi nhánh đang làm việc có thể là một kho khác
+     * hẳn, hoặc không có kho nào (đang xem gộp).
+     */
+    public function history(Request $request, int $id)
+    {
+        $shopID = (int) $request->query('shop_id', 0);
+        if ($shopID <= 0) {
+            return response()->json(['message' => 'Thiếu chi nhánh cần xem sổ kho.'], 422);
+        }
+
+        $page = max(1, (int) $request->query('page', 1));
+
+        try {
+            $res = $this->api->inventoryHistory($id, [
+                'shop_id' => $shopID,
+                'page' => $page,
+                'page_size' => self::LEDGER_PAGE_SIZE,
+            ]);
+            if ($res->successful()) {
+                return response()->json([
+                    'data' => $res->json('data') ?? [],
+                    'meta' => $res->json('meta') ?? [],
+                ]);
+            }
+            Log::warning('Load so kho chi nhanh failed', ['id' => $id, 'shop' => $shopID, 'status' => $res->status()]);
+        } catch (\Throwable $e) {
+            Log::error('Load so kho chi nhanh failed', ['id' => $id, 'shop' => $shopID, 'msg' => $e->getMessage()]);
+        }
+
+        return response()->json(['message' => 'Không tải được sổ kho.'], 404);
     }
 
     // ---------- Helpers ----------

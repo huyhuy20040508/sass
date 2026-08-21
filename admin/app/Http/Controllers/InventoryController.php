@@ -708,13 +708,23 @@ class InventoryController extends Controller
         $fileName = 'ton-kho-'.date('Ymd-His').'.csv';
         $low = $filters['low_stock'];
 
-        return response()->streamDownload(function () use ($rows, $low) {
+        // Cửa hàng nhiều chi nhánh: file phải nói con số này là của kho nào. Thiếu
+        // cột đó thì hai lượt xuất của hai kho ra hai file trông y hệt nhau, và
+        // người mở lại sau một tuần không có cách nào phân biệt.
+        $nhieuChiNhanh = count(\App\Services\ChiNhanhDangLam::danhSach()['ds']) > 1;
+        $khoText = \App\Services\ChiNhanhDangLam::ten() ?? 'Gộp mọi chi nhánh';
+
+        return response()->streamDownload(function () use ($rows, $low, $nhieuChiNhanh, $khoText) {
             $out = fopen('php://output', 'w');
             fwrite($out, "\xEF\xBB\xBF");
-            fputcsv($out, ['Mã hàng', 'Tên hàng hóa', 'Biến thể', 'ĐVT', 'Nhóm hàng', 'Tồn kho', 'Mức tồn', 'Giá bán', 'Giá vốn', 'Giá trị vốn tồn kho', 'Trạng thái', 'Lần cuối phát sinh']);
+            $cot = ['Mã hàng', 'Tên hàng hóa', 'Biến thể', 'ĐVT', 'Nhóm hàng', 'Tồn kho', 'Mức tồn', 'Giá bán', 'Giá vốn', 'Giá trị vốn tồn kho', 'Trạng thái', 'Lần cuối phát sinh'];
+            if ($nhieuChiNhanh) {
+                array_unshift($cot, 'Chi nhánh');
+            }
+            fputcsv($out, $cot);
             foreach ($rows as $r) {
                 $qty = (int) ($r['stock_quantity'] ?? 0);
-                fputcsv($out, [
+                $dong = [
                     $r['sku'] ?? '',
                     $r['product_name'] ?? '',
                     $r['variant_name'] ?? '',
@@ -729,7 +739,11 @@ class InventoryController extends Controller
                     (float) ($r['stock_value'] ?? 0),
                     ! empty($r['is_active']) ? 'Đang bán' : 'Ngừng bán',
                     ! empty($r['last_moved_at']) ? \Illuminate\Support\Carbon::parse($r['last_moved_at'])->format('d/m/Y H:i') : '',
-                ]);
+                ];
+                if ($nhieuChiNhanh) {
+                    array_unshift($dong, $khoText);
+                }
+                fputcsv($out, $dong);
             }
             fclose($out);
         }, $fileName, ['Content-Type' => 'text/csv; charset=UTF-8']);

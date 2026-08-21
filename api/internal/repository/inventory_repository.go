@@ -71,6 +71,22 @@ func tonExpr(ctx context.Context) string {
 	return tonCaCuaHang
 }
 
+// lanCuoiExpr là "phát sinh cuối" của một biến thể — và nó phải hỏi ĐÚNG cái kho
+// mà cột tồn bên cạnh đang nói tới.
+//
+// Lấy MAX của cả cửa hàng trong khi bảng đang hiển thị tồn của một chi nhánh thì
+// cột này báo "hôm qua có phát sinh" cho một kho đã đứng im ba tháng — người
+// quản kho đọc xong tưởng hàng vẫn đang luân chuyển và bỏ qua đúng chỗ cần dọn.
+func lanCuoiExpr(ctx context.Context) string {
+	if shopID, ok := chinhanh.ID(ctx); ok {
+		return fmt.Sprintf(`(SELECT MAX(t.created_at) FROM inventory_transactions t
+			  WHERE t.product_variant_id = v.id AND t.shop_id = %d) AS last_moved_at`, shopID)
+	}
+
+	return `(SELECT MAX(t.created_at) FROM inventory_transactions t
+			  WHERE t.product_variant_id = v.id) AS last_moved_at`
+}
+
 // baseQuery dựng phần FROM/JOIN dùng chung cho cả danh sách lẫn đếm.
 //
 // Sản phẩm đã xoá mềm bị loại hẳn: hàng của chúng không còn bán được nên đưa vào
@@ -179,8 +195,7 @@ func (r *inventoryRepository) List(ctx context.Context, f domain.InventoryFilter
 			` + effectivePriceExpr + ` AS price,
 			` + effectiveCostExpr + ` AS cost_price,
 			` + stockValueExpr(ton) + ` AS stock_value,
-			(SELECT MAX(t.created_at) FROM inventory_transactions t
-			  WHERE t.product_variant_id = v.id) AS last_moved_at`).
+			` + lanCuoiExpr(ctx)).
 		Order(inventoryOrder(f.Sort, ton)).
 		Limit(f.PageSize).
 		Offset((f.Page - 1) * f.PageSize)
@@ -226,8 +241,7 @@ func (r *inventoryRepository) FindItem(ctx context.Context, variantID uint) (*do
 			` + effectivePriceExpr + ` AS price,
 			` + effectiveCostExpr + ` AS cost_price,
 			` + stockValueExpr(ton) + ` AS stock_value,
-			(SELECT MAX(t.created_at) FROM inventory_transactions t
-			  WHERE t.product_variant_id = v.id) AS last_moved_at`).
+			` + lanCuoiExpr(ctx)).
 		Limit(1).Scan(&items).Error
 	if err != nil {
 		return nil, err
@@ -238,13 +252,39 @@ func (r *inventoryRepository) FindItem(ctx context.Context, variantID uint) (*do
 	return &items[0], nil
 }
 
-func (r *inventoryRepository) Histories(ctx context.Context, variantID uint, page, pageSize int) ([]domain.InventoryHistory, int64, error) {
-	base := r.db.WithContext(ctx).
-		Table("inventory_transactions AS t").
-		Where("t.product_variant_id = ?", variantID)
+// khoDangXet trả về chi nhánh mà một lượt ĐỌC phải cắt theo.
+//
+// Thứ tự: chi nhánh gọi thẳng (màn "Tồn kho chi nhánh" xem sổ của đúng một kho)
+// → chi nhánh đang làm việc trong ctx → không cắt (xem gộp cả cửa hàng).
+//
+// Khác hẳn chiToNhanhCuaRequest bên đường GHI, chỗ đó không được phép "không
+// biết kho nào" nên phải rơi về chi nhánh bán online. Đọc thì "không cắt" là một
+// câu trả lời hợp lệ và đúng ý người dùng khi họ chọn "Tất cả chi nhánh".
+func khoDangXet(ctx context.Context, shopID uint) (uint, bool) {
+	if shopID != 0 {
+		return shopID, true
+	}
+
+	return chinhanh.ID(ctx)
+}
+
+func (r *inventoryRepository) Histories(ctx context.Context, variantID, shopID uint, page, pageSize int) ([]domain.InventoryHistory, int64, error) {
+	// SỔ KHO PHẢI CẮT THEO ĐÚNG CÁI KHO ĐANG HIỂN THỊ. Không cắt thì người đang
+	// xem kho Quận 7 (tồn 3) mở lịch sử ra lại thấy bút toán của Quận 1 với "trước
+	// 40 → sau 41": cặp số ấy đúng với kho kia và mâu thuẫn với con số ngay trên
+	// màn hình, mà không có gì trên giao diện nói vì sao.
+	kho, coKho := khoDangXet(ctx, shopID)
+	loc := func(q *gorm.DB) *gorm.DB {
+		q = q.Where("t.product_variant_id = ?", variantID)
+		if coKho {
+			q = q.Where("t.shop_id = ?", kho)
+		}
+
+		return q
+	}
 
 	var total int64
-	if err := base.Count(&total).Error; err != nil {
+	if err := loc(r.db.WithContext(ctx).Table("inventory_transactions AS t")).Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 	if total == 0 {
@@ -255,14 +295,15 @@ func (r *inventoryRepository) Histories(ctx context.Context, variantID uint, pag
 	// là id đơn hàng vừa là id phiếu trả, nên phải kèm điều kiện reference_type ở
 	// từng JOIN thay vì COALESCE bừa hai bảng.
 	rows := make([]domain.InventoryHistory, 0, pageSize)
-	err := r.db.WithContext(ctx).
+	err := loc(r.db.WithContext(ctx).
 		Table("inventory_transactions AS t").
 		Joins("LEFT JOIN users u ON u.id = t.created_by").
+		Joins("LEFT JOIN shops sh ON sh.id = t.shop_id").
 		Joins("LEFT JOIN orders o ON o.id = t.reference_id AND t.reference_type = 'order'").
 		Joins("LEFT JOIN order_returns rt ON rt.id = t.reference_id AND t.reference_type = 'order_return'").
-		Joins("LEFT JOIN purchase_orders po ON po.id = t.reference_id AND t.reference_type = 'purchase_order'").
-		Where("t.product_variant_id = ?", variantID).
-		Select(`t.id, t.type, t.quantity, t.quantity_before, t.quantity_after,
+		Joins("LEFT JOIN purchase_orders po ON po.id = t.reference_id AND t.reference_type = 'purchase_order'")).
+		Select(`t.id, t.shop_id, COALESCE(sh.name, '') AS shop_name,
+			t.type, t.quantity, t.quantity_before, t.quantity_after,
 			COALESCE(t.reference_type, '') AS reference_type, t.reference_id,
 			COALESCE(o.order_code, rt.return_code, po.po_code, '') AS reference_code,
 			t.unit_cost, COALESCE(t.note, '') AS note,

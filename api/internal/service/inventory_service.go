@@ -31,7 +31,9 @@ type InventoryService interface {
 	Stats(ctx context.Context, lowStock int) (domain.InventoryStats, error)
 	// Get trả thông tin biến thể kèm 20 bút toán kho gần nhất.
 	Get(ctx context.Context, variantID uint) (*InventoryDetail, error)
-	Histories(ctx context.Context, variantID uint, page, pageSize int) ([]domain.InventoryHistory, int64, error)
+	// Histories trả sổ kho. shopID = 0: theo chi nhánh đang làm việc, không có
+	// thì gộp mọi chi nhánh.
+	Histories(ctx context.Context, variantID, shopID uint, page, pageSize int) ([]domain.InventoryHistory, int64, error)
 
 	// Adjust chỉnh tồn kho một biến thể và ghi sổ kho.
 	Adjust(ctx context.Context, variantID uint, req *dto.InventoryAdjustRequest, actorID uint) (*domain.InventoryAdjustResult, error)
@@ -114,20 +116,23 @@ func (s *inventoryService) Get(ctx context.Context, variantID uint) (*InventoryD
 	if err != nil {
 		return nil, err
 	}
-	histories, total, err := s.repo.Histories(ctx, variantID, 1, 20)
+	// 0 = theo chi nhánh đang làm việc. Modal xem nhanh mở từ trang Tồn kho, mà
+	// trang đó đang hiển thị tồn của đúng chi nhánh ấy — sổ kho phải cùng phạm vi,
+	// nếu không cặp "trước → sau" trong sổ mâu thuẫn với con số ngay trên bảng.
+	histories, total, err := s.repo.Histories(ctx, variantID, 0, 1, 20)
 	if err != nil {
 		return nil, err
 	}
 	return &InventoryDetail{Item: item, Histories: histories, Total: total}, nil
 }
 
-func (s *inventoryService) Histories(ctx context.Context, variantID uint, page, pageSize int) ([]domain.InventoryHistory, int64, error) {
+func (s *inventoryService) Histories(ctx context.Context, variantID, shopID uint, page, pageSize int) ([]domain.InventoryHistory, int64, error) {
 	// Biến thể không tồn tại thì báo 404 thay vì trả sổ rỗng — sổ rỗng nghĩa là
 	// "có hàng nhưng chưa từng phát sinh", hai chuyện khác hẳn nhau.
 	if _, err := s.repo.FindItem(ctx, variantID); err != nil {
 		return nil, 0, err
 	}
-	return s.repo.Histories(ctx, variantID, page, pageSize)
+	return s.repo.Histories(ctx, variantID, shopID, page, pageSize)
 }
 
 func (s *inventoryService) Adjust(ctx context.Context, variantID uint, req *dto.InventoryAdjustRequest, actorID uint) (*domain.InventoryAdjustResult, error) {
