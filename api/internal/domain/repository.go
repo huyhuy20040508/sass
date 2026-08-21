@@ -809,6 +809,78 @@ type VariantCost struct {
 	CostPrice *float64
 }
 
+// TonChiNhanhFilter là bộ lọc của màn "Tồn kho chi nhánh".
+//
+// Khác InventoryFilter ở đúng một chỗ, nhưng chỗ đó đổi luôn ý nghĩa của bảng:
+// ở đây một biến thể KHÔNG còn là một dòng, nó là một dòng TẠI MỖI chi nhánh
+// được chọn. Câu hỏi của người quản kho chuỗi không phải "còn bao nhiêu" — số
+// đó trang Tồn kho trả lời rồi — mà là "số hàng ấy đang nằm ở đâu".
+type TonChiNhanhFilter struct {
+	Keyword    string
+	CategoryID *uint
+	// ShopIDs rỗng = mọi chi nhánh ĐANG MỞ. Chi nhánh đã đóng không tự hiện ra:
+	// hàng ở đó không bán được nên cộng vào tổng chỉ làm sai con số người ta dùng
+	// để quyết định nhập thêm. Muốn xem thì chọn đích danh.
+	ShopIDs  []uint
+	Stock    string // all | in | low | out
+	LowStock int
+	Sort     string // stock_asc | stock_desc | name_asc | name_desc | value_desc
+	Page     int
+	PageSize int
+}
+
+// DongTonChiNhanh là MỘT ô của lưới (chi nhánh × biến thể).
+//
+// Quantity = 0 có hai nghĩa khác nhau dưới database — "đã từng có, giờ hết" và
+// "chi nhánh này chưa từng nhập món đó" (không có dòng variant_stocks). Trên màn
+// hình cả hai đều là "còn 0 cái", nên ở đây gộp về 0 chứ không dùng con trỏ:
+// người đi nhập hàng cần biết chi nhánh đang thiếu gì, không cần biết vì sao
+// bảng thiếu dòng.
+type DongTonChiNhanh struct {
+	ShopID   uint   `json:"shop_id"`
+	ShopCode string `json:"shop_code"`
+	ShopName string `json:"shop_name"`
+
+	VariantID    uint   `json:"variant_id"`
+	ProductID    uint   `json:"product_id"`
+	SKU          string `json:"sku"`
+	ProductName  string `json:"product_name"`
+	VariantName  string `json:"variant_name"`
+	UnitName     string `json:"unit_name"`
+	CategoryName string `json:"category_name"`
+	Thumbnail    string `json:"thumbnail"`
+
+	Quantity int `json:"quantity"`
+	// CostPrice nil = chưa khai giá vốn, y hệt InventoryItem. StockValue khi đó
+	// bằng 0 và tổng của chi nhánh đang thiếu đúng phần ấy.
+	CostPrice  *float64 `json:"cost_price"`
+	StockValue float64  `json:"stock_value"`
+	IsActive   bool     `json:"is_active"`
+}
+
+// TomTatChiNhanh là tổng của MỘT chi nhánh trên TOÀN bộ bộ lọc, không phải chỉ
+// phần đang hiện trên trang.
+//
+// Có riêng số này vì đầu mỗi nhóm trong bảng ghi "Chi nhánh A (137)". Đếm theo
+// trang đang xem thì con số đó tụt xuống 20 ngay khi sang trang hai, và người
+// đọc hiểu thành kho vừa mất hàng.
+type TomTatChiNhanh struct {
+	ShopID   uint    `json:"shop_id"`
+	ShopCode string  `json:"shop_code"`
+	ShopName string  `json:"shop_name"`
+	SoDong   int64   `json:"so_dong"`
+	TongTon  int64   `json:"tong_ton"`
+	GiaTri   float64 `json:"gia_tri"`
+}
+
+// KetQuaTonChiNhanh gói cả ba thứ màn hình cần trong một lượt gọi: các dòng của
+// trang đang xem, tổng của từng chi nhánh, và tổng số dòng để phân trang.
+type KetQuaTonChiNhanh struct {
+	Dong     []DongTonChiNhanh `json:"dong"`
+	ChiNhanh []TomTatChiNhanh  `json:"chi_nhanh"`
+	Total    int64             `json:"total"`
+}
+
 // InventoryRepository — truy cập tồn kho (product_variants) và sổ kho
 // (inventory_transactions).
 type InventoryRepository interface {
@@ -827,6 +899,11 @@ type InventoryRepository interface {
 	// Tồn mới âm thì trả ErrOutOfStock và KHÔNG dòng nào được ghi — chỉnh kho hàng
 	// loạt là một lần kiểm kê, ghi được nửa chừng còn tệ hơn là báo lỗi.
 	Adjust(ctx context.Context, items []InventoryAdjustment, actorID uint) ([]InventoryAdjustResult, error)
+
+	// TonTheoChiNhanh liệt kê tồn TÁCH RA theo từng chi nhánh: mỗi biến thể một
+	// dòng ở mỗi chi nhánh được chọn, kể cả chi nhánh chưa từng nhập món đó (số 0
+	// — đó đúng là dòng người đi nhập hàng cần nhìn thấy).
+	TonTheoChiNhanh(ctx context.Context, f TonChiNhanhFilter) (KetQuaTonChiNhanh, error)
 
 	// SetCostPrices khai giá vốn cho nhiều biến thể trong một transaction,
 	// tất-cả-hoặc-không. Ghi vào product_variants.cost_price (mức ghi đè) và KHÔNG

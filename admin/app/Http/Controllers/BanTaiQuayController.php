@@ -7,7 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Bán tại quầy — màn hình thu ngân.
+ * Bán hàng — màn hình thu ngân.
  *
  * VÌ SAO LÀ MỘT TRANG RIÊNG chứ không phải thêm nút vào trang Đơn hàng: hai việc
  * này có nhịp khác hẳn nhau. Trang Đơn hàng là nơi NGỒI XỬ LÝ đơn đã có — lọc,
@@ -26,7 +26,7 @@ use Illuminate\Support\Facades\Log;
  */
 class BanTaiQuayController extends Controller
 {
-    public const TITLE = 'Bán tại quầy';
+    public const TITLE = 'Bán hàng';
 
     /** Hình thức thanh toán của quầy.
      *

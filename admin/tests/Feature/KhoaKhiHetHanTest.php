@@ -132,6 +132,10 @@ class KhoaKhiHetHanTest extends TestCase
         $res->assertOk();
         $res->assertDontSee('Phần mềm đã hết hạn');
         // Cùng mốc với bài trên, chiều ngược lại: còn hạn thì thanh trái còn nguyên.
-        $res->assertSee('Bán tại quầy');
+        //
+        // Hỏi bằng HẰNG SỐ chứ không gõ lại nhãn: đây là bài kiểm "thanh trái còn
+        // đó hay không", không phải bài kiểm tên gọi. Chép nhãn vào đây thì mỗi
+        // lần đổi chữ trên màn hình là bài này đỏ ở một chỗ chẳng liên quan gì.
+        $res->assertSee(\App\Http\Controllers\BanTaiQuayController::TITLE);
     }
 }

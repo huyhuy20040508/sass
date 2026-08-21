@@ -53,7 +53,7 @@
         $MENH_GIA = \App\Http\Controllers\BanTaiQuayController::MENH_GIA;
     @endphp
 
-    <div class="pos" id="pos"
+    <div class="tnk" id="pos"
          data-search-url="{{ route('admin.orders.searchProducts') }}"
          data-customer-url="{{ route('admin.orders.searchCustomers') }}"
          data-scan-url="{{ route('thu-ngan.ban-hang.scan') }}"
@@ -66,100 +66,110 @@
          data-so-quy-url="{{ route('thu-ngan.ca-lam-viec.soQuy') }}"
          data-discount-limit="{{ $hanMucGiam }}">
 
-        {{-- ============ CỘT TRÁI: tìm / quét hàng ============ --}}
-        <section class="pos-pick">
-            <div class="pos-searchbar">
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 8v8M10 8v8M13 8v8M17 8v8"/></svg>
-                <input type="search" id="posSearch" class="pos-search" autocomplete="off" autofocus
-                       placeholder="Quét mã vạch, hoặc gõ tên hàng rồi bấm Enter">
-                <kbd class="pos-kbd">F2</kbd>
+        {{-- ============ KHU TRÁI: tìm / quét hàng ============ --}}
+        <section class="tnk-khu tnk-khu--chinh">
+            <div class="tnk-dau">
+                <span class="tnk-tab">Hàng hoá</span>
             </div>
 
-            <div class="pos-results" id="posResults">
-                <p class="pos-hint">Quét mã vạch để thêm hàng ngay, hoặc gõ tên để chọn từ danh sách.</p>
+            <div class="tnk-than pos-pick">
+                <div class="pos-searchbar">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 8v8M10 8v8M13 8v8M17 8v8"/></svg>
+                    <input type="search" id="posSearch" class="pos-search" autocomplete="off" autofocus
+                           placeholder="Quét mã vạch, hoặc gõ tên hàng rồi bấm Enter">
+                    <kbd class="pos-kbd">F2</kbd>
+                </div>
+
+                <div class="pos-results" id="posResults">
+                    <p class="pos-hint">Quét mã vạch để thêm hàng ngay, hoặc gõ tên để chọn từ danh sách.</p>
+                </div>
             </div>
         </section>
 
-        {{-- ============ CỘT PHẢI: giỏ hàng và thanh toán ============ --}}
-        <aside class="pos-till">
-            <header class="pos-till-head">
-                <h1 class="pos-title">Hoá đơn</h1>
+        {{-- ============ KHU PHẢI: giỏ hàng và thanh toán ============ --}}
+        <aside class="tnk-khu tnk-khu--phu">
+            {{-- Treo đơn / Huỷ giỏ nằm trên hàng thẻ, ngoài tấm trắng: giỏ dài
+                 ra thì hai nút này vẫn đứng nguyên chỗ. --}}
+            <div class="tnk-dau">
+                <span class="tnk-tab">Hoá đơn</span>
                 <div class="pos-till-acts">
                     <button type="button" class="pos-mini" id="posTreoLuu" hidden>Treo đơn</button>
                     <button type="button" class="pos-mini is-stop" id="posClear" hidden>Huỷ giỏ</button>
                 </div>
-            </header>
-
-            <div class="pos-cart" id="posCart">
-                <p class="pos-empty" id="posEmpty">Giỏ đang trống.</p>
             </div>
 
-            <div class="pos-foot">
-                <details class="pos-cus">
-                    <summary>Khách hàng &amp; mã giảm giá <span class="pos-cus-tag" id="posCusTag">khách lẻ</span></summary>
-                    <div class="pos-cus-body">
-                        <div class="pos-ac">
-                            <input type="text" id="posCusName" class="pos-input" autocomplete="off"
-                                   placeholder="Tên khách (không bắt buộc)">
-                            <div class="pos-ac-menu" id="posCusMenu" hidden></div>
-                        </div>
-                        <input type="text" id="posCusPhone" class="pos-input" autocomplete="off"
-                               placeholder="Số điện thoại (không bắt buộc)">
-                        <input type="text" id="posVoucher" class="pos-input pos-upper" autocomplete="off"
-                               placeholder="Mã giảm giá khách xuất trình">
-                        <input type="text" id="posNote" class="pos-input" autocomplete="off"
-                               placeholder="Ghi chú cho lượt bán này">
-                        <input type="hidden" id="posCusId" value="">
-                    </div>
-                </details>
-
-                <div class="pos-sum">
-                    <div class="pos-sum-row">
-                        <span>Tiền hàng <em id="posQty">0 món</em></span>
-                        <b id="posGross">0₫</b>
-                    </div>
-                    <div class="pos-sum-row pos-sum-cut" id="posCutRow" hidden>
-                        <span>Bớt theo món</span>
-                        <b id="posCut">0₫</b>
-                    </div>
-                    <div class="pos-sum-row pos-sum-total">
-                        <span>Khách phải trả</span>
-                        <b id="posTotal">0₫</b>
-                    </div>
-                    <p class="pos-sum-note">Mã giảm giá được trừ khi chốt đơn — số cuối do hệ thống tính.</p>
+            <div class="tnk-than">
+                <div class="pos-cart" id="posCart">
+                    <p class="pos-empty" id="posEmpty">Giỏ đang trống.</p>
                 </div>
 
-                <div class="pos-pay">
-                    <div class="pos-tabs" id="posPayTabs">
-                        @foreach($PAY_METHODS as $value => $label)
-                            <button type="button" class="pos-tab {{ $loop->first ? 'is-on' : '' }}"
-                                    data-method="{{ $value }}">{{ $label }}</button>
-                        @endforeach
+                <div class="pos-foot">
+                    <details class="pos-cus">
+                        <summary>Khách hàng &amp; mã giảm giá <span class="pos-cus-tag" id="posCusTag">khách lẻ</span></summary>
+                        <div class="pos-cus-body">
+                            <div class="pos-ac">
+                                <input type="text" id="posCusName" class="pos-input" autocomplete="off"
+                                       placeholder="Tên khách (không bắt buộc)">
+                                <div class="pos-ac-menu" id="posCusMenu" hidden></div>
+                            </div>
+                            <input type="text" id="posCusPhone" class="pos-input" autocomplete="off"
+                                   placeholder="Số điện thoại (không bắt buộc)">
+                            <input type="text" id="posVoucher" class="pos-input pos-upper" autocomplete="off"
+                                   placeholder="Mã giảm giá khách xuất trình">
+                            <input type="text" id="posNote" class="pos-input" autocomplete="off"
+                                   placeholder="Ghi chú cho lượt bán này">
+                            <input type="hidden" id="posCusId" value="">
+                        </div>
+                    </details>
+
+                    <div class="pos-sum">
+                        <div class="pos-sum-row">
+                            <span>Tiền hàng <em id="posQty">0 món</em></span>
+                            <b id="posGross">0₫</b>
+                        </div>
+                        <div class="pos-sum-row pos-sum-cut" id="posCutRow" hidden>
+                            <span>Bớt theo món</span>
+                            <b id="posCut">0₫</b>
+                        </div>
+                        <div class="pos-sum-row pos-sum-total">
+                            <span>Khách phải trả</span>
+                            <b id="posTotal">0₫</b>
+                        </div>
+                        <p class="pos-sum-note">Mã giảm giá được trừ khi chốt đơn — số cuối do hệ thống tính.</p>
                     </div>
 
-                    <div class="pos-cash" id="posCash">
-                        <div class="pos-tender">
-                            <label for="posTendered">Khách đưa</label>
-                            <input type="text" inputmode="numeric" id="posTendered" class="pos-input pos-money"
-                                   autocomplete="off" placeholder="0">
-                        </div>
-                        <div class="pos-notes">
-                            <button type="button" class="pos-note-btn" data-tender="exact">Đủ tiền</button>
-                            @foreach($MENH_GIA as $m)
-                                <button type="button" class="pos-note-btn" data-add="{{ $m }}">{{ number_format($m / 1000, 0, ',', '.') }}k</button>
+                    <div class="pos-pay">
+                        <div class="pos-tabs" id="posPayTabs">
+                            @foreach($PAY_METHODS as $value => $label)
+                                <button type="button" class="pos-tab {{ $loop->first ? 'is-on' : '' }}"
+                                        data-method="{{ $value }}">{{ $label }}</button>
                             @endforeach
                         </div>
-                        <div class="pos-change" id="posChange" hidden>
-                            <span>Thối lại</span>
-                            <b id="posChangeVal">0₫</b>
+
+                        <div class="pos-cash" id="posCash">
+                            <div class="pos-tender">
+                                <label for="posTendered">Khách đưa</label>
+                                <input type="text" inputmode="numeric" id="posTendered" class="pos-input pos-money"
+                                       autocomplete="off" placeholder="0">
+                            </div>
+                            <div class="pos-notes">
+                                <button type="button" class="pos-note-btn" data-tender="exact">Đủ tiền</button>
+                                @foreach($MENH_GIA as $m)
+                                    <button type="button" class="pos-note-btn" data-add="{{ $m }}">{{ number_format($m / 1000, 0, ',', '.') }}k</button>
+                                @endforeach
+                            </div>
+                            <div class="pos-change" id="posChange" hidden>
+                                <span>Thối lại</span>
+                                <b id="posChangeVal">0₫</b>
+                            </div>
                         </div>
+
+                        <p class="pos-err" id="posErr" hidden></p>
+
+                        <button type="button" class="pos-submit" id="posSubmit" disabled>
+                            Thu tiền <span id="posSubmitAmt"></span>
+                        </button>
                     </div>
-
-                    <p class="pos-err" id="posErr" hidden></p>
-
-                    <button type="button" class="pos-submit" id="posSubmit" disabled>
-                        Thu tiền <span id="posSubmitAmt"></span>
-                    </button>
                 </div>
             </div>
         </aside>
@@ -224,25 +234,10 @@
     </div>
 
     <style>
-        .pos {
-            display: grid;
-            grid-template-columns: minmax(0, 1fr) 400px;
-            gap: 12px;
-            align-items: start;
-            height: 100%;
-        }
+        /* Hai khu của trang dùng khuôn .tnk-* của layout (xem layouts/thu-ngan).
+           Dưới đây chỉ còn ruột của từng khu. */
 
-        /* ---------- Cột trái ---------- */
-        .pos-pick {
-            display: flex;
-            flex-direction: column;
-            min-width: 0;
-            height: 100%;
-            background: #fff;
-            border-radius: 8px;
-            overflow: hidden;
-        }
-
+        /* ---------- Khu trái: tìm / quét hàng ---------- */
         .pos-searchbar {
             display: flex;
             align-items: center;
@@ -331,27 +326,9 @@
         .pos-var-price { font-weight: 600; color: #1890ff; }
         .pos-var-out { color: #ff4d4f; }
 
-        /* ---------- Cột phải ---------- */
-        .pos-till {
-            display: flex;
-            flex-direction: column;
-            height: 100%;
-            background: #fff;
-            border-radius: 8px;
-            overflow: hidden;
-        }
-
-        .pos-till-head {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 8px;
-            padding: 11px 16px;
-            border-bottom: 1px solid #f0f0f0;
-        }
-
-        .pos-title { margin: 0; font-size: 15px; font-weight: 600; color: #262626; }
-        .pos-till-acts { display: flex; gap: 6px; }
+        /* ---------- Khu phải: giỏ hàng và thanh toán ---------- */
+        /* Hai nút của khu nằm trên hàng thẻ, dồn về mép phải. */
+        .pos-till-acts { display: flex; gap: 6px; margin-left: auto; }
 
         .pos-mini {
             height: 28px;
@@ -715,9 +692,10 @@
         .pos-done-links a { font-size: 12px; color: #1890ff; text-decoration: none; }
         .pos-done-links a:hover { text-decoration: underline; }
 
+        /* Xếp dọc (khuôn .tnk lo phần chia cột) thì khu chọn hàng phải có chiều
+           cao tối thiểu, không thì nó co lại còn đúng ô tìm kiếm. */
         @media (max-width: 1100px) {
             html, body { overflow: auto; }
-            .pos { grid-template-columns: 1fr; height: auto; }
             .pos-pick { min-height: 340px; }
         }
     </style>

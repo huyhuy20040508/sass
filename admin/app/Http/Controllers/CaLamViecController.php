@@ -7,7 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Ca làm việc & sổ quỹ — nơi chủ tiệm đối chiếu TIỀN TRONG KÉT với SỔ.
+ * Điều phối ca & sổ quỹ — nơi chủ tiệm đối chiếu TIỀN TRONG KÉT với SỔ.
  *
  * Cả trang này chỉ phục vụ đúng một câu hỏi cuối ngày: két có khớp sổ không, và
  * nếu lệch thì lệch trong lượt trực của ai. Thứ gì không trả lời câu đó thì
@@ -22,9 +22,9 @@ use Illuminate\Support\Facades\Log;
  */
 class CaLamViecController extends Controller
 {
-    public const TITLE = 'Ca làm việc';
+    public const TITLE = 'Điều phối ca';
 
-    public const EMPTY_TEXT = 'Chưa có ca nào. Mở ca ở màn hình Bán tại quầy khi bắt đầu buổi bán — từ lúc đó mọi lượt thu chi tiền mặt được ghi vào sổ của ca.';
+    public const EMPTY_TEXT = 'Chưa có ca nào. Mở ca ở màn hình Bán hàng khi bắt đầu buổi bán — từ lúc đó mọi lượt thu chi tiền mặt được ghi vào sổ của ca.';
 
     public const PAGE_SIZES = [20, 50, 100];
 

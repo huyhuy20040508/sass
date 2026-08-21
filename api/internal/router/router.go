@@ -641,6 +641,9 @@ func New(
 			// nào. Quầy vẫn trừ kho bình thường — nhưng chỉ qua đường bán hàng.
 			q.Dat(manage, http.MethodGet, "/inventory", "ton-kho.xem", h.Stock.List)
 			q.Dat(manage, http.MethodGet, "/inventory/stats", "ton-kho.xem", h.Stock.Stats)
+			// Tồn tách theo từng chi nhánh — cùng kho, khác câu hỏi: không phải "còn
+			// bao nhiêu" mà "số hàng ấy đang nằm ở đâu".
+			q.Dat(manage, http.MethodGet, "/inventory/chi-nhanh", "ton-kho.xem", h.Stock.TheoChiNhanh)
 			q.Dat(manage, http.MethodPost, "/inventory/adjust", "ton-kho.sua", h.Stock.BulkAdjust)
 			q.Dat(manage, http.MethodPut, "/inventory/cost", "ton-kho.gia-von", h.Stock.SetCost)
 			q.Dat(manage, http.MethodGet, "/inventory/:id", "ton-kho.xem", h.Stock.Get)

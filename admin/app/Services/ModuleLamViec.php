@@ -159,7 +159,7 @@ class ModuleLamViec
             [
                 'ma' => self::THU_NGAN,
                 'ten' => 'Thu ngân',
-                'mo_ta' => 'Bán tại quầy, ca làm việc, sổ quỹ',
+                'mo_ta' => 'Bán hàng, điều phối ca, sổ quỹ',
                 'href' => self::trangChu(self::THU_NGAN),
                 'anh' => 'images/cua-thu-ngan.jpg',
                 'icon' => '<rect x="2.5" y="7" width="19" height="12" rx="2"/><path d="M2.5 11h19"/><circle cx="12" cy="15" r="1.6"/><path d="M6 4.5h12"/>',

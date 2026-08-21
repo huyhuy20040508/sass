@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -61,6 +62,83 @@ func (h *InventoryHandler) List(c *gin.Context) {
 		Total:      total,
 		TotalPages: totalPages,
 	})
+}
+
+// @Summary		Tồn kho theo chi nhánh
+// @Description	Cùng số hàng của trang Tồn kho nhưng TÁCH RA theo từng chi nhánh: mỗi biến thể một dòng ở mỗi chi nhánh được chọn. Ô không có dòng trong `variant_stocks` (chi nhánh chưa từng nhập món đó) vẫn hiện với số 0 — đó đúng là dòng người đi nhập hàng cần thấy.
+// @Description	`chi_nhanh` là tổng của TỪNG chi nhánh tính trên toàn bộ bộ lọc, không phải trên trang đang xem: tiêu đề nhóm trong bảng ghi "Chi nhánh A (137)" nên con số đó không được đổi khi lật trang.
+// @Description	Không gửi `shops` thì lấy mọi chi nhánh ĐANG MỞ. Gửi đích danh thì lấy đúng những chi nhánh đó, kể cả chi nhánh đã đóng — hàng còn kẹt ở một điểm bán vừa đóng là thứ cần tra nhất.
+// @Tags			Admin - Inventory
+// @Accept			json
+// @Produce		json
+// @Param			keyword		query		string	false	"Tên sản phẩm / SKU biến thể / SKU sản phẩm"
+// @Param			category_id	query		int		false	"Lọc theo danh mục"
+// @Param			shops		query		string	false	"Danh sách id chi nhánh, ngăn bằng dấu phẩy"
+// @Param			stock		query		string	false	"all|in|low|out"
+// @Param			low_stock	query		int		false	"Ngưỡng sắp hết (mặc định 5, tối đa 1000)"
+// @Param			sort		query		string	false	"stock_asc|stock_desc|name_asc|name_desc|value_desc"
+// @Param			page		query		int		false	"Trang (mặc định 1)"
+// @Param			page_size	query		int		false	"Số dòng/trang (mặc định 20, tối đa 200)"
+// @Success		200			{object}	response.Body{data=domain.KetQuaTonChiNhanh,meta=response.Pagination}
+// @Failure		401			{object}	response.Body
+// @Failure		500			{object}	response.Body
+// @Security		BearerAuth
+// @Router			/admin/inventory/chi-nhanh [get]
+func (h *InventoryHandler) TheoChiNhanh(c *gin.Context) {
+	page, pageSize := pageParams(c, 20, 200)
+	low, _ := strconv.Atoi(c.Query("low_stock"))
+
+	f := domain.TonChiNhanhFilter{
+		Keyword:  c.Query("keyword"),
+		Stock:    c.Query("stock"),
+		Sort:     c.Query("sort"),
+		LowStock: low,
+		ShopIDs:  idsTuChuoi(c.Query("shops")),
+		Page:     page,
+		PageSize: pageSize,
+	}
+	if id, err := strconv.ParseUint(c.Query("category_id"), 10, 64); err == nil && id > 0 {
+		v := uint(id)
+		f.CategoryID = &v
+	}
+
+	res, err := h.svc.TonTheoChiNhanh(c.Request.Context(), f)
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, "Lỗi truy vấn tồn kho theo chi nhánh")
+		return
+	}
+
+	totalPages := 1
+	if res.Total > 0 {
+		totalPages = int((res.Total + int64(pageSize) - 1) / int64(pageSize))
+	}
+	response.Paginated(c, res, response.Pagination{
+		Page:       page,
+		PageSize:   pageSize,
+		Total:      res.Total,
+		TotalPages: totalPages,
+	})
+}
+
+// idsTuChuoi đọc "3,5,8" thành []uint.
+//
+// Bỏ qua phần không phải số thay vì báo lỗi: chuỗi này đến từ ô lọc trên URL, và
+// một dấu phẩy thừa lúc người dùng sửa tay địa chỉ không đáng để cả trang hỏng.
+// Số 0 cũng bị bỏ — không chi nhánh nào mang số đó.
+func idsTuChuoi(raw string) []uint {
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	phan := strings.Split(raw, ",")
+	ids := make([]uint, 0, len(phan))
+	for _, p := range phan {
+		n, err := strconv.ParseUint(strings.TrimSpace(p), 10, 64)
+		if err != nil || n == 0 {
+			continue
+		}
+		ids = append(ids, uint(n))
+	}
+	return ids
 }
 
 // @Summary		Thống kê tồn kho

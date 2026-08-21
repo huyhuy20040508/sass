@@ -8,7 +8,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Đơn quầy — những đơn do CHÍNH module thu ngân bán ra.
+ * Lịch sử đơn — những đơn do CHÍNH module thu ngân bán ra.
  *
  * VÌ SAO KHÔNG DÙNG TRANG ĐƠN HÀNG BÊN QUẢN TRỊ: hai loại đơn vận hành khác
  * hẳn nhau. Đơn 'web' còn phải xác nhận, soạn hàng, giao, đổi trạng thái —
@@ -23,7 +23,7 @@ use Illuminate\Support\Facades\Log;
  */
 class ThuNganController extends Controller
 {
-    public const TITLE = 'Đơn quầy';
+    public const TITLE = 'Lịch sử đơn';
 
     public const PAGE_SIZE = 20;
 

@@ -26,6 +26,8 @@ type InventoryDetail struct {
 
 type InventoryService interface {
 	List(ctx context.Context, f domain.InventoryFilter) ([]domain.InventoryItem, int64, error)
+	// TonTheoChiNhanh liệt kê tồn tách ra theo từng chi nhánh (màn "Tồn kho chi nhánh").
+	TonTheoChiNhanh(ctx context.Context, f domain.TonChiNhanhFilter) (domain.KetQuaTonChiNhanh, error)
 	Stats(ctx context.Context, lowStock int) (domain.InventoryStats, error)
 	// Get trả thông tin biến thể kèm 20 bút toán kho gần nhất.
 	Get(ctx context.Context, variantID uint) (*InventoryDetail, error)
@@ -73,6 +75,21 @@ func (s *inventoryService) List(ctx context.Context, f domain.InventoryFilter) (
 		f.Cost = "all"
 	}
 	return s.repo.List(ctx, f)
+}
+
+// TonTheoChiNhanh chuẩn hoá bộ lọc rồi giao cho repository.
+//
+// Ngưỡng "sắp hết" đi qua đúng NormalizeLowStock của trang Tồn kho: hai màn cùng
+// đọc một kho, để chúng đếm theo hai mốc khác nhau thì cùng một mặt hàng lúc
+// "sắp hết" lúc không, tuỳ người dùng đang mở trang nào.
+func (s *inventoryService) TonTheoChiNhanh(ctx context.Context, f domain.TonChiNhanhFilter) (domain.KetQuaTonChiNhanh, error) {
+	f.LowStock = NormalizeLowStock(f.LowStock)
+	switch f.Stock {
+	case "in", "low", "out":
+	default:
+		f.Stock = "all"
+	}
+	return s.repo.TonTheoChiNhanh(ctx, f)
 }
 
 // SetCosts khai giá vốn hàng loạt.
