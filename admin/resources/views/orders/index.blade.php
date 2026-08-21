@@ -633,6 +633,27 @@
                     <ol class="ord-timeline" id="vHistory"></ol>
                 </div>
 
+                {{-- Hoá đơn điện tử. Chỉ hiện khi đơn ĐÃ lập hoá đơn.
+                     MÃ CƠ QUAN THUẾ đứng hàng đầu vì nó là thứ quyết định tờ này
+                     đã có hiệu lực hay chưa — số hoá đơn thì tờ nháp cũng có. --}}
+                <div class="ord-view-sec" id="vEtaxSec" hidden>
+                    <p class="ord-sec-title">Hoá đơn điện tử</p>
+                    <div class="ord-sum ord-etax-sum">
+                        <div><span>Trạng thái</span><b id="vEtaxTrangThai">—</b></div>
+                        <div><span>Ký hiệu · Số</span><b id="vEtaxSo">—</b></div>
+                        <div><span>Mã cơ quan thuế</span><b id="vEtaxMaCQT">—</b></div>
+                        <div><span>Mã tra cứu</span><b id="vEtaxMaTraCuu">—</b></div>
+                    </div>
+                    <p class="ord-note-box" id="vEtaxLoi" hidden>—</p>
+                    <div class="ord-etax-acts">
+                        <a class="ord-btn-ghost" id="vEtaxPdf" href="#" target="_blank" rel="noopener">Xem bản in</a>
+                        <a class="ord-btn-ghost" id="vEtaxXml" href="#">Tải XML</a>
+                        <button type="button" class="ord-btn-ghost" id="vEtaxSync">Hỏi lại mã CQT</button>
+                        <button type="button" class="ord-btn-ghost" id="vEtaxReplace">Thay thế</button>
+                        <button type="button" class="ord-btn-ghost" id="vEtaxAdjust">Điều chỉnh về 0</button>
+                    </div>
+                </div>
+
                 {{-- Ghi chú nội bộ --}}
                 <div class="ord-view-sec">
                     <p class="ord-sec-title">Ghi chú nội bộ</p>
@@ -670,6 +691,39 @@
                     </a>
                     <button type="button" class="ord-btn-ghost" data-close>Đóng</button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    {{-- Modal lý do THAY THẾ / ĐIỀU CHỈNH hoá đơn.
+         Lý do là bắt buộc vì nó IN LÊN chính tờ mới: người đọc hoá đơn và cơ
+         quan thuế đều nhìn trường này để biết vì sao có tờ thay thế. --}}
+    <div class="ord-overlay" id="ordEtaxOverlay" style="display:none;">
+        <div class="ord-dialog ord-dialog-sm">
+            <div class="ord-modal-head">
+                <h4 class="ord-modal-title" id="vEtaxFixTitle">Thay thế hoá đơn</h4>
+                <button type="button" class="ord-modal-x" data-close>
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M18 6 6 18M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            <div class="ord-modal-body">
+                <p class="ord-note-box" id="vEtaxFixDesc">—</p>
+                <div>
+                    <label class="ord-lb" for="vEtaxLyDo">Lý do <span class="ord-req">*</span></label>
+                    <textarea id="vEtaxLyDo" class="ord-textarea" rows="3" maxlength="250"
+                        placeholder="VD: Sai thông tin người mua"></textarea>
+                </div>
+                <div id="vEtaxSoVBWrap">
+                    <label class="ord-lb" for="vEtaxSoVB">Số biên bản <span class="ord-opt">(không bắt buộc)</span></label>
+                    <input type="text" id="vEtaxSoVB" class="ord-input" maxlength="250" placeholder="VD: BBTT00001">
+                </div>
+            </div>
+            <div class="ord-modal-foot ord-foot-center">
+                <button type="button" class="ord-btn-danger" data-close>Huỷ</button>
+                <button type="button" class="ord-btn-primary" id="vEtaxFixSubmit">Xác nhận</button>
             </div>
         </div>
     </div>
@@ -2081,6 +2135,17 @@
             color: #8c8c8c;
         }
 
+        .ord-etax-sum {
+            align-items: flex-start;
+        }
+
+        .ord-etax-acts {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
         .ord-sum {
             display: flex;
             flex-direction: column;
@@ -2308,6 +2373,7 @@
             const $filter = document.getElementById('ordFilter');
             const $viewOverlay = document.getElementById('ordViewOverlay');
             const $reasonOverlay = document.getElementById('ordReasonOverlay');
+            const $etaxOverlay = document.getElementById('ordEtaxOverlay');
             const actionForm = document.getElementById('ordActionForm');
 
             // Luồng xử lý đơn (đúng thứ tự backend) — dùng dựng stepper tiến trình.
@@ -2516,11 +2582,11 @@
             // ---------- Modal ----------
             const openOverlay = (el) => { el.style.display = 'flex'; };
             const closeOverlay = (el) => { el.style.display = 'none'; };
-            [$viewOverlay, $reasonOverlay].forEach((ov) => {
+            [$viewOverlay, $reasonOverlay, $etaxOverlay].forEach((ov) => {
                 ov.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', () => closeOverlay(ov)));
             });
             document.addEventListener('keydown', (e) => {
-                if (e.key === 'Escape') [$viewOverlay, $reasonOverlay].forEach(closeOverlay);
+                if (e.key === 'Escape') [$viewOverlay, $reasonOverlay, $etaxOverlay].forEach(closeOverlay);
             });
 
             // ---------- Chi tiết đơn ----------
@@ -2729,15 +2795,25 @@
 
             // ---------- Hoá đơn điện tử ----------
             //
-            // Ba trạng thái, ba câu khác nhau: chưa có thì mời phát hành, đã ký thì
-            // in số hoá đơn ra, lưu nháp thì nói rõ là CHƯA có giá trị pháp lý —
+            // Bốn trạng thái, bốn câu khác nhau. "Đã gửi" KHÁC "đã phát hành":
+            // tờ chưa được cơ quan thuế cấp mã thì chưa đưa cho khách được, và
             // người bán tưởng đã xong rồi mới là chỗ hỏng.
             const $etaxBtn = document.getElementById('vEtaxBtn');
             const $etaxChu = document.getElementById('vEtaxBtnChu');
+            const $etaxSec = document.getElementById('vEtaxSec');
             let hoaDonHienTai = null;
+            let etaxViec = 'replace';
+
+            const TEN_TRANG_THAI_HD = {
+                draft: 'Nháp — chưa ký',
+                sent: 'Đã gửi — chờ cơ quan thuế cấp mã',
+                issued: 'Đã cấp mã',
+                failed: 'Cổng từ chối',
+            };
 
             function veNutHoaDon(hd) {
                 hoaDonHienTai = hd;
+                veBangHoaDon(hd);
 
                 // Đơn chưa thu tiền thì chưa xuất hoá đơn được — ẩn nút thay vì để
                 // người ta bấm rồi nhận lỗi.
@@ -2752,36 +2828,69 @@
 
                 if (!hd || hd.status === 'failed') {
                     $etaxChu.textContent = hd ? 'Phát hành lại hoá đơn' : 'Phát hành hoá đơn';
+                    $etaxBtn.dataset.viec = 'phat-hanh';
                     $etaxBtn.title = hd && hd.error ? 'Lượt trước hỏng: ' + hd.error : '';
 
                     return;
                 }
 
-                $etaxBtn.disabled = true;
-                if (hd.status === 'issued') {
-                    $etaxChu.textContent = hd.invoice_no
-                        ? 'Đã phát hành · số ' + hd.invoice_no
-                        : 'Đã phát hành hoá đơn';
-                    $etaxBtn.title = 'Ký hiệu ' + (hd.symbol || '');
-                } else {
-                    $etaxChu.textContent = 'Đã lưu nháp hoá đơn';
-                    $etaxBtn.title = 'Hoá đơn nháp chưa có giá trị pháp lý — vào trang nhà cung cấp để ký phát hành';
+                if (hd.status === 'draft') {
+                    // Tờ nháp chưa có giá trị pháp lý: nút chính đổi thành Ký chứ
+                    // không đứng im chờ người dùng sang trang nhà cung cấp.
+                    $etaxChu.textContent = 'Ký và gửi hoá đơn';
+                    $etaxBtn.dataset.viec = 'ky';
+                    $etaxBtn.title = 'Hoá đơn nháp chưa có giá trị pháp lý';
+
+                    return;
                 }
+
+                $etaxBtn.disabled = true;
+                $etaxBtn.dataset.viec = '';
+                $etaxChu.textContent = hd.status === 'issued'
+                    ? (hd.invoice_no ? 'Đã phát hành · số ' + hd.invoice_no : 'Đã phát hành hoá đơn')
+                    : 'Đã gửi · chờ cấp mã';
+                $etaxBtn.title = 'Ký hiệu ' + (hd.symbol || '');
             }
 
-            $etaxBtn.addEventListener('click', () => {
-                if (!current || $etaxBtn.disabled) return;
+            // Bảng thông tin hoá đơn trong thân hộp chi tiết, kèm các nút chỉ có
+            // nghĩa ở đúng một trạng thái (không tải XML một tờ chưa ký).
+            function veBangHoaDon(hd) {
+                $etaxSec.hidden = !hd;
+                if (!hd || !current) return;
 
-                $etaxBtn.disabled = true;
-                const chuCu = $etaxChu.textContent;
-                $etaxChu.textContent = 'Đang phát hành…';
+                document.getElementById('vEtaxTrangThai').textContent = TEN_TRANG_THAI_HD[hd.status] || hd.status || '—';
+                document.getElementById('vEtaxSo').textContent =
+                    (hd.symbol || '—') + (hd.invoice_no ? ' · ' + hd.invoice_no : '');
+                document.getElementById('vEtaxMaCQT').textContent = hd.tax_auth_code || 'chưa được cấp';
+                document.getElementById('vEtaxMaTraCuu').textContent = hd.lookup_code || '—';
 
-                fetch(`${URL_BASE}/${current.id}/etax`, {
+                const $loi = document.getElementById('vEtaxLoi');
+                $loi.hidden = !hd.error;
+                $loi.textContent = hd.error || '';
+
+                const daKy = hd.status === 'sent' || hd.status === 'issued';
+                const hien = (id, co) => { document.getElementById(id).hidden = !co; };
+                document.getElementById('vEtaxPdf').href = `${URL_BASE}/${current.id}/etax/pdf`;
+                document.getElementById('vEtaxXml').href = `${URL_BASE}/${current.id}/etax/xml`;
+                hien('vEtaxPdf', hd.status !== 'failed');
+                hien('vEtaxXml', daKy);
+                hien('vEtaxSync', daKy && !hd.tax_auth_code);
+                hien('vEtaxReplace', hd.status === 'issued');
+                hien('vEtaxAdjust', hd.status === 'issued');
+            }
+
+            // Một lượt thao tác trên tờ hoá đơn. Câu của cổng in ra nguyên văn:
+            // "chưa chọn ký hiệu" và "ngày hoá đơn nhỏ hơn ngày tờ khai" là hai
+            // việc phải làm khác hẳn nhau.
+            function goiHoaDon(duong, than) {
+                return fetch(`${URL_BASE}/${current.id}/etax${duong}`, {
                     method: 'POST',
                     headers: {
                         Accept: 'application/json',
+                        'Content-Type': 'application/json',
                         'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '',
                     },
+                    body: JSON.stringify(than || {}),
                 })
                     .then((r) => r.json().then((j) => { if (!r.ok) throw j; return j; }))
                     .then((j) => {
@@ -2789,17 +2898,116 @@
                         if (typeof adminToast === 'function') {
                             adminToast({ title: j.message, tone: 'success' });
                         }
+                        tuInHoaDon(j.data);
+
+                        return j;
                     })
                     .catch((j) => {
-                        $etaxBtn.disabled = false;
-                        $etaxChu.textContent = chuCu;
-                        const cau = (j && j.message) || 'Phát hành hoá đơn không thành công.';
+                        const cau = (j && j.message) || 'Thao tác trên hoá đơn không thành công.';
                         if (typeof adminToast === 'function') {
-                            adminToast({ title: 'Không phát hành được hoá đơn', body: cau, tone: 'danger' });
+                            adminToast({ title: 'Hoá đơn điện tử', body: cau, tone: 'danger' });
                         } else {
                             alert(cau);
                         }
+
+                        throw j;
                     });
+            }
+
+            // Công tắc "Tự in" của chi nhánh: vừa ký xong là mở luôn bản in cho
+            // người bán đưa khách.
+            //
+            // In qua IFRAME ẨN chứ không phải window.open: lượt gọi cổng hoá đơn
+            // mất vài giây, mà mở tab mới sau ngần ấy thời gian thì trình duyệt
+            // coi là cửa sổ bật lên và chặn. Bản PDF đi qua chính máy chủ này nên
+            // cùng nguồn, gọi print() vào trong được.
+            let $khungIn = null;
+
+            function tuInHoaDon(hd) {
+                if (!hd || !hd.auto_print || !current) return;
+                // Tờ chưa ký thì chưa có gì đáng đưa khách.
+                if (hd.status !== 'sent' && hd.status !== 'issued') return;
+
+                if (!$khungIn) {
+                    $khungIn = document.createElement('iframe');
+                    $khungIn.hidden = true;
+                    $khungIn.style.display = 'none';
+                    document.body.appendChild($khungIn);
+                }
+
+                $khungIn.onload = () => {
+                    try {
+                        $khungIn.contentWindow.focus();
+                        $khungIn.contentWindow.print();
+                    } catch (e) {
+                        // Trình duyệt không cho in từ khung ẩn — nút "Xem bản in"
+                        // vẫn nằm ngay đó, không cần báo gì thêm.
+                    }
+                };
+                $khungIn.src = `${URL_BASE}/${current.id}/etax/pdf`;
+            }
+
+            $etaxBtn.addEventListener('click', () => {
+                if (!current || $etaxBtn.disabled) return;
+
+                const ky = $etaxBtn.dataset.viec === 'ky';
+                const chuCu = $etaxChu.textContent;
+                $etaxBtn.disabled = true;
+                $etaxChu.textContent = ky ? 'Đang ký…' : 'Đang phát hành…';
+
+                goiHoaDon(ky ? '/sign' : '').catch(() => {
+                    $etaxBtn.disabled = false;
+                    $etaxChu.textContent = chuCu;
+                });
+            });
+
+            document.getElementById('vEtaxSync').addEventListener('click', (e) => {
+                const $nut = e.currentTarget;
+                $nut.disabled = true;
+                goiHoaDon('/sync').catch(() => {}).finally(() => { $nut.disabled = false; });
+            });
+
+            // Thay thế và điều chỉnh đều phải có LÝ DO: nó in lên chính tờ mới,
+            // và cơ quan thuế đọc trường ấy.
+            function moSuaHoaDon(viec) {
+                etaxViec = viec;
+                const hd = hoaDonHienTai || {};
+                const to = `${esc(hd.symbol || '')} số ${esc(hd.invoice_no || '')}`;
+                const la = viec === 'replace';
+
+                document.getElementById('vEtaxFixTitle').textContent =
+                    la ? 'Thay thế hoá đơn' : 'Điều chỉnh hoá đơn về 0';
+                document.getElementById('vEtaxFixDesc').innerHTML = la
+                    ? `Xuất một tờ MỚI thay cho hoá đơn <b>${to}</b>, dựng lại từ đơn hàng hiện tại. Tờ cũ sẽ bị đánh dấu <b>đã bị thay thế</b>.`
+                    : `Xuất một tờ điều chỉnh đưa hoá đơn <b>${to}</b> về 0 đồng. Cách ghi này M-Invoice có hướng dẫn nhưng KHÔNG nằm trong quy định của cơ quan thuế — hỏi cơ quan thuế quản lý trước khi dùng.`;
+                document.getElementById('vEtaxSoVBWrap').hidden = !la;
+                document.getElementById('vEtaxLyDo').value = '';
+                document.getElementById('vEtaxSoVB').value = '';
+
+                closeOverlay($viewOverlay);
+                openOverlay($etaxOverlay);
+                setTimeout(() => document.getElementById('vEtaxLyDo').focus(), 30);
+            }
+
+            document.getElementById('vEtaxReplace').addEventListener('click', () => moSuaHoaDon('replace'));
+            document.getElementById('vEtaxAdjust').addEventListener('click', () => moSuaHoaDon('adjust'));
+
+            document.getElementById('vEtaxFixSubmit').addEventListener('click', () => {
+                const $lyDo = document.getElementById('vEtaxLyDo');
+                const lyDo = $lyDo.value.trim();
+                if (!lyDo) { $lyDo.focus(); return; }
+
+                const than = { ly_do: lyDo };
+                if (etaxViec === 'replace') {
+                    than.so_van_ban = document.getElementById('vEtaxSoVB').value.trim();
+                }
+
+                const $nut = document.getElementById('vEtaxFixSubmit');
+                $nut.disabled = true;
+                goiHoaDon('/' + etaxViec, than)
+                    .then(() => { closeOverlay($etaxOverlay); openOverlay($viewOverlay); })
+                    .catch(() => {})
+                    .finally(() => { $nut.disabled = false; });
             });
 
             // Mở modal nhập lý do (dùng chung Huỷ đơn / Trả hàng).

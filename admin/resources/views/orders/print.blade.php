@@ -85,6 +85,7 @@
         .inv-title { text-align: center; margin: 12px 0 2px; }
         .inv-title h1 { font-size: 19px; text-transform: uppercase; letter-spacing: 1px; }
         .inv-title .inv-code { font-size: 13px; margin-top: 3px; }
+        .inv-status.inv-etax { margin-top: 2px; }
         .inv-title .inv-code b { font-size: 14.5px; }
         .inv-status { text-align: center; font-size: 11.5px; color: #444; margin-bottom: 12px; }
 
@@ -171,6 +172,21 @@
             &nbsp;•&nbsp; Thanh toán: {{ $PAY_STATUSES[$o['payment_status'] ?? ''] ?? '—' }}
             ({{ $PAY_METHODS[$o['payment_method'] ?? ''] ?? '—' }})
         </p>
+
+        {{-- Hoá đơn điện tử. Chỉ in khi cơ quan thuế ĐÃ CẤP MÃ: một tờ chưa có
+             mã thì chưa có hiệu lực, in số của nó lên bill là nói với khách một
+             điều chưa đúng. Mã tra cứu là thứ khách gõ vào trang của nhà cung
+             cấp để tự xem hoá đơn của mình. --}}
+        @php($hd = $o['etax'] ?? null)
+        @if($hd && !empty($hd['tax_auth_code']))
+            <p class="inv-status inv-etax">
+                Hoá đơn điện tử: <b>{{ $hd['symbol'] ?? '' }}@if(!empty($hd['invoice_no'])) số {{ $hd['invoice_no'] }}@endif</b>
+                &nbsp;•&nbsp; Mã CQT: {{ $hd['tax_auth_code'] }}
+                @if(!empty($hd['lookup_code']))
+                    &nbsp;•&nbsp; Mã tra cứu: <b>{{ $hd['lookup_code'] }}</b>
+                @endif
+            </p>
+        @endif
 
         {{-- Khách hàng --}}
         <div class="inv-sec">

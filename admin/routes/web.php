@@ -253,6 +253,14 @@ Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:quan_ly'])->prefix('ad
     Route::get('/orders/{id}/detail', [OrderController::class, 'detail'])->name('orders.detail');
     // Phát hành hoá đơn điện tử cho một đơn — trả JSON, nút nằm trong hộp chi tiết.
     Route::post('/orders/{id}/etax', [OrderController::class, 'phatHanhHoaDon'])->name('orders.phatHanhHoaDon');
+    // Đời sau của tờ hoá đơn: ký, hỏi lại mã cơ quan thuế, thay thế, điều chỉnh.
+    // Bản PDF và bản XML trả thẳng tệp nên mở bằng đường dẫn, không phải fetch.
+    Route::post('/orders/{id}/etax/sign', [OrderController::class, 'kyHoaDon'])->name('orders.kyHoaDon');
+    Route::post('/orders/{id}/etax/sync', [OrderController::class, 'dongBoHoaDon'])->name('orders.dongBoHoaDon');
+    Route::post('/orders/{id}/etax/replace', [OrderController::class, 'thayTheHoaDon'])->name('orders.thayTheHoaDon');
+    Route::post('/orders/{id}/etax/adjust', [OrderController::class, 'dieuChinhHoaDon'])->name('orders.dieuChinhHoaDon');
+    Route::get('/orders/{id}/etax/pdf', [OrderController::class, 'pdfHoaDon'])->name('orders.pdfHoaDon');
+    Route::get('/orders/{id}/etax/xml', [OrderController::class, 'xmlHoaDon'])->name('orders.xmlHoaDon');
     Route::get('/orders/{id}/print', [OrderController::class, 'print'])->name('orders.print');
     Route::get('/orders/{id}/label', [OrderController::class, 'label'])->name('orders.label');
     Route::put('/orders/{id}/status', [OrderController::class, 'updateStatus'])->name('orders.updateStatus');
