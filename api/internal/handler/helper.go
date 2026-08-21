@@ -177,7 +177,7 @@ func handleServiceError(c *gin.Context, err error) {
 		response.Error(c, 409, "Gói dịch vụ của cửa hàng đã hết chỗ ("+
 			strings.TrimPrefix(err.Error(), domain.ErrVuotHanMuc.Error()+": ")+
 			"). Xoá bớt hoặc liên hệ nhà cung cấp để nâng gói.")
-	// Chi nhánh. Ba lỗi, ba cách chữa khác hẳn nhau — nên không gộp làm một.
+	// Chi nhánh. Năm lỗi, năm cách chữa khác hẳn nhau — nên không gộp làm một.
 	case errors.Is(err, domain.ErrMaChiNhanhDaCo):
 		response.ValidationError(c, map[string]string{
 			"code": "Mã này đã có chi nhánh khác dùng, vui lòng đặt mã khác",
@@ -185,6 +185,27 @@ func handleServiceError(c *gin.Context, err error) {
 	case errors.Is(err, domain.ErrMaChiNhanhInvalid):
 		response.ValidationError(c, map[string]string{
 			"code": "Mã chi nhánh chỉ gồm chữ thường không dấu, số, dấu chấm, gạch ngang hoặc gạch dưới (2–30 ký tự)",
+		})
+	case errors.Is(err, domain.ErrToaDoChiNhanhInvalid):
+		response.ValidationError(c, map[string]string{
+			"location": "Vị trí phải là cặp toạ độ \"vĩ độ, kinh độ\" — mở Google Maps, bấm chuột phải vào điểm cần lấy rồi dán con số hiện ra",
+		})
+	case errors.Is(err, domain.ErrToaDoThieuCap):
+		response.ValidationError(c, map[string]string{
+			"area_scope": "Khai vị trí thì phải khai cả phạm vi hoạt động, và ngược lại",
+		})
+	// Hoá đơn điện tử — bốn lỗi, bốn cách chữa khác nhau.
+	case errors.Is(err, domain.ErrETaxChuaCoKhoa):
+		response.Error(c, 503, "Máy chủ chưa khai khoá mã hoá (ETAX_SECRET_KEY) nên chưa lưu được mật khẩu cổng hoá đơn điện tử. Liên hệ nhà cung cấp phần mềm.")
+	case errors.Is(err, domain.ErrETaxNhaCungCapLa):
+		response.ValidationError(c, map[string]string{
+			"provider": "Nhà cung cấp hoá đơn điện tử này chưa được hỗ trợ",
+		})
+	case errors.Is(err, domain.ErrETaxMSTDaDung):
+		response.Error(c, 409, "Mã số thuế này đã kết nối ở một chi nhánh khác — mỗi tài khoản cổng hoá đơn chỉ dùng cho một điểm bán")
+	case errors.Is(err, domain.ErrETaxKyHieuLa):
+		response.ValidationError(c, map[string]string{
+			"template_symbol": "Ký hiệu này không có trong danh sách đã đăng ký — bấm Đồng bộ mẫu rồi chọn lại",
 		})
 	case errors.Is(err, domain.ErrChiNhanhCuoiCung):
 		response.Error(c, 409, "Đây là chi nhánh đang hoạt động cuối cùng — đóng nó xong thì cửa hàng không còn điểm bán nào để ghi đơn hàng hay tồn kho")

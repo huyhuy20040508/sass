@@ -32,8 +32,93 @@ func (r *chiNhanhRepository) List(ctx context.Context, onlyActive bool) ([]domai
 	if err := q.Find(&list).Error; err != nil {
 		return nil, err
 	}
+	if err := r.ganTenNguoiTao(ctx, list); err != nil {
+		return nil, err
+	}
+	if err := r.ganEtax(ctx, list); err != nil {
+		return nil, err
+	}
 
 	return list, nil
+}
+
+// ganEtax điền domain.ChiNhanh.Etax cho cả danh sách — cột "Sử dụng HĐĐT".
+//
+// Một lượt đọc cho mọi dòng, KHÔNG phải JOIN: bộ lọc tenant chèn `tenant_id = ?`
+// không kèm tên bảng nên câu có JOIN sẽ hỏng vì cột nhập nhằng (cùng lý do với
+// ganTenNguoiTao).
+func (r *chiNhanhRepository) ganEtax(ctx context.Context, list []domain.ChiNhanh) error {
+	if len(list) == 0 {
+		return nil
+	}
+
+	var rows []domain.EtaxConnection
+	if err := r.db.WithContext(ctx).Model(&domain.EtaxConnection{}).
+		Select("shop_id", "provider", "tax_code", "template_symbol", "is_active").
+		Find(&rows).Error; err != nil {
+		return err
+	}
+
+	theoChiNhanh := make(map[uint]domain.EtaxTom, len(rows))
+	for _, row := range rows {
+		theoChiNhanh[row.ShopID] = domain.EtaxTom{
+			Provider:       row.Provider,
+			TaxCode:        row.TaxCode,
+			TemplateSymbol: row.TemplateSymbol,
+			IsActive:       row.IsActive,
+		}
+	}
+	for i := range list {
+		if tom, co := theoChiNhanh[list[i].ID]; co {
+			t := tom
+			list[i].Etax = &t
+		}
+	}
+
+	return nil
+}
+
+// ganTenNguoiTao điền domain.ChiNhanh.CreatedByName cho cả danh sách.
+//
+// MỘT lượt tra bảng `users` cho mọi dòng, KHÔNG phải JOIN: bộ lọc tenant chèn
+// điều kiện `tenant_id = ?` không kèm tên bảng, nên câu có JOIN sang `users`
+// (cũng có cột tenant_id) sẽ hỏng vì cột nhập nhằng. Cũng không tra từng dòng
+// một — danh sách chi nhánh ngắn nhưng vòng lặp gọi database là thói quen xấu
+// khó gỡ về sau.
+//
+// Người tạo đã bị xoá thì tên để rỗng và màn hình in "—": bộ lọc tenant vẫn
+// chạy ở câu này, nên nó cũng không bao giờ trả về tên người của cửa hàng khác.
+func (r *chiNhanhRepository) ganTenNguoiTao(ctx context.Context, list []domain.ChiNhanh) error {
+	ids := make([]uint, 0, len(list))
+	for i := range list {
+		if list[i].CreatedBy != nil && *list[i].CreatedBy > 0 {
+			ids = append(ids, *list[i].CreatedBy)
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+
+	var rows []struct {
+		ID       uint
+		FullName string
+	}
+	if err := r.db.WithContext(ctx).Model(&domain.User{}).
+		Select("id", "full_name").Where("id IN ?", ids).Find(&rows).Error; err != nil {
+		return err
+	}
+
+	ten := make(map[uint]string, len(rows))
+	for _, row := range rows {
+		ten[row.ID] = row.FullName
+	}
+	for i := range list {
+		if list[i].CreatedBy != nil {
+			list[i].CreatedByName = ten[*list[i].CreatedBy]
+		}
+	}
+
+	return nil
 }
 
 func (r *chiNhanhRepository) FindByID(ctx context.Context, id uint) (*domain.ChiNhanh, error) {
@@ -45,8 +130,17 @@ func (r *chiNhanhRepository) FindByID(ctx context.Context, id uint) (*domain.Chi
 	if err != nil {
 		return nil, err
 	}
+	// Một phần tử cũng đi qua đúng đường của danh sách, để hai lối đọc không bao
+	// giờ trả về hai hình dạng khác nhau.
+	mot := []domain.ChiNhanh{cn}
+	if err := r.ganTenNguoiTao(ctx, mot); err != nil {
+		return nil, err
+	}
+	if err := r.ganEtax(ctx, mot); err != nil {
+		return nil, err
+	}
 
-	return &cn, nil
+	return &mot[0], nil
 }
 
 // ExistsByCode dùng Unscoped: mã của chi nhánh đã xoá mềm vẫn giữ chỗ trong

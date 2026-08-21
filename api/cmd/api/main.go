@@ -29,6 +29,7 @@ import (
 	"sass-api/pkg/jwt"
 	"sass-api/pkg/logger"
 	"sass-api/pkg/mailer"
+	"sass-api/pkg/minvoice"
 	"sass-api/pkg/payos"
 	"sass-api/pkg/sepay"
 )
@@ -371,7 +372,19 @@ func main() {
 	// Chi nhánh: các ĐIỂM BÁN trong một cửa hàng. Đây là thứ gói Chuỗi bán, và
 	// cũng là nơi hạn mức `max_shops` lần đầu có việc để làm — trước nó, con số
 	// ấy canh một thao tác mà không màn hình nào làm được.
-	chiNhanhSvc := service.NewChiNhanhService(chiNhanhRepo, hanMucSvc)
+	// quyTacMaRepo để mã bỏ trống được đặt theo quy tắc đánh số của cửa hàng.
+	chiNhanhSvc := service.NewChiNhanhService(chiNhanhRepo, hanMucSvc, quyTacMaRepo)
+	// Hoá đơn điện tử: tài khoản cổng HĐĐT của TỪNG chi nhánh. hopETax mã hoá mật
+	// khẩu trước khi ghi — chưa khai ETAX_SECRET_KEY thì lượt kết nối bị từ chối
+	// kèm lý do, chứ không ghi plaintext.
+	hopETax := bimat.New(cfg.ETax.SecretKey)
+	if !hopETax.SanSang() {
+		logger.Warn("chưa khai ETAX_SECRET_KEY — cửa hàng sẽ không kết nối được hoá đơn điện tử",
+			zap.String("cach_chua", "thêm ETAX_SECRET_KEY vào api/.env rồi khởi động lại"))
+	}
+	etaxSvc := service.NewEtaxService(
+		repository.NewEtaxRepository(db), chiNhanhRepo, orderRepo, hopETax, minvoice.New(),
+	)
 	caSvc := service.NewCaLamViecService(caRepo, userRepo, chiNhanhRepo)
 	// Quy tắc đánh số chứng từ — chiNhanhRepo để chốt chi nhánh có thật trước khi
 	// ghi một bộ quy tắc không màn hình nào đọc tới.
@@ -409,12 +422,12 @@ func main() {
 	notifSvc := service.NewNotificationService(notifRepo, hub)
 	// Cổng thanh toán PayOS. Dựng TRƯỚC orderSvc vì đặt hàng cần nó để xin link;
 	// chiều ngược lại paymentSvc chỉ dùng orderRepo nên hai bên không tham chiếu vòng.
-	paymentSvc := service.NewPaymentService(paymentRepo, orderRepo, payosClient, cfg.PayOS, sepayClient, notifSvc)
+	paymentSvc := service.NewPaymentService(paymentRepo, orderRepo, payosClient, cfg.PayOS, sepayClient, notifSvc, etaxSvc)
 	// Mailer để gửi email xác nhận sau khi khách đặt hàng (chạy nền, hỏng không chặn đơn).
 	// returnRepo để chặn hoàn cả đơn khi đơn đã có phiếu trả hàng riêng.
 	// settingSvc cấp phí vận chuyển, ngưỡng miễn phí ship, hotline và tên cửa hàng.
 	// promotionSvc để giá thu tiền đúng bằng giá khách nhìn thấy ngoài cửa hàng.
-	orderSvc := service.NewOrderService(orderRepo, returnRepo, mailSender, cfg.Mail, notifSvc, settingSvc, paymentSvc, promotionSvc, voucherSvc)
+	orderSvc := service.NewOrderService(orderRepo, returnRepo, mailSender, cfg.Mail, notifSvc, settingSvc, paymentSvc, promotionSvc, voucherSvc, etaxSvc)
 	returnSvc := service.NewOrderReturnService(returnRepo, notifSvc, settingSvc)
 	inventorySvc := service.NewInventoryService(inventoryRepo)
 	supplierSvc := service.NewSupplierService(supplierRepo, quyTacMaRepo)
@@ -460,6 +473,7 @@ func main() {
 		Setting:   handler.NewSettingHandler(settingSvc),
 		User:      handler.NewUserHandler(userSvc),
 		ChiNhanh:  handler.NewChiNhanhHandler(chiNhanhSvc),
+		ETax:      handler.NewEtaxHandler(etaxSvc),
 		NhanSu:    handler.NewNhanSuHandler(nhanSuSvc),
 		NhomQuyen: handler.NewNhomQuyenHandler(nhomQuyenSvc),
 		QuyTacMa:  handler.NewQuyTacMaHandler(quyTacMaSvc),

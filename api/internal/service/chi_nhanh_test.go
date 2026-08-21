@@ -124,6 +124,25 @@ func (f *fakeChiNhanhRepo) CountActiveExcept(_ context.Context, excludeID uint) 
 
 // hanMucChan là cửa hạn mức luôn trả lời "hết chỗ" — đủ để kiểm ChiNhanhService
 // có HỎI nó hay không, mà không phải dựng lại cả sổ nền tảng.
+// quyTacTat — sổ quy tắc đánh số CHƯA khai gì: SinhMa trả rỗng, nên chi nhánh
+// rơi về dải chi-nhanh-2 sẵn có. Đúng trạng thái của một cửa hàng mới mở.
+type quyTacTat struct{ domain.QuyTacMaRepository }
+
+func (quyTacTat) SinhMa(context.Context, string, uint, func(string) (bool, error)) (string, error) {
+	return "", nil
+}
+
+// quyTacBat trả về một mã cố định, để kiểm rằng mã của quy tắc được hạ chữ
+// thường trước khi ghi.
+type quyTacBat struct {
+	domain.QuyTacMaRepository
+	ma string
+}
+
+func (q quyTacBat) SinhMa(context.Context, string, uint, func(string) (bool, error)) (string, error) {
+	return q.ma, nil
+}
+
 type hanMucChan struct {
 	hoi []domain.LoaiHanMuc
 }
@@ -150,9 +169,9 @@ func chiNhanhGoc() domain.ChiNhanh {
 func TestChiNhanhHetHanMucThiKhongMoDuoc(t *testing.T) {
 	repo := newFakeChiNhanhRepo(chiNhanhGoc())
 	hm := &hanMucChan{}
-	svc := NewChiNhanhService(repo, hm)
+	svc := NewChiNhanhService(repo, hm, quyTacTat{})
 
-	_, err := svc.Create(context.Background(), &dto.ChiNhanhRequest{Name: "Kho miền Bắc"})
+	_, err := svc.Create(context.Background(), &dto.ChiNhanhRequest{Name: "Kho miền Bắc"}, 0)
 	if !errors.Is(err, domain.ErrVuotHanMuc) {
 		t.Fatalf("gói đã hết chỗ mà vẫn mở được chi nhánh: %v", err)
 	}
@@ -168,9 +187,9 @@ func TestChiNhanhHetHanMucThiKhongMoDuoc(t *testing.T) {
 // chạy bình thường, đúng như trước khi có chỗ ép.
 func TestChiNhanhKhongCoCuaHanMucThiVanMoDuoc(t *testing.T) {
 	repo := newFakeChiNhanhRepo(chiNhanhGoc())
-	svc := NewChiNhanhService(repo, nil)
+	svc := NewChiNhanhService(repo, nil, quyTacTat{})
 
-	if _, err := svc.Create(context.Background(), &dto.ChiNhanhRequest{Name: "Kho miền Bắc"}); err != nil {
+	if _, err := svc.Create(context.Background(), &dto.ChiNhanhRequest{Name: "Kho miền Bắc"}, 0); err != nil {
 		t.Fatalf("chưa nối sổ nền tảng mà lại chặn: %v", err)
 	}
 }
@@ -183,9 +202,9 @@ func TestChiNhanhTuSinhMaNeMaDaCo(t *testing.T) {
 		chiNhanhGoc(),
 		domain.ChiNhanh{ID: 2, Code: "chi-nhanh-2", Name: "Kho 2", IsActive: true},
 	)
-	svc := NewChiNhanhService(repo, nil)
+	svc := NewChiNhanhService(repo, nil, quyTacTat{})
 
-	cn, err := svc.Create(context.Background(), &dto.ChiNhanhRequest{Name: "Kho 3"})
+	cn, err := svc.Create(context.Background(), &dto.ChiNhanhRequest{Name: "Kho 3"}, 0)
 	if err != nil {
 		t.Fatalf("không mở được chi nhánh: %v", err)
 	}
@@ -199,9 +218,9 @@ func TestChiNhanhTuSinhMaNeMaDaCo(t *testing.T) {
 // câu với khoá duy nhất của MySQL (vốn không phân biệt hoa thường).
 func TestChiNhanhHaChuThuongMaNguoiDungGo(t *testing.T) {
 	repo := newFakeChiNhanhRepo(chiNhanhGoc())
-	svc := NewChiNhanhService(repo, nil)
+	svc := NewChiNhanhService(repo, nil, quyTacTat{})
 
-	cn, err := svc.Create(context.Background(), &dto.ChiNhanhRequest{Code: "  Kho-1 ", Name: "Kho 1"})
+	cn, err := svc.Create(context.Background(), &dto.ChiNhanhRequest{Code: "  Kho-1 ", Name: "Kho 1"}, 0)
 	if err != nil {
 		t.Fatalf("không mở được chi nhánh: %v", err)
 	}
@@ -211,10 +230,10 @@ func TestChiNhanhHaChuThuongMaNguoiDungGo(t *testing.T) {
 }
 
 func TestChiNhanhTuChoiMaCoDauVaKhoangTrang(t *testing.T) {
-	svc := NewChiNhanhService(newFakeChiNhanhRepo(chiNhanhGoc()), nil)
+	svc := NewChiNhanhService(newFakeChiNhanhRepo(chiNhanhGoc()), nil, quyTacTat{})
 
 	for _, ma := range []string{"kho miền bắc", "kho#1", "k", "-kho"} {
-		_, err := svc.Create(context.Background(), &dto.ChiNhanhRequest{Code: ma, Name: "Kho"})
+		_, err := svc.Create(context.Background(), &dto.ChiNhanhRequest{Code: ma, Name: "Kho"}, 0)
 		if !errors.Is(err, domain.ErrMaChiNhanhInvalid) {
 			t.Fatalf("mã %q phải bị từ chối, nhận: %v", ma, err)
 		}
@@ -222,9 +241,9 @@ func TestChiNhanhTuChoiMaCoDauVaKhoangTrang(t *testing.T) {
 }
 
 func TestChiNhanhTuChoiMaDaCo(t *testing.T) {
-	svc := NewChiNhanhService(newFakeChiNhanhRepo(chiNhanhGoc()), nil)
+	svc := NewChiNhanhService(newFakeChiNhanhRepo(chiNhanhGoc()), nil, quyTacTat{})
 
-	_, err := svc.Create(context.Background(), &dto.ChiNhanhRequest{Code: "mac-dinh", Name: "Kho"})
+	_, err := svc.Create(context.Background(), &dto.ChiNhanhRequest{Code: "mac-dinh", Name: "Kho"}, 0)
 	if !errors.Is(err, domain.ErrMaChiNhanhDaCo) {
 		t.Fatalf("mã trùng phải bị từ chối, nhận: %v", err)
 	}
@@ -234,7 +253,7 @@ func TestChiNhanhTuChoiMaDaCo(t *testing.T) {
 // chi nhánh này.
 func TestChiNhanhSuaBoTrongMaThiGiuNguyen(t *testing.T) {
 	repo := newFakeChiNhanhRepo(chiNhanhGoc())
-	svc := NewChiNhanhService(repo, nil)
+	svc := NewChiNhanhService(repo, nil, quyTacTat{})
 
 	cn, err := svc.Update(context.Background(), 1, &dto.ChiNhanhRequest{Name: "Cửa hàng chính (mới)"})
 	if err != nil {
@@ -249,7 +268,7 @@ func TestChiNhanhSuaBoTrongMaThiGiuNguyen(t *testing.T) {
 
 func TestChiNhanhKhongXoaDuocCaiCuoiCung(t *testing.T) {
 	repo := newFakeChiNhanhRepo(chiNhanhGoc())
-	svc := NewChiNhanhService(repo, nil)
+	svc := NewChiNhanhService(repo, nil, quyTacTat{})
 
 	if err := svc.Delete(context.Background(), 1); !errors.Is(err, domain.ErrChiNhanhCuoiCung) {
 		t.Fatalf("xoá chi nhánh cuối cùng phải bị chặn, nhận: %v", err)
@@ -265,7 +284,7 @@ func TestChiNhanhKhongTatDuocCaiHoatDongCuoiCung(t *testing.T) {
 		chiNhanhGoc(),
 		domain.ChiNhanh{ID: 2, Code: "kho-2", Name: "Kho 2", IsActive: false},
 	)
-	svc := NewChiNhanhService(repo, nil)
+	svc := NewChiNhanhService(repo, nil, quyTacTat{})
 
 	tat := false
 	_, err := svc.Update(context.Background(), 1, &dto.ChiNhanhRequest{Name: "Cửa hàng chính", IsActive: &tat})
@@ -280,7 +299,7 @@ func TestChiNhanhXoaDuocKhiConCaiKhac(t *testing.T) {
 		chiNhanhGoc(),
 		domain.ChiNhanh{ID: 2, Code: "kho-2", Name: "Kho 2", IsActive: true},
 	)
-	svc := NewChiNhanhService(repo, nil)
+	svc := NewChiNhanhService(repo, nil, quyTacTat{})
 
 	if err := svc.Delete(context.Background(), 2); err != nil {
 		t.Fatalf("còn chi nhánh khác mà vẫn chặn xoá: %v", err)
@@ -291,9 +310,37 @@ func TestChiNhanhXoaDuocKhiConCaiKhac(t *testing.T) {
 // kể cả khi nó là dòng cuối cùng trong danh sách.
 func TestChiNhanhXoaDuocCaiDaTatDuLaDongCuoi(t *testing.T) {
 	repo := newFakeChiNhanhRepo(domain.ChiNhanh{ID: 1, Code: "kho-cu", Name: "Kho cũ", IsActive: false})
-	svc := NewChiNhanhService(repo, nil)
+	svc := NewChiNhanhService(repo, nil, quyTacTat{})
 
 	if err := svc.Delete(context.Background(), 1); err != nil {
 		t.Fatalf("chi nhánh đã tắt mà vẫn chặn xoá: %v", err)
+	}
+}
+
+// Khai quy tắc đánh số cho chi nhánh (Cài đặt → Thông số chung) thì mã mới đi
+// theo quy tắc, và phải được hạ chữ thường: tiền tố người ta gõ thường là "CN"
+// nhưng mã chi nhánh đi vào đường dẫn nên chỉ nhận chữ thường.
+func TestChiNhanhLayMaTheoQuyTacDanhSo(t *testing.T) {
+	repo := newFakeChiNhanhRepo(chiNhanhGoc())
+	svc := NewChiNhanhService(repo, nil, quyTacBat{ma: "CN0001"})
+
+	cn, err := svc.Create(context.Background(), &dto.ChiNhanhRequest{Name: "Kho miền Bắc"}, 0)
+	if err != nil {
+		t.Fatalf("mở chi nhánh: %v", err)
+	}
+	if cn.Code != "cn0001" {
+		t.Fatalf("mã phải theo quy tắc và hạ chữ thường, nhận %q", cn.Code)
+	}
+}
+
+// Tiền tố mở đầu bằng gạch ngang là mã chi nhánh không nhận được. Báo ra thay
+// vì lặng lẽ rơi về dải cũ — người cấu hình cần biết để sửa tiền tố.
+func TestChiNhanhTuChoiMaQuyTacSaiKhuon(t *testing.T) {
+	repo := newFakeChiNhanhRepo(chiNhanhGoc())
+	svc := NewChiNhanhService(repo, nil, quyTacBat{ma: "-CN0001"})
+
+	_, err := svc.Create(context.Background(), &dto.ChiNhanhRequest{Name: "Kho miền Bắc"}, 0)
+	if !errors.Is(err, domain.ErrMaChiNhanhInvalid) {
+		t.Fatalf("mã quy tắc sai khuôn phải bị từ chối, nhận %v", err)
 	}
 }

@@ -51,10 +51,12 @@ import (
 	"sass-api/internal/router"
 	"sass-api/internal/service"
 	"sass-api/internal/tenant"
+	"sass-api/pkg/bimat"
 	"sass-api/pkg/facebook"
 	"sass-api/pkg/google"
 	"sass-api/pkg/jwt"
 	"sass-api/pkg/mailer"
+	"sass-api/pkg/minvoice"
 	"sass-api/pkg/payos"
 	"sass-api/pkg/sepay"
 )
@@ -349,8 +351,12 @@ func dungHeThongVoi(t *testing.T, banHang, dieuHanh bool) *heThong {
 	userSvc := service.NewUserService(userRepo, roleRepo, hanMucSvc)
 	hub := realtime.NewHub()
 	notifSvc := service.NewNotificationService(notifRepo, hub)
-	paymentSvc := service.NewPaymentService(paymentRepo, orderRepo, payosClient, cfg.PayOS, sepayClient, notifSvc)
-	orderSvc := service.NewOrderService(orderRepo, returnRepo, mailSender, cfg.Mail, notifSvc, settingSvc, paymentSvc, promotionSvc, voucherSvc)
+	// Hoá đơn điện tử: hộp mã hoá rỗng và client trỏ máy chủ thật. Bộ test hiện
+	// chưa chạm nhóm này; dựng sớm vì đơn hàng và thanh toán móc vào nó.
+	etaxSvc := service.NewEtaxService(
+		repository.NewEtaxRepository(db), chiNhanhRepo, orderRepo, bimat.New(""), minvoice.New())
+	paymentSvc := service.NewPaymentService(paymentRepo, orderRepo, payosClient, cfg.PayOS, sepayClient, notifSvc, etaxSvc)
+	orderSvc := service.NewOrderService(orderRepo, returnRepo, mailSender, cfg.Mail, notifSvc, settingSvc, paymentSvc, promotionSvc, voucherSvc, etaxSvc)
 	returnSvc := service.NewOrderReturnService(returnRepo, notifSvc, settingSvc)
 	inventorySvc := service.NewInventoryService(inventoryRepo)
 	supplierSvc := service.NewSupplierService(supplierRepo, quyTacMaRepo)
@@ -376,7 +382,8 @@ func dungHeThongVoi(t *testing.T, banHang, dieuHanh bool) *heThong {
 		PReturn:  handler.NewPurchaseReturnHandler(pReturnSvc),
 		Setting:  handler.NewSettingHandler(settingSvc),
 		User:     handler.NewUserHandler(userSvc),
-		ChiNhanh: handler.NewChiNhanhHandler(service.NewChiNhanhService(chiNhanhRepo, hanMucSvc)),
+		ChiNhanh: handler.NewChiNhanhHandler(service.NewChiNhanhService(chiNhanhRepo, hanMucSvc, quyTacMaRepo)),
+		ETax:     handler.NewEtaxHandler(etaxSvc),
 		NhanSu: handler.NewNhanSuHandler(service.NewNhanSuService(
 			repository.NewNhanVienRepository(db), chiNhanhRepo, userSvc,
 			repository.NewQuyenRepository(db), quyTacMaRepo)),

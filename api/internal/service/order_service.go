@@ -79,6 +79,17 @@ type OrderService interface {
 	Revenue(ctx context.Context, days int) (domain.RevenueSummary, error)
 }
 
+// PhatHanhHDDT — hoá đơn điện tử tự phát hành sau khi đơn đã thu tiền.
+//
+// Khai ở đây thay vì dùng thẳng EtaxService: hai service này chỉ cần đúng một
+// hàm của nó, và nhận cả interface lớn vào là buộc mọi bài kiểm phải dựng một
+// bản giả có mười phương thức không ai gọi.
+type PhatHanhHDDT interface {
+	// TuPhatHanh nuốt mọi lỗi: cổng hoá đơn sập không được phép làm hỏng một
+	// lượt bán đã thu tiền xong.
+	TuPhatHanh(ctx context.Context, orderID uint)
+}
+
 type orderService struct {
 	orderRepo domain.OrderRepository
 	// returnRepo chỉ dùng để biết đơn đã có phiếu trả hàng riêng hay chưa (xem
@@ -100,13 +111,16 @@ type orderService struct {
 	// promos trừ chương trình khuyến mãi vào giá từng dòng hàng. Có thể nil (test) —
 	// mọi lời gọi đều qua applyPromotions đã kiểm nil.
 	promos PromotionService
+	// etax tự phát hành hoá đơn điện tử sau khi đơn quầy thu tiền xong. Có thể
+	// nil (test, hoặc cửa hàng chưa nối cổng).
+	etax PhatHanhHDDT
 	// vouchers kiểm mã giảm giá khách nhập tay. Có thể nil (test) — khi nil thì
 	// khách gửi mã lên sẽ bị báo mã không tồn tại thay vì được giảm miễn phí.
 	vouchers VoucherService
 }
 
-func NewOrderService(orderRepo domain.OrderRepository, returnRepo domain.OrderReturnRepository, mail mailer.Mailer, mailCfg config.MailConfig, notify NotificationService, settings SettingService, payments PaymentService, promos PromotionService, vouchers VoucherService) OrderService {
-	return &orderService{orderRepo: orderRepo, returnRepo: returnRepo, mail: mail, mailCfg: mailCfg, notify: notify, settings: settings, payments: payments, promos: promos, vouchers: vouchers}
+func NewOrderService(orderRepo domain.OrderRepository, returnRepo domain.OrderReturnRepository, mail mailer.Mailer, mailCfg config.MailConfig, notify NotificationService, settings SettingService, payments PaymentService, promos PromotionService, vouchers VoucherService, etax PhatHanhHDDT) OrderService {
+	return &orderService{orderRepo: orderRepo, returnRepo: returnRepo, mail: mail, mailCfg: mailCfg, notify: notify, settings: settings, payments: payments, promos: promos, vouchers: vouchers, etax: etax}
 }
 
 // applyVoucher kiểm mã khách nhập rồi ghi khoản giảm + bản chụp mã vào đơn, trả
@@ -482,6 +496,8 @@ func (s *orderService) POSCheckout(ctx context.Context, req *dto.POSCheckoutRequ
 	// Quầy là nơi hàng ra khỏi kho nhanh nhất mà người bán lại không nhìn thấy số
 	// tồn còn lại — cảnh báo sắp hết ở đây có giá trị hơn ở bất kỳ luồng nào khác.
 	s.notifyLowStock(ctx, order)
+	// Đơn quầy sinh ra đã thu tiền xong, nên đây chính là "vừa thanh toán".
+	s.tuPhatHanhHoaDon(ctx, order.ID)
 
 	msg := "Đã bán và thu tiền xong."
 	if order.ChangeAmount != nil {
@@ -1696,4 +1712,13 @@ func canMoveTo(from, to string) bool {
 		}
 	}
 	return false
+}
+
+// tuPhatHanhHoaDon gọi hoá đơn điện tử nếu cửa hàng đã bật. nil = chưa nối cổng
+// hoặc đang chạy trong bài kiểm — không phải lỗi.
+func (s *orderService) tuPhatHanhHoaDon(ctx context.Context, orderID uint) {
+	if s.etax == nil {
+		return
+	}
+	s.etax.TuPhatHanh(ctx, orderID)
 }

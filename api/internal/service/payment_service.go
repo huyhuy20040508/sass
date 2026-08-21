@@ -84,6 +84,8 @@ type paymentService struct {
 	// notify đẩy thông báo "đơn đã thanh toán" vào chuông của nhân viên và của
 	// khách. Có thể nil khi dựng service trong test.
 	notify NotificationService
+	// etax tự phát hành hoá đơn điện tử khi tiền đã về. Có thể nil.
+	etax PhatHanhHDDT
 }
 
 func NewPaymentService(
@@ -93,6 +95,7 @@ func NewPaymentService(
 	payosCfg config.PayOSConfig,
 	sepayClient *sepay.Client,
 	notify NotificationService,
+	etax PhatHanhHDDT,
 ) PaymentService {
 	return &paymentService{
 		repo:       repo,
@@ -101,6 +104,7 @@ func NewPaymentService(
 		payosCfg:   payosCfg,
 		sepay:      sepayClient,
 		notify:     notify,
+		etax:       etax,
 		lastLookup: make(map[uint]time.Time),
 	}
 }
@@ -596,6 +600,13 @@ func (s *paymentService) markOrderPaid(ctx context.Context, orderID uint) error 
 
 	logger.Info("đơn đã được ghi nhận thanh toán qua PayOS",
 		zap.String("order_code", o.OrderCode), zap.Float64("amount", o.TotalAmount))
+
+	// Tiền đã về = đủ điều kiện xuất hoá đơn. Gọi SAU khi đơn đã ghi xong, ngoài
+	// transaction: một lượt gọi ra cổng bên ngoài không được nằm trong lúc còn
+	// giữ khoá dòng.
+	if s.etax != nil {
+		s.etax.TuPhatHanh(ctx, o.ID)
+	}
 
 	if s.notify == nil {
 		return nil

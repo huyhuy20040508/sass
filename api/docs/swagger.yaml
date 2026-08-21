@@ -57,20 +57,76 @@ definitions:
     type: object
   domain.ChiNhanh:
     properties:
+      access_link:
+        description: AccessLink là link đặt hàng online của riêng điểm bán này.
+        type: string
       address:
+        type: string
+      area_scope:
+        description: |-
+          AreaScope tính bằng MÉT và đi theo cặp với Location: có toạ độ mà không có
+          bán kính thì không khoanh được vùng nào, và ngược lại.
+        type: integer
+      branch_type:
+        description: |-
+          BranchType phân biệt ĐIỂM BÁN với PHÁP NHÂN: 1 = chi nhánh, 2 = công ty.
+          Bản v2 để hai lựa chọn này ngay trên form khai chi nhánh.
+        type: integer
+      city:
         type: string
       code:
         type: string
+      country:
+        type: string
       created_at:
+        type: string
+      created_by:
+        description: |-
+          CreatedBy là người mở chi nhánh. NULL với dòng dựng trước migration 0033
+          (và với dòng 'mac-dinh' dựng cùng cửa hàng) — màn hình in "—" chứ không
+          bịa ra một cái tên.
+        type: integer
+      created_by_name:
+        description: |-
+          CreatedByName KHÔNG phải cột: repository điền thêm bằng một lượt tra bảng
+          `users` cho cả danh sách. Cột "Người tạo" của bảng danh sách cần cái TÊN,
+          mà bắt giao diện tự đi tra id là mỗi trang thêm một lượt gọi API.
+        type: string
+      email:
+        type: string
+      etax:
+        allOf:
+        - $ref: '#/definitions/domain.EtaxTom'
+        description: |-
+          Etax cũng KHÔNG phải cột: cột "Sử dụng HĐĐT" của bảng danh sách chỉ cần
+          biết chi nhánh này đã nối chưa và nối tới đâu. nil = chưa nối. Đầy đủ thì
+          gọi GET /admin/chi-nhanh/{id}/etax.
+      footer_invoice_info:
+        type: string
+      header_invoice_info:
+        description: |-
+          Ba khối chữ của hoá đơn tại quầy: đầu hoá đơn, dòng wifi, chân hoá đơn.
+          Giới hạn 255 ký tự mỗi khối — giấy 58/80mm không chứa nổi nhiều hơn.
         type: string
       id:
         type: integer
+      image:
+        description: |-
+          Image là logo in trên hoá đơn tại quầy — đường dẫn ảnh do Shop Admin tải
+          lên và lưu hộ; API chỉ cất chuỗi (cùng cách với NhanSu.Avatar).
+        type: string
       is_active:
         description: |-
           IsActive = false: chi nhánh ngừng hoạt động nhưng dữ liệu cũ vẫn tra được.
           VẪN TÍNH vào hạn mức — nó còn giữ mã và còn đứng trong danh sách, y như tài
           khoản bị khoá vẫn chiếm một chỗ.
         type: boolean
+      location:
+        description: |-
+          Location giữ nguyên khuôn "vĩ độ, kinh độ" của v2 — một CHUỖI, không tách
+          hai cột số. Nó được dán thẳng từ Google Maps; tách ra rồi ghép lại chỉ để
+          hiển thị là hai lần cơ hội làm sai.
+        type: string
       name:
         type: string
       phone:
@@ -78,7 +134,16 @@ definitions:
           Phone/Address NULL được dưới database. Dùng StringOrNull để đọc NULL không
           vỡ ở tầng driver, và để ô bỏ trống ghi xuống NULL chứ không phải chuỗi rỗng.
         type: string
+      tax_code:
+        type: string
+      transaction_name:
+        description: |-
+          TransactionName là tên viết tắt dùng trong giao dịch, KHÁC tên đầy đủ trên
+          giấy phép — chuỗi hay in tên ngắn lên hoá đơn cho vừa khổ giấy.
+        type: string
       updated_at:
+        type: string
+      wifi_invoice_info:
         type: string
     type: object
   domain.CustomerBucket:
@@ -209,6 +274,138 @@ definitions:
       name:
         type: string
       updated_at:
+        type: string
+    type: object
+  domain.DongTonChiNhanh:
+    properties:
+      category_name:
+        type: string
+      cost_price:
+        description: |-
+          CostPrice nil = chưa khai giá vốn, y hệt InventoryItem. StockValue khi đó
+          bằng 0 và tổng của chi nhánh đang thiếu đúng phần ấy.
+        type: number
+      is_active:
+        type: boolean
+      product_id:
+        type: integer
+      product_name:
+        type: string
+      quantity:
+        type: integer
+      shop_code:
+        type: string
+      shop_id:
+        type: integer
+      shop_name:
+        type: string
+      sku:
+        type: string
+      stock_value:
+        type: number
+      thumbnail:
+        type: string
+      unit_name:
+        type: string
+      variant_id:
+        type: integer
+      variant_name:
+        type: string
+    type: object
+  domain.EtaxConnection:
+    properties:
+      auto_print:
+        type: boolean
+      auto_release:
+        type: boolean
+      created_at:
+        type: string
+      id:
+        type: integer
+      is_active:
+        type: boolean
+      ma_dvcs:
+        type: string
+      provider:
+        type: string
+      shop_id:
+        type: integer
+      tax_code:
+        type: string
+      template_symbol:
+        type: string
+      templates:
+        description: 'Templates KHÔNG phải cột: repository nạp thêm cho màn hình chi
+          tiết.'
+        items:
+          $ref: '#/definitions/domain.EtaxTemplate'
+        type: array
+      token_synced_at:
+        type: string
+      updated_at:
+        type: string
+      username:
+        type: string
+    type: object
+  domain.EtaxInvoice:
+    properties:
+      connection_id:
+        type: integer
+      created_at:
+        type: string
+      error:
+        type: string
+      id:
+        type: integer
+      invoice_id:
+        type: string
+      invoice_no:
+        type: string
+      issued_at:
+        type: string
+      order_id:
+        type: integer
+      provider:
+        type: string
+      shop_id:
+        type: integer
+      status:
+        type: string
+      symbol:
+        type: string
+      total_amount:
+        type: number
+      updated_at:
+        type: string
+      vat_amount:
+        type: number
+    type: object
+  domain.EtaxTemplate:
+    properties:
+      connection_id:
+        type: integer
+      created_at:
+        type: string
+      form_no:
+        type: string
+      id:
+        type: integer
+      symbol:
+        type: string
+      type_name:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  domain.EtaxTom:
+    properties:
+      is_active:
+        type: boolean
+      provider:
+        type: string
+      tax_code:
+        type: string
+      template_symbol:
         type: string
     type: object
   domain.GoodsReceipt:
@@ -427,6 +624,19 @@ definitions:
       total_quantity:
         type: integer
       total_variants:
+        type: integer
+    type: object
+  domain.KetQuaTonChiNhanh:
+    properties:
+      chi_nhanh:
+        items:
+          $ref: '#/definitions/domain.TomTatChiNhanh'
+        type: array
+      dong:
+        items:
+          $ref: '#/definitions/domain.DongTonChiNhanh'
+        type: array
+      total:
         type: integer
     type: object
   domain.KhuQuyen:
@@ -1628,6 +1838,21 @@ definitions:
       updated_at:
         type: string
     type: object
+  domain.TomTatChiNhanh:
+    properties:
+      gia_tri:
+        type: number
+      shop_code:
+        type: string
+      shop_id:
+        type: integer
+      shop_name:
+        type: string
+      so_dong:
+        type: integer
+      tong_ton:
+        type: integer
+    type: object
   domain.User:
     properties:
       access_areas:
@@ -2214,8 +2439,32 @@ definitions:
     type: object
   dto.ChiNhanhRequest:
     properties:
+      access_link:
+        description: AccessLink là link đặt hàng online của riêng điểm bán này.
+        maxLength: 255
+        type: string
       address:
         maxLength: 255
+        type: string
+      area_scope:
+        description: |-
+          AreaScope tính bằng MÉT, đi theo cặp với Location. Con trỏ để phân biệt
+          "không khai" với "khai số 0" — số 0 là một bán kính vô nghĩa nên bị chặn.
+        example: 100
+        minimum: 1
+        type: integer
+      branch_type:
+        description: |-
+          BranchType: 1 = chi nhánh, 2 = công ty. Bỏ trống khi TẠO = 1; bỏ trống khi
+          SỬA = giữ nguyên loại cũ.
+        enum:
+        - 1
+        - 2
+        example: 1
+        type: integer
+      city:
+        example: TP. Hồ Chí Minh
+        maxLength: 100
         type: string
       code:
         description: |-
@@ -2225,9 +2474,39 @@ definitions:
         example: kho-mien-bac
         maxLength: 30
         type: string
+      country:
+        example: Việt Nam
+        maxLength: 100
+        type: string
+      email:
+        maxLength: 150
+        type: string
+      footer_invoice_info:
+        maxLength: 255
+        type: string
+      header_invoice_info:
+        description: |-
+          Ba khối chữ của hoá đơn tại quầy. 255 ký tự mỗi khối — giấy 58/80mm không
+          chứa nổi nhiều hơn.
+        maxLength: 255
+        type: string
+      image:
+        description: |-
+          Image — đường dẫn logo do Shop Admin tải lên và lưu hộ; API chỉ cất chuỗi
+          (cùng cách với NhanSuRequest.Avatar).
+        maxLength: 255
+        type: string
       is_active:
         description: IsActive bỏ trống = true (chi nhánh mới mặc định đang hoạt động).
         type: boolean
+      location:
+        description: |-
+          Location theo khuôn "vĩ độ, kinh độ" dán thẳng từ Google Maps. Khuôn được
+          kiểm ở ChiNhanhService, không kiểm ở đây: `max` chỉ chặn được độ dài, còn
+          "10.81, 106.71" đúng khuôn hay không thì cần đọc từng số.
+        example: 10.813129, 106.710010
+        maxLength: 50
+        type: string
       name:
         example: Kho miền Bắc
         maxLength: 150
@@ -2236,6 +2515,17 @@ definitions:
         description: Phone/Address bỏ trống ghi xuống NULL, không phải chuỗi rỗng.
         example: "0912345678"
         maxLength: 20
+        type: string
+      tax_code:
+        example: "0312345678"
+        maxLength: 20
+        type: string
+      transaction_name:
+        example: CN Quận 1
+        maxLength: 150
+        type: string
+      wifi_invoice_info:
+        maxLength: 255
         type: string
     required:
     - name
@@ -2808,6 +3098,49 @@ definitions:
         items:
           $ref: '#/definitions/domain.SoQuy'
         type: array
+    type: object
+  dto.EtaxCaiDatRequest:
+    properties:
+      auto_print:
+        type: boolean
+      auto_release:
+        description: 'Hai cờ để con trỏ: không gửi = giữ nguyên.'
+        type: boolean
+      template_symbol:
+        description: TemplateSymbol phải nằm trong danh sách mẫu đã kéo về; rỗng =
+          chưa chọn.
+        example: C25TAA
+        maxLength: 20
+        type: string
+    type: object
+  dto.EtaxKetNoiRequest:
+    properties:
+      ma_dvcs:
+        description: MaDVCS là mã đơn vị cơ sở bên M-Invoice; bỏ trống = "VP" (văn
+          phòng).
+        example: VP
+        maxLength: 20
+        type: string
+      password:
+        maxLength: 200
+        type: string
+      provider:
+        description: Provider bỏ trống = minvoice (hôm nay mới có một nhà cung cấp).
+        enum:
+        - minvoice
+        example: minvoice
+        type: string
+      tax_code:
+        example: 0106026495-998
+        maxLength: 30
+        type: string
+      username:
+        maxLength: 150
+        type: string
+    required:
+    - password
+    - tax_code
+    - username
     type: object
   dto.FacebookLoginRequest:
     properties:
@@ -7250,6 +7583,227 @@ paths:
       summary: Sửa chi nhánh
       tags:
       - Admin - Chi nhánh
+  /admin/chi-nhanh/{id}/etax:
+    delete:
+      description: Xoá hẳn tài khoản khỏi sổ; mẫu hoá đơn đã kéo về đi theo.
+      parameters:
+      - description: ID chi nhánh
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Body'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Body'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Ngắt kết nối HĐĐT
+      tags:
+      - Admin - Hoá đơn điện tử
+    get:
+      description: |-
+        Trả về tài khoản đang nối kèm danh sách ký hiệu hoá đơn đã đăng ký.
+        404 = chi nhánh này chưa kết nối.
+        Mật khẩu và token KHÔNG bao giờ trả ra.
+      parameters:
+      - description: ID chi nhánh
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/domain.EtaxConnection'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Body'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Kết nối HĐĐT của một chi nhánh
+      tags:
+      - Admin - Hoá đơn điện tử
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Đăng nhập THẬT vào cổng trước khi lưu, rồi kéo luôn danh sách ký hiệu về.
+        Gọi lại trên chi nhánh đã nối = khai lại tài khoản.
+      parameters:
+      - description: ID chi nhánh
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Tài khoản cổng HĐĐT
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.EtaxKetNoiRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/domain.EtaxConnection'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.Body'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Body'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.Body'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Kết nối cổng HĐĐT
+      tags:
+      - Admin - Hoá đơn điện tử
+    put:
+      consumes:
+      - application/json
+      description: Chọn ký hiệu dùng để phát hành và hai công tắc tự phát hành / tự
+        in.
+      parameters:
+      - description: ID chi nhánh
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Cài đặt
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.EtaxCaiDatRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/domain.EtaxConnection'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Body'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Cài đặt phát hành hoá đơn
+      tags:
+      - Admin - Hoá đơn điện tử
+  /admin/chi-nhanh/{id}/etax/sync:
+    post:
+      description: Kéo lại danh sách ký hiệu từ nhà cung cấp; token hết hạn thì tự
+        đăng nhập lại.
+      parameters:
+      - description: ID chi nhánh
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/domain.EtaxConnection'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Body'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Đồng bộ mẫu hoá đơn
+      tags:
+      - Admin - Hoá đơn điện tử
   /admin/contact-requests:
     get:
       consumes:
@@ -8340,6 +8894,74 @@ paths:
       summary: Chỉnh tồn kho hàng loạt
       tags:
       - Admin - Inventory
+  /admin/inventory/chi-nhanh:
+    get:
+      consumes:
+      - application/json
+      description: |-
+        Cùng số hàng của trang Tồn kho nhưng TÁCH RA theo từng chi nhánh: mỗi biến thể một dòng ở mỗi chi nhánh được chọn. Ô không có dòng trong `variant_stocks` (chi nhánh chưa từng nhập món đó) vẫn hiện với số 0 — đó đúng là dòng người đi nhập hàng cần thấy.
+        `chi_nhanh` là tổng của TỪNG chi nhánh tính trên toàn bộ bộ lọc, không phải trên trang đang xem: tiêu đề nhóm trong bảng ghi "Chi nhánh A (137)" nên con số đó không được đổi khi lật trang.
+        Không gửi `shops` thì lấy mọi chi nhánh ĐANG MỞ. Gửi đích danh thì lấy đúng những chi nhánh đó, kể cả chi nhánh đã đóng — hàng còn kẹt ở một điểm bán vừa đóng là thứ cần tra nhất.
+      parameters:
+      - description: Tên sản phẩm / SKU biến thể / SKU sản phẩm
+        in: query
+        name: keyword
+        type: string
+      - description: Lọc theo danh mục
+        in: query
+        name: category_id
+        type: integer
+      - description: Danh sách id chi nhánh, ngăn bằng dấu phẩy
+        in: query
+        name: shops
+        type: string
+      - description: all|in|low|out
+        in: query
+        name: stock
+        type: string
+      - description: Ngưỡng sắp hết (mặc định 5, tối đa 1000)
+        in: query
+        name: low_stock
+        type: integer
+      - description: stock_asc|stock_desc|name_asc|name_desc|value_desc
+        in: query
+        name: sort
+        type: string
+      - description: Trang (mặc định 1)
+        in: query
+        name: page
+        type: integer
+      - description: Số dòng/trang (mặc định 20, tối đa 200)
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/domain.KetQuaTonChiNhanh'
+                meta:
+                  $ref: '#/definitions/response.Pagination'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Tồn kho theo chi nhánh
+      tags:
+      - Admin - Inventory
   /admin/inventory/cost:
     put:
       consumes:
@@ -9373,6 +9995,92 @@ paths:
       summary: Sửa đơn hàng
       tags:
       - Admin - Orders
+  /admin/orders/{id}/etax:
+    get:
+      description: 404 = đơn này chưa phát hành hoá đơn.
+      parameters:
+      - description: ID đơn hàng
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/domain.EtaxInvoice'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Body'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Hoá đơn điện tử của một đơn hàng
+      tags:
+      - Admin - Hoá đơn điện tử
+    post:
+      description: |-
+        Chi nhánh của đơn phải đã kết nối cổng HĐĐT và đã chọn ký hiệu.
+        Công tắc "Tự phát hành" quyết định lưu nháp hay ký luôn.
+        Mỗi đơn phát hành ĐÚNG MỘT hoá đơn; bấm lại chỉ được khi lượt trước hỏng.
+      parameters:
+      - description: ID đơn hàng
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/domain.EtaxInvoice'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Body'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.Body'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Phát hành hoá đơn cho một đơn hàng
+      tags:
+      - Admin - Hoá đơn điện tử
   /admin/orders/{id}/note:
     put:
       consumes:

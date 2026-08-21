@@ -98,13 +98,70 @@ class OrderController extends Controller
         try {
             $res = $this->api->order($id);
             if ($res->successful()) {
-                return response()->json(['data' => $res->json('data')]);
+                return response()->json([
+                    'data' => $res->json('data'),
+                    // Hoá đơn điện tử đi kèm luôn: hộp chi tiết phải biết đơn đã
+                    // xuất hoá đơn chưa để khỏi bày nút phát hành lần thứ hai.
+                    'etax' => $this->hoaDonCuaDon($id),
+                ]);
             }
         } catch (\Throwable $e) {
             Log::error('Load order detail failed', ['id' => $id, 'msg' => $e->getMessage()]);
         }
 
         return response()->json(['message' => 'Không tải được chi tiết đơn hàng.'], 404);
+    }
+
+    /**
+     * Hoá đơn điện tử của một đơn — null nếu chưa phát hành hoặc chưa nối cổng.
+     *
+     * Nuốt lỗi có chủ ý: hộp chi tiết đơn hàng KHÔNG được hỏng chỉ vì cổng hoá
+     * đơn trả về một thứ lạ. Không đọc được thì coi như chưa có, nút phát hành
+     * vẫn bấm được và lúc đó API mới là nơi từ chối nếu đã xuất rồi.
+     */
+    protected function hoaDonCuaDon(int $id): ?array
+    {
+        try {
+            $res = $this->api->hoaDonCuaDon($id);
+
+            return $res->successful() ? $res->json('data') : null;
+        } catch (\Throwable $e) {
+            Log::warning('Load etax invoice failed', ['id' => $id, 'msg' => $e->getMessage()]);
+
+            return null;
+        }
+    }
+
+    /**
+     * Phát hành hoá đơn điện tử cho một đơn.
+     *
+     * Trả JSON vì nút nằm trong hộp chi tiết, không tải lại trang. In `message`
+     * của API ra nguyên văn: "chưa nối cổng", "chưa chọn ký hiệu" và "đã phát
+     * hành rồi" là ba việc phải làm khác hẳn nhau.
+     */
+    public function phatHanhHoaDon(int $id)
+    {
+        try {
+            $res = $this->api->phatHanhHoaDon($id);
+        } catch (\Throwable $e) {
+            Log::error('Issue etax invoice failed', ['id' => $id, 'msg' => $e->getMessage()]);
+
+            return response()->json(['message' => 'Không kết nối được API. Vui lòng thử lại.'], 502);
+        }
+
+        if ($res->successful()) {
+            return response()->json([
+                'message' => $res->json('message') ?: 'Đã phát hành hoá đơn.',
+                'data' => $res->json('data'),
+            ]);
+        }
+
+        $loi = $res->json('errors');
+        $message = is_array($loi) && $loi
+            ? implode(' ', $loi)
+            : ($res->json('message') ?: 'Phát hành hoá đơn không thành công.');
+
+        return response()->json(['message' => $message], 422);
     }
 
     /** Trang in hóa đơn cho 1 hoặc NHIỀU đơn (mở tab mới, tự bật hộp thoại in).

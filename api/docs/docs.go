@@ -1274,6 +1274,356 @@ const docTemplate = `{
                 }
             }
         },
+        "/admin/chi-nhanh/{id}/etax": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Trả về tài khoản đang nối kèm danh sách ký hiệu hoá đơn đã đăng ký.\n404 = chi nhánh này chưa kết nối.\nMật khẩu và token KHÔNG bao giờ trả ra.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Hoá đơn điện tử"
+                ],
+                "summary": "Kết nối HĐĐT của một chi nhánh",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID chi nhánh",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/domain.EtaxConnection"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Chọn ký hiệu dùng để phát hành và hai công tắc tự phát hành / tự in.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Hoá đơn điện tử"
+                ],
+                "summary": "Cài đặt phát hành hoá đơn",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID chi nhánh",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Cài đặt",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.EtaxCaiDatRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/domain.EtaxConnection"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Đăng nhập THẬT vào cổng trước khi lưu, rồi kéo luôn danh sách ký hiệu về.\nGọi lại trên chi nhánh đã nối = khai lại tài khoản.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Hoá đơn điện tử"
+                ],
+                "summary": "Kết nối cổng HĐĐT",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID chi nhánh",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Tài khoản cổng HĐĐT",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.EtaxKetNoiRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/domain.EtaxConnection"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Xoá hẳn tài khoản khỏi sổ; mẫu hoá đơn đã kéo về đi theo.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Hoá đơn điện tử"
+                ],
+                "summary": "Ngắt kết nối HĐĐT",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID chi nhánh",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/chi-nhanh/{id}/etax/sync": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Kéo lại danh sách ký hiệu từ nhà cung cấp; token hết hạn thì tự đăng nhập lại.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Hoá đơn điện tử"
+                ],
+                "summary": "Đồng bộ mẫu hoá đơn",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID chi nhánh",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/domain.EtaxConnection"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/contact-requests": {
             "get": {
                 "security": [
@@ -2808,6 +3158,111 @@ const docTemplate = `{
                     },
                     "422": {
                         "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/inventory/chi-nhanh": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Cùng số hàng của trang Tồn kho nhưng TÁCH RA theo từng chi nhánh: mỗi biến thể một dòng ở mỗi chi nhánh được chọn. Ô không có dòng trong ` + "`" + `variant_stocks` + "`" + ` (chi nhánh chưa từng nhập món đó) vẫn hiện với số 0 — đó đúng là dòng người đi nhập hàng cần thấy.\n` + "`" + `chi_nhanh` + "`" + ` là tổng của TỪNG chi nhánh tính trên toàn bộ bộ lọc, không phải trên trang đang xem: tiêu đề nhóm trong bảng ghi \"Chi nhánh A (137)\" nên con số đó không được đổi khi lật trang.\nKhông gửi ` + "`" + `shops` + "`" + ` thì lấy mọi chi nhánh ĐANG MỞ. Gửi đích danh thì lấy đúng những chi nhánh đó, kể cả chi nhánh đã đóng — hàng còn kẹt ở một điểm bán vừa đóng là thứ cần tra nhất.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Inventory"
+                ],
+                "summary": "Tồn kho theo chi nhánh",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Tên sản phẩm / SKU biến thể / SKU sản phẩm",
+                        "name": "keyword",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Lọc theo danh mục",
+                        "name": "category_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Danh sách id chi nhánh, ngăn bằng dấu phẩy",
+                        "name": "shops",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "all|in|low|out",
+                        "name": "stock",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Ngưỡng sắp hết (mặc định 5, tối đa 1000)",
+                        "name": "low_stock",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "stock_asc|stock_desc|name_asc|name_desc|value_desc",
+                        "name": "sort",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Trang (mặc định 1)",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Số dòng/trang (mặc định 20, tối đa 200)",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/domain.KetQuaTonChiNhanh"
+                                        },
+                                        "meta": {
+                                            "$ref": "#/definitions/response.Pagination"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
@@ -4929,6 +5384,144 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/orders/{id}/etax": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "404 = đơn này chưa phát hành hoá đơn.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Hoá đơn điện tử"
+                ],
+                "summary": "Hoá đơn điện tử của một đơn hàng",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID đơn hàng",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/domain.EtaxInvoice"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Chi nhánh của đơn phải đã kết nối cổng HĐĐT và đã chọn ký hiệu.\nCông tắc \"Tự phát hành\" quyết định lưu nháp hay ký luôn.\nMỗi đơn phát hành ĐÚNG MỘT hoá đơn; bấm lại chỉ được khi lượt trước hỏng.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Hoá đơn điện tử"
+                ],
+                "summary": "Phát hành hoá đơn cho một đơn hàng",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID đơn hàng",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/domain.EtaxInvoice"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
@@ -15581,21 +16174,73 @@ const docTemplate = `{
         "domain.ChiNhanh": {
             "type": "object",
             "properties": {
+                "access_link": {
+                    "description": "AccessLink là link đặt hàng online của riêng điểm bán này.",
+                    "type": "string"
+                },
                 "address": {
+                    "type": "string"
+                },
+                "area_scope": {
+                    "description": "AreaScope tính bằng MÉT và đi theo cặp với Location: có toạ độ mà không có\nbán kính thì không khoanh được vùng nào, và ngược lại.",
+                    "type": "integer"
+                },
+                "branch_type": {
+                    "description": "BranchType phân biệt ĐIỂM BÁN với PHÁP NHÂN: 1 = chi nhánh, 2 = công ty.\nBản v2 để hai lựa chọn này ngay trên form khai chi nhánh.",
+                    "type": "integer"
+                },
+                "city": {
                     "type": "string"
                 },
                 "code": {
                     "type": "string"
                 },
+                "country": {
+                    "type": "string"
+                },
                 "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "description": "CreatedBy là người mở chi nhánh. NULL với dòng dựng trước migration 0033\n(và với dòng 'mac-dinh' dựng cùng cửa hàng) — màn hình in \"—\" chứ không\nbịa ra một cái tên.",
+                    "type": "integer"
+                },
+                "created_by_name": {
+                    "description": "CreatedByName KHÔNG phải cột: repository điền thêm bằng một lượt tra bảng\n` + "`" + `users` + "`" + ` cho cả danh sách. Cột \"Người tạo\" của bảng danh sách cần cái TÊN,\nmà bắt giao diện tự đi tra id là mỗi trang thêm một lượt gọi API.",
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "etax": {
+                    "description": "Etax cũng KHÔNG phải cột: cột \"Sử dụng HĐĐT\" của bảng danh sách chỉ cần\nbiết chi nhánh này đã nối chưa và nối tới đâu. nil = chưa nối. Đầy đủ thì\ngọi GET /admin/chi-nhanh/{id}/etax.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/domain.EtaxTom"
+                        }
+                    ]
+                },
+                "footer_invoice_info": {
+                    "type": "string"
+                },
+                "header_invoice_info": {
+                    "description": "Ba khối chữ của hoá đơn tại quầy: đầu hoá đơn, dòng wifi, chân hoá đơn.\nGiới hạn 255 ký tự mỗi khối — giấy 58/80mm không chứa nổi nhiều hơn.",
                     "type": "string"
                 },
                 "id": {
                     "type": "integer"
                 },
+                "image": {
+                    "description": "Image là logo in trên hoá đơn tại quầy — đường dẫn ảnh do Shop Admin tải\nlên và lưu hộ; API chỉ cất chuỗi (cùng cách với NhanSu.Avatar).",
+                    "type": "string"
+                },
                 "is_active": {
                     "description": "IsActive = false: chi nhánh ngừng hoạt động nhưng dữ liệu cũ vẫn tra được.\nVẪN TÍNH vào hạn mức — nó còn giữ mã và còn đứng trong danh sách, y như tài\nkhoản bị khoá vẫn chiếm một chỗ.",
                     "type": "boolean"
+                },
+                "location": {
+                    "description": "Location giữ nguyên khuôn \"vĩ độ, kinh độ\" của v2 — một CHUỖI, không tách\nhai cột số. Nó được dán thẳng từ Google Maps; tách ra rồi ghép lại chỉ để\nhiển thị là hai lần cơ hội làm sai.",
+                    "type": "string"
                 },
                 "name": {
                     "type": "string"
@@ -15604,7 +16249,17 @@ const docTemplate = `{
                     "description": "Phone/Address NULL được dưới database. Dùng StringOrNull để đọc NULL không\nvỡ ở tầng driver, và để ô bỏ trống ghi xuống NULL chứ không phải chuỗi rỗng.",
                     "type": "string"
                 },
+                "tax_code": {
+                    "type": "string"
+                },
+                "transaction_name": {
+                    "description": "TransactionName là tên viết tắt dùng trong giao dịch, KHÁC tên đầy đủ trên\ngiấy phép — chuỗi hay in tên ngắn lên hoá đơn cho vừa khổ giấy.",
+                    "type": "string"
+                },
                 "updated_at": {
+                    "type": "string"
+                },
+                "wifi_invoice_info": {
                     "type": "string"
                 }
             }
@@ -15790,6 +16445,201 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "domain.DongTonChiNhanh": {
+            "type": "object",
+            "properties": {
+                "category_name": {
+                    "type": "string"
+                },
+                "cost_price": {
+                    "description": "CostPrice nil = chưa khai giá vốn, y hệt InventoryItem. StockValue khi đó\nbằng 0 và tổng của chi nhánh đang thiếu đúng phần ấy.",
+                    "type": "number"
+                },
+                "is_active": {
+                    "type": "boolean"
+                },
+                "product_id": {
+                    "type": "integer"
+                },
+                "product_name": {
+                    "type": "string"
+                },
+                "quantity": {
+                    "type": "integer"
+                },
+                "shop_code": {
+                    "type": "string"
+                },
+                "shop_id": {
+                    "type": "integer"
+                },
+                "shop_name": {
+                    "type": "string"
+                },
+                "sku": {
+                    "type": "string"
+                },
+                "stock_value": {
+                    "type": "number"
+                },
+                "thumbnail": {
+                    "type": "string"
+                },
+                "unit_name": {
+                    "type": "string"
+                },
+                "variant_id": {
+                    "type": "integer"
+                },
+                "variant_name": {
+                    "type": "string"
+                }
+            }
+        },
+        "domain.EtaxConnection": {
+            "type": "object",
+            "properties": {
+                "auto_print": {
+                    "type": "boolean"
+                },
+                "auto_release": {
+                    "type": "boolean"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "is_active": {
+                    "type": "boolean"
+                },
+                "ma_dvcs": {
+                    "type": "string"
+                },
+                "provider": {
+                    "type": "string"
+                },
+                "shop_id": {
+                    "type": "integer"
+                },
+                "tax_code": {
+                    "type": "string"
+                },
+                "template_symbol": {
+                    "type": "string"
+                },
+                "templates": {
+                    "description": "Templates KHÔNG phải cột: repository nạp thêm cho màn hình chi tiết.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.EtaxTemplate"
+                    }
+                },
+                "token_synced_at": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "domain.EtaxInvoice": {
+            "type": "object",
+            "properties": {
+                "connection_id": {
+                    "type": "integer"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "error": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "invoice_id": {
+                    "type": "string"
+                },
+                "invoice_no": {
+                    "type": "string"
+                },
+                "issued_at": {
+                    "type": "string"
+                },
+                "order_id": {
+                    "type": "integer"
+                },
+                "provider": {
+                    "type": "string"
+                },
+                "shop_id": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "symbol": {
+                    "type": "string"
+                },
+                "total_amount": {
+                    "type": "number"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "vat_amount": {
+                    "type": "number"
+                }
+            }
+        },
+        "domain.EtaxTemplate": {
+            "type": "object",
+            "properties": {
+                "connection_id": {
+                    "type": "integer"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "form_no": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "symbol": {
+                    "type": "string"
+                },
+                "type_name": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "domain.EtaxTom": {
+            "type": "object",
+            "properties": {
+                "is_active": {
+                    "type": "boolean"
+                },
+                "provider": {
+                    "type": "string"
+                },
+                "tax_code": {
+                    "type": "string"
+                },
+                "template_symbol": {
                     "type": "string"
                 }
             }
@@ -16081,6 +16931,26 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "total_variants": {
+                    "type": "integer"
+                }
+            }
+        },
+        "domain.KetQuaTonChiNhanh": {
+            "type": "object",
+            "properties": {
+                "chi_nhanh": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.TomTatChiNhanh"
+                    }
+                },
+                "dong": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.DongTonChiNhanh"
+                    }
+                },
+                "total": {
                     "type": "integer"
                 }
             }
@@ -17689,6 +18559,29 @@ const docTemplate = `{
                 }
             }
         },
+        "domain.TomTatChiNhanh": {
+            "type": "object",
+            "properties": {
+                "gia_tri": {
+                    "type": "number"
+                },
+                "shop_code": {
+                    "type": "string"
+                },
+                "shop_id": {
+                    "type": "integer"
+                },
+                "shop_name": {
+                    "type": "string"
+                },
+                "so_dong": {
+                    "type": "integer"
+                },
+                "tong_ton": {
+                    "type": "integer"
+                }
+            }
+        },
         "domain.User": {
             "type": "object",
             "properties": {
@@ -18424,9 +19317,34 @@ const docTemplate = `{
                 "name"
             ],
             "properties": {
+                "access_link": {
+                    "description": "AccessLink là link đặt hàng online của riêng điểm bán này.",
+                    "type": "string",
+                    "maxLength": 255
+                },
                 "address": {
                     "type": "string",
                     "maxLength": 255
+                },
+                "area_scope": {
+                    "description": "AreaScope tính bằng MÉT, đi theo cặp với Location. Con trỏ để phân biệt\n\"không khai\" với \"khai số 0\" — số 0 là một bán kính vô nghĩa nên bị chặn.",
+                    "type": "integer",
+                    "minimum": 1,
+                    "example": 100
+                },
+                "branch_type": {
+                    "description": "BranchType: 1 = chi nhánh, 2 = công ty. Bỏ trống khi TẠO = 1; bỏ trống khi\nSỬA = giữ nguyên loại cũ.",
+                    "type": "integer",
+                    "enum": [
+                        1,
+                        2
+                    ],
+                    "example": 1
+                },
+                "city": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "example": "TP. Hồ Chí Minh"
                 },
                 "code": {
                     "description": "Code bỏ trống khi TẠO = hệ thống tự sinh (chi-nhanh-2, chi-nhanh-3…). Bỏ\ntrống khi SỬA = giữ nguyên mã cũ: mã đã đi vào chứng từ, tự đổi là hồ sơ\nhai bên lệch nhau.",
@@ -18434,9 +19352,38 @@ const docTemplate = `{
                     "maxLength": 30,
                     "example": "kho-mien-bac"
                 },
+                "country": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "example": "Việt Nam"
+                },
+                "email": {
+                    "type": "string",
+                    "maxLength": 150
+                },
+                "footer_invoice_info": {
+                    "type": "string",
+                    "maxLength": 255
+                },
+                "header_invoice_info": {
+                    "description": "Ba khối chữ của hoá đơn tại quầy. 255 ký tự mỗi khối — giấy 58/80mm không\nchứa nổi nhiều hơn.",
+                    "type": "string",
+                    "maxLength": 255
+                },
+                "image": {
+                    "description": "Image — đường dẫn logo do Shop Admin tải lên và lưu hộ; API chỉ cất chuỗi\n(cùng cách với NhanSuRequest.Avatar).",
+                    "type": "string",
+                    "maxLength": 255
+                },
                 "is_active": {
                     "description": "IsActive bỏ trống = true (chi nhánh mới mặc định đang hoạt động).",
                     "type": "boolean"
+                },
+                "location": {
+                    "description": "Location theo khuôn \"vĩ độ, kinh độ\" dán thẳng từ Google Maps. Khuôn được\nkiểm ở ChiNhanhService, không kiểm ở đây: ` + "`" + `max` + "`" + ` chỉ chặn được độ dài, còn\n\"10.81, 106.71\" đúng khuôn hay không thì cần đọc từng số.",
+                    "type": "string",
+                    "maxLength": 50,
+                    "example": "10.813129, 106.710010"
                 },
                 "name": {
                     "type": "string",
@@ -18448,6 +19395,20 @@ const docTemplate = `{
                     "type": "string",
                     "maxLength": 20,
                     "example": "0912345678"
+                },
+                "tax_code": {
+                    "type": "string",
+                    "maxLength": 20,
+                    "example": "0312345678"
+                },
+                "transaction_name": {
+                    "type": "string",
+                    "maxLength": 150,
+                    "example": "CN Quận 1"
+                },
+                "wifi_invoice_info": {
+                    "type": "string",
+                    "maxLength": 255
                 }
             }
         },
@@ -19159,6 +20120,61 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/domain.SoQuy"
                     }
+                }
+            }
+        },
+        "dto.EtaxCaiDatRequest": {
+            "type": "object",
+            "properties": {
+                "auto_print": {
+                    "type": "boolean"
+                },
+                "auto_release": {
+                    "description": "Hai cờ để con trỏ: không gửi = giữ nguyên.",
+                    "type": "boolean"
+                },
+                "template_symbol": {
+                    "description": "TemplateSymbol phải nằm trong danh sách mẫu đã kéo về; rỗng = chưa chọn.",
+                    "type": "string",
+                    "maxLength": 20,
+                    "example": "C25TAA"
+                }
+            }
+        },
+        "dto.EtaxKetNoiRequest": {
+            "type": "object",
+            "required": [
+                "password",
+                "tax_code",
+                "username"
+            ],
+            "properties": {
+                "ma_dvcs": {
+                    "description": "MaDVCS là mã đơn vị cơ sở bên M-Invoice; bỏ trống = \"VP\" (văn phòng).",
+                    "type": "string",
+                    "maxLength": 20,
+                    "example": "VP"
+                },
+                "password": {
+                    "type": "string",
+                    "maxLength": 200
+                },
+                "provider": {
+                    "description": "Provider bỏ trống = minvoice (hôm nay mới có một nhà cung cấp).",
+                    "type": "string",
+                    "enum": [
+                        "minvoice"
+                    ],
+                    "example": "minvoice"
+                },
+                "tax_code": {
+                    "type": "string",
+                    "maxLength": 30,
+                    "example": "0106026495-998"
+                },
+                "username": {
+                    "type": "string",
+                    "maxLength": 150
                 }
             }
         },

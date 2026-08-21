@@ -58,6 +58,8 @@ type Handlers struct {
 	// khách hàng của nền tảng — xem domain.ChiNhanh. Luôn có mặt: đây là dữ liệu
 	// data plane, không phụ thuộc control plane.
 	ChiNhanh *handler.ChiNhanhHandler
+	// ETax — kết nối cổng hoá đơn điện tử của từng chi nhánh.
+	ETax *handler.EtaxHandler
 	// NhanSu là HỒ SƠ người đi làm (bảng `employees`), đứng cạnh User chứ không
 	// thay: nhân viên không có tài khoản đăng nhập vẫn có hồ sơ ở đây.
 	NhanSu *handler.NhanSuHandler
@@ -605,6 +607,12 @@ func New(
 			q.Dat(admin, http.MethodPut, "/orders/:id/payment", "don-hang.sua", h.Order.UpdatePayment)
 			q.Dat(admin, http.MethodPut, "/orders/:id/shipping", "don-hang.sua", h.Order.UpdateShipping)
 			q.Dat(admin, http.MethodPut, "/orders/:id/note", "don-hang.sua", h.Order.UpdateNote)
+
+			// Hoá đơn điện tử của một đơn. XEM đi cùng quyền xem đơn (nhân viên
+			// quầy cần biết đơn đã có hoá đơn chưa để khỏi xuất hai lần), còn PHÁT
+			// HÀNH thì ở `manage`: nó ghi doanh thu với cơ quan thuế.
+			q.Dat(admin, http.MethodGet, "/orders/:id/etax", "don-hang.xem", h.ETax.HoaDon)
+			q.Dat(manage, http.MethodPost, "/orders/:id/etax", "don-hang.sua", h.ETax.PhatHanh)
 			// Món còn trả được của một đơn — màn hình lập phiếu trả dựng form từ đây.
 			// Đi theo nhóm `manage` cùng chính trang Trả hàng ngay dưới: nhân viên
 			// không lập được phiếu thì cũng không cần cái form đó.
@@ -728,6 +736,15 @@ func New(
 			q.Dat(manage, http.MethodGet, "/chi-nhanh/:id", "chi-nhanh.xem", h.ChiNhanh.Get)
 			q.Dat(manage, http.MethodPut, "/chi-nhanh/:id", "chi-nhanh.sua", h.ChiNhanh.Update)
 			q.Dat(manage, http.MethodDelete, "/chi-nhanh/:id", "chi-nhanh.xoa", h.ChiNhanh.Delete)
+
+			// Hoá đơn điện tử của một chi nhánh. Đi theo quyền của chính chi nhánh:
+			// ai sửa được điểm bán thì nối được cổng HĐĐT cho nó, và mật khẩu ấy
+			// phát hành được hoá đơn đứng tên cửa hàng nên không xuống thấp hơn.
+			q.Dat(manage, http.MethodGet, "/chi-nhanh/:id/etax", "chi-nhanh.xem", h.ETax.Get)
+			q.Dat(manage, http.MethodPost, "/chi-nhanh/:id/etax", "chi-nhanh.sua", h.ETax.Connect)
+			q.Dat(manage, http.MethodPut, "/chi-nhanh/:id/etax", "chi-nhanh.sua", h.ETax.Update)
+			q.Dat(manage, http.MethodPost, "/chi-nhanh/:id/etax/sync", "chi-nhanh.sua", h.ETax.Sync)
+			q.Dat(manage, http.MethodDelete, "/chi-nhanh/:id/etax", "chi-nhanh.sua", h.ETax.Delete)
 
 			// Quy tắc đánh số chứng từ. Đọc cũng ở `manage`: đây là bộ khung của
 			// tiệm, không phải thứ quầy bán cần biết.

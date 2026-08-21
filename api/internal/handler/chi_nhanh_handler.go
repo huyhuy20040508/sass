@@ -4,6 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"sass-api/internal/dto"
+	"sass-api/internal/middleware"
 	"sass-api/internal/service"
 	"sass-api/pkg/response"
 )
@@ -95,7 +96,8 @@ func (h *ChiNhanhHandler) Create(c *gin.Context) {
 	if !bindJSON(c, &req) {
 		return
 	}
-	cn, err := h.svc.Create(c.Request.Context(), &req)
+	// Người đang đăng nhập đi vào cột "Người tạo" của bảng danh sách.
+	cn, err := h.svc.Create(c.Request.Context(), &req, middleware.CurrentUserID(c))
 	if err != nil {
 		handleServiceError(c, err)
 
