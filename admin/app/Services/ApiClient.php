@@ -2,7 +2,6 @@
 
 namespace App\Services;
 
-use App\Services\HanSuDung;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Cache;
@@ -1388,6 +1387,20 @@ class ApiClient
         return $this->get('/admin/chi-nhanh', $onlyActive ? ['active' => 'true'] : []);
     }
 
+    /**
+     * Một chi nhánh theo id.
+     *
+     * Dùng cho công tắc trạng thái trên bảng: API chỉ có PUT TOÀN PHẦN, không có
+     * đường đổi riêng một cột, nên phải đọc lại bản ghi rồi gửi nguyên trạng và
+     * chỉ lật cờ `is_active`. Đọc lại thay vì lấy giá trị đang hiện trên trang:
+     * trang có thể đã cũ, và ghi đè tên/địa chỉ bằng bản cũ chỉ vì ai đó gạt một
+     * cái công tắc là mất dữ liệu người khác vừa sửa.
+     */
+    public function chiNhanhChiTiet(int $id): Response
+    {
+        return $this->get("/admin/chi-nhanh/{$id}");
+    }
+
     /** Mở thêm một chi nhánh. Bỏ trống `code` thì API tự đặt mã. */
     public function taoChiNhanh(array $data): Response
     {
@@ -1404,6 +1417,53 @@ class ApiClient
     public function xoaChiNhanh(int $id): Response
     {
         return $this->delete("/admin/chi-nhanh/{$id}");
+    }
+
+    // ---------- Hoá đơn điện tử của chi nhánh ----------
+    //
+    // Tài khoản cổng HĐĐT gắn với TỪNG chi nhánh (chuỗi nhiều pháp nhân thì mỗi
+    // điểm bán một mã số thuế). API không bao giờ trả mật khẩu hay token ra.
+
+    /** Kết nối HĐĐT của một chi nhánh, kèm danh sách ký hiệu. 404 = chưa nối. */
+    public function etax(int $shopID): Response
+    {
+        return $this->get("/admin/chi-nhanh/{$shopID}/etax");
+    }
+
+    /** Khai tài khoản cổng HĐĐT. API đăng nhập thật trước khi lưu. */
+    public function ketNoiEtax(int $shopID, array $data): Response
+    {
+        return $this->post("/admin/chi-nhanh/{$shopID}/etax", $data);
+    }
+
+    /** Đổi ký hiệu phát hành và hai công tắc tự phát hành / tự in. */
+    public function luuCaiDatEtax(int $shopID, array $data): Response
+    {
+        return $this->put("/admin/chi-nhanh/{$shopID}/etax", $data);
+    }
+
+    /** Kéo lại danh sách ký hiệu từ nhà cung cấp. */
+    public function dongBoMauEtax(int $shopID): Response
+    {
+        return $this->post("/admin/chi-nhanh/{$shopID}/etax/sync", []);
+    }
+
+    /** Ngắt kết nối — xoá hẳn tài khoản khỏi sổ. */
+    public function ngatEtax(int $shopID): Response
+    {
+        return $this->delete("/admin/chi-nhanh/{$shopID}/etax");
+    }
+
+    /** Hoá đơn điện tử đã phát hành của một đơn. 404 = chưa phát hành. */
+    public function hoaDonCuaDon(int $orderID): Response
+    {
+        return $this->get("/admin/orders/{$orderID}/etax");
+    }
+
+    /** Phát hành hoá đơn cho một đơn hàng. */
+    public function phatHanhHoaDon(int $orderID): Response
+    {
+        return $this->post("/admin/orders/{$orderID}/etax", []);
     }
 
     // ---------- Quy tắc đánh số chứng từ ----------
@@ -1591,7 +1651,7 @@ class ApiClient
         $website = $this->settingString('store_website');
 
         $contact = array_filter([
-            $phone !== '' ? 'Hotline: ' . $phone : '',
+            $phone !== '' ? 'Hotline: '.$phone : '',
             $website,
         ]);
 

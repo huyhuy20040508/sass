@@ -239,6 +239,53 @@ type ChiNhanh struct {
 	// vỡ ở tầng driver, và để ô bỏ trống ghi xuống NULL chứ không phải chuỗi rỗng.
 	Phone   StringOrNull `json:"phone"`
 	Address StringOrNull `json:"address"`
+
+	// ----- Hồ sơ đầy đủ của điểm bán (migration 0033) -----
+	//
+	// Bấy nhiêu ô là của màn "Quản lý chi nhánh", dựng theo bản cũ v2. Tất cả
+	// đều tuỳ chọn: cửa hàng một chi nhánh khai tên với địa chỉ là bán được
+	// rồi, phần còn lại dành cho chuỗi có nhiều pháp nhân và nhiều máy in.
+
+	// TransactionName là tên viết tắt dùng trong giao dịch, KHÁC tên đầy đủ trên
+	// giấy phép — chuỗi hay in tên ngắn lên hoá đơn cho vừa khổ giấy.
+	TransactionName StringOrNull `json:"transaction_name"`
+	TaxCode         StringOrNull `json:"tax_code"`
+	Email           StringOrNull `json:"email"`
+	Country         StringOrNull `json:"country"`
+	City            StringOrNull `json:"city"`
+	// Location giữ nguyên khuôn "vĩ độ, kinh độ" của v2 — một CHUỖI, không tách
+	// hai cột số. Nó được dán thẳng từ Google Maps; tách ra rồi ghép lại chỉ để
+	// hiển thị là hai lần cơ hội làm sai.
+	Location StringOrNull `json:"location"`
+	// AreaScope tính bằng MÉT và đi theo cặp với Location: có toạ độ mà không có
+	// bán kính thì không khoanh được vùng nào, và ngược lại.
+	AreaScope *uint `json:"area_scope"`
+	// AccessLink là link đặt hàng online của riêng điểm bán này.
+	AccessLink StringOrNull `json:"access_link"`
+	// BranchType phân biệt ĐIỂM BÁN với PHÁP NHÂN: 1 = chi nhánh, 2 = công ty.
+	// Bản v2 để hai lựa chọn này ngay trên form khai chi nhánh.
+	BranchType uint8 `json:"branch_type"`
+	// Image là logo in trên hoá đơn tại quầy — đường dẫn ảnh do Shop Admin tải
+	// lên và lưu hộ; API chỉ cất chuỗi (cùng cách với NhanSu.Avatar).
+	Image StringOrNull `json:"image"`
+	// Ba khối chữ của hoá đơn tại quầy: đầu hoá đơn, dòng wifi, chân hoá đơn.
+	// Giới hạn 255 ký tự mỗi khối — giấy 58/80mm không chứa nổi nhiều hơn.
+	HeaderInvoiceInfo StringOrNull `json:"header_invoice_info"`
+	WifiInvoiceInfo   StringOrNull `json:"wifi_invoice_info"`
+	FooterInvoiceInfo StringOrNull `json:"footer_invoice_info"`
+	// CreatedBy là người mở chi nhánh. NULL với dòng dựng trước migration 0033
+	// (và với dòng 'mac-dinh' dựng cùng cửa hàng) — màn hình in "—" chứ không
+	// bịa ra một cái tên.
+	CreatedBy *uint `json:"created_by"`
+	// CreatedByName KHÔNG phải cột: repository điền thêm bằng một lượt tra bảng
+	// `users` cho cả danh sách. Cột "Người tạo" của bảng danh sách cần cái TÊN,
+	// mà bắt giao diện tự đi tra id là mỗi trang thêm một lượt gọi API.
+	CreatedByName string `json:"created_by_name" gorm:"-"`
+	// Etax cũng KHÔNG phải cột: cột "Sử dụng HĐĐT" của bảng danh sách chỉ cần
+	// biết chi nhánh này đã nối chưa và nối tới đâu. nil = chưa nối. Đầy đủ thì
+	// gọi GET /admin/chi-nhanh/{id}/etax.
+	Etax *EtaxTom `json:"etax" gorm:"-"`
+
 	// IsActive = false: chi nhánh ngừng hoạt động nhưng dữ liệu cũ vẫn tra được.
 	// VẪN TÍNH vào hạn mức — nó còn giữ mã và còn đứng trong danh sách, y như tài
 	// khoản bị khoá vẫn chiếm một chỗ.
@@ -249,6 +296,15 @@ type ChiNhanh struct {
 }
 
 func (ChiNhanh) TableName() string { return "shops" }
+
+// EtaxTom — bản tóm tắt kết nối hoá đơn điện tử, đủ để bảng danh sách chi nhánh
+// vẽ nút "Kết nối" hay "Chi tiết". Không mang mật khẩu, không mang token.
+type EtaxTom struct {
+	Provider       string `json:"provider"`
+	TaxCode        string `json:"tax_code"`
+	TemplateSymbol string `json:"template_symbol"`
+	IsActive       bool   `json:"is_active"`
+}
 
 // TonKhoChiNhanh là số hàng của MỘT biến thể ĐANG NẰM TẠI một chi nhánh — bảng
 // `variant_stocks`, và từ migration 0005 là NGUỒN SỰ THẬT của tồn kho.

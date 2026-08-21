@@ -220,6 +220,19 @@ var (
 	// gõ được ở mọi bàn phím — cùng luật với tên đăng nhập của nhân viên.
 	ErrMaChiNhanhInvalid = errors.New("mã chi nhánh chỉ gồm chữ thường không dấu, số, dấu chấm, gạch ngang hoặc gạch dưới (2–30 ký tự)")
 
+	// ErrToaDoChiNhanhInvalid — ô "Vị trí" không phải một cặp toạ độ.
+	//
+	// Khuôn đúng là "vĩ độ, kinh độ" dán thẳng từ Google Maps, vĩ độ trong
+	// [-90; 90] và kinh độ trong [-180; 180]. Nhận bừa một chuỗi rồi để tầng bản
+	// đồ tự xoay xở nghĩa là chi nhánh nằm ở một chỗ không ai tìm ra.
+	ErrToaDoChiNhanhInvalid = errors.New("vị trí phải là cặp toạ độ \"vĩ độ, kinh độ\", ví dụ 10.813129, 106.710010")
+
+	// ErrToaDoThieuCap — có toạ độ mà không có phạm vi hoạt động, hoặc ngược lại.
+	//
+	// Hai ô này chỉ có nghĩa khi đi cùng nhau: một điểm không bán kính thì không
+	// khoanh được vùng nào, một bán kính không tâm thì không biết vẽ quanh đâu.
+	ErrToaDoThieuCap = errors.New("vị trí và phạm vi hoạt động phải khai cùng nhau")
+
 	// ErrChiNhanhCuoiCung — xoá (hoặc tắt) chi nhánh HOẠT ĐỘNG cuối cùng.
 	//
 	// Mọi bảng giao dịch đều mang `shop_id`: đơn hàng, phiếu nhập, tồn kho đều

@@ -581,8 +581,65 @@ type ChiNhanhRequest struct {
 	// Phone/Address bỏ trống ghi xuống NULL, không phải chuỗi rỗng.
 	Phone   string `json:"phone" binding:"omitempty,max=20" example:"0912345678"`
 	Address string `json:"address" binding:"omitempty,max=255"`
+
+	// ----- Hồ sơ đầy đủ của điểm bán (migration 0033) -----
+	//
+	// Tất cả đều TUỲ CHỌN: cửa hàng một chi nhánh khai tên với địa chỉ là bán
+	// được rồi. Bỏ trống ghi xuống NULL, không phải chuỗi rỗng.
+
+	TransactionName string `json:"transaction_name" binding:"omitempty,max=150" example:"CN Quận 1"`
+	TaxCode         string `json:"tax_code" binding:"omitempty,max=20" example:"0312345678"`
+	Email           string `json:"email" binding:"omitempty,email,max=150"`
+	Country         string `json:"country" binding:"omitempty,max=100" example:"Việt Nam"`
+	City            string `json:"city" binding:"omitempty,max=100" example:"TP. Hồ Chí Minh"`
+	// Location theo khuôn "vĩ độ, kinh độ" dán thẳng từ Google Maps. Khuôn được
+	// kiểm ở ChiNhanhService, không kiểm ở đây: `max` chỉ chặn được độ dài, còn
+	// "10.81, 106.71" đúng khuôn hay không thì cần đọc từng số.
+	Location string `json:"location" binding:"omitempty,max=50" example:"10.813129, 106.710010"`
+	// AreaScope tính bằng MÉT, đi theo cặp với Location. Con trỏ để phân biệt
+	// "không khai" với "khai số 0" — số 0 là một bán kính vô nghĩa nên bị chặn.
+	AreaScope *uint `json:"area_scope" binding:"omitempty,min=1" example:"100"`
+	// AccessLink là link đặt hàng online của riêng điểm bán này.
+	AccessLink string `json:"access_link" binding:"omitempty,max=255"`
+	// BranchType: 1 = chi nhánh, 2 = công ty. Bỏ trống khi TẠO = 1; bỏ trống khi
+	// SỬA = giữ nguyên loại cũ.
+	BranchType *uint8 `json:"branch_type" binding:"omitempty,oneof=1 2" example:"1"`
+	// Image — đường dẫn logo do Shop Admin tải lên và lưu hộ; API chỉ cất chuỗi
+	// (cùng cách với NhanSuRequest.Avatar).
+	Image string `json:"image" binding:"omitempty,max=255"`
+	// Ba khối chữ của hoá đơn tại quầy. 255 ký tự mỗi khối — giấy 58/80mm không
+	// chứa nổi nhiều hơn.
+	HeaderInvoiceInfo string `json:"header_invoice_info" binding:"omitempty,max=255"`
+	WifiInvoiceInfo   string `json:"wifi_invoice_info" binding:"omitempty,max=255"`
+	FooterInvoiceInfo string `json:"footer_invoice_info" binding:"omitempty,max=255"`
+
 	// IsActive bỏ trống = true (chi nhánh mới mặc định đang hoạt động).
 	IsActive *bool `json:"is_active"`
+}
+
+// ---------- Hoá đơn điện tử ----------
+
+// EtaxKetNoiRequest — khai tài khoản cổng HĐĐT cho một chi nhánh.
+//
+// Mật khẩu chỉ đi MỘT CHIỀU: gửi lên để đăng nhập rồi mã hoá cất đi, không có
+// đường đọc lại. Đổi mật khẩu bên nhà cung cấp thì khai lại cả tài khoản.
+type EtaxKetNoiRequest struct {
+	// Provider bỏ trống = minvoice (hôm nay mới có một nhà cung cấp).
+	Provider string `json:"provider" binding:"omitempty,oneof=minvoice" example:"minvoice"`
+	TaxCode  string `json:"tax_code" binding:"required,max=30" example:"0106026495-998"`
+	Username string `json:"username" binding:"required,max=150"`
+	Password string `json:"password" binding:"required,max=200"`
+	// MaDVCS là mã đơn vị cơ sở bên M-Invoice; bỏ trống = "VP" (văn phòng).
+	MaDVCS string `json:"ma_dvcs" binding:"omitempty,max=20" example:"VP"`
+}
+
+// EtaxCaiDatRequest — ký hiệu dùng để phát hành và hai công tắc tự động.
+type EtaxCaiDatRequest struct {
+	// TemplateSymbol phải nằm trong danh sách mẫu đã kéo về; rỗng = chưa chọn.
+	TemplateSymbol string `json:"template_symbol" binding:"omitempty,max=20" example:"C25TAA"`
+	// Hai cờ để con trỏ: không gửi = giữ nguyên.
+	AutoRelease *bool `json:"auto_release"`
+	AutoPrint   *bool `json:"auto_print"`
 }
 
 // ---------- Nhân sự (hồ sơ người đi làm) ----------

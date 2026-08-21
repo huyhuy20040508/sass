@@ -27,6 +27,20 @@ type Config struct {
 	SePay     SePayConfig
 	Facebook  FacebookConfig
 	Google    GoogleConfig
+	ETax      ETaxConfig
+}
+
+// ETaxConfig — hoá đơn điện tử.
+//
+// Chỉ có một ô, và nó KHÔNG phải khoá của nhà cung cấp: tài khoản cổng HĐĐT là
+// của từng cửa hàng, họ tự khai ở màn Quản lý chi nhánh. Đây là khoá để MÃ HOÁ
+// mật khẩu ấy trước khi ghi xuống database (xem pkg/bimat).
+//
+// Rỗng = chưa khai. API vẫn chạy; lượt kết nối HĐĐT bị TỪ CHỐI kèm lý do, chứ
+// không lặng lẽ ghi mật khẩu nguyên văn — ai cầm được nó là phát hành được hoá
+// đơn đứng tên cửa hàng.
+type ETaxConfig struct {
+	SecretKey string
 }
 
 type AppConfig struct {
@@ -516,6 +530,9 @@ func Load() (*Config, error) {
 			AppSecret: strings.TrimSpace(v.GetString("FACEBOOK_APP_SECRET")),
 			BaseURL:   strings.TrimRight(strings.TrimSpace(v.GetString("FACEBOOK_GRAPH_BASE_URL")), "/"),
 			Version:   strings.Trim(strings.TrimSpace(v.GetString("FACEBOOK_GRAPH_VERSION")), "/"),
+		},
+		ETax: ETaxConfig{
+			SecretKey: strings.TrimSpace(v.GetString("ETAX_SECRET_KEY")),
 		},
 		Google: GoogleConfig{
 			// Client secret dán từ console hay dính khoảng trắng đầu/cuối; thừa một ký

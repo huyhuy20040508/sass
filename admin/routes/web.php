@@ -252,6 +252,8 @@ Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:quan_ly'])->prefix('ad
     Route::post('/orders', [OrderController::class, 'store'])->name('orders.store');
     Route::put('/orders/{id}', [OrderController::class, 'update'])->name('orders.update');
     Route::get('/orders/{id}/detail', [OrderController::class, 'detail'])->name('orders.detail');
+    // Phát hành hoá đơn điện tử cho một đơn — trả JSON, nút nằm trong hộp chi tiết.
+    Route::post('/orders/{id}/etax', [OrderController::class, 'phatHanhHoaDon'])->name('orders.phatHanhHoaDon');
     Route::get('/orders/{id}/print', [OrderController::class, 'print'])->name('orders.print');
     Route::get('/orders/{id}/label', [OrderController::class, 'label'])->name('orders.label');
     Route::put('/orders/{id}/status', [OrderController::class, 'updateStatus'])->name('orders.updateStatus');
@@ -459,7 +461,26 @@ Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:quan_ly'])->prefix('ad
         // phải việc hằng ngày của nhân viên. API chặn đúng như vậy.
         Route::get('/branches', [ChiNhanhController::class, 'index'])->name('chi-nhanh.index');
         Route::post('/branches', [ChiNhanhController::class, 'store'])->name('chi-nhanh.store');
+        // Tải logo TRƯỚC khi gửi form: form chỉ mang theo đường dẫn ảnh trả về,
+        // nên bấm Lưu mà hỏng thì ảnh vẫn còn đó, không phải chọn lại.
+        Route::post('/branches/logo', [ChiNhanhController::class, 'uploadAnh'])->name('chi-nhanh.anh');
         Route::put('/branches/{id}', [ChiNhanhController::class, 'update'])->whereNumber('id')->name('chi-nhanh.update');
+        // Công tắc mở/đóng trên bảng danh sách — chỉ đổi một cột.
+        Route::put('/branches/{id}/status', [ChiNhanhController::class, 'toggleStatus'])
+            ->whereNumber('id')->name('chi-nhanh.toggleStatus');
+        // Hoá đơn điện tử của chi nhánh. `etax` trả JSON cho hộp thoại (mở ngay
+        // trên bảng, không tải lại trang); bốn đường còn lại quay về danh sách
+        // kèm toast như mọi thao tác khác.
+        Route::get('/branches/{id}/etax', [ChiNhanhController::class, 'etax'])
+            ->whereNumber('id')->name('chi-nhanh.etax');
+        Route::post('/branches/{id}/etax', [ChiNhanhController::class, 'ketNoiEtax'])
+            ->whereNumber('id')->name('chi-nhanh.ketNoiEtax');
+        Route::put('/branches/{id}/etax', [ChiNhanhController::class, 'luuCaiDatEtax'])
+            ->whereNumber('id')->name('chi-nhanh.luuCaiDatEtax');
+        Route::post('/branches/{id}/etax/sync', [ChiNhanhController::class, 'dongBoMauEtax'])
+            ->whereNumber('id')->name('chi-nhanh.dongBoMauEtax');
+        Route::delete('/branches/{id}/etax', [ChiNhanhController::class, 'ngatEtax'])
+            ->whereNumber('id')->name('chi-nhanh.ngatEtax');
         Route::delete('/branches/{id}', [ChiNhanhController::class, 'destroy'])->whereNumber('id')->name('chi-nhanh.destroy');
 
         // Khách hàng
