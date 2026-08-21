@@ -4,7 +4,7 @@
 
 @section('content')
     {{--
-        Đơn quầy — danh sách CHỈ ĐỌC những lượt bán ra từ chính module này.
+        Lịch sử đơn — danh sách CHỈ ĐỌC những lượt bán ra từ chính module này.
 
         Không có nút đổi trạng thái, không có chọn hàng loạt, không có xuất
         Excel: đơn quầy xong ngay lúc tạo, nên chỗ này chỉ phục vụ đúng hai lý

@@ -11,7 +11,7 @@
         được tô màu, còn mọi cột khác để xám — người mở trang này đang đi tìm chỗ
         lệch, không đi đọc từng con số.
 
-        Mở và đóng ca KHÔNG làm ở đây mà làm ở màn hình Bán tại quầy: đó là nơi
+        Mở và đóng ca KHÔNG làm ở đây mà làm ở màn hình Bán hàng: đó là nơi
         người trực đang đứng lúc bắt đầu và lúc kết thúc buổi bán.
     --}}
     @php
@@ -26,7 +26,7 @@
     <div class="clv">
         <div class="clv-head">
             <h1 class="clv-title">{{ $TITLE }}</h1>
-            <a href="{{ route('thu-ngan.ban-hang.index') }}" class="clv-link">Mở / đóng ca ở màn hình Bán tại quầy →</a>
+            <a href="{{ route('thu-ngan.ban-hang.index') }}" class="clv-link">Mở / đóng ca ở màn hình Bán hàng →</a>
         </div>
 
         @isset($error)
