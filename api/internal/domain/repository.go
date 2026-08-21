@@ -784,11 +784,18 @@ const (
 	StockModeDelta = "delta"
 )
 
-// InventoryAdjustment là yêu cầu chỉnh tồn kho của MỘT biến thể.
+// InventoryAdjustment là yêu cầu chỉnh tồn kho của MỘT biến thể TẠI MỘT chi nhánh.
 type InventoryAdjustment struct {
 	VariantID uint
-	Mode      string // set | delta
-	Quantity  int    // số đặt (mode=set) hoặc lượng thay đổi, âm là xuất (mode=delta)
+	// ShopID = 0 nghĩa là chi nhánh đang làm việc. Gửi số khác 0 để chỉnh ĐÚNG một
+	// kho bất kể người bấm đang đứng ở đâu — màn Tồn kho hiển thị nhiều kho cùng
+	// lúc, mỗi dòng một kho, nên nút chỉnh của dòng phải nói rõ nó sửa kho nào.
+	//
+	// Cùng một biến thể ở hai chi nhánh là HAI dòng độc lập: chúng không gộp vào
+	// nhau, và một dòng hỏng (tồn âm) làm cả lượt cuộn lại như mọi thao tác hàng loạt.
+	ShopID   uint
+	Mode     string // set | delta
+	Quantity int    // số đặt (mode=set) hoặc lượng thay đổi, âm là xuất (mode=delta)
 	// Type là loại bút toán ghi vào sổ kho: import | export | adjustment.
 	// Rỗng thì service tự suy từ chế độ và dấu của lượng thay đổi.
 	Type     string
@@ -799,11 +806,15 @@ type InventoryAdjustment struct {
 // InventoryAdjustResult — kết quả chỉnh kho của một biến thể, trả về cho giao
 // diện cập nhật lại dòng mà không cần tải lại cả trang.
 type InventoryAdjustResult struct {
-	VariantID uint   `json:"variant_id"`
-	SKU       string `json:"sku"`
-	Before    int    `json:"before"`
-	After     int    `json:"after"`
-	Change    int    `json:"change"`
+	VariantID uint `json:"variant_id"`
+	// ShopID là kho THẬT SỰ bị sửa — luôn trả về, kể cả khi client không gửi lên.
+	// Giao diện dựa vào nó để cập nhật đúng dòng: một biến thể có mặt ở nhiều dòng
+	// (mỗi kho một dòng) nên chỉ variant_id thôi thì không trỏ được vào dòng nào.
+	ShopID uint   `json:"shop_id"`
+	SKU    string `json:"sku"`
+	Before int    `json:"before"`
+	After  int    `json:"after"`
+	Change int    `json:"change"`
 }
 
 // VariantCost là yêu cầu khai giá vốn cho MỘT biến thể.

@@ -19,6 +19,25 @@ const groupNameExpr = "(SELECT c.name FROM categories c WHERE c.id = products.ca
 
 type productRepository struct{ db *gorm.DB }
 
+// tongTonExpr cộng tồn của MỌI chi nhánh cho một biến thể.
+//
+// Thay cho cột `product_variants.stock_quantity` đã bỏ: giữ một bản cộng trong
+// bảng nghĩa là hai chỗ cùng giữ một sự thật, và cái lệch giữa chúng chỉ lộ ra
+// lúc có người đếm hàng thật. Cộng ngay trong câu truy vấn thì không có gì để
+// lệch — đổi lại là một truy vấn con, và nó đi qua chỉ mục
+// uq_variant_stocks_shop_variant nên rẻ.
+//
+// Dùng cho những màn hình chỉ hỏi "cả cửa hàng còn bao nhiêu". Màn kho hỏi
+// "nằm ở đâu" thì đọc thẳng variant_stocks theo từng chi nhánh.
+const tongTonExpr = `COALESCE((SELECT SUM(vs.quantity) FROM variant_stocks vs
+	WHERE vs.product_variant_id = product_variants.id), 0) AS stock_quantity`
+
+// bienTheKemTon là bộ Preload biến thể có kèm tổng tồn, dùng chung cho mọi
+// đường đọc sản phẩm — thiếu Select này thì stock_quantity im lặng bằng 0.
+func bienTheKemTon(db *gorm.DB) *gorm.DB {
+	return db.Select("product_variants.*, " + tongTonExpr).Order("pos ASC, id ASC")
+}
+
 func NewProductRepository(db *gorm.DB) domain.ProductRepository {
 	return &productRepository{db: db}
 }
@@ -124,7 +143,7 @@ func (r *productRepository) List(ctx context.Context, f domain.ProductFilter) ([
 	q = q.Preload("Category").Preload("Location").Preload("Unit").
 		Preload("Shops").Preload("Tags")
 	if !f.Slim {
-		q = q.Preload("Variants", func(db *gorm.DB) *gorm.DB { return db.Order("pos ASC, id ASC") }).
+		q = q.Preload("Variants", bienTheKemTon).
 			Preload("Variants.Attributes").
 			Preload("Variants.Attributes.Attribute").
 			Preload("Variants.Attributes.Value").
@@ -141,7 +160,7 @@ func (r *productRepository) FindByID(ctx context.Context, id uint) (*domain.Prod
 	err := r.db.WithContext(ctx).
 		Preload("Category").Preload("Location").Preload("Unit").
 		Preload("Shops").Preload("Tags").
-		Preload("Variants", func(db *gorm.DB) *gorm.DB { return db.Order("pos ASC, id ASC") }).
+		Preload("Variants", bienTheKemTon).
 		Preload("Variants.Attributes").
 		Preload("Variants.Attributes.Attribute").
 		Preload("Variants.Attributes.Value").
@@ -158,7 +177,7 @@ func (r *productRepository) FindBySlug(ctx context.Context, slug string) (*domai
 	err := r.db.WithContext(ctx).
 		Preload("Category").Preload("Location").Preload("Unit").
 		Preload("Shops").Preload("Tags").
-		Preload("Variants", func(db *gorm.DB) *gorm.DB { return db.Order("pos ASC, id ASC") }).
+		Preload("Variants", bienTheKemTon).
 		Preload("Variants.Attributes").
 		Preload("Variants.Attributes.Attribute").
 		Preload("Variants.Attributes.Value").
@@ -376,11 +395,9 @@ func (r *productRepository) ReplaceVariants(ctx context.Context, productID uint,
 
 		// Upsert từng biến thể: ID>0 -> cập nhật, ID=0 -> thêm mới.
 		//
-		// Omit("stock_quantity") là bắt buộc: tồn kho chỉ thuộc về nghiệp vụ kho
-		// (nhập hàng, điều chỉnh, đơn hàng, trả hàng) và luôn đi kèm một dòng
-		// trong inventory_transactions. Save() vốn ghi mọi cột, nên nếu không
-		// loại trừ thì mỗi lần sửa sản phẩm sẽ đạp tồn kho về 0.
-		// Dòng thêm mới nhờ đó lấy DEFAULT 0 của DB; dòng cũ giữ nguyên tồn.
+		// Tồn kho KHÔNG nằm trong bảng này nữa (nó ở variant_stocks, mỗi chi nhánh
+		// một dòng), nên form sản phẩm không có cách nào đạp phải nó — trước đây
+		// phải Omit("stock_quantity") ở cả hai nhánh đúng vì lý do đó.
 		//
 		// Tách hẳn hai nhánh Create/Updates thay vì dùng chung Save(): dữ liệu
 		// dựng từ request không mang created_at, mà Save() ghi MỌI cột nên nó
@@ -397,12 +414,12 @@ func (r *productRepository) ReplaceVariants(ctx context.Context, productID uint,
 
 			if variants[i].ID == 0 {
 				// Thêm mới: để GORM tự điền created_at/updated_at.
-				if err := tx.Omit("stock_quantity", clause.Associations).Create(&variants[i]).Error; err != nil {
+				if err := tx.Omit(clause.Associations).Create(&variants[i]).Error; err != nil {
 					return err
 				}
 			} else if err := tx.Model(&domain.ProductVariant{}).
 				Where("id = ?", variants[i].ID).
-				Omit("stock_quantity", "created_at").
+				Omit("created_at").
 				// Updates với struct bỏ qua trường zero-value, nên phải chỉ rõ
 				// từng cột — không thì xoá tên biến thể, gỡ giá riêng hay tắt
 				// biến thể đều không lưu được.

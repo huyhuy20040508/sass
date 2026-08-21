@@ -140,6 +140,7 @@ func (s *inventoryService) Adjust(ctx context.Context, variantID uint, req *dto.
 	if err != nil {
 		return nil, err
 	}
+	adj.ShopID = req.ShopID
 
 	results, err := s.repo.Adjust(ctx, []domain.InventoryAdjustment{adj}, actorID)
 	if err != nil {
@@ -158,6 +159,7 @@ func (s *inventoryService) BulkAdjust(ctx context.Context, req *dto.InventoryBul
 		if err != nil {
 			return nil, err
 		}
+		adj.ShopID = it.ShopID
 		items = append(items, adj)
 	}
 	if len(items) == 0 {

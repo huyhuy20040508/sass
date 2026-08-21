@@ -12,7 +12,6 @@ use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DonViTinhController;
 use App\Http\Controllers\GoiDichVuController;
-use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\TonKhoChiNhanhController;
 use App\Http\Controllers\NhanSuController;
 use App\Http\Controllers\NotificationController;
@@ -282,30 +281,31 @@ Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:quan_ly'])->prefix('ad
         Route::put('/returns/{id}/settle', [ReturnController::class, 'settle'])->whereNumber('id')->name('returns.settle');
         Route::put('/returns/{id}/note', [ReturnController::class, 'updateNote'])->whereNumber('id')->name('returns.updateNote');
 
-        // Tồn kho — đơn vị quản lý là biến thể sản phẩm (size/màu/phiên bản).
-        Route::get('/inventory', [InventoryController::class, 'index'])->name('inventory.index');
-
-        // Tồn kho chi nhánh — cùng số hàng của trang trên nhưng tách ra theo từng
-        // điểm bán. Hai đường này đặt TRƯỚC /inventory/{id} cho khỏi bị nuốt.
-        Route::get('/inventory/branches', [TonKhoChiNhanhController::class, 'index'])->name('ton-kho-chi-nhanh.index');
-        Route::get('/inventory/branches/export', [TonKhoChiNhanhController::class, 'export'])->name('ton-kho-chi-nhanh.export');
-        // Sổ kho của một biến thể tại MỘT chi nhánh — hộp thoại trên trang gọi vào đây.
-        Route::get('/inventory/branches/{id}/history', [TonKhoChiNhanhController::class, 'history'])
+        // TỒN KHO — một dòng là MỘT BIẾN THỂ TẠI MỘT CHI NHÁNH.
+        //
+        // Trang "Tồn kho" cũ (một biến thể một dòng, tồn là con số gộp của cả cửa
+        // hàng) đã bỏ: từ migration 0005 hàng nằm ở từng kho, nên câu "còn bao
+        // nhiêu" không trả lời được gì nếu không nói rõ ở đâu. Màn này thay hẳn nó
+        // và giữ nguyên bộ URL cũ để dấu trang của người dùng không chết.
+        //
+        // Mọi đường TĨNH phải đứng trước /inventory/{id}, nếu không "stocktake",
+        // "export"… bị hiểu thành id biến thể.
+        Route::get('/inventory', [TonKhoChiNhanhController::class, 'index'])->name('ton-kho-chi-nhanh.index');
+        Route::get('/inventory/export', [TonKhoChiNhanhController::class, 'export'])->name('ton-kho-chi-nhanh.export');
+        Route::get('/inventory/import-template', [TonKhoChiNhanhController::class, 'importTemplate'])->name('ton-kho-chi-nhanh.importTemplate');
+        Route::post('/inventory/import', [TonKhoChiNhanhController::class, 'import'])->name('ton-kho-chi-nhanh.import');
+        // Khai giá vốn hàng loạt — cùng khuôn nhập file với số kiểm kê. Giá vốn là
+        // thuộc tính của mặt hàng nên KHÔNG kèm chi nhánh.
+        Route::get('/inventory/cost-template', [TonKhoChiNhanhController::class, 'importCostTemplate'])->name('ton-kho-chi-nhanh.importCostTemplate');
+        Route::post('/inventory/import-cost', [TonKhoChiNhanhController::class, 'importCost'])->name('ton-kho-chi-nhanh.importCost');
+        // Phiếu kiểm kê để in (?rows=2:15,2:16 hoặc theo bộ lọc), chia theo từng kho.
+        Route::get('/inventory/stocktake', [TonKhoChiNhanhController::class, 'stocktake'])->name('ton-kho-chi-nhanh.stocktake');
+        Route::post('/inventory/bulk-adjust', [TonKhoChiNhanhController::class, 'bulkAdjust'])->name('ton-kho-chi-nhanh.bulkAdjust');
+        // Sổ kho của một biến thể tại MỘT chi nhánh (?shop_id=…).
+        Route::get('/inventory/{id}/history', [TonKhoChiNhanhController::class, 'history'])
             ->whereNumber('id')->name('ton-kho-chi-nhanh.history');
-        Route::get('/inventory/export', [InventoryController::class, 'export'])->name('inventory.export');
-        Route::get('/inventory/import-template', [InventoryController::class, 'importTemplate'])->name('inventory.importTemplate');
-        Route::post('/inventory/import', [InventoryController::class, 'import'])->name('inventory.import');
-        // Khai giá vốn hàng loạt — cùng khuôn nhập file với số kiểm kê.
-        Route::get('/inventory/cost-template', [InventoryController::class, 'importCostTemplate'])->name('inventory.importCostTemplate');
-        Route::post('/inventory/import-cost', [InventoryController::class, 'importCost'])->name('inventory.importCost');
-        // Phiếu kiểm kê để in (?ids=1,2,3 hoặc theo bộ lọc) — đặt trước route {id}.
-        Route::get('/inventory/stocktake', [InventoryController::class, 'stocktake'])->name('inventory.stocktake');
-        // Chỉnh hàng loạt đặt trước route {id} để không bị nuốt.
-        Route::post('/inventory/bulk-adjust', [InventoryController::class, 'bulkAdjust'])->name('inventory.bulkAdjust');
-        Route::get('/inventory/{id}/detail', [InventoryController::class, 'detail'])->whereNumber('id')->name('inventory.detail');
-        // Sổ kho phân trang — modal xem nhanh chỉ nạp sẵn trang đầu, "Xem thêm" gọi vào đây.
-        Route::get('/inventory/{id}/history', [InventoryController::class, 'history'])->whereNumber('id')->name('inventory.history');
-        Route::put('/inventory/{id}', [InventoryController::class, 'adjust'])->whereNumber('id')->name('inventory.adjust');
+        Route::put('/inventory/{id}', [TonKhoChiNhanhController::class, 'adjust'])
+            ->whereNumber('id')->name('ton-kho-chi-nhanh.adjust');
 
         // Đặt hàng nhập — chiều mua vào của kho (đặt hàng nhà cung cấp → nhận hàng).
         Route::get('/purchases', [PurchaseController::class, 'index'])->name('purchases.index');

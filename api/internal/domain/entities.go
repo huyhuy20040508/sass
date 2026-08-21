@@ -607,10 +607,20 @@ type ProductVariant struct {
 	//
 	// nil = biến thể không khai giá riêng và cũng không có chương trình nào áp.
 	FinalPrice *float64 `json:"final_price,omitempty" gorm:"-"`
-	// StockQuantity là cache tồn kho, chỉ nghiệp vụ kho được ghi (nhập hàng,
-	// điều chỉnh, đơn hàng, trả hàng). Luồng tạo/sửa sản phẩm không đụng tới
-	// cột này — xem productRepository.ReplaceVariants.
-	StockQuantity int            `json:"stock_quantity"`
+	// StockQuantity là TỔNG tồn của mọi chi nhánh — một con số tiện tay cho những
+	// màn hình chỉ hỏi "cả cửa hàng còn bao nhiêu": danh sách hàng hoá, trang bán
+	// cho khách vãng lai, ô "còn mấy cái" lúc soạn phiếu.
+	//
+	// KHÔNG CÒN LÀ MỘT CỘT trong database. Trước đây nó là `product_variants.
+	// stock_quantity`, một bản cộng do repository ghi lại sau mỗi lần đụng kho —
+	// tức là hai chỗ cùng giữ một sự thật, và chỗ nào cũng có thể lệch. Từ nay chỉ
+	// còn `variant_stocks` (mỗi chi nhánh một dòng); con số này được CỘNG RA trong
+	// chính câu truy vấn cần tới nó.
+	//
+	// Vì vậy nó mang `gorm:"->"`: GORM không bao giờ ghi trường này xuống database,
+	// và câu nào không tự cộng thì nó bằng 0. Cần số thật thì SELECT kèm biểu thức
+	// tongTonExpr (xem product_repository) — đừng thêm lại một cột cache nữa.
+	StockQuantity int            `json:"stock_quantity" gorm:"->"`
 	WeightGram    int            `json:"weight_gram"`
 	Image         string         `json:"image"`
 	IsActive      bool           `json:"is_active"`

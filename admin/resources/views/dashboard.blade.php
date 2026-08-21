@@ -847,7 +847,7 @@
                             @endif
                         </p>
                     </div>
-                    <a class="db-linkbtn" href="{{ route('admin.inventory.index', ['is_active' => 1]) }}">Quản lý kho →</a>
+                    <a class="db-linkbtn" href="{{ route('admin.ton-kho-chi-nhanh.index') }}">Quản lý kho →</a>
                 </div>
 
                 @if(empty($lowStock))

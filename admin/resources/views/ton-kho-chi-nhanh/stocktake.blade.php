@@ -1,6 +1,10 @@
 {{--
     Phiếu kiểm kê kho — trang IN, đứng độc lập với layout admin.
 
+    Chia thành TỪNG KHO: người đi đếm cầm tờ này đi giữa các kệ của một điểm bán,
+    trộn hai kho vào chung một danh sách là mời họ đếm nhầm sang hàng của nơi khác.
+    Mỗi kho có tiêu đề riêng, số thứ tự đếm lại từ 1, và một cụm chữ ký riêng.
+
     Không extends layouts.app: trang này chỉ để ra giấy, kéo cả sidebar/topbar vào
     chỉ tổ phải ẩn lại bằng CSS in.
 
@@ -35,13 +39,8 @@
     }
     $scopeText = $scope ? implode(' · ', $scope) : 'toàn bộ kho';
 
-    // KHO NÀO — con số tồn in trên phiếu là của chi nhánh đang làm việc, hoặc là
-    // bản cộng của mọi chi nhánh khi chưa chọn kho nào. Tờ giấy này rời khỏi màn
-    // hình và đi theo người đi đếm giữa các kệ: thiếu dòng này thì hai kho in ra
-    // hai tờ giống hệt nhau, và số đếm được ghi vào nhầm tờ là chuyện sớm muộn.
-    $khoIn = \App\Services\ChiNhanhDangLam::ten();
-    $nhieuChiNhanh = count(\App\Services\ChiNhanhDangLam::danhSach()['ds']) > 1;
-    $truncated = $total > count($rows);
+    $truncated = $total > $daIn;
+    $soKho = count($theoKho);
 @endphp
 <!DOCTYPE html>
 <html lang="vi">
@@ -106,6 +105,14 @@
         /* Ô điền tay: nền hơi xám trên màn hình cho dễ nhận ra, in ra thì trắng trơn. */
         .st-fill { background: #fbfbfb; }
 
+        .st-kho { margin-top: 6mm; }
+        .st-kho-moi { page-break-before: always; }
+        .st-kho-title {
+            margin: 0 0 2mm; font-size: 12pt; font-weight: 700;
+            border-bottom: 1px solid #000; padding-bottom: 1mm;
+        }
+        .st-kho-title span { font-weight: 400; font-size: 9pt; }
+
         .st-foot { margin-top: 14px; display: flex; justify-content: space-between; gap: 12px; font-size: 11px; }
         .st-sign { width: 32%; text-align: center; }
         .st-sign b { display: block; font-size: 12px; }
@@ -163,11 +170,9 @@
                 @if ($shopContact !== '')<p>{{ $shopContact }}</p>@endif
             </div>
             <div class="st-meta">
-                @if($nhieuChiNhanh)
-                    <p><b>Kho: {{ $khoIn ?? 'gộp mọi chi nhánh' }}</b></p>
-                @endif
+                <p><b>{{ $nf($soKho) }} kho</b></p>
                 <p>Ngày in: {{ now()->format('H:i d/m/Y') }}</p>
-                <p>Số dòng: {{ $nf(count($rows)) }}</p>
+                <p>Số dòng: {{ $nf($daIn) }}</p>
             </div>
         </div>
 
@@ -181,51 +186,60 @@
 
         @if($truncated)
             <p class="st-warn">
-                Danh sách có {{ $nf($total) }} dòng, phiếu này chỉ in {{ $nf(count($rows)) }} dòng đầu.
+                Danh sách có {{ $nf($total) }} dòng, phiếu này chỉ in {{ $nf($daIn) }} dòng đầu.
                 Hãy lọc hẹp lại rồi in tiếp phần còn lại.
             </p>
         @endif
 
-        <table>
-            <thead>
-                <tr>
-                    <th style="width:9mm">STT</th>
-                    <th style="width:34mm">SKU</th>
-                    <th>Sản phẩm</th>
-                    <th style="width:30mm">Phân loại</th>
-                    <th class="col-sys" style="width:18mm">Tồn sổ sách</th>
-                    <th class="col-cost" style="width:20mm">Giá vốn</th>
-                    <th style="width:24mm">Số đếm thực tế</th>
-                    <th style="width:20mm">Chênh lệch</th>
-                    <th style="width:30mm">Ghi chú</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach($rows as $i => $r)
-                    @php
-                        $variant = array_filter([
-                            $r['variant_name'] ?? '',
-                            $r['unit_name'] ?? '',
-                        ]);
-                    @endphp
-                    <tr>
-                        <td class="c">{{ $i + 1 }}</td>
-                        <td class="st-sku">{{ $r['sku'] ?? '—' }}</td>
-                        <td>
-                            <span class="st-name">{{ $r['product_name'] ?? '—' }}</span>
-                        </td>
-                        <td class="st-variant">{{ $variant ? implode(' / ', $variant) : '—' }}</td>
-                        <td class="col-sys r">{{ $nf($r['stock_quantity'] ?? 0) }}</td>
-                        <td class="col-cost r">
-                            {{ ($r['cost_price'] ?? null) === null ? '—' : $nf($r['cost_price']).'₫' }}
-                        </td>
-                        <td class="st-fill"></td>
-                        <td class="st-fill"></td>
-                        <td class="st-fill"></td>
-                    </tr>
-                @endforeach
-            </tbody>
-        </table>
+        @foreach($theoKho as $khoID => $kho)
+            {{-- Mỗi kho bắt đầu ở TRANG MỚI (trừ kho đầu): hai kho dính nhau trên
+                 một tờ thì người đếm lật qua là đã sang hàng của nơi khác. --}}
+            <div class="st-kho {{ $loop->first ? '' : 'st-kho-moi' }}">
+                <h2 class="st-kho-title">
+                    Kho: {{ $kho['ten'] !== '' ? $kho['ten'] : 'Chi nhánh #'.$khoID }}
+                    <span>({{ $nf(count($kho['dong'])) }} dòng)</span>
+                </h2>
+
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width:9mm">STT</th>
+                            <th style="width:34mm">SKU</th>
+                            <th>Sản phẩm</th>
+                            <th style="width:30mm">Phân loại</th>
+                            <th class="col-sys" style="width:18mm">Tồn sổ sách</th>
+                            <th class="col-cost" style="width:20mm">Giá vốn</th>
+                            <th style="width:24mm">Số đếm thực tế</th>
+                            <th style="width:20mm">Chênh lệch</th>
+                            <th style="width:30mm">Ghi chú</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach($kho['dong'] as $i => $r)
+                            @php
+                                $variant = array_filter([
+                                    $r['variant_name'] ?? '',
+                                    $r['unit_name'] ?? '',
+                                ]);
+                            @endphp
+                            <tr>
+                                <td class="c">{{ $i + 1 }}</td>
+                                <td class="st-sku">{{ $r['sku'] ?? '—' }}</td>
+                                <td><span class="st-name">{{ $r['product_name'] ?? '—' }}</span></td>
+                                <td class="st-variant">{{ $variant ? implode(' / ', $variant) : '—' }}</td>
+                                <td class="col-sys r">{{ $nf($r['quantity'] ?? 0) }}</td>
+                                <td class="col-cost r">
+                                    {{ ($r['cost_price'] ?? null) === null ? '—' : $nf($r['cost_price']).'₫' }}
+                                </td>
+                                <td class="st-fill"></td>
+                                <td class="st-fill"></td>
+                                <td class="st-fill"></td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        @endforeach
 
         <div class="st-foot">
             <div class="st-sign">

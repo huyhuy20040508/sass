@@ -1737,7 +1737,7 @@ const RETURN_URL = @json(route('admin.products.index', request()->query()));
                                         <div id="mVariants">${varRowsHtml}</div>
                                     </div>
                                     <p class="prd-err" data-err="mVariants"></p>
-                                    ${isView ? '' : `<p class="prd-hint">Giá riêng của biến thể đè giá khuyến mãi của mặt hàng. Tồn kho chỉ xem — đổi ở <a href="{{ route('admin.inventory.index') }}" target="_blank">Kho</a>.</p>`}
+                                    ${isView ? '' : `<p class="prd-hint">Giá riêng của biến thể đè giá khuyến mãi của mặt hàng. Tồn kho chỉ xem — đổi ở <a href="{{ route('admin.ton-kho-chi-nhanh.index') }}" target="_blank">Kho</a>.</p>`}
                                 </div>
                             </section>
                             </div>
