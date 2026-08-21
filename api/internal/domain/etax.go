@@ -71,10 +71,25 @@ func (EtaxTemplate) TableName() string { return "etax_templates" }
 const (
 	// HoaDonNhap — đã lưu bên cổng nhưng CHƯA ký: chưa có giá trị pháp lý.
 	HoaDonNhap = "draft"
-	// HoaDonDaPhatHanh — đã ký, có số hoá đơn thật.
+	// HoaDonDaGui — đã ký và gửi, nhưng cơ quan thuế CHƯA cấp mã. Cổng nói "đã
+	// gửi" ngay khi ký xong, và đó chưa phải là xong.
+	HoaDonDaGui = "sent"
+	// HoaDonDaPhatHanh — cơ quan thuế đã cấp mã (có TaxAuthCode). Đây mới là
+	// một tờ hoá đơn có hiệu lực.
 	HoaDonDaPhatHanh = "issued"
 	// HoaDonHong — cổng từ chối. Giữ lại để tra `error`.
 	HoaDonHong = "failed"
+)
+
+// Loại tờ hoá đơn (`trang_thai_hd` bên cổng). Chỉ tờ Gốc và tờ Thay thế mới
+// được thay thế tiếp; tờ đã bị điều chỉnh thì không.
+const (
+	ToGoc         = 0
+	ToHuy         = 1
+	ToDieuChinh   = 2
+	ToThayThe     = 3
+	ToBiDieuChinh = 5
+	ToBiThayThe   = 6
 )
 
 // EtaxInvoice — một lượt phát hành hoá đơn cho MỘT đơn hàng.
@@ -92,19 +107,42 @@ type EtaxInvoice struct {
 	InvoiceNo string `json:"invoice_no"`
 	InvoiceID string `json:"invoice_id"`
 
+	// TaxAuthCode (macqt) là mã cơ quan thuế cấp — thứ quyết định tờ hoá đơn có
+	// hiệu lực hay chưa. LookupCode (sobaomat) in lên bill để khách tự tra.
+	TaxAuthCode string `json:"tax_auth_code"`
+	LookupCode  string `json:"lookup_code"`
+	// Hai trạng thái NGUYÊN BẢN của cổng, giữ số chứ không dịch: GatewayStatus là
+	// đường gửi CQT, DocStatus là loại tờ. Dịch sẵn thì mất thông tin khi họ đổi
+	// cách hiểu, mà đây là thứ phải đối chiếu được với màn hình nhà cung cấp.
+	GatewayStatus *int `json:"gateway_status"`
+	DocStatus     *int `json:"doc_status"`
+
 	TotalAmount float64 `json:"total_amount"`
 	VatAmount   float64 `json:"vat_amount"`
 
 	// Payload/Response giữ NGUYÊN VĂN thứ đã gửi và đã nhận. Hoá đơn là chứng từ
 	// pháp lý: dựng lại từ đơn hàng hôm nay không trả lời được câu "lúc ấy đã
 	// gửi cái gì".
-	Payload  string `json:"-"`
-	Response string `json:"-"`
-	Error    string `json:"error"`
+	//
+	// Ba cột này là JSON trong MySQL, nên chúng dùng StringOrNull: một lượt phát
+	// hành HỎNG không có `response`, mà ghi chuỗi rỗng vào cột JSON là máy chủ
+	// strict mode báo lỗi và mất luôn cả dấu vết lỗi muốn giữ.
+	Payload  StringOrNull `json:"-"`
+	Response StringOrNull `json:"-"`
+	// History là các tờ ĐỜI TRƯỚC: thay thế và điều chỉnh sinh ra một tờ mới đè
+	// lên chỗ của tờ cũ, mà số hoá đơn cũ đã nằm trong sổ của cơ quan thuế và
+	// khách vẫn giữ bản in của nó.
+	History StringOrNull `json:"-"`
+	Error   string       `json:"error"`
 
 	IssuedAt  *time.Time `json:"issued_at"`
 	CreatedAt time.Time  `json:"created_at"`
 	UpdatedAt time.Time  `json:"updated_at"`
+
+	// AutoPrint KHÔNG phải cột: nó là công tắc của chi nhánh, chép sang đây để
+	// màn hình biết có phải tự mở bản in sau khi phát hành hay không. Đọc thêm
+	// một lượt kết nối ở phía màn hình thì tốn một lượt gọi cho mỗi lần mở đơn.
+	AutoPrint bool `json:"auto_print" gorm:"-"`
 }
 
 func (EtaxInvoice) TableName() string { return "etax_invoices" }
@@ -138,6 +176,28 @@ var (
 	// chúng đan vào nhau, và lúc đối chiếu với cơ quan thuế không tách ra được
 	// phiếu nào của nơi nào.
 	ErrETaxMSTDaDung = errors.New("mã số thuế này đã kết nối ở một chi nhánh khác")
+
+	// ErrHoaDonChuaLap — đơn chưa phát hành hoá đơn nên chưa có gì để ký, in
+	// hay thay thế.
+	ErrHoaDonChuaLap = errors.New("đơn này chưa phát hành hoá đơn")
+
+	// ErrHoaDonThieuMa — có bản ghi nhưng cổng chưa trả về id, thường là lượt
+	// phát hành trước đã hỏng. Phát hành lại chứ đừng ký một thứ không có.
+	ErrHoaDonThieuMa = errors.New("hoá đơn này chưa có mã bên cổng — hãy phát hành lại")
+
+	// ErrHoaDonDaKy — ký một tờ đã ký là xin cổng cấp số lần thứ hai.
+	ErrHoaDonDaKy = errors.New("hoá đơn này đã ký rồi")
+
+	// ErrHoaDonChuaKy — bản XML chỉ có sau khi ký; tờ nháp thì chưa có gì để tải.
+	ErrHoaDonChuaKy = errors.New("hoá đơn chưa ký nên chưa có bản XML")
+
+	// ErrHoaDonKhongSuaDuoc — cơ quan thuế chỉ cho thay thế / điều chỉnh một tờ
+	// ĐÃ ĐƯỢC CẤP MÃ. Tờ nháp thì sửa thẳng rồi phát hành lại.
+	ErrHoaDonKhongSuaDuoc = errors.New("chỉ thay thế hoặc điều chỉnh được hoá đơn đã được cơ quan thuế cấp mã")
+
+	// ErrHoaDonKhongThayTheDuoc — tờ đang ở loại không cho thay thế tiếp (đã bị
+	// điều chỉnh, hoặc đã bị thay thế bởi một tờ khác).
+	ErrHoaDonKhongThayTheDuoc = errors.New("hoá đơn này không thay thế được nữa — chỉ tờ gốc hoặc tờ thay thế mới thay được")
 
 	// ErrETaxKyHieuLa — ký hiệu chọn để phát hành không nằm trong danh sách mẫu
 	// đã kéo về. Nhận bừa thì tới lúc phát hành mới hỏng, và lúc đó khách đang

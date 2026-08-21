@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"math"
 	"strconv"
 	"strings"
@@ -39,7 +38,18 @@ func (s *etaxService) XemHoaDon(ctx context.Context, orderID uint) (*domain.Etax
 		return nil, err
 	}
 
-	return s.repo.HoaDonTheoDon(ctx, orderID)
+	hd, err := s.repo.HoaDonTheoDon(ctx, orderID)
+	if err != nil {
+		return nil, err
+	}
+	// Công tắc "Tự in" của chi nhánh đi kèm để màn hình biết có phải mở bản in
+	// ngay không. Đọc hỏng thì thôi — không in tự động vẫn còn nút in tay, còn
+	// làm gãy lượt xem hoá đơn thì không chữa được bằng gì.
+	if cn, err := s.repo.TheoChiNhanh(ctx, hd.ShopID); err == nil {
+		hd.AutoPrint = cn.AutoPrint
+	}
+
+	return hd, nil
 }
 
 // PhatHanh xuất hoá đơn cho một đơn hàng.
@@ -104,7 +114,7 @@ func (s *etaxService) PhatHanh(ctx context.Context, orderID uint) (*domain.EtaxI
 		ghi.CreatedAt = cu.CreatedAt
 	}
 	if du, err := json.Marshal(hoaDon); err == nil {
-		ghi.Payload = string(du)
+		ghi.Payload = domain.StringOrNull(du)
 	}
 
 	ketQua, err := s.mi.PhatHanh(ctx, ketNoi.TaxCode, ketNoi.Token, hoaDon, ketNoi.AutoRelease)
@@ -127,18 +137,23 @@ func (s *etaxService) PhatHanh(ctx context.Context, orderID uint) (*domain.EtaxI
 	ghi.Error = ""
 	ghi.InvoiceNo = ketQua.SoHoaDon
 	ghi.InvoiceID = ketQua.MaHoaDon
-	ghi.Response = string(ketQua.Tho)
+	ghi.Response = domain.StringOrNull(ketQua.Tho)
 	ghi.IssuedAt = &gio
 	// Lưu nháp thì CHƯA có giá trị pháp lý: nói đúng trạng thái thay vì báo "đã
 	// phát hành" cho một tờ chưa ký.
 	ghi.Status = domain.HoaDonNhap
 	if ketNoi.AutoRelease {
-		ghi.Status = domain.HoaDonDaPhatHanh
+		// SaveSign trả về "đã gửi", KHÔNG phải "đã cấp mã": mã cơ quan thuế chỉ
+		// xuất hiện ở lượt tra lại. Tra ngay để khỏi báo với người bán một tờ hoá
+		// đơn có hiệu lực trong khi nó còn đang nằm ở cổng.
+		ghi.Status = domain.HoaDonDaGui
+		s.dongBoTuCong(ctx, ketNoi, ghi)
 	}
 
 	if err := s.repo.LuuHoaDon(ctx, ghi); err != nil {
 		return nil, err
 	}
+	ghi.AutoPrint = ketNoi.AutoPrint
 
 	return ghi, nil
 }
@@ -189,8 +204,14 @@ func (s *etaxService) dungHoaDon(
 		return nil, 0, err
 	}
 
+	// Giảm giá TOÀN ĐƠN (voucher, khuyến mại) chưa nằm trong TotalPrice của dòng
+	// nào — xem Order.DiscountAmount. Chia đều nó theo tỉ trọng từng dòng thay vì
+	// nhét vào một trường ở đầu phiếu: thuế suất mỗi dòng một khác, mà một khoản
+	// giảm treo ở đầu phiếu thì không nói được nó giảm phần chịu thuế nào.
+	chiaBot := chiaGiamGia(don)
+
 	dong := make([]map[string]any, 0, len(don.Items)+1)
-	var tongThue, tongChuaThue float64
+	var tongThue, tongChuaThue, tongTienHang, tongBot float64
 
 	for i, it := range don.Items {
 		ten := strings.TrimSpace(it.ProductName)
@@ -198,9 +219,11 @@ func (s *etaxService) dungHoaDon(
 			ten += " (" + it.VariantName + ")"
 		}
 
-		// TotalPrice đã trừ phần bớt của chính dòng đó (xem OrderItem.TotalPrice),
-		// nên tiền chưa thuế của dòng chính là nó — đừng trừ chiết khấu lần nữa.
-		chuaThue := it.TotalPrice
+		// TotalPrice đã trừ phần bớt của CHÍNH dòng đó (xem OrderItem.TotalPrice);
+		// phần còn phải trừ là suất giảm giá toàn đơn chia về đây.
+		chuaThue := lamTron(it.TotalPrice - chiaBot[i])
+		bot := lamTron(it.DiscountAmount + chiaBot[i])
+		tienHang := lamTron(it.UnitPrice * float64(it.Quantity))
 		mucThue := 0
 		if it.ProductID != nil {
 			mucThue = thueSuat[*it.ProductID]
@@ -215,12 +238,10 @@ func (s *etaxService) dungHoaDon(
 			"inv_unitCode":              "",
 			"inv_quantity":              it.Quantity,
 			"inv_unitPrice":             it.UnitPrice,
-			"amount":                    lamTron(it.UnitPrice * float64(it.Quantity)),
+			"inv_Amount":                tienHang,
 			"inv_discountPercentage":    0,
-			"inv_discountAmount":        lamTron(it.DiscountAmount),
-			"ptppv":                     0,
-			"phidichvu":                 0,
-			"inv_TotalAmountWithoutVat": lamTron(chuaThue),
+			"inv_discountAmount":        bot,
+			"inv_TotalAmountWithoutVat": chuaThue,
 		}
 		if coThue {
 			d["ma_thue"] = maThue(mucThue)
@@ -231,6 +252,8 @@ func (s *etaxService) dungHoaDon(
 
 		tongThue += tienThue
 		tongChuaThue += chuaThue
+		tongTienHang += tienHang
+		tongBot += bot
 	}
 
 	// Phí giao hàng đi thành MỘT DÒNG của hoá đơn, không gộp vào tổng: khách
@@ -244,11 +267,9 @@ func (s *etaxService) dungHoaDon(
 			"inv_unitCode":              "",
 			"inv_quantity":              1,
 			"inv_unitPrice":             don.ShippingFee,
-			"amount":                    lamTron(don.ShippingFee),
+			"inv_Amount":                lamTron(don.ShippingFee),
 			"inv_discountPercentage":    0,
 			"inv_discountAmount":        0,
-			"ptppv":                     0,
-			"phidichvu":                 0,
 			"inv_TotalAmountWithoutVat": lamTron(don.ShippingFee),
 		}
 		if coThue {
@@ -259,7 +280,8 @@ func (s *etaxService) dungHoaDon(
 			d["inv_TotalAmount"] = lamTron(don.ShippingFee)
 		}
 		dong = append(dong, d)
-		tongChuaThue += don.ShippingFee
+		tongChuaThue += lamTron(don.ShippingFee)
+		tongTienHang += lamTron(don.ShippingFee)
 	}
 
 	hoaDon := map[string]any{
@@ -278,10 +300,17 @@ func (s *etaxService) dungHoaDon(
 		"ma_ch":                 chiNhanh.Code,
 		"ten_ch":                chiNhanh.Name,
 		"dchicuahang":           string(chiNhanh.Address),
-		"amount":                lamTron(don.SubtotalAmount + don.ShippingFee),
-		"inv_discountAmount":    lamTron(don.DiscountAmount),
-		"inv_TotalAmount":       lamTron(don.TotalAmount + tongThue),
-		"serviceCharge":         0,
+		// key_api là khoá CHỐNG TRÙNG của cổng: gửi lại cùng một mã đơn thì cổng
+		// từ chối (mã lỗi 88) thay vì phát hành tờ thứ hai. Đây là lưới an toàn
+		// cho đường tự phát hành, nơi một lượt gọi hỏng giữa chừng vẫn có thể đã
+		// tạo hoá đơn bên kia.
+		"key_api": don.OrderCode,
+		// Tổng ở đầu phiếu phải khớp TỔNG CÁC DÒNG chứ không phải tổng của đơn
+		// hàng: hai con số ấy lệch nhau khi đơn có giảm giá toàn đơn, và cổng bắt
+		// lỗi cả tờ khi chúng không cộng ra nhau.
+		"inv_Amount":         lamTron(tongTienHang),
+		"inv_discountAmount": lamTron(tongBot),
+		"inv_TotalAmount":    lamTron(tongChuaThue + tongThue),
 		"details": []map[string]any{
 			{"data": dong},
 		},
@@ -294,6 +323,46 @@ func (s *etaxService) dungHoaDon(
 	return hoaDon, lamTron(tongThue), nil
 }
 
+// chiaGiamGia chia khoản giảm giá TOÀN ĐƠN về từng dòng theo tỉ trọng tiền.
+//
+// Đồng lẻ dồn vào dòng CUỐI: chia đều rồi làm tròn từng dòng thì tổng các dòng
+// lệch tổng của đơn vài đồng, và cổng từ chối cả tờ hoá đơn vì không cộng ra
+// nhau. Dồn phần dư vào một chỗ thì con số nào cũng đúng.
+func chiaGiamGia(don *domain.Order) []float64 {
+	ra := make([]float64, len(don.Items))
+	if don.DiscountAmount <= 0 || len(don.Items) == 0 {
+		return ra
+	}
+
+	var goc float64
+	for _, it := range don.Items {
+		goc += it.TotalPrice
+	}
+	if goc <= 0 {
+		return ra
+	}
+
+	tong := lamTron(don.DiscountAmount)
+	// Giảm giá lớn hơn tiền hàng là dữ liệu hỏng — bớt tối đa bằng tiền hàng chứ
+	// đừng gửi lên một dòng âm.
+	if tong > goc {
+		tong = goc
+	}
+
+	var daChia float64
+	for i, it := range don.Items {
+		if i == len(don.Items)-1 {
+			ra[i] = tong - daChia
+
+			break
+		}
+		ra[i] = lamTron(tong * it.TotalPrice / goc)
+		daChia += ra[i]
+	}
+
+	return ra
+}
+
 // tinhThue tính tiền thuế của một dòng. Hai mã âm (KCT, KKKNT) không sinh thuế.
 func tinhThue(chuaThue float64, muc int) float64 {
 	if muc <= 0 {
@@ -303,21 +372,18 @@ func tinhThue(chuaThue float64, muc int) float64 {
 	return lamTron(chuaThue * float64(muc) / 100)
 }
 
-// maThue đổi quy ước Product.VAT sang mã thuế M-Invoice: số dương là phần trăm,
-// còn hai mã âm gửi đúng chữ viết tắt của tờ khai.
+// maThue đổi quy ước Product.VAT sang mã thuế M-Invoice.
+//
+// API 2.0 nhận ĐÚNG một bảng số: "10" "8" "5" "0" cho thuế suất, "-1" không
+// chịu thuế, "-2" không kê khai nộp thuế. Chữ viết tắt "KCT"/"KKKNT" là quy ước
+// của bản cũ, gửi lên bản này là cổng bắt lỗi dữ liệu.
 func maThue(muc int) string {
-	switch muc {
-	case mucKhongChiuThue:
-		return "KCT"
-	case mucKhongKeKhai:
-		return "KKKNT"
-	default:
-		if muc < 0 {
-			return "0"
-		}
-
-		return strconv.Itoa(muc)
+	// Mức âm ngoài -1/-2 không có mã nào tương ứng: gửi 0% chứ đừng để cổng đoán.
+	if muc < mucKhongKeKhai {
+		return "0"
 	}
+
+	return strconv.Itoa(muc)
 }
 
 // lamTron về đồng: hoá đơn không có đơn vị nhỏ hơn, và để lẻ thì tổng của các
@@ -357,15 +423,24 @@ func catNgan(s string, n int) string {
 	return s[:n]
 }
 
-// MoTaHoaDon dựng câu báo cho người bấm nút — nói rõ đã KÝ hay mới lưu nháp.
+// MoTaHoaDon dựng câu báo cho người bấm nút.
+//
+// Ba câu cho ba trạng thái, và chúng phải khác nhau: "đã gửi" mà nói "đã phát
+// hành" là bảo người bán đưa cho khách một tờ chưa được cấp mã.
 func MoTaHoaDon(hd *domain.EtaxInvoice) string {
-	if hd.Status == domain.HoaDonDaPhatHanh {
-		if hd.InvoiceNo != "" {
-			return fmt.Sprintf("Đã phát hành hoá đơn %s số %s", hd.Symbol, hd.InvoiceNo)
-		}
-
-		return "Đã phát hành hoá đơn " + hd.Symbol
+	so := hd.Symbol
+	if hd.InvoiceNo != "" {
+		so += " số " + hd.InvoiceNo
 	}
 
-	return "Đã lưu hoá đơn nháp " + hd.Symbol + " — vào trang nhà cung cấp để ký phát hành"
+	switch hd.Status {
+	case domain.HoaDonDaPhatHanh:
+		return "Đã phát hành hoá đơn " + so
+
+	case domain.HoaDonDaGui:
+		return "Đã ký và gửi hoá đơn " + so + " — đang chờ cơ quan thuế cấp mã"
+
+	default:
+		return "Đã lưu hoá đơn nháp " + hd.Symbol + " — bấm Ký để phát hành"
+	}
 }

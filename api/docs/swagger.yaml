@@ -349,12 +349,26 @@ definitions:
     type: object
   domain.EtaxInvoice:
     properties:
+      auto_print:
+        description: |-
+          AutoPrint KHÔNG phải cột: nó là công tắc của chi nhánh, chép sang đây để
+          màn hình biết có phải tự mở bản in sau khi phát hành hay không. Đọc thêm
+          một lượt kết nối ở phía màn hình thì tốn một lượt gọi cho mỗi lần mở đơn.
+        type: boolean
       connection_id:
         type: integer
       created_at:
         type: string
+      doc_status:
+        type: integer
       error:
         type: string
+      gateway_status:
+        description: |-
+          Hai trạng thái NGUYÊN BẢN của cổng, giữ số chứ không dịch: GatewayStatus là
+          đường gửi CQT, DocStatus là loại tờ. Dịch sẵn thì mất thông tin khi họ đổi
+          cách hiểu, mà đây là thứ phải đối chiếu được với màn hình nhà cung cấp.
+        type: integer
       id:
         type: integer
       invoice_id:
@@ -362,6 +376,8 @@ definitions:
       invoice_no:
         type: string
       issued_at:
+        type: string
+      lookup_code:
         type: string
       order_id:
         type: integer
@@ -372,6 +388,11 @@ definitions:
       status:
         type: string
       symbol:
+        type: string
+      tax_auth_code:
+        description: |-
+          TaxAuthCode (macqt) là mã cơ quan thuế cấp — thứ quyết định tờ hoá đơn có
+          hiệu lực hay chưa. LookupCode (sobaomat) in lên bill để khách tự tra.
         type: string
       total_amount:
         type: number
@@ -515,6 +536,12 @@ definitions:
         type: integer
       change:
         type: integer
+      shop_id:
+        description: |-
+          ShopID là kho THẬT SỰ bị sửa — luôn trả về, kể cả khi client không gửi lên.
+          Giao diện dựa vào nó để cập nhật đúng dòng: một biến thể có mặt ở nhiều dòng
+          (mỗi kho một dòng) nên chỉ variant_id thôi thì không trỏ được vào dòng nào.
+        type: integer
       sku:
         type: string
       variant_id:
@@ -541,6 +568,15 @@ definitions:
       reference_id:
         type: integer
       reference_type:
+        type: string
+      shop_id:
+        description: |-
+          ShopID/ShopName là CHI NHÁNH phát sinh bút toán. Luôn trả về, kể cả khi
+          đang xem sổ của đúng một kho: màn hình cần nói được "đây là sổ của kho
+          nào", còn lúc xem gộp thì thiếu nó là mỗi dòng "trước 40 → sau 41" không
+          biết thuộc kho nào và cặp số đọc lên mâu thuẫn với con số trên bảng.
+        type: integer
+      shop_name:
         type: string
       type:
         type: string
@@ -3113,6 +3149,51 @@ definitions:
         maxLength: 20
         type: string
     type: object
+  dto.EtaxDieuChinhRequest:
+    properties:
+      dong:
+        items:
+          $ref: '#/definitions/dto.EtaxDongDieuChinhDTO'
+        type: array
+      ly_do:
+        example: Điều chỉnh giảm đơn giá
+        maxLength: 250
+        type: string
+    required:
+    - ly_do
+    type: object
+  dto.EtaxDongDieuChinhDTO:
+    properties:
+      don_gia:
+        example: 250000
+        type: number
+      don_vi_tinh:
+        example: Cái
+        maxLength: 50
+        type: string
+      ma_thue:
+        description: |-
+          MaThue theo bảng của cổng: "10" "8" "5" "0", "-1" không chịu thuế,
+          "-2" không kê khai nộp thuế.
+        example: "10"
+        maxLength: 5
+        type: string
+      so_luong:
+        example: -1
+        type: number
+      ten_hang:
+        example: Quần bò
+        maxLength: 500
+        type: string
+      thanh_tien:
+        example: -250000
+        type: number
+      tien_thue:
+        example: -25000
+        type: number
+    required:
+    - ten_hang
+    type: object
   dto.EtaxKetNoiRequest:
     properties:
       ma_dvcs:
@@ -3141,6 +3222,21 @@ definitions:
     - password
     - tax_code
     - username
+    type: object
+  dto.EtaxThayTheRequest:
+    properties:
+      ly_do:
+        example: Sai thông tin người mua
+        maxLength: 250
+        type: string
+      so_van_ban:
+        description: SoVanBan là số biên bản thoả thuận với khách, nếu hai bên có
+          lập.
+        example: BBTT00001
+        maxLength: 250
+        type: string
+    required:
+    - ly_do
     type: object
   dto.FacebookLoginRequest:
     properties:
@@ -3605,6 +3701,12 @@ definitions:
       quantity:
         example: 50
         type: integer
+      shop_id:
+        description: |-
+          ShopID: chỉnh ĐÚNG kho này. Bỏ trống thì rơi về chi nhánh đang làm việc —
+          đường đi của cửa hàng một chi nhánh, nơi màn hình không có gì để chọn.
+        example: 2
+        type: integer
       type:
         description: |-
           Type là loại bút toán ghi sổ kho. Bỏ trống thì server tự suy: "set" ghi
@@ -3629,6 +3731,12 @@ definitions:
         - delta
         type: string
       quantity:
+        type: integer
+      shop_id:
+        description: |-
+          ShopID theo TỪNG DÒNG chứ không đặt chung cho cả yêu cầu: bảng tồn kho gom
+          nhóm theo chi nhánh, người dùng tick vài dòng của kho này rồi vài dòng của
+          kho kia rồi bấm một lần. Bỏ trống = chi nhánh đang làm việc.
         type: integer
       variant_id:
         type: integer
@@ -6376,6 +6484,19 @@ definitions:
     required:
     - is_active
     type: object
+  minvoice.ThongTinMST:
+    properties:
+      cqthue_ql:
+        type: string
+      dia_chi:
+        type: string
+      ma_so_thue:
+        type: string
+      nguoi_dai_dien:
+        type: string
+      ten_cty:
+        type: string
+    type: object
   response.Body:
     properties:
       data: {}
@@ -8521,6 +8642,54 @@ paths:
       summary: Bật/tắt một đơn vị tính
       tags:
       - Admin - Đơn vị tính
+  /admin/etax/tra-cuu-mst:
+    get:
+      description: |-
+        Trả tên đơn vị và địa chỉ đã đăng ký với cơ quan thuế, để điền hộ thông tin người mua.
+        M-Invoice chỉ mở API này cho các địa chỉ IP đã đăng ký trước — 503 nghĩa là máy chủ chưa được mở.
+      parameters:
+      - description: Mã số thuế cần tra
+        in: query
+        name: mst
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/minvoice.ThongTinMST'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Body'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Body'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Tra cứu mã số thuế
+      tags:
+      - Admin - Hoá đơn điện tử
   /admin/goi-dich-vu:
     get:
       description: |-
@@ -8827,6 +8996,11 @@ paths:
       - description: Số item/trang (mặc định 20, tối đa 100)
         in: query
         name: page_size
+        type: integer
+      - description: 'Xem sổ của đúng một chi nhánh (bỏ trống: theo chi nhánh đang
+          làm việc)'
+        in: query
+        name: shop_id
         type: integer
       produces:
       - application/json
@@ -10079,6 +10253,302 @@ paths:
       security:
       - BearerAuth: []
       summary: Phát hành hoá đơn cho một đơn hàng
+      tags:
+      - Admin - Hoá đơn điện tử
+  /admin/orders/{id}/etax/adjust:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Không gửi `dong` = điều chỉnh VỀ 0 (tương đương huỷ): đảo dấu đúng các dòng đã ghi trên tờ cũ.
+        Gửi `dong` = tự khai phần chênh lệch (số âm là giảm, số dương là tăng).
+      parameters:
+      - description: ID đơn hàng
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Lý do và các dòng điều chỉnh
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.EtaxDieuChinhRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/domain.EtaxInvoice'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Body'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.Body'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Body'
+        "502":
+          description: Bad Gateway
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Điều chỉnh hoá đơn
+      tags:
+      - Admin - Hoá đơn điện tử
+  /admin/orders/{id}/etax/pdf:
+    get:
+      description: |-
+        Trả về THẲNG tệp PDF, không bọc JSON — màn hình mở nó trong tab mới.
+        `chuyen_doi=1` lấy bản hoá đơn chuyển đổi ra giấy (có chữ ký và dấu bên bán).
+      parameters:
+      - description: ID đơn hàng
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 1 = bản chuyển đổi
+        in: query
+        name: chuyen_doi
+        type: string
+      produces:
+      - application/pdf
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: file
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Body'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+        "502":
+          description: Bad Gateway
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Bản PDF của hoá đơn
+      tags:
+      - Admin - Hoá đơn điện tử
+  /admin/orders/{id}/etax/replace:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Xuất một tờ MỚI thay cho tờ hiện tại, dựng lại từ đơn hàng hôm nay.
+        Chỉ thay được tờ đã được cơ quan thuế cấp mã, và chỉ tờ Gốc hoặc tờ Thay thế.
+      parameters:
+      - description: ID đơn hàng
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Lý do thay thế
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.EtaxThayTheRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/domain.EtaxInvoice'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Body'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.Body'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Body'
+        "502":
+          description: Bad Gateway
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Thay thế hoá đơn
+      tags:
+      - Admin - Hoá đơn điện tử
+  /admin/orders/{id}/etax/sign:
+    post:
+      description: |-
+        Chỉ chạy được với chữ ký số MỀM (file p12 hoặc dịch vụ EASY/ICA/INTRUST).
+        Khách ký bằng USB token phải ký ở trang của nhà cung cấp.
+      parameters:
+      - description: ID đơn hàng
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/domain.EtaxInvoice'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Body'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.Body'
+        "502":
+          description: Bad Gateway
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Ký hoá đơn nháp và gửi cơ quan thuế
+      tags:
+      - Admin - Hoá đơn điện tử
+  /admin/orders/{id}/etax/sync:
+    post:
+      description: |-
+        Cơ quan thuế cấp mã không tức thì và không báo về, nên phải tự hỏi lại.
+        Có `tax_auth_code` thì hoá đơn mới thật sự có hiệu lực.
+      parameters:
+      - description: ID đơn hàng
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/domain.EtaxInvoice'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Body'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+        "502":
+          description: Bad Gateway
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Hỏi lại cổng về trạng thái hoá đơn
+      tags:
+      - Admin - Hoá đơn điện tử
+  /admin/orders/{id}/etax/xml:
+    get:
+      description: Tệp XML đã ký — thứ kế toán lưu trữ. Hoá đơn chưa ký thì chưa có.
+      parameters:
+      - description: ID đơn hàng
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/xml
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: file
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Body'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.Body'
+        "502":
+          description: Bad Gateway
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Bản XML gốc của hoá đơn
       tags:
       - Admin - Hoá đơn điện tử
   /admin/orders/{id}/note:
