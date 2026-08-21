@@ -191,6 +191,9 @@ func (c *Client) goi(ctx context.Context, method, mst, duong, token string, than
 	}
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
+		// SaveSign và Sign đòi thêm mã số thuế ở header; gắn cho mọi lượt đã đăng
+		// nhập cho đỡ phải nhớ lượt nào cần.
+		req.Header.Set("TaxCode", mst)
 	}
 
 	res, err := c.http.Do(req)
@@ -241,41 +244,102 @@ func (c *Client) PhatHanh(ctx context.Context, mst, token string, hoaDon map[str
 	// đổi theo cấu hình từng khách (có nơi `data` là object, có nơi là mảng), mà
 	// thứ phải giữ lại nguyên vẹn là toàn bộ câu trả lời chứ không phải vài
 	// trường mình đoán trước.
+	// Cổng nhận payload BỌC HAI LỚP: `editmode` (1 thêm, 2 sửa, 3 xoá) và mảng
+	// `data`. Gửi object phẳng thì cổng không thấy hoá đơn nào.
+	boc := map[string]any{"editmode": 1, "data": []any{hoaDon}}
+
 	var tho json.RawMessage
-	if err := c.goi(ctx, http.MethodPost, mst, duong, token, hoaDon, &tho); err != nil {
+	if err := c.goi(ctx, http.MethodPost, mst, duong, token, boc, &tho); err != nil {
 		return nil, err
 	}
 
-	var than struct {
-		Code    string `json:"code"`
-		Message string `json:"message"`
-		// Ba tên trường cho cùng một thứ: M-Invoice trả `shdon`/`so_hoa_don` tuỳ
-		// bản, và `inv_invoiceNumber` ở nhánh 78.
-		SoHoaDon  string `json:"shdon"`
-		SoHoaDon2 string `json:"so_hoa_don"`
-		SoHoaDon3 string `json:"inv_invoiceNumber"`
-		MaHoaDon  string `json:"inv_invoiceAuth_id"`
-		MaHoaDon2 string `json:"id"`
+	var vo struct {
+		Code    string          `json:"code"`
+		Message string          `json:"message"`
+		Data    json.RawMessage `json:"data"`
 	}
-	if err := json.Unmarshal(tho, &than); err != nil {
+	if err := json.Unmarshal(tho, &vo); err != nil {
 		// Trả lời không đọc được thành object (vd một mảng) vẫn là một lượt gọi
 		// tới nơi: giữ nguyên văn rồi để nơi gọi tự xử.
 		return &KetQuaPhatHanh{Tho: tho}, nil
 	}
 
-	if than.Code != "" && than.Code != maThanhCong {
-		if than.Message != "" {
-			return nil, fmt.Errorf("minvoice: cổng từ chối hoá đơn: %s", than.Message)
+	if vo.Code != "" && vo.Code != maThanhCong {
+		if vo.Message != "" {
+			return nil, fmt.Errorf("minvoice: cổng từ chối hoá đơn: %s", vo.Message)
 		}
 
 		return nil, errors.New("minvoice: cổng từ chối hoá đơn")
 	}
 
+	// Số và mã hoá đơn nằm TRONG `data`, không phải ở gốc — và `data` có nơi là
+	// object, có nơi là mảng một phần tử.
+	than := docPhanData(vo.Data)
+
 	return &KetQuaPhatHanh{
-		SoHoaDon: dauTienKhacRong(than.SoHoaDon, than.SoHoaDon2, than.SoHoaDon3),
-		MaHoaDon: dauTienKhacRong(than.MaHoaDon, than.MaHoaDon2),
+		SoHoaDon: dauTienKhacRong(string(than.SoHoaDon), string(than.SoHoaDon2), string(than.SoHoaDon3)),
+		MaHoaDon: dauTienKhacRong(string(than.MaHoaDon), string(than.MaHoaDon2), string(than.MaHoaDon3)),
 		Tho:      tho,
 	}, nil
+}
+
+// phanData là những trường mình cần trong `data` của lượt phát hành.
+type phanData struct {
+	// Ba tên cho cùng một số hoá đơn: `shdon`/`so_hoa_don` tuỳ bản, và
+	// `inv_invoiceNumber` ở nhánh 78.
+	SoHoaDon  soChuoi `json:"shdon"`
+	SoHoaDon2 soChuoi `json:"so_hoa_don"`
+	SoHoaDon3 soChuoi `json:"inv_invoiceNumber"`
+	MaHoaDon  soChuoi `json:"inv_invoiceAuth_id"`
+	MaHoaDon2 soChuoi `json:"hoadon68_id"`
+	MaHoaDon3 soChuoi `json:"id"`
+}
+
+// docPhanData mở `data` ra, chịu cả object lẫn mảng. Đọc không được thì trả về
+// rỗng: nơi gọi vẫn giữ nguyên văn câu trả lời.
+func docPhanData(du json.RawMessage) phanData {
+	var ra phanData
+	du = bytes.TrimSpace(du)
+	if len(du) == 0 {
+		return ra
+	}
+
+	if du[0] == '[' {
+		var ds []json.RawMessage
+		if err := json.Unmarshal(du, &ds); err != nil || len(ds) == 0 {
+			return ra
+		}
+		du = ds[0]
+	}
+
+	_ = json.Unmarshal(du, &ra)
+
+	return ra
+}
+
+// soChuoi đọc một trường mà cổng lúc trả về số, lúc trả về chuỗi — `shdon` là
+// số (8072) còn `inv_invoiceAuth_id` là chuỗi, và cả hai vào chung một struct.
+type soChuoi string
+
+func (s *soChuoi) UnmarshalJSON(du []byte) error {
+	du = bytes.TrimSpace(du)
+	if len(du) == 0 || string(du) == "null" {
+		return nil
+	}
+
+	if du[0] == '"' {
+		var v string
+		if err := json.Unmarshal(du, &v); err != nil {
+			return err
+		}
+		*s = soChuoi(v)
+
+		return nil
+	}
+
+	*s = soChuoi(du)
+
+	return nil
 }
 
 func dauTienKhacRong(ds ...string) string {

@@ -118,3 +118,79 @@ func TestDiaChiTheoMaSoThue(t *testing.T) {
 		t.Fatalf("tài khoản dùng thử phải đi .minvoice.site, nhận %q", got)
 	}
 }
+
+// Cổng nhận payload BỌC HAI LỚP `{editmode, data:[…]}`, và trả số hoá đơn ở
+// TRONG `data` — `shdon` lại là số chứ không phải chuỗi. Gửi object phẳng hoặc
+// đọc số ở gốc đều hỏng lặng: cổng trả 200 mà mình không thấy hoá đơn nào.
+func TestPhatHanhBocPayloadVaDocSoTrongData(t *testing.T) {
+	var nhan map[string]any
+	var taxCode string
+	sv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/InvoiceApi78/SaveSign" {
+			t.Errorf("ký thì phải gọi SaveSign, nhận %s", r.URL.Path)
+		}
+		taxCode = r.Header.Get("TaxCode")
+		du, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(du, &nhan)
+		_, _ = w.Write([]byte(`{"code":"00","data":{"shdon":8072,"inv_invoiceAuth_id":"3a1a564b-60ae"}}`))
+	}))
+	defer sv.Close()
+
+	kq, err := NewVoiGoc(sv.URL).PhatHanh(context.Background(), "0106026495-999", "abc123",
+		map[string]any{"inv_invoiceSeries": "1C26TYY"}, true)
+	if err != nil {
+		t.Fatalf("phát hành: %v", err)
+	}
+
+	if nhan["editmode"] != float64(1) {
+		t.Fatalf("phải gửi editmode=1, nhận %v", nhan["editmode"])
+	}
+	ds, ok := nhan["data"].([]any)
+	if !ok || len(ds) != 1 {
+		t.Fatalf("hoá đơn phải nằm trong mảng data, nhận %v", nhan["data"])
+	}
+	if ds[0].(map[string]any)["inv_invoiceSeries"] != "1C26TYY" {
+		t.Fatalf("ký hiệu phải đi nguyên vào data[0], nhận %v", ds[0])
+	}
+	if taxCode != "0106026495-999" {
+		t.Fatalf("SaveSign đòi header TaxCode, nhận %q", taxCode)
+	}
+	if kq.SoHoaDon != "8072" {
+		t.Fatalf("số hoá đơn phải đọc được từ data, nhận %q", kq.SoHoaDon)
+	}
+	if kq.MaHoaDon != "3a1a564b-60ae" {
+		t.Fatalf("mã hoá đơn phải đọc được từ data, nhận %q", kq.MaHoaDon)
+	}
+}
+
+// Lưu nháp đi đường Save, và có cấu hình cổng trả `data` là MẢNG.
+func TestPhatHanhNhapDocDuocDataDangMang(t *testing.T) {
+	sv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/InvoiceApi78/Save" {
+			t.Errorf("lưu nháp phải gọi Save, nhận %s", r.URL.Path)
+		}
+		_, _ = w.Write([]byte(`{"code":"00","data":[{"inv_invoiceNumber":"12","hoadon68_id":"xyz"}]}`))
+	}))
+	defer sv.Close()
+
+	kq, err := NewVoiGoc(sv.URL).PhatHanh(context.Background(), "0106026495-999", "abc123", map[string]any{}, false)
+	if err != nil {
+		t.Fatalf("lưu nháp: %v", err)
+	}
+	if kq.SoHoaDon != "12" || kq.MaHoaDon != "xyz" {
+		t.Fatalf("phải đọc được phần tử đầu của mảng data, nhận %+v", kq)
+	}
+}
+
+// Cổng từ chối thì code khác "00" — và câu của họ phải đi tới người bấm nút.
+func TestPhatHanhBiTuChoiThiBaoCauCuaCong(t *testing.T) {
+	sv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"code":"88","message":"Trùng key tích hợp"}`))
+	}))
+	defer sv.Close()
+
+	_, err := NewVoiGoc(sv.URL).PhatHanh(context.Background(), "0106026495-999", "abc123", map[string]any{}, true)
+	if err == nil || !strings.Contains(err.Error(), "Trùng key tích hợp") {
+		t.Fatalf("phải giữ nguyên câu của cổng, nhận %v", err)
+	}
+}
