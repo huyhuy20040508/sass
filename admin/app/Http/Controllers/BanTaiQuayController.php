@@ -50,7 +50,46 @@ class BanTaiQuayController extends Controller
 
     public function index()
     {
-        return view('thu-ngan.ban-hang', ['hanMucGiam' => $this->hanMucGiam()]);
+        return view('thu-ngan.ban-hang', [
+            'hanMucGiam' => $this->hanMucGiam(),
+            'nhomHang' => $this->nhomHang(),
+        ]);
+    }
+
+    /**
+     * Các nhóm hàng cho thanh lọc trên lưới hàng.
+     *
+     * Chỉ lấy nhóm CON TRỰC TIẾP của nhóm gốc "Hàng bán": nhóm gốc thì bấm vào
+     * cũng ra gần hết kho, còn nhóm cháu thì thanh dài tới mức phải cuộn mới thấy
+     * nhóm mình cần — cả hai đều không giúp người đứng quầy bấm nhanh hơn.
+     *
+     * API hỏng thì trả mảng rỗng: thanh nhóm biến mất, ô tìm kiếm vẫn bán được hàng.
+     */
+    protected function nhomHang(): array
+    {
+        try {
+            $res = $this->api->categories(all: true);
+            if (! $res->successful()) {
+                return [];
+            }
+
+            $all = $res->json('data') ?? [];
+            $goc = collect($all)->firstWhere('slug', 'hang-ban');
+            $gocId = (int) ($goc['id'] ?? 0);
+            if ($gocId === 0) {
+                return [];
+            }
+
+            return collect($all)
+                ->filter(fn ($c) => (int) ($c['parent_id'] ?? 0) === $gocId)
+                ->map(fn ($c) => ['id' => (int) $c['id'], 'name' => (string) ($c['name'] ?? '')])
+                ->values()
+                ->all();
+        } catch (\Throwable $e) {
+            Log::warning('Load POS categories failed', ['msg' => $e->getMessage()]);
+
+            return [];
+        }
     }
 
     /**

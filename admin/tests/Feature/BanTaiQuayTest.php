@@ -379,4 +379,101 @@ class BanTaiQuayTest extends TestCase
             ->assertOk()
             ->assertSee('size: 58mm auto', false);
     }
+
+    // ---------------------------------------------------------------- lưới hàng
+
+    /**
+     * Thanh nhóm hàng chỉ lấy CON TRỰC TIẾP của nhóm gốc "Hàng bán".
+     *
+     * Nhóm gốc thì bấm vào cũng ra gần hết kho, còn nhóm cháu thì thanh dài tới
+     * mức phải cuộn mới thấy nhóm mình cần — cả hai đều không giúp người đứng quầy
+     * bấm nhanh hơn, nên cả hai đều không được có mặt trên thanh.
+     */
+    public function test_thanh_nhom_hang_chi_lay_nhom_con_cua_hang_ban(): void
+    {
+        Http::fake([
+            '*/admin/orders/pos/discount-limit' => Http::response(['data' => ['limit_percent' => 0]]),
+            '*/categories*' => Http::response(['data' => [
+                ['id' => 1, 'name' => 'Hàng bán', 'slug' => 'hang-ban', 'parent_id' => null],
+                ['id' => 2, 'name' => 'Đồ uống', 'slug' => 'do-uong', 'parent_id' => 1],
+                ['id' => 3, 'name' => 'Cà phê', 'slug' => 'ca-phe', 'parent_id' => 2],
+                ['id' => 9, 'name' => 'Hàng hoá khác', 'slug' => 'hang-hoa-khac', 'parent_id' => null],
+            ]]),
+        ]);
+
+        $res = $this->withSession($this->phienNhanVien())
+            ->get(route('thu-ngan.ban-hang.index'))
+            ->assertOk()
+            ->assertSee('data-id="2">Đồ uống', false);
+
+        // Nhóm gốc và nhóm cháu KHÔNG được lên thanh.
+        $res->assertDontSee('data-id="1">Hàng bán', false);
+        $res->assertDontSee('data-id="3">Cà phê', false);
+        $res->assertDontSee('data-id="9">Hàng hoá khác', false);
+    }
+
+    /**
+     * API danh mục hỏng thì thanh nhóm rỗng, trang vẫn mở.
+     *
+     * Thanh nhóm là lối đi tắt, không phải điều kiện để bán: mất nó thì người bán
+     * gõ tên hàng, còn trang trắng thì cả quầy dừng.
+     */
+    public function test_api_danh_muc_hong_thi_van_ban_duoc(): void
+    {
+        Http::fake([
+            '*/admin/orders/pos/discount-limit' => Http::response(['data' => ['limit_percent' => 0]]),
+            '*/categories*' => Http::response([], 500),
+        ]);
+
+        $this->withSession($this->phienNhanVien())
+            ->get(route('thu-ngan.ban-hang.index'))
+            ->assertOk()
+            ->assertSee('data-id="">Tất cả', false);
+    }
+
+    /** Lưới hàng lọc theo nhóm và sang trang được — cả hai đều chuyển thẳng xuống API. */
+    public function test_luoi_hang_chuyen_tiep_nhom_va_trang(): void
+    {
+        Http::fake(['*/products*' => Http::response(
+            ['data' => [], 'meta' => ['page' => 2, 'page_size' => 24, 'total' => 30, 'total_pages' => 2]]
+        )]);
+
+        $this->withSession($this->phienNhanVien())
+            ->getJson(route('admin.orders.searchProducts', [
+                'q' => '', 'category_id' => 5, 'page' => 2, 'page_size' => 24,
+            ]))
+            ->assertOk()
+            // Số trang phải đi tiếp ra ngoài, không thì thanh phân trang không biết
+            // mình đang ở đâu và nút "Sau" mất luôn.
+            ->assertJsonPath('meta.total_pages', 2);
+
+        Http::assertSent(function ($req) {
+            $u = $req->url();
+
+            return str_contains($u, 'category_id=5')
+                && str_contains($u, 'page=2')
+                && str_contains($u, 'page_size=24');
+        });
+    }
+
+    /**
+     * Không gửi gì thêm thì hành vi y như trước: 10 kết quả, không lọc nhóm.
+     *
+     * Trang tạo đơn bên quản trị dùng CHUNG đường này và chỉ gửi mỗi `q` — thêm
+     * tham số cho màn quầy mà đổi mặc định là làm hỏng ô gợi ý bên đó.
+     */
+    public function test_duong_tim_san_pham_giu_nguyen_mac_dinh(): void
+    {
+        Http::fake(['*/products*' => Http::response(['data' => []])]);
+
+        $this->withSession($this->phienNhanVien())
+            ->getJson(route('admin.orders.searchProducts', ['q' => 'ao']))
+            ->assertOk();
+
+        Http::assertSent(function ($req) {
+            $u = $req->url();
+
+            return str_contains($u, 'page_size=10') && ! str_contains($u, 'category_id');
+        });
+    }
 }

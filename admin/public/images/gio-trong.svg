@@ -1,0 +1,8 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-hidden="true">
+  <!-- Giỏ hàng rỗng — hình lấp ô trống ở màn bán hàng.
+       Tông theo bộ màu của module thu ngân (xám #c9ced6 / nền #f3f5f8), cố ý nhạt:
+       đây là hình để liếc qua biết giỏ chưa có gì, không phải thứ mời người ta nhìn. -->
+  <path d="M23 24v-5.5a9 9 0 0 1 18 0V24" stroke="#c9ced6" stroke-width="3.2" stroke-linecap="round"/>
+  <rect x="12.5" y="24" width="39" height="32" rx="5" fill="#f3f5f8" stroke="#c9ced6" stroke-width="3.2"/>
+  <path d="M21 47.5h22" stroke="#dfe3e9" stroke-width="3" stroke-linecap="round"/>
+</svg>

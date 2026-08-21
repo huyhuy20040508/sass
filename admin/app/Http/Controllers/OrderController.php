@@ -562,15 +562,39 @@ class OrderController extends Controller
         return response()->json(['data' => $data]);
     }
 
-    /** JSON: tìm sản phẩm (kèm biến thể) cho ô thêm sản phẩm khi tạo đơn. */
+    /**
+     * JSON: tìm sản phẩm (kèm biến thể) cho ô thêm sản phẩm khi tạo đơn.
+     *
+     * Màn hình bán tại quầy gọi CHÍNH đường này để đổ lưới hàng, nên có thêm
+     * category_id / page / page_size. Cả ba đều tuỳ chọn và mặc định giữ nguyên
+     * hành vi cũ — trang tạo đơn không gửi gì thì vẫn nhận đúng 10 kết quả như trước.
+     */
     public function searchProducts(Request $request)
     {
         $keyword = trim((string) $request->query('q', ''));
+        $categoryId = (int) $request->query('category_id', 0);
+        $page = max(1, (int) $request->query('page', 1));
+        // Trần 60: lưới ở quầy tắt ảnh thì xếp được nhiều thẻ, nhưng quá số này
+        // là một lần cuộn dài hơn cả việc gõ tên hàng.
+        $pageSize = min(60, max(1, (int) $request->query('page_size', 10)));
+
+        $query = [
+            'keyword' => $keyword,
+            'page' => $page,
+            'page_size' => $pageSize,
+            'status' => 'active',
+        ];
+        if ($categoryId > 0) {
+            $query['category_id'] = $categoryId;
+        }
+
         $list = [];
+        $meta = [];
         try {
-            $res = $this->api->products(['keyword' => $keyword, 'page_size' => 10, 'status' => 'active']);
+            $res = $this->api->products($query);
             if ($res->successful()) {
                 $list = $res->json('data') ?? [];
+                $meta = $res->json('meta') ?? [];
             }
         } catch (\Throwable $e) {
             Log::info('Search products failed', ['msg' => $e->getMessage()]);
@@ -604,7 +628,7 @@ class OrderController extends Controller
             ];
         }, $list);
 
-        return response()->json(['data' => $data]);
+        return response()->json(['data' => $data, 'meta' => $meta]);
     }
 
     public function updateStatus(Request $request, int $id)
