@@ -1514,6 +1514,9 @@ type PurchasePaymentRequest struct {
 type InventoryAdjustRequest struct {
 	Mode     string `json:"mode" binding:"required,oneof=set delta" example:"set"`
 	Quantity int    `json:"quantity" example:"50"`
+	// ShopID: chỉnh ĐÚNG kho này. Bỏ trống thì rơi về chi nhánh đang làm việc —
+	// đường đi của cửa hàng một chi nhánh, nơi màn hình không có gì để chọn.
+	ShopID uint `json:"shop_id" example:"2"`
 	// Type là loại bút toán ghi sổ kho. Bỏ trống thì server tự suy: "set" ghi
 	// "adjustment", "delta" ghi "import" khi cộng và "export" khi trừ.
 	Type     string   `json:"type" binding:"omitempty,oneof=import export adjustment" example:"adjustment"`
@@ -1526,6 +1529,10 @@ type InventoryBulkAdjustItem struct {
 	VariantID uint   `json:"variant_id" binding:"required"`
 	Mode      string `json:"mode" binding:"required,oneof=set delta"`
 	Quantity  int    `json:"quantity"`
+	// ShopID theo TỪNG DÒNG chứ không đặt chung cho cả yêu cầu: bảng tồn kho gom
+	// nhóm theo chi nhánh, người dùng tick vài dòng của kho này rồi vài dòng của
+	// kho kia rồi bấm một lần. Bỏ trống = chi nhánh đang làm việc.
+	ShopID uint `json:"shop_id"`
 }
 
 // InventoryCostItem — khai giá vốn cho một biến thể.

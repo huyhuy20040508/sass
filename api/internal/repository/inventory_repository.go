@@ -59,7 +59,12 @@ func stockValueExpr(ton string) string {
 // điều kiện vừa lọc.
 const (
 	tonTheoChiNhanh = "COALESCE(vs.quantity, 0)"
-	tonCaCuaHang    = "v.stock_quantity"
+	// Tồn của CẢ CỬA HÀNG cộng thẳng từ variant_stocks. Trước đây đọc cột
+	// `v.stock_quantity` — một bản cộng do repository ghi lại sau mỗi lần đụng
+	// kho. Cột đó đã bỏ: hai chỗ cùng giữ một sự thật thì sớm muộn lệch nhau, mà
+	// cái lệch ấy chỉ lộ ra lúc có người đếm hàng thật.
+	tonCaCuaHang = `COALESCE((SELECT SUM(vs2.quantity) FROM variant_stocks vs2
+		WHERE vs2.product_variant_id = v.id), 0)`
 )
 
 // tonExpr chọn biểu thức tồn theo ctx, và baseQuery gắn JOIN tương ứng.
@@ -69,6 +74,22 @@ func tonExpr(ctx context.Context) string {
 	}
 
 	return tonCaCuaHang
+}
+
+// lanCuoiExpr là "phát sinh cuối" của một biến thể — và nó phải hỏi ĐÚNG cái kho
+// mà cột tồn bên cạnh đang nói tới.
+//
+// Lấy MAX của cả cửa hàng trong khi bảng đang hiển thị tồn của một chi nhánh thì
+// cột này báo "hôm qua có phát sinh" cho một kho đã đứng im ba tháng — người
+// quản kho đọc xong tưởng hàng vẫn đang luân chuyển và bỏ qua đúng chỗ cần dọn.
+func lanCuoiExpr(ctx context.Context) string {
+	if shopID, ok := chinhanh.ID(ctx); ok {
+		return fmt.Sprintf(`(SELECT MAX(t.created_at) FROM inventory_transactions t
+			  WHERE t.product_variant_id = v.id AND t.shop_id = %d) AS last_moved_at`, shopID)
+	}
+
+	return `(SELECT MAX(t.created_at) FROM inventory_transactions t
+			  WHERE t.product_variant_id = v.id) AS last_moved_at`
 }
 
 // baseQuery dựng phần FROM/JOIN dùng chung cho cả danh sách lẫn đếm.
@@ -179,8 +200,7 @@ func (r *inventoryRepository) List(ctx context.Context, f domain.InventoryFilter
 			` + effectivePriceExpr + ` AS price,
 			` + effectiveCostExpr + ` AS cost_price,
 			` + stockValueExpr(ton) + ` AS stock_value,
-			(SELECT MAX(t.created_at) FROM inventory_transactions t
-			  WHERE t.product_variant_id = v.id) AS last_moved_at`).
+			` + lanCuoiExpr(ctx)).
 		Order(inventoryOrder(f.Sort, ton)).
 		Limit(f.PageSize).
 		Offset((f.Page - 1) * f.PageSize)
@@ -226,8 +246,7 @@ func (r *inventoryRepository) FindItem(ctx context.Context, variantID uint) (*do
 			` + effectivePriceExpr + ` AS price,
 			` + effectiveCostExpr + ` AS cost_price,
 			` + stockValueExpr(ton) + ` AS stock_value,
-			(SELECT MAX(t.created_at) FROM inventory_transactions t
-			  WHERE t.product_variant_id = v.id) AS last_moved_at`).
+			` + lanCuoiExpr(ctx)).
 		Limit(1).Scan(&items).Error
 	if err != nil {
 		return nil, err
@@ -238,13 +257,39 @@ func (r *inventoryRepository) FindItem(ctx context.Context, variantID uint) (*do
 	return &items[0], nil
 }
 
-func (r *inventoryRepository) Histories(ctx context.Context, variantID uint, page, pageSize int) ([]domain.InventoryHistory, int64, error) {
-	base := r.db.WithContext(ctx).
-		Table("inventory_transactions AS t").
-		Where("t.product_variant_id = ?", variantID)
+// khoDangXet trả về chi nhánh mà một lượt ĐỌC phải cắt theo.
+//
+// Thứ tự: chi nhánh gọi thẳng (màn "Tồn kho chi nhánh" xem sổ của đúng một kho)
+// → chi nhánh đang làm việc trong ctx → không cắt (xem gộp cả cửa hàng).
+//
+// Khác hẳn chiToNhanhCuaRequest bên đường GHI, chỗ đó không được phép "không
+// biết kho nào" nên phải rơi về chi nhánh bán online. Đọc thì "không cắt" là một
+// câu trả lời hợp lệ và đúng ý người dùng khi họ chọn "Tất cả chi nhánh".
+func khoDangXet(ctx context.Context, shopID uint) (uint, bool) {
+	if shopID != 0 {
+		return shopID, true
+	}
+
+	return chinhanh.ID(ctx)
+}
+
+func (r *inventoryRepository) Histories(ctx context.Context, variantID, shopID uint, page, pageSize int) ([]domain.InventoryHistory, int64, error) {
+	// SỔ KHO PHẢI CẮT THEO ĐÚNG CÁI KHO ĐANG HIỂN THỊ. Không cắt thì người đang
+	// xem kho Quận 7 (tồn 3) mở lịch sử ra lại thấy bút toán của Quận 1 với "trước
+	// 40 → sau 41": cặp số ấy đúng với kho kia và mâu thuẫn với con số ngay trên
+	// màn hình, mà không có gì trên giao diện nói vì sao.
+	kho, coKho := khoDangXet(ctx, shopID)
+	loc := func(q *gorm.DB) *gorm.DB {
+		q = q.Where("t.product_variant_id = ?", variantID)
+		if coKho {
+			q = q.Where("t.shop_id = ?", kho)
+		}
+
+		return q
+	}
 
 	var total int64
-	if err := base.Count(&total).Error; err != nil {
+	if err := loc(r.db.WithContext(ctx).Table("inventory_transactions AS t")).Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 	if total == 0 {
@@ -255,14 +300,15 @@ func (r *inventoryRepository) Histories(ctx context.Context, variantID uint, pag
 	// là id đơn hàng vừa là id phiếu trả, nên phải kèm điều kiện reference_type ở
 	// từng JOIN thay vì COALESCE bừa hai bảng.
 	rows := make([]domain.InventoryHistory, 0, pageSize)
-	err := r.db.WithContext(ctx).
+	err := loc(r.db.WithContext(ctx).
 		Table("inventory_transactions AS t").
 		Joins("LEFT JOIN users u ON u.id = t.created_by").
+		Joins("LEFT JOIN shops sh ON sh.id = t.shop_id").
 		Joins("LEFT JOIN orders o ON o.id = t.reference_id AND t.reference_type = 'order'").
 		Joins("LEFT JOIN order_returns rt ON rt.id = t.reference_id AND t.reference_type = 'order_return'").
-		Joins("LEFT JOIN purchase_orders po ON po.id = t.reference_id AND t.reference_type = 'purchase_order'").
-		Where("t.product_variant_id = ?", variantID).
-		Select(`t.id, t.type, t.quantity, t.quantity_before, t.quantity_after,
+		Joins("LEFT JOIN purchase_orders po ON po.id = t.reference_id AND t.reference_type = 'purchase_order'")).
+		Select(`t.id, t.shop_id, COALESCE(sh.name, '') AS shop_name,
+			t.type, t.quantity, t.quantity_before, t.quantity_after,
 			COALESCE(t.reference_type, '') AS reference_type, t.reference_id,
 			COALESCE(o.order_code, rt.return_code, po.po_code, '') AS reference_code,
 			t.unit_cost, COALESCE(t.note, '') AS note,
@@ -341,31 +387,65 @@ func (r *inventoryRepository) Adjust(ctx context.Context, items []domain.Invento
 		return nil, domain.ErrConflict
 	}
 
-	// Gộp theo biến thể trước khi khoá: cùng một biến thể gửi lên hai lần thì lần
-	// sau phải tính trên kết quả của lần trước, không phải ghi đè nó.
-	order := make([]uint, 0, len(items))
-	byID := make(map[uint][]domain.InventoryAdjustment, len(items))
-	for _, it := range items {
-		if _, seen := byID[it.VariantID]; !seen {
-			order = append(order, it.VariantID)
-		}
-		byID[it.VariantID] = append(byID[it.VariantID], it)
-	}
-	// Khoá theo ID tăng dần — cùng thứ tự với luồng đặt hàng/trả hàng nên hai bên
-	// chạy song song không khoá chéo nhau.
-	ids := slices.Clone(order)
-	slices.Sort(ids)
-
-	results := make([]domain.InventoryAdjustResult, 0, len(order))
-
-	// Chỉnh kho luôn là việc của MỘT chi nhánh cụ thể: người bấm nút đang đứng ở
-	// một kho và đếm hàng trong kho đó. Không xác định được chi nhánh thì dừng —
-	// cộng số hàng vừa đếm vào một kho do máy đoán là cách nhanh nhất để sổ và
-	// hàng thật lệch nhau.
-	shopID, err := chiNhanhCuaRequest(ctx, r.db)
+	// Chỉnh kho luôn là việc của MỘT chi nhánh cụ thể: người bấm nút vừa đếm hàng
+	// trong một kho. Dòng nào không nói rõ kho thì rơi về chi nhánh đang làm việc
+	// — không xác định được thì dừng, vì cộng số vừa đếm vào một kho do máy đoán
+	// là cách nhanh nhất để sổ và hàng thật lệch nhau.
+	macDinh, err := chiNhanhCuaRequest(ctx, r.db)
 	if err != nil {
 		return nil, err
 	}
+
+	// Gộp theo CẶP (chi nhánh, biến thể) trước khi khoá: gửi cùng một biến thể hai
+	// lần cho CÙNG một kho thì lần sau phải tính trên kết quả của lần trước; còn
+	// hai kho khác nhau là hai con số độc lập, gộp lại là trộn hàng của hai nơi.
+	type khoaDong struct{ shop, variant uint }
+	order := make([]khoaDong, 0, len(items))
+	byKey := make(map[khoaDong][]domain.InventoryAdjustment, len(items))
+	kho := make(map[uint]bool, 4)
+	for _, it := range items {
+		k := khoaDong{shop: it.ShopID, variant: it.VariantID}
+		if k.shop == 0 {
+			k.shop = macDinh
+		}
+		if _, seen := byKey[k]; !seen {
+			order = append(order, k)
+		}
+		byKey[k] = append(byKey[k], it)
+		kho[k.shop] = true
+	}
+
+	// Chi nhánh do client gửi lên phải THUỘC CỬA HÀNG NÀY. Không kiểm thì một id
+	// gõ tay của tiệm khác vẫn ghi được một dòng variant_stocks mang tenant của ta
+	// nhưng trỏ vào kho của họ — khoá ngoại sang `shops` không chặn được, vì nó chỉ
+	// hỏi "chi nhánh có tồn tại không" chứ không hỏi "của ai".
+	for shopID := range kho {
+		if shopID == macDinh {
+			continue
+		}
+		var co int64
+		if err := r.db.WithContext(ctx).Model(&domain.ChiNhanh{}).
+			Where("id = ?", shopID).Count(&co).Error; err != nil {
+			return nil, err
+		}
+		if co == 0 {
+			return nil, domain.ErrNotFound
+		}
+	}
+
+	// Khoá theo ID biến thể tăng dần — cùng thứ tự với luồng đặt hàng/trả hàng nên
+	// hai bên chạy song song không khoá chéo nhau.
+	ids := make([]uint, 0, len(order))
+	daCo := make(map[uint]bool, len(order))
+	for _, k := range order {
+		if !daCo[k.variant] {
+			daCo[k.variant] = true
+			ids = append(ids, k.variant)
+		}
+	}
+	slices.Sort(ids)
+
+	results := make([]domain.InventoryAdjustResult, 0, len(order))
 
 	err = r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var variants []domain.ProductVariant
@@ -378,11 +458,13 @@ func (r *inventoryRepository) Adjust(ctx context.Context, items []domain.Invento
 			found[v.ID] = v
 		}
 
-		for _, vid := range ids {
+		for _, k := range order {
+			vid := k.variant
 			v, ok := found[vid]
 			if !ok {
 				return domain.ErrNotFound
 			}
+			shopID := k.shop
 
 			// before/after ĐỌC THEO CHI NHÁNH, không theo bản cộng của cả cửa hàng:
 			// người dùng vừa đếm kho của mình, nên con số họ thấy phải là con số kho
@@ -393,7 +475,7 @@ func (r *inventoryRepository) Adjust(ctx context.Context, items []domain.Invento
 			}
 
 			current := before
-			for _, adj := range byID[vid] {
+			for _, adj := range byKey[k] {
 				next := current + adj.Quantity
 				if adj.Mode == domain.StockModeSet {
 					next = adj.Quantity
@@ -427,6 +509,7 @@ func (r *inventoryRepository) Adjust(ctx context.Context, items []domain.Invento
 
 			results = append(results, domain.InventoryAdjustResult{
 				VariantID: vid,
+				ShopID:    shopID,
 				SKU:       v.SKU,
 				Before:    before,
 				After:     current,
@@ -442,16 +525,10 @@ func (r *inventoryRepository) Adjust(ctx context.Context, items []domain.Invento
 		return nil, err
 	}
 
-	// Trả kết quả theo đúng thứ tự người dùng gửi lên, không theo thứ tự khoá.
-	pos := make(map[uint]domain.InventoryAdjustResult, len(results))
-	for _, res := range results {
-		pos[res.VariantID] = res
-	}
-	out := make([]domain.InventoryAdjustResult, 0, len(order))
-	for _, vid := range order {
-		out = append(out, pos[vid])
-	}
-	return out, nil
+	// Không cần xếp lại: vòng ghi ở trên đi theo `order`, tức là đúng thứ tự người
+	// dùng gửi lên. (Việc khoá dòng mới đi theo id tăng dần, và nó nằm ở câu SELECT
+	// riêng phía trước.)
+	return results, nil
 }
 
 // TonTheoChiNhanh dựng lưới (chi nhánh × biến thể) cho màn "Tồn kho chi nhánh".

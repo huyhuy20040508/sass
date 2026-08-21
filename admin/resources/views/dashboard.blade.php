@@ -835,9 +835,19 @@
                 <div class="db-card-head">
                     <div>
                         <h3 class="db-card-title">Sắp hết hàng</h3>
-                        <p class="db-card-sub">Biến thể đang bán còn tối đa {{ $LOW_STOCK }} sản phẩm</p>
+                        {{-- Thẻ này gọi đúng endpoint tồn kho nên nó đã ăn theo chi nhánh
+                             đang làm việc. Phải NÓI RA: cùng một mặt hàng có thể sắp hết ở
+                             kho này mà đầy ở kho kia, và người đọc cần biết mình đang nhìn
+                             kho nào trước khi quyết định nhập thêm. --}}
+                        @php($khoDangXem = \App\Services\ChiNhanhDangLam::ten())
+                        <p class="db-card-sub">
+                            Biến thể đang bán còn tối đa {{ $LOW_STOCK }} sản phẩm
+                            @if(count(\App\Services\ChiNhanhDangLam::danhSach()['ds']) > 1)
+                                · <b>{{ $khoDangXem === null ? 'gộp mọi chi nhánh' : 'kho '.$khoDangXem }}</b>
+                            @endif
+                        </p>
                     </div>
-                    <a class="db-linkbtn" href="{{ route('admin.inventory.index', ['is_active' => 1]) }}">Quản lý kho →</a>
+                    <a class="db-linkbtn" href="{{ route('admin.ton-kho-chi-nhanh.index') }}">Quản lý kho →</a>
                 </div>
 
                 @if(empty($lowStock))

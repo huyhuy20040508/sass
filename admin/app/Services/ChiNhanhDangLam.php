@@ -59,4 +59,28 @@ class ChiNhanhDangLam
 
         return self::$nho = ['ds' => $ds, 'dangChon' => $dangChon === null ? null : (int) $dangChon];
     }
+
+    /**
+     * Tên chi nhánh đang làm việc, null nghĩa là đang xem GỘP mọi chi nhánh.
+     *
+     * Có riêng hàm này vì các trang kho phải NÓI RA mình đang hiển thị kho nào.
+     * Con số tồn đổi hẳn ý nghĩa theo lựa chọn ở thanh trên cùng — tồn của một
+     * điểm bán hay bản cộng của cả cửa hàng — mà ô chọn đó lại chỉ hiện khi cửa
+     * hàng có từ hai chi nhánh, nên không thể trông vào nó để người dùng tự hiểu.
+     */
+    public static function ten(): ?string
+    {
+        $d = self::danhSach();
+        if ($d['dangChon'] === null) {
+            return null;
+        }
+
+        foreach ($d['ds'] as $cn) {
+            if ((int) $cn['id'] === $d['dangChon']) {
+                return (string) ($cn['name'] ?? '');
+            }
+        }
+
+        return null;
+    }
 }

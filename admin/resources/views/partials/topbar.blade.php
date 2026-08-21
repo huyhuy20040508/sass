@@ -74,7 +74,7 @@
              data-stream-token-url="{{ route('admin.notifications.streamToken') }}"
              data-orders-url="{{ route('admin.orders.index') }}"
              data-returns-url="{{ route('admin.returns.index') }}"
-             data-inventory-url="{{ route('admin.inventory.index') }}">
+             data-inventory-url="{{ route('admin.ton-kho-chi-nhanh.index') }}">
             <button type="button" class="jh-tb-iconbtn" id="jhTbNotifBtn" aria-label="Thông báo"
                     aria-haspopup="true" aria-expanded="false">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">

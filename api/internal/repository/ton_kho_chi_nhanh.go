@@ -13,18 +13,18 @@ import (
 
 // CỬA DUY NHẤT GHI TỒN KHO.
 //
-// Từ migration 0005, tồn kho nằm ở `variant_stocks` (mỗi chi nhánh một dòng) và
-// `product_variants.stock_quantity` chỉ còn là BẢN CỘNG SẴN của mọi chi nhánh.
-// Hai bảng đó phải luôn khớp nhau, mà cách duy nhất giữ được điều đó là không có
-// đường nào ghi riêng lẻ vào một trong hai.
+// Từ migration 0005, tồn kho nằm ở `variant_stocks` — mỗi chi nhánh một dòng, và
+// đó là NƠI DUY NHẤT giữ số hàng. Bản cộng `product_variants.stock_quantity` đã
+// bỏ hẳn (migration 0036): hai chỗ cùng giữ một sự thật thì sớm muộn lệch nhau,
+// và cái lệch ấy chỉ lộ ra lúc có người đếm hàng thật. Chỗ nào cần "cả cửa hàng
+// còn bao nhiêu" thì CỘNG RA trong chính câu truy vấn đó.
 //
 // Vì vậy: mọi chỗ đụng vào kho — nhập hàng, bán hàng, huỷ đơn, trả hàng, chỉnh
 // kho — đều gọi ĐÚNG hàm dưới đây, trong CÙNG giao dịch với chứng từ của nó.
 // `grep -rn "ghiTonChiNhanh"` phải liệt kê được toàn bộ chỗ hàng hoá đổi số.
 //
-// KHÔNG viết `Update("stock_quantity", …)` ở bất cứ đâu nữa. Câu lệnh đó vẫn
-// chạy, vẫn đổi đúng con số người ta nhìn thấy trên màn hình, và để lại một
-// chi nhánh có sổ kho sai — sai theo kiểu chỉ lộ ra lúc có người đếm hàng thật.
+// KHÔNG dựng lại một cột cache nào nữa, dù nó tiện tới đâu: cột như vậy luôn
+// đúng cho tới ngày có một đường ghi quên cập nhật nó, và ngày đó không ai biết.
 
 // chiNhanhCuaRequest trả về chi nhánh mà lượt ghi kho này thuộc về.
 //
@@ -112,10 +112,6 @@ func ghiTonChiNhanh(tx *gorm.DB, shopID, variantID uint, delta int, choPhepAm bo
 		return truoc, truoc, err
 	}
 
-	if err := dungLaiBanCong(tx, variantID); err != nil {
-		return truoc, truoc, err
-	}
-
 	return truoc, sau, nil
 }
 
@@ -170,28 +166,4 @@ func datTonChiNhanh(tx *gorm.DB, shopID, variantID uint, soDich int, choPhepAm b
 	}
 
 	return ghiTonChiNhanh(tx, shopID, variantID, soDich-truoc, choPhepAm)
-}
-
-// dungLaiBanCong ghi lại product_variants.stock_quantity = tổng mọi chi nhánh.
-//
-// Cộng lại từ đầu chứ không cộng dồn delta: hai cách cho cùng kết quả khi mọi
-// thứ chạy đúng, nhưng chỉ cách này TỰ CHỮA khi có gì đó lệch (một dòng ghi
-// tay dưới database, một lượt migration chạy dở). Chi phí là một câu SUM trên
-// vài dòng có index — không đáng để đổi lấy một con số trôi dần theo thời gian
-// mà không ai đối chiếu lại được.
-//
-// Unscoped ở lượt UPDATE: biến thể đã xoá mềm vẫn phải cập nhật bản cộng, nếu
-// không thì hàng trả về của một đơn cũ nằm trong variant_stocks mà con số hiển
-// thị đứng im.
-func dungLaiBanCong(tx *gorm.DB, variantID uint) error {
-	var tong int
-	if err := tx.Model(&domain.TonKhoChiNhanh{}).
-		Where("product_variant_id = ?", variantID).
-		Select("COALESCE(SUM(quantity), 0)").Scan(&tong).Error; err != nil {
-		return err
-	}
-
-	return tx.Unscoped().Model(&domain.ProductVariant{}).
-		Where("id = ?", variantID).
-		Update("stock_quantity", tong).Error
 }

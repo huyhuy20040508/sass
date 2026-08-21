@@ -85,6 +85,21 @@ func ctxRaw() context.Context {
 	return tenant.WithoutScope(context.Background(), "test: SQL viết tay dựng/dọn dữ liệu")
 }
 
+// chiNhanhGoc trả về chi nhánh đang mở có id nhỏ nhất của cửa hàng số 1 — nơi
+// migration 0005 dồn toàn bộ tồn kho về. Bài kiểm nào cần "bỏ hàng vào kho" thì
+// bỏ vào đúng đó.
+func chiNhanhGoc(t *testing.T, db *gorm.DB) uint {
+	t.Helper()
+
+	var cn domain.ChiNhanh
+	if err := db.WithContext(ctxTest()).Model(&domain.ChiNhanh{}).
+		Where("is_active = ?", true).Order("id ASC").Take(&cn).Error; err != nil {
+		t.Fatalf("cửa hàng test chưa có chi nhánh nào: %v", err)
+	}
+
+	return cn.ID
+}
+
 // seedCategory trả về id một danh mục THUỘC CỬA HÀNG SỐ 1, tạo nếu chưa có.
 //
 // Mệnh đề tenant_id = 1 là bắt buộc, không phải cho gọn. Bộ test này dùng CHUNG
@@ -162,10 +177,13 @@ func seedProduct(t *testing.T, db *gorm.DB) uint {
 	return p.ID
 }
 
-// Sửa sản phẩm KHÔNG được đụng tới tồn kho. Đây là bảo chứng quan trọng nhất
-// của luồng mới: tồn kho chỉ đổi qua nghiệp vụ kho và luôn kèm bút toán trong
-// inventory_transactions. GORM Save() vốn ghi mọi cột, nên nếu ai đó gỡ
-// Omit("stock_quantity") thì mỗi lần sửa sản phẩm sẽ đạp tồn về 0.
+// Sửa sản phẩm KHÔNG được đụng tới tồn kho. Đây là bảo chứng quan trọng nhất của
+// luồng mới: tồn kho chỉ đổi qua nghiệp vụ kho và luôn kèm bút toán trong
+// inventory_transactions.
+//
+// Từ migration 0036, tồn nằm hẳn ở bảng khác (variant_stocks) nên form sản phẩm
+// không còn cách nào đạp phải nó. Bài kiểm vẫn giữ: nó gác cái luật, không gác
+// cách hiện thực — ai đó thêm lại một cột cache vào product_variants là nó đỏ.
 func TestReplaceVariantsKhongDungToiTonKho(t *testing.T) {
 	db := testDB(t)
 	repo := NewProductRepository(db)
@@ -183,13 +201,15 @@ func TestReplaceVariantsKhongDungToiTonKho(t *testing.T) {
 	if err := db.WithContext(ctxTest()).Where("product_id = ? AND name = ?", productID, "M").First(&v).Error; err != nil {
 		t.Fatalf("không đọc được biến thể vừa tạo: %v", err)
 	}
-	if v.StockQuantity != 0 {
-		t.Fatalf("biến thể mới phải có tồn 0, nhận %d", v.StockQuantity)
+	if got := stockOf(t, db, v.ID); got != 0 {
+		t.Fatalf("biến thể mới phải có tồn 0, nhận %d", got)
 	}
 
-	// Kho nhập 50 cái (mô phỏng nhận hàng từ phiếu nhập).
-	if err := db.WithContext(ctxTest()).Model(&domain.ProductVariant{}).Where("id = ?", v.ID).
-		UpdateColumn("stock_quantity", 50).Error; err != nil {
+	// Kho nhập 50 cái (mô phỏng nhận hàng từ phiếu nhập) — ghi vào variant_stocks,
+	// nơi duy nhất giữ số hàng.
+	if err := db.WithContext(ctxTest()).Create(&domain.TonKhoChiNhanh{
+		ShopID: chiNhanhGoc(t, db), ProductVariantID: v.ID, Quantity: 50,
+	}).Error; err != nil {
 		t.Fatalf("không cập nhật được tồn kho: %v", err)
 	}
 
@@ -206,8 +226,10 @@ func TestReplaceVariantsKhongDungToiTonKho(t *testing.T) {
 	if err := db.WithContext(ctxTest()).First(&sau, v.ID).Error; err != nil {
 		t.Fatalf("không đọc lại được biến thể: %v", err)
 	}
-	if sau.StockQuantity != 50 {
-		t.Fatalf("sửa sản phẩm đã đạp tồn kho: mong 50, nhận %d", sau.StockQuantity)
+	// Hỏi thẳng variant_stocks: tồn kho không còn là một cột của product_variants,
+	// nên đọc qua struct sẽ luôn ra 0 và bài kiểm này sẽ xanh một cách vô nghĩa.
+	if got := stockOf(t, db, v.ID); got != 50 {
+		t.Fatalf("sửa sản phẩm đã đạp tồn kho: mong 50, nhận %d", got)
 	}
 	if sau.Price == nil || *sau.Price != gia {
 		t.Fatalf("giá riêng không được ghi: %v", sau.Price)

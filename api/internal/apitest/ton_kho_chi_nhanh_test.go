@@ -432,3 +432,295 @@ func TestManTonKhoChiNhanh(t *testing.T) {
 		}
 	}
 }
+
+// soKho đọc sổ kho của một biến thể qua đúng đường mà modal xem nhanh gọi.
+func soKho(t *testing.T, h *heThong, c *cuaHang, shopID uint, duong string) []struct {
+	ShopID   uint   `json:"shop_id"`
+	ShopName string `json:"shop_name"`
+	Before   int    `json:"quantity_before"`
+	After    int    `json:"quantity_after"`
+} {
+	t.Helper()
+
+	var out struct {
+		Data []struct {
+			ShopID   uint   `json:"shop_id"`
+			ShopName string `json:"shop_name"`
+			Before   int    `json:"quantity_before"`
+			After    int    `json:"quantity_after"`
+		} `json:"data"`
+	}
+
+	var res traLoi
+	if shopID == 0 {
+		res = h.goi(t, c.token, http.MethodGet, duong, nil)
+	} else {
+		res = h.goiChiNhanh(t, c.token, shopID, http.MethodGet, duong, nil)
+	}
+	if res.ma != http.StatusOK {
+		t.Fatalf("đọc sổ kho trả %d\n%s", res.ma, catBot(res.than))
+	}
+	if err := json.Unmarshal([]byte(res.than), &out); err != nil {
+		t.Fatalf("không đọc được sổ kho: %v\n%s", err, catBot(res.than))
+	}
+
+	return out.Data
+}
+
+// TestSoKhoCatTheoChiNhanh — SỔ KHO PHẢI KỂ CHUYỆN CỦA ĐÚNG CÁI KHO ĐANG XEM.
+//
+// Trước bản này, sổ kho chỉ lọc theo biến thể. Người đang xem kho Quận 7 (tồn 3)
+// mở lịch sử ra thấy bút toán của Quận 1 kèm "trước 40 → sau 41" — cặp số đúng
+// với kho kia và mâu thuẫn với con số ngay trên màn hình, mà không có gì nói vì
+// sao. Hỏng kiểu này không báo lỗi ở đâu cả: nó chỉ làm người đếm hàng mất niềm
+// tin vào cả cái sổ.
+func TestSoKhoCatTheoChiNhanh(t *testing.T) {
+	h := dungHeThong(t)
+	a, _ := haiCuaHang(t, h)
+
+	res := h.goi(t, a.token, http.MethodPost, "/api/v1/admin/chi-nhanh",
+		map[string]any{"name": "Kho phu " + a.vet, "code": "kho-phu"})
+	if res.ma != http.StatusCreated {
+		t.Fatalf("mở chi nhánh thứ hai trả %d\n%s", res.ma, catBot(res.than))
+	}
+	var tao struct {
+		Data struct {
+			ID uint `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(res.than), &tao); err != nil {
+		t.Fatalf("không đọc được chi nhánh vừa mở: %v", err)
+	}
+	goc, phu := a.chiNhanh, tao.Data.ID
+	duongSo := fmt.Sprintf("/api/v1/admin/inventory/%d/history", a.bienThe)
+
+	// Kho phụ chưa có bút toán nào. "Phát sinh cuối" của nó phải TRỐNG, dù biến
+	// thể này có lịch sử dày ở kho gốc — đó là dấu hiệu người quản kho dựa vào để
+	// biết kho nào đang nằm im.
+	var chiTiet struct {
+		Data struct {
+			Item struct {
+				LastMovedAt *string `json:"last_moved_at"`
+			} `json:"item"`
+		} `json:"data"`
+	}
+	res = h.goiChiNhanh(t, a.token, phu, http.MethodGet,
+		fmt.Sprintf("/api/v1/admin/inventory/%d", a.bienThe), nil)
+	if err := json.Unmarshal([]byte(res.than), &chiTiet); err != nil {
+		t.Fatalf("không đọc được chi tiết: %v", err)
+	}
+	if chiTiet.Data.Item.LastMovedAt != nil {
+		t.Fatalf("kho phụ chưa có bút toán nào mà phát sinh cuối vẫn là %q — đang lấy MAX của cả cửa hàng",
+			*chiTiet.Data.Item.LastMovedAt)
+	}
+	if dong := soKho(t, h, a, phu, duongSo); len(dong) != 0 {
+		t.Fatalf("kho phụ chưa có bút toán nào mà sổ trả về %d dòng", len(dong))
+	}
+
+	// Mỗi kho một lượt nhập, để hai bên đều có bút toán riêng.
+	for _, ch := range []struct {
+		shop uint
+		so   int
+	}{{phu, 7}, {goc, 5}} {
+		res = h.goiChiNhanh(t, a.token, ch.shop, http.MethodPut,
+			fmt.Sprintf("/api/v1/admin/inventory/%d", a.bienThe),
+			map[string]any{"mode": "delta", "quantity": ch.so})
+		if res.ma != http.StatusOK {
+			t.Fatalf("nhập hàng vào chi nhánh %d trả %d\n%s", ch.shop, res.ma, catBot(res.than))
+		}
+	}
+
+	// Đứng ở kho phụ: sổ chỉ được có bút toán của kho phụ, và cặp trước → sau
+	// phải là số của CHÍNH kho đó (0 → 7), không phải số của cả cửa hàng.
+	dong := soKho(t, h, a, phu, duongSo)
+	if len(dong) != 1 {
+		t.Fatalf("sổ của kho phụ phải có đúng 1 dòng, đang có %d", len(dong))
+	}
+	if dong[0].ShopID != phu {
+		t.Fatalf("sổ của kho phụ lẫn bút toán của chi nhánh %d", dong[0].ShopID)
+	}
+	if dong[0].Before != 0 || dong[0].After != 7 {
+		t.Fatalf("cặp trước → sau của kho phụ phải là 0 → 7, đang là %d → %d", dong[0].Before, dong[0].After)
+	}
+
+	// Đứng ở kho gốc: không thấy dòng nào của kho phụ.
+	for _, d := range soKho(t, h, a, goc, duongSo) {
+		if d.ShopID != goc {
+			t.Fatalf("sổ của kho gốc lẫn bút toán của chi nhánh %d", d.ShopID)
+		}
+	}
+
+	// Không gửi header = xem gộp: thấy cả hai kho, và mỗi dòng phải nói được nó
+	// thuộc kho nào — thiếu tên kho thì bảng gộp đọc lên vô nghĩa.
+	gop := soKho(t, h, a, 0, duongSo)
+	thay := map[uint]bool{}
+	for _, d := range gop {
+		thay[d.ShopID] = true
+		if d.ShopName == "" {
+			t.Fatalf("dòng sổ của chi nhánh %d không kèm tên kho", d.ShopID)
+		}
+	}
+	if !thay[goc] || !thay[phu] {
+		t.Fatalf("xem gộp phải thấy cả hai kho, đang thấy %v", thay)
+	}
+
+	// Hỏi đích danh một kho bằng shop_id — đường mà màn "Tồn kho chi nhánh" dùng,
+	// vì nó nhìn nhiều kho cùng lúc nên không đứng ở kho nào cả.
+	for _, d := range soKho(t, h, a, 0, duongSo+fmt.Sprintf("?shop_id=%d", phu)) {
+		if d.ShopID != phu {
+			t.Fatalf("hỏi sổ của kho %d mà trả về dòng của kho %d", phu, d.ShopID)
+		}
+	}
+}
+
+// TestChinhKhoChiDinhChiNhanh — NÚT CHỈNH KHO PHẢI SỬA ĐÚNG KHO CỦA DÒNG ĐÓ.
+//
+// Màn Tồn kho bày nhiều kho cùng lúc, mỗi dòng một kho. Nếu lượt ghi vẫn đi theo
+// "chi nhánh đang làm việc" thì người dùng bấm ở dòng kho A mà hàng chạy vào kho
+// B — không lỗi, không cảnh báo, chỉ có hai kho cùng sai và không ai biết cho tới
+// lúc đếm hàng thật.
+//
+// Bài này cũng chốt luôn cửa chặn: id chi nhánh của CỬA HÀNG KHÁC phải bị từ
+// chối. Khoá ngoại sang `shops` không đỡ được chỗ này — nó chỉ hỏi "chi nhánh có
+// tồn tại không" chứ không hỏi "của ai".
+func TestChinhKhoChiDinhChiNhanh(t *testing.T) {
+	h := dungHeThong(t)
+	a, b := haiCuaHang(t, h)
+
+	res := h.goi(t, a.token, http.MethodPost, "/api/v1/admin/chi-nhanh",
+		map[string]any{"name": "Kho phu " + a.vet, "code": "kho-phu"})
+	if res.ma != http.StatusCreated {
+		t.Fatalf("mở chi nhánh thứ hai trả %d\n%s", res.ma, catBot(res.than))
+	}
+	var tao struct {
+		Data struct {
+			ID uint `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(res.than), &tao); err != nil {
+		t.Fatalf("không đọc được chi nhánh vừa mở: %v", err)
+	}
+	goc, phu := a.chiNhanh, tao.Data.ID
+
+	// ĐANG ĐỨNG Ở KHO GỐC nhưng chỉnh cho kho phụ.
+	res = h.goiChiNhanh(t, a.token, goc, http.MethodPut,
+		fmt.Sprintf("/api/v1/admin/inventory/%d", a.bienThe),
+		map[string]any{"mode": "delta", "quantity": 9, "shop_id": phu})
+	if res.ma != http.StatusOK {
+		t.Fatalf("chỉnh kho phụ từ kho gốc trả %d\n%s", res.ma, catBot(res.than))
+	}
+	var mot struct {
+		Data struct {
+			ShopID uint `json:"shop_id"`
+			After  int  `json:"after"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(res.than), &mot); err != nil {
+		t.Fatalf("không đọc được kết quả chỉnh kho: %v", err)
+	}
+	if mot.Data.ShopID != phu {
+		t.Fatalf("kết quả phải nói rõ đã sửa kho %d, đang nói %d", phu, mot.Data.ShopID)
+	}
+	if got := tonCua(t, h, a, phu, a.bienThe); got != 9 {
+		t.Fatalf("kho phụ phải là 9, đang là %d", got)
+	}
+	if got := tonCua(t, h, a, goc, a.bienThe); got != 20 {
+		t.Fatalf("GHI NHẦM KHO: chỉnh cho kho phụ mà kho gốc thành %d (phải giữ 20)", got)
+	}
+
+	// Hàng loạt: hai dòng, hai kho khác nhau, trong CÙNG một lượt gửi.
+	res = h.goiChiNhanh(t, a.token, goc, http.MethodPost, "/api/v1/admin/inventory/adjust",
+		map[string]any{
+			"items": []map[string]any{
+				{"variant_id": a.bienThe, "mode": "set", "quantity": 30, "shop_id": goc},
+				{"variant_id": a.bienThe, "mode": "set", "quantity": 4, "shop_id": phu},
+			},
+		})
+	if res.ma != http.StatusOK {
+		t.Fatalf("chỉnh hàng loạt hai kho trả %d\n%s", res.ma, catBot(res.than))
+	}
+	if got := tonCua(t, h, a, goc, a.bienThe); got != 30 {
+		t.Fatalf("kho gốc phải là 30, đang là %d", got)
+	}
+	if got := tonCua(t, h, a, phu, a.bienThe); got != 4 {
+		t.Fatalf("kho phụ phải là 4, đang là %d — hai dòng cùng biến thể đã bị gộp làm một", got)
+	}
+
+	// Chi nhánh của CỬA HÀNG KHÁC: phải bị từ chối, và không được ghi gì.
+	res = h.goiChiNhanh(t, a.token, goc, http.MethodPut,
+		fmt.Sprintf("/api/v1/admin/inventory/%d", a.bienThe),
+		map[string]any{"mode": "delta", "quantity": 5, "shop_id": b.chiNhanh})
+	if res.ma != http.StatusNotFound {
+		t.Fatalf("RÒ DỮ LIỆU: ghi kho sang chi nhánh của cửa hàng khác trả %d (phải 404)\n%s",
+			res.ma, catBot(res.than))
+	}
+	if got := tonCua(t, h, a, goc, a.bienThe); got != 30 {
+		t.Fatalf("lượt ghi hỏng vẫn phải cuộn lại: kho gốc thành %d (phải giữ 30)", got)
+	}
+}
+
+// TestTonGopVanDungSauKhiBoCotCache — con số "cả cửa hàng còn bao nhiêu" phải
+// CỘNG RA ĐÚNG sau khi cột cache bị bỏ.
+//
+// Đây là bài kiểm gác đúng kiểu hỏng nguy hiểm nhất của đợt bỏ cột: không có gì
+// gãy, không lỗi nào nổi lên, chỉ là mọi màn hình dùng con số gộp — danh sách
+// hàng hoá, trang bán cho khách vãng lai, ô "còn mấy cái" — im lặng hiển thị 0.
+// Một truy vấn quên kèm biểu thức cộng là đủ để gây ra chuyện đó.
+func TestTonGopVanDungSauKhiBoCotCache(t *testing.T) {
+	h := dungHeThong(t)
+	a, _ := haiCuaHang(t, h)
+
+	res := h.goi(t, a.token, http.MethodPost, "/api/v1/admin/chi-nhanh",
+		map[string]any{"name": "Kho phu " + a.vet, "code": "kho-phu"})
+	if res.ma != http.StatusCreated {
+		t.Fatalf("mở chi nhánh thứ hai trả %d\n%s", res.ma, catBot(res.than))
+	}
+	var tao struct {
+		Data struct {
+			ID uint `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(res.than), &tao); err != nil {
+		t.Fatalf("không đọc được chi nhánh vừa mở: %v", err)
+	}
+
+	// Gieo sẵn 20 ở chi nhánh gốc; thêm 7 ở chi nhánh phụ.
+	res = h.goiChiNhanh(t, a.token, tao.Data.ID, http.MethodPut,
+		fmt.Sprintf("/api/v1/admin/inventory/%d", a.bienThe),
+		map[string]any{"mode": "delta", "quantity": 7})
+	if res.ma != http.StatusOK {
+		t.Fatalf("nhập hàng vào chi nhánh phụ trả %d\n%s", res.ma, catBot(res.than))
+	}
+
+	// Trang Hàng hoá đọc tồn qua payload sản phẩm, KHÔNG qua màn kho.
+	res = h.goi(t, a.token, http.MethodGet, fmt.Sprintf("/api/v1/admin/products/%d", a.sanPham), nil)
+	if res.ma != http.StatusOK {
+		t.Fatalf("đọc chi tiết sản phẩm trả %d\n%s", res.ma, catBot(res.than))
+	}
+	var sp struct {
+		Data struct {
+			Variants []struct {
+				ID            uint `json:"id"`
+				StockQuantity int  `json:"stock_quantity"`
+			} `json:"variants"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(res.than), &sp); err != nil {
+		t.Fatalf("không đọc được sản phẩm: %v\n%s", err, catBot(res.than))
+	}
+
+	thay := false
+	for _, v := range sp.Data.Variants {
+		if v.ID != a.bienThe {
+			continue
+		}
+		thay = true
+		if v.StockQuantity != 27 {
+			t.Fatalf("tồn gộp của biến thể phải là 27 (20 + 7), payload sản phẩm trả %d"+
+				" — câu truy vấn đang thiếu phép cộng từ variant_stocks", v.StockQuantity)
+		}
+	}
+	if !thay {
+		t.Fatalf("không thấy biến thể %d trong payload sản phẩm", a.bienThe)
+	}
+}

@@ -756,7 +756,13 @@ type InventoryStats struct {
 // InventoryHistory — một dòng sổ kho đã ghép sẵn tên người thực hiện và mã chứng
 // từ liên quan (mã đơn / mã phiếu trả), để giao diện đọc được ngay.
 type InventoryHistory struct {
-	ID             uint      `json:"id"`
+	ID uint `json:"id"`
+	// ShopID/ShopName là CHI NHÁNH phát sinh bút toán. Luôn trả về, kể cả khi
+	// đang xem sổ của đúng một kho: màn hình cần nói được "đây là sổ của kho
+	// nào", còn lúc xem gộp thì thiếu nó là mỗi dòng "trước 40 → sau 41" không
+	// biết thuộc kho nào và cặp số đọc lên mâu thuẫn với con số trên bảng.
+	ShopID         uint      `json:"shop_id"`
+	ShopName       string    `json:"shop_name"`
 	Type           string    `json:"type"`
 	Quantity       int       `json:"quantity"`
 	QuantityBefore int       `json:"quantity_before"`
@@ -778,11 +784,18 @@ const (
 	StockModeDelta = "delta"
 )
 
-// InventoryAdjustment là yêu cầu chỉnh tồn kho của MỘT biến thể.
+// InventoryAdjustment là yêu cầu chỉnh tồn kho của MỘT biến thể TẠI MỘT chi nhánh.
 type InventoryAdjustment struct {
 	VariantID uint
-	Mode      string // set | delta
-	Quantity  int    // số đặt (mode=set) hoặc lượng thay đổi, âm là xuất (mode=delta)
+	// ShopID = 0 nghĩa là chi nhánh đang làm việc. Gửi số khác 0 để chỉnh ĐÚNG một
+	// kho bất kể người bấm đang đứng ở đâu — màn Tồn kho hiển thị nhiều kho cùng
+	// lúc, mỗi dòng một kho, nên nút chỉnh của dòng phải nói rõ nó sửa kho nào.
+	//
+	// Cùng một biến thể ở hai chi nhánh là HAI dòng độc lập: chúng không gộp vào
+	// nhau, và một dòng hỏng (tồn âm) làm cả lượt cuộn lại như mọi thao tác hàng loạt.
+	ShopID   uint
+	Mode     string // set | delta
+	Quantity int    // số đặt (mode=set) hoặc lượng thay đổi, âm là xuất (mode=delta)
 	// Type là loại bút toán ghi vào sổ kho: import | export | adjustment.
 	// Rỗng thì service tự suy từ chế độ và dấu của lượng thay đổi.
 	Type     string
@@ -793,11 +806,15 @@ type InventoryAdjustment struct {
 // InventoryAdjustResult — kết quả chỉnh kho của một biến thể, trả về cho giao
 // diện cập nhật lại dòng mà không cần tải lại cả trang.
 type InventoryAdjustResult struct {
-	VariantID uint   `json:"variant_id"`
-	SKU       string `json:"sku"`
-	Before    int    `json:"before"`
-	After     int    `json:"after"`
-	Change    int    `json:"change"`
+	VariantID uint `json:"variant_id"`
+	// ShopID là kho THẬT SỰ bị sửa — luôn trả về, kể cả khi client không gửi lên.
+	// Giao diện dựa vào nó để cập nhật đúng dòng: một biến thể có mặt ở nhiều dòng
+	// (mỗi kho một dòng) nên chỉ variant_id thôi thì không trỏ được vào dòng nào.
+	ShopID uint   `json:"shop_id"`
+	SKU    string `json:"sku"`
+	Before int    `json:"before"`
+	After  int    `json:"after"`
+	Change int    `json:"change"`
 }
 
 // VariantCost là yêu cầu khai giá vốn cho MỘT biến thể.
@@ -889,7 +906,12 @@ type InventoryRepository interface {
 	Stats(ctx context.Context, lowStock int) (InventoryStats, error)
 	FindItem(ctx context.Context, variantID uint) (*InventoryItem, error)
 	// Histories trả sổ kho của một biến thể, mới -> cũ.
-	Histories(ctx context.Context, variantID uint, page, pageSize int) ([]InventoryHistory, int64, error)
+	//
+	// shopID = 0 nghĩa là "theo chi nhánh đang làm việc trong ctx", không có thì
+	// gộp mọi chi nhánh. Truyền số khác 0 để xem sổ của ĐÚNG một kho bất kể người
+	// dùng đang đứng ở đâu — màn "Tồn kho chi nhánh" nhìn nhiều kho cùng lúc nên
+	// không thể hỏi qua chi nhánh đang làm việc.
+	Histories(ctx context.Context, variantID, shopID uint, page, pageSize int) ([]InventoryHistory, int64, error)
 
 	// Adjust chỉnh tồn kho trong MỘT transaction, tất-cả-hoặc-không: khoá các biến
 	// thể theo ID tăng dần (cùng thứ tự với luồng đặt hàng nên không khoá chéo),

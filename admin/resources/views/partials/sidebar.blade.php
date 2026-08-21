@@ -120,14 +120,13 @@
                     ],
                 ] : []),
                 ...($canManage ? [[
-                    // Module kho gồm ĐÚNG 6 trang dưới đây, tất cả đã có route thật.
+                    // Module kho gồm ĐÚNG 5 trang dưới đây, tất cả đã có route thật.
                     // Vẫn chưa có "Chuyển kho": tồn đã tách theo chi nhánh (migration
                     // 0005) nên chiều kho đi / kho đến giờ có nghĩa, nhưng một phiếu
                     // chuyển còn cần trạng thái đang đi đường và lượt nhận ở đầu kia —
                     // dựng nửa vời thì hàng biến mất khỏi cả hai kho.
                     'label' => 'Quản lý kho', 'icon' => 'inventory',
                     'children' => [
-                        ['href' => route('admin.inventory.index'), 'label' => 'Tồn kho', 'active' => request()->routeIs('admin.inventory.*')],
                         [
                             'href' => route('admin.ton-kho-chi-nhanh.index'),
                             'label' => \App\Http\Controllers\TonKhoChiNhanhController::TITLE,

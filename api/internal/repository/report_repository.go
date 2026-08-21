@@ -502,7 +502,8 @@ func (r *reportRepository) ProductRows(ctx context.Context, p domain.ReportPerio
 			COALESCE(SUM(oi.total_price), 0) AS revenue,
 			COALESCE(SUM(` + costExpr + ` * oi.quantity), 0) AS cost,
 			COALESCE(SUM(oi.total_price), 0) - COALESCE(SUM(` + costExpr + ` * oi.quantity), 0) AS profit,
-			COALESCE((SELECT SUM(v.stock_quantity) FROM product_variants v
+			COALESCE((SELECT SUM(vs.quantity) FROM variant_stocks vs
+				JOIN product_variants v ON v.id = vs.product_variant_id
 				WHERE v.product_id = oi.product_id AND v.deleted_at IS NULL), 0) AS stock`).
 		Group("oi.product_id, p.name, p.sku, p.slug, p.thumbnail, c.name").
 		Order(order).

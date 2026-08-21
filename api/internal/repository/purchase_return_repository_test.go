@@ -165,18 +165,12 @@ func TestPurchaseReturnTruKhoDungMotLan(t *testing.T) {
 	}
 	// Bán bớt 1 cái để kho chỉ còn 4 < 5 của phiếu.
 	//
-	// Ghi vào variant_stocks chứ KHÔNG vào product_variants.stock_quantity: từ
-	// migration 0005, cột kia chỉ là bản cộng sẵn của mọi chi nhánh, còn phép
-	// kiểm "đủ hàng để trả không" thì đọc tồn của chính chi nhánh giữ hàng. Ghi
-	// nhầm chỗ thì bài kiểm dựng lên một tình huống không có thật: màn hình báo
-	// còn 4 mà kho chi nhánh vẫn đủ 5, nên lượt chốt không bị chặn.
+	// variant_stocks là nơi DUY NHẤT giữ số hàng (từ 0036 không còn cột cache
+	// nào ở product_variants nữa), và phép kiểm "đủ hàng để trả không" đọc tồn
+	// của chính chi nhánh giữ hàng.
 	if err := db.WithContext(ctxTest()).Model(&domain.TonKhoChiNhanh{}).
 		Where("product_variant_id = ?", v.ID).Update("quantity", 4).Error; err != nil {
 		t.Fatalf("không đặt được tồn kho chi nhánh: %v", err)
-	}
-	if err := db.WithContext(ctxTest()).Model(&domain.ProductVariant{}).Where("id = ?", v.ID).
-		Update("stock_quantity", 4).Error; err != nil {
-		t.Fatalf("không dựng lại bản cộng tồn kho: %v", err)
 	}
 	if _, err := repo.MarkReturned(ctx, over.ID, 0); err != domain.ErrOutOfStock {
 		t.Fatalf("kho không đủ phải trả ErrOutOfStock, nhận %v", err)
@@ -212,10 +206,16 @@ func TestPurchaseReturnTruKhoDungMotLan(t *testing.T) {
 
 // stockOf đọc tồn kho hiện tại của biến thể, đọc thẳng DB để không phụ thuộc
 // bất kỳ cache nào của repository.
+// stockOf đọc tồn của MỘT biến thể trên toàn cửa hàng.
+//
+// Cộng từ variant_stocks chứ không đọc một cột cache: từ migration 0036 không
+// còn cột nào giữ sẵn con số này, và đó là chủ ý — một bản cộng nằm sẵn trong
+// bảng là chỗ để hai nguồn sự thật lệch nhau.
 func stockOf(t *testing.T, db *gorm.DB, variantID uint) int {
 	t.Helper()
 	var stock int
-	if err := db.WithContext(ctxRaw()).Raw("SELECT stock_quantity FROM product_variants WHERE id = ?", variantID).
+	if err := db.WithContext(ctxRaw()).
+		Raw("SELECT COALESCE(SUM(quantity), 0) FROM variant_stocks WHERE product_variant_id = ?", variantID).
 		Scan(&stock).Error; err != nil {
 		t.Fatalf("không đọc được tồn kho: %v", err)
 	}
