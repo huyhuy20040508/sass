@@ -144,7 +144,7 @@
                      sớm muộn có bản bị bỏ quên khi sửa chữ. --}}
                 <template id="posEmptyTpl">
                     <div class="pos-empty">
-                        <img src="{{ asset('images/gio-trong.svg') }}" alt="" class="pos-empty-anh">
+                        <img src="{{ asset('images/emptyCart.svg') }}" alt="" class="pos-empty-anh">
                         <p class="pos-empty-tieu">Chưa có hàng trong giỏ</p>
                         <p class="pos-empty-phu">
                             Quét mã vạch, hoặc bấm vào thẻ hàng bên trái để thêm.
