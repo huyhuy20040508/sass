@@ -96,7 +96,7 @@
         {{-- Chỉ chấm màu và một chữ trạng thái. KHÔNG in config('api.base_url')
              ra đây: địa chỉ đó là hằng số, hiện thường trực ở mọi trang thì chỉ
              là nhiễu, mà vẫn là chi tiết hạ tầng nội bộ. Ai cần tra thì xem
-             saas/.env. --}}
+             admin-Selliotech/.env. --}}
         <div class="rail-status-line">
             <span class="dot {{ ($apiOnline ?? false) ? 'dot-good' : 'dot-bad' }}"></span>
             <span>Go API — {{ ($apiOnline ?? false) ? 'đang chạy' : 'mất kết nối' }}</span>

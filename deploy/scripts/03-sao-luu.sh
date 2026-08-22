@@ -13,7 +13,7 @@
 #   1. database `selliotech`            toàn bộ dữ liệu bán hàng
 #   1b. database `selliotech_platform`  sổ cái nền tảng: khách hàng, thuê bao,
 #                                       tài khoản khu điều hành, tên miền
-#   2. admin/storage/app/public         ảnh người bán tải lên
+#   2. web_Shop/storage/app/public         ảnh người bán tải lên
 #   3. ba tệp .env                      DB_PASSWORD, JWT_SECRET, APP_KEY, khoá thanh toán
 #
 # Mã nguồn, cấu hình nginx và systemd đều có trong git nên không chép lại: kéo
@@ -33,7 +33,7 @@ DB_NAME="selliotech"
 # Control plane. Dump ra TỆP RIÊNG chứ không gộp: hai database phục hồi độc lập
 # được chính là lý do tách chúng ra, gộp một tệp là tự bỏ mất tính chất đó.
 DB_NEN_TANG="selliotech_platform"
-ANH_DIR="$APP_DIR/admin/storage/app/public"
+ANH_DIR="$APP_DIR/web_Shop/storage/app/public"
 
 # Giữ bao nhiêu bản. Ba tầng chồng lên nhau, không phải ba lựa chọn:
 #   14 bản gần nhất  = 7 ngày đầy đủ, cứu được sai sót vừa gây ra sáng nay
@@ -324,7 +324,7 @@ lam_sao_luu() {
     # APP_KEY thì không: Laravel dùng nó mã hoá dữ liệu nằm trong database.
     local CO_ENV=0
     local -a ENVS=()
-    for f in api/.env admin/.env saas/.env; do
+    for f in api/.env web_Shop/.env admin-Selliotech/.env; do
         [[ -f "$APP_DIR/$f" ]] && { ENVS+=("$f"); CO_ENV=$((CO_ENV+1)); }
     done
     if (( CO_ENV > 0 )); then

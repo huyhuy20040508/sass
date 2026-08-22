@@ -216,7 +216,7 @@
                                  Chỉ trỏ vào chỗ khai báo là đủ. --}}
                             Không gọi được <span class="mono">/health</span>. Kiểm tra dịch vụ Go API
                             còn chạy không, và <span class="mono">API_BASE_URL</span> trong
-                            <span class="mono">saas/.env</span> có trỏ đúng chỗ không.
+                            <span class="mono">admin-Selliotech/.env</span> có trỏ đúng chỗ không.
                         </p>
                     @endunless
                 </div>

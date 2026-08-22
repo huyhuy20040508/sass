@@ -586,7 +586,7 @@
            HỘP THOẠI CÓ FORM
 
            Dựng theo đúng khuôn form của Shop Admin (xem .sup-* trong
-           admin/resources/views/suppliers/index.blade.php): rộng tối đa 720,
+           web_Shop/resources/views/suppliers/index.blade.php): rộng tối đa 720,
            cao tối đa 92vh, CẢ HỘP cuộn với đầu và chân dính lại, lưới hai cột,
            nhãn chữ thường 13px, ô cao 36px, nút ở chân canh giữa.
 

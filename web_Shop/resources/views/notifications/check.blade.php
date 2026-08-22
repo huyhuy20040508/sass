@@ -158,7 +158,7 @@
                     })
                     .then(function (d) {
                         if (!d.token) throw new Error('API không trả về token.');
-                        if (!d.url) throw new Error('Thiếu cấu hình api.public_url trong admin/config/api.php.');
+                        if (!d.url) throw new Error('Thiếu cấu hình api.public_url trong web_Shop/config/api.php.');
                         mark('token', 'ok', 'lấy được token');
                         log('Bước 1 OK. Luồng sẽ mở tới: ' + d.url);
                         openStream(d.url + '?token=' + encodeURIComponent(d.token));

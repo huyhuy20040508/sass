@@ -1206,7 +1206,7 @@ func (s *orderService) pushStockAlert(ctx context.Context, o *domain.Order, leve
 	}
 
 	// stock_level + variant_sku là thứ giao diện dùng để mở đúng trang Tồn kho khi
-	// bấm vào thông báo (xem targetUrl trong admin/public/js/realtime.js).
+	// bấm vào thông báo (xem targetUrl trong web_Shop/public/js/realtime.js).
 	data := map[string]any{
 		"stock_level": level,
 		"count":       len(alerts),

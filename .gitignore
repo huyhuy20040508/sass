@@ -24,30 +24,30 @@ Thumbs.db
 /api/api
 /api/api.new
 
-# ===== Laravel (admin) =====
-/admin/vendor/
-/admin/storage/*.key
-/admin/storage/app/**
-!/admin/storage/app/.gitignore
-/admin/storage/debugbar/*
-/admin/storage/framework/cache/*
-/admin/storage/framework/sessions/*
-/admin/storage/framework/views/*
-/admin/storage/logs/*
-/admin/bootstrap/cache/*
-/admin/.phpunit.result.cache
+# ===== Laravel (web_Shop) =====
+/web_Shop/vendor/
+/web_Shop/storage/*.key
+/web_Shop/storage/app/**
+!/web_Shop/storage/app/.gitignore
+/web_Shop/storage/debugbar/*
+/web_Shop/storage/framework/cache/*
+/web_Shop/storage/framework/sessions/*
+/web_Shop/storage/framework/views/*
+/web_Shop/storage/logs/*
+/web_Shop/bootstrap/cache/*
+/web_Shop/.phpunit.result.cache
 
-# ===== Laravel (saas — khu điều hành nền tảng) =====
-/saas/vendor/
-/saas/storage/*.key
-/saas/storage/app/**
-!/saas/storage/app/.gitignore
-/saas/storage/framework/cache/*
-/saas/storage/framework/sessions/*
-/saas/storage/framework/views/*
-/saas/storage/logs/*
-/saas/bootstrap/cache/*
-/saas/.phpunit.result.cache
+# ===== Laravel (admin-Selliotech — khu điều hành nền tảng) =====
+/admin-Selliotech/vendor/
+/admin-Selliotech/storage/*.key
+/admin-Selliotech/storage/app/**
+!/admin-Selliotech/storage/app/.gitignore
+/admin-Selliotech/storage/framework/cache/*
+/admin-Selliotech/storage/framework/sessions/*
+/admin-Selliotech/storage/framework/views/*
+/admin-Selliotech/storage/logs/*
+/admin-Selliotech/bootstrap/cache/*
+/admin-Selliotech/.phpunit.result.cache
 
 # Tài liệu .docx là KẾT QUẢ của sass-docx/tao-tai-lieu.py — chạy lại là có,
 # không giữ bản nhị phân trong git (mỗi lần sinh lại là một tệp khác hoàn toàn).

@@ -272,7 +272,7 @@ cham([("`price` NULL nghĩa là “Liên hệ”, KHÁC 0 (miễn phí). Bên `s
 cham([("Sửa giá là `UPDATE` thẳng dòng, không cần migration mới — bảng này giữ giá HIỆN HÀNH, lịch sử giá nằm ở `subscriptions.price` của từng hợp đồng.", False, False)])
 cham([("Sửa tay bằng SQL thì nhớ set `updated_at = NOW(3)`: cột đó không có `ON UPDATE CURRENT_TIMESTAMP`, cả repo giao cho GORM điền.", False, False)])
 cham([("Thêm mã gói mới thì phải mở rộng ENUM `subscriptions.plan` trong CÙNG một migration, nếu không sẽ bán được gói mà MySQL từ chối ghi thuê bao.", False, False)])
-cham([("Giá còn được gõ tay lần thứ hai trong `landing/index.html`. Đổi giá là phải sửa cả hai chỗ, tới ngày landing đọc qua API mới hết.", False, False)])
+cham([("Giá còn được gõ tay lần thứ hai trong `landing_shop/index.html`. Đổi giá là phải sửa cả hai chỗ, tới ngày landing đọc qua API mới hết.", False, False)])
 cham([("`own_domain` là ĐIỀU KHOẢN BÁN HÀNG nằm trong dữ liệu, không phải luật kỹ thuật: đổi chính sách là `UPDATE` một ô, không phải sửa code rồi triển khai lại. Chi tiết ở mục 3.5.", False, False)])
 
 # ---- 3.3 tenants

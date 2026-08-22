@@ -322,7 +322,7 @@ func New(
 		// service phía dưới vẫn còn nguyên, đây chỉ là chỗ đăng ký đường dẫn.
 		//
 		// Khu quản trị KHÔNG gọi đường nào trong cụm này — đã đối chiếu với danh
-		// sách URI trong admin/app/Services/ApiClient.php.
+		// sách URI trong web_Shop/app/Services/ApiClient.php.
 		// ====================================================================
 		if cfg.App.EnableStorefront {
 			// Cả cụm dưới đây phục vụ khách mua sắm, tức là phải biết đang mở cửa

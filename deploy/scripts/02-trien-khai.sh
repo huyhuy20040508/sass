@@ -86,7 +86,7 @@ buoc "2/10  Kiểm tra cấu hình"
 # API im lặng dùng toàn giá trị mặc định (database sai, JWT_SECRET rỗng) chứ
 # không báo lỗi gì.
 thieu=0
-for f in api/.env admin/.env saas/.env; do
+for f in api/.env web_Shop/.env admin-Selliotech/.env; do
     if [[ ! -f "$APP_DIR/$f" ]]; then
         vang "  THIẾU $APP_DIR/$f"
         thieu=1
@@ -97,8 +97,8 @@ if (( thieu )); then
 
 Chép mẫu rồi điền:
     cp $APP_DIR/deploy/env/api.env.example   $APP_DIR/api/.env
-    cp $APP_DIR/deploy/env/admin.env.example $APP_DIR/admin/.env
-    cp $APP_DIR/deploy/env/saas.env.example  $APP_DIR/saas/.env
+    cp $APP_DIR/deploy/env/web_Shop.env.example $APP_DIR/web_Shop/.env
+    cp $APP_DIR/deploy/env/admin-Selliotech.env.example $APP_DIR/admin-Selliotech/.env
     nano $APP_DIR/api/.env      # điền DB_PASSWORD và JWT_SECRET
 HD
     exit 1
@@ -114,9 +114,9 @@ fi
 if ! grep -qE '^JWT_SECRET=.{16,}' "$APP_DIR/api/.env"; then
     chet "api/.env chưa có JWT_SECRET đủ dài. Sinh bằng: openssl rand -base64 48"
 fi
-chown "$APP_USER:$APP_USER" "$APP_DIR"/{api,admin,saas}/.env
-chmod 600 "$APP_DIR"/{api,admin,saas}/.env
-xanh "  api/.env, admin/.env, saas/.env: đủ và đã khoá quyền 600"
+chown "$APP_USER:$APP_USER" "$APP_DIR"/{api,web_Shop,admin-Selliotech}/.env
+chmod 600 "$APP_DIR"/{api,web_Shop,admin-Selliotech}/.env
+xanh "  api/.env, web_Shop/.env, admin-Selliotech/.env: đủ và đã khoá quyền 600"
 
 # ---------------------------------------------------------------------
 buoc "3/10  Build Go API"
@@ -181,7 +181,7 @@ fi
 # ---------------------------------------------------------------------
 buoc "5/10  Hai app Laravel"
 # ---------------------------------------------------------------------
-for app in admin saas; do
+for app in web_Shop admin-Selliotech; do
     cd "$APP_DIR/$app"
 
     # Thư mục runtime của Laravel. Git KHÔNG lưu được thư mục rỗng, mà .gitignore
@@ -215,9 +215,9 @@ done
 
 # Shop Admin lưu ảnh người bán tải lên vào storage/app/public; symlink này là
 # thứ duy nhất khiến chúng hiện ra được ở /storage/... trên web.
-cd "$APP_DIR/admin"
+cd "$APP_DIR/web_Shop"
 [[ -L public/storage ]] || sudo -u "$APP_USER" php artisan storage:link --quiet
-xanh "  admin: đã có symlink public/storage"
+xanh "  web_Shop: đã có symlink public/storage"
 
 # ---------------------------------------------------------------------
 buoc "6/10  Quyền thư mục"
@@ -230,10 +230,10 @@ buoc "6/10  Quyền thư mục"
 chown -R "$APP_USER:$APP_USER" "$APP_DIR"
 find "$APP_DIR" -type d -exec chmod 755 {} +
 find "$APP_DIR" -type f -exec chmod 644 {} +
-chmod 600 "$APP_DIR"/{api,admin,saas}/.env
+chmod 600 "$APP_DIR"/{api,web_Shop,admin-Selliotech}/.env
 chmod 755 "$APP_DIR/api/api.new"
 
-for app in admin saas; do
+for app in web_Shop admin-Selliotech; do
     for d in storage bootstrap/cache; do
         chown -R "$APP_USER:www-data" "$APP_DIR/$app/$d"
         chmod -R 775 "$APP_DIR/$app/$d"
@@ -252,7 +252,7 @@ buoc "7/10  nginx + systemd"
 #
 # Bốn app, năm tên miền: app.selliotech.store không còn app nào đứng sau, nó chỉ
 # chuyển hướng sang admin.selliotech.store cho người còn giữ dấu trang cũ.
-#   order.* -> Shop Admin (admin/)      admin.* -> SaaS Admin (saas/)
+#   order.* -> Shop Admin (web_Shop/)      admin.* -> SaaS Admin (admin-Selliotech/)
 for site in selliotech.store api.selliotech.store order.selliotech.store admin.selliotech.store app.selliotech.store; do
     cp "$APP_DIR/deploy/nginx/$site.conf" "/etc/nginx/sites-available/$site"
     ln -sfn "/etc/nginx/sites-available/$site" "/etc/nginx/sites-enabled/$site"
