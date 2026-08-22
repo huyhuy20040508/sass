@@ -52,37 +52,6 @@ func maCuaPhanHoi(t *testing.T, than, truong string) string {
 	return ma
 }
 
-// TestSinhMa_NhaCungCap — mã NCC theo quy tắc, và giữ dải NCC001 khi chưa bật.
-func TestSinhMa_NhaCungCap(t *testing.T) {
-	h := dungHeThong(t)
-	a, _ := haiCuaHang(t, h)
-
-	taoNCC := func(ten string) string {
-		res := h.goi(t, a.token, http.MethodPost, "/api/v1/admin/suppliers", map[string]any{
-			"name": ten + " " + a.vet,
-		})
-		if res.ma != http.StatusCreated {
-			t.Fatalf("tạo nhà cung cấp hỏng: %d\n%s", res.ma, catBot(res.than))
-		}
-
-		return maCuaPhanHoi(t, res.than, "code")
-	}
-
-	// Chưa bật quy tắc: giữ nguyên cách đặt mã sẵn có.
-	if ma := taoNCC("Công ty A"); ma != "NCC001" {
-		t.Fatalf("chưa bật quy tắc thì mã phải là NCC001, nhận %q", ma)
-	}
-
-	batQuyTac(t, h, a, domain.LoaiNhaCungCap, "NCC", 5)
-
-	if ma := taoNCC("Công ty B"); ma != "NCC00001" {
-		t.Fatalf("mã theo quy tắc phải là NCC00001, nhận %q", ma)
-	}
-	if ma := taoNCC("Công ty C"); ma != "NCC00002" {
-		t.Fatalf("số phải tăng dần, nhận %q", ma)
-	}
-}
-
 // TestSinhMa_NhanVien — mã nhân viên theo quy tắc.
 func TestSinhMa_NhanVien(t *testing.T) {
 	h := dungHeThong(t)
@@ -203,9 +172,9 @@ func TestSinhMa_ChungTuTheoChiNhanh(t *testing.T) {
 
 	lapPhieu := func(shopID uint) string {
 		res := h.goiVoiHeader(t, a.token, http.MethodPost, "/api/v1/admin/purchases", map[string]any{
-			"supplier_id": a.nhaCungCap,
-			"status":      "ordered",
-			"items":       []map[string]any{{"variant_id": a.bienThe, "quantity": 2, "unit_cost": 50000}},
+			"supplier_name": "Nhà cung cấp " + a.vet,
+			"status":        "ordered",
+			"items":         []map[string]any{{"variant_id": a.bienThe, "quantity": 2, "unit_cost": 50000}},
 		}, map[string]string{middleware.HeaderChiNhanh: strconv.Itoa(int(shopID))})
 		if res.ma != http.StatusCreated {
 			t.Fatalf("lập phiếu đặt mua hỏng: %d\n%s", res.ma, catBot(res.than))
@@ -235,7 +204,7 @@ func TestSinhMa_TheoNgay(t *testing.T) {
 	res := h.goi(t, a.token, http.MethodPut, "/api/v1/admin/quy-tac-ma", map[string]any{
 		"shop_id": a.chiNhanh,
 		"quy_tac": []map[string]any{
-			{"doc_type": domain.LoaiNhaCungCap, "prefix": "NCC",
+			{"doc_type": domain.LoaiPhieuDatMua, "prefix": "PDM",
 				"value_part": domain.PhanNgayThangNam, "length": 11, "suffix": ""},
 		},
 	})
@@ -243,15 +212,17 @@ func TestSinhMa_TheoNgay(t *testing.T) {
 		t.Fatalf("bật quy tắc theo ngày hỏng: %d\n%s", res.ma, catBot(res.than))
 	}
 
-	res = h.goi(t, a.token, http.MethodPost, "/api/v1/admin/suppliers",
-		map[string]any{"name": "Công ty ngày " + a.vet})
+	res = h.goi(t, a.token, http.MethodPost, "/api/v1/admin/purchases", map[string]any{
+		"supplier_name": "Công ty ngày " + a.vet,
+		"items":         []map[string]any{{"variant_id": a.bienThe, "quantity": 1, "unit_cost": 50000}},
+	})
 	if res.ma != http.StatusCreated {
-		t.Fatalf("tạo nhà cung cấp hỏng: %d\n%s", res.ma, catBot(res.than))
+		t.Fatalf("lập phiếu đặt mua hỏng: %d\n%s", res.ma, catBot(res.than))
 	}
 
 	// 11 ký tự phần giữa: 8 cho ddmmyyyy, 3 còn lại cho số đếm.
-	mong := "NCC" + time.Now().Format("02012006") + "001"
-	if ma := maCuaPhanHoi(t, res.than, "code"); ma != mong {
+	mong := "PDM" + time.Now().Format("02012006") + "001"
+	if ma := maCuaPhanHoi(t, res.than, "po_code"); ma != mong {
 		t.Fatalf("mã theo ngày phải là %s, nhận %q", mong, ma)
 	}
 }

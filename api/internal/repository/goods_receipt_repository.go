@@ -167,7 +167,6 @@ type receiveMark struct {
 	ID              uint
 	PurchaseOrderID uint
 	POCode          string
-	SupplierID      *uint
 	SupplierName    string
 	POStatus        string
 	CreatedAt       time.Time
@@ -196,7 +195,7 @@ func (r *goodsReceiptRepository) batches(ctx context.Context) ([]domain.GoodsRec
 		Where("h.to_status IN ? AND h.note LIKE ?",
 			[]string{domain.PurchaseStatusPartial, domain.PurchaseStatusReceived},
 			receiveHistoryPrefix+"%").
-		Select(`h.id, h.purchase_order_id, po.po_code, po.supplier_id, po.supplier_name,
+		Select(`h.id, h.purchase_order_id, po.po_code, po.supplier_name,
 			po.status AS po_status, h.created_at, COALESCE(h.note, '') AS note,
 			COALESCE(u.full_name, '') AS created_by_name`).
 		Order("h.purchase_order_id ASC, h.created_at ASC, h.id ASC").
@@ -240,7 +239,6 @@ func (r *goodsReceiptRepository) batches(ctx context.Context) ([]domain.GoodsRec
 			Batch:           batch,
 			PurchaseOrderID: m.PurchaseOrderID,
 			POCode:          m.POCode,
-			SupplierID:      m.SupplierID,
 			SupplierName:    m.SupplierName,
 			POStatus:        m.POStatus,
 			ReceivedAt:      m.CreatedAt,
@@ -321,9 +319,6 @@ func filterReceipts(all []domain.GoodsReceipt, f domain.GoodsReceiptFilter) []do
 	out := make([]domain.GoodsReceipt, 0, len(all))
 
 	for _, b := range all {
-		if f.SupplierID > 0 && (b.SupplierID == nil || *b.SupplierID != f.SupplierID) {
-			continue
-		}
 		day := b.ReceivedAt.Format("2006-01-02")
 		if f.FromDate != "" && day < f.FromDate {
 			continue

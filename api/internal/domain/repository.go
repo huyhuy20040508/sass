@@ -391,34 +391,11 @@ type ReturnEffects struct {
 
 // ---------- Đặt hàng nhập ----------
 
-// SupplierFilter là tham số lọc khi liệt kê nhà cung cấp.
-type SupplierFilter struct {
-	Keyword string // tên / mã / SĐT / người liên hệ
-	// OnlyActive = true: chỉ nhà cung cấp đang hợp tác (dropdown lập phiếu dùng cái này).
-	OnlyActive bool
-}
-
-// SupplierRepository — truy cập bảng suppliers.
-type SupplierRepository interface {
-	List(ctx context.Context, f SupplierFilter) ([]Supplier, error)
-	FindByID(ctx context.Context, id uint) (*Supplier, error)
-	// ExistsByCode tính cả nhà cung cấp đã xoá mềm — mã vẫn bị UNIQUE index giữ chỗ.
-	ExistsByCode(ctx context.Context, code string, excludeID uint) (bool, error)
-	// NextCode sinh mã kế tiếp theo dạng NCC001 khi người dùng không tự khai.
-	NextCode(ctx context.Context) (string, error)
-	Create(ctx context.Context, s *Supplier) error
-	Update(ctx context.Context, s *Supplier) error
-	// Delete xoá mềm; nhà cung cấp còn phiếu đặt hàng thì trả ErrConflict — xoá đi
-	// là các phiếu cũ mất luôn đầu mối liên hệ.
-	Delete(ctx context.Context, id uint) error
-}
-
 // PurchaseFilter là tham số lọc/sắp xếp/phân trang khi liệt kê phiếu đặt hàng nhập.
 type PurchaseFilter struct {
-	Keyword       string // mã phiếu / tên nhà cung cấp / ghi chú
+	Keyword       string // mã phiếu / tên bên bán / ghi chú
 	Status        string // all | draft | ordered | partial | received | cancelled (cho phép nhiều giá trị, ngăn bởi dấu phẩy)
 	PaymentStatus string // all | unpaid | partial | paid
-	SupplierID    *uint
 	FromDate      string // YYYY-MM-DD (theo created_at)
 	ToDate        string // YYYY-MM-DD
 	Sort          string // newest | oldest | total_desc | total_asc | expected_asc
@@ -525,10 +502,9 @@ type PurchaseOrderRepository interface {
 
 // PurchaseReturnFilter là tham số lọc/sắp xếp/phân trang khi liệt kê phiếu trả.
 type PurchaseReturnFilter struct {
-	Keyword      string // mã phiếu trả / mã phiếu đặt / nhà cung cấp / ghi chú
+	Keyword      string // mã phiếu trả / mã phiếu đặt / bên bán / ghi chú
 	Status       string // "" | all | draft | returned | refunded | cancelled (cho phép CSV)
 	RefundStatus string // "" | all | unpaid | partial | paid
-	SupplierID   *uint
 	Reason       string
 	FromDate     string // YYYY-MM-DD theo ngày lập phiếu
 	ToDate       string
@@ -612,7 +588,6 @@ type GoodsReceipt struct {
 	Batch           int    `json:"batch"`
 	PurchaseOrderID uint   `json:"purchase_order_id"`
 	POCode          string `json:"po_code"`
-	SupplierID      *uint  `json:"supplier_id"`
 	SupplierName    string `json:"supplier_name"`
 	// POStatus là trạng thái HIỆN TẠI của phiếu đặt (đã nhận đủ / nhận một phần).
 	POStatus string `json:"po_status"`
@@ -651,13 +626,12 @@ type GoodsReceiptItem struct {
 
 // GoodsReceiptFilter là tham số lọc/sắp xếp/phân trang khi liệt kê đợt nhập.
 type GoodsReceiptFilter struct {
-	Keyword    string // mã đợt / mã phiếu đặt / nhà cung cấp / người nhận / ghi chú
-	SupplierID uint
-	FromDate   string // YYYY-MM-DD — theo ngày nhận hàng
-	ToDate     string
-	Sort       string // newest | oldest | qty_desc | amount_desc
-	Page       int
-	PageSize   int
+	Keyword  string // mã đợt / mã phiếu đặt / bên bán / người nhận / ghi chú
+	FromDate string // YYYY-MM-DD — theo ngày nhận hàng
+	ToDate   string
+	Sort     string // newest | oldest | qty_desc | amount_desc
+	Page     int
+	PageSize int
 }
 
 // GoodsReceiptStats — số liệu đầu trang Nhập hàng.

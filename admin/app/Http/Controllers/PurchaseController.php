@@ -84,8 +84,7 @@ class PurchaseController extends Controller
         }
 
         $view = view('purchases.index', compact('purchases', 'filters', 'meta'))
-            ->with('stats', $this->stats())
-            ->with('suppliers', $this->supplierList());
+            ->with('stats', $this->stats());
 
         return $error ? $view->with('error', $error) : $view;
     }
@@ -119,12 +118,6 @@ class PurchaseController extends Controller
         }
 
         return response()->json(['data' => $list]);
-    }
-
-    /** JSON: danh sách nhà cung cấp (khối quản lý nhà cung cấp trên trang này). */
-    public function suppliers(Request $request)
-    {
-        return response()->json(['data' => $this->supplierList(false, trim((string) $request->query('q', '')))]);
     }
 
     public function store(Request $request)
@@ -275,39 +268,6 @@ class PurchaseController extends Controller
             : $redirect->with('success', $msg);
     }
 
-    // ---------- Nhà cung cấp (quản lý ngay trên trang đặt hàng) ----------
-
-    public function storeSupplier(Request $request)
-    {
-        $data = $this->validateSupplier($request);
-
-        return $this->send(
-            fn () => $this->api->createSupplier($data),
-            'Đã thêm nhà cung cấp "'.$data['name'].'".',
-            $request
-        );
-    }
-
-    public function updateSupplier(Request $request, int $id)
-    {
-        $data = $this->validateSupplier($request);
-
-        return $this->send(
-            fn () => $this->api->updateSupplier($id, $data),
-            'Đã cập nhật nhà cung cấp.',
-            $request
-        );
-    }
-
-    public function destroySupplier(Request $request, int $id)
-    {
-        return $this->send(
-            fn () => $this->api->deleteSupplier($id),
-            'Đã xoá nhà cung cấp.',
-            $request
-        );
-    }
-
     public function export(Request $request)
     {
         // Có ?ids=... thì chỉ xuất các phiếu được chọn trên bảng; không thì xuất
@@ -351,7 +311,7 @@ class PurchaseController extends Controller
     protected function validatePayload(Request $request, array $extra = []): array
     {
         return $request->validate(array_merge([
-            'supplier_id' => 'required|integer|min:1',
+            'supplier_name' => 'required|string|max:150',
             'expected_date' => 'nullable|date_format:Y-m-d',
             'discount_amount' => 'nullable|numeric|min:0',
             'shipping_fee' => 'nullable|numeric|min:0',
@@ -366,7 +326,7 @@ class PurchaseController extends Controller
     protected function payloadFrom(array $data): array
     {
         return [
-            'supplier_id' => (int) $data['supplier_id'],
+            'supplier_name' => trim((string) $data['supplier_name']),
             'expected_date' => (string) ($data['expected_date'] ?? ''),
             'discount_amount' => (float) ($data['discount_amount'] ?? 0),
             'shipping_fee' => (float) ($data['shipping_fee'] ?? 0),
@@ -379,47 +339,18 @@ class PurchaseController extends Controller
         ];
     }
 
-    protected function validateSupplier(Request $request): array
-    {
-        $data = $request->validate([
-            'code' => 'nullable|string|max:30',
-            'name' => 'required|string|max:150',
-            'contact_name' => 'nullable|string|max:150',
-            'phone' => 'nullable|string|max:20',
-            'email' => 'nullable|email|max:191',
-            'address' => 'nullable|string|max:255',
-            'tax_code' => 'nullable|string|max:30',
-            'note' => 'nullable|string|max:500',
-            'is_active' => 'nullable|boolean',
-        ]);
-
-        return [
-            'code' => trim((string) ($data['code'] ?? '')),
-            'name' => trim($data['name']),
-            'contact_name' => (string) ($data['contact_name'] ?? ''),
-            'phone' => (string) ($data['phone'] ?? ''),
-            'email' => (string) ($data['email'] ?? ''),
-            'address' => (string) ($data['address'] ?? ''),
-            'tax_code' => (string) ($data['tax_code'] ?? ''),
-            'note' => (string) ($data['note'] ?? ''),
-            'is_active' => (bool) ($data['is_active'] ?? true),
-        ];
-    }
-
     protected function filters(Request $request): array
     {
         $status = (string) $request->query('status', 'all');
         $payment = (string) $request->query('payment_status', 'all');
         $sort = (string) $request->query('sort', 'newest');
         $psize = (int) $request->query('page_size', 20);
-        $supplier = (int) $request->query('supplier_id', 0);
         $date = fn ($v) => preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $v) ? (string) $v : '';
 
         return [
             'keyword' => trim((string) $request->query('keyword', '')),
             'status' => isset(self::STATUSES[$status]) ? $status : 'all',
             'payment_status' => isset(self::PAYMENT_STATUSES[$payment]) ? $payment : 'all',
-            'supplier_id' => $supplier > 0 ? $supplier : '',
             'from_date' => $date($request->query('from_date')),
             'to_date' => $date($request->query('to_date')),
             'sort' => isset(self::SORTS[$sort]) ? $sort : 'newest',
@@ -444,21 +375,6 @@ class PurchaseController extends Controller
         }
 
         return $stats;
-    }
-
-    /** Danh sách nhà cung cấp cho dropdown + khối quản lý. */
-    protected function supplierList(bool $onlyActive = false, string $keyword = ''): array
-    {
-        try {
-            $res = $this->api->suppliers($keyword, $onlyActive);
-            if ($res->successful()) {
-                return $res->json('data') ?? [];
-            }
-        } catch (\Throwable $e) {
-            Log::info('Load suppliers failed', ['msg' => $e->getMessage()]);
-        }
-
-        return [];
     }
 
     /** Đọc các phiếu theo ?ids=1,2,3 — giữ đúng thứ tự người dùng đã chọn. */

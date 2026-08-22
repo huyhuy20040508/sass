@@ -44,13 +44,12 @@ type cuaHang struct {
 	traHang    uint
 	maGiaoDich string // payments.transaction_code — khoá của /payments/{code}
 
-	nhaCungCap uint
-	phieuDat   uint // ordered, chưa nhận đợt nào
-	dongDat    uint // purchase_order_items.id của phieuDat
-	phieuNhan  uint // received, đã có đợt nhập
-	dongNhan   uint // purchase_order_items.id của phieuNhan
-	maDotNhap  string
-	traNhap    uint
+	phieuDat  uint // ordered, chưa nhận đợt nào
+	dongDat   uint // purchase_order_items.id của phieuDat
+	phieuNhan uint // received, đã có đợt nhập
+	dongNhan  uint // purchase_order_items.id của phieuNhan
+	maDotNhap string
+	traNhap   uint
 
 	banner    uint
 	khuyenMai uint
@@ -230,13 +229,6 @@ func gieo(t *testing.T, db *gorm.DB, ma string) *cuaHang {
 	c.maGiaoDich = thanhToan.TransactionCode
 
 	// --- mua vào ---
-	nhaCungCap := &domain.Supplier{
-		Code: "ncc-" + c.vet, Name: "Nhà cung cấp " + c.vet,
-		Phone: "0900000002", IsActive: true,
-	}
-	tao(t, db, ctx, nhaCungCap)
-	c.nhaCungCap = nhaCungCap.ID
-
 	c.phieuDat, c.dongDat = gieoPhieuDat(t, db, ctx, c, "pd-"+c.vet, domain.PurchaseStatusOrdered, 0)
 	c.phieuNhan, c.dongNhan = gieoPhieuDat(t, db, ctx, c, "pn-"+c.vet, domain.PurchaseStatusReceived, 5)
 
@@ -260,8 +252,8 @@ func gieo(t *testing.T, db *gorm.DB, ma string) *cuaHang {
 	traNhap := &domain.PurchaseReturn{
 		ShopID:     c.chiNhanh,
 		ReturnCode: "tn-" + c.vet, PurchaseOrderID: &c.phieuNhan, POCode: "pn-" + c.vet,
-		SupplierID: &nhaCungCap.ID, SupplierName: "Nhà cung cấp " + c.vet,
-		Status: domain.PurchaseReturnStatusDraft, Reason: domain.PurchaseReturnReasonDefect,
+		SupplierName: "Nhà cung cấp " + c.vet,
+		Status:       domain.PurchaseReturnStatusDraft, Reason: domain.PurchaseReturnReasonDefect,
 		ItemsAmount: 60000, RefundStatus: domain.PurchaseRefundUnpaid, Note: "Ghi chú " + c.vet,
 	}
 	tao(t, db, ctx, traNhap)
@@ -410,14 +402,9 @@ func boSung(t *testing.T, db *gorm.DB, c *cuaHang) {
 		UnitPrice: 200000, Quantity: 1, TotalPrice: 200000,
 	})
 
-	nhaCungCap := &domain.Supplier{
-		Code: "ncc2-" + c.vet, Name: "Nhà cung cấp " + hau, IsActive: true,
-	}
-	tao(t, db, ctx, nhaCungCap)
-
 	phieu := &domain.PurchaseOrder{
 		ShopID: c.chiNhanh,
-		POCode: "pn2-" + c.vet, SupplierID: &nhaCungCap.ID, SupplierName: "Nhà cung cấp " + hau,
+		POCode: "pn2-" + c.vet, SupplierName: "Nhà cung cấp " + hau,
 		Status: domain.PurchaseStatusReceived, ItemsAmount: 240000, TotalAmount: 240000,
 		PaymentStatus: domain.PurchasePaymentUnpaid, OrderedAt: &now, ReceivedAt: &now,
 		CreatedBy: &c.quanTri,
@@ -444,8 +431,8 @@ func boSung(t *testing.T, db *gorm.DB, c *cuaHang) {
 	traNhap := &domain.PurchaseReturn{
 		ShopID:     c.chiNhanh,
 		ReturnCode: "tn2-" + c.vet, PurchaseOrderID: &phieu.ID, POCode: phieu.POCode,
-		SupplierID: &nhaCungCap.ID, SupplierName: "Nhà cung cấp " + hau,
-		Status: domain.PurchaseReturnStatusDraft, Reason: domain.PurchaseReturnReasonDefect,
+		SupplierName: "Nhà cung cấp " + hau,
+		Status:       domain.PurchaseReturnStatusDraft, Reason: domain.PurchaseReturnReasonDefect,
 		ItemsAmount: 120000, RefundStatus: domain.PurchaseRefundUnpaid,
 	}
 	tao(t, db, ctx, traNhap)
@@ -512,7 +499,7 @@ func gieoPhieuDat(t *testing.T, db *gorm.DB, ctx context.Context, c *cuaHang, ma
 
 	phieu := &domain.PurchaseOrder{
 		ShopID: c.chiNhanh,
-		POCode: ma, SupplierID: &c.nhaCungCap, SupplierName: "Nhà cung cấp " + c.vet,
+		POCode: ma, SupplierName: "Nhà cung cấp " + c.vet,
 		Status: trangThai, ItemsAmount: 300000, TotalAmount: 300000,
 		PaymentStatus: domain.PurchasePaymentUnpaid, Note: "Phiếu của " + c.vet,
 		OrderedAt: &now, CreatedBy: &c.quanTri,

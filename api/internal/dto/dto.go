@@ -1415,21 +1415,6 @@ type CustomerResponse struct {
 
 // ---------- Đặt hàng nhập ----------
 
-// SupplierRequest — payload tạo/sửa nhà cung cấp.
-// Code bỏ trống thì server tự sinh mã kế tiếp dạng NCC001.
-type SupplierRequest struct {
-	Code        string `json:"code" binding:"omitempty,max=30"`
-	Name        string `json:"name" binding:"required,max=150"`
-	ContactName string `json:"contact_name" binding:"omitempty,max=150"`
-	Phone       string `json:"phone" binding:"omitempty,max=20"`
-	Email       string `json:"email" binding:"omitempty,email,max=191"`
-	Address     string `json:"address" binding:"omitempty,max=255"`
-	TaxCode     string `json:"tax_code" binding:"omitempty,max=30"`
-	Note        string `json:"note" binding:"omitempty,max=500"`
-	// IsActive bỏ trống = true (nhà cung cấp mới mặc định đang hợp tác).
-	IsActive *bool `json:"is_active"`
-}
-
 // PurchaseReturnItemRequest — một dòng hàng trả lại nhà cung cấp.
 //
 // Khoá theo DÒNG CỦA PHIẾU ĐẶT (không phải biến thể): số còn trả được tính trên
@@ -1480,8 +1465,8 @@ type PurchaseItemRequest struct {
 // Status quyết định phiếu ra đời ở đâu: "draft" để soạn tiếp, "ordered" khi đã
 // chốt với nhà cung cấp. Bỏ trống = draft.
 type PurchaseCreateRequest struct {
-	SupplierID uint   `json:"supplier_id" binding:"required"`
-	Status     string `json:"status" binding:"omitempty,oneof=draft ordered"`
+	SupplierName string `json:"supplier_name" binding:"required,max=150"`
+	Status       string `json:"status" binding:"omitempty,oneof=draft ordered"`
 	// ExpectedDate là ngày hẹn giao, dạng YYYY-MM-DD.
 	ExpectedDate string `json:"expected_date" binding:"omitempty,datetime=2006-01-02" example:"2026-08-15"`
 	// DiscountAmount là chiết khấu nhà cung cấp cho, ShippingFee là cước phải trả.
@@ -1495,7 +1480,7 @@ type PurchaseCreateRequest struct {
 // PurchaseUpdateRequest — sửa phiếu đặt hàng (chỉ khi chưa nhận đợt hàng nào).
 // Không đổi được trạng thái ở đây: dùng endpoint chuyển trạng thái riêng.
 type PurchaseUpdateRequest struct {
-	SupplierID     uint                  `json:"supplier_id" binding:"required"`
+	SupplierName   string                `json:"supplier_name" binding:"required,max=150"`
 	ExpectedDate   string                `json:"expected_date" binding:"omitempty,datetime=2006-01-02" example:"2026-08-15"`
 	DiscountAmount float64               `json:"discount_amount" binding:"gte=0"`
 	ShippingFee    float64               `json:"shipping_fee" binding:"gte=0"`

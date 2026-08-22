@@ -28,7 +28,6 @@
         $hasFilter = $filters['keyword'] !== ''
             || $filters['status'] !== 'all'
             || $filters['payment_status'] !== 'all'
-            || $filters['supplier_id'] !== ''
             || $filters['from_date'] !== ''
             || $filters['to_date'] !== ''
             || $filters['sort'] !== 'newest';
@@ -37,7 +36,6 @@
         // Khoảng ngày nằm ngoài hàng nâng cao (luôn thấy trên thanh công cụ) nên không đếm ở đây.
         $advCount = ($filters['status'] !== 'all' ? 1 : 0)
             + ($filters['payment_status'] !== 'all' ? 1 : 0)
-            + ($filters['supplier_id'] !== '' ? 1 : 0)
             + ($filters['sort'] !== 'newest' ? 1 : 0);
         $advOpen = $advCount > 0;
     @endphp
@@ -183,15 +181,6 @@
                     <option value="all" {{ $filters['payment_status'] === 'all' ? 'selected' : '' }}>Tất cả thanh toán</option>
                     @foreach($PAYMENTS as $value => $label)
                         <option value="{{ $value }}" {{ $filters['payment_status'] === $value ? 'selected' : '' }}>{{ $label }}</option>
-                    @endforeach
-                </select>
-
-                <select name="supplier_id" class="po-select" title="Lọc theo nhà cung cấp">
-                    <option value="">Tất cả nhà cung cấp</option>
-                    @foreach($suppliers as $sup)
-                        <option value="{{ $sup['id'] }}" {{ (string) $filters['supplier_id'] === (string) $sup['id'] ? 'selected' : '' }}>
-                            {{ $sup['name'] }}
-                        </option>
                     @endforeach
                 </select>
 
@@ -494,26 +483,13 @@
                 <div class="po-modal-body">
                     {{-- Bước 1: nhà cung cấp & ngày hẹn --}}
                     <div class="po-view-sec">
-                        <p class="po-sec-title">1. Nhà cung cấp</p>
+                        <p class="po-sec-title">1. Bên bán</p>
                         <div class="po-form-grid">
                             <div class="po-field">
-                                <label class="po-lb" for="fSupplier">Nhà cung cấp <span class="po-req">*</span></label>
-                                <div class="po-inline">
-                                    <select name="supplier_id" id="fSupplier" class="po-select is-block" data-ph required>
-                                        <option value="">Chọn nhà cung cấp…</option>
-                                        @foreach($suppliers as $sup)
-                                            @if(($sup['is_active'] ?? true))
-                                                <option value="{{ $sup['id'] }}">{{ $sup['name'] }} ({{ $sup['code'] }})</option>
-                                            @endif
-                                        @endforeach
-                                    </select>
-                                    <button type="button" class="po-btn-ghost po-btn-sq" id="fAddSupplier" title="Thêm nhà cung cấp mới">
-                                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
-                                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                            <path d="M5 12h14M12 5v14" />
-                                        </svg>
-                                    </button>
-                                </div>
+                                <label class="po-lb" for="fSupplier">Bên bán <span class="po-req">*</span></label>
+                                <input type="text" name="supplier_name" id="fSupplier" class="po-input"
+                                       maxlength="150" required autocomplete="off"
+                                       placeholder="Tên nhà cung cấp ghi trên phiếu">
                             </div>
                             <div class="po-field">
                                 <label class="po-lb" for="fExpected">Ngày hẹn giao</label>
@@ -696,90 +672,6 @@
                     </div>
                 </div>
             </form>
-        </div>
-    </div>
-
-    {{-- ===== Modal nhà cung cấp ===== --}}
-    <div class="po-overlay" id="poSupOverlay" style="display:none;">
-        <div class="po-dialog">
-            <div class="po-modal-head">
-                <h4 class="po-modal-title">Nhà cung cấp</h4>
-                <button type="button" class="po-modal-x" data-close>
-                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"
-                        stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
-                </button>
-            </div>
-
-            <div class="po-modal-body">
-                <form method="POST" action="{{ route('admin.purchases.storeSupplier') }}" id="poSupForm">
-                    @csrf
-                    <input type="hidden" name="return" value="{{ request()->getRequestUri() }}">
-                    <input type="hidden" name="_method" id="sMethod" value="POST">
-                    <p class="po-sec-title" id="sTitle">Thêm nhà cung cấp</p>
-                    <div class="po-form-grid">
-                        <div class="po-field">
-                            <label class="po-lb" for="sName">Tên nhà cung cấp <span class="po-req">*</span></label>
-                            <input type="text" name="name" id="sName" class="po-input" maxlength="150" required>
-                        </div>
-                        <div class="po-field">
-                            <label class="po-lb" for="sCode">Mã</label>
-                            <input type="text" name="code" id="sCode" class="po-input" maxlength="30"
-                                placeholder="Bỏ trống để tự sinh NCC001…">
-                        </div>
-                        <div class="po-field">
-                            <label class="po-lb" for="sContact">Người liên hệ</label>
-                            <input type="text" name="contact_name" id="sContact" class="po-input" maxlength="150">
-                        </div>
-                        <div class="po-field">
-                            <label class="po-lb" for="sPhone">Điện thoại</label>
-                            <input type="text" name="phone" id="sPhone" class="po-input" maxlength="20">
-                        </div>
-                        <div class="po-field">
-                            <label class="po-lb" for="sEmail">Email</label>
-                            <input type="email" name="email" id="sEmail" class="po-input" maxlength="191">
-                        </div>
-                        <div class="po-field">
-                            <label class="po-lb" for="sTax">Mã số thuế</label>
-                            <input type="text" name="tax_code" id="sTax" class="po-input" maxlength="30">
-                        </div>
-                        <div class="po-field is-full">
-                            <label class="po-lb" for="sAddress">Địa chỉ</label>
-                            <input type="text" name="address" id="sAddress" class="po-input" maxlength="255">
-                        </div>
-                    </div>
-                    <label class="po-checkline">
-                        <input type="hidden" name="is_active" value="0">
-                        <input type="checkbox" name="is_active" value="1" id="sActive" class="po-check" checked>
-                        <span>Đang hợp tác <em>— bỏ chọn thì nhà cung cấp không còn hiện trong ô chọn khi lập phiếu</em></span>
-                    </label>
-                    <div class="po-sup-foot">
-                        <button type="button" class="po-btn-ghost" id="sReset" hidden>Thôi sửa</button>
-                        <button type="submit" class="po-btn-primary" id="sSubmit">Thêm nhà cung cấp</button>
-                    </div>
-                </form>
-
-                <div class="po-view-sec">
-                    <p class="po-sec-title">Danh sách nhà cung cấp</p>
-                    <table class="po-items">
-                        <thead>
-                            <tr>
-                                <th class="po-i-code">Mã</th>
-                                <th>Tên & liên hệ</th>
-                                <th class="po-i-qty">Số phiếu</th>
-                                <th class="po-i-qty">Trạng thái</th>
-                                <th class="po-i-act"></th>
-                            </tr>
-                        </thead>
-                        <tbody id="sList"></tbody>
-                    </table>
-                </div>
-            </div>
-
-            <div class="po-modal-foot">
-                <div class="po-foot-right">
-                    <button type="button" class="po-btn-ghost" data-close>Đóng</button>
-                </div>
-            </div>
         </div>
     </div>
 
@@ -1220,8 +1112,6 @@
             const URL_BASE = @json(url('/admin/purchases'));
             const EXPORT_URL = @json(route('admin.purchases.export'));
             const VARIANTS_URL = @json(route('admin.purchases.searchVariants'));
-            const SUPPLIERS_URL = @json(route('admin.purchases.suppliers'));
-            const SUPPLIER_STORE_URL = @json(route('admin.purchases.storeSupplier'));
 
             // Luồng phiếu (đúng thứ tự backend) — dùng dựng stepper tiến trình.
             const PIPELINE = ['draft', 'ordered', 'partial', 'received'];
@@ -1639,8 +1529,7 @@
                     alert.hidden = true;
                 }
 
-                const sup = p.supplier || {};
-                set('vSupName', p.supplier_name || sup.name || '—');
+                set('vSupName', p.supplier_name || '—');
                 set('vSupContact', sup.contact_name || '—');
                 set('vSupPhone', sup.phone || '—');
                 set('vSupAddress', sup.address || '—');
@@ -1889,7 +1778,7 @@
                     $('fTitle').textContent = 'Sửa phiếu ' + p.po_code;
                     $('fSaveDraft').hidden = true;
                     $('fSubmit').textContent = 'Lưu thay đổi';
-                    $('fSupplier').value = p.supplier_id || '';
+                    $('fSupplier').value = p.supplier_name || '';
                     $('fExpected').value = dateInput(p.expected_date);
                     $('fNote').value = p.note || '';
                     setMoney('fDiscount', 'fDiscountRaw', p.discount_amount);
@@ -2121,7 +2010,7 @@
                 $('fSubmit').addEventListener('click', () => { $('fStatus').value = 'ordered'; });
 
                 form.addEventListener('submit', (e) => {
-                    if (!$('fSupplier').value) {
+                    if (!$('fSupplier').value.trim()) {
                         e.preventDefault();
                         toast('Vui lòng chọn nhà cung cấp.', 'danger');
                         return;
@@ -2133,120 +2022,6 @@
                     }
                     $('fSubmit').disabled = true;
                     $('fSaveDraft').disabled = true;
-                });
-            })();
-
-            // ===================== NHÀ CUNG CẤP =====================
-            (function () {
-                const form = $('poSupForm');
-
-                function render(list) {
-                    const tbody = $('sList');
-                    if (!list.length) {
-                        tbody.innerHTML = '<tr><td colspan="5" class="po-empty">Chưa có nhà cung cấp nào.</td></tr>';
-                        return;
-                    }
-                    tbody.innerHTML = list.map((s) => {
-                        const contact = [s.contact_name, s.phone].filter(Boolean).join(' · ');
-                        return `<tr>
-                                <td class="po-i-code">${esc(s.code)}</td>
-                                <td>
-                                    <span class="po-item-name">${esc(s.name)}</span>
-                                    ${contact ? `<span class="po-item-sub">${esc(contact)}</span>` : ''}
-                                </td>
-                                <td class="po-i-qty">${s.purchase_count || 0}</td>
-                                <td class="po-i-qty">
-                                    <span class="po-badge tone-${s.is_active ? 'done' : 'stop'}">${s.is_active ? 'Hợp tác' : 'Ngừng'}</span>
-                                </td>
-                                <td class="po-i-act">
-                                    <button type="button" class="po-rowbtn s-edit" data-sup="${encodeURIComponent(JSON.stringify(s))}" title="Sửa">
-                                        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor"
-                                            stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                                            <path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
-                                        </svg>
-                                    </button>
-                                    ${s.purchase_count ? '' : `<button type="button" class="po-rowbtn s-del" data-id="${s.id}" data-name="${esc(s.name)}" title="Xoá nhà cung cấp">
-                                        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor"
-                                            stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                                            <path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14" />
-                                        </svg>
-                                    </button>`}
-                                </td>
-                            </tr>`;
-                    }).join('');
-                }
-
-                function load() {
-                    $('sList').innerHTML = '<tr><td colspan="5" class="po-empty">Đang tải…</td></tr>';
-                    fetch(SUPPLIERS_URL, { headers: { Accept: 'application/json' } })
-                        .then((r) => r.ok ? r.json() : Promise.reject(r))
-                        .then((res) => render(res.data || []))
-                        .catch(() => {
-                            $('sList').innerHTML = '<tr><td colspan="5" class="po-empty">Không tải được danh sách nhà cung cấp.</td></tr>';
-                        });
-                }
-
-                function resetSupForm() {
-                    form.reset();
-                    form.action = SUPPLIER_STORE_URL;
-                    $('sMethod').value = 'POST';
-                    $('sTitle').textContent = 'Thêm nhà cung cấp';
-                    $('sSubmit').textContent = 'Thêm nhà cung cấp';
-                    $('sReset').hidden = true;
-                    $('sActive').checked = true;
-                }
-
-                function openSuppliers() {
-                    resetSupForm();
-                    load();
-                    openOverlay($supOverlay);
-                }
-
-                // Lối vào duy nhất của modal này là nút "+" cạnh ô chọn nhà cung cấp trong
-                // form lập phiếu: thêm nhanh giữa lúc lập phiếu, thêm xong trang tải lại
-                // nên ô chọn có sẵn tên mới. Quản lý đầy đủ ở trang Nhà cung cấp.
-                $('fAddSupplier').addEventListener('click', () => {
-                    closeOverlay($formOverlay);
-                    openSuppliers();
-                });
-
-                $('sReset').addEventListener('click', resetSupForm);
-
-                $('sList').addEventListener('click', (e) => {
-                    const del = e.target.closest('.s-del');
-                    if (del) {
-                        // Nút xoá chỉ hiện với nhà cung cấp chưa có phiếu nào; API vẫn
-                        // kiểm tra lại nên không có đường nào xoá mất đầu mối của phiếu cũ.
-                        Promise.resolve(window.sysDelete({
-                            title: 'Xoá nhà cung cấp',
-                            message: `Xoá nhà cung cấp "${del.dataset.name}"?`,
-                        })).then((ok) => {
-                            if (!ok) return;
-                            actionForm.action = `${URL_BASE}/suppliers/${del.dataset.id}`;
-                            $('poActionMethod').value = 'DELETE';
-                            $('poActionStatus').value = '';
-                            actionForm.submit();
-                        });
-                        return;
-                    }
-
-                    const btn = e.target.closest('.s-edit');
-                    if (!btn) return;
-                    const s = JSON.parse(decodeURIComponent(btn.dataset.sup));
-                    form.action = `${URL_BASE}/suppliers/${s.id}`;
-                    $('sMethod').value = 'PUT';
-                    $('sTitle').textContent = 'Sửa nhà cung cấp ' + s.code;
-                    $('sSubmit').textContent = 'Lưu thay đổi';
-                    $('sReset').hidden = false;
-                    $('sName').value = s.name || '';
-                    $('sCode').value = s.code || '';
-                    $('sContact').value = s.contact_name || '';
-                    $('sPhone').value = s.phone || '';
-                    $('sEmail').value = s.email || '';
-                    $('sTax').value = s.tax_code || '';
-                    $('sAddress').value = s.address || '';
-                    $('sActive').checked = !!s.is_active;
-                    $('sName').focus();
                 });
             })();
 

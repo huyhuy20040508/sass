@@ -30,7 +30,6 @@
             || $filters['status'] !== 'all'
             || $filters['refund_status'] !== 'all'
             || $filters['reason'] !== 'all'
-            || $filters['supplier_id'] !== ''
             || $filters['from_date'] !== ''
             || $filters['to_date'] !== ''
             || $filters['sort'] !== 'newest';
@@ -40,7 +39,6 @@
         $advCount = ($filters['status'] !== 'all' ? 1 : 0)
             + ($filters['refund_status'] !== 'all' ? 1 : 0)
             + ($filters['reason'] !== 'all' ? 1 : 0)
-            + ($filters['supplier_id'] !== '' ? 1 : 0)
             + ($filters['sort'] !== 'newest' ? 1 : 0);
         $advOpen = $advCount > 0;
 
@@ -146,15 +144,6 @@
                     <option value="all">Tất cả lý do</option>
                     @foreach($REASONS as $value => $label)
                         <option value="{{ $value }}" {{ $filters['reason'] === $value ? 'selected' : '' }}>{{ $label }}</option>
-                    @endforeach
-                </select>
-
-                <select name="supplier_id" class="pr-select" title="Lọc theo nhà cung cấp">
-                    <option value="">Tất cả nhà cung cấp</option>
-                    @foreach($suppliers as $sup)
-                        <option value="{{ $sup['id'] }}" {{ (string) $filters['supplier_id'] === (string) $sup['id'] ? 'selected' : '' }}>
-                            {{ $sup['name'] }}
-                        </option>
                     @endforeach
                 </select>
 

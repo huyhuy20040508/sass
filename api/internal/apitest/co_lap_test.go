@@ -200,15 +200,6 @@ var bangTuyen = []buoc{
 		func(c *cuaHang) string { return fmt.Sprintf("/api/v1/admin/inventory/%d", c.bienThe) },
 		func(*cuaHang) any { return map[string]any{"mode": "delta", "quantity": 1} }, phaSua},
 
-	// --- Nhà cung cấp ---
-	{"nha-cung-cap", "GET /admin/suppliers/{id}", http.MethodGet,
-		func(c *cuaHang) string { return fmt.Sprintf("/api/v1/admin/suppliers/%d", c.nhaCungCap) }, nil, phaDoc},
-	{"nha-cung-cap", "PUT /admin/suppliers/{id}", http.MethodPut,
-		func(c *cuaHang) string { return fmt.Sprintf("/api/v1/admin/suppliers/%d", c.nhaCungCap) },
-		func(c *cuaHang) any { return map[string]any{"name": "Nhà cung cấp " + c.vet} }, phaSua},
-	{"nha-cung-cap", "DELETE /admin/suppliers/{id}", http.MethodDelete,
-		func(c *cuaHang) string { return fmt.Sprintf("/api/v1/admin/suppliers/%d", c.nhaCungCap) }, nil, phaXoa},
-
 	// --- Đặt hàng nhập ---
 	{"dat-hang-nhap", "GET /admin/purchases/{id}", http.MethodGet,
 		func(c *cuaHang) string { return fmt.Sprintf("/api/v1/admin/purchases/%d", c.phieuDat) }, nil, phaDoc},
@@ -228,8 +219,8 @@ var bangTuyen = []buoc{
 		func(c *cuaHang) string { return fmt.Sprintf("/api/v1/admin/purchases/%d", c.phieuDat) },
 		func(c *cuaHang) any {
 			return map[string]any{
-				"supplier_id": c.nhaCungCap,
-				"items":       []map[string]any{{"variant_id": c.bienThe, "quantity": 5, "unit_cost": 60000}},
+				"supplier_name": "Nhà cung cấp " + c.vet,
+				"items":         []map[string]any{{"variant_id": c.bienThe, "quantity": 5, "unit_cost": 60000}},
 			}
 		}, phaSua},
 	{"dat-hang-nhap", "PUT /admin/purchases/{id}/payment", http.MethodPut,

@@ -44,9 +44,6 @@ func applyPurchaseFilter(q *gorm.DB, f domain.PurchaseFilter) *gorm.DB {
 	if f.PaymentStatus != "" && f.PaymentStatus != "all" {
 		q = q.Where("purchase_orders.payment_status = ?", f.PaymentStatus)
 	}
-	if f.SupplierID != nil {
-		q = q.Where("purchase_orders.supplier_id = ?", *f.SupplierID)
-	}
 	if f.FromDate != "" {
 		q = q.Where("purchase_orders.created_at >= ?", f.FromDate+" 00:00:00")
 	}
@@ -98,7 +95,6 @@ func (r *purchaseOrderRepository) FindByID(ctx context.Context, id uint) (*domai
 	var po domain.PurchaseOrder
 	err := r.db.WithContext(ctx).
 		Preload("Items", func(q *gorm.DB) *gorm.DB { return q.Order("id ASC") }).
-		Preload("Supplier").
 		First(&po, id).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, domain.ErrNotFound

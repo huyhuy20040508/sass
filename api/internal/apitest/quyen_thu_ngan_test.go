@@ -67,7 +67,6 @@ func TestThuNgan_ChiVaoDuocQuayBan(t *testing.T) {
 			fmt.Sprintf("/api/v1/admin/orders/%d/returnable", a.donGiao), nil},
 
 		// Chiều mua vào.
-		{"nhà cung cấp", http.MethodGet, "/api/v1/admin/suppliers", nil},
 		{"đặt hàng nhập", http.MethodGet, "/api/v1/admin/purchases", nil},
 		{"trả hàng nhập", http.MethodGet, "/api/v1/admin/purchase-returns", nil},
 		{"nhập hàng", http.MethodGet, "/api/v1/admin/receipts", nil},
