@@ -978,6 +978,49 @@ class ApiClient
         return $this->put('/admin/inventory/cost', $payload);
     }
 
+    // ---------- Nhà cung cấp ----------
+    //
+    // Danh mục đầu mối mua vào, dựng lại theo bản order v2. Các đường dưới đây
+    // CHƯA CÓ bên API (migration 0038 đã gỡ cả bảng lẫn handler) — Shop Admin gọi
+    // vào sẽ nhận 404 và trang tự hiện bảng rỗng kèm lời báo.
+
+    /**
+     * Danh sách nhà cung cấp. $query hỗ trợ: keyword, active.
+     * Mỗi phần tử kèm total_purchases / paid / debt do API tổng hợp sẵn.
+     */
+    public function nhaCungCap(array $query = []): Response
+    {
+        return $this->get('/admin/nha-cung-cap', array_filter($query));
+    }
+
+    public function nhaCungCapChiTiet(int $id): Response
+    {
+        return $this->get("/admin/nha-cung-cap/{$id}");
+    }
+
+    /** Thêm nhà cung cấp. Bỏ trống `code` thì API tự đặt theo quy tắc đánh số. */
+    public function taoNhaCungCap(array $data): Response
+    {
+        return $this->post('/admin/nha-cung-cap', $data);
+    }
+
+    /** Sửa nhà cung cấp. Bỏ trống `code` = giữ nguyên mã cũ. */
+    public function suaNhaCungCap(int $id, array $data): Response
+    {
+        return $this->put("/admin/nha-cung-cap/{$id}", $data);
+    }
+
+    /** Bật/tắt hợp tác — chỉ gửi đúng một trường, không đụng các cột khác. */
+    public function trangThaiNhaCungCap(int $id, int $status): Response
+    {
+        return $this->put("/admin/nha-cung-cap/{$id}/trang-thai", ['status' => $status]);
+    }
+
+    public function xoaNhaCungCap(int $id): Response
+    {
+        return $this->delete("/admin/nha-cung-cap/{$id}");
+    }
+
     // ---------- Purchase returns (trả hàng nhập) ----------
 
     /**

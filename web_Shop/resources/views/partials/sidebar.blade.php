@@ -147,6 +147,11 @@
                             'label' => \App\Http\Controllers\PurchaseReturnController::TITLE,
                             'active' => request()->routeIs('admin.purchase-returns.*'),
                         ],
+                        [
+                            'href' => route('admin.nha-cung-cap.index'),
+                            'label' => \App\Http\Controllers\NhaCungCapController::TITLE,
+                            'active' => request()->routeIs('admin.nha-cung-cap.*'),
+                        ],
                     ],
                 ]] : []),
                 // Báo cáo đứng sau các module nghiệp vụ và trước Cài đặt: nó chỉ ĐỌC
