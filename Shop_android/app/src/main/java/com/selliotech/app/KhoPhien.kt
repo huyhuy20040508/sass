@@ -29,6 +29,10 @@ data class Phien(
     val vaiTro: String,
     /** Cửa hàng hết hạn hợp đồng: phiên vẫn dùng được nhưng gần như mọi đường trả 403. */
     val cuaHangKhoa: Boolean,
+    /** Những cửa tài khoản này mở được: quan_ly, thu_ngan, hoặc cả hai. */
+    val cuaVao: List<String> = emptyList(),
+    /** Khu đang đứng. Rỗng = chưa chọn, phải qua màn chọn khu trước. */
+    val khu: String = "",
 ) {
     /**
      * Còn dùng được không. Trừ hao 60 giây vì token sống có 15 phút — gọi đúng
@@ -69,6 +73,8 @@ class KhoPhien(boiCanh: Context) {
             tenDangNhap = j.optString("ten_dang_nhap"),
             vaiTro = j.optString("vai_tro"),
             cuaHangKhoa = j.optBoolean("cua_hang_khoa"),
+            cuaVao = j.optString("cua_vao").split(",").filter(String::isNotBlank),
+            khu = j.optString("khu"),
         )
     }
 
@@ -82,6 +88,8 @@ class KhoPhien(boiCanh: Context) {
             put("ten_dang_nhap", phien.tenDangNhap)
             put("vai_tro", phien.vaiTro)
             put("cua_hang_khoa", phien.cuaHangKhoa)
+            put("cua_vao", phien.cuaVao.joinToString(","))
+            put("khu", phien.khu)
         }
 
         o.edit()
@@ -90,6 +98,12 @@ class KhoPhien(boiCanh: Context) {
             // đăng xuất để điền sẵn cho ca sau.
             .putString(K_MA_CUA_HANG, phien.maCuaHang)
             .apply()
+    }
+
+    /** Ghi lại khu vừa chọn, phần còn lại của phiên giữ nguyên. */
+    fun ghiKhu(khu: String) {
+        val cu = doc() ?: return
+        ghi(cu.copy(khu = khu))
     }
 
     /** Chỉ thay hai token sau một lượt làm mới; phần hồ sơ giữ nguyên. */

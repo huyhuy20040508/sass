@@ -1,7 +1,6 @@
 package com.selliotech.app.ui.theme
 
 import android.app.Activity
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
@@ -115,7 +114,14 @@ private val BangToi = darkColorScheme(
  */
 @Composable
 fun SelliotechTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    // LUÔN tông sáng, KHÔNG theo chế độ tối của máy: Shop Admin trên web không có
+    // chế độ tối, mà cùng một người sáng dùng web ở quầy chiều cầm điện thoại đi
+    // kiểm kho. Máy để chế độ tối là app đổi hẳn bộ mặt so với web — thành hai
+    // phần mềm khác nhau trong đầu họ.
+    //
+    // Vẫn để tham số chứ không xoá: bảng màu tối đã dựng sẵn, ngày nào web có chế
+    // độ tối thì mở lại bằng isSystemInDarkTheme() ở đây.
+    darkTheme: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val bang = if (darkTheme) BangToi else BangSang

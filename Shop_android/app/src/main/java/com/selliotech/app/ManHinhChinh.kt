@@ -17,31 +17,17 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
 import com.selliotech.app.ui.Huy
-import com.selliotech.app.ui.NutChinh
-import com.selliotech.app.ui.NutNguyHiem
-import com.selliotech.app.ui.NutPhu
 import com.selliotech.app.ui.Sac
 import com.selliotech.app.ui.The
-import com.selliotech.app.ui.TieuDeMuc
 import com.selliotech.app.ui.theme.Bo
 import com.selliotech.app.ui.theme.Cach
-import com.selliotech.app.ui.theme.Xanh
-import com.selliotech.app.ui.theme.XanhDam
+import com.selliotech.app.ui.theme.CaoCham
 import com.selliotech.app.ui.theme.mauPhu
-import kotlinx.coroutines.launch
 
 /**
  * Màn chính sau khi đăng nhập.
@@ -49,28 +35,25 @@ import kotlinx.coroutines.launch
  * Chỉ đặt nút cho chức năng đã có thật. Bày sẵn một lưới ô "Báo cáo / Kho /
  * Khách hàng" cho đẹp rồi bấm vào không ra gì là cách nhanh nhất để người
  * dùng hết tin vào app.
+ *
+ * Quét mã đã dời xuống nút tròn trên thanh nổi, nên trong thân màn không còn
+ * nút nào: nó là việc chính của cả khu Thu ngân, mà việc chính thì phải luôn
+ * nằm dưới ngón cái ở MỌI tab, không phải chỉ khi đang đứng đúng màn này.
  */
 @Composable
 fun ManHinhChinh(
     phien: Phien,
-    kho: KhoPhien,
     modifier: Modifier = Modifier,
-    onQuetMa: () -> Unit,
-    onDangXuat: () -> Unit,
 ) {
-    val pham = rememberCoroutineScope()
-    var quyen by remember { mutableStateOf<String?>(null) }
-    var dangGoiQuyen by remember { mutableStateOf(false) }
-
     Column(
         modifier = modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
             .verticalScroll(rememberScrollState())
-            .padding(Cach.Chuan),
+            .padding(start = Cach.Chuan, end = Cach.Chuan, top = demTren, bottom = Cach.Chuan),
         verticalArrangement = Arrangement.spacedBy(Cach.Chuan),
     ) {
-        Spacer(Modifier.height(Cach.Sat))
+        MuTrang("Bán hàng")
 
         TheCuaHang(phien)
 
@@ -78,125 +61,63 @@ fun ManHinhChinh(
             TheHetHan()
         }
 
-        Column {
-            TieuDeMuc("Chức năng")
-
-            NutChinh(
-                chu = "Quét mã tại quầy",
-                onBam = onQuetMa,
-                moKhoa = !phien.cuaHangKhoa,
-            )
-
-            Spacer(Modifier.height(Cach.Vua))
-
-            NutPhu(
-                chu = if (dangGoiQuyen) "Đang gọi..." else "Xem quyền của tôi",
-                onBam = {
-                    dangGoiQuyen = true
-                    pham.launch {
-                        quyen = layQuyenCuaToi(kho)
-                        dangGoiQuyen = false
-                    }
-                },
-                moKhoa = !dangGoiQuyen,
-            )
-        }
-
-        quyen?.let {
-            The {
-                Text(
-                    "Máy chủ trả về",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = mauPhu.chuMo,
-                )
-                Spacer(Modifier.height(Cach.Gan))
-                Text(
-                    it,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontFamily = FontFamily.Monospace,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-        }
-
-        Spacer(Modifier.height(Cach.Gan))
-
-        NutNguyHiem(chu = "Đăng xuất", onBam = onDangXuat)
-
-        Spacer(Modifier.height(Cach.Khoi))
+        Spacer(Modifier.height(demDuoi))
     }
 }
 
 /**
- * Thẻ cửa hàng — khối đầu tiên người dùng nhìn thấy.
+ * Thẻ ca đang trực: ai đang đứng quầy và tiệm còn hạn hay không.
  *
- * Nền chuyển sắc tím thay vì thẻ trắng: đây là chỗ duy nhất trong màn được
- * phép nổi bật, phần còn lại phải nhường nó.
+ * KHÔNG in lại tên tiệm ở đây — mũ app đã nói rồi, và nó nói ở mọi tab. Thẻ
+ * này chỉ giữ phần mũ không nói được.
+ *
+ * Cũng KHÔNG tô chuyển sắc nữa: trong app này mảng xanh chuyển sắc dành riêng
+ * cho tiền. Tô nó lên một thẻ hồ sơ là dạy mắt bỏ qua nó, để rồi hôm nào con
+ * số doanh thu thật cũng bị lướt qua nốt.
  */
 @Composable
 private fun TheCuaHang(phien: Phien) {
-    Surface(shape = Bo.The, color = Color.Transparent, modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier
-                .background(Brush.linearGradient(listOf(XanhDam, Xanh)))
-                .padding(Cach.Rong),
-        ) {
-            Text(
-                "Đang bán tại",
-                style = MaterialTheme.typography.labelMedium,
-                color = Color.White.copy(alpha = 0.7f),
-            )
-            Spacer(Modifier.height(Cach.Sat))
-            Text(
-                phien.tenCuaHang.ifBlank { "Cửa hàng ${phien.maCuaHang}" },
-                style = MaterialTheme.typography.headlineSmall,
-                color = Color.White,
-            )
+    The {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            ChuCaiDau(phien.tenDangNhap)
 
-            Spacer(Modifier.height(Cach.Chuan))
+            Spacer(Modifier.size(Cach.Vua))
 
-            HangNguoiDung(phien)
-        }
-    }
-}
-
-@Composable
-private fun HangNguoiDung(phien: Phien) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        ChuCaiDau(phien.tenDangNhap)
-        Spacer(Modifier.size(Cach.Vua))
-        Column(Modifier.weight(1f)) {
-            Text(
-                phien.tenDangNhap.ifBlank { "—" },
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium,
-                color = Color.White,
-            )
-            if (phien.vaiTro.isNotBlank()) {
+            Column(Modifier.weight(1f)) {
                 Text(
-                    phien.vaiTro,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White.copy(alpha = 0.7f),
+                    phien.tenDangNhap.ifBlank { "—" },
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    phien.vaiTro.ifBlank { "Đang trực quầy" },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = mauPhu.chuMo,
                 )
             }
+
+            Huy(
+                if (phien.cuaHangKhoa) "Hết hạn" else "Đang hoạt động",
+                if (phien.cuaHangKhoa) Sac.DO else Sac.LUC,
+            )
         }
-        Huy(if (phien.cuaHangKhoa) "Hết hạn" else "Đang hoạt động", if (phien.cuaHangKhoa) Sac.DO else Sac.LUC)
     }
 }
 
-/** Vòng tròn chữ cái đầu — chỗ của ảnh đại diện khi nào API có trả về. */
+/** Ô chữ cái đầu — chỗ của ảnh đại diện khi nào API có trả về. */
 @Composable
 private fun ChuCaiDau(ten: String) {
     Box(
         modifier = Modifier
-            .size(44.dp)
-            .background(Color.White.copy(alpha = 0.18f), Bo.Tron),
+            .size(CaoCham.O)
+            .background(mauPhu.lamNen, Bo.O),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             ten.take(1).uppercase().ifBlank { "?" },
             style = MaterialTheme.typography.titleMedium,
-            color = Color.White,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
         )
     }
 }

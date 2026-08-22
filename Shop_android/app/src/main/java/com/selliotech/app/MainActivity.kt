@@ -6,9 +6,13 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
+import com.composables.icons.lucide.House
+import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Package
+import com.composables.icons.lucide.ScanBarcode
+import com.composables.icons.lucide.Store
+import com.composables.icons.lucide.User
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -17,7 +21,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.selliotech.app.ui.theme.Luc
 import com.selliotech.app.ui.theme.SelliotechTheme
+import com.selliotech.app.ui.theme.TimSellio
+import com.selliotech.app.ui.theme.Xanh
+
+// Mã tab. Chuỗi chứ không phải enum: mỗi khu có bộ tab riêng, một enum gộp cả
+// hai thì luôn có nửa số giá trị vô nghĩa với khu đang đứng.
+private const val TAB_TONG_QUAN = "tong-quan"
+private const val TAB_HANG_HOA = "hang-hoa"
+private const val TAB_BAN_HANG = "ban-hang"
+private const val TAB_TAI_KHOAN = "tai-khoan"
 
 /** Chỗ đang đứng trong app. Bản này chưa cần thư viện điều hướng. */
 private sealed interface ManHinh {
@@ -25,9 +39,58 @@ private sealed interface ManHinh {
 
     data object DangNhap : ManHinh
 
-    data class Chinh(val phien: Phien) : ManHinh
+    data class ChonKhu(val phien: Phien) : ManHinh
 
-    data class QuetMa(val phien: Phien) : ManHinh
+    /** Đang làm việc: khung tab của khu, `tab` là tab đang mở. */
+    data class Lam(
+        val phien: Phien,
+        val tab: String,
+        /** Bộ lọc mà tab Hàng hoá mở lên kèm — đến từ dòng Cần xử lý. */
+        val loc: LocHang = LocHang(),
+    ) : ManHinh
+
+    /**
+     * Quét mã chiếm trọn màn — camera không chia chỗ với thanh tab được.
+     *
+     * Nhớ `tabVe` vì giờ nút quét nằm trên thanh nổi, tức bấm được từ BẤT KỲ
+     * tab nào. Đóng camera phải trả người ta về đúng chỗ họ đứng lúc bấm, chứ
+     * không quăng sang một tab khác.
+     */
+    data class QuetMa(val phien: Phien, val tabVe: String) : ManHinh
+}
+
+/** Bộ tab của một khu. Thu ngân và Quản trị là hai bộ khác hẳn nhau. */
+private fun tabCuaKhu(khu: String): List<MucTab> = if (khu == Khu.QUAN_LY) {
+    listOf(
+        MucTab(TAB_TONG_QUAN, "Tổng quan", Lucide.House),
+        MucTab(TAB_HANG_HOA, "Hàng hoá", Lucide.Package),
+        MucTab(TAB_TAI_KHOAN, "Tài khoản", Lucide.User),
+    )
+} else {
+    listOf(
+        MucTab(TAB_BAN_HANG, "Bán hàng", Lucide.Store),
+        MucTab(TAB_TAI_KHOAN, "Tài khoản", Lucide.User),
+    )
+}
+
+/**
+ * Module của một khu — bày trong tấm ứng dụng.
+ *
+ * Đi cùng `tabCuaKhu`: cùng một mã, cùng một chỗ đến. Ba cái đang có cũng nằm
+ * cả trên thanh, nhưng tấm ứng dụng là danh sách ĐẦY ĐỦ nên chúng phải có mặt.
+ * Module mới thì thêm một dòng ở đây, chưa cần đụng vào thanh.
+ */
+private fun ungDungCuaKhu(khu: String): List<OUngDung> = if (khu == Khu.QUAN_LY) {
+    listOf(
+        OUngDung(TAB_TONG_QUAN, "Tổng quan", Lucide.House, Xanh),
+        OUngDung(TAB_HANG_HOA, "Hàng hoá & tồn kho", Lucide.Package, Luc),
+        OUngDung(TAB_TAI_KHOAN, "Tài khoản", Lucide.User, TimSellio),
+    )
+} else {
+    listOf(
+        OUngDung(TAB_BAN_HANG, "Bán hàng", Lucide.Store, Xanh),
+        OUngDung(TAB_TAI_KHOAN, "Tài khoản", Lucide.User, TimSellio),
+    )
 }
 
 class MainActivity : ComponentActivity() {
@@ -45,7 +108,7 @@ class MainActivity : ComponentActivity() {
                     val cu = kho.doc()
                     dang = when {
                         cu == null -> ManHinh.DangNhap
-                        cu.conHan() -> ManHinh.Chinh(cu)
+                        cu.conHan() -> noiVao(kho, cu)
                         else -> {
                             val moi = lamMoiToken(cu.refreshToken)
                             if (moi == null) {
@@ -59,48 +122,172 @@ class MainActivity : ComponentActivity() {
                                     hetHanLuc = moi.hetHanLuc,
                                 )
                                 kho.ghiTokenMoi(gop.accessToken, gop.refreshToken, gop.hetHanLuc)
-                                ManHinh.Chinh(gop)
+                                noiVao(kho, gop)
                             }
                         }
                     }
                 }
 
-                Scaffold(modifier = Modifier.fillMaxSize()) { dem ->
-                    val nen = Modifier.padding(dem)
-                    when (val noi = dang) {
-                        ManHinh.DangMo -> Box(
-                            modifier = nen.fillMaxSize(),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            CircularProgressIndicator()
-                        }
+                val dangXuat = {
+                    kho.xoa()
+                    dang = ManHinh.DangNhap
+                }
 
-                        // Không truyền `nen`: ảnh nền phải tràn ra sau thanh trạng
-                        // thái, màn này tự chừa lề cho phần chữ.
-                        ManHinh.DangNhap -> ManHinhDangNhap(
-                            kho = kho,
-                            onXong = { dang = ManHinh.Chinh(it) },
-                        )
-
-                        is ManHinh.Chinh -> ManHinhChinh(
-                            phien = noi.phien,
-                            kho = kho,
-                            modifier = nen,
-                            onQuetMa = { dang = ManHinh.QuetMa(noi.phien) },
-                            onDangXuat = {
-                                kho.xoa()
-                                dang = ManHinh.DangNhap
-                            },
-                        )
-
-                        is ManHinh.QuetMa -> ManHinhQuetMa(
-                            kho = kho,
-                            modifier = nen,
-                            onQuayLai = { dang = ManHinh.Chinh(noi.phien) },
-                        )
+                when (val noi = dang) {
+                    ManHinh.DangMo -> Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        CircularProgressIndicator()
                     }
+
+                    // Hai màn dưới đây tự tràn hết màn hình, không nằm trong khung
+                    // tab: một cái là ảnh nền tràn ra sau thanh trạng thái, cái kia
+                    // là khung ngắm camera.
+                    ManHinh.DangNhap -> ManHinhDangNhap(
+                        kho = kho,
+                        onXong = { dang = ManHinh.ChonKhu(it) },
+                    )
+
+                    is ManHinh.ChonKhu -> ManHinhChonKhu(
+                        phien = noi.phien,
+                        onChon = { khu ->
+                            kho.ghiKhu(khu)
+                            dang = noiLamViec(noi.phien.copy(khu = khu))
+                        },
+                        onDangXuat = dangXuat,
+                    )
+
+                    is ManHinh.QuetMa -> ManHinhQuetMa(
+                        kho = kho,
+                        onQuayLai = { dang = ManHinh.Lam(noi.phien, noi.tabVe) },
+                    )
+
+                    is ManHinh.Lam -> KhungLamViec(
+                        phien = noi.phien,
+                        tab = noi.tab,
+                        kho = kho,
+                        loc = noi.loc,
+                        // Bấm thẳng vào tab thì xem CẢ kho, bộ lọc cũ bỏ đi.
+                        onChonTab = { dang = ManHinh.Lam(noi.phien, it) },
+                        onXemHang = { l -> dang = ManHinh.Lam(noi.phien, TAB_HANG_HOA, l) },
+                        onBoLoc = { dang = ManHinh.Lam(noi.phien, TAB_HANG_HOA) },
+                        onQuetMa = { dang = ManHinh.QuetMa(noi.phien, noi.tab) },
+                        onDoiKhu = { dang = ManHinh.ChonKhu(noi.phien) },
+                        onDangXuat = dangXuat,
+                    )
                 }
             }
         }
     }
 }
+
+/** Khung tab của khu đang đứng, và nội dung của tab đang mở. */
+@Composable
+private fun KhungLamViec(
+    phien: Phien,
+    tab: String,
+    kho: KhoPhien,
+    loc: LocHang,
+    onChonTab: (String) -> Unit,
+    onXemHang: (LocHang) -> Unit,
+    onBoLoc: () -> Unit,
+    onQuetMa: () -> Unit,
+    onDoiKhu: () -> Unit,
+    onDangXuat: () -> Unit,
+) {
+    val tenTiem = phien.tenCuaHang.ifBlank { phien.maCuaHang }
+    val laQuanLy = phien.khu == Khu.QUAN_LY
+    var moUngDung by remember { mutableStateOf(false) }
+
+    KhungApp(
+        // Mũ app nói người này đang đứng ĐÂU: tiệm nào, khu nào. Người trông
+        // nhiều tiệm cần thấy điều đó ở mọi màn, không phải chỉ lúc đăng nhập.
+        tenCuaHang = tenTiem,
+        tenKhu = Khu.ten(phien.khu),
+        chuCaiDau = tenTiem.take(1).uppercase(),
+        tabs = tabCuaKhu(phien.khu),
+        maDangChon = tab,
+        onChonTab = onChonTab,
+        // Hai khu, hai thứ khác hẳn nhau ở cái nút tròn.
+        //
+        // Quản trị: ô ứng dụng. Khu này rồi sẽ có kho, khách hàng, nhà cung cấp,
+        // sổ quỹ, báo cáo — thanh không đựng nổi, phải có cửa mở ra hết.
+        //
+        // Thu ngân: quét mã. Cả ca trực họ làm đúng một việc đó, mở thêm một
+        // tấm nữa rồi mới bấm được là thừa một cú chạm ở chỗ đang vội nhất.
+        nutNoi = if (laQuanLy) {
+            NutNoi.UngDung(onBam = { moUngDung = true })
+        } else {
+            NutNoi.Viec(
+                nhan = "Quét mã",
+                bieuTuong = Lucide.ScanBarcode,
+                moKhoa = !phien.cuaHangKhoa,
+                onBam = onQuetMa,
+            )
+        },
+        // Mở được nhiều khu thì cả mũ app thành nút đổi khu. Chỉ một khu thì
+        // truyền null: mũ hết mũi tên, hết bấm được — không bày nút chết.
+        onDoiKhu = if (phien.cuaVao.size > 1) onDoiKhu else null,
+    ) { nen ->
+        when (tab) {
+            TAB_TONG_QUAN -> ManHinhQuanTri(
+                kho = kho,
+                modifier = nen,
+                onXemHang = onXemHang,
+            )
+
+            TAB_HANG_HOA -> ManHinhHangHoa(
+                kho = kho,
+                modifier = nen,
+                loc = loc,
+                onBoLoc = onBoLoc,
+            )
+
+            TAB_BAN_HANG -> ManHinhChinh(
+                phien = phien,
+                modifier = nen,
+            )
+
+            else -> ManHinhTaiKhoan(
+                phien = phien,
+                kho = kho,
+                modifier = nen,
+                onDangXuat = onDangXuat,
+            )
+        }
+    }
+
+    if (moUngDung) {
+        TamUngDung(
+            tenKhu = Khu.ten(phien.khu),
+            dsUngDung = ungDungCuaKhu(phien.khu),
+            maDangChon = tab,
+            onChon = {
+                moUngDung = false
+                onChonTab(it)
+            },
+            onDong = { moUngDung = false },
+        )
+    }
+}
+
+/**
+ * Chỗ vào sau khi đã có phiên: đã chọn khu và khu đó còn hợp lệ thì vào thẳng,
+ * chưa chọn thì hỏi. Phiên cất từ bản app cũ chưa có cửa vào thì hỏi lại API.
+ */
+private suspend fun noiVao(kho: KhoPhien, phien: Phien): ManHinh {
+    var p = phien
+    if (p.cuaVao.isEmpty()) {
+        layCuaVao(p.accessToken)?.let {
+            p = p.copy(cuaVao = it)
+            kho.ghi(p)
+        }
+    }
+
+    return if (p.khu.isNotBlank() && p.khu in p.cuaVao) noiLamViec(p) else ManHinh.ChonKhu(p)
+}
+
+/** Khu nào thì mở tab đầu của khu đó. Đây là chỗ hai cửa rẽ ra hai hướng. */
+private fun noiLamViec(phien: Phien): ManHinh =
+    ManHinh.Lam(phien, tabCuaKhu(phien.khu).first().ma)
