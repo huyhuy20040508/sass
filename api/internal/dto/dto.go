@@ -1413,6 +1413,40 @@ type CustomerResponse struct {
 	CreatedAt     string `json:"created_at"`
 }
 
+// ---------- Nhà cung cấp ----------
+
+// NhaCungCapRequest — payload tạo/sửa nhà cung cấp.
+//
+// Mã bỏ trống thì server tự đặt (theo quy tắc đánh số của cửa hàng nếu đã bật,
+// không thì dải NCC001); bỏ trống lúc SỬA là giữ nguyên mã cũ. Bắt buộc đúng
+// hai ô Tên và Địa chỉ, như màn của bản v2.
+type NhaCungCapRequest struct {
+	Code      string `json:"code" binding:"omitempty,max=30,alphanum"`
+	Name      string `json:"name" binding:"required,max=150"`
+	ShortName string `json:"short_name" binding:"omitempty,max=100"`
+
+	TaxCode string `json:"tax_code" binding:"omitempty,max=30"`
+	Phone   string `json:"phone" binding:"omitempty,max=20"`
+	Email   string `json:"email" binding:"omitempty,email,max=191"`
+
+	Address      string `json:"address" binding:"required,max=255"`
+	AddressLine2 string `json:"address_line2" binding:"omitempty,max=200"`
+
+	RepresentativeName  string `json:"representative_name" binding:"omitempty,max=150"`
+	RepresentativePhone string `json:"representative_phone" binding:"omitempty,max=20"`
+
+	Image string `json:"image" binding:"omitempty,max=255"`
+	Note  string `json:"note" binding:"omitempty,max=500"`
+
+	// IsActive bỏ trống = true (bên mới mặc định đang hợp tác).
+	IsActive *bool `json:"is_active"`
+}
+
+// TrangThaiNhaCungCapRequest — công tắc hợp tác trên bảng danh sách.
+type TrangThaiNhaCungCapRequest struct {
+	IsActive *bool `json:"is_active" binding:"required"`
+}
+
 // ---------- Đặt hàng nhập ----------
 
 // PurchaseReturnItemRequest — một dòng hàng trả lại nhà cung cấp.

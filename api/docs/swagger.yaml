@@ -757,6 +757,60 @@ definitions:
       updated_at:
         type: string
     type: object
+  domain.NhaCungCap:
+    properties:
+      address:
+        type: string
+      address_line2:
+        type: string
+      code:
+        description: 'Code luôn viết hoa: NCC001 do phần mềm đặt, hoặc do người dùng
+          tự gõ.'
+        type: string
+      created_at:
+        type: string
+      debt_amount:
+        type: number
+      email:
+        type: string
+      id:
+        type: integer
+      image:
+        type: string
+      is_active:
+        description: |-
+          IsActive tắt = thôi hợp tác: bên này biến khỏi ô chọn lúc lập phiếu, nhưng
+          dòng vẫn còn để phiếu cũ tra ra được tên và số máy.
+        type: boolean
+      last_order_at:
+        type: string
+      name:
+        type: string
+      note:
+        type: string
+      paid_amount:
+        type: number
+      phone:
+        type: string
+      purchase_count:
+        description: |-
+          Năm số dưới đây tổng hợp từ phiếu đặt hàng nhập, không có cột trong DB.
+          PurchaseCount đếm MỌI phiếu vì nó dùng để chặn xoá; bốn số còn lại loại
+          phiếu nháp và phiếu đã huỷ — nháp chưa đặt thật, huỷ thì không còn nợ ai.
+        type: integer
+      representative_name:
+        type: string
+      representative_phone:
+        type: string
+      short_name:
+        type: string
+      tax_code:
+        type: string
+      total_purchases:
+        type: number
+      updated_at:
+        type: string
+    type: object
   domain.NhomMucQuyen:
     properties:
       mucs:
@@ -3848,6 +3902,51 @@ definitions:
         example: 10%
         type: string
     type: object
+  dto.NhaCungCapRequest:
+    properties:
+      address:
+        maxLength: 255
+        type: string
+      address_line2:
+        maxLength: 200
+        type: string
+      code:
+        maxLength: 30
+        type: string
+      email:
+        maxLength: 191
+        type: string
+      image:
+        maxLength: 255
+        type: string
+      is_active:
+        description: IsActive bỏ trống = true (bên mới mặc định đang hợp tác).
+        type: boolean
+      name:
+        maxLength: 150
+        type: string
+      note:
+        maxLength: 500
+        type: string
+      phone:
+        maxLength: 20
+        type: string
+      representative_name:
+        maxLength: 150
+        type: string
+      representative_phone:
+        maxLength: 20
+        type: string
+      short_name:
+        maxLength: 100
+        type: string
+      tax_code:
+        maxLength: 30
+        type: string
+    required:
+    - address
+    - name
+    type: object
   dto.NhanSuRequest:
     properties:
       address:
@@ -5978,6 +6077,13 @@ definitions:
     - name
     type: object
   dto.TrangThaiDonViTinhRequest:
+    properties:
+      is_active:
+        type: boolean
+    required:
+    - is_active
+    type: object
+  dto.TrangThaiNhaCungCapRequest:
     properties:
       is_active:
         type: boolean
@@ -9324,6 +9430,224 @@ paths:
       summary: Gỡ một email khỏi danh sách nhận tin
       tags:
       - Admin - Contact
+  /admin/nha-cung-cap:
+    get:
+      description: |-
+        Tìm theo tên, mã, tên viết tắt, SĐT hoặc MST. Đặt `active=true` để chỉ lấy bên đang hợp tác — ô chọn lúc lập phiếu dùng tham số này.
+        Mỗi dòng kèm số phiếu đã đặt và ba số tiền tổng hợp từ phiếu đặt hàng nhập (bỏ phiếu nháp và phiếu đã huỷ).
+        Cố ý KHÔNG phân trang: danh mục của một cửa hàng chỉ vài chục dòng, trang quản trị tự cắt trang.
+      parameters:
+      - description: Tên, mã, tên viết tắt, SĐT hoặc MST
+        in: query
+        name: keyword
+        type: string
+      - description: true = chỉ bên đang hợp tác
+        in: query
+        name: active
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/domain.NhaCungCap'
+                  type: array
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Danh sách nhà cung cấp
+      tags:
+      - Admin - Nhà cung cấp
+    post:
+      consumes:
+      - application/json
+      description: Mã tự viết hoa và phải khác mọi mã đã có TRONG CỬA HÀNG NÀY, kể
+        cả mã của bên đã xoá. Bỏ trống mã thì server tự đặt.
+      parameters:
+      - description: Thông tin nhà cung cấp
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.NhaCungCapRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/domain.NhaCungCap'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Body'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Thêm nhà cung cấp
+      tags:
+      - Admin - Nhà cung cấp
+  /admin/nha-cung-cap/{id}:
+    delete:
+      description: Xoá mềm, và bị chặn khi còn phiếu đặt hàng nhập trỏ tới — phiếu
+        cũ sẽ mất đầu mối liên hệ. Muốn dừng nhập hàng thì tắt hợp tác.
+      parameters:
+      - description: ID nhà cung cấp
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Body'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Xoá nhà cung cấp
+      tags:
+      - Admin - Nhà cung cấp
+    get:
+      parameters:
+      - description: ID nhà cung cấp
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/domain.NhaCungCap'
+              type: object
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Chi tiết một nhà cung cấp
+      tags:
+      - Admin - Nhà cung cấp
+    put:
+      consumes:
+      - application/json
+      description: Bỏ trống mã = giữ nguyên mã cũ; mã đã in trên chứng từ nên không
+        tự đổi.
+      parameters:
+      - description: ID nhà cung cấp
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Thông tin nhà cung cấp
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.NhaCungCapRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/domain.NhaCungCap'
+              type: object
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Sửa nhà cung cấp
+      tags:
+      - Admin - Nhà cung cấp
+  /admin/nha-cung-cap/{id}/trang-thai:
+    put:
+      consumes:
+      - application/json
+      description: Tắt = bên này thôi bày ở ô chọn lúc lập phiếu. Dòng vẫn còn nên
+        phiếu cũ vẫn tra ra được tên và số máy.
+      parameters:
+      - description: ID nhà cung cấp
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Trạng thái
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.TrangThaiNhaCungCapRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/domain.NhaCungCap'
+              type: object
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Bật/tắt hợp tác
+      tags:
+      - Admin - Nhà cung cấp
   /admin/nhan-su:
     get:
       description: |-
