@@ -29,7 +29,6 @@ func NewGoodsReceiptHandler(svc service.GoodsReceiptService) *GoodsReceiptHandle
 // @Accept			json
 // @Produce		json
 // @Param			keyword		query		string	false	"Mã đợt / mã phiếu đặt / nhà cung cấp / người nhận / ghi chú"
-// @Param			supplier_id	query		int		false	"Lọc theo nhà cung cấp"
 // @Param			from_date	query		string	false	"Từ ngày nhận (YYYY-MM-DD)"
 // @Param			to_date		query		string	false	"Đến ngày nhận (YYYY-MM-DD)"
 // @Param			sort		query		string	false	"newest|oldest|qty_desc|amount_desc"
@@ -57,9 +56,6 @@ func (h *GoodsReceiptHandler) List(c *gin.Context) {
 		Sort:     c.Query("sort"),
 		Page:     page,
 		PageSize: pageSize,
-	}
-	if id, err := strconv.ParseUint(c.Query("supplier_id"), 10, 64); err == nil && id > 0 {
-		filter.SupplierID = uint(id)
 	}
 
 	list, total, err := h.svc.List(c.Request.Context(), filter)

@@ -117,7 +117,6 @@ func (s *purchaseReturnService) Create(ctx context.Context, req *dto.PurchaseRet
 	rt := &domain.PurchaseReturn{
 		PurchaseOrderID: &poID,
 		POCode:          po.POCode,
-		SupplierID:      po.SupplierID,
 		SupplierName:    po.SupplierName,
 		// Luôn tạo ở trạng thái NHÁP rồi mới chốt: việc trừ kho chỉ có một đường duy
 		// nhất là MarkReturned, kể cả khi người dùng bấm "Trả hàng ngay".

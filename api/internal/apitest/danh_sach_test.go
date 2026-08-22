@@ -46,7 +46,6 @@ var bangDanhSach = []khoDoc{
 	{"don-hang", "/api/v1/admin/orders?page_size=100", 2},
 	{"tra-hang", "/api/v1/admin/returns?page_size=100", 1},
 	{"ton-kho", "/api/v1/admin/inventory?page_size=100", 1},
-	{"nha-cung-cap", "/api/v1/admin/suppliers?page_size=100", -1},
 	{"dat-hang-nhap", "/api/v1/admin/purchases?page_size=100", 2},
 	{"dat-hang-nhap", "/api/v1/admin/purchases/variants", -1},
 	{"nhap-hang", "/api/v1/admin/receipts?page_size=100", 1},

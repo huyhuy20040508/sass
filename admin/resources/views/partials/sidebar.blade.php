@@ -138,11 +138,6 @@
                             'active' => request()->routeIs('admin.purchases.*'),
                         ],
                         [
-                            'href' => route('admin.suppliers.index'),
-                            'label' => \App\Http\Controllers\SupplierController::TITLE,
-                            'active' => request()->routeIs('admin.suppliers.*'),
-                        ],
-                        [
                             'href' => route('admin.receipts.index'),
                             'label' => \App\Http\Controllers\ReceiptController::TITLE,
                             'active' => request()->routeIs('admin.receipts.*'),

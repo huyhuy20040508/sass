@@ -978,46 +978,11 @@ class ApiClient
         return $this->put('/admin/inventory/cost', $payload);
     }
 
-    // ---------- Suppliers (nhà cung cấp) ----------
-
-    /**
-     * Danh sách nhà cung cấp. $onlyActive = true để chỉ lấy bên đang hợp tác
-     * (dropdown lập phiếu dùng cái này). Mỗi phần tử kèm purchase_count.
-     */
-    public function suppliers(string $keyword = '', bool $onlyActive = false): Response
-    {
-        return $this->get('/admin/suppliers', array_filter([
-            'keyword' => $keyword,
-            'active' => $onlyActive ? 'true' : null,
-        ]));
-    }
-
-    public function supplier(int $id): Response
-    {
-        return $this->get("/admin/suppliers/{$id}");
-    }
-
-    /** Thêm nhà cung cấp; bỏ trống `code` thì API tự sinh mã NCC001, NCC002… */
-    public function createSupplier(array $payload): Response
-    {
-        return $this->post('/admin/suppliers', $payload);
-    }
-
-    public function updateSupplier(int $id, array $payload): Response
-    {
-        return $this->put("/admin/suppliers/{$id}", $payload);
-    }
-
-    public function deleteSupplier(int $id): Response
-    {
-        return $this->delete("/admin/suppliers/{$id}");
-    }
-
     // ---------- Purchase returns (trả hàng nhập) ----------
 
     /**
      * Danh sách phiếu trả hàng lại nhà cung cấp.
-     * $query hỗ trợ: keyword, status, refund_status, reason, supplier_id,
+     * $query hỗ trợ: keyword, status, refund_status, reason,
      * from_date, to_date, sort, page, page_size. `status` nhận nhiều giá trị
      * ngăn cách bởi dấu phẩy.
      */
@@ -1077,7 +1042,7 @@ class ApiClient
 
     /**
      * Danh sách ĐỢT nhập hàng (mỗi lần nhận hàng là một đợt).
-     * $query hỗ trợ: keyword, supplier_id, from_date, to_date, sort, page, page_size.
+     * $query hỗ trợ: keyword, from_date, to_date, sort, page, page_size.
      *
      * API này CHỈ ĐỌC — muốn nhập hàng thì gọi receivePurchase(): đó là đường duy
      * nhất được cộng tồn kho.
@@ -1144,7 +1109,7 @@ class ApiClient
 
     /**
      * Danh sách phiếu đặt hàng nhập (lọc/sắp xếp/phân trang phía server).
-     * $query hỗ trợ: keyword, status, payment_status, supplier_id, from_date,
+     * $query hỗ trợ: keyword, status, payment_status, from_date,
      * to_date, sort, page, page_size.
      */
     public function purchases(array $query = []): Response

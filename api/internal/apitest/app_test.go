@@ -309,7 +309,6 @@ func dungHeThongVoi(t *testing.T, banHang, dieuHanh bool) *heThong {
 	returnRepo := repository.NewOrderReturnRepository(db)
 	notifRepo := repository.NewNotificationRepository(db)
 	inventoryRepo := repository.NewInventoryRepository(db)
-	supplierRepo := repository.NewSupplierRepository(db)
 	purchaseRepo := repository.NewPurchaseOrderRepository(db)
 	receiptRepo := repository.NewGoodsReceiptRepository(db)
 	pReturnRepo := repository.NewPurchaseReturnRepository(db)
@@ -359,9 +358,8 @@ func dungHeThongVoi(t *testing.T, banHang, dieuHanh bool) *heThong {
 	orderSvc := service.NewOrderService(orderRepo, returnRepo, mailSender, cfg.Mail, notifSvc, settingSvc, paymentSvc, promotionSvc, voucherSvc, etaxSvc)
 	returnSvc := service.NewOrderReturnService(returnRepo, notifSvc, settingSvc)
 	inventorySvc := service.NewInventoryService(inventoryRepo)
-	supplierSvc := service.NewSupplierService(supplierRepo, quyTacMaRepo)
 	contactSvc := service.NewContactService(contactRepo, newsletterRepo)
-	purchaseSvc := service.NewPurchaseOrderService(purchaseRepo, supplierRepo)
+	purchaseSvc := service.NewPurchaseOrderService(purchaseRepo)
 	receiptSvc := service.NewGoodsReceiptService(receiptRepo)
 	pReturnSvc := service.NewPurchaseReturnService(pReturnRepo, purchaseRepo)
 	reportSvc := service.NewReportService(reportRepo)
@@ -376,7 +374,6 @@ func dungHeThongVoi(t *testing.T, banHang, dieuHanh bool) *heThong {
 		Return:   handler.NewOrderReturnHandler(returnSvc),
 		Notif:    handler.NewNotificationHandler(notifSvc, hub),
 		Stock:    handler.NewInventoryHandler(inventorySvc),
-		Supplier: handler.NewSupplierHandler(supplierSvc),
 		Purchase: handler.NewPurchaseOrderHandler(purchaseSvc),
 		Receipt:  handler.NewGoodsReceiptHandler(receiptSvc),
 		PReturn:  handler.NewPurchaseReturnHandler(pReturnSvc),

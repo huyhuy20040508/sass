@@ -57,12 +57,11 @@ type PurchaseOrderService interface {
 }
 
 type purchaseOrderService struct {
-	repo     domain.PurchaseOrderRepository
-	supplier domain.SupplierRepository
+	repo domain.PurchaseOrderRepository
 }
 
-func NewPurchaseOrderService(repo domain.PurchaseOrderRepository, supplier domain.SupplierRepository) PurchaseOrderService {
-	return &purchaseOrderService{repo: repo, supplier: supplier}
+func NewPurchaseOrderService(repo domain.PurchaseOrderRepository) PurchaseOrderService {
+	return &purchaseOrderService{repo: repo}
 }
 
 func (s *purchaseOrderService) List(ctx context.Context, f domain.PurchaseFilter) ([]domain.PurchaseOrder, int64, error) {
@@ -198,11 +197,6 @@ func (s *purchaseOrderService) lookupLines(ctx context.Context, items []dto.Purc
 // ---------- Tạo & sửa ----------
 
 func (s *purchaseOrderService) Create(ctx context.Context, req *dto.PurchaseCreateRequest, actorID uint) (*PurchaseDetail, error) {
-	sup, err := s.supplier.FindByID(ctx, req.SupplierID)
-	if err != nil {
-		return nil, err
-	}
-
 	lines, amount, err := s.lookupLines(ctx, req.Items)
 	if err != nil {
 		return nil, err
@@ -213,10 +207,8 @@ func (s *purchaseOrderService) Create(ctx context.Context, req *dto.PurchaseCrea
 		status = domain.PurchaseStatusDraft
 	}
 
-	supplierID := sup.ID
 	po := &domain.PurchaseOrder{
-		SupplierID:     &supplierID,
-		SupplierName:   sup.Name,
+		SupplierName:   strings.TrimSpace(req.SupplierName),
 		Status:         status,
 		ExpectedDate:   parseExpected(req.ExpectedDate),
 		ItemsAmount:    amount,
@@ -249,8 +241,11 @@ func (s *purchaseOrderService) Create(ctx context.Context, req *dto.PurchaseCrea
 }
 
 func (s *purchaseOrderService) Update(ctx context.Context, id uint, req *dto.PurchaseUpdateRequest, actorID uint) (*PurchaseDetail, error) {
-	sup, err := s.supplier.FindByID(ctx, req.SupplierID)
-	if err != nil {
+	// Tra phiếu TRƯỚC khi soi danh sách hàng: phiếu không phải của cửa hàng này
+	// thì câu trả lời đúng là 404, chứ không phải "sản phẩm không còn tồn tại" —
+	// dòng hàng gửi lên cũng của cửa hàng kia nên nó hỏng trước, và lời báo lỗi
+	// đó vừa sai vừa hé ra rằng có một phiếu mang id ấy ở đâu đó.
+	if _, err := s.repo.FindByID(ctx, id); err != nil {
 		return nil, err
 	}
 
@@ -266,9 +261,7 @@ func (s *purchaseOrderService) Update(ctx context.Context, id uint, req *dto.Pur
 			return nil, nil, domain.ErrPurchaseLocked
 		}
 
-		supplierID := sup.ID
-		po.SupplierID = &supplierID
-		po.SupplierName = sup.Name
+		po.SupplierName = strings.TrimSpace(req.SupplierName)
 		po.ExpectedDate = parseExpected(req.ExpectedDate)
 		po.ItemsAmount = amount
 		po.DiscountAmount = req.DiscountAmount
@@ -277,7 +270,7 @@ func (s *purchaseOrderService) Update(ctx context.Context, id uint, req *dto.Pur
 		po.PaymentStatus = paymentStatusOf(po.PaidAmount, po.TotalAmount)
 		po.Note = strings.TrimSpace(req.Note)
 
-		cols := []string{"SupplierID", "SupplierName", "ExpectedDate", "ItemsAmount",
+		cols := []string{"SupplierName", "ExpectedDate", "ItemsAmount",
 			"DiscountAmount", "ShippingFee", "TotalAmount", "PaymentStatus", "Note"}
 		if actorID > 0 {
 			actor := actorID

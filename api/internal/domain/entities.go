@@ -1167,37 +1167,6 @@ type OrderReturnHistory struct {
 
 // ---------- 5c. Đặt hàng nhập ----------
 
-// Supplier — nhà cung cấp, bên bán hàng cho cửa hàng.
-type Supplier struct {
-	ID uint `json:"id" gorm:"primaryKey"`
-	TenantOwned
-	Code        string         `json:"code"`
-	Name        string         `json:"name"`
-	ContactName string         `json:"contact_name"`
-	Phone       string         `json:"phone"`
-	Email       string         `json:"email"`
-	Address     string         `json:"address"`
-	TaxCode     string         `json:"tax_code"`
-	Note        string         `json:"note"`
-	IsActive    bool           `json:"is_active"`
-	CreatedAt   time.Time      `json:"created_at"`
-	UpdatedAt   time.Time      `json:"updated_at"`
-	DeletedAt   gorm.DeletedAt `json:"-" gorm:"index"`
-
-	// PurchaseCount là số phiếu đặt hàng (chưa xoá) của nhà cung cấp này. Không có
-	// cột trong DB — repository tự đếm khi trả danh sách, để trang quản trị cảnh
-	// báo được trước khi xoá.
-	PurchaseCount int64 `json:"purchase_count" gorm:"-"`
-
-	// Ba số dưới đây tổng hợp từ phiếu đặt hàng để trang "Nhà cung cấp" xếp hạng
-	// và đối chiếu công nợ, cũng không có cột trong DB. Phiếu NHÁP và phiếu ĐÃ HUỶ
-	// bị loại khỏi cả ba: nháp chưa đặt thật, huỷ thì không còn nợ ai — cùng luật
-	// với thống kê ở trang Đặt hàng nhập.
-	PurchaseAmount float64    `json:"purchase_amount" gorm:"-"`
-	DebtAmount     float64    `json:"debt_amount" gorm:"-"`
-	LastOrderAt    *time.Time `json:"last_order_at" gorm:"-"`
-}
-
 // PurchaseOrder — một phiếu đặt hàng nhập từ nhà cung cấp.
 //
 // Phiếu có thể nhận làm NHIỀU đợt (nhà cung cấp giao thiếu, giao dần): số thực
@@ -1208,14 +1177,12 @@ type PurchaseOrder struct {
 	// ShopID là chi nhánh ĐẶT hàng, và cũng là kho hàng sẽ về khi nhận. Chốt lúc
 	// lập phiếu chứ không lúc nhận: người nhận hàng có thể đang đứng ở chi nhánh
 	// khác, mà hàng thì về đúng nơi đã đặt.
-	ShopID     uint   `json:"shop_id"`
-	POCode     string `json:"po_code" gorm:"column:po_code"`
-	SupplierID *uint  `json:"supplier_id"`
-	// SupplierName là tên chụp lại lúc đặt — nhà cung cấp đổi tên hoặc bị xoá thì
-	// phiếu cũ vẫn đọc được đúng như lúc ký.
-	SupplierName string    `json:"supplier_name"`
-	Supplier     *Supplier `json:"supplier,omitempty" gorm:"foreignKey:SupplierID"`
-	Status       string    `json:"status"`
+	ShopID uint   `json:"shop_id"`
+	POCode string `json:"po_code" gorm:"column:po_code"`
+	// SupplierName là tên bên bán, gõ thẳng vào phiếu. Không còn danh mục nhà
+	// cung cấp nào để trỏ tới, nên đây là chỗ duy nhất ghi lại bên bán là ai.
+	SupplierName string `json:"supplier_name"`
+	Status       string `json:"status"`
 
 	ExpectedDate *time.Time `json:"expected_date" gorm:"type:date"`
 
@@ -1399,7 +1366,6 @@ type PurchaseReturn struct {
 	// bản chụp lúc lập phiếu nên phiếu cũ vẫn đọc được nguyên trạng.
 	PurchaseOrderID *uint  `json:"purchase_order_id"`
 	POCode          string `json:"po_code" gorm:"column:po_code"`
-	SupplierID      *uint  `json:"supplier_id"`
 	SupplierName    string `json:"supplier_name"`
 
 	Status string `json:"status"`

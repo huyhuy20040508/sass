@@ -31,7 +31,6 @@ func NewPurchaseReturnHandler(svc service.PurchaseReturnService) *PurchaseReturn
 // @Param			status			query		string	false	"all|draft|returned|refunded|cancelled — cho phép nhiều giá trị ngăn cách bởi dấu phẩy"
 // @Param			refund_status	query		string	false	"all|unpaid|partial|paid"
 // @Param			reason			query		string	false	"all|defect|wrong_item|over_stock|expired|other"
-// @Param			supplier_id		query		int		false	"Lọc theo nhà cung cấp"
 // @Param			from_date		query		string	false	"Từ ngày lập phiếu (YYYY-MM-DD)"
 // @Param			to_date			query		string	false	"Đến ngày lập phiếu (YYYY-MM-DD)"
 // @Param			sort			query		string	false	"newest|oldest|amount_desc|amount_asc"
@@ -62,10 +61,6 @@ func (h *PurchaseReturnHandler) List(c *gin.Context) {
 		Sort:         c.Query("sort"),
 		Page:         page,
 		PageSize:     pageSize,
-	}
-	if id, err := strconv.ParseUint(c.Query("supplier_id"), 10, 64); err == nil && id > 0 {
-		v := uint(id)
-		filter.SupplierID = &v
 	}
 
 	list, total, err := h.svc.List(c.Request.Context(), filter)

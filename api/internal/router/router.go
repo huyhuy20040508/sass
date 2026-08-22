@@ -48,7 +48,6 @@ type Handlers struct {
 	Return   *handler.OrderReturnHandler
 	Notif    *handler.NotificationHandler
 	Stock    *handler.InventoryHandler
-	Supplier *handler.SupplierHandler
 	Purchase *handler.PurchaseOrderHandler
 	Receipt  *handler.GoodsReceiptHandler
 	PReturn  *handler.PurchaseReturnHandler
@@ -669,11 +668,6 @@ func New(
 			q.Dat(manage, http.MethodPut, "/inventory/:id", "ton-kho.sua", h.Stock.Adjust)
 
 			// Nhà cung cấp — bên bán hàng cho cửa hàng, dùng cho phiếu đặt hàng nhập.
-			q.Dat(manage, http.MethodGet, "/suppliers", "nha-cung-cap.xem", h.Supplier.List)
-			q.Dat(manage, http.MethodPost, "/suppliers", "nha-cung-cap.them", h.Supplier.Create)
-			q.Dat(manage, http.MethodGet, "/suppliers/:id", "nha-cung-cap.xem", h.Supplier.Get)
-			q.Dat(manage, http.MethodPut, "/suppliers/:id", "nha-cung-cap.sua", h.Supplier.Update)
-			q.Dat(manage, http.MethodDelete, "/suppliers/:id", "nha-cung-cap.xoa", h.Supplier.Delete)
 
 			// Đặt hàng nhập — chiều MUA VÀO của kho.
 			// Hai đường tĩnh ("stats", "variants") phải đứng trước /:id, nếu không

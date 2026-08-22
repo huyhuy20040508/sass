@@ -4,8 +4,6 @@ import (
 	"strings"
 	"testing"
 
-	"gorm.io/gorm"
-
 	"sass-api/internal/domain"
 )
 
@@ -36,10 +34,8 @@ func TestGoodsReceiptDungLaiTungDotNhan(t *testing.T) {
 		}
 	}
 
-	supplierID := seedSupplier(t, db)
 	poRepo := NewPurchaseOrderRepository(db)
 	po := &domain.PurchaseOrder{
-		SupplierID:   &supplierID,
 		SupplierName: "NCC kiểm thử nhập hàng",
 		Status:       domain.PurchaseStatusOrdered,
 		// Bắt buộc dưới MySQL strict — xem chú thích ở seedProduct
@@ -60,7 +56,6 @@ func TestGoodsReceiptDungLaiTungDotNhan(t *testing.T) {
 		db.WithContext(ctxRaw()).Exec("DELETE FROM inventory_transactions WHERE reference_type = 'purchase_order' AND reference_id = ?", po.ID)
 		db.WithContext(ctxTest()).Unscoped().Where("purchase_order_id = ?", po.ID).Delete(&domain.PurchaseOrderItem{})
 		db.WithContext(ctxTest()).Unscoped().Delete(&domain.PurchaseOrder{}, po.ID)
-		db.WithContext(ctxTest()).Unscoped().Delete(&domain.Supplier{}, supplierID)
 	})
 
 	items, err := poRepo.FindByID(ctx, po.ID)
@@ -146,15 +141,6 @@ func TestGoodsReceiptDungLaiTungDotNhan(t *testing.T) {
 		t.Fatalf("dòng hàng đợt 1 phải là biến thể M, nhận %q", it.SKU)
 	}
 
-	// Lọc theo nhà cung cấp phải giữ cả hai đợt; nhà cung cấp khác thì rỗng.
-	bySup, _, err := repo.List(ctx, domain.GoodsReceiptFilter{SupplierID: supplierID, Page: 1, PageSize: 20})
-	if err != nil {
-		t.Fatalf("lọc theo NCC lỗi: %v", err)
-	}
-	if len(bySup) != 2 {
-		t.Fatalf("lọc theo NCC phải ra 2 đợt, nhận %d", len(bySup))
-	}
-
 	// Lọc theo từ khoá dùng mã đợt.
 	byCode, _, err := repo.List(ctx, domain.GoodsReceiptFilter{Keyword: mine[1].Code, Page: 1, PageSize: 20})
 	if err != nil {
@@ -167,15 +153,4 @@ func TestGoodsReceiptDungLaiTungDotNhan(t *testing.T) {
 	if _, err := repo.Find(ctx, po.POCode+"-N9"); err == nil {
 		t.Fatal("mã đợt không tồn tại phải trả lỗi")
 	}
-}
-
-// seedSupplier tạo một nhà cung cấp tối giản để treo phiếu đặt vào.
-func seedSupplier(t *testing.T, db *gorm.DB) uint {
-	t.Helper()
-	s := &domain.Supplier{Code: "TEST-NCC-RCPT", Name: "NCC kiểm thử nhập hàng", IsActive: true}
-	db.WithContext(ctxTest()).Unscoped().Where("code = ?", s.Code).Delete(&domain.Supplier{})
-	if err := db.WithContext(ctxTest()).Create(s).Error; err != nil {
-		t.Fatalf("không tạo được nhà cung cấp: %v", err)
-	}
-	return s.ID
 }

@@ -50,9 +50,6 @@ func applyPurchaseReturnFilter(q *gorm.DB, f domain.PurchaseReturnFilter) *gorm.
 	if f.Reason != "" && f.Reason != "all" {
 		q = q.Where("purchase_returns.reason = ?", f.Reason)
 	}
-	if f.SupplierID != nil {
-		q = q.Where("purchase_returns.supplier_id = ?", *f.SupplierID)
-	}
 	if f.FromDate != "" {
 		q = q.Where("purchase_returns.created_at >= ?", f.FromDate+" 00:00:00")
 	}

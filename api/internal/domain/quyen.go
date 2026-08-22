@@ -173,10 +173,6 @@ var DanhMucQuyen = []KhuQuyen{
 						},
 					},
 					{
-						Prefix: "nha-cung-cap", Ten: "Nhà cung cấp",
-						Viec: []string{QuyenXem, QuyenThem, QuyenSua, QuyenXoa},
-					},
-					{
 						Prefix: "dat-hang-nhap", Ten: "Đặt hàng nhập",
 						Viec: []string{QuyenXem, QuyenThem, QuyenSua, QuyenXoa},
 					},

@@ -30,10 +30,8 @@ func TestPurchaseReturnTruKhoDungMotLan(t *testing.T) {
 		t.Fatalf("không tạo được biến thể: %v", err)
 	}
 
-	supplierID := seedSupplier(t, db)
 	poRepo := NewPurchaseOrderRepository(db)
 	po := &domain.PurchaseOrder{
-		SupplierID:   &supplierID,
 		SupplierName: "NCC kiểm thử trả hàng",
 		Status:       domain.PurchaseStatusOrdered,
 		// Bắt buộc dưới MySQL strict — xem chú thích ở seedProduct
@@ -54,7 +52,6 @@ func TestPurchaseReturnTruKhoDungMotLan(t *testing.T) {
 		db.WithContext(ctxRaw()).Exec("DELETE FROM purchase_returns WHERE purchase_order_id = ?", po.ID)
 		db.WithContext(ctxTest()).Unscoped().Where("purchase_order_id = ?", po.ID).Delete(&domain.PurchaseOrderItem{})
 		db.WithContext(ctxTest()).Unscoped().Delete(&domain.PurchaseOrder{}, po.ID)
-		db.WithContext(ctxTest()).Unscoped().Delete(&domain.Supplier{}, supplierID)
 	})
 
 	saved, err := poRepo.FindByID(ctx, po.ID)
@@ -89,7 +86,6 @@ func TestPurchaseReturnTruKhoDungMotLan(t *testing.T) {
 	rt := &domain.PurchaseReturn{
 		PurchaseOrderID: &po.ID,
 		POCode:          po.POCode,
-		SupplierID:      &supplierID,
 		SupplierName:    po.SupplierName,
 		Status:          domain.PurchaseReturnStatusDraft,
 		Reason:          domain.PurchaseReturnReasonDefect,
@@ -149,7 +145,6 @@ func TestPurchaseReturnTruKhoDungMotLan(t *testing.T) {
 	over := &domain.PurchaseReturn{
 		PurchaseOrderID: &po.ID,
 		POCode:          po.POCode,
-		SupplierID:      &supplierID,
 		SupplierName:    po.SupplierName,
 		Status:          domain.PurchaseReturnStatusDraft,
 		Reason:          domain.PurchaseReturnReasonOther,

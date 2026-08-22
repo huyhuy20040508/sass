@@ -7429,12 +7429,6 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
-                        "type": "integer",
-                        "description": "Lọc theo nhà cung cấp",
-                        "name": "supplier_id",
-                        "in": "query"
-                    },
-                    {
                         "type": "string",
                         "description": "Từ ngày lập phiếu (YYYY-MM-DD)",
                         "name": "from_date",
@@ -8063,12 +8057,6 @@ const docTemplate = `{
                         "type": "string",
                         "description": "all|unpaid|partial|paid",
                         "name": "payment_status",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Lọc phiếu của một nhà cung cấp",
-                        "name": "supplier_id",
                         "in": "query"
                     },
                     {
@@ -8886,12 +8874,6 @@ const docTemplate = `{
                         "type": "string",
                         "description": "Mã đợt / mã phiếu đặt / nhà cung cấp / người nhận / ghi chú",
                         "name": "keyword",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Lọc theo nhà cung cấp",
-                        "name": "supplier_id",
                         "in": "query"
                     },
                     {
@@ -10242,311 +10224,6 @@ const docTemplate = `{
                                     }
                                 }
                             ]
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/suppliers": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Tìm theo tên / mã / SĐT / người liên hệ. Mỗi phần tử kèm ` + "`" + `purchase_count` + "`" + ` — số phiếu đặt hàng đang trỏ tới nhà cung cấp đó, dùng để cảnh báo trước khi xoá.\nKèm sẵn số liệu mua hàng để trang quản lý không phải gọi thêm: ` + "`" + `purchase_amount` + "`" + ` (tổng giá trị đã đặt), ` + "`" + `debt_amount` + "`" + ` (còn nợ), ` + "`" + `last_order_at` + "`" + ` (lần đặt gần nhất) — cả ba KHÔNG tính phiếu nháp và phiếu đã huỷ.\nĐặt ` + "`" + `active=true` + "`" + ` để chỉ lấy nhà cung cấp đang hợp tác (dropdown lập phiếu dùng tham số này).",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Admin - Suppliers"
-                ],
-                "summary": "Danh sách nhà cung cấp",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Tên / mã / SĐT / người liên hệ",
-                        "name": "keyword",
-                        "in": "query"
-                    },
-                    {
-                        "type": "boolean",
-                        "description": "true = chỉ nhà cung cấp đang hợp tác",
-                        "name": "active",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.Body"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "array",
-                                            "items": {
-                                                "$ref": "#/definitions/domain.Supplier"
-                                            }
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/response.Body"
-                        }
-                    }
-                }
-            },
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Bỏ trống ` + "`" + `code` + "`" + ` thì server tự sinh mã kế tiếp dạng NCC001. Mã trùng (kể cả với nhà cung cấp đã xoá) trả về 409 vì mã bị ràng buộc duy nhất.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Admin - Suppliers"
-                ],
-                "summary": "Thêm nhà cung cấp",
-                "parameters": [
-                    {
-                        "description": "Thông tin nhà cung cấp",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/dto.SupplierRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.Body"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/domain.Supplier"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/response.Body"
-                        }
-                    },
-                    "409": {
-                        "description": "Conflict",
-                        "schema": {
-                            "$ref": "#/definitions/response.Body"
-                        }
-                    },
-                    "422": {
-                        "description": "Unprocessable Entity",
-                        "schema": {
-                            "$ref": "#/definitions/response.Body"
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/suppliers/{id}": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Admin - Suppliers"
-                ],
-                "summary": "Chi tiết nhà cung cấp",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "ID nhà cung cấp",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.Body"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/domain.Supplier"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/response.Body"
-                        }
-                    }
-                }
-            },
-            "put": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Bỏ trống ` + "`" + `code` + "`" + ` = giữ nguyên mã cũ (mã đã in trên chứng từ giấy, không tự đổi).",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Admin - Suppliers"
-                ],
-                "summary": "Sửa nhà cung cấp",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "ID nhà cung cấp",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Thông tin nhà cung cấp",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/dto.SupplierRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.Body"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/domain.Supplier"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/response.Body"
-                        }
-                    },
-                    "409": {
-                        "description": "Conflict",
-                        "schema": {
-                            "$ref": "#/definitions/response.Body"
-                        }
-                    },
-                    "422": {
-                        "description": "Unprocessable Entity",
-                        "schema": {
-                            "$ref": "#/definitions/response.Body"
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Chỉ xoá được nhà cung cấp CHƯA có phiếu đặt hàng nào; còn phiếu thì trả 409 (nên tắt \"đang hợp tác\" thay vì xoá, để phiếu cũ giữ được đầu mối liên hệ).",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Admin - Suppliers"
-                ],
-                "summary": "Xoá nhà cung cấp",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "ID nhà cung cấp",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/response.Body"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/response.Body"
-                        }
-                    },
-                    "409": {
-                        "description": "Conflict",
-                        "schema": {
-                            "$ref": "#/definitions/response.Body"
                         }
                     }
                 }
@@ -17255,9 +16932,6 @@ const docTemplate = `{
                     "description": "ReceivedAt là lúc đợt nhận được ghi xong (mốc lịch sử của phiếu).",
                     "type": "string"
                 },
-                "supplier_id": {
-                    "type": "integer"
-                },
                 "supplier_name": {
                     "type": "string"
                 }
@@ -18374,9 +18048,6 @@ const docTemplate = `{
                 "status": {
                     "type": "string"
                 },
-                "supplier_id": {
-                    "type": "integer"
-                },
                 "supplier_name": {
                     "type": "string"
                 },
@@ -18989,61 +18660,6 @@ const docTemplate = `{
                 },
                 "shop_id": {
                     "type": "integer"
-                },
-                "updated_at": {
-                    "type": "string"
-                }
-            }
-        },
-        "domain.Supplier": {
-            "type": "object",
-            "properties": {
-                "address": {
-                    "type": "string"
-                },
-                "code": {
-                    "type": "string"
-                },
-                "contact_name": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "debt_amount": {
-                    "type": "number"
-                },
-                "email": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "is_active": {
-                    "type": "boolean"
-                },
-                "last_order_at": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "note": {
-                    "type": "string"
-                },
-                "phone": {
-                    "type": "string"
-                },
-                "purchase_amount": {
-                    "description": "Ba số dưới đây tổng hợp từ phiếu đặt hàng để trang \"Nhà cung cấp\" xếp hạng\nvà đối chiếu công nợ, cũng không có cột trong DB. Phiếu NHÁP và phiếu ĐÃ HUỶ\nbị loại khỏi cả ba: nháp chưa đặt thật, huỷ thì không còn nợ ai — cùng luật\nvới thống kê ở trang Đặt hàng nhập.",
-                    "type": "number"
-                },
-                "purchase_count": {
-                    "description": "PurchaseCount là số phiếu đặt hàng (chưa xoá) của nhà cung cấp này. Không có\ncột trong DB — repository tự đếm khi trả danh sách, để trang quản trị cảnh\nbáo được trước khi xoá.",
-                    "type": "integer"
-                },
-                "tax_code": {
-                    "type": "string"
                 },
                 "updated_at": {
                     "type": "string"
@@ -22878,7 +22494,7 @@ const docTemplate = `{
             "type": "object",
             "required": [
                 "items",
-                "supplier_id"
+                "supplier_name"
             ],
             "properties": {
                 "discount_amount": {
@@ -22914,8 +22530,9 @@ const docTemplate = `{
                         "ordered"
                     ]
                 },
-                "supplier_id": {
-                    "type": "integer"
+                "supplier_name": {
+                    "type": "string",
+                    "maxLength": 150
                 }
             }
         },
@@ -23098,7 +22715,7 @@ const docTemplate = `{
             "type": "object",
             "required": [
                 "items",
-                "supplier_id"
+                "supplier_name"
             ],
             "properties": {
                 "discount_amount": {
@@ -23125,8 +22742,9 @@ const docTemplate = `{
                     "type": "number",
                     "minimum": 0
                 },
-                "supplier_id": {
-                    "type": "integer"
+                "supplier_name": {
+                    "type": "string",
+                    "maxLength": 150
                 }
             }
         },
@@ -23790,50 +23408,6 @@ const docTemplate = `{
                     "maxLength": 191
                 },
                 "source": {
-                    "type": "string",
-                    "maxLength": 30
-                }
-            }
-        },
-        "dto.SupplierRequest": {
-            "type": "object",
-            "required": [
-                "name"
-            ],
-            "properties": {
-                "address": {
-                    "type": "string",
-                    "maxLength": 255
-                },
-                "code": {
-                    "type": "string",
-                    "maxLength": 30
-                },
-                "contact_name": {
-                    "type": "string",
-                    "maxLength": 150
-                },
-                "email": {
-                    "type": "string",
-                    "maxLength": 191
-                },
-                "is_active": {
-                    "description": "IsActive bỏ trống = true (nhà cung cấp mới mặc định đang hợp tác).",
-                    "type": "boolean"
-                },
-                "name": {
-                    "type": "string",
-                    "maxLength": 150
-                },
-                "note": {
-                    "type": "string",
-                    "maxLength": 500
-                },
-                "phone": {
-                    "type": "string",
-                    "maxLength": 20
-                },
-                "tax_code": {
                     "type": "string",
                     "maxLength": 30
                 }
@@ -25021,14 +24595,8 @@ const docTemplate = `{
                 "status": {
                     "type": "string"
                 },
-                "supplier": {
-                    "$ref": "#/definitions/domain.Supplier"
-                },
-                "supplier_id": {
-                    "type": "integer"
-                },
                 "supplier_name": {
-                    "description": "SupplierName là tên chụp lại lúc đặt — nhà cung cấp đổi tên hoặc bị xoá thì\nphiếu cũ vẫn đọc được đúng như lúc ký.",
+                    "description": "SupplierName là tên bên bán, gõ thẳng vào phiếu. Không còn danh mục nhà\ncung cấp nào để trỏ tới, nên đây là chỗ duy nhất ghi lại bên bán là ai.",
                     "type": "string"
                 },
                 "total_amount": {
@@ -25122,9 +24690,6 @@ const docTemplate = `{
                 },
                 "status": {
                     "type": "string"
-                },
-                "supplier_id": {
-                    "type": "integer"
                 },
                 "supplier_name": {
                     "type": "string"

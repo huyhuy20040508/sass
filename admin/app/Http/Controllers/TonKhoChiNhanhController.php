@@ -73,7 +73,6 @@ class TonKhoChiNhanhController extends Controller
         'manual' => 'Thủ công',
         'order' => 'Đơn hàng',
         'order_return' => 'Phiếu trả hàng',
-        'supplier' => 'Nhà cung cấp',
     ];
 
     /** Loại bút toán trong sổ kho — hộp thoại sổ kho dịch mã sang chữ bằng bảng này. */

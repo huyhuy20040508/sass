@@ -37,7 +37,6 @@ const (
 	LoaiThuocTinh    = "thuoc-tinh"
 	LoaiViTri        = "vi-tri"
 	LoaiChiNhanh     = "chi-nhanh"
-	LoaiNhaCungCap   = "nha-cung-cap"
 	LoaiNhanVien     = "nhan-vien"
 	LoaiDonHang      = "don-hang"
 	LoaiPhieuDatMua  = "phieu-dat-mua"
@@ -84,7 +83,6 @@ var DanhMucLoaiMa = []LoaiMa{
 	{Ma: LoaiThuocTinh, Ten: "Thuộc tính", DungChung: true, TienToGoiY: "TT"},
 	{Ma: LoaiDonViTinh, Ten: "Đơn vị tính", DungChung: true, TienToGoiY: "DV"},
 	{Ma: LoaiViTri, Ten: "Vị trí", DungChung: true, TienToGoiY: "VT"},
-	{Ma: LoaiNhaCungCap, Ten: "Nhà cung cấp", DungChung: true, BatTatDuoc: true, TienToGoiY: "NCC"},
 	// Mã chi nhánh chỉ nhận chữ THƯỜNG (nó đi vào đường dẫn), nên tiền tố gợi ý
 	// viết thường và mã sinh ra được hạ chữ trước khi ghi — xem chiNhanhService.
 	{Ma: LoaiChiNhanh, Ten: "Chi nhánh", DungChung: true, TienToGoiY: "cn"},

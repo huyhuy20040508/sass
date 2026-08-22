@@ -25,7 +25,6 @@
 
         $firstRank = ($meta['page'] - 1) * $meta['page_size'];
         $hasFilter = $filters['keyword'] !== ''
-            || $filters['supplier_id'] !== ''
             || $filters['from_date'] !== ''
             || $filters['to_date'] !== ''
             || $filters['sort'] !== 'newest';
@@ -67,15 +66,6 @@
                         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
                     </button>
                 </div>
-
-                <select name="supplier_id" class="rc-select" title="Lọc theo nhà cung cấp">
-                    <option value="">Tất cả nhà cung cấp</option>
-                    @foreach($suppliers as $sup)
-                        <option value="{{ $sup['id'] }}" {{ (string) $filters['supplier_id'] === (string) $sup['id'] ? 'selected' : '' }}>
-                            {{ $sup['name'] }}
-                        </option>
-                    @endforeach
-                </select>
 
                 {{-- Khoảng ngày nhận hàng — dùng component chung, KHÔNG tự dựng ô ngày riêng. --}}
                 @include('partials.date-range', [

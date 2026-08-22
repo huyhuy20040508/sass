@@ -314,7 +314,6 @@ func main() {
 	returnRepo := repository.NewOrderReturnRepository(db)
 	notifRepo := repository.NewNotificationRepository(db)
 	inventoryRepo := repository.NewInventoryRepository(db)
-	supplierRepo := repository.NewSupplierRepository(db)
 	purchaseRepo := repository.NewPurchaseOrderRepository(db)
 	receiptRepo := repository.NewGoodsReceiptRepository(db)
 	pReturnRepo := repository.NewPurchaseReturnRepository(db)
@@ -430,12 +429,9 @@ func main() {
 	orderSvc := service.NewOrderService(orderRepo, returnRepo, mailSender, cfg.Mail, notifSvc, settingSvc, paymentSvc, promotionSvc, voucherSvc, etaxSvc)
 	returnSvc := service.NewOrderReturnService(returnRepo, notifSvc, settingSvc)
 	inventorySvc := service.NewInventoryService(inventoryRepo)
-	supplierSvc := service.NewSupplierService(supplierRepo, quyTacMaRepo)
 	// Yêu cầu khách gửi từ storefront (Liên hệ / Thu mua) + danh sách nhận tin.
 	contactSvc := service.NewContactService(contactRepo, newsletterRepo)
-	// purchaseSvc cần supplierRepo để chụp tên nhà cung cấp vào phiếu ngay lúc lập:
-	// nhà cung cấp đổi tên sau đó thì phiếu cũ vẫn đọc đúng như lúc ký.
-	purchaseSvc := service.NewPurchaseOrderService(purchaseRepo, supplierRepo)
+	purchaseSvc := service.NewPurchaseOrderService(purchaseRepo)
 	// Trang Nhập hàng chỉ ĐỌC lại các đợt hàng đã về; việc cộng tồn kho vẫn nằm
 	// duy nhất ở purchaseSvc.Receive.
 	receiptSvc := service.NewGoodsReceiptService(receiptRepo)
@@ -466,7 +462,6 @@ func main() {
 		Return:    handler.NewOrderReturnHandler(returnSvc),
 		Notif:     handler.NewNotificationHandler(notifSvc, hub),
 		Stock:     handler.NewInventoryHandler(inventorySvc),
-		Supplier:  handler.NewSupplierHandler(supplierSvc),
 		Purchase:  handler.NewPurchaseOrderHandler(purchaseSvc),
 		Receipt:   handler.NewGoodsReceiptHandler(receiptSvc),
 		PReturn:   handler.NewPurchaseReturnHandler(pReturnSvc),

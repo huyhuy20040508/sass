@@ -62,7 +62,6 @@ class ReceiptController extends Controller
 
         $view = view('receipts.index', compact('receipts', 'filters', 'meta'))
             ->with('stats', $this->stats())
-            ->with('suppliers', $this->supplierList())
             ->with('pending', $this->pendingOrders());
 
         return $error ? $view->with('error', $error) : $view;
@@ -118,12 +117,10 @@ class ReceiptController extends Controller
     {
         $sort = (string) $request->query('sort', 'newest');
         $psize = (int) $request->query('page_size', 20);
-        $supplier = (int) $request->query('supplier_id', 0);
         $date = fn ($v) => preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $v) ? (string) $v : '';
 
         return [
             'keyword' => trim((string) $request->query('keyword', '')),
-            'supplier_id' => $supplier > 0 ? $supplier : '',
             'from_date' => $date($request->query('from_date')),
             'to_date' => $date($request->query('to_date')),
             'sort' => isset(self::SORTS[$sort]) ? $sort : 'newest',
@@ -207,21 +204,6 @@ class ReceiptController extends Controller
 
             return [];
         }
-    }
-
-    /** Danh sách nhà cung cấp cho ô lọc. */
-    protected function supplierList(): array
-    {
-        try {
-            $res = $this->api->suppliers();
-            if ($res->successful()) {
-                return $res->json('data') ?? [];
-            }
-        } catch (\Throwable $e) {
-            Log::info('Load suppliers failed', ['msg' => $e->getMessage()]);
-        }
-
-        return [];
     }
 
     /** Đọc hết các trang theo bộ lọc để xuất file. */

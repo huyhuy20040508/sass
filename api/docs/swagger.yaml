@@ -468,8 +468,6 @@ definitions:
       received_at:
         description: ReceivedAt là lúc đợt nhận được ghi xong (mốc lịch sử của phiếu).
         type: string
-      supplier_id:
-        type: integer
       supplier_name:
         type: string
     type: object
@@ -1311,8 +1309,6 @@ definitions:
         type: integer
       status:
         type: string
-      supplier_id:
-        type: integer
       supplier_name:
         type: string
       updated_at:
@@ -1754,50 +1750,6 @@ definitions:
         type: integer
       shop_id:
         type: integer
-      updated_at:
-        type: string
-    type: object
-  domain.Supplier:
-    properties:
-      address:
-        type: string
-      code:
-        type: string
-      contact_name:
-        type: string
-      created_at:
-        type: string
-      debt_amount:
-        type: number
-      email:
-        type: string
-      id:
-        type: integer
-      is_active:
-        type: boolean
-      last_order_at:
-        type: string
-      name:
-        type: string
-      note:
-        type: string
-      phone:
-        type: string
-      purchase_amount:
-        description: |-
-          Ba số dưới đây tổng hợp từ phiếu đặt hàng để trang "Nhà cung cấp" xếp hạng
-          và đối chiếu công nợ, cũng không có cột trong DB. Phiếu NHÁP và phiếu ĐÃ HUỶ
-          bị loại khỏi cả ba: nháp chưa đặt thật, huỷ thì không còn nợ ai — cùng luật
-          với thống kê ở trang Đặt hàng nhập.
-        type: number
-      purchase_count:
-        description: |-
-          PurchaseCount là số phiếu đặt hàng (chưa xoá) của nhà cung cấp này. Không có
-          cột trong DB — repository tự đếm khi trả danh sách, để trang quản trị cảnh
-          báo được trước khi xoá.
-        type: integer
-      tax_code:
-        type: string
       updated_at:
         type: string
     type: object
@@ -5013,11 +4965,12 @@ definitions:
         - draft
         - ordered
         type: string
-      supplier_id:
-        type: integer
+      supplier_name:
+        maxLength: 150
+        type: string
     required:
     - items
-    - supplier_id
+    - supplier_name
     type: object
   dto.PurchaseItemRequest:
     properties:
@@ -5165,11 +5118,12 @@ definitions:
       shipping_fee:
         minimum: 0
         type: number
-      supplier_id:
-        type: integer
+      supplier_name:
+        maxLength: 150
+        type: string
     required:
     - items
-    - supplier_id
+    - supplier_name
     type: object
   dto.QuanTriItem:
     properties:
@@ -5698,39 +5652,6 @@ definitions:
         type: string
     required:
     - email
-    type: object
-  dto.SupplierRequest:
-    properties:
-      address:
-        maxLength: 255
-        type: string
-      code:
-        maxLength: 30
-        type: string
-      contact_name:
-        maxLength: 150
-        type: string
-      email:
-        maxLength: 191
-        type: string
-      is_active:
-        description: IsActive bỏ trống = true (nhà cung cấp mới mặc định đang hợp
-          tác).
-        type: boolean
-      name:
-        maxLength: 150
-        type: string
-      note:
-        maxLength: 500
-        type: string
-      phone:
-        maxLength: 20
-        type: string
-      tax_code:
-        maxLength: 30
-        type: string
-    required:
-    - name
     type: object
   dto.TaoChinhThucRequest:
     properties:
@@ -6704,14 +6625,10 @@ definitions:
         type: integer
       status:
         type: string
-      supplier:
-        $ref: '#/definitions/domain.Supplier'
-      supplier_id:
-        type: integer
       supplier_name:
         description: |-
-          SupplierName là tên chụp lại lúc đặt — nhà cung cấp đổi tên hoặc bị xoá thì
-          phiếu cũ vẫn đọc được đúng như lúc ký.
+          SupplierName là tên bên bán, gõ thẳng vào phiếu. Không còn danh mục nhà
+          cung cấp nào để trỏ tới, nên đây là chỗ duy nhất ghi lại bên bán là ai.
         type: string
       total_amount:
         type: number
@@ -6780,8 +6697,6 @@ definitions:
         type: integer
       status:
         type: string
-      supplier_id:
-        type: integer
       supplier_name:
         type: string
       updated_at:
@@ -11619,10 +11534,6 @@ paths:
         in: query
         name: reason
         type: string
-      - description: Lọc theo nhà cung cấp
-        in: query
-        name: supplier_id
-        type: integer
       - description: Từ ngày lập phiếu (YYYY-MM-DD)
         in: query
         name: from_date
@@ -12025,10 +11936,6 @@ paths:
         in: query
         name: payment_status
         type: string
-      - description: Lọc phiếu của một nhà cung cấp
-        in: query
-        name: supplier_id
-        type: integer
       - description: Từ ngày (YYYY-MM-DD)
         in: query
         name: from_date
@@ -12552,10 +12459,6 @@ paths:
         in: query
         name: keyword
         type: string
-      - description: Lọc theo nhà cung cấp
-        in: query
-        name: supplier_id
-        type: integer
       - description: Từ ngày nhận (YYYY-MM-DD)
         in: query
         name: from_date
@@ -13426,196 +13329,6 @@ paths:
       summary: Ghi tay một khoản thu/chi tiền mặt
       tags:
       - Admin - Ca làm việc
-  /admin/suppliers:
-    get:
-      consumes:
-      - application/json
-      description: |-
-        Tìm theo tên / mã / SĐT / người liên hệ. Mỗi phần tử kèm `purchase_count` — số phiếu đặt hàng đang trỏ tới nhà cung cấp đó, dùng để cảnh báo trước khi xoá.
-        Kèm sẵn số liệu mua hàng để trang quản lý không phải gọi thêm: `purchase_amount` (tổng giá trị đã đặt), `debt_amount` (còn nợ), `last_order_at` (lần đặt gần nhất) — cả ba KHÔNG tính phiếu nháp và phiếu đã huỷ.
-        Đặt `active=true` để chỉ lấy nhà cung cấp đang hợp tác (dropdown lập phiếu dùng tham số này).
-      parameters:
-      - description: Tên / mã / SĐT / người liên hệ
-        in: query
-        name: keyword
-        type: string
-      - description: true = chỉ nhà cung cấp đang hợp tác
-        in: query
-        name: active
-        type: boolean
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.Body'
-            - properties:
-                data:
-                  items:
-                    $ref: '#/definitions/domain.Supplier'
-                  type: array
-              type: object
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.Body'
-      security:
-      - BearerAuth: []
-      summary: Danh sách nhà cung cấp
-      tags:
-      - Admin - Suppliers
-    post:
-      consumes:
-      - application/json
-      description: Bỏ trống `code` thì server tự sinh mã kế tiếp dạng NCC001. Mã trùng
-        (kể cả với nhà cung cấp đã xoá) trả về 409 vì mã bị ràng buộc duy nhất.
-      parameters:
-      - description: Thông tin nhà cung cấp
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/dto.SupplierRequest'
-      produces:
-      - application/json
-      responses:
-        "201":
-          description: Created
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.Body'
-            - properties:
-                data:
-                  $ref: '#/definitions/domain.Supplier'
-              type: object
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/response.Body'
-        "409":
-          description: Conflict
-          schema:
-            $ref: '#/definitions/response.Body'
-        "422":
-          description: Unprocessable Entity
-          schema:
-            $ref: '#/definitions/response.Body'
-      security:
-      - BearerAuth: []
-      summary: Thêm nhà cung cấp
-      tags:
-      - Admin - Suppliers
-  /admin/suppliers/{id}:
-    delete:
-      consumes:
-      - application/json
-      description: Chỉ xoá được nhà cung cấp CHƯA có phiếu đặt hàng nào; còn phiếu
-        thì trả 409 (nên tắt "đang hợp tác" thay vì xoá, để phiếu cũ giữ được đầu
-        mối liên hệ).
-      parameters:
-      - description: ID nhà cung cấp
-        in: path
-        name: id
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/response.Body'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/response.Body'
-        "409":
-          description: Conflict
-          schema:
-            $ref: '#/definitions/response.Body'
-      security:
-      - BearerAuth: []
-      summary: Xoá nhà cung cấp
-      tags:
-      - Admin - Suppliers
-    get:
-      consumes:
-      - application/json
-      parameters:
-      - description: ID nhà cung cấp
-        in: path
-        name: id
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.Body'
-            - properties:
-                data:
-                  $ref: '#/definitions/domain.Supplier'
-              type: object
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/response.Body'
-      security:
-      - BearerAuth: []
-      summary: Chi tiết nhà cung cấp
-      tags:
-      - Admin - Suppliers
-    put:
-      consumes:
-      - application/json
-      description: Bỏ trống `code` = giữ nguyên mã cũ (mã đã in trên chứng từ giấy,
-        không tự đổi).
-      parameters:
-      - description: ID nhà cung cấp
-        in: path
-        name: id
-        required: true
-        type: integer
-      - description: Thông tin nhà cung cấp
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/dto.SupplierRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.Body'
-            - properties:
-                data:
-                  $ref: '#/definitions/domain.Supplier'
-              type: object
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/response.Body'
-        "409":
-          description: Conflict
-          schema:
-            $ref: '#/definitions/response.Body'
-        "422":
-          description: Unprocessable Entity
-          schema:
-            $ref: '#/definitions/response.Body'
-      security:
-      - BearerAuth: []
-      summary: Sửa nhà cung cấp
-      tags:
-      - Admin - Suppliers
   /admin/the-hang-hoa:
     get:
       description: Mọi thẻ cửa hàng đang dùng ("Bán chạy nhất", "Món mới"…), sắp theo

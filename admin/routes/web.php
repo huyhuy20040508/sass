@@ -26,7 +26,6 @@ use App\Http\Controllers\ReceiptController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\ReturnController;
 use App\Http\Controllers\SettingController;
-use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\ThongSoChungController;
 use App\Http\Controllers\ThueController;
 use App\Http\Controllers\ThuNganController;
@@ -320,10 +319,6 @@ Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:quan_ly'])->prefix('ad
         Route::get('/purchases/export', [PurchaseController::class, 'export'])->name('purchases.export');
         // Tra cứu cho modal lập phiếu + khối nhà cung cấp — đặt trước route {id} để không bị nuốt.
         Route::get('/purchases/new/variants', [PurchaseController::class, 'searchVariants'])->name('purchases.searchVariants');
-        Route::get('/purchases/suppliers', [PurchaseController::class, 'suppliers'])->name('purchases.suppliers');
-        Route::post('/purchases/suppliers', [PurchaseController::class, 'storeSupplier'])->name('purchases.storeSupplier');
-        Route::put('/purchases/suppliers/{id}', [PurchaseController::class, 'updateSupplier'])->whereNumber('id')->name('purchases.updateSupplier');
-        Route::delete('/purchases/suppliers/{id}', [PurchaseController::class, 'destroySupplier'])->whereNumber('id')->name('purchases.destroySupplier');
         Route::post('/purchases/bulk-status', [PurchaseController::class, 'bulkStatus'])->name('purchases.bulkStatus');
         Route::post('/purchases', [PurchaseController::class, 'store'])->name('purchases.store');
         Route::get('/purchases/{id}/detail', [PurchaseController::class, 'detail'])->whereNumber('id')->name('purchases.detail');
@@ -375,16 +370,6 @@ Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:quan_ly'])->prefix('ad
         Route::get('/receipts/{code}/detail', [ReceiptController::class, 'detail'])
             ->where('code', '[A-Za-z0-9\-]+')->name('receipts.detail');
 
-        // Nhà cung cấp — danh mục đầu mối mua vào của trang Đặt hàng nhập.
-        Route::get('/suppliers', [SupplierController::class, 'index'])->name('suppliers.index');
-        Route::get('/suppliers/export', [SupplierController::class, 'export'])->name('suppliers.export');
-        // Hai route hàng loạt đặt TRƯỚC route {id} để không bị nuốt.
-        Route::post('/suppliers/bulk-destroy', [SupplierController::class, 'bulkDestroy'])->name('suppliers.bulkDestroy');
-        Route::post('/suppliers/bulk-status', [SupplierController::class, 'bulkStatus'])->name('suppliers.bulkStatus');
-        Route::post('/suppliers', [SupplierController::class, 'store'])->name('suppliers.store');
-        Route::put('/suppliers/{id}/toggle-status', [SupplierController::class, 'toggleStatus'])->whereNumber('id')->name('suppliers.toggleStatus');
-        Route::put('/suppliers/{id}', [SupplierController::class, 'update'])->whereNumber('id')->name('suppliers.update');
-        Route::delete('/suppliers/{id}', [SupplierController::class, 'destroy'])->whereNumber('id')->name('suppliers.destroy');
     });
 
     // --- Quản lý người & cấu hình: nhân viên (staff) KHÔNG vào ---

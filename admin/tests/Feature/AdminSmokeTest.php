@@ -355,7 +355,7 @@ class AdminSmokeTest extends TestCase
             '/admin/contacts', '/admin/newsletter',
             // Trả hàng, kho và mua vào.
             '/admin/returns', '/admin/inventory', '/admin/purchases',
-            '/admin/suppliers', '/admin/receipts', '/admin/purchase-returns',
+            '/admin/receipts', '/admin/purchase-returns',
         ];
 
         foreach ($cam as $uri) {

@@ -29,7 +29,6 @@ func NewPurchaseOrderHandler(svc service.PurchaseOrderService) *PurchaseOrderHan
 // @Param			keyword			query		string	false	"Mã phiếu / tên nhà cung cấp / ghi chú"
 // @Param			status			query		string	false	"all|draft|ordered|partial|received|cancelled — cho phép nhiều giá trị ngăn cách bởi dấu phẩy"
 // @Param			payment_status	query		string	false	"all|unpaid|partial|paid"
-// @Param			supplier_id		query		int		false	"Lọc phiếu của một nhà cung cấp"
 // @Param			from_date		query		string	false	"Từ ngày (YYYY-MM-DD)"
 // @Param			to_date			query		string	false	"Đến ngày (YYYY-MM-DD)"
 // @Param			sort			query		string	false	"newest|oldest|total_desc|total_asc|expected_asc"
@@ -59,10 +58,6 @@ func (h *PurchaseOrderHandler) List(c *gin.Context) {
 		Sort:          c.Query("sort"),
 		Page:          page,
 		PageSize:      pageSize,
-	}
-	if id, err := strconv.ParseUint(c.Query("supplier_id"), 10, 64); err == nil && id > 0 {
-		v := uint(id)
-		filter.SupplierID = &v
 	}
 
 	list, total, err := h.svc.List(c.Request.Context(), filter)
