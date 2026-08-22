@@ -1013,7 +1013,7 @@ class ApiClient
     /** Bật/tắt hợp tác — chỉ gửi đúng một trường, không đụng các cột khác. */
     public function trangThaiNhaCungCap(int $id, int $status): Response
     {
-        return $this->put("/admin/nha-cung-cap/{$id}/trang-thai", ['status' => $status]);
+        return $this->put("/admin/nha-cung-cap/{$id}/trang-thai", ['is_active' => $status === 1]);
     }
 
     public function xoaNhaCungCap(int $id): Response

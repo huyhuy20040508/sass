@@ -8,20 +8,15 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Nhà cung cấp — danh mục đầu mối mua vào, dựng lại theo màn "Quản lý nhà cung
- * cấp" của bản order v2 (khu Kho).
+ * Nhà cung cấp — danh mục đầu mối mua vào, dựng theo màn cùng tên của order v2.
  *
- * MỚI CÓ GIAO DIỆN. Bảng dữ liệu và các đường API đã bị gỡ ở migration 0038, nên
- * trang gọi /admin/nha-cung-cap không thấy thì hiện bảng rỗng kèm một dòng báo.
- * Tên ô của form đặt đúng tên trường bên v2 (`3rd_suppliers`) để lúc dựng lại
- * backend không phải dịch tên ở giữa.
- *
- * Ba cột tiền — Tổng mua / Đã trả / Còn nợ — do API tổng hợp sẵn từ phiếu mua và
- * sổ nợ; trang chỉ hiển thị, không tự cộng.
+ * Bảng dữ liệu và đường API đã bị gỡ ở migration 0038: trang gọi
+ * /admin/nha-cung-cap không thấy thì hiện bảng rỗng kèm một dòng báo. Tổng mua /
+ * Đã trả / Còn nợ do API tổng hợp sẵn, trang chỉ hiển thị.
  */
 class NhaCungCapController extends Controller
 {
-    /** Nhãn ngắn cho thanh điều hướng; tiêu đề trang là TITLE_PAGE. */
+    /** Nhãn ngắn cho thanh điều hướng. */
     public const TITLE = 'Nhà cung cấp';
 
     public const TITLE_PAGE = 'Danh sách nhà cung cấp';
@@ -38,7 +33,6 @@ class NhaCungCapController extends Controller
         self::NGUNG_HOP_TAC => 'Ngừng hợp tác',
     ];
 
-    /** Lọc phụ hay dùng nhất trên trang này: đi soát tiền còn nợ. */
     public const CONG_NO = [
         'con_no' => 'Còn nợ',
         'het_no' => 'Không nợ',
@@ -57,7 +51,7 @@ class NhaCungCapController extends Controller
 
     public const MUC_SO_DONG = [10, 20, 30, 40, 50];
 
-    /** Chín cột của file nhập, đúng thứ tự bản v2 — đổi thứ tự là vỡ lượt nhập. */
+    /** Chín cột của file nhập — đổi thứ tự là vỡ lượt nhập. */
     public const COT_NHAP = [
         'STT', 'Mã nhà cung cấp', 'Tên nhà cung cấp', 'Mã số thuế', 'Điện thoại',
         'Email', 'Địa chỉ', 'Địa chỉ 2', 'Trạng thái',
@@ -65,10 +59,7 @@ class NhaCungCapController extends Controller
 
     public const IMPORT_MAX_ROWS = 2000;
 
-    /**
-     * Các cột bày được ngoài bảng, đúng bộ của v2. Người dùng tự tắt bớt và lựa
-     * chọn nằm ở localStorage của trình duyệt (bản v2 lưu vào DB theo user).
-     */
+    /** Các cột tắt/bật được ngoài bảng; lựa chọn lưu ở localStorage. */
     public const COT_BANG = [
         'code' => 'Mã NCC',
         'name' => 'Tên nhà cung cấp',
@@ -89,10 +80,7 @@ class NhaCungCapController extends Controller
     // Danh sách
     // ---------------------------------------------------------------------
 
-    /**
-     * Danh mục nhà cung cấp của một cửa hàng đếm bằng hàng chục, nên API trả cả
-     * danh sách một lượt còn lọc / sắp / cắt trang làm ngay tại đây.
-     */
+    /** API trả cả danh sách một lượt; lọc / sắp / cắt trang làm ngay tại đây. */
     public function index(Request $request)
     {
         $filters = $this->filters($request);
@@ -111,6 +99,7 @@ class NhaCungCapController extends Controller
             $error = 'Chưa nối được API nhà cung cấp — trang đang hiện bảng rỗng.';
         }
 
+        $all = array_map([$this, 'veKieuXem'], $all);
         $loc = $this->locSapXep($all, $filters);
         $tong = count($loc);
         $soTrang = max(1, (int) ceil($tong / $filters['page_size']));
@@ -131,7 +120,7 @@ class NhaCungCapController extends Controller
         return $error ? $view->with('error', $error) : $view;
     }
 
-    /** Xuất đúng phần đang lọc, 12 cột như file Excel của bản v2. */
+    /** Xuất đúng phần đang lọc, 12 cột như bản v2. */
     public function export(Request $request)
     {
         $filters = $this->filters($request);
@@ -145,7 +134,7 @@ class NhaCungCapController extends Controller
             return back()->with('error', 'Không kết nối được API để xuất tệp.');
         }
 
-        $list = $this->locSapXep($all, $filters);
+        $list = $this->locSapXep(array_map([$this, 'veKieuXem'], $all), $filters);
         $ten = 'nha-cung-cap-'.date('Ymd-His').'.csv';
 
         return response()->streamDownload(function () use ($list) {
@@ -176,10 +165,7 @@ class NhaCungCapController extends Controller
         }, $ten, ['Content-Type' => 'text/csv; charset=UTF-8']);
     }
 
-    /**
-     * File mẫu để nhập danh sách — ĐÚNG 9 cột theo thứ tự bản v2, vì lượt nhập
-     * đọc theo vị trí cột khi tiêu đề không khớp tên nào đã biết.
-     */
+    /** File mẫu — giữ đúng thứ tự cột, vì lượt nhập có thể đọc theo vị trí. */
     public function mauNhap()
     {
         return response()->streamDownload(function () {
@@ -194,11 +180,7 @@ class NhaCungCapController extends Controller
         }, 'mau-nha-cung-cap.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
     }
 
-    /**
-     * Nhập danh sách từ file CSV. Soát TOÀN BỘ file trước rồi mới ghi: một dòng
-     * sai là dừng cả lượt và báo theo số dòng (đúng cách bản v2 làm), vì nhập
-     * nửa vời để lại một danh mục không ai biết đã vào tới đâu.
-     */
+    /** Nhập CSV — soát cả file trước, một dòng sai là dừng cả lượt. */
     public function import(Request $request)
     {
         $request->validate([
@@ -247,7 +229,7 @@ class NhaCungCapController extends Controller
                 'email' => $lay('email'),
                 'address' => $lay('address'),
                 'address_line2' => $lay('address_line2'),
-                'status' => $lay('status') === '0' ? self::NGUNG_HOP_TAC : self::DANG_HOP_TAC,
+                'is_active' => $lay('status') !== '0',
             ];
 
             if ($row['name'] === '' && $row['address'] === '' && $row['code'] === '') {
@@ -262,8 +244,7 @@ class NhaCungCapController extends Controller
             if ($row['code'] !== '' && ! preg_match('/^[A-Za-z0-9]+$/', $row['code'])) {
                 $loi[] = 'Dòng '.$dong.': mã "'.$row['code'].'" chỉ được gồm chữ và số.';
             }
-            // Trùng mã ngay trong file thì API chỉ báo ở dòng thứ hai, không nói
-            // được nó đụng dòng nào — bắt tại đây để câu lỗi chỉ đúng hai chỗ.
+            // Bắt trùng mã tại đây để câu lỗi chỉ ra đúng hai dòng.
             if ($row['code'] !== '' && isset($daThayMa[$row['code']])) {
                 $loi[] = 'Dòng '.$dong.': trùng mã "'.$row['code'].'" với dòng '.$daThayMa[$row['code']].'.';
             }
@@ -369,7 +350,7 @@ class NhaCungCapController extends Controller
         );
     }
 
-    /** Xoá nhiều — bên nào còn phiếu mua thì API từ chối, đếm riêng để báo lại. */
+    /** Xoá nhiều — bên còn phiếu mua thì API từ chối, đếm riêng để báo lại. */
     public function bulkDestroy(Request $request)
     {
         $ids = $this->idsFrom($request);
@@ -386,7 +367,7 @@ class NhaCungCapController extends Controller
         );
     }
 
-    /** Lối thoát cho bên còn phiếu nên không xoá được: cho ngừng hợp tác hàng loạt. */
+    /** Lối thoát cho bên không xoá được: cho ngừng hợp tác hàng loạt. */
     public function bulkStatus(Request $request)
     {
         $status = (int) $request->validate([
@@ -407,7 +388,7 @@ class NhaCungCapController extends Controller
         );
     }
 
-    /** Ảnh tải lên ngay lúc chọn, form chỉ mang theo đường dẫn trả về. */
+    /** Ảnh tải lên ngay lúc chọn, form chỉ mang theo đường dẫn. */
     public function uploadAnh(Request $request)
     {
         $request->validate(['anh' => ImageStore::rules()], ImageStore::messages());
@@ -528,14 +509,16 @@ class NhaCungCapController extends Controller
             'email.email' => 'Email không đúng định dạng.',
         ]);
 
-        $data['status'] = (int) $data['status'];
+        // API nói `is_active` như mọi danh mục khác; form giữ tên `status` của v2.
+        $data['is_active'] = (int) $data['status'] === self::DANG_HOP_TAC;
+        unset($data['status']);
 
         return $data;
     }
 
     /**
-     * Dò vị trí từng cột trong dòng tiêu đề. Nhận cả tên tiếng Việt của file mẫu
-     * lẫn tên không dấu; tiêu đề lạ mà đủ 9 cột thì đọc theo VỊ TRÍ như v2.
+     * Dò vị trí cột theo tiêu đề (có dấu hoặc không); tiêu đề lạ mà đủ 9 cột thì
+     * đọc theo vị trí.
      *
      * @return array<string,int>|null null khi thiếu cột bắt buộc
      */
@@ -564,7 +547,7 @@ class NhaCungCapController extends Controller
             }
         }
 
-        // Tiêu đề không khớp tên nào nhưng đủ 9 cột: đọc theo vị trí của file mẫu.
+        // Tiêu đề lạ nhưng đủ 9 cột: đọc theo vị trí của file mẫu.
         if (! isset($viTri['name'], $viTri['address']) && count($header) >= count(self::COT_NHAP)) {
             return ['code' => 1, 'name' => 2, 'tax_code' => 3, 'phone' => 4,
                 'email' => 5, 'address' => 6, 'address_line2' => 7, 'status' => 8];
@@ -586,6 +569,18 @@ class NhaCungCapController extends Controller
         }
 
         return $s;
+    }
+
+    /**
+     * Đổi tên trường của API sang tên màn hình đang dùng (giữ nguyên tên của v2).
+     */
+    protected function veKieuXem(array $ncc): array
+    {
+        $ncc['status'] = ($ncc['is_active'] ?? true) ? self::DANG_HOP_TAC : self::NGUNG_HOP_TAC;
+        $ncc['paid'] = $ncc['paid_amount'] ?? 0;
+        $ncc['debt'] = $ncc['debt_amount'] ?? 0;
+
+        return $ncc;
     }
 
     /** @return int[] */
@@ -644,7 +639,7 @@ class NhaCungCapController extends Controller
         return back()->withInput()->with('error', $res->json('message') ?: 'Thao tác không thành công.');
     }
 
-    /** Về đúng URL cũ (giữ bộ lọc, số trang) nếu form có gửi kèm. */
+    /** Về đúng URL cũ nếu form có gửi kèm. */
     protected function veDanhSach(Request $request)
     {
         $ve = trim((string) $request->input('return', ''));

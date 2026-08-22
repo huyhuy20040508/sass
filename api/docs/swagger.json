@@ -3971,6 +3971,360 @@
                 }
             }
         },
+        "/admin/nha-cung-cap": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Tìm theo tên, mã, tên viết tắt, SĐT hoặc MST. Đặt `active=true` để chỉ lấy bên đang hợp tác — ô chọn lúc lập phiếu dùng tham số này.\nMỗi dòng kèm số phiếu đã đặt và ba số tiền tổng hợp từ phiếu đặt hàng nhập (bỏ phiếu nháp và phiếu đã huỷ).\nCố ý KHÔNG phân trang: danh mục của một cửa hàng chỉ vài chục dòng, trang quản trị tự cắt trang.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Nhà cung cấp"
+                ],
+                "summary": "Danh sách nhà cung cấp",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Tên, mã, tên viết tắt, SĐT hoặc MST",
+                        "name": "keyword",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "true = chỉ bên đang hợp tác",
+                        "name": "active",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/domain.NhaCungCap"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Mã tự viết hoa và phải khác mọi mã đã có TRONG CỬA HÀNG NÀY, kể cả mã của bên đã xoá. Bỏ trống mã thì server tự đặt.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Nhà cung cấp"
+                ],
+                "summary": "Thêm nhà cung cấp",
+                "parameters": [
+                    {
+                        "description": "Thông tin nhà cung cấp",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.NhaCungCapRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/domain.NhaCungCap"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/nha-cung-cap/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Nhà cung cấp"
+                ],
+                "summary": "Chi tiết một nhà cung cấp",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID nhà cung cấp",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/domain.NhaCungCap"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Bỏ trống mã = giữ nguyên mã cũ; mã đã in trên chứng từ nên không tự đổi.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Nhà cung cấp"
+                ],
+                "summary": "Sửa nhà cung cấp",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID nhà cung cấp",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Thông tin nhà cung cấp",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.NhaCungCapRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/domain.NhaCungCap"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Xoá mềm, và bị chặn khi còn phiếu đặt hàng nhập trỏ tới — phiếu cũ sẽ mất đầu mối liên hệ. Muốn dừng nhập hàng thì tắt hợp tác.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Nhà cung cấp"
+                ],
+                "summary": "Xoá nhà cung cấp",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID nhà cung cấp",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/nha-cung-cap/{id}/trang-thai": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Tắt = bên này thôi bày ở ô chọn lúc lập phiếu. Dòng vẫn còn nên phiếu cũ vẫn tra ra được tên và số máy.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Nhà cung cấp"
+                ],
+                "summary": "Bật/tắt hợp tác",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID nhà cung cấp",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Trạng thái",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.TrangThaiNhaCungCapRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/domain.NhaCungCap"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/nhan-su": {
             "get": {
                 "security": [
@@ -17294,6 +17648,77 @@
                 }
             }
         },
+        "domain.NhaCungCap": {
+            "type": "object",
+            "properties": {
+                "address": {
+                    "type": "string"
+                },
+                "address_line2": {
+                    "type": "string"
+                },
+                "code": {
+                    "description": "Code luôn viết hoa: NCC001 do phần mềm đặt, hoặc do người dùng tự gõ.",
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "debt_amount": {
+                    "type": "number"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "image": {
+                    "type": "string"
+                },
+                "is_active": {
+                    "description": "IsActive tắt = thôi hợp tác: bên này biến khỏi ô chọn lúc lập phiếu, nhưng\ndòng vẫn còn để phiếu cũ tra ra được tên và số máy.",
+                    "type": "boolean"
+                },
+                "last_order_at": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "note": {
+                    "type": "string"
+                },
+                "paid_amount": {
+                    "type": "number"
+                },
+                "phone": {
+                    "type": "string"
+                },
+                "purchase_count": {
+                    "description": "Năm số dưới đây tổng hợp từ phiếu đặt hàng nhập, không có cột trong DB.\nPurchaseCount đếm MỌI phiếu vì nó dùng để chặn xoá; bốn số còn lại loại\nphiếu nháp và phiếu đã huỷ — nháp chưa đặt thật, huỷ thì không còn nợ ai.",
+                    "type": "integer"
+                },
+                "representative_name": {
+                    "type": "string"
+                },
+                "representative_phone": {
+                    "type": "string"
+                },
+                "short_name": {
+                    "type": "string"
+                },
+                "tax_code": {
+                    "type": "string"
+                },
+                "total_purchases": {
+                    "type": "number"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
         "domain.NhomMucQuyen": {
             "type": "object",
             "properties": {
@@ -21194,6 +21619,67 @@
                 }
             }
         },
+        "dto.NhaCungCapRequest": {
+            "type": "object",
+            "required": [
+                "address",
+                "name"
+            ],
+            "properties": {
+                "address": {
+                    "type": "string",
+                    "maxLength": 255
+                },
+                "address_line2": {
+                    "type": "string",
+                    "maxLength": 200
+                },
+                "code": {
+                    "type": "string",
+                    "maxLength": 30
+                },
+                "email": {
+                    "type": "string",
+                    "maxLength": 191
+                },
+                "image": {
+                    "type": "string",
+                    "maxLength": 255
+                },
+                "is_active": {
+                    "description": "IsActive bỏ trống = true (bên mới mặc định đang hợp tác).",
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 150
+                },
+                "note": {
+                    "type": "string",
+                    "maxLength": 500
+                },
+                "phone": {
+                    "type": "string",
+                    "maxLength": 20
+                },
+                "representative_name": {
+                    "type": "string",
+                    "maxLength": 150
+                },
+                "representative_phone": {
+                    "type": "string",
+                    "maxLength": 20
+                },
+                "short_name": {
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "tax_code": {
+                    "type": "string",
+                    "maxLength": 30
+                }
+            }
+        },
         "dto.NhanSuRequest": {
             "type": "object",
             "required": [
@@ -23764,6 +24250,17 @@
             }
         },
         "dto.TrangThaiDonViTinhRequest": {
+            "type": "object",
+            "required": [
+                "is_active"
+            ],
+            "properties": {
+                "is_active": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "dto.TrangThaiNhaCungCapRequest": {
             "type": "object",
             "required": [
                 "is_active"

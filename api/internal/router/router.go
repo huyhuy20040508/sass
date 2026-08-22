@@ -73,6 +73,8 @@ type Handlers struct {
 	DonViTinh *handler.DonViTinhHandler
 	// ViTri — chỗ để hàng trong cửa hàng/kho (Hàng hóa → Vị trí).
 	ViTri *handler.ViTriHandler
+	// NhaCungCap — danh mục bên bán hàng cho cửa hàng (Quản lý kho → Nhà cung cấp).
+	NhaCungCap *handler.NhaCungCapHandler
 	// Thue — thuế suất (Hàng hóa → Thuế).
 	Thue *handler.ThueHandler
 	// Ca là ca làm việc + sổ quỹ tiền mặt — cụm trả lời câu hỏi cuối ngày: tiền
@@ -668,6 +670,12 @@ func New(
 			q.Dat(manage, http.MethodPut, "/inventory/:id", "ton-kho.sua", h.Stock.Adjust)
 
 			// Nhà cung cấp — bên bán hàng cho cửa hàng, dùng cho phiếu đặt hàng nhập.
+			q.Dat(manage, http.MethodGet, "/nha-cung-cap", "nha-cung-cap.xem", h.NhaCungCap.List)
+			q.Dat(manage, http.MethodPost, "/nha-cung-cap", "nha-cung-cap.them", h.NhaCungCap.Create)
+			q.Dat(manage, http.MethodGet, "/nha-cung-cap/:id", "nha-cung-cap.xem", h.NhaCungCap.Get)
+			q.Dat(manage, http.MethodPut, "/nha-cung-cap/:id", "nha-cung-cap.sua", h.NhaCungCap.Update)
+			q.Dat(manage, http.MethodPut, "/nha-cung-cap/:id/trang-thai", "nha-cung-cap.sua", h.NhaCungCap.DoiTrangThai)
+			q.Dat(manage, http.MethodDelete, "/nha-cung-cap/:id", "nha-cung-cap.xoa", h.NhaCungCap.Delete)
 
 			// Đặt hàng nhập — chiều MUA VÀO của kho.
 			// Hai đường tĩnh ("stats", "variants") phải đứng trước /:id, nếu không

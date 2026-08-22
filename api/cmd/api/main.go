@@ -307,6 +307,7 @@ func main() {
 	thueRepo := repository.NewThueRepository(db)
 	donViTinhRepo := repository.NewDonViTinhRepository(db)
 	viTriRepo := repository.NewViTriRepository(db)
+	nhaCungCapRepo := repository.NewNhaCungCapRepository(db)
 	thuocTinhRepo := repository.NewThuocTinhRepository(db)
 	productRepo := repository.NewProductRepository(db)
 	orderRepo := repository.NewOrderRepository(db)
@@ -395,6 +396,8 @@ func main() {
 	donViTinhSvc := service.NewDonViTinhService(donViTinhRepo, quyTacMaRepo)
 	// Vị trí — cùng khuôn với đơn vị tính: bảng tra mã + tên của riêng cửa hàng.
 	viTriSvc := service.NewViTriService(viTriRepo, quyTacMaRepo)
+	// Nhà cung cấp — danh mục đầu mối mua vào của khu Kho.
+	nhaCungCapSvc := service.NewNhaCungCapService(nhaCungCapRepo, quyTacMaRepo)
 	// Thuộc tính — cùng khuôn với đơn vị tính, thêm tầng giá trị con.
 	thuocTinhSvc := service.NewThuocTinhService(thuocTinhRepo, quyTacMaRepo)
 	// Chương trình khuyến mãi: vừa là module quản trị, vừa là thứ tính giá sau giảm
@@ -453,42 +456,43 @@ func main() {
 
 	// 7. Handler
 	handlers := router.Handlers{
-		Health:    handler.NewHealthHandler(version),
-		Auth:      handler.NewAuthHandler(authSvc),
-		Category:  handler.NewCategoryHandler(categorySvc),
-		Product:   handler.NewProductHandler(productSvc, promotionSvc),
-		Customer:  handler.NewCustomerHandler(customerSvc),
-		Order:     handler.NewOrderHandler(orderSvc),
-		Return:    handler.NewOrderReturnHandler(returnSvc),
-		Notif:     handler.NewNotificationHandler(notifSvc, hub),
-		Stock:     handler.NewInventoryHandler(inventorySvc),
-		Purchase:  handler.NewPurchaseOrderHandler(purchaseSvc),
-		Receipt:   handler.NewGoodsReceiptHandler(receiptSvc),
-		PReturn:   handler.NewPurchaseReturnHandler(pReturnSvc),
-		Setting:   handler.NewSettingHandler(settingSvc),
-		User:      handler.NewUserHandler(userSvc),
-		ChiNhanh:  handler.NewChiNhanhHandler(chiNhanhSvc),
-		ETax:      handler.NewEtaxHandler(etaxSvc),
-		NhanSu:    handler.NewNhanSuHandler(nhanSuSvc),
-		NhomQuyen: handler.NewNhomQuyenHandler(nhomQuyenSvc),
-		QuyTacMa:  handler.NewQuyTacMaHandler(quyTacMaSvc),
-		Thue:      handler.NewThueHandler(thueSvc),
-		DonViTinh: handler.NewDonViTinhHandler(donViTinhSvc),
-		ViTri:     handler.NewViTriHandler(viTriSvc),
-		ThuocTinh: handler.NewThuocTinhHandler(thuocTinhSvc),
-		Ca:        handler.NewCaLamViecHandler(caSvc),
-		Payment:   handler.NewPaymentHandler(paymentSvc),
-		Banner:    handler.NewBannerHandler(bannerSvc),
-		Report:    handler.NewReportHandler(reportSvc),
-		Promo:     handler.NewPromotionHandler(promotionSvc),
-		Voucher:   handler.NewVoucherHandler(voucherSvc),
-		Contact:   handler.NewContactHandler(contactSvc),
-		Plan:      planHandler,
-		KhachHang: khachHangHandler,
-		DungThu:   dungThuHandler,
-		GoiDichVu: goiDichVuHandler,
-		CauHinh:   cauHinhHandler,
-		GiaHan:    giaHanHandler,
+		Health:     handler.NewHealthHandler(version),
+		Auth:       handler.NewAuthHandler(authSvc),
+		Category:   handler.NewCategoryHandler(categorySvc),
+		Product:    handler.NewProductHandler(productSvc, promotionSvc),
+		Customer:   handler.NewCustomerHandler(customerSvc),
+		Order:      handler.NewOrderHandler(orderSvc),
+		Return:     handler.NewOrderReturnHandler(returnSvc),
+		Notif:      handler.NewNotificationHandler(notifSvc, hub),
+		Stock:      handler.NewInventoryHandler(inventorySvc),
+		Purchase:   handler.NewPurchaseOrderHandler(purchaseSvc),
+		Receipt:    handler.NewGoodsReceiptHandler(receiptSvc),
+		PReturn:    handler.NewPurchaseReturnHandler(pReturnSvc),
+		Setting:    handler.NewSettingHandler(settingSvc),
+		User:       handler.NewUserHandler(userSvc),
+		ChiNhanh:   handler.NewChiNhanhHandler(chiNhanhSvc),
+		ETax:       handler.NewEtaxHandler(etaxSvc),
+		NhanSu:     handler.NewNhanSuHandler(nhanSuSvc),
+		NhomQuyen:  handler.NewNhomQuyenHandler(nhomQuyenSvc),
+		QuyTacMa:   handler.NewQuyTacMaHandler(quyTacMaSvc),
+		Thue:       handler.NewThueHandler(thueSvc),
+		DonViTinh:  handler.NewDonViTinhHandler(donViTinhSvc),
+		ViTri:      handler.NewViTriHandler(viTriSvc),
+		NhaCungCap: handler.NewNhaCungCapHandler(nhaCungCapSvc),
+		ThuocTinh:  handler.NewThuocTinhHandler(thuocTinhSvc),
+		Ca:         handler.NewCaLamViecHandler(caSvc),
+		Payment:    handler.NewPaymentHandler(paymentSvc),
+		Banner:     handler.NewBannerHandler(bannerSvc),
+		Report:     handler.NewReportHandler(reportSvc),
+		Promo:      handler.NewPromotionHandler(promotionSvc),
+		Voucher:    handler.NewVoucherHandler(voucherSvc),
+		Contact:    handler.NewContactHandler(contactSvc),
+		Plan:       planHandler,
+		KhachHang:  khachHangHandler,
+		DungThu:    dungThuHandler,
+		GoiDichVu:  goiDichVuHandler,
+		CauHinh:    cauHinhHandler,
+		GiaHan:     giaHanHandler,
 	}
 
 	// 8. Router + HTTP server
