@@ -321,7 +321,7 @@ func TenantRequired() gin.HandlerFunc {
 //     và gọi lại như khách vãng lai.
 //
 //  2. TÊN MIỀN LẠ THÌ KHÔNG ĐỘNG GÌ. Tên miền chưa vào sổ (hôm nay là chính
-//     order.selliotech.store của khu quản trị) đi tiếp y như trước: có token
+//     shop.selliotech.store của khu quản trị) đi tiếp y như trước: có token
 //     thì dùng token, không thì TenantRequired chặn. Nhờ vậy bật middleware
 //     này lên KHÔNG đổi hành vi của bất cứ đường nào đang chạy.
 //

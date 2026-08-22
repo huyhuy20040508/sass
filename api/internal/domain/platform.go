@@ -141,7 +141,7 @@ const (
 // App là một phần mềm nền tảng bán ra.
 //
 // Hôm nay danh mục có đúng một dòng — AppOrder, phần mềm quản trị bán hàng
-// đang chạy ở order.selliotech.store. Vì chỉ có một nên chưa chỗ nào phải hỏi
+// đang chạy ở shop.selliotech.store. Vì chỉ có một nên chưa chỗ nào phải hỏi
 // "app nào": Subscription ghi gói mà không ghi gói CỦA app nào. Bảng có mặt để
 // tới lúc có sản phẩm thứ hai thì không phải vừa dựng bảng vừa điền ngược cho
 // các thuê bao đang chạy.

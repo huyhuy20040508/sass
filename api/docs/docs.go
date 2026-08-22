@@ -19944,7 +19944,7 @@ const docTemplate = `{
                 "dia_chi_dang_nhap": {
                     "description": "DiaChiDangNhap là URL Shop Admin của chính tiến trình này (cfg.App.ShopAdminURL).",
                     "type": "string",
-                    "example": "https://order.selliotech.store"
+                    "example": "https://shop.selliotech.store"
                 },
                 "goi": {
                     "type": "string",
