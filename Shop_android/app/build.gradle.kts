@@ -1,7 +1,15 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+}
+
+// Khoá ký nằm ngoài git. Không có keystore.properties thì bản release ra không ký.
+val tepKhoaKy = rootProject.file("keystore.properties")
+val khoaKy = Properties().apply {
+    if (tepKhoaKy.exists()) tepKhoaKy.inputStream().use { load(it) }
 }
 
 android {
@@ -18,8 +26,20 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        if (tepKhoaKy.exists()) {
+            create("phatHanh") {
+                storeFile = rootProject.file(khoaKy.getProperty("storeFile"))
+                storePassword = khoaKy.getProperty("storePassword")
+                keyAlias = khoaKy.getProperty("keyAlias")
+                keyPassword = khoaKy.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
+            signingConfig = signingConfigs.findByName("phatHanh")
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
@@ -45,6 +65,18 @@ dependencies {
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
+    implementation(libs.androidx.material.icons.extended)
+    implementation(libs.kotlinx.coroutines.android)
+
+    // Quét mã vạch: CameraX dựng khung hình, ML Kit đọc mã trong khung.
+    implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(libs.androidx.camera.core)
+    implementation(libs.androidx.camera.camera2)
+    implementation(libs.androidx.camera.lifecycle)
+    implementation(libs.androidx.camera.view)
+    implementation(libs.mlkit.barcode.scanning)
+    // Nâng thẳng graphics-path: bản Compose BOM kéo về chưa căn 16 KB.
+    implementation(libs.androidx.graphics.path)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

@@ -9,3 +9,8 @@
 .cxx
 local.properties
 .kotlin
+
+# Khoa ky ban phat hanh: tuyet doi khong day len git
+keystore.properties
+*.jks
+*.keystore
