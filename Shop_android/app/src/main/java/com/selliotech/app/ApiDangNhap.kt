@@ -104,6 +104,10 @@ suspend fun dangNhapCuaHang(
             tenDangNhap = nguoiDung?.optString("username").orEmpty(),
             vaiTro = nguoiDung?.optJSONObject("role")?.optString("name").orEmpty(),
             cuaHangKhoa = data.optBoolean("cua_hang_khoa"),
+            cuaVao = cuaVao(
+                accessAreas = nguoiDung?.optString("access_areas").orEmpty(),
+                vaiTroId = nguoiDung?.optInt("role_id") ?: 0,
+            ),
         ),
     )
 }
@@ -193,3 +197,20 @@ suspend fun layQuyenCuaToi(kho: KhoPhien): String {
 /** expires_in tính bằng giây; để trống thì coi như 15 phút đúng như mặc định bên API. */
 private fun hanTu(giay: Long): Long =
     System.currentTimeMillis() + (if (giay > 0) giay else 900L) * 1000L
+
+/**
+ * Đọc lại cửa vào từ GET /auth/me.
+ *
+ * Cho phiên cất từ bản app chưa biết tới cửa vào: bắt họ đăng nhập lại chỉ vì
+ * app lên đời là làm phiền vô cớ. Trả null = không hỏi được, cứ để nguyên.
+ */
+suspend fun layCuaVao(token: String): List<String>? {
+    val traLoi = goiApi("/auth/me", token = token)
+    val data = traLoi.json()?.optJSONObject("data")
+    if (!traLoi.xuoi || data == null) return null
+
+    return cuaVao(
+        accessAreas = data.optString("access_areas"),
+        vaiTroId = data.optInt("role_id"),
+    )
+}

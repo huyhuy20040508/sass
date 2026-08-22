@@ -66,6 +66,7 @@ dependencies {
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
     implementation(libs.androidx.material.icons.extended)
+    implementation(libs.icons.lucide)
     implementation(libs.kotlinx.coroutines.android)
 
     // Quét mã vạch: CameraX dựng khung hình, ML Kit đọc mã trong khung.
