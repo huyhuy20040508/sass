@@ -102,15 +102,10 @@ func (s *nhaCungCapService) DoiTrangThai(ctx context.Context, id uint, batLen bo
 	return ncc, nil
 }
 
-// Delete chặn khi còn phiếu đặt hàng trỏ tới: xoá đi là phiếu cũ mất đầu mối
-// liên hệ. Muốn dừng nhập hàng thì tắt hợp tác.
+// Delete xoá mềm — FindByID trước để bên không tồn tại trả 404 thay vì im lặng.
 func (s *nhaCungCapService) Delete(ctx context.Context, id uint) error {
-	ncc, err := s.repo.FindByID(ctx, id)
-	if err != nil {
+	if _, err := s.repo.FindByID(ctx, id); err != nil {
 		return err
-	}
-	if ncc.PurchaseCount > 0 {
-		return domain.ErrNhaCungCapDangDung
 	}
 
 	return s.repo.Delete(ctx, id)

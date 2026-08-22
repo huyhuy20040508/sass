@@ -316,9 +316,6 @@ func handleServiceError(c *gin.Context, err error) {
 		response.ValidationError(c, map[string]string{
 			"code": "Mã nhà cung cấp này đã có trong cửa hàng (tính cả bên đã xoá)",
 		})
-	case errors.Is(err, domain.ErrNhaCungCapDangDung):
-		response.Error(c, 409, "Nhà cung cấp này còn phiếu đặt hàng nhập nên không xoá được. "+
-			"Tắt hợp tác thay vì xoá, để phiếu cũ vẫn giữ được đầu mối liên hệ")
 	// Thuộc tính — bốn lỗi trùng, tô đỏ đúng ô người vừa gõ. Hai lỗi của giá trị
 	// con trỏ vào cả bảng giá trị chứ không vào một dòng: màn hình không đánh số
 	// dòng nên chỉ vào "dòng thứ ba" cũng chẳng giúp ai.

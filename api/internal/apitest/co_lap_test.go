@@ -200,66 +200,6 @@ var bangTuyen = []buoc{
 		func(c *cuaHang) string { return fmt.Sprintf("/api/v1/admin/inventory/%d", c.bienThe) },
 		func(*cuaHang) any { return map[string]any{"mode": "delta", "quantity": 1} }, phaSua},
 
-	// --- Đặt hàng nhập ---
-	{"dat-hang-nhap", "GET /admin/purchases/{id}", http.MethodGet,
-		func(c *cuaHang) string { return fmt.Sprintf("/api/v1/admin/purchases/%d", c.phieuDat) }, nil, phaDoc},
-	// Số lượng phải > 0: gửi 0 thì service chặn ngay ở bước kiểm dữ liệu ("chưa
-	// chọn sản phẩm nào để nhận") và không bao giờ tra tới phiếu — lượt kiểm chèn
-	// id sẽ nhận 422 và không chứng minh được điều gì.
-	//
-	// Đứng TRƯỚC lệnh sửa phiếu: sửa phiếu thay mới toàn bộ dòng hàng, nên chạy
-	// sau thì dongDat trỏ vào một dòng đã bị xoá và lượt đối chứng nhận 404 vì lý
-	// do chẳng liên quan gì tới cô lập tenant.
-	{"dat-hang-nhap", "POST /admin/purchases/{id}/receive", http.MethodPost,
-		func(c *cuaHang) string { return fmt.Sprintf("/api/v1/admin/purchases/%d/receive", c.phieuDat) },
-		func(c *cuaHang) any {
-			return map[string]any{"items": []map[string]any{{"item_id": c.dongDat, "quantity": 1}}}
-		}, phaSua},
-	{"dat-hang-nhap", "PUT /admin/purchases/{id}", http.MethodPut,
-		func(c *cuaHang) string { return fmt.Sprintf("/api/v1/admin/purchases/%d", c.phieuDat) },
-		func(c *cuaHang) any {
-			return map[string]any{
-				"supplier_name": "Nhà cung cấp " + c.vet,
-				"items":         []map[string]any{{"variant_id": c.bienThe, "quantity": 5, "unit_cost": 60000}},
-			}
-		}, phaSua},
-	{"dat-hang-nhap", "PUT /admin/purchases/{id}/payment", http.MethodPut,
-		func(c *cuaHang) string { return fmt.Sprintf("/api/v1/admin/purchases/%d/payment", c.phieuDat) },
-		func(*cuaHang) any { return map[string]any{"paid_amount": 0} }, phaSua},
-	{"dat-hang-nhap", "PUT /admin/purchases/{id}/status", http.MethodPut,
-		func(c *cuaHang) string { return fmt.Sprintf("/api/v1/admin/purchases/%d/status", c.phieuDat) },
-		func(c *cuaHang) any { return map[string]any{"status": "cancelled", "note": "huỷ " + c.vet} }, phaSua},
-	{"dat-hang-nhap", "DELETE /admin/purchases/{id}", http.MethodDelete,
-		func(c *cuaHang) string { return fmt.Sprintf("/api/v1/admin/purchases/%d", c.phieuDat) }, nil, phaXoa},
-
-	// --- Nhập hàng (đợt hàng đã về, tra theo MÃ chứ không phải id) ---
-	{"nhap-hang", "GET /admin/receipts/{code}", http.MethodGet,
-		func(c *cuaHang) string { return "/api/v1/admin/receipts/" + c.maDotNhap }, nil, phaDoc},
-
-	// --- Trả hàng nhập ---
-	{"tra-hang-nhap", "GET /admin/purchase-returns/returnable/{id}", http.MethodGet,
-		func(c *cuaHang) string {
-			return fmt.Sprintf("/api/v1/admin/purchase-returns/returnable/%d", c.phieuNhan)
-		}, nil, phaDoc},
-	{"tra-hang-nhap", "GET /admin/purchase-returns/{id}", http.MethodGet,
-		func(c *cuaHang) string { return fmt.Sprintf("/api/v1/admin/purchase-returns/%d", c.traNhap) }, nil, phaDoc},
-	{"tra-hang-nhap", "PUT /admin/purchase-returns/{id}", http.MethodPut,
-		func(c *cuaHang) string { return fmt.Sprintf("/api/v1/admin/purchase-returns/%d", c.traNhap) },
-		func(c *cuaHang) any {
-			return map[string]any{
-				"purchase_order_id": c.phieuNhan,
-				"items":             []map[string]any{{"purchase_order_item_id": c.dongNhan, "quantity": 1}},
-			}
-		}, phaSua},
-	{"tra-hang-nhap", "PUT /admin/purchase-returns/{id}/refund", http.MethodPut,
-		func(c *cuaHang) string { return fmt.Sprintf("/api/v1/admin/purchase-returns/%d/refund", c.traNhap) },
-		func(*cuaHang) any { return map[string]any{"refund_amount": 0} }, phaSua},
-	{"tra-hang-nhap", "PUT /admin/purchase-returns/{id}/status", http.MethodPut,
-		func(c *cuaHang) string { return fmt.Sprintf("/api/v1/admin/purchase-returns/%d/status", c.traNhap) },
-		func(c *cuaHang) any { return map[string]any{"status": "cancelled", "note": "huỷ " + c.vet} }, phaSua},
-	{"tra-hang-nhap", "DELETE /admin/purchase-returns/{id}", http.MethodDelete,
-		func(c *cuaHang) string { return fmt.Sprintf("/api/v1/admin/purchase-returns/%d", c.traNhap) }, nil, phaXoa},
-
 	// --- Yêu cầu của khách ---
 	{"lien-he", "GET /admin/contact-requests/{id}", http.MethodGet,
 		func(c *cuaHang) string { return fmt.Sprintf("/api/v1/admin/contact-requests/%d", c.yeuCau) }, nil, phaDoc},

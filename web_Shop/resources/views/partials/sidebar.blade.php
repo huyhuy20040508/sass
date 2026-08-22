@@ -120,32 +120,14 @@
                     ],
                 ] : []),
                 ...($canManage ? [[
-                    // Module kho gồm ĐÚNG 5 trang dưới đây, tất cả đã có route thật.
-                    // Vẫn chưa có "Chuyển kho": tồn đã tách theo chi nhánh (migration
-                    // 0005) nên chiều kho đi / kho đến giờ có nghĩa, nhưng một phiếu
-                    // chuyển còn cần trạng thái đang đi đường và lượt nhận ở đầu kia —
-                    // dựng nửa vời thì hàng biến mất khỏi cả hai kho.
+                    // Module kho còn ĐÚNG 2 trang dưới đây, cả hai đã có route thật.
+                    // Đặt hàng nhập / Nhập hàng / Trả hàng nhập đã bị gỡ bỏ.
                     'label' => 'Quản lý kho', 'icon' => 'inventory',
                     'children' => [
                         [
                             'href' => route('admin.ton-kho-chi-nhanh.index'),
                             'label' => \App\Http\Controllers\TonKhoChiNhanhController::TITLE,
                             'active' => request()->routeIs('admin.ton-kho-chi-nhanh.*'),
-                        ],
-                        [
-                            'href' => route('admin.purchases.index'),
-                            'label' => \App\Http\Controllers\PurchaseController::TITLE,
-                            'active' => request()->routeIs('admin.purchases.*'),
-                        ],
-                        [
-                            'href' => route('admin.receipts.index'),
-                            'label' => \App\Http\Controllers\ReceiptController::TITLE,
-                            'active' => request()->routeIs('admin.receipts.*'),
-                        ],
-                        [
-                            'href' => route('admin.purchase-returns.index'),
-                            'label' => \App\Http\Controllers\PurchaseReturnController::TITLE,
-                            'active' => request()->routeIs('admin.purchase-returns.*'),
                         ],
                         [
                             'href' => route('admin.nha-cung-cap.index'),

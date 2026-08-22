@@ -463,14 +463,8 @@ nhom = [
         ("order_return_items", "Trả từng MÓN, không phải trả cả đơn.", "0 dòng"),
         ("order_return_history", "Nhật ký duyệt / từ chối phiếu trả.", "0 dòng"),
     ]),
-    ("4.9  Nhập hàng từ nhà cung cấp", [
+    ("4.9  Nhà cung cấp", [
         ("suppliers", "Nhà cung cấp.", "0 dòng"),
-        ("purchase_orders", "Phiếu đặt hàng nhập.", "0 dòng"),
-        ("purchase_order_items", "Từng món trên phiếu nhập, kèm giá vốn.", "0 dòng"),
-        ("purchase_order_history", "Nhật ký trạng thái phiếu nhập.", "0 dòng"),
-        ("purchase_returns", "Phiếu trả hàng NGƯỢC về nhà cung cấp.", "0 dòng"),
-        ("purchase_return_items", "Từng món trả về nhà cung cấp.", "0 dòng"),
-        ("purchase_return_history", "Nhật ký phiếu trả nhà cung cấp.", "0 dòng"),
     ]),
     ("4.10  Tương tác của người mua", [
         ("product_reviews", "Đánh giá sản phẩm.", "0 dòng"),

@@ -138,8 +138,8 @@ func TestSinhMa_HangHoa(t *testing.T) {
 	}
 }
 
-// TestSinhMa_ChungTuTheoChiNhanh — phiếu đặt mua lấy quy tắc của ĐÚNG chi nhánh
-// lập phiếu, và mỗi chi nhánh đếm riêng.
+// TestSinhMa_ChungTuTheoChiNhanh — đơn hàng lấy quy tắc của ĐÚNG chi nhánh lập
+// đơn, và mỗi chi nhánh đếm riêng.
 func TestSinhMa_ChungTuTheoChiNhanh(t *testing.T) {
 	h := dungHeThong(t)
 	a, _ := haiCuaHang(t, h)
@@ -159,39 +159,45 @@ func TestSinhMa_ChungTuTheoChiNhanh(t *testing.T) {
 		res := h.goi(t, a.token, http.MethodPut, "/api/v1/admin/quy-tac-ma", map[string]any{
 			"shop_id": shopID,
 			"quy_tac": []map[string]any{
-				{"doc_type": domain.LoaiPhieuDatMua, "prefix": tienTo,
+				{"doc_type": domain.LoaiDonHang, "prefix": tienTo,
 					"value_part": domain.PhanSoThuTu, "length": 4, "suffix": ""},
 			},
 		})
 		if res.ma != http.StatusOK {
-			t.Fatalf("bật quy tắc phiếu đặt mua hỏng: %d\n%s", res.ma, catBot(res.than))
+			t.Fatalf("bật quy tắc đơn hàng hỏng: %d\n%s", res.ma, catBot(res.than))
 		}
 	}
-	luuQuyTac(a.chiNhanh, "PDA")
-	luuQuyTac(khoPhu, "PDB")
+	luuQuyTac(a.chiNhanh, "DHA")
+	luuQuyTac(khoPhu, "DHB")
 
-	lapPhieu := func(shopID uint) string {
-		res := h.goiVoiHeader(t, a.token, http.MethodPost, "/api/v1/admin/purchases", map[string]any{
-			"supplier_name": "Nhà cung cấp " + a.vet,
-			"status":        "ordered",
-			"items":         []map[string]any{{"variant_id": a.bienThe, "quantity": 2, "unit_cost": 50000}},
-		}, map[string]string{middleware.HeaderChiNhanh: strconv.Itoa(int(shopID))})
+	// Kho phụ vừa mở thì trống, mà đường lập đơn chặn khi không đủ hàng. Nhập
+	// sẵn vài cái để bài này kiểm được đúng thứ nó muốn kiểm: cái MÃ.
+	res = h.goiChiNhanh(t, a.token, khoPhu, http.MethodPut,
+		fmt.Sprintf("/api/v1/admin/inventory/%d", a.bienThe),
+		map[string]any{"mode": "delta", "quantity": 5})
+	if res.ma != http.StatusOK {
+		t.Fatalf("nhập hàng vào kho phụ hỏng: %d\n%s", res.ma, catBot(res.than))
+	}
+
+	lapDon := func(shopID uint) string {
+		res := h.goiVoiHeader(t, a.token, http.MethodPost, "/api/v1/admin/orders",
+			donMau(a), map[string]string{middleware.HeaderChiNhanh: strconv.Itoa(int(shopID))})
 		if res.ma != http.StatusCreated {
-			t.Fatalf("lập phiếu đặt mua hỏng: %d\n%s", res.ma, catBot(res.than))
+			t.Fatalf("lập đơn hàng hỏng: %d\n%s", res.ma, catBot(res.than))
 		}
 
-		return maCuaPhanHoi(t, res.than, "po_code")
+		return maCuaPhanHoi(t, res.than, "order_code")
 	}
 
-	if ma := lapPhieu(a.chiNhanh); ma != "PDA0001" {
-		t.Fatalf("phiếu của chi nhánh gốc phải là PDA0001, nhận %q", ma)
+	if ma := lapDon(a.chiNhanh); ma != "DHA0001" {
+		t.Fatalf("đơn của chi nhánh gốc phải là DHA0001, nhận %q", ma)
 	}
-	if ma := lapPhieu(a.chiNhanh); ma != "PDA0002" {
+	if ma := lapDon(a.chiNhanh); ma != "DHA0002" {
 		t.Fatalf("số của một chi nhánh phải tăng dần, nhận %q", ma)
 	}
 	// Chi nhánh khác đếm riêng từ 1 — đó là lý do quy tắc chứng từ chia theo nơi.
-	if ma := lapPhieu(khoPhu); ma != "PDB0001" {
-		t.Fatalf("phiếu của kho phụ phải là PDB0001, nhận %q", ma)
+	if ma := lapDon(khoPhu); ma != "DHB0001" {
+		t.Fatalf("đơn của kho phụ phải là DHB0001, nhận %q", ma)
 	}
 }
 
@@ -204,7 +210,7 @@ func TestSinhMa_TheoNgay(t *testing.T) {
 	res := h.goi(t, a.token, http.MethodPut, "/api/v1/admin/quy-tac-ma", map[string]any{
 		"shop_id": a.chiNhanh,
 		"quy_tac": []map[string]any{
-			{"doc_type": domain.LoaiPhieuDatMua, "prefix": "PDM",
+			{"doc_type": domain.LoaiDonHang, "prefix": "DHN",
 				"value_part": domain.PhanNgayThangNam, "length": 11, "suffix": ""},
 		},
 	})
@@ -212,18 +218,29 @@ func TestSinhMa_TheoNgay(t *testing.T) {
 		t.Fatalf("bật quy tắc theo ngày hỏng: %d\n%s", res.ma, catBot(res.than))
 	}
 
-	res = h.goi(t, a.token, http.MethodPost, "/api/v1/admin/purchases", map[string]any{
-		"supplier_name": "Công ty ngày " + a.vet,
-		"items":         []map[string]any{{"variant_id": a.bienThe, "quantity": 1, "unit_cost": 50000}},
-	})
+	res = h.goi(t, a.token, http.MethodPost, "/api/v1/admin/orders", donMau(a))
 	if res.ma != http.StatusCreated {
-		t.Fatalf("lập phiếu đặt mua hỏng: %d\n%s", res.ma, catBot(res.than))
+		t.Fatalf("lập đơn hàng hỏng: %d\n%s", res.ma, catBot(res.than))
 	}
 
 	// 11 ký tự phần giữa: 8 cho ddmmyyyy, 3 còn lại cho số đếm.
-	mong := "PDM" + time.Now().Format("02012006") + "001"
-	if ma := maCuaPhanHoi(t, res.than, "po_code"); ma != mong {
+	mong := "DHN" + time.Now().Format("02012006") + "001"
+	if ma := maCuaPhanHoi(t, res.than, "order_code"); ma != mong {
 		t.Fatalf("mã theo ngày phải là %s, nhận %q", mong, ma)
+	}
+}
+
+// donMau — payload đơn hàng tối thiểu để lấy mã sinh ra; chỉ dùng cho các bài
+// kiểm quy tắc đánh số, không phải bài kiểm nghiệp vụ đơn hàng.
+func donMau(c *cuaHang) map[string]any {
+	return map[string]any{
+		"user_id": c.khach, "recipient_name": "Người nhận " + c.vet,
+		"recipient_phone": "0900000001", "shipping_address": "Địa chỉ " + c.vet,
+		"payment_method": "cod",
+		"items": []map[string]any{{
+			"product_variant_id": c.bienThe, "product_name": "Sản phẩm " + c.vet,
+			"unit_price": 100000, "quantity": 1,
+		}},
 	}
 }
 

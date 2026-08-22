@@ -48,9 +48,6 @@ type Handlers struct {
 	Return   *handler.OrderReturnHandler
 	Notif    *handler.NotificationHandler
 	Stock    *handler.InventoryHandler
-	Purchase *handler.PurchaseOrderHandler
-	Receipt  *handler.GoodsReceiptHandler
-	PReturn  *handler.PurchaseReturnHandler
 	Setting  *handler.SettingHandler
 	User     *handler.UserHandler
 	// ChiNhanh là các ĐIỂM BÁN của chính cửa hàng (bảng `shops`), không phải
@@ -677,37 +674,6 @@ func New(
 			q.Dat(manage, http.MethodPut, "/nha-cung-cap/:id/trang-thai", "nha-cung-cap.sua", h.NhaCungCap.DoiTrangThai)
 			q.Dat(manage, http.MethodDelete, "/nha-cung-cap/:id", "nha-cung-cap.xoa", h.NhaCungCap.Delete)
 
-			// Đặt hàng nhập — chiều MUA VÀO của kho.
-			// Hai đường tĩnh ("stats", "variants") phải đứng trước /:id, nếu không
-			// chúng sẽ bị hiểu thành id phiếu.
-			q.Dat(manage, http.MethodGet, "/purchases", "dat-hang-nhap.xem", h.Purchase.List)
-			q.Dat(manage, http.MethodPost, "/purchases", "dat-hang-nhap.them", h.Purchase.Create)
-			q.Dat(manage, http.MethodGet, "/purchases/stats", "dat-hang-nhap.xem", h.Purchase.Stats)
-			q.Dat(manage, http.MethodGet, "/purchases/variants", "dat-hang-nhap.xem", h.Purchase.SearchVariants)
-			q.Dat(manage, http.MethodGet, "/purchases/:id", "dat-hang-nhap.xem", h.Purchase.Get)
-			q.Dat(manage, http.MethodPut, "/purchases/:id", "dat-hang-nhap.sua", h.Purchase.Update)
-			q.Dat(manage, http.MethodDelete, "/purchases/:id", "dat-hang-nhap.xoa", h.Purchase.Delete)
-			q.Dat(manage, http.MethodPut, "/purchases/:id/status", "dat-hang-nhap.sua", h.Purchase.UpdateStatus)
-			q.Dat(manage, http.MethodPut, "/purchases/:id/payment", "dat-hang-nhap.sua", h.Purchase.UpdatePayment)
-			// Nhận hàng là hành động tạo ra bút toán kho mới mỗi lần gọi (nhận nhiều
-			// đợt), nên là POST chứ không phải PUT.
-			q.Dat(manage, http.MethodPost, "/purchases/:id/receive", "nhap-kho.them", h.Purchase.Receive)
-
-			// Nhập hàng — CHỈ ĐỌC lại các đợt hàng đã về (dựng từ sổ kho). Việc ghi
-			// kho vẫn chỉ có một đường duy nhất là POST /purchases/:id/receive.
-			// "stats" phải đứng trước /:code, nếu không nó bị hiểu là mã đợt nhập.
-			// Trả hàng nhập — trả hàng lại nhà cung cấp (chiều ngược của nhập hàng).
-			// "stats" và "returnable" phải đứng trước /:id để không bị hiểu là id phiếu.
-			q.Dat(manage, http.MethodGet, "/purchase-returns", "tra-hang-nhap.xem", h.PReturn.List)
-			q.Dat(manage, http.MethodPost, "/purchase-returns", "tra-hang-nhap.them", h.PReturn.Create)
-			q.Dat(manage, http.MethodGet, "/purchase-returns/stats", "tra-hang-nhap.xem", h.PReturn.Stats)
-			q.Dat(manage, http.MethodGet, "/purchase-returns/returnable/:id", "tra-hang-nhap.xem", h.PReturn.Returnable)
-			q.Dat(manage, http.MethodGet, "/purchase-returns/:id", "tra-hang-nhap.xem", h.PReturn.Get)
-			q.Dat(manage, http.MethodPut, "/purchase-returns/:id", "tra-hang-nhap.sua", h.PReturn.Update)
-			q.Dat(manage, http.MethodPut, "/purchase-returns/:id/status", "tra-hang-nhap.sua", h.PReturn.UpdateStatus)
-			q.Dat(manage, http.MethodPut, "/purchase-returns/:id/refund", "tra-hang-nhap.sua", h.PReturn.UpdateRefund)
-			q.Dat(manage, http.MethodDelete, "/purchase-returns/:id", "tra-hang-nhap.xoa", h.PReturn.Delete)
-
 			// Cấu hình hệ thống — key-value, ghi nhiều khoá một lần.
 			//
 			// --- Yêu cầu của khách + danh sách nhận tin ---
@@ -830,10 +796,6 @@ func New(
 				manage.GET(strings.TrimPrefix(DuongDonGiaHan, "/admin"), h.GiaHan.TrangThai)
 			}
 			q.Dat(manage, http.MethodPut, "/roles/:id", "cau-hinh.sua", h.User.UpdateRole)
-
-			q.Dat(manage, http.MethodGet, "/receipts", "nhap-kho.xem", h.Receipt.List)
-			q.Dat(manage, http.MethodGet, "/receipts/stats", "nhap-kho.xem", h.Receipt.Stats)
-			q.Dat(manage, http.MethodGet, "/receipts/:code", "nhap-kho.xem", h.Receipt.Get)
 
 			// Báo cáo — CHỈ ĐỌC, gộp lại dữ liệu đã có theo khoảng thời gian.
 			//

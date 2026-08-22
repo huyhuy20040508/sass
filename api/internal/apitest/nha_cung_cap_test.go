@@ -9,23 +9,18 @@ import (
 
 // Bài kiểm NHÀ CUNG CẤP qua API thật và MySQL thật.
 //
-// Bốn chỗ đáng hỏng của danh mục này: mã tự sinh có chạy không, công tắc hợp tác
-// có ghi lẫn sang các ô khác không (bản v2 `fill($request->all())` nên có), bên
-// còn phiếu đặt hàng có bị chặn xoá không, và hai cửa hàng có nhìn thấy danh mục
-// của nhau không.
+// Ba chỗ đáng hỏng của danh mục này: mã tự sinh có chạy không, công tắc hợp tác
+// có ghi lẫn sang các ô khác không (bản v2 `fill($request->all())` nên có), và
+// hai cửa hàng có nhìn thấy danh mục của nhau không.
 
 // nhaCungCap là một dòng trên bảng Nhà cung cấp.
 type nhaCungCap struct {
-	ID             uint    `json:"id"`
-	Code           string  `json:"code"`
-	Name           string  `json:"name"`
-	Address        string  `json:"address"`
-	Phone          string  `json:"phone"`
-	IsActive       bool    `json:"is_active"`
-	PurchaseCount  int64   `json:"purchase_count"`
-	TotalPurchases float64 `json:"total_purchases"`
-	PaidAmount     float64 `json:"paid_amount"`
-	DebtAmount     float64 `json:"debt_amount"`
+	ID       uint   `json:"id"`
+	Code     string `json:"code"`
+	Name     string `json:"name"`
+	Address  string `json:"address"`
+	Phone    string `json:"phone"`
+	IsActive bool   `json:"is_active"`
 }
 
 func themNCC(t *testing.T, h *heThong, token string, than map[string]any) (int, nhaCungCap) {
@@ -62,26 +57,6 @@ func docNCC(t *testing.T, h *heThong, token, query string) []nhaCungCap {
 	}
 
 	return body.Data
-}
-
-// gieoPhieuMua nhét thẳng một phiếu đặt hàng trỏ tới nhà cung cấp.
-//
-// Đi thẳng xuống database thay vì gọi API lập phiếu: màn đặt hàng nhập hiện chưa
-// gửi supplier_id (ô chọn bên bán vẫn là ô gõ tên), mà thứ cần kiểm ở đây là
-// đường ĐỌC — tổng tiền và lượt chặn xoá.
-func gieoPhieuMua(t *testing.T, h *heThong, c *cuaHang, nccID uint, trangThai string, tong, daTra float64) {
-	t.Helper()
-
-	err := h.db.WithContext(ctxThoat()).Exec(
-		"INSERT INTO purchase_orders (tenant_id, shop_id, supplier_id, po_code, supplier_name, status, "+
-			"items_amount, discount_amount, shipping_fee, total_amount, paid_amount, payment_status, created_at, updated_at) "+
-			"VALUES (?, ?, ?, ?, '', ?, ?, 0, 0, ?, ?, 'unpaid', NOW(3), NOW(3))",
-		c.id, c.chiNhanh, nccID, fmt.Sprintf("PO-%d-%s-%d", nccID, trangThai, int64(tong)),
-		trangThai, tong, tong, daTra,
-	).Error
-	if err != nil {
-		t.Fatalf("không gieo được phiếu đặt hàng: %v", err)
-	}
 }
 
 // TestNhaCungCap_TaoRoiDocLai — bỏ trống mã thì phần mềm đặt NCC001, và bên mới
@@ -203,50 +178,22 @@ func TestNhaCungCap_SuaBoTrongMaThiGiuMaCu(t *testing.T) {
 	}
 }
 
-// TestNhaCungCap_SoTienVaChanXoa — ba cột tiền cộng đúng, và bên còn phiếu thì
-// không xoá được (409) chứ không xoá xong mới biết.
-func TestNhaCungCap_SoTienVaChanXoa(t *testing.T) {
+// TestNhaCungCap_Xoa — xoá mềm một bên, và bên không có thật trả 404.
+func TestNhaCungCap_Xoa(t *testing.T) {
 	h := dungHeThong(t)
 	a, _ := haiCuaHang(t, h)
 
-	_, ncc := themNCC(t, h, a.token, map[string]any{"name": "Bên có phiếu", "address": "1 A"})
-	_, rong := themNCC(t, h, a.token, map[string]any{"name": "Bên chưa mua gì", "address": "2 B"})
-
-	gieoPhieuMua(t, h, a, ncc.ID, "received", 1_000_000, 400_000)
-	gieoPhieuMua(t, h, a, ncc.ID, "ordered", 500_000, 0)
-	// Hai phiếu dưới đây KHÔNG được tính tiền: nháp chưa đặt thật, huỷ thì không
-	// còn nợ ai. Nhưng vẫn tính là "còn phiếu" nên vẫn chặn xoá.
-	gieoPhieuMua(t, h, a, ncc.ID, "draft", 9_000_000, 0)
-	gieoPhieuMua(t, h, a, ncc.ID, "cancelled", 8_000_000, 0)
-
-	var co nhaCungCap
-	for _, d := range docNCC(t, h, a.token, "") {
-		if d.ID == ncc.ID {
-			co = d
-		}
-	}
-
-	if co.PurchaseCount != 4 {
-		t.Fatalf("số phiếu phải đếm cả nháp và huỷ (4), nhận %d", co.PurchaseCount)
-	}
-	if co.TotalPurchases != 1_500_000 {
-		t.Fatalf("tổng mua phải là 1.500.000 (bỏ nháp + huỷ), nhận %.0f", co.TotalPurchases)
-	}
-	if co.PaidAmount != 400_000 {
-		t.Fatalf("đã trả phải là 400.000, nhận %.0f", co.PaidAmount)
-	}
-	if co.DebtAmount != 1_100_000 {
-		t.Fatalf("còn nợ phải là 1.100.000, nhận %.0f", co.DebtAmount)
-	}
+	_, ncc := themNCC(t, h, a.token, map[string]any{"name": "Bên sẽ xoá", "address": "1 A"})
 
 	res := h.goi(t, a.token, http.MethodDelete, fmt.Sprintf("/api/v1/admin/nha-cung-cap/%d", ncc.ID), nil)
-	if res.ma != http.StatusConflict {
-		t.Fatalf("xoá bên còn phiếu phải trả 409, nhận %d\n%s", res.ma, catBot(res.than))
+	if res.ma != http.StatusOK {
+		t.Fatalf("xoá nhà cung cấp phải trả 200, nhận %d\n%s", res.ma, catBot(res.than))
 	}
 
-	res = h.goi(t, a.token, http.MethodDelete, fmt.Sprintf("/api/v1/admin/nha-cung-cap/%d", rong.ID), nil)
-	if res.ma != http.StatusOK {
-		t.Fatalf("xoá bên chưa có phiếu phải trả 200, nhận %d\n%s", res.ma, catBot(res.than))
+	// Xoá lần hai: dòng đã đi khỏi danh mục nên đường xoá phải trả 404.
+	res = h.goi(t, a.token, http.MethodDelete, fmt.Sprintf("/api/v1/admin/nha-cung-cap/%d", ncc.ID), nil)
+	if res.ma != http.StatusNotFound {
+		t.Fatalf("xoá lại bên đã xoá phải trả 404, nhận %d\n%s", res.ma, catBot(res.than))
 	}
 }
 

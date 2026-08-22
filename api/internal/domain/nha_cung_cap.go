@@ -43,15 +43,6 @@ type NhaCungCap struct {
 	CreatedAt time.Time      `json:"created_at"`
 	UpdatedAt time.Time      `json:"updated_at"`
 	DeletedAt gorm.DeletedAt `json:"-" gorm:"index"`
-
-	// Năm số dưới đây tổng hợp từ phiếu đặt hàng nhập, không có cột trong DB.
-	// PurchaseCount đếm MỌI phiếu vì nó dùng để chặn xoá; bốn số còn lại loại
-	// phiếu nháp và phiếu đã huỷ — nháp chưa đặt thật, huỷ thì không còn nợ ai.
-	PurchaseCount  int64      `json:"purchase_count" gorm:"-"`
-	TotalPurchases float64    `json:"total_purchases" gorm:"-"`
-	PaidAmount     float64    `json:"paid_amount" gorm:"-"`
-	DebtAmount     float64    `json:"debt_amount" gorm:"-"`
-	LastOrderAt    *time.Time `json:"last_order_at" gorm:"-"`
 }
 
 func (NhaCungCap) TableName() string { return "suppliers" }
@@ -74,15 +65,9 @@ type NhaCungCapRepository interface {
 	Create(ctx context.Context, ncc *NhaCungCap) error
 	Update(ctx context.Context, ncc *NhaCungCap) error
 	Delete(ctx context.Context, id uint) error
-	// ThongKeMua tổng hợp phiếu đặt hàng cho cả trang bằng vài câu GROUP BY.
-	ThongKeMua(ctx context.Context, list []NhaCungCap) error
 }
 
 var (
 	// ErrNhaCungCapTrungMa — mã đã có trong cửa hàng, kể cả ở dòng đã xoá mềm.
 	ErrNhaCungCapTrungMa = errors.New("mã nhà cung cấp đã tồn tại")
-
-	// ErrNhaCungCapDangDung — còn phiếu đặt hàng trỏ tới nên không xoá được. Xoá
-	// đi là những phiếu ấy mất đầu mối liên hệ; lối đúng là tắt hợp tác.
-	ErrNhaCungCapDangDung = errors.New("nhà cung cấp còn phiếu đặt hàng nhập")
 )

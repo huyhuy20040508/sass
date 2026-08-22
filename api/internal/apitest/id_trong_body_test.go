@@ -93,10 +93,6 @@ func TestCoLapTenant_IDTrongBody(t *testing.T) {
 				"product_variant_id": b.bienThe, "product_name": "x", "unit_price": 1000, "quantity": 1,
 			}},
 		}},
-		{"POST /admin/purchase-returns (phiếu đặt của cửa hàng khác)", "/api/v1/admin/purchase-returns", map[string]any{
-			"purchase_order_id": b.phieuNhan,
-			"items":             []map[string]any{{"purchase_order_item_id": b.dongNhan, "quantity": 1}},
-		}},
 		{"POST /admin/returns (đơn của cửa hàng khác)", "/api/v1/admin/returns", map[string]any{
 			"order_id": b.donGiao, "reason": "defective",
 			"items": []map[string]any{{"order_item_id": dongDauCuaDon(t, h.db, ctxB, b.donGiao), "quantity": 1}},

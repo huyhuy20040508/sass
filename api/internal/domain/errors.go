@@ -179,26 +179,6 @@ var (
 	// Đơn đang có phiếu trả hàng riêng nên không được hoàn cả đơn bằng luồng đơn hàng.
 	ErrReturnInProgress = errors.New("đơn đang có phiếu trả hàng cần xử lý")
 
-	// Đặt hàng nhập
-	// Phiếu không có dòng hàng nào, hoặc mọi dòng đều số lượng 0.
-	ErrPurchaseEmpty = errors.New("phiếu đặt hàng chưa có sản phẩm nào")
-	// Sửa/huỷ/xoá phiếu đã qua giai đoạn cho phép (đã nhận hàng, đã huỷ).
-	ErrPurchaseLocked = errors.New("phiếu đặt hàng không còn ở giai đoạn sửa được")
-	// Số nhận của một đợt vượt quá phần còn thiếu của dòng hàng.
-	ErrPurchaseQtyExceeded = errors.New("số lượng nhận vượt quá số còn lại của phiếu")
-	// Đợt nhận hàng không chọn dòng nào, hoặc mọi dòng đều nhận 0.
-	ErrPurchaseNothingToReceive = errors.New("chưa chọn sản phẩm nào để nhận")
-
-	// Trả hàng nhập
-	// Phiếu trả không có dòng nào, hoặc mọi dòng đều số lượng 0.
-	ErrPurchaseReturnEmpty = errors.New("phiếu trả hàng chưa có sản phẩm nào")
-	// Sửa/huỷ/xoá phiếu trả đã qua giai đoạn cho phép (đã trả NCC, đã huỷ).
-	ErrPurchaseReturnLocked = errors.New("phiếu trả hàng không còn ở giai đoạn sửa được")
-	// Trả nhiều hơn số đã nhận (đã trừ phần nằm trong các phiếu trả khác).
-	ErrPurchaseReturnQtyExceeded = errors.New("số lượng trả vượt quá số còn trả được của phiếu đặt")
-	// Huỷ phiếu trả mà không nhập lý do.
-	ErrPurchaseReturnNoReason = errors.New("vui lòng nhập lý do huỷ phiếu trả hàng")
-
 	// Banner trang chủ
 	// Vị trí không nằm trong danh sách khối storefront đang dựng được.
 	ErrBannerPositionInvalid = errors.New("vị trí banner không hợp lệ")

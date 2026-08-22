@@ -40,8 +40,6 @@ const (
 	LoaiNhaCungCap   = "nha-cung-cap"
 	LoaiNhanVien     = "nhan-vien"
 	LoaiDonHang      = "don-hang"
-	LoaiPhieuDatMua  = "phieu-dat-mua"
-	LoaiTraHangNCC   = "tra-hang-ncc"
 	LoaiTraHangKhach = "tra-hang-khach"
 )
 
@@ -92,8 +90,6 @@ var DanhMucLoaiMa = []LoaiMa{
 
 	// Chứng từ — theo từng chi nhánh, vì mã nói ra phiếu phát sinh ở đâu.
 	{Ma: LoaiDonHang, Ten: "Đơn hàng", TienToGoiY: "DH"},
-	{Ma: LoaiPhieuDatMua, Ten: "Phiếu đặt mua hàng", TienToGoiY: "PO"},
-	{Ma: LoaiTraHangNCC, Ten: "Trả hàng nhà cung cấp", TienToGoiY: "TNC"},
 	{Ma: LoaiTraHangKhach, Ten: "Khách trả hàng", TienToGoiY: "TKH"},
 }
 

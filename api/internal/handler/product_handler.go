@@ -249,7 +249,7 @@ func (h *ProductHandler) DoiChoThuTu(c *gin.Context) {
 // Create godoc
 //
 //	@Summary		Tạo sản phẩm
-//	@Description	Biến thể khai bằng TỔ HỢP THUỘC TÍNH (`attributes`); không gửi tổ hợp nào = hàng đơn, server tự dựng một dòng mặc định. Tồn kho của biến thể mới luôn bằng 0 — muốn có hàng bán phải qua nghiệp vụ kho (`POST /admin/purchases` rồi nhận hàng, hoặc `POST /admin/inventory/adjust`).
+//	@Description	Biến thể khai bằng TỔ HỢP THUỘC TÍNH (`attributes`); không gửi tổ hợp nào = hàng đơn, server tự dựng một dòng mặc định. Tồn kho của biến thể mới luôn bằng 0 — muốn có hàng bán phải qua nghiệp vụ kho (`POST /admin/inventory/adjust`).
 //	@Description	Trả 409 khi cửa hàng đã dùng hết hạn mức sản phẩm của hợp đồng (`max_products`); thông báo kèm số đang dùng và trần.
 //	@Tags			Admin - Products
 //	@Accept			json

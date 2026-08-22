@@ -21,9 +21,6 @@ use App\Http\Controllers\PhanQuyenController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\PromotionController;
-use App\Http\Controllers\PurchaseController;
-use App\Http\Controllers\PurchaseReturnController;
-use App\Http\Controllers\ReceiptController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\ReturnController;
 use App\Http\Controllers\SettingController;
@@ -314,39 +311,6 @@ Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:quan_ly'])->prefix('ad
             ->whereNumber('id')->name('ton-kho-chi-nhanh.history');
         Route::put('/inventory/{id}', [TonKhoChiNhanhController::class, 'adjust'])
             ->whereNumber('id')->name('ton-kho-chi-nhanh.adjust');
-
-        // Đặt hàng nhập — chiều mua vào của kho (đặt hàng nhà cung cấp → nhận hàng).
-        Route::get('/purchases', [PurchaseController::class, 'index'])->name('purchases.index');
-        Route::get('/purchases/export', [PurchaseController::class, 'export'])->name('purchases.export');
-        // Tra cứu cho modal lập phiếu + khối nhà cung cấp — đặt trước route {id} để không bị nuốt.
-        Route::get('/purchases/new/variants', [PurchaseController::class, 'searchVariants'])->name('purchases.searchVariants');
-        Route::post('/purchases/bulk-status', [PurchaseController::class, 'bulkStatus'])->name('purchases.bulkStatus');
-        Route::post('/purchases', [PurchaseController::class, 'store'])->name('purchases.store');
-        Route::get('/purchases/{id}/detail', [PurchaseController::class, 'detail'])->whereNumber('id')->name('purchases.detail');
-        Route::put('/purchases/{id}', [PurchaseController::class, 'update'])->whereNumber('id')->name('purchases.update');
-        Route::put('/purchases/{id}/status', [PurchaseController::class, 'updateStatus'])->whereNumber('id')->name('purchases.updateStatus');
-        Route::post('/purchases/{id}/receive', [PurchaseController::class, 'receive'])->whereNumber('id')->name('purchases.receive');
-        Route::put('/purchases/{id}/payment', [PurchaseController::class, 'payment'])->whereNumber('id')->name('purchases.payment');
-        Route::delete('/purchases/{id}', [PurchaseController::class, 'destroy'])->whereNumber('id')->name('purchases.destroy');
-
-        // Trả hàng nhập — trả hàng lại nhà cung cấp (chiều ngược của nhập hàng).
-        // Hai đường tĩnh đặt trước route {id} để không bị nuốt.
-        Route::get('/purchase-returns', [PurchaseReturnController::class, 'index'])->name('purchase-returns.index');
-        Route::get('/purchase-returns/export', [PurchaseReturnController::class, 'export'])->name('purchase-returns.export');
-        Route::get('/purchase-returns/returnable/{purchaseId}', [PurchaseReturnController::class, 'returnable'])
-            ->whereNumber('purchaseId')->name('purchase-returns.returnable');
-        Route::post('/purchase-returns', [PurchaseReturnController::class, 'store'])->name('purchase-returns.store');
-        Route::get('/purchase-returns/{id}/detail', [PurchaseReturnController::class, 'detail'])
-            ->whereNumber('id')->name('purchase-returns.detail');
-        Route::put('/purchase-returns/{id}', [PurchaseReturnController::class, 'update'])
-            ->whereNumber('id')->name('purchase-returns.update');
-        Route::put('/purchase-returns/{id}/status', [PurchaseReturnController::class, 'updateStatus'])
-            ->whereNumber('id')->name('purchase-returns.updateStatus');
-        Route::put('/purchase-returns/{id}/refund', [PurchaseReturnController::class, 'refund'])
-            ->whereNumber('id')->name('purchase-returns.refund');
-        Route::delete('/purchase-returns/{id}', [PurchaseReturnController::class, 'destroy'])
-            ->whereNumber('id')->name('purchase-returns.destroy');
-
         // Yêu cầu của khách — hộp thư đến từ form Liên hệ và form Thu mua trên
         // storefront. Trước đây hai form đó chỉ hiện hộp thoại "cảm ơn" rồi vứt sạch
         // dữ liệu, nên đây là chỗ đầu tiên trong cửa hàng nhìn thấy khách đã nhắn gì.
@@ -362,14 +326,6 @@ Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:quan_ly'])->prefix('ad
         Route::get('/newsletter', [ContactController::class, 'newsletter'])->name('newsletter.index');
         Route::put('/newsletter/{id}/unsubscribe', [ContactController::class, 'unsubscribe'])
             ->whereNumber('id')->name('newsletter.unsubscribe');
-
-        // Nhập hàng — sổ hàng về kho. Việc ghi kho vẫn dùng chung route
-        // purchases.receive, trang này chỉ là một lối vào khác của cùng luồng đó.
-        Route::get('/receipts', [ReceiptController::class, 'index'])->name('receipts.index');
-        Route::get('/receipts/export', [ReceiptController::class, 'export'])->name('receipts.export');
-        // Mã đợt có dạng PO202607300001-N1 nên không dùng whereNumber được.
-        Route::get('/receipts/{code}/detail', [ReceiptController::class, 'detail'])
-            ->where('code', '[A-Za-z0-9\-]+')->name('receipts.detail');
 
         // Nhà cung cấp — danh mục đầu mối mua vào của khu Kho.
         Route::get('/suppliers', [NhaCungCapController::class, 'index'])->name('nha-cung-cap.index');

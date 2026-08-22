@@ -288,10 +288,6 @@ class AdminSmokeTest extends TestCase
             'admin.orders.label' => ['id' => $this->firstValue('/admin/orders', 'id')],
             'admin.orders.print' => ['id' => $this->firstValue('/admin/orders', 'id')],
             'admin.products.show' => ['id' => $this->firstValue('/products', 'id')],
-            'admin.purchases.detail' => ['id' => $this->firstValue('/admin/purchases', 'id')],
-            'admin.purchase-returns.detail' => ['id' => $this->firstValue('/admin/purchase-returns', 'id')],
-            'admin.purchase-returns.returnable' => ['purchaseId' => $this->firstValue('/admin/purchases', 'id')],
-            'admin.receipts.detail' => ['code' => $this->firstValue('/admin/receipts', 'code')],
             'admin.returns.detail' => ['id' => $this->firstValue('/admin/returns', 'id')],
             'admin.returns.returnable' => ['orderId' => $this->firstValue('/admin/orders', 'id')],
             'admin.settings.page' => ['group' => 'general'],
@@ -353,9 +349,8 @@ class AdminSmokeTest extends TestCase
             '/admin/products', '/admin/categories',
             '/admin/promotions', '/admin/vouchers', '/admin/banners',
             '/admin/contacts', '/admin/newsletter',
-            // Trả hàng, kho và mua vào.
-            '/admin/returns', '/admin/inventory', '/admin/purchases',
-            '/admin/receipts', '/admin/purchase-returns',
+            // Trả hàng và kho.
+            '/admin/returns', '/admin/inventory',
         ];
 
         foreach ($cam as $uri) {

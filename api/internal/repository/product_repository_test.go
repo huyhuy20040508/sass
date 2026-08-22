@@ -269,3 +269,19 @@ func TestReplaceVariantsThemLaiBienTheDaXoa(t *testing.T) {
 		t.Fatalf("phải còn đúng 1 biến thể đang sống, nhận %d", dem)
 	}
 }
+
+// stockOf đọc tồn của MỘT biến thể trên toàn cửa hàng.
+//
+// Cộng từ variant_stocks chứ không đọc một cột cache: từ migration 0036 không
+// còn cột nào giữ sẵn con số này, và đó là chủ ý — một bản cộng nằm sẵn trong
+// bảng là chỗ để hai nguồn sự thật lệch nhau.
+func stockOf(t *testing.T, db *gorm.DB, variantID uint) int {
+	t.Helper()
+	var stock int
+	if err := db.WithContext(ctxRaw()).
+		Raw("SELECT COALESCE(SUM(quantity), 0) FROM variant_stocks WHERE product_variant_id = ?", variantID).
+		Scan(&stock).Error; err != nil {
+		t.Fatalf("không đọc được tồn kho: %v", err)
+	}
+	return stock
+}
