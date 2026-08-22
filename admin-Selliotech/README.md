@@ -6,11 +6,11 @@ Phân biệt với hai app còn lại:
 
 | App | Ai dùng | Việc |
 |---|---|---|
-| `saas/` (app này) | Bạn — chủ nền tảng | Quản lý cửa hàng khách, gói dịch vụ, hạn dùng |
-| `admin/` | Khách đã mua | Quản lý bán hàng của chính cửa hàng họ |
+| `admin-Selliotech/` (app này) | Bạn — chủ nền tảng | Quản lý cửa hàng khách, gói dịch vụ, hạn dùng |
+| `web_Shop/` | Khách đã mua | Quản lý bán hàng của chính cửa hàng họ |
 | `api/` | — | Go API, service duy nhất chạm MySQL |
 
-**Không kết nối MySQL trực tiếp** — mọi dữ liệu đi qua Go API, giống `admin/`.
+**Không kết nối MySQL trực tiếp** — mọi dữ liệu đi qua Go API, giống `web_Shop/`.
 
 ## Trạng thái hiện tại
 

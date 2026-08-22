@@ -13,6 +13,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DonViTinhController;
 use App\Http\Controllers\GoiDichVuController;
 use App\Http\Controllers\TonKhoChiNhanhController;
+use App\Http\Controllers\NhaCungCapController;
 use App\Http\Controllers\NhanSuController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\OrderController;
@@ -369,6 +370,21 @@ Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:quan_ly'])->prefix('ad
         // Mã đợt có dạng PO202607300001-N1 nên không dùng whereNumber được.
         Route::get('/receipts/{code}/detail', [ReceiptController::class, 'detail'])
             ->where('code', '[A-Za-z0-9\-]+')->name('receipts.detail');
+
+        // Nhà cung cấp — danh mục đầu mối mua vào của khu Kho.
+        Route::get('/suppliers', [NhaCungCapController::class, 'index'])->name('nha-cung-cap.index');
+        Route::get('/suppliers/export', [NhaCungCapController::class, 'export'])->name('nha-cung-cap.export');
+        Route::post('/suppliers/photo', [NhaCungCapController::class, 'uploadAnh'])->name('nha-cung-cap.anh');
+        Route::get('/suppliers/import-template', [NhaCungCapController::class, 'mauNhap'])->name('nha-cung-cap.mauNhap');
+        Route::post('/suppliers/import', [NhaCungCapController::class, 'import'])->name('nha-cung-cap.import');
+        // Hai đường hàng loạt đặt TRƯỚC {id} để không bị nuốt.
+        Route::post('/suppliers/bulk-status', [NhaCungCapController::class, 'bulkStatus'])->name('nha-cung-cap.bulkStatus');
+        Route::post('/suppliers/bulk-delete', [NhaCungCapController::class, 'bulkDestroy'])->name('nha-cung-cap.bulkDestroy');
+        Route::post('/suppliers', [NhaCungCapController::class, 'store'])->name('nha-cung-cap.store');
+        Route::put('/suppliers/{id}', [NhaCungCapController::class, 'update'])->whereNumber('id')->name('nha-cung-cap.update');
+        Route::put('/suppliers/{id}/status', [NhaCungCapController::class, 'updateStatus'])
+            ->whereNumber('id')->name('nha-cung-cap.updateStatus');
+        Route::delete('/suppliers/{id}', [NhaCungCapController::class, 'destroy'])->whereNumber('id')->name('nha-cung-cap.destroy');
 
     });
 

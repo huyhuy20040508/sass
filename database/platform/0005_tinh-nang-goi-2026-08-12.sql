@@ -131,7 +131,7 @@ ON DUPLICATE KEY UPDATE plan_features.feature_key = plan_features.feature_key;
 -- =====================================================================
 --  3. HAI HẠN MỨC LANDING ĐÃ HỨA MÀ DATABASE CHƯA BAO GIỜ GHI
 -- =====================================================================
---  Bản chép đúng của bảng giá đang công khai ở landing/index.html
+--  Bản chép đúng của bảng giá đang công khai ở landing_shop/index.html
 --  (mục #bang-gia) ngày 12/08/2026:
 --
 --      Khởi đầu   1 cửa hàng, 2 tài khoản    · 500 sản phẩm

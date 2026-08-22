@@ -24,7 +24,7 @@ DB_NAME="selliotech"
 # Bản sao lưu tạo TRƯỚC khi có control plane thì không có tệp đó; khi ấy script
 # để nguyên database này chứ không xoá đi, xem bước 3/5.
 DB_NEN_TANG="selliotech_platform"
-ANH_DIR="$APP_DIR/admin/storage/app/public"
+ANH_DIR="$APP_DIR/web_Shop/storage/app/public"
 APP_USER="selliotech"
 
 xanh() { printf '\033[32m%s\033[0m\n' "$*"; }
@@ -135,7 +135,7 @@ LAM_DB=1; LAM_ANH=1
 (( LAM_DB )) && [[ -f "$NGUON/nen-tang.sql.gz" ]] \
               && echo "  - database '$DB_NEN_TANG'  (sổ cái nền tảng, cũng bị thay thế)"
 (( LAM_ANH )) && echo "  - $ANH_DIR"
-(( CA_ENV ))  && echo "  - api/.env, admin/.env, saas/.env"
+(( CA_ENV ))  && echo "  - api/.env, web_Shop/.env, admin-Selliotech/.env"
 echo
 echo "  Hiện trạng sẽ được chụp lại trước vào $LUU_DIR/truoc-khi-phuc-hoi-*"
 
@@ -285,12 +285,12 @@ buoc "5/5  Tệp .env"
 # ---------------------------------------------------------------------
 if (( CA_ENV )); then
     if [[ -f "$NGUON/cauhinh.tar.gz" ]]; then
-        for f in api/.env admin/.env saas/.env; do
+        for f in api/.env web_Shop/.env admin-Selliotech/.env; do
             [[ -f "$APP_DIR/$f" ]] && cp -p "$APP_DIR/$f" "$CHUP/$(echo "$f" | tr / -)"
         done
         tar -xzf "$NGUON/cauhinh.tar.gz" -C "$APP_DIR"
-        chown "$APP_USER:$APP_USER" "$APP_DIR"/{api,admin,saas}/.env 2>/dev/null || true
-        chmod 600 "$APP_DIR"/{api,admin,saas}/.env 2>/dev/null || true
+        chown "$APP_USER:$APP_USER" "$APP_DIR"/{api,web_Shop,admin-Selliotech}/.env 2>/dev/null || true
+        chmod 600 "$APP_DIR"/{api,web_Shop,admin-Selliotech}/.env 2>/dev/null || true
         xanh "  đã nạp lại .env (bản cũ nằm trong $CHUP)"
         vang "  Laravel còn cache config cũ — chạy 02-trien-khai.sh để nạp lại."
     else

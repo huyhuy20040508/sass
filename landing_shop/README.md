@@ -5,7 +5,7 @@ Trang tĩnh giới thiệu phần mềm, dành cho tên miền gốc `selliotech
 framework: mở thẳng `index.html` bằng trình duyệt là xem được.
 
 ```
-landing/
+landing_shop/
 ├── index.html   nội dung trang
 ├── styles.css   toàn bộ giao diện
 ├── main.js      chỉ xử lý form đăng ký dùng thử

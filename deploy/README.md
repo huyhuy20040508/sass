@@ -4,10 +4,10 @@
 
 | Tên miền | Trỏ tới | Là gì |
 |---|---|---|
-| `selliotech.store` | Thư mục tĩnh `landing/` | Trang giới thiệu bán phần mềm |
+| `selliotech.store` | Thư mục tĩnh `landing_shop/` | Trang giới thiệu bán phần mềm |
 | `api.selliotech.store` | Go API (nội bộ `127.0.0.1:8090`) | Service duy nhất chạm MySQL |
-| `order.selliotech.store` | Laravel `admin/` | Shop Admin — khu quản lý bán hàng |
-| `admin.selliotech.store` | Laravel `saas/` | SaaS Admin — khu điều hành nền tảng |
+| `order.selliotech.store` | Laravel `web_Shop/` | Shop Admin — khu quản lý bán hàng |
+| `admin.selliotech.store` | Laravel `admin-Selliotech/` | SaaS Admin — khu điều hành nền tảng |
 | `app.selliotech.store` | — | Tên miền cũ của SaaS Admin, chỉ chuyển hướng 301 sang `admin.*` |
 
 > **Hai tên miền đã đổi chỗ.** Trước đây `admin.*` là khu bán hàng và `app.*` là khu điều hành.
@@ -110,8 +110,8 @@ Giờ tạo ba tệp:
 ```bash
 cd /var/www/selliotech
 sudo cp deploy/env/api.env.example   api/.env
-sudo cp deploy/env/admin.env.example admin/.env
-sudo cp deploy/env/saas.env.example  saas/.env
+sudo cp deploy/env/web_Shop.env.example web_Shop/.env
+sudo cp deploy/env/admin-Selliotech.env.example admin-Selliotech/.env
 
 # Sinh khoá ký token — KHÔNG bê chuỗi ở máy cá nhân lên
 openssl rand -base64 48
@@ -119,7 +119,7 @@ openssl rand -base64 48
 sudo nano api/.env      # điền DB_PASSWORD (bước 2) và JWT_SECRET (dòng trên)
 ```
 
-`admin/.env` và `saas/.env` để nguyên cũng chạy được; `APP_KEY` do script tự sinh.
+`web_Shop/.env` và `admin-Selliotech/.env` để nguyên cũng chạy được; `APP_KEY` do script tự sinh.
 
 ---
 
@@ -136,7 +136,7 @@ Script **không** tạo tài khoản quản trị: mật khẩu nằm trong tệ
 ai đọc repo cũng có. Nó chỉ đếm số tài khoản nội bộ, và khi database còn trắng thì
 in ra hướng dẫn chạy `selliotech-tao-admin` ở bước dưới.
 
-Trang giới thiệu không cần bước build nào: nó là HTML tĩnh nằm sẵn trong `landing/`, script chỉ đặt tệp nginx và bước đặt quyền lo phần còn lại.
+Trang giới thiệu không cần bước build nào: nó là HTML tĩnh nằm sẵn trong `landing_shop/`, script chỉ đặt tệp nginx và bước đặt quyền lo phần còn lại.
 
 Kiểm bằng trình duyệt (vẫn còn `http://`):
 
@@ -265,8 +265,8 @@ Mỗi lần SSH vào máy, dòng đầu màn hình cho biết tình hình:
 |---|---|
 | database `selliotech` | Toàn bộ dữ liệu bán hàng |
 | database `selliotech_platform` | Sổ cái nền tảng: khách hàng, thuê bao, tài khoản khu điều hành, tên miền. Dump ra tệp riêng (`nen-tang.sql.gz`) để phục hồi độc lập với dữ liệu bán hàng |
-| `admin/storage/app/public` | Ảnh người bán tải lên |
-| `api/.env`, `admin/.env`, `saas/.env` | `APP_KEY`, `JWT_SECRET`, `DB_PASSWORD`, khoá cổng thanh toán |
+| `web_Shop/storage/app/public` | Ảnh người bán tải lên |
+| `api/.env`, `web_Shop/.env`, `admin-Selliotech/.env` | `APP_KEY`, `JWT_SECRET`, `DB_PASSWORD`, khoá cổng thanh toán |
 
 Mã nguồn, cấu hình nginx, systemd đều có trong git nên không chép lại — kéo repo về là có. `.env` thì khác: `DB_PASSWORD` đặt lại được, `JWT_SECRET` sinh lại được (chỉ tốn việc mọi người đăng nhập lại), nhưng **`APP_KEY` thì không** — mất nó là mọi thứ Laravel đã mã hoá trong database thành rác, dù database còn nguyên từng byte.
 
@@ -366,7 +366,7 @@ sudo bash deploy/scripts/02-trien-khai.sh   # kéo script mới về
 sudo bash deploy/scripts/02-trien-khai.sh   # chạy script mới
 ```
 
-Đây đúng là chỗ đã vấp lúc thêm tên miền gốc. Lượt đầu kéo về `landing/` và `deploy/nginx/selliotech.store.conf`, nhưng vòng lặp cài nginx của **bản script cũ** chỉ biết ba tên miền con nên bỏ qua tệp mới. Cùng lúc đó script vẫn `rm -f /etc/nginx/sites-enabled/default`, thế là tên miền gốc rơi vào block đứng đầu bảng chữ cái — `admin.selliotech.store` — và trả về trang đăng nhập Shop Admin kèm cookie phiên của khu quản trị. Nhìn thì tưởng cấu hình sai, thật ra chỉ là chưa chạy lượt hai.
+Đây đúng là chỗ đã vấp lúc thêm tên miền gốc. Lượt đầu kéo về `landing_shop/` và `deploy/nginx/selliotech.store.conf`, nhưng vòng lặp cài nginx của **bản script cũ** chỉ biết ba tên miền con nên bỏ qua tệp mới. Cùng lúc đó script vẫn `rm -f /etc/nginx/sites-enabled/default`, thế là tên miền gốc rơi vào block đứng đầu bảng chữ cái — `admin.selliotech.store` — và trả về trang đăng nhập Shop Admin kèm cookie phiên của khu quản trị. Nhìn thì tưởng cấu hình sai, thật ra chỉ là chưa chạy lượt hai.
 
 Dấu hiệu nhận ra: `ls -1 /etc/nginx/sites-enabled/` thiếu tệp mà bạn vừa thêm.
 
@@ -388,7 +388,7 @@ Ba job kiểm tra chạy song song, khoảng 3–5 phút:
 |---|---|
 | **API (Go)** | `gofmt` → `go vet` → `go build ./...` → `go test ./...` trên **MySQL 8 thật** |
 | **Shop Admin** | `composer install` → `php artisan test` (PHP 8.3, sqlite in-memory) |
-| **SaaS Admin** | như trên, cho `saas/` |
+| **SaaS Admin** | như trên, cho `admin-Selliotech/` |
 
 Xanh hết thì job **Triển khai** SSH vào VPS và chạy `02-trien-khai.sh` — cùng một script vẫn
 gõ tay lâu nay. Không có đường triển khai thứ hai để hai bên lệch nhau. Sau đó nó gọi
@@ -524,7 +524,7 @@ gh run view --repo huyhuy20040508/sass --log-failed
 |---|---|
 | `gofmt` | Chạy `cd api && gofmt -w .` rồi commit lại |
 | `go test` phần `apitest`/`repository` | Thường là migration mới quên cột, hoặc query thiếu điều kiện tenant |
-| `php artisan test` | Chạy lại y hệt dưới máy: `cd admin && php artisan test` |
+| `php artisan test` | Chạy lại y hệt dưới máy: `cd web_Shop && php artisan test` |
 | `Triển khai` | Test đã xanh, tức là **mã nguồn ổn** — hỏng ở máy chủ. SSH vào chạy tay `sudo bash deploy/scripts/02-trien-khai.sh` để thấy nó chết ở bước nào trong 10 bước |
 
 Deploy hỏng giữa chừng thì máy chủ vẫn chạy bản cũ: script build ra `api.new` và chỉ đổi
@@ -544,7 +544,7 @@ sudo nginx -t
 sudo tail -50 /var/log/nginx/order.selliotech.store.error.log
 
 # Laravel
-sudo tail -50 /var/www/selliotech/admin/storage/logs/laravel.log
+sudo tail -50 /var/www/selliotech/web_Shop/storage/logs/laravel.log
 
 # Sao lưu
 sudo selliotech-sao-luu trang-thai

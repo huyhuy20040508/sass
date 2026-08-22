@@ -3,8 +3,8 @@
 # Ba việc kiểm chạy song song trên mọi lượt push và mọi pull request:
 #
 #     api    — Go: gofmt, vet, build, rồi TOÀN BỘ test kể cả nhóm cần MySQL thật
-#     admin  — Shop Admin (Laravel): php artisan test
-#     saas   — SaaS Admin (Laravel): php artisan test
+#     web_Shop         — Shop Admin (Laravel): php artisan test
+#     admin-Selliotech — SaaS Admin (Laravel): php artisan test
 #
 # Xong cả ba mà nhánh là main thì job `trien-khai` SSH vào VPS chạy đúng
 # deploy/scripts/02-trien-khai.sh — cùng một script vẫn gõ tay lâu nay, không có
@@ -148,7 +148,7 @@ jobs:
         run: go test -p 1 ./...
 
   # -------------------------------------------------------------------
-  admin:
+  web-shop:
     name: Shop Admin (Laravel)
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -165,7 +165,7 @@ jobs:
           coverage: none
 
       - name: Dựng thư mục runtime của Laravel
-        working-directory: admin
+        working-directory: web_Shop
         # Git KHÔNG lưu được thư mục rỗng, mà .gitignore lại loại sạch nội dung
         # bên trong storage/ — nên bản vừa checkout thiếu chúng. Thiếu
         # storage/framework/views là mọi test chạm view chết với đúng một câu
@@ -184,17 +184,17 @@ jobs:
       - name: Cache composer
         uses: actions/cache@v4
         with:
-          path: admin/vendor
-          key: composer-admin-php8.3-${{ hashFiles('admin/composer.lock') }}
+          path: web_Shop/vendor
+          key: composer-web-shop-php8.3-${{ hashFiles('web_Shop/composer.lock') }}
 
       - name: composer install
-        working-directory: admin
+        working-directory: web_Shop
         # CÓ dev-dependency ở đây (khác hẳn lúc triển khai, chỗ đó --no-dev):
         # phpunit, faker và collision đều nằm trong nhóm dev.
         run: composer install --prefer-dist --no-interaction --no-progress
 
       - name: Dựng .env
-        working-directory: admin
+        working-directory: web_Shop
         # phpunit.xml đã ép sqlite/array cho database, cache, session — nhưng
         # APP_KEY thì không ép được, mà thiếu nó là mọi test chạm session chết
         # ngay ở lượt mã hoá cookie.
@@ -203,11 +203,11 @@ jobs:
           php artisan key:generate --force
 
       - name: php artisan test
-        working-directory: admin
+        working-directory: web_Shop
         run: php artisan test
 
   # -------------------------------------------------------------------
-  saas:
+  admin-selliotech:
     name: SaaS Admin (Laravel)
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -221,8 +221,8 @@ jobs:
           coverage: none
 
       - name: Dựng thư mục runtime của Laravel
-        working-directory: saas
-        # Xem chú thích ở job admin.
+        working-directory: admin-Selliotech
+        # Xem chú thích ở job web-shop.
         run: |
           mkdir -p storage/app/private storage/app/public \
                    storage/framework/cache/data \
@@ -234,27 +234,27 @@ jobs:
       - name: Cache composer
         uses: actions/cache@v4
         with:
-          path: saas/vendor
-          key: composer-saas-php8.3-${{ hashFiles('saas/composer.lock') }}
+          path: admin-Selliotech/vendor
+          key: composer-admin-selliotech-php8.3-${{ hashFiles('admin-Selliotech/composer.lock') }}
 
       - name: composer install
-        working-directory: saas
+        working-directory: admin-Selliotech
         run: composer install --prefer-dist --no-interaction --no-progress
 
       - name: Dựng .env
-        working-directory: saas
+        working-directory: admin-Selliotech
         run: |
           cp .env.example .env
           php artisan key:generate --force
 
       - name: php artisan test
-        working-directory: saas
+        working-directory: admin-Selliotech
         run: php artisan test
 
   # -------------------------------------------------------------------
   trien-khai:
     name: Triển khai lên VPS
-    needs: [api, admin, saas]
+    needs: [api, web-shop, admin-selliotech]
     # Chỉ main, và không bao giờ từ pull request — kể cả PR nhắm vào main.
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest

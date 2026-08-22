@@ -8,7 +8,7 @@ set "SELF=%~f0"
 REM  File nay dong 2 vai:
 REM    - Khong tham so  -> cua so TONG: kiem tra moi thu, mo cac cua so con,
 REM                        roi hien bang dieu khien tu lam moi.
-REM    - --service <ten> -> cua so RIENG cua 1 service (api / admin / saas).
+REM    - --service <ten> -> cua so RIENG cua 1 service (api / web_Shop / admin-Selliotech).
 REM    --status         -> chi mo bang dieu khien, khong kiem tra, khong mo gi.
 REM  Gop lam mot de chi phai phat hanh 1 file, va de cua so con luon dung
 REM  cung logic voi cua so tong.
@@ -80,49 +80,49 @@ if not exist "api\.env" (
     pause
     exit /b 1
 )
-if not exist "admin\.env" (
-    echo     [LOI] Chua co admin\.env
-    echo           Chay: copy admin\.env.example admin\.env  roi: php artisan key:generate
+if not exist "web_Shop\.env" (
+    echo     [LOI] Chua co web_Shop\.env
+    echo           Chay: copy web_Shop\.env.example web_Shop\.env  roi: php artisan key:generate
     pause
     exit /b 1
 )
-if not exist "admin\vendor" (
-    echo     [LOI] Chua co admin\vendor. Chay: cd admin ^&^& composer install
+if not exist "web_Shop\vendor" (
+    echo     [LOI] Chua co web_Shop\vendor. Chay: cd web_Shop ^&^& composer install
     pause
     exit /b 1
 )
-if not exist "saas\.env" (
-    echo     [LOI] Chua co saas\.env
-    echo           Chay: copy saas\.env.example saas\.env  roi: php artisan key:generate
+if not exist "admin-Selliotech\.env" (
+    echo     [LOI] Chua co admin-Selliotech\.env
+    echo           Chay: copy admin-Selliotech\.env.example admin-Selliotech\.env  roi: php artisan key:generate
     pause
     exit /b 1
 )
-if not exist "saas\vendor" (
-    echo     [LOI] Chua co saas\vendor. Chay: cd saas ^&^& composer install
+if not exist "admin-Selliotech\vendor" (
+    echo     [LOI] Chua co admin-Selliotech\vendor. Chay: cd admin-Selliotech ^&^& composer install
     pause
     exit /b 1
 )
-echo     - api\.env, admin\.env, saas\.env, vendor: OK
+echo     - api\.env, web_Shop\.env, admin-Selliotech\.env, vendor: OK
 
 REM  Thu muc runtime cua Laravel. Git KHONG luu duoc thu muc rong, ma thieu
 REM  storage\framework\sessions la moi request tra 500 ngay tu trang dang nhap
 REM  (file_put_contents ... No such file or directory). Tao lai o day de ban
 REM  clone ve chay duoc luon, khong phai di doc stack trace.
 for %%D in (
-    "admin\storage\app\private"
-    "admin\storage\app\public"
-    "admin\storage\framework\cache\data"
-    "admin\storage\framework\sessions"
-    "admin\storage\framework\views"
-    "admin\storage\logs"
-    "admin\bootstrap\cache"
-    "saas\storage\app\private"
-    "saas\storage\app\public"
-    "saas\storage\framework\cache\data"
-    "saas\storage\framework\sessions"
-    "saas\storage\framework\views"
-    "saas\storage\logs"
-    "saas\bootstrap\cache"
+    "web_Shop\storage\app\private"
+    "web_Shop\storage\app\public"
+    "web_Shop\storage\framework\cache\data"
+    "web_Shop\storage\framework\sessions"
+    "web_Shop\storage\framework\views"
+    "web_Shop\storage\logs"
+    "web_Shop\bootstrap\cache"
+    "admin-Selliotech\storage\app\private"
+    "admin-Selliotech\storage\app\public"
+    "admin-Selliotech\storage\framework\cache\data"
+    "admin-Selliotech\storage\framework\sessions"
+    "admin-Selliotech\storage\framework\views"
+    "admin-Selliotech\storage\logs"
+    "admin-Selliotech\bootstrap\cache"
 ) do if not exist "%%~D" mkdir "%%~D"
 echo     - Thu muc runtime cua Laravel: OK
 
@@ -176,8 +176,8 @@ REM ============================================================
 echo.
 echo [3] Mo cua so rieng cho tung service...
 call :LAUNCH api
-call :LAUNCH admin
-call :LAUNCH saas
+call :LAUNCH web_Shop
+call :LAUNCH admin-Selliotech
 echo     - Cho cac service len...
 timeout /t 4 /nobreak >nul
 
@@ -203,7 +203,7 @@ echo.
 echo ------------------------------------------------------------
 echo    Swagger UI  : http://localhost:8080/swagger/index.html
 echo    phpMyAdmin  : http://localhost/phpmyadmin  (database: selliotech)
-echo    Landing     : mo truc tiep tep landing\index.html
+echo    Landing     : mo truc tiep tep landing_shop\index.html
 echo.
 echo    Dang nhap Shop Admin: 3 o - ma cua hang / ten dang nhap / mat khau
 echo    Chua co tai khoan? cd api ^&^& go run ./cmd/tao-admin
@@ -231,8 +231,8 @@ goto :DASHBOARD
 echo.
 echo    Dang mo lai cac service dang tat...
 call :LAUNCH api
-call :LAUNCH admin
-call :LAUNCH saas
+call :LAUNCH web_Shop
+call :LAUNCH admin-Selliotech
 timeout /t 4 /nobreak >nul
 goto :DASHBOARD
 
@@ -241,7 +241,7 @@ echo.
 echo    Dang dung cac service...
 REM  Dong ca cua so con (/t de keo theo go/php ben trong), sau do quet lai theo
 REM  cong phong truong hop cua so bi doi ten hoac service duoc chay tay.
-for %%S in (api admin saas) do taskkill /f /t /fi "WINDOWTITLE eq Selliotech - %%S" >nul 2>&1
+for %%S in (api web_Shop admin-Selliotech) do taskkill /f /t /fi "WINDOWTITLE eq Selliotech - %%S" >nul 2>&1
 for %%P in (8080 8001 8002) do (
     call :CHECK_PORT %%P
     if defined ST_PID taskkill /f /t /pid !ST_PID! >nul 2>&1
@@ -288,8 +288,8 @@ REM  Mo cua so rieng cho 1 service, bo qua neu cong da co nguoi giu.
 :LAUNCH
 set "L_NAME=%~1"
 if /i "%L_NAME%"=="api"   set "L_PORT=8080"
-if /i "%L_NAME%"=="admin" set "L_PORT=8001"
-if /i "%L_NAME%"=="saas"  set "L_PORT=8002"
+if /i "%L_NAME%"=="web_Shop" set "L_PORT=8001"
+if /i "%L_NAME%"=="admin-Selliotech"  set "L_PORT=8002"
 call :CHECK_PORT !L_PORT!
 if defined ST_PID (
     echo     - %L_NAME%: cong !L_PORT! da co tien trinh !ST_PID!. Khong mo them.
@@ -312,20 +312,20 @@ if /i "%SVC%"=="api" (
     set "SVC_URL=http://localhost:8080"
     set "SVC_RUN=go run ./cmd/api"
 )
-if /i "%SVC%"=="admin" (
-    set "SVC_DIR=admin"
+if /i "%SVC%"=="web_Shop" (
+    set "SVC_DIR=web_Shop"
     set "SVC_DESC=Shop Admin - Laravel, khu ban hang"
     set "SVC_URL=http://localhost:8001"
     set "SVC_RUN=php artisan serve --port=8001"
 )
-if /i "%SVC%"=="saas" (
-    set "SVC_DIR=saas"
+if /i "%SVC%"=="admin-Selliotech" (
+    set "SVC_DIR=admin-Selliotech"
     set "SVC_DESC=SaaS Admin - Laravel, dieu hanh nen tang"
     set "SVC_URL=http://localhost:8002"
     set "SVC_RUN=php artisan serve --port=8002"
 )
 if not defined SVC_DIR (
-    echo Khong biet service "%SVC%". Chi nhan: api, admin, saas.
+    echo Khong biet service "%SVC%". Chi nhan: api, web_Shop, admin-Selliotech.
     pause
     exit /b 1
 )
