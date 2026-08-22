@@ -17,7 +17,7 @@
 --
 --  0002 nói BÁN CÁI GÌ. Tệp này nói BÁN BAO NHIÊU. Hôm nay bảng giá của
 --  Sellio Order chỉ tồn tại ở đúng một chỗ: ba thẻ HTML trong
---  landing_shop/index.html. Muốn khu điều hành hiện được "gói Cửa hàng, 499k/
+--  landing/index.html. Muốn khu điều hành hiện được "gói Cửa hàng, 499k/
 --  tháng" thì phải gõ lại số đó lần thứ hai, và hai chỗ gõ tay sẽ lệch
 --  nhau đúng vào ngày đổi giá.
 --
@@ -109,7 +109,7 @@ CREATE TABLE IF NOT EXISTS plans (
 --  2. BẢNG GIÁ ĐANG CHẠY CỦA APP 'order'
 -- =====================================================================
 --  Ba dòng dưới đây là bản chép ĐÚNG của bảng giá đang công khai ở
---  landing_shop/index.html (mục #bang-gia) ngày 12/08/2026:
+--  landing/index.html (mục #bang-gia) ngày 12/08/2026:
 --
 --      Khởi đầu   199.000đ/tháng   1 cửa hàng, 2 tài khoản
 --      Cửa hàng   499.000đ/tháng   1 cửa hàng, 10 tài khoản
