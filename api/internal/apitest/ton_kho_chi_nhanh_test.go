@@ -124,70 +124,6 @@ func TestTonKhoTachTheoChiNhanh(t *testing.T) {
 	}
 }
 
-// TestSoConTrenManHinhLapPhieu — CỘT "CÒN" PHẢI HỎI ĐÚNG CÁI KHO SẼ BỊ TRỪ.
-//
-// Tách kho ra theo chi nhánh mới xong một nửa nếu đường GHI trừ kho A còn đường
-// ĐỌC vẫn khoe số của cả cửa hàng. Cái lệch đó không báo lỗi lúc mở màn hình —
-// nó chờ tới lúc người ta chốt phiếu, tức là sau khi đã hứa với nhà cung cấp
-// hoặc đã nhận tiền của khách.
-//
-// Hai màn hình, hai câu trả lời KHÁC NHAU cho cùng một biến thể, và đó chính là
-// điều bài này chứng minh:
-//
-//   - lập phiếu NHẬP: kho sẽ nhận hàng = chi nhánh đang đứng;
-//   - lập phiếu TRẢ nhà cung cấp: kho đã nhận lô hàng = chi nhánh của PHIẾU ĐẶT
-//     GỐC, kể cả khi người lập đang đứng ở chi nhánh khác.
-func TestSoConTrenManHinhLapPhieu(t *testing.T) {
-	h := dungHeThong(t)
-	a, _ := haiCuaHang(t, h)
-
-	phu := moChiNhanh(t, h, a, "kho-phu-2")
-
-	// 20 cái ở chi nhánh gốc (dữ liệu gieo sẵn), 7 cái ở chi nhánh phụ.
-	res := h.goiChiNhanh(t, a.token, phu, http.MethodPut,
-		fmt.Sprintf("/api/v1/admin/inventory/%d", a.bienThe),
-		map[string]any{"mode": "delta", "quantity": 7})
-	if res.ma != http.StatusOK {
-		t.Fatalf("nhập hàng vào chi nhánh phụ trả %d\n%s", res.ma, catBot(res.than))
-	}
-
-	// --- Màn hình lập phiếu NHẬP ---
-	//
-	// 27 là bản cộng của cả cửa hàng. Con số đó xuất hiện ở đây nghĩa là người
-	// lập phiếu đang đặt hàng theo tồn của một kho khác.
-	if got := tonKhiLapPhieuNhap(t, h, a, phu); got != 7 {
-		t.Fatalf("đứng ở chi nhánh phụ mà cột 'còn' của phiếu nhập ghi %d — phải là 7 (27 = đang đọc bản cộng cả cửa hàng)", got)
-	}
-	if got := tonKhiLapPhieuNhap(t, h, a, a.chiNhanh); got != 20 {
-		t.Fatalf("đứng ở chi nhánh gốc mà cột 'còn' của phiếu nhập ghi %d — phải là 20", got)
-	}
-
-	// --- Màn hình lập phiếu TRẢ nhà cung cấp ---
-	//
-	// Lô hàng của phiếu `phieuNhan` đã về kho GỐC, nên dù người lập đang đứng ở
-	// chi nhánh phụ (nơi chỉ có 7 cái), số hiển thị vẫn phải là 20 — đúng cái kho
-	// mà lượt chốt phiếu sẽ trừ đi.
-	res = h.goiChiNhanh(t, a.token, phu, http.MethodGet,
-		fmt.Sprintf("/api/v1/admin/purchase-returns/returnable/%d", a.phieuNhan), nil)
-	if res.ma != http.StatusOK {
-		t.Fatalf("đọc dòng trả được của phiếu nhập trả %d\n%s", res.ma, catBot(res.than))
-	}
-	var traDuoc struct {
-		Data []struct {
-			Stock int `json:"stock"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal([]byte(res.than), &traDuoc); err != nil {
-		t.Fatalf("không đọc được danh sách trả được: %v\n%s", err, catBot(res.than))
-	}
-	if len(traDuoc.Data) == 0 {
-		t.Fatalf("phiếu nhập phải có dòng trả lại được:\n%s", catBot(res.than))
-	}
-	if got := traDuoc.Data[0].Stock; got != 20 {
-		t.Fatalf("tồn trên phiếu trả ghi %d — phải là 20, tồn của KHO ĐÃ NHẬN lô hàng (7 = kho người đang đứng, 27 = bản cộng cả cửa hàng)", got)
-	}
-}
-
 // moChiNhanh mở thêm một chi nhánh qua đúng đường người dùng đi và trả về id.
 func moChiNhanh(t *testing.T, h *heThong, c *cuaHang, ma string) uint {
 	t.Helper()
@@ -208,35 +144,6 @@ func moChiNhanh(t *testing.T, h *heThong, c *cuaHang, ma string) uint {
 	}
 
 	return tao.Data.ID
-}
-
-// tonKhiLapPhieuNhap đọc cột "còn" của ô chọn hàng trên màn hình lập phiếu nhập.
-func tonKhiLapPhieuNhap(t *testing.T, h *heThong, c *cuaHang, shopID uint) int {
-	t.Helper()
-
-	res := h.goiChiNhanh(t, c.token, shopID, http.MethodGet,
-		"/api/v1/admin/purchases/variants?keyword=sku-"+c.vet+"-m", nil)
-	if res.ma != http.StatusOK {
-		t.Fatalf("tìm hàng để nhập trả %d\n%s", res.ma, catBot(res.than))
-	}
-
-	var out struct {
-		Data []struct {
-			VariantID uint `json:"variant_id"`
-			Stock     int  `json:"stock"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal([]byte(res.than), &out); err != nil {
-		t.Fatalf("không đọc được danh sách hàng: %v\n%s", err, catBot(res.than))
-	}
-	for _, v := range out.Data {
-		if v.VariantID == c.bienThe {
-			return v.Stock
-		}
-	}
-	t.Fatalf("không thấy biến thể %d trong ô chọn hàng:\n%s", c.bienThe, catBot(res.than))
-
-	return 0
 }
 
 // TestChiNhanhCuaTiemKhacKhongDungDuoc — header chi nhánh là con số do trình

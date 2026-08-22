@@ -309,9 +309,6 @@ func dungHeThongVoi(t *testing.T, banHang, dieuHanh bool) *heThong {
 	returnRepo := repository.NewOrderReturnRepository(db)
 	notifRepo := repository.NewNotificationRepository(db)
 	inventoryRepo := repository.NewInventoryRepository(db)
-	purchaseRepo := repository.NewPurchaseOrderRepository(db)
-	receiptRepo := repository.NewGoodsReceiptRepository(db)
-	pReturnRepo := repository.NewPurchaseReturnRepository(db)
 	settingRepo := repository.NewSettingRepository(db)
 	bannerRepo := repository.NewBannerRepository(db)
 	reportRepo := repository.NewReportRepository(db)
@@ -360,9 +357,6 @@ func dungHeThongVoi(t *testing.T, banHang, dieuHanh bool) *heThong {
 	returnSvc := service.NewOrderReturnService(returnRepo, notifSvc, settingSvc)
 	inventorySvc := service.NewInventoryService(inventoryRepo)
 	contactSvc := service.NewContactService(contactRepo, newsletterRepo)
-	purchaseSvc := service.NewPurchaseOrderService(purchaseRepo)
-	receiptSvc := service.NewGoodsReceiptService(receiptRepo)
-	pReturnSvc := service.NewPurchaseReturnService(pReturnRepo, purchaseRepo)
 	reportSvc := service.NewReportService(reportRepo)
 
 	r := router.New(cfg, jwtMgr, tenMienRepo, nguoiDieuHanhRepo, nil, chiNhanhRepo, repository.NewQuyenRepository(db), router.Handlers{
@@ -375,9 +369,6 @@ func dungHeThongVoi(t *testing.T, banHang, dieuHanh bool) *heThong {
 		Return:   handler.NewOrderReturnHandler(returnSvc),
 		Notif:    handler.NewNotificationHandler(notifSvc, hub),
 		Stock:    handler.NewInventoryHandler(inventorySvc),
-		Purchase: handler.NewPurchaseOrderHandler(purchaseSvc),
-		Receipt:  handler.NewGoodsReceiptHandler(receiptSvc),
-		PReturn:  handler.NewPurchaseReturnHandler(pReturnSvc),
 		Setting:  handler.NewSettingHandler(settingSvc),
 		User:     handler.NewUserHandler(userSvc),
 		ChiNhanh: handler.NewChiNhanhHandler(service.NewChiNhanhService(chiNhanhRepo, hanMucSvc, quyTacMaRepo)),

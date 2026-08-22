@@ -315,9 +315,6 @@ func main() {
 	returnRepo := repository.NewOrderReturnRepository(db)
 	notifRepo := repository.NewNotificationRepository(db)
 	inventoryRepo := repository.NewInventoryRepository(db)
-	purchaseRepo := repository.NewPurchaseOrderRepository(db)
-	receiptRepo := repository.NewGoodsReceiptRepository(db)
-	pReturnRepo := repository.NewPurchaseReturnRepository(db)
 	settingRepo := repository.NewSettingRepository(db)
 	bannerRepo := repository.NewBannerRepository(db)
 	reportRepo := repository.NewReportRepository(db)
@@ -434,13 +431,6 @@ func main() {
 	inventorySvc := service.NewInventoryService(inventoryRepo)
 	// Yêu cầu khách gửi từ storefront (Liên hệ / Thu mua) + danh sách nhận tin.
 	contactSvc := service.NewContactService(contactRepo, newsletterRepo)
-	purchaseSvc := service.NewPurchaseOrderService(purchaseRepo)
-	// Trang Nhập hàng chỉ ĐỌC lại các đợt hàng đã về; việc cộng tồn kho vẫn nằm
-	// duy nhất ở purchaseSvc.Receive.
-	receiptSvc := service.NewGoodsReceiptService(receiptRepo)
-	// pReturnSvc cần purchaseRepo để đọc phiếu đặt gốc: chỉ trả lại được hàng ĐÃ NHẬN
-	// của phiếu đó, và giá nhập lấy theo đúng dòng phiếu đặt.
-	pReturnSvc := service.NewPurchaseReturnService(pReturnRepo, purchaseRepo)
 	// Báo cáo chỉ đọc và gộp lại dữ liệu đã có, không phụ thuộc service nào khác —
 	// nó đi thẳng xuống repository riêng của mình để các phép gộp chạy bằng SQL
 	// thay vì nạp đơn ra bộ nhớ rồi cộng bằng Go.
@@ -465,9 +455,6 @@ func main() {
 		Return:     handler.NewOrderReturnHandler(returnSvc),
 		Notif:      handler.NewNotificationHandler(notifSvc, hub),
 		Stock:      handler.NewInventoryHandler(inventorySvc),
-		Purchase:   handler.NewPurchaseOrderHandler(purchaseSvc),
-		Receipt:    handler.NewGoodsReceiptHandler(receiptSvc),
-		PReturn:    handler.NewPurchaseReturnHandler(pReturnSvc),
 		Setting:    handler.NewSettingHandler(settingSvc),
 		User:       handler.NewUserHandler(userSvc),
 		ChiNhanh:   handler.NewChiNhanhHandler(chiNhanhSvc),

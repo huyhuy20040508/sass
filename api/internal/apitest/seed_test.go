@@ -44,13 +44,6 @@ type cuaHang struct {
 	traHang    uint
 	maGiaoDich string // payments.transaction_code — khoá của /payments/{code}
 
-	phieuDat  uint // ordered, chưa nhận đợt nào
-	dongDat   uint // purchase_order_items.id của phieuDat
-	phieuNhan uint // received, đã có đợt nhập
-	dongNhan  uint // purchase_order_items.id của phieuNhan
-	maDotNhap string
-	traNhap   uint
-
 	banner    uint
 	khuyenMai uint
 	voucher   uint
@@ -228,43 +221,17 @@ func gieo(t *testing.T, db *gorm.DB, ma string) *cuaHang {
 	tao(t, db, ctx, thanhToan)
 	c.maGiaoDich = thanhToan.TransactionCode
 
-	// --- mua vào ---
-	c.phieuDat, c.dongDat = gieoPhieuDat(t, db, ctx, c, "pd-"+c.vet, domain.PurchaseStatusOrdered, 0)
-	c.phieuNhan, c.dongNhan = gieoPhieuDat(t, db, ctx, c, "pn-"+c.vet, domain.PurchaseStatusReceived, 5)
-
-	// Một đợt nhập = các bút toán kho + MỘT mốc lịch sử ghi SAU chúng. Thứ tự
-	// quan trọng: goods_receipt_repository gom bút toán theo mốc đứng sau chúng,
-	// nên ghi mốc trước thì đợt nhập hiện ra với 0 dòng hàng.
+	// --- hàng về kho ---
+	//
+	// Bút toán nhập KHÔNG trỏ vào chứng từ nào: các trang mua vào đã bị gỡ, đây
+	// chỉ còn là lượt cân đối kho để tồn của biến thể bằng 20.
 	tao(t, db, ctx, &domain.InventoryTransaction{
 		ShopID:           c.chiNhanh,
 		ProductVariantID: c.bienThe, Type: "import", Quantity: 5,
 		QuantityBefore: 15, QuantityAfter: 20,
-		ReferenceType: "purchase_order", ReferenceID: &c.phieuNhan,
-		UnitCost: conTro(60000.0), Note: "Nhập hàng theo phiếu pn-" + c.vet,
+		UnitCost: conTro(60000.0), Note: "Hàng về kho " + c.vet,
 		CreatedBy: &quanTri.ID,
 	})
-	tao(t, db, ctx, &domain.PurchaseOrderHistory{
-		PurchaseOrderID: c.phieuNhan, FromStatus: domain.PurchaseStatusOrdered,
-		ToStatus: domain.PurchaseStatusReceived, Note: "Nhận 5 sản phẩm", ChangedBy: &quanTri.ID,
-	})
-	c.maDotNhap = "pn-" + c.vet + "-N1"
-
-	traNhap := &domain.PurchaseReturn{
-		ShopID:     c.chiNhanh,
-		ReturnCode: "tn-" + c.vet, PurchaseOrderID: &c.phieuNhan, POCode: "pn-" + c.vet,
-		SupplierName: "Nhà cung cấp " + c.vet,
-		Status:       domain.PurchaseReturnStatusDraft, Reason: domain.PurchaseReturnReasonDefect,
-		ItemsAmount: 60000, RefundStatus: domain.PurchaseRefundUnpaid, Note: "Ghi chú " + c.vet,
-	}
-	tao(t, db, ctx, traNhap)
-	c.traNhap = traNhap.ID
-	tao(t, db, ctx, &domain.PurchaseReturnItem{
-		PurchaseReturnID: traNhap.ID, PurchaseOrderItemID: &c.dongNhan,
-		ProductID: &sanPham.ID, ProductVariantID: &bienThe.ID,
-		ProductName: "Sản phẩm " + c.vet, VariantSKU: bienThe.SKU,
-		Quantity: 1, UnitCost: 60000, TotalCost: 60000,
-	})
-
 	// --- tiếp thị & tương tác ---
 	banner := &domain.Banner{
 		Title: "Banner " + c.vet, Image: "/anh/" + c.vet + ".jpg",
@@ -402,45 +369,12 @@ func boSung(t *testing.T, db *gorm.DB, c *cuaHang) {
 		UnitPrice: 200000, Quantity: 1, TotalPrice: 200000,
 	})
 
-	phieu := &domain.PurchaseOrder{
-		ShopID: c.chiNhanh,
-		POCode: "pn2-" + c.vet, SupplierName: "Nhà cung cấp " + hau,
-		Status: domain.PurchaseStatusReceived, ItemsAmount: 240000, TotalAmount: 240000,
-		PaymentStatus: domain.PurchasePaymentUnpaid, OrderedAt: &now, ReceivedAt: &now,
-		CreatedBy: &c.quanTri,
-	}
-	tao(t, db, ctx, phieu)
-	dongPhieu := &domain.PurchaseOrderItem{
-		PurchaseOrderID: phieu.ID, ProductID: &sanPham.ID, ProductVariantID: &bienThe.ID,
-		ProductName: "Sản phẩm " + hau, VariantSKU: bienThe.SKU,
-		UnitCost: 120000, Quantity: 2, ReceivedQuantity: 2, TotalCost: 240000,
-	}
-	tao(t, db, ctx, dongPhieu)
+	// Hàng về kho — không trỏ vào chứng từ nào, xem chú thích ở lượt gieo trên.
 	tao(t, db, ctx, &domain.InventoryTransaction{
 		ShopID:           c.chiNhanh,
 		ProductVariantID: bienThe.ID, Type: "import", Quantity: 2,
 		QuantityBefore: 5, QuantityAfter: 7,
-		ReferenceType: "purchase_order", ReferenceID: &phieu.ID,
 		UnitCost: conTro(120000.0), CreatedBy: &c.quanTri,
-	})
-	tao(t, db, ctx, &domain.PurchaseOrderHistory{
-		PurchaseOrderID: phieu.ID, FromStatus: domain.PurchaseStatusOrdered,
-		ToStatus: domain.PurchaseStatusReceived, Note: "Nhận 2 sản phẩm", ChangedBy: &c.quanTri,
-	})
-
-	traNhap := &domain.PurchaseReturn{
-		ShopID:     c.chiNhanh,
-		ReturnCode: "tn2-" + c.vet, PurchaseOrderID: &phieu.ID, POCode: phieu.POCode,
-		SupplierName: "Nhà cung cấp " + hau,
-		Status:       domain.PurchaseReturnStatusDraft, Reason: domain.PurchaseReturnReasonDefect,
-		ItemsAmount: 120000, RefundStatus: domain.PurchaseRefundUnpaid,
-	}
-	tao(t, db, ctx, traNhap)
-	tao(t, db, ctx, &domain.PurchaseReturnItem{
-		PurchaseReturnID: traNhap.ID, PurchaseOrderItemID: &dongPhieu.ID,
-		ProductID: &sanPham.ID, ProductVariantID: &bienThe.ID,
-		ProductName: "Sản phẩm " + hau, VariantSKU: bienThe.SKU,
-		Quantity: 1, UnitCost: 120000, TotalCost: 120000,
 	})
 
 	tao(t, db, ctx, &domain.Promotion{
@@ -490,33 +424,6 @@ func gieoDon(t *testing.T, db *gorm.DB, ctx context.Context, c *cuaHang, ma, tra
 	})
 
 	return don.ID
-}
-
-// gieoPhieuDat dựng một phiếu đặt hàng nhập kèm một dòng, trả về id phiếu và id dòng.
-func gieoPhieuDat(t *testing.T, db *gorm.DB, ctx context.Context, c *cuaHang, ma, trangThai string, daNhan int) (uint, uint) {
-	t.Helper()
-	now := time.Now()
-
-	phieu := &domain.PurchaseOrder{
-		ShopID: c.chiNhanh,
-		POCode: ma, SupplierName: "Nhà cung cấp " + c.vet,
-		Status: trangThai, ItemsAmount: 300000, TotalAmount: 300000,
-		PaymentStatus: domain.PurchasePaymentUnpaid, Note: "Phiếu của " + c.vet,
-		OrderedAt: &now, CreatedBy: &c.quanTri,
-	}
-	if trangThai == domain.PurchaseStatusReceived {
-		phieu.ReceivedAt = &now
-	}
-	tao(t, db, ctx, phieu)
-
-	dong := &domain.PurchaseOrderItem{
-		PurchaseOrderID: phieu.ID, ProductID: &c.sanPham, ProductVariantID: &c.bienThe,
-		ProductName: "Sản phẩm " + c.vet, VariantSKU: "sku-" + c.vet + "-m", VariantName: "M",
-		UnitCost: 60000, Quantity: 5, ReceivedQuantity: daNhan, TotalCost: 300000,
-	}
-	tao(t, db, ctx, dong)
-
-	return phieu.ID, dong.ID
 }
 
 func tao(t *testing.T, db *gorm.DB, ctx context.Context, v any) {

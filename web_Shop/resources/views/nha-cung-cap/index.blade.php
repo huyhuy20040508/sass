@@ -13,7 +13,7 @@
         $tien = fn ($n) => ((float) $n) != 0.0 ? number_format((float) $n, 0, ',', '.').'₫' : '—';
 
         // Lọc phụ nằm trong "Nâng cao"; đang bật thì hàng đó tự mở kèm con số.
-        $advCount = ($filters['debt'] !== '' ? 1 : 0) + ($filters['sort'] !== 'moi_nhat' ? 1 : 0);
+        $advCount = $filters['sort'] !== 'moi_nhat' ? 1 : 0;
         $advOpen = $advCount > 0;
         $hasFilter = $advCount > 0 || $filters['keyword'] !== '' || $filters['status'] !== '';
 
@@ -24,9 +24,7 @@
         <div class="ncc-head">
             <h1 class="ncc-title">{{ $TITLE }}</h1>
             <span class="ncc-sum">
-                Đang hợp tác: <b>{{ $so($thongKe['dang_hop_tac']) }}</b>/{{ $so($thongKe['tong']) }} ·
-                Tổng mua: <b>{{ $tien($thongKe['tong_mua']) }}</b> ·
-                Còn nợ: <b>{{ $tien($thongKe['con_no']) }}</b>
+                Đang hợp tác: <b>{{ $so($thongKe['dang_hop_tac']) }}</b>/{{ $so($thongKe['tong']) }}
             </span>
         </div>
 
@@ -116,13 +114,6 @@
             </div>
 
             <div class="ncc-toolbar-adv {{ $advOpen ? 'is-open' : '' }}" id="nccAdvRow">
-                <select name="debt" class="ncc-select" title="Lọc theo công nợ">
-                    <option value="">Tất cả công nợ</option>
-                    @foreach($C::CONG_NO as $ma => $ten)
-                        <option value="{{ $ma }}" @selected($filters['debt'] === $ma)>{{ $ten }}</option>
-                    @endforeach
-                </select>
-
                 <select name="sort" class="ncc-select" title="Sắp xếp">
                     @foreach($C::SAP_XEP as $ma => $ten)
                         <option value="{{ $ma }}" @selected($filters['sort'] === $ma)>{{ $ten }}</option>
@@ -147,9 +138,6 @@
                         <th class="ncc-c-email">Email</th>
                         <th class="ncc-c-addr">Địa chỉ</th>
                         <th class="ncc-c-addr2">Địa chỉ 2</th>
-                        <th class="ncc-c-mua">Tổng mua</th>
-                        <th class="ncc-c-tra">Đã trả</th>
-                        <th class="ncc-c-no">Còn nợ</th>
                         <th class="ncc-c-status">Trạng thái</th>
                         <th class="ncc-c-act">Thao tác</th>
                     </tr>
@@ -160,7 +148,6 @@
                             $id = (int) ($ncc['id'] ?? 0);
                             $ten = $ncc['name'] ?? '';
                             $bat = (int) ($ncc['status'] ?? 1) === $C::DANG_HOP_TAC;
-                            $no = (float) ($ncc['debt'] ?? 0);
                         @endphp
                         <tr data-id="{{ $id }}">
                             <td class="ncc-c-check">
@@ -186,15 +173,6 @@
                             <td class="ncc-c-email" title="{{ $ncc['email'] ?? '' }}">{{ ($ncc['email'] ?? '') ?: '—' }}</td>
                             <td class="ncc-c-addr" title="{{ $ncc['address'] ?? '' }}">{{ ($ncc['address'] ?? '') ?: '—' }}</td>
                             <td class="ncc-c-addr2" title="{{ $ncc['address_line2'] ?? '' }}">{{ ($ncc['address_line2'] ?? '') ?: '—' }}</td>
-                            <td class="ncc-c-mua">{{ $tien($ncc['total_purchases'] ?? 0) }}</td>
-                            <td class="ncc-c-tra">{{ $tien($ncc['paid'] ?? 0) }}</td>
-                            <td class="ncc-c-no">
-                                @if($no > 0)
-                                    <span class="ncc-debt">{{ $tien($no) }}</span>
-                                @else
-                                    <span class="ncc-muted">—</span>
-                                @endif
-                            </td>
                             <td class="ncc-c-status">
                                 <button type="button" class="ncc-switch {{ $bat ? 'on' : '' }}"
                                         data-toggle="{{ $id }}" data-on="{{ $bat ? 1 : 0 }}"
@@ -372,12 +350,6 @@
             </div>
 
             <div class="ncc-modal-body">
-                <div class="ncc-tabs" role="tablist">
-                    <button type="button" class="ncc-tab is-active" data-tab="ho-so">Chi tiết</button>
-                    <button type="button" class="ncc-tab" data-tab="lich-su">Lịch sử mua hàng</button>
-                    <button type="button" class="ncc-tab" data-tab="cong-no">Công nợ</button>
-                </div>
-
                 <div class="ncc-tab-pane is-active" data-pane="ho-so">
                     <div class="ncc-view-cols">
                         <div class="ncc-view-anh">
@@ -397,43 +369,6 @@
                     </div>
                 </div>
 
-                <div class="ncc-tab-pane" data-pane="lich-su">
-                    <div class="ncc-sub-bar">
-                        <div class="ncc-searchbox">
-                            <input type="text" class="ncc-search-input is-sm" data-tim="lich-su"
-                                   placeholder="Tìm theo mã phiếu, chi nhánh, ghi chú" autocomplete="off">
-                            <button type="button" class="ncc-search-btn" tabindex="-1">
-                                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-                            </button>
-                        </div>
-                        <input type="date" class="ncc-input is-date" data-tu="lich-su" title="Từ ngày">
-                        <input type="date" class="ncc-input is-date" data-den="lich-su" title="Đến ngày">
-                        <button type="button" class="ncc-btn-ghost ncc-sub-export" data-xuat="lich-su">
-                            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
-                            Xuất file
-                        </button>
-                    </div>
-                    <div class="ncc-sub-wrap" id="nccPaneLichSu"></div>
-                    <div class="ncc-sub-foot" data-foot="lich-su"></div>
-                </div>
-
-                <div class="ncc-tab-pane" data-pane="cong-no">
-                    <div class="ncc-sub-bar">
-                        <div class="ncc-searchbox">
-                            <input type="text" class="ncc-search-input is-sm" data-tim="cong-no"
-                                   placeholder="Tìm theo mã chứng từ, ghi chú" autocomplete="off">
-                            <button type="button" class="ncc-search-btn" tabindex="-1">
-                                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-                            </button>
-                        </div>
-                        <button type="button" class="ncc-btn-ghost ncc-sub-export" data-xuat="cong-no">
-                            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
-                            Xuất file
-                        </button>
-                    </div>
-                    <div class="ncc-sub-wrap" id="nccPaneCongNo"></div>
-                    <div class="ncc-sub-foot" data-foot="cong-no"></div>
-                </div>
             </div>
 
             <div class="ncc-modal-foot">
@@ -584,7 +519,7 @@
         .ncc-table-wrap { width: 100%; padding: 0 20px; overflow-x: auto; scrollbar-width: thin; }
         .ncc-table-wrap::-webkit-scrollbar { height: 11px; }
         .ncc-table-wrap::-webkit-scrollbar-thumb { background-color: #dcdcdc; border-radius: 8px; border: 3px solid #fff; }
-        .ncc-table { width: 100%; min-width: 1360px; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
+        .ncc-table { width: 100%; min-width: 1120px; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
         .ncc-table thead tr { background: #f0f0f0; color: #262626; }
         .ncc-table thead th { text-align: center; padding: 14px 10px; font-size: 13px; font-weight: 700; white-space: nowrap; }
         .ncc-table tbody td {
@@ -600,12 +535,9 @@
         .ncc-table th.ncc-c-name,   .ncc-table td.ncc-c-name   { width: 13%; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
         .ncc-table th.ncc-c-tax,    .ncc-table td.ncc-c-tax    { width: 7%; }
         .ncc-table th.ncc-c-phone,  .ncc-table td.ncc-c-phone  { width: 7%; }
-        .ncc-table th.ncc-c-email,  .ncc-table td.ncc-c-email  { width: 9%; overflow: hidden; text-overflow: ellipsis; }
-        .ncc-table th.ncc-c-addr,   .ncc-table td.ncc-c-addr   { width: 9%; overflow: hidden; text-overflow: ellipsis; color: #595959; }
-        .ncc-table th.ncc-c-addr2,  .ncc-table td.ncc-c-addr2  { width: 9%; overflow: hidden; text-overflow: ellipsis; color: #595959; }
-        .ncc-table th.ncc-c-mua,    .ncc-table td.ncc-c-mua,
-        .ncc-table th.ncc-c-tra,    .ncc-table td.ncc-c-tra,
-        .ncc-table th.ncc-c-no,     .ncc-table td.ncc-c-no     { width: 7%; font-variant-numeric: tabular-nums; }
+        .ncc-table th.ncc-c-email,  .ncc-table td.ncc-c-email  { width: 16%; overflow: hidden; text-overflow: ellipsis; }
+        .ncc-table th.ncc-c-addr,   .ncc-table td.ncc-c-addr   { width: 16%; overflow: hidden; text-overflow: ellipsis; color: #595959; }
+        .ncc-table th.ncc-c-addr2,  .ncc-table td.ncc-c-addr2  { width: 16%; overflow: hidden; text-overflow: ellipsis; color: #595959; }
         .ncc-table th.ncc-c-status, .ncc-table td.ncc-c-status { width: 5%; }
         .ncc-table th.ncc-c-act,    .ncc-table td.ncc-c-act    { width: 7%; }
 
@@ -613,7 +545,6 @@
         .ncc-name { display: block; font-weight: 500; overflow: hidden; text-overflow: ellipsis; }
         .ncc-sub { display: block; margin-top: 2px; font-size: 12px; color: #8c8c8c; overflow: hidden; text-overflow: ellipsis; }
         .ncc-muted { color: #bfbfbf; }
-        .ncc-debt { font-weight: 600; color: #cf1322; }
         .ncc-phone { color: #262626; text-decoration: none; }
         .ncc-phone:hover { color: #1890ff; }
         .ncc-empty { padding: 40px 12px; text-align: center; color: #8c8c8c; white-space: normal; }
@@ -734,7 +665,6 @@
         .ncc-switch-label { font-size: 13px; }
 
         /* Modal chi tiết */
-        .ncc-tabs { display: flex; gap: 4px; border-bottom: 1px solid #f0f0f0; }
         .ncc-tab {
             border: 0; background: none; padding: 8px 14px; font-size: 13px; color: #595959; cursor: pointer;
             border-bottom: 2px solid transparent;
@@ -752,29 +682,6 @@
         .ncc-cell.is-full { grid-column: 1 / -1; }
         .ncc-lb { font-size: 12px; color: #8c8c8c; }
         .ncc-vl { font-size: 13px; color: #262626; word-break: break-word; }
-
-        /* Hai bảng con trong hộp chi tiết */
-        .ncc-sub-wrap { overflow-x: auto; }
-        .ncc-sub-table { width: 100%; min-width: 720px; border-collapse: collapse; font-size: 13px; }
-        .ncc-sub-table thead tr { background: #f0f0f0; }
-        .ncc-sub-table th { text-align: center; padding: 10px 8px; font-size: 12px; font-weight: 700; white-space: nowrap; }
-        .ncc-sub-table td { text-align: center; padding: 10px 8px; border-bottom: 1px solid #f5f5f5; white-space: nowrap; }
-        .ncc-sub-empty { padding: 32px 12px; text-align: center; color: #8c8c8c; font-size: 13px; }
-        .ncc-sub-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
-        .ncc-sub-bar .ncc-search-input.is-sm { width: 220px; height: 30px; }
-        .ncc-sub-bar .ncc-search-btn { height: 30px; width: 34px; }
-        .ncc-input.is-date { height: 30px; width: 150px; }
-        .ncc-sub-export { height: 30px; margin-left: auto; }
-        .ncc-sub-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 10px; }
-        .ncc-sub-foot:empty { display: none; }
-        .ncc-sub-dem { font-size: 12px; color: #8c8c8c; }
-        .ncc-sub-pager { display: flex; align-items: center; gap: 6px; }
-        .ncc-pg {
-            min-width: 28px; height: 28px; padding: 0 8px; border: 1px solid #d9d9d9; border-radius: 4px;
-            background: #fff; font-size: 12px; color: #262626; cursor: pointer;
-        }
-        .ncc-pg[disabled] { opacity: .45; cursor: not-allowed; }
-        .ncc-sub-size { height: 28px; font-size: 12px; padding: 0 26px 0 8px; }
     </style>
 
     <script>
@@ -966,15 +873,6 @@
             const $detail = document.getElementById('nccDetailOverlay');
             let dangXem = null;
 
-            document.querySelectorAll('.ncc-tab').forEach((tab) => {
-                tab.addEventListener('click', () => {
-                    document.querySelectorAll('.ncc-tab').forEach((t) => t.classList.toggle('is-active', t === tab));
-                    document.querySelectorAll('.ncc-tab-pane').forEach((p) => {
-                        p.classList.toggle('is-active', p.dataset.pane === tab.dataset.tab);
-                    });
-                });
-            });
-
             function o(nhan, giaTri, full) {
                 return `<div class="ncc-cell${full ? ' is-full' : ''}"><span class="ncc-lb">${esc(nhan)}</span>`
                     + `<span class="ncc-vl">${esc(giaTri || '—')}</span></div>`;
@@ -1006,195 +904,14 @@
                     o('Email', s.email),
                     o('Người đại diện', s.representative_name),
                     o('SĐT người đại diện', s.representative_phone),
-                    o('Tổng mua', money(s.total_purchases)),
-                    o('Đã trả', money(s.paid)),
-                    o('Còn nợ', money(s.debt)),
                     o('Ngày tạo', ngay(s.created_at)),
                     o('Địa chỉ', s.address, true),
                     o('Địa chỉ 2', s.address_line2, true),
                     o('Ghi chú', s.note, true),
                 ].join('');
 
-                napBangCon(s);
-
-                document.querySelector('.ncc-tab').click();
                 $detail.style.display = 'flex';
             }
-
-            // Hai bảng con dùng chung một bộ máy: lọc -> cắt trang -> vẽ.
-            const MUC_DONG_CON = [10, 20, 30, 40, 50];
-
-            const conLai = (r) => (Number(r.total_amount) || 0) - (Number(r.paid) || 0);
-
-            const BANG_CON = {
-                'lich-su': {
-                    el: 'nccPaneLichSu',
-                    khoa: 'purchase_orders',
-                    rong: 'Chưa có phiếu mua nào từ nhà cung cấp này.',
-                    tep: 'lich-su-mua-hang',
-                    ngay: (r) => r.created_at || r.document_date,
-                    tim: (r) => [r.code, r.branch_name, r.note].join(' '),
-                    cot: [
-                        { ten: 'Mã phiếu', lay: (r) => r.code || '—' },
-                        { ten: 'Ngày lập', lay: (r) => ngay(r.created_at || r.document_date) },
-                        { ten: 'Chi nhánh', lay: (r) => r.branch_name || '—' },
-                        { ten: 'Tiền hàng', lay: (r) => money(r.total_price) },
-                        { ten: 'Tổng tiền', lay: (r) => money(r.total_amount) },
-                        { ten: 'Thanh toán', lay: (r) => r.payment_status_label || '—' },
-                        { ten: 'Ghi chú', lay: (r) => r.note || '—' },
-                    ],
-                },
-                'cong-no': {
-                    el: 'nccPaneCongNo',
-                    khoa: 'debts',
-                    rong: 'Nhà cung cấp này chưa có khoản nợ nào.',
-                    tep: 'cong-no',
-                    ngay: (r) => r.created_at,
-                    tim: (r) => [r.code, r.note].join(' '),
-                    cot: [
-                        { ten: 'Mã chứng từ', lay: (r) => r.code || '—' },
-                        { ten: 'Ngày lập', lay: (r) => ngay(r.created_at) },
-                        { ten: 'Tổng tiền', lay: (r) => money(r.total_amount) },
-                        { ten: 'Đã trả', lay: (r) => money(r.paid) },
-                        {
-                            ten: 'Còn lại',
-                            lay: (r) => money(conLai(r)),
-                            html: (r) => (conLai(r) > 0 ? '<span class="ncc-debt">' + money(conLai(r)) + '</span>' : '—'),
-                        },
-                        { ten: 'Hạn trả', lay: (r) => ngay(r.expired_date) },
-                        { ten: 'Ghi chú', lay: (r) => r.note || '—' },
-                    ],
-                },
-            };
-
-            const TRANG_THAI_CON = {};
-
-            function napBangCon(s) {
-                for (const [ma, cau] of Object.entries(BANG_CON)) {
-                    TRANG_THAI_CON[ma] = {
-                        rows: Array.isArray(s[cau.khoa]) ? s[cau.khoa] : [],
-                        q: '', tu: '', den: '', trang: 1, soDong: MUC_DONG_CON[0],
-                    };
-                    document.querySelectorAll('[data-pane="' + ma + '"] .ncc-sub-bar input')
-                        .forEach((i) => { i.value = ''; });
-                    veBangCon(ma);
-                }
-            }
-
-            /** Lọc theo ô tìm + khoảng ngày, chưa cắt trang. */
-            function locBangCon(ma) {
-                const cau = BANG_CON[ma];
-                const st = TRANG_THAI_CON[ma];
-                const q = st.q.trim().toLowerCase();
-                const tu = st.tu ? new Date(st.tu + 'T00:00:00') : null;
-                const den = st.den ? new Date(st.den + 'T23:59:59') : null;
-
-                return st.rows.filter((r) => {
-                    if (q && !String(cau.tim(r) || '').toLowerCase().includes(q)) return false;
-                    if (!tu && !den) return true;
-                    const thoi = cau.ngay(r);
-                    const d = thoi ? new Date(String(thoi).replace(' ', 'T')) : null;
-                    if (!d || isNaN(d)) return false;
-                    if (tu && d < tu) return false;
-                    if (den && d > den) return false;
-                    return true;
-                });
-            }
-
-            function veBangCon(ma) {
-                const cau = BANG_CON[ma];
-                const st = TRANG_THAI_CON[ma];
-                const el = document.getElementById(cau.el);
-                const foot = document.querySelector('[data-foot="' + ma + '"]');
-                const loc = locBangCon(ma);
-
-                if (!loc.length) {
-                    el.innerHTML = '<p class="ncc-sub-empty">'
-                        + (st.rows.length ? 'Không có dòng nào khớp bộ lọc.' : cau.rong) + '</p>';
-                    foot.innerHTML = '';
-                    return;
-                }
-
-                const soTrang = Math.max(1, Math.ceil(loc.length / st.soDong));
-                st.trang = Math.min(st.trang, soTrang);
-                const dau = (st.trang - 1) * st.soDong;
-
-                el.innerHTML = '<table class="ncc-sub-table"><thead><tr><th>STT</th>'
-                    + cau.cot.map((c) => '<th>' + esc(c.ten) + '</th>').join('')
-                    + '</tr></thead><tbody>'
-                    + loc.slice(dau, dau + st.soDong).map((r, i) => '<tr><td>' + (dau + i + 1) + '</td>'
-                        + cau.cot.map((c) => '<td>' + (c.html ? c.html(r) : esc(c.lay(r))) + '</td>').join('')
-                        + '</tr>').join('')
-                    + '</tbody></table>';
-
-                foot.innerHTML = '<span class="ncc-sub-dem">' + loc.length + ' dòng</span>'
-                    + '<div class="ncc-sub-pager">'
-                    + '<select class="ncc-select ncc-sub-size" data-sodong="' + ma + '">'
-                    + MUC_DONG_CON.map((n) => '<option value="' + n + '"'
-                        + (n === st.soDong ? ' selected' : '') + '>Hiển thị ' + n + '</option>').join('')
-                    + '</select>'
-                    + '<button type="button" class="ncc-pg" data-trang="' + ma + '" data-buoc="-1"'
-                    + (st.trang <= 1 ? ' disabled' : '') + '>&lsaquo;</button>'
-                    + '<span class="ncc-sub-dem">Trang ' + st.trang + '/' + soTrang + '</span>'
-                    + '<button type="button" class="ncc-pg" data-trang="' + ma + '" data-buoc="1"'
-                    + (st.trang >= soTrang ? ' disabled' : '') + '>&rsaquo;</button>'
-                    + '</div>';
-            }
-
-            /** Xuất đúng phần đang lọc của tab. */
-            function xuatBangCon(ma) {
-                const cau = BANG_CON[ma];
-                const loc = locBangCon(ma);
-                if (!loc.length) { toastErr('Không có dòng nào để xuất.'); return; }
-
-                const o = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
-                const csv = '\ufeff'
-                    + ['STT'].concat(cau.cot.map((c) => c.ten)).map(o).join(',') + '\n'
-                    + loc.map((r, i) => [i + 1].concat(cau.cot.map((c) => c.lay(r))).map(o).join(',')).join('\n');
-
-                const maNcc = (dangXem && dangXem.code) ? '-' + dangXem.code : '';
-                const a = document.createElement('a');
-                a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
-                a.download = cau.tep + maNcc + '.csv';
-                document.body.appendChild(a);
-                a.click();
-                a.remove();
-                setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-            }
-
-            // Gõ chờ 300ms; đổi ngày / số dòng thì chạy ngay.
-            let timerCon = null;
-            $detail.addEventListener('input', (e) => {
-                const ma = e.target.dataset.tim;
-                if (!ma) return;
-                clearTimeout(timerCon);
-                timerCon = setTimeout(() => {
-                    TRANG_THAI_CON[ma].q = e.target.value;
-                    TRANG_THAI_CON[ma].trang = 1;
-                    veBangCon(ma);
-                }, 300);
-            });
-
-            $detail.addEventListener('change', (e) => {
-                const t = e.target;
-                const ma = t.dataset.tu || t.dataset.den || t.dataset.sodong;
-                if (!ma) return;
-                if (t.dataset.tu !== undefined) TRANG_THAI_CON[ma].tu = t.value;
-                if (t.dataset.den !== undefined) TRANG_THAI_CON[ma].den = t.value;
-                if (t.dataset.sodong !== undefined) TRANG_THAI_CON[ma].soDong = Number(t.value) || MUC_DONG_CON[0];
-                TRANG_THAI_CON[ma].trang = 1;
-                veBangCon(ma);
-            });
-
-            $detail.addEventListener('click', (e) => {
-                const xuat = e.target.closest('[data-xuat]');
-                if (xuat) { xuatBangCon(xuat.dataset.xuat); return; }
-                const pg = e.target.closest('[data-trang]');
-                if (pg) {
-                    TRANG_THAI_CON[pg.dataset.trang].trang += Number(pg.dataset.buoc);
-                    veBangCon(pg.dataset.trang);
-                }
-            });
 
             document.getElementById('nccDetailEdit').addEventListener('click', () => {
                 if (!dangXem) return;

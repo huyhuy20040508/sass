@@ -10,9 +10,9 @@ use Illuminate\Support\Facades\Log;
 /**
  * Nhà cung cấp — danh mục đầu mối mua vào, dựng theo màn cùng tên của order v2.
  *
- * Bảng dữ liệu và đường API đã bị gỡ ở migration 0038: trang gọi
- * /admin/nha-cung-cap không thấy thì hiện bảng rỗng kèm một dòng báo. Tổng mua /
- * Đã trả / Còn nợ do API tổng hợp sẵn, trang chỉ hiển thị.
+ * Trang gọi /admin/nha-cung-cap; API không thấy thì hiện bảng rỗng kèm một dòng
+ * báo. Không còn cột tiền: ba trang mua vào đã bị gỡ nên chẳng còn phiếu nào để
+ * cộng tổng mua / đã trả / còn nợ.
  */
 class NhaCungCapController extends Controller
 {
@@ -33,18 +33,11 @@ class NhaCungCapController extends Controller
         self::NGUNG_HOP_TAC => 'Ngừng hợp tác',
     ];
 
-    public const CONG_NO = [
-        'con_no' => 'Còn nợ',
-        'het_no' => 'Không nợ',
-    ];
-
     public const SAP_XEP = [
         'moi_nhat' => 'Mới thêm nhất',
         'ten_az' => 'Tên A → Z',
         'ten_za' => 'Tên Z → A',
         'ma_az' => 'Mã tăng dần',
-        'no_nhieu' => 'Còn nợ nhiều nhất',
-        'mua_nhieu' => 'Mua nhiều nhất',
     ];
 
     public const SO_DONG_MOI_TRANG = 20;
@@ -68,9 +61,6 @@ class NhaCungCapController extends Controller
         'email' => 'Email',
         'addr' => 'Địa chỉ',
         'addr2' => 'Địa chỉ 2',
-        'mua' => 'Tổng mua',
-        'tra' => 'Đã trả',
-        'no' => 'Còn nợ',
         'status' => 'Trạng thái',
     ];
 
@@ -142,7 +132,7 @@ class NhaCungCapController extends Controller
             fwrite($out, "\xEF\xBB\xBF");
             fputcsv($out, [
                 'STT', 'Mã nhà cung cấp', 'Tên nhà cung cấp', 'Mã số thuế', 'Điện thoại',
-                'Email', 'Địa chỉ', 'Địa chỉ 2', 'Tổng mua', 'Đã trả', 'Còn nợ', 'Trạng thái',
+                'Email', 'Địa chỉ', 'Địa chỉ 2', 'Trạng thái',
             ]);
 
             foreach ($list as $i => $ncc) {
@@ -155,9 +145,6 @@ class NhaCungCapController extends Controller
                     $ncc['email'] ?? '',
                     $ncc['address'] ?? '',
                     $ncc['address_line2'] ?? '',
-                    (float) ($ncc['total_purchases'] ?? 0),
-                    (float) ($ncc['paid'] ?? 0),
-                    (float) ($ncc['debt'] ?? 0),
                     self::TRANG_THAI[(int) ($ncc['status'] ?? 1)] ?? '',
                 ]);
             }
@@ -405,13 +392,11 @@ class NhaCungCapController extends Controller
     {
         $sort = (string) $request->query('sort', 'moi_nhat');
         $status = (string) $request->query('status', '');
-        $debt = (string) $request->query('debt', '');
         $size = (int) $request->query('page_size', self::SO_DONG_MOI_TRANG);
 
         return [
             'keyword' => trim((string) $request->query('keyword', '')),
             'status' => in_array($status, ['0', '1'], true) ? $status : '',
-            'debt' => isset(self::CONG_NO[$debt]) ? $debt : '',
             'sort' => isset(self::SAP_XEP[$sort]) ? $sort : 'moi_nhat',
             'page' => max(1, (int) $request->query('page', 1)),
             'page_size' => in_array($size, self::MUC_SO_DONG, true) ? $size : self::SO_DONG_MOI_TRANG,
@@ -432,26 +417,13 @@ class NhaCungCapController extends Controller
                 }
             }
 
-            if ($f['status'] !== '' && (int) ($ncc['status'] ?? 1) !== (int) $f['status']) {
-                return false;
-            }
-
-            $no = (float) ($ncc['debt'] ?? 0);
-
-            return match ($f['debt']) {
-                'con_no' => $no > 0,
-                'het_no' => $no <= 0,
-                default => true,
-            };
+            return $f['status'] === '' || (int) ($ncc['status'] ?? 1) === (int) $f['status'];
         }));
 
-        $so = fn ($ncc, $khoa) => (float) ($ncc[$khoa] ?? 0);
         usort($list, match ($f['sort']) {
             'ten_az' => fn ($a, $b) => strcmp(mb_strtolower($a['name'] ?? ''), mb_strtolower($b['name'] ?? '')),
             'ten_za' => fn ($a, $b) => strcmp(mb_strtolower($b['name'] ?? ''), mb_strtolower($a['name'] ?? '')),
             'ma_az' => fn ($a, $b) => strcmp($a['code'] ?? '', $b['code'] ?? ''),
-            'no_nhieu' => fn ($a, $b) => $so($b, 'debt') <=> $so($a, 'debt'),
-            'mua_nhieu' => fn ($a, $b) => $so($b, 'total_purchases') <=> $so($a, 'total_purchases'),
             default => fn ($a, $b) => ((int) ($b['id'] ?? 0)) <=> ((int) ($a['id'] ?? 0)),
         });
 
@@ -462,22 +434,16 @@ class NhaCungCapController extends Controller
     protected function thongKe(array $all): array
     {
         $dangHopTac = 0;
-        $tongMua = 0.0;
-        $conNo = 0.0;
 
         foreach ($all as $ncc) {
             if ((int) ($ncc['status'] ?? 1) === self::DANG_HOP_TAC) {
                 $dangHopTac++;
             }
-            $tongMua += (float) ($ncc['total_purchases'] ?? 0);
-            $conNo += (float) ($ncc['debt'] ?? 0);
         }
 
         return [
             'tong' => count($all),
             'dang_hop_tac' => $dangHopTac,
-            'tong_mua' => $tongMua,
-            'con_no' => $conNo,
         ];
     }
 
@@ -577,8 +543,6 @@ class NhaCungCapController extends Controller
     protected function veKieuXem(array $ncc): array
     {
         $ncc['status'] = ($ncc['is_active'] ?? true) ? self::DANG_HOP_TAC : self::NGUNG_HOP_TAC;
-        $ncc['paid'] = $ncc['paid_amount'] ?? 0;
-        $ncc['debt'] = $ncc['debt_amount'] ?? 0;
 
         return $ncc;
     }
