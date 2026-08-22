@@ -488,7 +488,7 @@ func nhanConTrong(nenTang *sql.DB, nhanGoc string, tenantID int64) (string, erro
 //
 //   - có thuê bao CÒN HIỆU LỰC (chưa huỷ) trong sổ nền tảng;
 //   - thuê bao đó `status = 'active'` — đã trả tiền. 'trial' không được, đó
-//     chính là câu "khách dùng thử thì dùng chung order.selliotech.store";
+//     chính là câu "khách dùng thử thì dùng chung shop.selliotech.store";
 //     'past_due' cũng không: đang nợ thì không cấp THÊM địa chỉ mới, còn địa
 //     chỉ đã cấp vẫn chạy cho tới lúc khoá hẳn cửa hàng.
 //   - hợp đồng đó ghi `own_domain = 1`. Mặc định dưới database là 0, nên hợp
@@ -551,13 +551,13 @@ func xetGoi(nenTang *sql.DB, tenantID int64, maCuaHang, dacCach string) error {
 	if trangThai != "active" {
 		return fmt.Errorf(
 			"thuê bao của cửa hàng %q đang ở trạng thái %q, chưa phải %q.\n"+
-				"        Khách dùng thử và khách đang nợ dùng chung order.selliotech.store, không cấp tên miền riêng.",
+				"        Khách dùng thử và khách đang nợ dùng chung shop.selliotech.store, không cấp tên miền riêng.",
 			maCuaHang, trangThai, "active")
 	}
 	if !coTenMien {
 		return fmt.Errorf(
 			"hợp đồng %q của cửa hàng %q không kèm tên miền riêng (subscriptions.own_domain = 0).\n"+
-				"        Cửa hàng này dùng chung order.selliotech.store và gõ mã cửa hàng lúc đăng nhập.\n"+
+				"        Cửa hàng này dùng chung shop.selliotech.store và gõ mã cửa hàng lúc đăng nhập.\n"+
 				"        SỬA BẢNG GIÁ Ở ĐÂY KHÔNG CÓ TÁC DỤNG: hợp đồng đã ký không đi theo bảng giá.\n"+
 				"        Bật ô \"Tên miền riêng\" ở màn hình Tính năng gói chỉ áp cho hợp đồng ký TỪ NAY\n"+
 				"        VỀ SAU. Bán thêm quyền này cho khách hiện tại là sửa CHÍNH hợp đồng của họ:\n"+

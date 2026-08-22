@@ -250,10 +250,11 @@ buoc "7/10  nginx + systemd"
 # Duyệt bằng TÊN MIỀN ĐẦY ĐỦ, không ghép "$site.selliotech.store": tên miền gốc
 # của trang giới thiệu không có phần đầu nào để ghép.
 #
-# Bốn app, năm tên miền: app.selliotech.store không còn app nào đứng sau, nó chỉ
-# chuyển hướng sang admin.selliotech.store cho người còn giữ dấu trang cũ.
-#   order.* -> Shop Admin (web_Shop/)      admin.* -> SaaS Admin (admin-Selliotech/)
-for site in selliotech.store api.selliotech.store order.selliotech.store admin.selliotech.store app.selliotech.store; do
+# Bốn app, sáu tên miền: app.* và order.* không còn app nào đứng sau, chúng chỉ
+# chuyển hướng 301 cho người còn giữ dấu trang cũ — app.* sang admin.*, order.*
+# sang shop.*.
+#   shop.* -> Shop Admin (web_Shop/)       admin.* -> SaaS Admin (admin-Selliotech/)
+for site in selliotech.store api.selliotech.store shop.selliotech.store order.selliotech.store admin.selliotech.store app.selliotech.store; do
     cp "$APP_DIR/deploy/nginx/$site.conf" "/etc/nginx/sites-available/$site"
     ln -sfn "/etc/nginx/sites-available/$site" "/etc/nginx/sites-enabled/$site"
 done
@@ -418,7 +419,8 @@ cat <<'HD'
 Kiểm bằng trình duyệt (còn là http:// cho tới khi bật HTTPS):
     http://selliotech.store                     <- trang giới thiệu
     http://api.selliotech.store/api/v1/health
-    http://order.selliotech.store               <- Shop Admin (bán hàng)
+    http://shop.selliotech.store                <- Shop Admin (bán hàng)
+    http://order.selliotech.store               <- tên miền cũ, phải nhảy sang shop.*
     http://admin.selliotech.store               <- SaaS Admin (điều hành nền tảng)
     http://app.selliotech.store                 <- tên miền cũ, phải nhảy sang admin.*
 
@@ -428,6 +430,7 @@ Bật HTTPS (chỉ chạy được sau khi DNS đã trỏ về máy này):
         -d selliotech.store \
         -d www.selliotech.store \
         -d api.selliotech.store \
+        -d shop.selliotech.store \
         -d order.selliotech.store \
         -d admin.selliotech.store \
         -d app.selliotech.store \

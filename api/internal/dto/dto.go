@@ -2112,7 +2112,7 @@ type DangKyResponse struct {
 	Goi         string    `json:"goi" example:"Khởi đầu"`
 	HetHan      time.Time `json:"het_han"`
 	// DiaChiDangNhap là URL Shop Admin của chính tiến trình này (cfg.App.ShopAdminURL).
-	DiaChiDangNhap string `json:"dia_chi_dang_nhap" example:"https://order.selliotech.store"`
+	DiaChiDangNhap string `json:"dia_chi_dang_nhap" example:"https://shop.selliotech.store"`
 }
 
 // TaoDungThuResponse — biên bản của lượt ký, đủ để màn hình đọc lại cho người

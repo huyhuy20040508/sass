@@ -229,7 +229,7 @@ bang(
     [
         ["Ý nghĩa", "Mỗi dòng là MỘT phần mềm nền tảng bán ra. Đây là câu trả lời cho “bán cái gì”."],
         ["Chức năng", "Làm bảng cha của `plans` (bảng giá gắn theo từng app), và về sau là chỗ để biết một khách đang mua phần mềm nào khi có sản phẩm thứ hai."],
-        ["Cột đáng chú ý", "`code` (tên ngắn chữ thường, trùng tiền tố tên miền: `order` → `order.selliotech.store`) · `name` · `tagline` · `status` = `planned` | `active` | `retired`"],
+        ["Cột đáng chú ý", "`code` (tên ngắn chữ thường, trùng tiền tố tên miền: `shop` → `shop.selliotech.store`) · `name` · `tagline` · `status` = `planned` | `active` | `retired`"],
         ["Máy cục bộ", "1 dòng: `order` — “Sellio Order” — `active` (chính phần mềm quản trị bán hàng đang chạy)"],
         ["Máy thật", "Chưa có bảng — migration `0002` chưa deploy"],
     ],
@@ -337,8 +337,8 @@ p("Tên miền riêng là TÍNH NĂNG CỦA GÓI, không phải thứ mọi khá
 bang(
     ["Khách", "Địa chỉ dùng", "Đăng nhập"],
     [
-        ["Đang dùng thử (mọi gói)", "`order.selliotech.store` dùng chung", "gõ mã cửa hàng ở ô 1"],
-        ["Gói Khởi đầu / Cửa hàng đã trả tiền", "`order.selliotech.store` dùng chung", "gõ mã cửa hàng ở ô 1"],
+        ["Đang dùng thử (mọi gói)", "`shop.selliotech.store` dùng chung", "gõ mã cửa hàng ở ô 1"],
+        ["Gói Khởi đầu / Cửa hàng đã trả tiền", "`shop.selliotech.store` dùng chung", "gõ mã cửa hàng ở ô 1"],
         ["Gói Chuỗi đã trả tiền", "tên miền riêng: `quochuy.selliotech.store` hoặc tên miền của khách", "vào đúng địa chỉ là biết tiệm nào"],
     ],
     rong=[1.9, 2.7, 1.9],

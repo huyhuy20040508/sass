@@ -309,7 +309,7 @@ Phục hồi nhầm bản thì quay lại được từ đó. Kiểm tra xong h�
 liệu khách hàng và không nằm trong vòng xoay tự động.
 
 Việc nên làm ngay:
-    1. Mở https://order.selliotech.store xem dữ liệu có đúng như mong đợi không.
+    1. Mở https://shop.selliotech.store xem dữ liệu có đúng như mong đợi không.
     2. Nếu mã nguồn lệch với bản sao lưu:  sudo bash $APP_DIR/deploy/scripts/02-trien-khai.sh
     3. Xoá thư mục ảnh cũ ${ANH_DIR}.cu-* khi đã yên tâm.
 HD
