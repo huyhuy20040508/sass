@@ -2573,3 +2573,113 @@ type ThuocTinhRequest struct {
 type TrangThaiThuocTinhRequest struct {
 	IsActive *bool `json:"is_active" binding:"required"`
 }
+
+// ---------- Phiếu mua hàng ----------
+
+// PurchaseItemRequest — một dòng hàng client gửi lên khi lập/sửa phiếu.
+//
+// Chỉ gửi ID và các con số người mua thoả thuận với bên bán. Tên hàng, SKU, ảnh
+// và hệ số quy đổi do server tra lại từ mặt hàng — nhận từ client thì phiếu in
+// ra một đằng, kho cộng một nẻo.
+type PurchaseItemRequest struct {
+	VariantID uint `json:"variant_id" binding:"required" example:"12"`
+	// UnitID là đơn vị MUA. Bỏ trống = mua theo đơn vị tính chính của mặt hàng.
+	UnitID   uint `json:"unit_id" example:"3"`
+	Quantity int  `json:"quantity" binding:"required,min=1" example:"2"`
+	// UnitCost là giá một đơn vị MUA (giá một thùng, không phải giá một cái).
+	UnitCost float64 `json:"unit_cost" binding:"min=0" example:"120000"`
+	// VATPercent chỉ được dùng khi phiếu khai thuế theo dòng (vat_mode = goods).
+	// Số âm là mã thuế đặc biệt của mặt hàng: -1 = KCT, -2 = KKKNT.
+	//
+	// Con trỏ chứ không phải int: bỏ TRỐNG hẳn trường này mới là "lấy thuế suất
+	// của mặt hàng". Gửi số 0 là khai một dòng KHÔNG chịu thuế, và hai chuyện
+	// đó phải phân biệt được — không thì dòng cố ý để 0% bị ghi thành 8%.
+	VATPercent *int `json:"vat_percent" binding:"omitempty,min=-2,max=100" example:"8"`
+	// LotNumber / ExpireDate chụp lại số lô bên bán ghi. Bỏ trống là hàng
+	// không theo lô — KHÔNG phải chiều của tồn kho, xem migration 0042.
+	LotNumber  string `json:"lot_number" binding:"omitempty,max=50" example:"L2026-08"`
+	ExpireDate string `json:"expire_date" binding:"omitempty,datetime=2006-01-02" example:"2027-08-22"`
+}
+
+// PurchaseCreateRequest — payload lập phiếu mua hàng.
+//
+// Phiếu lập ra LUÔN ở trạng thái lưu tạm, chưa đụng tới kho. Muốn duyệt luôn
+// thì gọi tiếp POST {id}/duyet — đường riêng vì duyệt là lúc hàng vào kho thật
+// và có quyền riêng canh; nhét thêm một ô `status` vào đây thì cùng một endpoint
+// vừa là "ghi nháp" vừa là "ghi sổ kho", mà middleware phân quyền thì không rẽ
+// theo nội dung request được.
+type PurchaseCreateRequest struct {
+	SupplierID uint `json:"supplier_id" example:"4"`
+	// SupplierName bỏ trống thì server lấy tên trong danh mục theo SupplierID.
+	// Gõ tay được để còn ghi phiếu cho bên bán vãng lai.
+	SupplierName string `json:"supplier_name" binding:"omitempty,max=150"`
+
+	DocumentDate string `json:"document_date" binding:"omitempty,datetime=2006-01-02" example:"2026-08-22"`
+	ExpectedDate string `json:"expected_date" binding:"omitempty,datetime=2006-01-02" example:"2026-08-25"`
+
+	PurchaserID          uint   `json:"purchaser_id" example:"7"`
+	SupplierDeliveryCode string `json:"supplier_delivery_code" binding:"omitempty,max=50"`
+
+	VATMode    string `json:"vat_mode" binding:"omitempty,oneof=order goods" example:"order"`
+	VATPercent int    `json:"vat_percent" binding:"min=-2,max=100" example:"8"`
+
+	DiscountAmount float64 `json:"discount_amount" binding:"min=0" example:"50000"`
+	// PaidAmount là số trả ngay lúc lập phiếu; 0 = ghi nợ toàn bộ.
+	PaidAmount float64 `json:"paid_amount" binding:"min=0" example:"0"`
+
+	Note       string `json:"note" binding:"omitempty,max=500"`
+	Attachment string `json:"attachment" binding:"omitempty,max=255"`
+
+	Items []PurchaseItemRequest `json:"items" binding:"required,min=1,max=200,dive"`
+}
+
+// PurchaseUpdateRequest — sửa phiếu. Chỉ phiếu LƯU TẠM sửa được.
+//
+// Không có Status: đổi trạng thái đi đường riêng (duyệt / huỷ) vì mỗi đường có
+// luật và có mốc lịch sử riêng.
+type PurchaseUpdateRequest struct {
+	SupplierID   uint   `json:"supplier_id" example:"4"`
+	SupplierName string `json:"supplier_name" binding:"omitempty,max=150"`
+
+	DocumentDate string `json:"document_date" binding:"omitempty,datetime=2006-01-02"`
+	ExpectedDate string `json:"expected_date" binding:"omitempty,datetime=2006-01-02"`
+
+	PurchaserID          uint   `json:"purchaser_id"`
+	SupplierDeliveryCode string `json:"supplier_delivery_code" binding:"omitempty,max=50"`
+
+	VATMode    string `json:"vat_mode" binding:"omitempty,oneof=order goods"`
+	VATPercent int    `json:"vat_percent" binding:"min=-2,max=100"`
+
+	DiscountAmount float64 `json:"discount_amount" binding:"min=0"`
+	PaidAmount     float64 `json:"paid_amount" binding:"min=0"`
+
+	Note       string `json:"note" binding:"omitempty,max=500"`
+	Attachment string `json:"attachment" binding:"omitempty,max=255"`
+
+	Items []PurchaseItemRequest `json:"items" binding:"required,min=1,max=200,dive"`
+}
+
+// PurchaseApproveRequest — duyệt phiếu và cộng hàng vào kho.
+type PurchaseApproveRequest struct {
+	// UpdateCost bỏ trống = true: giá vốn của mặt hàng nhận luôn giá vừa mua.
+	// Tắt đi khi đây là lô mua bất thường (hàng khuyến mại, mua gấp giá cao) mà
+	// cửa hàng không muốn nó kéo giá vốn — và kéo theo lãi gộp — đi theo.
+	UpdateCost *bool  `json:"update_cost"`
+	Note       string `json:"note" binding:"omitempty,max=500"`
+}
+
+// PurchaseCancelRequest — huỷ phiếu lưu tạm.
+//
+// Lý do BẮT BUỘC: vài tuần sau không ai nhớ vì sao phiếu chết.
+type PurchaseCancelRequest struct {
+	Note string `json:"note" binding:"required,max=500"`
+}
+
+// PurchasePaymentRequest — ghi nhận tiền đã trả nhà cung cấp.
+//
+// PaidAmount là số LUỸ KẾ đã trả cho phiếu, không phải số vừa trả thêm: màn hình
+// hiện số đã trả và người dùng sửa đúng con số đó, nên gửi lên cũng là con số ấy.
+type PurchasePaymentRequest struct {
+	PaidAmount float64 `json:"paid_amount" binding:"min=0" example:"500000"`
+	Note       string  `json:"note" binding:"omitempty,max=500"`
+}

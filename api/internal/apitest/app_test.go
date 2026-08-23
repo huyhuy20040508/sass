@@ -323,6 +323,7 @@ func dungHeThongVoi(t *testing.T, banHang, dieuHanh bool) *heThong {
 	donViTinhRepo := repository.NewDonViTinhRepository(db)
 	viTriRepo := repository.NewViTriRepository(db)
 	nhaCungCapRepo := repository.NewNhaCungCapRepository(db)
+	phieuMuaHangRepo := repository.NewPurchaseOrderRepository(db)
 	thuocTinhRepo := repository.NewThuocTinhRepository(db)
 
 	settingSvc := service.NewSettingService(settingRepo)
@@ -380,20 +381,21 @@ func dungHeThongVoi(t *testing.T, banHang, dieuHanh bool) *heThong {
 			service.NewNhomQuyenService(repository.NewQuyenRepository(db), userRepo)),
 		QuyTacMa: handler.NewQuyTacMaHandler(
 			service.NewQuyTacMaService(quyTacMaRepo, chiNhanhRepo)),
-		Thue:       handler.NewThueHandler(service.NewThueService(thueRepo)),
-		DonViTinh:  handler.NewDonViTinhHandler(service.NewDonViTinhService(donViTinhRepo, quyTacMaRepo)),
-		ViTri:      handler.NewViTriHandler(service.NewViTriService(viTriRepo, quyTacMaRepo)),
-		NhaCungCap: handler.NewNhaCungCapHandler(service.NewNhaCungCapService(nhaCungCapRepo, quyTacMaRepo)),
-		ThuocTinh:  handler.NewThuocTinhHandler(service.NewThuocTinhService(thuocTinhRepo, quyTacMaRepo)),
-		Ca:         handler.NewCaLamViecHandler(service.NewCaLamViecService(caRepo, userRepo, chiNhanhRepo)),
-		Payment:    handler.NewPaymentHandler(paymentSvc),
-		Banner:     handler.NewBannerHandler(bannerSvc),
-		Report:     handler.NewReportHandler(reportSvc),
-		Promo:      handler.NewPromotionHandler(promotionSvc),
-		Voucher:    handler.NewVoucherHandler(voucherSvc),
-		Contact:    handler.NewContactHandler(contactSvc),
-		Plan:       planHandler,
-		KhachHang:  khachHangHandler,
+		Thue:         handler.NewThueHandler(service.NewThueService(thueRepo)),
+		DonViTinh:    handler.NewDonViTinhHandler(service.NewDonViTinhService(donViTinhRepo, quyTacMaRepo)),
+		ViTri:        handler.NewViTriHandler(service.NewViTriService(viTriRepo, quyTacMaRepo)),
+		NhaCungCap:   handler.NewNhaCungCapHandler(service.NewNhaCungCapService(nhaCungCapRepo, quyTacMaRepo)),
+		PhieuMuaHang: handler.NewPhieuMuaHangHandler(service.NewPhieuMuaHangService(phieuMuaHangRepo, nhaCungCapRepo)),
+		ThuocTinh:    handler.NewThuocTinhHandler(service.NewThuocTinhService(thuocTinhRepo, quyTacMaRepo)),
+		Ca:           handler.NewCaLamViecHandler(service.NewCaLamViecService(caRepo, userRepo, chiNhanhRepo)),
+		Payment:      handler.NewPaymentHandler(paymentSvc),
+		Banner:       handler.NewBannerHandler(bannerSvc),
+		Report:       handler.NewReportHandler(reportSvc),
+		Promo:        handler.NewPromotionHandler(promotionSvc),
+		Voucher:      handler.NewVoucherHandler(voucherSvc),
+		Contact:      handler.NewContactHandler(contactSvc),
+		Plan:         planHandler,
+		KhachHang:    khachHangHandler,
 	})
 
 	return &heThong{r: r, db: db, nenTang: nenTang}

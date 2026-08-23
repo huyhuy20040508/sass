@@ -1017,6 +1017,88 @@ class ApiClient
         return $this->delete("/admin/nha-cung-cap/{$id}");
     }
 
+    // ---------- Phiếu mua hàng ----------
+    //
+    // Chứng từ mua vào, một loại duy nhất theo màn cùng tên của bản order v2.
+    // Duyệt đi đường riêng vì đó là lúc hàng vào kho thật và API canh quyền
+    // `phieu-mua-hang.duyet` ở đúng đường đó.
+
+    /**
+     * Danh sách phiếu. $query hỗ trợ: keyword, status, payment_status,
+     * supplier_id, variant_id, from_date, to_date, sort, page, page_size.
+     */
+    public function phieuMuaHang(array $query = []): Response
+    {
+        return $this->get('/admin/phieu-mua-hang', array_filter($query, fn ($v) => $v !== '' && $v !== null));
+    }
+
+    /** Con số đầu trang: đếm phiếu theo trạng thái, tiền đã mua, tiền còn nợ. */
+    public function phieuMuaHangThongKe(): Response
+    {
+        return $this->get('/admin/phieu-mua-hang/stats');
+    }
+
+    /** Tìm mặt hàng để đưa vào phiếu — kèm giá vốn gợi ý, tồn kho và đơn vị mua được. */
+    public function phieuMuaHangMatHang(array $query = []): Response
+    {
+        return $this->get('/admin/phieu-mua-hang/mat-hang', array_filter($query));
+    }
+
+    /** Nhóm hàng CÓ hàng mua được — ô lọc nhóm trong hộp lập phiếu. */
+    public function phieuMuaHangNhomHang(): Response
+    {
+        return $this->get('/admin/phieu-mua-hang/nhom-hang');
+    }
+
+    public function phieuMuaHangChiTiet(int $id): Response
+    {
+        return $this->get("/admin/phieu-mua-hang/{$id}");
+    }
+
+    /** Lập phiếu. Phiếu mới LUÔN là phiếu lưu tạm, chưa đụng tới kho. */
+    public function taoPhieuMuaHang(array $data): Response
+    {
+        return $this->post('/admin/phieu-mua-hang', $data);
+    }
+
+    /** Sửa phiếu — API chỉ nhận phiếu lưu tạm. */
+    public function suaPhieuMuaHang(int $id, array $data): Response
+    {
+        return $this->put("/admin/phieu-mua-hang/{$id}", $data);
+    }
+
+    /**
+     * Duyệt phiếu: hàng vào kho, phiếu khoá lại.
+     *
+     * LUÔN kèm khoá `note` kể cả khi rỗng. Mảng PHP rỗng mã hoá thành `[]` —
+     * một MẢNG JSON, không phải object — và bên Go bind nó vào struct thì trượt,
+     * trả 422 "dữ liệu không hợp lệ" cho một lượt gọi chẳng có dữ liệu nào sai.
+     */
+    public function duyetPhieuMuaHang(int $id, array $data = []): Response
+    {
+        return $this->post("/admin/phieu-mua-hang/{$id}/duyet", $data + ['note' => '']);
+    }
+
+    /** Huỷ phiếu lưu tạm — API bắt buộc có lý do. */
+    public function huyPhieuMuaHang(int $id, string $lyDo): Response
+    {
+        return $this->post("/admin/phieu-mua-hang/{$id}/huy", ['note' => $lyDo]);
+    }
+
+    /** Ghi nhận tiền đã trả NCC. `paid_amount` là số LUỸ KẾ, không phải số vừa trả thêm. */
+    public function traTienPhieuMuaHang(int $id, float $daTra, string $ghiChu = ''): Response
+    {
+        return $this->post("/admin/phieu-mua-hang/{$id}/thanh-toan", [
+            'paid_amount' => $daTra,
+            'note' => $ghiChu,
+        ]);
+    }
+
+    public function xoaPhieuMuaHang(int $id): Response
+    {
+        return $this->delete("/admin/phieu-mua-hang/{$id}");
+    }
+
     // ---------- Settings (cấu hình hệ thống) ----------
 
     /**

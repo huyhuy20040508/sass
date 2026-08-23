@@ -120,14 +120,20 @@
                     ],
                 ] : []),
                 ...($canManage ? [[
-                    // Module kho còn ĐÚNG 2 trang dưới đây, cả hai đã có route thật.
-                    // Đặt hàng nhập / Nhập hàng / Trả hàng nhập đã bị gỡ bỏ.
+                    // Module kho: tồn kho, phiếu mua hàng và nhà cung cấp. Ba màn
+                    // Đặt hàng nhập / Nhập hàng / Trả hàng nhập cũ đã gỡ — chiều
+                    // mua vào nay gom vào MỘT chứng từ duy nhất.
                     'label' => 'Quản lý kho', 'icon' => 'inventory',
                     'children' => [
                         [
                             'href' => route('admin.ton-kho-chi-nhanh.index'),
                             'label' => \App\Http\Controllers\TonKhoChiNhanhController::TITLE,
                             'active' => request()->routeIs('admin.ton-kho-chi-nhanh.*'),
+                        ],
+                        [
+                            'href' => route('admin.phieu-mua-hang.index'),
+                            'label' => \App\Http\Controllers\PhieuMuaHangController::TITLE,
+                            'active' => request()->routeIs('admin.phieu-mua-hang.*'),
                         ],
                         [
                             'href' => route('admin.nha-cung-cap.index'),

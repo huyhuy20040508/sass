@@ -6798,6 +6798,684 @@ const docTemplate = `{
                 }
             }
         },
+        "/admin/phieu-mua-hang": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Lọc theo từ khoá (mã phiếu / bên bán / ghi chú), trạng thái, tình trạng thanh toán, nhà cung cấp, mặt hàng và khoảng ngày lập.\n` + "`" + `status` + "`" + ` và ` + "`" + `payment_status` + "`" + ` nhận nhiều giá trị ngăn bởi dấu phẩy — bộ lọc ngoài bảng là các ô tick.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Phiếu mua hàng"
+                ],
+                "summary": "Danh sách phiếu mua hàng",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Mã phiếu, tên bên bán hoặc ghi chú",
+                        "name": "keyword",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "draft | approved | cancelled (ngăn bởi dấu phẩy)",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "unpaid | partial | paid (ngăn bởi dấu phẩy)",
+                        "name": "payment_status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Lọc theo nhà cung cấp",
+                        "name": "supplier_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Chỉ phiếu có chứa mặt hàng này",
+                        "name": "variant_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "YYYY-MM-DD",
+                        "name": "from_date",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "YYYY-MM-DD",
+                        "name": "to_date",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "newest | oldest | total_desc | total_asc | document_desc",
+                        "name": "sort",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Trang, mặc định 1",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Số dòng mỗi trang, mặc định 20, tối đa 100",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/domain.PurchaseOrder"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Phiếu lập ra luôn là phiếu LƯU TẠM, chưa đụng tới kho. Muốn hàng vào kho thì gọi tiếp POST {id}/duyet — đường riêng vì nó có quyền riêng canh.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Phiếu mua hàng"
+                ],
+                "summary": "Lập phiếu mua hàng",
+                "parameters": [
+                    {
+                        "description": "Nội dung phiếu",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.PurchaseCreateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.PhieuMuaHangDetail"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/phieu-mua-hang/mat-hang": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Mỗi dòng kèm giá vốn gợi ý, tồn của ĐÚNG kho sẽ nhận hàng, thuế suất của mặt hàng và danh sách đơn vị mua được (đơn vị chính + khối quy đổi).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Phiếu mua hàng"
+                ],
+                "summary": "Tìm mặt hàng để đưa vào phiếu",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Tên hàng hoặc SKU",
+                        "name": "keyword",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Chỉ hàng thuộc nhóm này",
+                        "name": "category_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Số dòng tối đa, mặc định 20",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/domain.PurchaseVariant"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/phieu-mua-hang/nhom-hang": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "CHỈ những nhóm đang có ít nhất một mặt hàng còn bán — ô lọc nhóm trong hộp lập phiếu đổ từ đây. Nhóm rỗng không bày ra, vì chọn vào chỉ ra bảng trắng.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Phiếu mua hàng"
+                ],
+                "summary": "Nhóm hàng có hàng mua được",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/domain.PurchaseNhomHang"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/phieu-mua-hang/stats": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Đếm phiếu theo trạng thái, tiền hàng đã mua và tiền còn nợ nhà cung cấp. Tiền chỉ cộng trên phiếu ĐÃ DUYỆT.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Phiếu mua hàng"
+                ],
+                "summary": "Con số đầu trang phiếu mua hàng",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/domain.PurchaseStats"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/phieu-mua-hang/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Phiếu mua hàng"
+                ],
+                "summary": "Chi tiết một phiếu mua hàng",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID phiếu",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.PhieuMuaHangDetail"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Chỉ phiếu LƯU TẠM sửa được. Phiếu đã duyệt là kho đã đổi theo nó nên khoá lại — muốn chữa số đã vào kho thì cân đối ở màn Tồn kho.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Phiếu mua hàng"
+                ],
+                "summary": "Sửa phiếu mua hàng",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID phiếu",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Nội dung phiếu",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.PurchaseUpdateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.PhieuMuaHangDetail"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Chỉ xoá được phiếu lưu tạm. Phiếu đã duyệt nằm lại trong sổ vì kho đã đổi theo nó; phiếu đã huỷ nằm lại để còn đọc được lý do.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Phiếu mua hàng"
+                ],
+                "summary": "Xoá phiếu mua hàng",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID phiếu",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/phieu-mua-hang/{id}/duyet": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Lúc DUY NHẤT phiếu mua chạm vào tồn kho: cộng hàng vào kho của chi nhánh đã lập phiếu và ghi bút toán sổ kho. Duyệt xong phiếu khoá lại.\n` + "`" + `update_cost` + "`" + ` bỏ trống = true: giá vốn mặt hàng nhận luôn giá vừa mua (đã quy về đơn vị tính chính).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Phiếu mua hàng"
+                ],
+                "summary": "Duyệt phiếu và nhập kho",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID phiếu",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Tuỳ chọn lượt duyệt",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/dto.PurchaseApproveRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.PhieuMuaHangDetail"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/phieu-mua-hang/{id}/huy": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Chỉ huỷ được phiếu lưu tạm, và phải nói lý do — vài tuần sau không ai nhớ vì sao phiếu chết.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Phiếu mua hàng"
+                ],
+                "summary": "Huỷ phiếu mua hàng",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID phiếu",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Lý do huỷ",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.PurchaseCancelRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.PhieuMuaHangDetail"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/phieu-mua-hang/{id}/thanh-toan": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "` + "`" + `paid_amount` + "`" + ` là số LUỸ KẾ đã trả cho phiếu, không phải số vừa trả thêm. Server so với tổng tiền ĐANG lưu chứ không tin con số client gửi kèm.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Phiếu mua hàng"
+                ],
+                "summary": "Ghi nhận tiền đã trả nhà cung cấp",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID phiếu",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Số đã trả",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.PurchasePaymentRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.PhieuMuaHangDetail"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/products": {
             "post": {
                 "security": [
@@ -16666,6 +17344,309 @@ const docTemplate = `{
                 }
             }
         },
+        "domain.PurchaseNhomHang": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "so_mat_hang": {
+                    "description": "SoMatHang là số mặt hàng đang bán trong nhóm — màn hình in kèm để người\nlập phiếu biết chọn vào đó sẽ ra bao nhiêu dòng.",
+                    "type": "integer"
+                }
+            }
+        },
+        "domain.PurchaseOrder": {
+            "type": "object",
+            "properties": {
+                "approved_at": {
+                    "type": "string"
+                },
+                "attachment": {
+                    "type": "string"
+                },
+                "cancel_reason": {
+                    "type": "string"
+                },
+                "cancelled_at": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "integer"
+                },
+                "discount_amount": {
+                    "type": "number"
+                },
+                "document_date": {
+                    "type": "string"
+                },
+                "expected_date": {
+                    "type": "string"
+                },
+                "handled_by": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.PurchaseOrderItem"
+                    }
+                },
+                "items_amount": {
+                    "type": "number"
+                },
+                "note": {
+                    "type": "string"
+                },
+                "paid_amount": {
+                    "type": "number"
+                },
+                "payment_status": {
+                    "type": "string"
+                },
+                "po_code": {
+                    "type": "string"
+                },
+                "purchaser_id": {
+                    "type": "integer"
+                },
+                "shop_id": {
+                    "description": "ShopID là chi nhánh lập phiếu, và cũng là kho hàng sẽ về khi duyệt. Chốt\nlúc lập chứ không lúc duyệt: người bấm duyệt có thể đang đứng ở chi nhánh\nkhác, mà hàng thì về đúng nơi đã đặt mua.",
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "supplier_delivery_code": {
+                    "type": "string"
+                },
+                "supplier_id": {
+                    "description": "SupplierID trỏ về danh mục để gom số liệu và lọc; nil = bên bán vãng lai.",
+                    "type": "integer"
+                },
+                "supplier_name": {
+                    "description": "SupplierName là bản chụp TÊN bên bán lúc lập phiếu, và là thứ in ra phiếu.\nĐổi tên nhà cung cấp hôm nay không được sửa lại chứng từ ký tháng trước.",
+                    "type": "string"
+                },
+                "total_amount": {
+                    "type": "number"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "vat_amount": {
+                    "type": "number"
+                },
+                "vat_mode": {
+                    "description": "VATMode quyết định thuế khai ở đâu: cả phiếu một mức, hay mỗi dòng một mức.",
+                    "type": "string"
+                },
+                "vat_percent": {
+                    "type": "integer"
+                }
+            }
+        },
+        "domain.PurchaseOrderHistory": {
+            "type": "object",
+            "properties": {
+                "changed_by": {
+                    "type": "integer"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "from_status": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "note": {
+                    "type": "string"
+                },
+                "purchase_order_id": {
+                    "type": "integer"
+                },
+                "to_status": {
+                    "type": "string"
+                }
+            }
+        },
+        "domain.PurchaseOrderItem": {
+            "type": "object",
+            "properties": {
+                "base_quantity": {
+                    "description": "BaseQuantity = Quantity × UnitRatio, và ĐÂY là số cộng vào kho.",
+                    "type": "integer"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "expire_date": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "line_amount": {
+                    "type": "number"
+                },
+                "lot_number": {
+                    "description": "LotNumber / ExpireDate là bản CHỤP trên chứng từ, KHÔNG phải một chiều\ncủa tồn kho: kho vẫn đếm theo (chi nhánh × biến thể), hai lô của cùng\nmột mặt hàng cộng vào một dòng tồn. Xem migration 0042.",
+                    "type": "string"
+                },
+                "product_id": {
+                    "type": "integer"
+                },
+                "product_name": {
+                    "type": "string"
+                },
+                "product_variant_id": {
+                    "type": "integer"
+                },
+                "purchase_order_id": {
+                    "type": "integer"
+                },
+                "quantity": {
+                    "description": "Quantity là số đơn vị MUA, đúng như trên hoá đơn bên bán.",
+                    "type": "integer"
+                },
+                "thumbnail": {
+                    "type": "string"
+                },
+                "total_cost": {
+                    "type": "number"
+                },
+                "unit_cost": {
+                    "description": "UnitCost là giá một đơn vị MUA (giá một thùng, không phải giá một cái).",
+                    "type": "number"
+                },
+                "unit_id": {
+                    "description": "UnitID là đơn vị MUA; nil = mua theo đúng đơn vị tính chính của mặt hàng.",
+                    "type": "integer"
+                },
+                "unit_name": {
+                    "type": "string"
+                },
+                "unit_ratio": {
+                    "description": "UnitRatio: 1 đơn vị mua bằng bao nhiêu đơn vị tính chính.",
+                    "type": "number"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "variant_name": {
+                    "description": "VariantName chụp lại TÊN biến thể lúc lập chứng từ (\"128GB · Đen\").\nRỗng = hàng không có biến thể.",
+                    "type": "string"
+                },
+                "variant_sku": {
+                    "type": "string"
+                },
+                "vat_amount": {
+                    "type": "number"
+                },
+                "vat_percent": {
+                    "type": "integer"
+                }
+            }
+        },
+        "domain.PurchaseStats": {
+            "type": "object",
+            "properties": {
+                "approved": {
+                    "type": "integer"
+                },
+                "cancelled": {
+                    "type": "integer"
+                },
+                "debt_amount": {
+                    "description": "DebtAmount là tiền còn nợ nhà cung cấp của các phiếu đã duyệt.",
+                    "type": "number"
+                },
+                "draft": {
+                    "type": "integer"
+                },
+                "purchased_amount": {
+                    "description": "PurchasedAmount là tiền hàng đã mua thật (chỉ phiếu đã duyệt).",
+                    "type": "number"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "domain.PurchaseUnit": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "ratio": {
+                    "description": "Ratio: 1 đơn vị này bằng bao nhiêu đơn vị tính chính.",
+                    "type": "number"
+                },
+                "unit_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "domain.PurchaseVariant": {
+            "type": "object",
+            "properties": {
+                "base_unit_id": {
+                    "description": "BaseUnitID / BaseUnitName là đơn vị tính CHÍNH — đơn vị kho đang đếm.",
+                    "type": "integer"
+                },
+                "base_unit_name": {
+                    "type": "string"
+                },
+                "cost_price": {
+                    "description": "CostPrice là giá vốn đang khai (nil = chưa khai) — gợi ý giá nhập cho\nngười lập phiếu.",
+                    "type": "number"
+                },
+                "product_id": {
+                    "type": "integer"
+                },
+                "product_name": {
+                    "type": "string"
+                },
+                "sku": {
+                    "type": "string"
+                },
+                "stock": {
+                    "type": "integer"
+                },
+                "thumbnail": {
+                    "type": "string"
+                },
+                "units": {
+                    "description": "Units là các đơn vị mua được, kể cả đơn vị chính (hệ số 1). Màn lập phiếu\nđổ thẳng danh sách này vào ô chọn đơn vị của dòng hàng.\n\ngorm:\"-\" vì đây KHÔNG phải quan hệ: danh sách dựng từ cột JSON\nproducts.unit_conversions ở napDonVi. Bỏ thẻ này thì GORM coi nó là một\nquan hệ và câu Scan chết với \"define a valid foreign key for relations\".",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.PurchaseUnit"
+                    }
+                },
+                "variant_id": {
+                    "type": "integer"
+                },
+                "variant_name": {
+                    "type": "string"
+                },
+                "vat_percent": {
+                    "description": "VATPercent là thuế suất của mặt hàng (âm = KCT/KKKNT, xem products.vat).",
+                    "type": "integer"
+                }
+            }
+        },
         "domain.QuyTacMa": {
             "type": "object",
             "properties": {
@@ -20949,6 +21930,230 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.PurchaseApproveRequest": {
+            "type": "object",
+            "properties": {
+                "note": {
+                    "type": "string",
+                    "maxLength": 500
+                },
+                "update_cost": {
+                    "description": "UpdateCost bỏ trống = true: giá vốn của mặt hàng nhận luôn giá vừa mua.\nTắt đi khi đây là lô mua bất thường (hàng khuyến mại, mua gấp giá cao) mà\ncửa hàng không muốn nó kéo giá vốn — và kéo theo lãi gộp — đi theo.",
+                    "type": "boolean"
+                }
+            }
+        },
+        "dto.PurchaseCancelRequest": {
+            "type": "object",
+            "required": [
+                "note"
+            ],
+            "properties": {
+                "note": {
+                    "type": "string",
+                    "maxLength": 500
+                }
+            }
+        },
+        "dto.PurchaseCreateRequest": {
+            "type": "object",
+            "required": [
+                "items"
+            ],
+            "properties": {
+                "attachment": {
+                    "type": "string",
+                    "maxLength": 255
+                },
+                "discount_amount": {
+                    "type": "number",
+                    "minimum": 0,
+                    "example": 50000
+                },
+                "document_date": {
+                    "type": "string",
+                    "example": "2026-08-22"
+                },
+                "expected_date": {
+                    "type": "string",
+                    "example": "2026-08-25"
+                },
+                "items": {
+                    "type": "array",
+                    "maxItems": 200,
+                    "minItems": 1,
+                    "items": {
+                        "$ref": "#/definitions/dto.PurchaseItemRequest"
+                    }
+                },
+                "note": {
+                    "type": "string",
+                    "maxLength": 500
+                },
+                "paid_amount": {
+                    "description": "PaidAmount là số trả ngay lúc lập phiếu; 0 = ghi nợ toàn bộ.",
+                    "type": "number",
+                    "minimum": 0,
+                    "example": 0
+                },
+                "purchaser_id": {
+                    "type": "integer",
+                    "example": 7
+                },
+                "supplier_delivery_code": {
+                    "type": "string",
+                    "maxLength": 50
+                },
+                "supplier_id": {
+                    "type": "integer",
+                    "example": 4
+                },
+                "supplier_name": {
+                    "description": "SupplierName bỏ trống thì server lấy tên trong danh mục theo SupplierID.\nGõ tay được để còn ghi phiếu cho bên bán vãng lai.",
+                    "type": "string",
+                    "maxLength": 150
+                },
+                "vat_mode": {
+                    "type": "string",
+                    "enum": [
+                        "order",
+                        "goods"
+                    ],
+                    "example": "order"
+                },
+                "vat_percent": {
+                    "type": "integer",
+                    "maximum": 100,
+                    "minimum": -2,
+                    "example": 8
+                }
+            }
+        },
+        "dto.PurchaseItemRequest": {
+            "type": "object",
+            "required": [
+                "quantity",
+                "variant_id"
+            ],
+            "properties": {
+                "expire_date": {
+                    "type": "string",
+                    "example": "2027-08-22"
+                },
+                "lot_number": {
+                    "description": "LotNumber / ExpireDate chụp lại số lô bên bán ghi. Bỏ trống là hàng\nkhông theo lô — KHÔNG phải chiều của tồn kho, xem migration 0042.",
+                    "type": "string",
+                    "maxLength": 50,
+                    "example": "L2026-08"
+                },
+                "quantity": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "example": 2
+                },
+                "unit_cost": {
+                    "description": "UnitCost là giá một đơn vị MUA (giá một thùng, không phải giá một cái).",
+                    "type": "number",
+                    "minimum": 0,
+                    "example": 120000
+                },
+                "unit_id": {
+                    "description": "UnitID là đơn vị MUA. Bỏ trống = mua theo đơn vị tính chính của mặt hàng.",
+                    "type": "integer",
+                    "example": 3
+                },
+                "variant_id": {
+                    "type": "integer",
+                    "example": 12
+                },
+                "vat_percent": {
+                    "description": "VATPercent chỉ được dùng khi phiếu khai thuế theo dòng (vat_mode = goods).\nSố âm là mã thuế đặc biệt của mặt hàng: -1 = KCT, -2 = KKKNT.\n\nCon trỏ chứ không phải int: bỏ TRỐNG hẳn trường này mới là \"lấy thuế suất\ncủa mặt hàng\". Gửi số 0 là khai một dòng KHÔNG chịu thuế, và hai chuyện\nđó phải phân biệt được — không thì dòng cố ý để 0% bị ghi thành 8%.",
+                    "type": "integer",
+                    "maximum": 100,
+                    "minimum": -2,
+                    "example": 8
+                }
+            }
+        },
+        "dto.PurchasePaymentRequest": {
+            "type": "object",
+            "properties": {
+                "note": {
+                    "type": "string",
+                    "maxLength": 500
+                },
+                "paid_amount": {
+                    "type": "number",
+                    "minimum": 0,
+                    "example": 500000
+                }
+            }
+        },
+        "dto.PurchaseUpdateRequest": {
+            "type": "object",
+            "required": [
+                "items"
+            ],
+            "properties": {
+                "attachment": {
+                    "type": "string",
+                    "maxLength": 255
+                },
+                "discount_amount": {
+                    "type": "number",
+                    "minimum": 0
+                },
+                "document_date": {
+                    "type": "string"
+                },
+                "expected_date": {
+                    "type": "string"
+                },
+                "items": {
+                    "type": "array",
+                    "maxItems": 200,
+                    "minItems": 1,
+                    "items": {
+                        "$ref": "#/definitions/dto.PurchaseItemRequest"
+                    }
+                },
+                "note": {
+                    "type": "string",
+                    "maxLength": 500
+                },
+                "paid_amount": {
+                    "type": "number",
+                    "minimum": 0
+                },
+                "purchaser_id": {
+                    "type": "integer"
+                },
+                "supplier_delivery_code": {
+                    "type": "string",
+                    "maxLength": 50
+                },
+                "supplier_id": {
+                    "type": "integer",
+                    "example": 4
+                },
+                "supplier_name": {
+                    "type": "string",
+                    "maxLength": 150
+                },
+                "vat_mode": {
+                    "type": "string",
+                    "enum": [
+                        "order",
+                        "goods"
+                    ]
+                },
+                "vat_percent": {
+                    "type": "integer",
+                    "maximum": 100,
+                    "minimum": -2
+                }
+            }
+        },
         "dto.QuanTriItem": {
             "type": "object",
             "properties": {
@@ -22718,6 +23923,120 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "voucher_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "service.PhieuMuaHangDetail": {
+            "type": "object",
+            "properties": {
+                "approved_at": {
+                    "type": "string"
+                },
+                "attachment": {
+                    "type": "string"
+                },
+                "can_approve": {
+                    "description": "CanApprove = phiếu còn duyệt được. Trang quản trị dựng nút từ hai cờ này\nthay vì chép lại luật vào giao diện rồi lệch với server.",
+                    "type": "boolean"
+                },
+                "can_edit": {
+                    "description": "CanEdit = phiếu còn sửa/xoá được (chỉ phiếu lưu tạm).",
+                    "type": "boolean"
+                },
+                "can_pay": {
+                    "description": "CanPay = phiếu đã duyệt và còn nợ nhà cung cấp.",
+                    "type": "boolean"
+                },
+                "cancel_reason": {
+                    "type": "string"
+                },
+                "cancelled_at": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "integer"
+                },
+                "discount_amount": {
+                    "type": "number"
+                },
+                "document_date": {
+                    "type": "string"
+                },
+                "expected_date": {
+                    "type": "string"
+                },
+                "handled_by": {
+                    "type": "integer"
+                },
+                "histories": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.PurchaseOrderHistory"
+                    }
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.PurchaseOrderItem"
+                    }
+                },
+                "items_amount": {
+                    "type": "number"
+                },
+                "note": {
+                    "type": "string"
+                },
+                "paid_amount": {
+                    "type": "number"
+                },
+                "payment_status": {
+                    "type": "string"
+                },
+                "po_code": {
+                    "type": "string"
+                },
+                "purchaser_id": {
+                    "type": "integer"
+                },
+                "shop_id": {
+                    "description": "ShopID là chi nhánh lập phiếu, và cũng là kho hàng sẽ về khi duyệt. Chốt\nlúc lập chứ không lúc duyệt: người bấm duyệt có thể đang đứng ở chi nhánh\nkhác, mà hàng thì về đúng nơi đã đặt mua.",
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "supplier_delivery_code": {
+                    "type": "string"
+                },
+                "supplier_id": {
+                    "description": "SupplierID trỏ về danh mục để gom số liệu và lọc; nil = bên bán vãng lai.",
+                    "type": "integer"
+                },
+                "supplier_name": {
+                    "description": "SupplierName là bản chụp TÊN bên bán lúc lập phiếu, và là thứ in ra phiếu.\nĐổi tên nhà cung cấp hôm nay không được sửa lại chứng từ ký tháng trước.",
+                    "type": "string"
+                },
+                "total_amount": {
+                    "type": "number"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "vat_amount": {
+                    "type": "number"
+                },
+                "vat_mode": {
+                    "description": "VATMode quyết định thuế khai ở đâu: cả phiếu một mức, hay mỗi dòng một mức.",
+                    "type": "string"
+                },
+                "vat_percent": {
                     "type": "integer"
                 }
             }
