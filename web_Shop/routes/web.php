@@ -332,6 +332,8 @@ Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:quan_ly'])->prefix('ad
         Route::get('/suppliers', [NhaCungCapController::class, 'index'])->name('nha-cung-cap.index');
         Route::get('/suppliers/export', [NhaCungCapController::class, 'export'])->name('nha-cung-cap.export');
         Route::post('/suppliers/photo', [NhaCungCapController::class, 'uploadAnh'])->name('nha-cung-cap.anh');
+        Route::get('/suppliers/{id}/purchase-orders', [NhaCungCapController::class, 'phieuMua'])
+            ->whereNumber('id')->name('nha-cung-cap.phieuMua');
         Route::get('/suppliers/import-template', [NhaCungCapController::class, 'mauNhap'])->name('nha-cung-cap.mauNhap');
         Route::post('/suppliers/import', [NhaCungCapController::class, 'import'])->name('nha-cung-cap.import');
         // Hai đường hàng loạt đặt TRƯỚC {id} để không bị nuốt.

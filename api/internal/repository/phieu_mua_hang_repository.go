@@ -115,8 +115,53 @@ func (r *purchaseOrderRepository) List(ctx context.Context, f domain.PurchaseFil
 		Offset((page - 1) * size).
 		Limit(size).
 		Find(&list).Error
+	if err != nil {
+		return nil, 0, err
+	}
 
-	return list, tong, err
+	return list, tong, r.napTenNguoiLap(ctx, list)
+}
+
+// napTenNguoiLap tra TÊN người lập cho cả trang trong MỘT câu truy vấn.
+//
+// Không Preload quan hệ: `created_by` trỏ vào users, mà bảng đó còn mang mật
+// khẩu băm và khoá phiên — kéo nguyên dòng về chỉ để lấy cái tên là mang theo
+// những thứ không nên rời khỏi tầng dưới.
+func (r *purchaseOrderRepository) napTenNguoiLap(ctx context.Context, list []domain.PurchaseOrder) error {
+	ids := make([]uint, 0, len(list))
+	for _, po := range list {
+		if po.CreatedBy != nil && *po.CreatedBy > 0 && !slices.Contains(ids, *po.CreatedBy) {
+			ids = append(ids, *po.CreatedBy)
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+
+	type dong struct {
+		ID       uint
+		FullName string
+	}
+	var nguoi []dong
+	// Unscoped: người lập có thể đã nghỉ và bị xoá mềm, phiếu cũ vẫn phải in
+	// ra được tên họ.
+	if err := r.db.WithContext(ctx).Unscoped().Table("users").
+		Select("id, COALESCE(full_name, '') AS full_name").
+		Where("id IN ?", ids).Scan(&nguoi).Error; err != nil {
+		return err
+	}
+
+	ten := make(map[uint]string, len(nguoi))
+	for _, n := range nguoi {
+		ten[n.ID] = n.FullName
+	}
+	for i := range list {
+		if list[i].CreatedBy != nil {
+			list[i].CreatedByName = ten[*list[i].CreatedBy]
+		}
+	}
+
+	return nil
 }
 
 func (r *purchaseOrderRepository) FindByID(ctx context.Context, id uint) (*domain.PurchaseOrder, error) {
@@ -131,7 +176,12 @@ func (r *purchaseOrderRepository) FindByID(ctx context.Context, id uint) (*domai
 		return nil, err
 	}
 
-	return &po, nil
+	mot := []domain.PurchaseOrder{po}
+	if err := r.napTenNguoiLap(ctx, mot); err != nil {
+		return nil, err
+	}
+
+	return &mot[0], nil
 }
 
 // Stats — một lượt quét, không phải năm câu đếm.

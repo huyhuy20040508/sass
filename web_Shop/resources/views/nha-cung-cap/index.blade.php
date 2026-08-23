@@ -234,6 +234,14 @@
                 </button>
             </div>
 
+            {{-- Ba tab như bản v2. Hai tab sau từng bị gỡ ở 557d907 vì chúng
+                 cộng từ purchase_orders — bảng đó nay đã có lại. --}}
+            <div class="ncc-tabs" id="nccTabs">
+                <button type="button" class="ncc-tab is-active" data-tab="ho-so">Chi tiết</button>
+                <button type="button" class="ncc-tab" data-tab="giao-dich">Lịch sử giao dịch</button>
+                <button type="button" class="ncc-tab" data-tab="cong-no">Công nợ</button>
+            </div>
+
             <div class="ncc-modal-body">
                 <div class="ncc-tab-pane is-active" data-pane="ho-so">
                     <div class="ncc-view-cols">
@@ -254,6 +262,35 @@
                     </div>
                 </div>
 
+                <div class="ncc-tab-pane" data-pane="giao-dich">
+                    <div class="ncc-tab-tools">
+                        <div class="ncc-searchbox">
+                            <input type="text" id="nccGdTim" class="ncc-search-input"
+                                   placeholder="Tìm theo mã phiếu hoặc ghi chú" autocomplete="off">
+                            <button type="button" class="ncc-search-btn" title="Tìm">
+                                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                            </button>
+                        </div>
+                        <input type="date" id="nccGdTu" class="ncc-input ncc-input-ngay" title="Từ ngày">
+                        <span class="ncc-dash">→</span>
+                        <input type="date" id="nccGdDen" class="ncc-input ncc-input-ngay" title="Đến ngày">
+                    </div>
+                    <div id="nccGdBang"></div>
+                </div>
+
+                <div class="ncc-tab-pane" data-pane="cong-no">
+                    <div class="ncc-tien" id="nccNoTong"></div>
+                    <div class="ncc-tab-tools">
+                        <div class="ncc-searchbox">
+                            <input type="text" id="nccNoTim" class="ncc-search-input"
+                                   placeholder="Tìm theo mã phiếu hoặc ghi chú" autocomplete="off">
+                            <button type="button" class="ncc-search-btn" title="Tìm">
+                                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="nccNoBang"></div>
+                </div>
             </div>
 
             <div class="ncc-modal-foot">
@@ -463,6 +500,38 @@
         .ncc-note-box { margin: 0; padding: 10px 12px; border-radius: 6px; background: #f6f8fa; font-size: 12px; color: #595959; }
 
         /* Modal chi tiết */
+        .ncc-tabs {
+            position: sticky; top: 49px; z-index: 2; display: flex; gap: 4px;
+            padding: 0 20px; background: #fff; border-bottom: 1px solid #f0f0f0;
+        }
+        .ncc-tab-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+        .ncc-input-ngay { width: auto; min-width: 150px; }
+        .ncc-dash { color: #bfbfbf; font-size: 12px; }
+
+        /* Ba con số tiền của tab Công nợ */
+        .ncc-tien { display: flex; gap: 24px; flex-wrap: wrap; margin-bottom: 14px; }
+        .ncc-tien-o { display: flex; flex-direction: column; gap: 2px; }
+        .ncc-tien-lb { font-size: 12px; color: #8c8c8c; }
+        .ncc-tien-vl { font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
+        .ncc-tien-vl.is-no { color: #d4380d; }
+
+        /* Bảng trong tab — cột tiền canh phải, ô nằm một dòng */
+        .ncc-tab-wrap { width: 100%; overflow-x: auto; scrollbar-width: thin; }
+        .ncc-tab-wrap::-webkit-scrollbar { height: 11px; }
+        .ncc-tab-wrap::-webkit-scrollbar-thumb { background-color: #dcdcdc; border-radius: 8px; border: 3px solid #fff; }
+        .ncc-tab-table { width: 100%; min-width: 900px; border-collapse: collapse; font-size: 13px; }
+        .ncc-tab-table thead th {
+            padding: 10px 8px; background: #f0f0f0; font-size: 12px; font-weight: 700;
+            text-align: center; white-space: nowrap;
+        }
+        .ncc-tab-table tbody td {
+            padding: 10px 8px; border-bottom: 1px solid #f5f5f5; text-align: center; white-space: nowrap;
+        }
+        .ncc-tab-table tbody tr:hover { background: #fafafa; }
+        .ncc-tab-table td.is-tien { text-align: right; font-variant-numeric: tabular-nums; }
+        .ncc-tab-table td.is-ghichu { text-align: left; max-width: 200px; overflow: hidden; text-overflow: ellipsis; }
+        .ncc-tab-rong { padding: 32px 12px; text-align: center; color: #8c8c8c; font-size: 13px; }
+
         .ncc-tab {
             border: 0; background: none; padding: 8px 14px; font-size: 13px; color: #595959; cursor: pointer;
             border-bottom: 2px solid transparent;
@@ -708,8 +777,158 @@
                     o('Ghi chú', s.note, true),
                 ].join('');
 
+                // Về tab đầu, và quên phiếu của bên vừa xem — không thì mở
+                // nhà cung cấp khác lại thấy lịch sử của người trước.
+                phieuCuaNCC = null;
+                tienCuaNCC = null;
+                $tabs.querySelectorAll('.ncc-tab').forEach((b, i) => b.classList.toggle('is-active', i === 0));
+                document.querySelectorAll('.ncc-tab-pane').forEach((p) => {
+                    p.classList.toggle('is-active', p.dataset.pane === 'ho-so');
+                });
+                ['nccGdTim', 'nccGdTu', 'nccGdDen', 'nccNoTim'].forEach((id) => {
+                    document.getElementById(id).value = '';
+                });
+
                 $detail.style.display = 'flex';
             }
+
+            // ---------- Ba tab của hộp chi tiết ----------
+            //
+            // Dữ liệu nạp MỘT lần cho mỗi lượt mở hộp rồi lọc tại chỗ: hai tab
+            // sau cùng đọc một danh sách phiếu, gọi hai lượt là hỏi máy chủ hai
+            // lần cho cùng một câu.
+            let phieuCuaNCC = null;
+            let tienCuaNCC = null;
+
+            const $tabs = document.getElementById('nccTabs');
+            $tabs.addEventListener('click', (e) => {
+                const nut = e.target.closest('[data-tab]');
+                if (!nut) return;
+                const ten = nut.dataset.tab;
+                $tabs.querySelectorAll('.ncc-tab').forEach((b) => b.classList.toggle('is-active', b === nut));
+                document.querySelectorAll('.ncc-tab-pane').forEach((p) => {
+                    p.classList.toggle('is-active', p.dataset.pane === ten);
+                });
+                if (ten !== 'ho-so') napPhieu();
+            });
+
+            async function napPhieu() {
+                if (!dangXem || phieuCuaNCC !== null) { veTab(); return; }
+
+                document.getElementById('nccGdBang').innerHTML = '<p class="ncc-tab-rong">Đang đọc…</p>';
+                document.getElementById('nccNoBang').innerHTML = '<p class="ncc-tab-rong">Đang đọc…</p>';
+                try {
+                    const res = await fetch(`${URL_BASE}/${dangXem.id}/purchase-orders`, {
+                        headers: { Accept: 'application/json' },
+                    });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.message || 'Không đọc được phiếu mua.');
+                    phieuCuaNCC = data.data || [];
+                    tienCuaNCC = data.tien || { tong_mua: 0, da_tra: 0, con_no: 0 };
+                } catch (err) {
+                    phieuCuaNCC = [];
+                    tienCuaNCC = null;
+                    const cau = `<p class="ncc-tab-rong">${esc(err.message || 'Không đọc được phiếu mua.')}</p>`;
+                    document.getElementById('nccGdBang').innerHTML = cau;
+                    document.getElementById('nccNoBang').innerHTML = cau;
+                    return;
+                }
+                veTab();
+            }
+
+            const NHAN_TRA = { unpaid: 'Chưa trả', partial: 'Trả một phần', paid: 'Đã trả đủ' };
+            const NHAN_PHIEU = { draft: 'Lưu tạm', approved: 'Đã duyệt', cancelled: 'Đã huỷ' };
+
+            /** Lọc theo từ khoá và khoảng ngày lập. */
+            function locPhieu(tu, den, kw) {
+                return (phieuCuaNCC || []).filter((p) => {
+                    if (kw) {
+                        const dong = ((p.po_code || '') + ' ' + (p.note || '')).toLowerCase();
+                        if (!dong.includes(kw.toLowerCase())) return false;
+                    }
+                    const ngayLap = (p.created_at || '').slice(0, 10);
+                    if (tu && ngayLap < tu) return false;
+                    if (den && ngayLap > den) return false;
+                    return true;
+                });
+            }
+
+            function veTab() {
+                // --- Lịch sử giao dịch ---
+                const gd = locPhieu(
+                    document.getElementById('nccGdTu').value,
+                    document.getElementById('nccGdDen').value,
+                    document.getElementById('nccGdTim').value.trim(),
+                );
+                document.getElementById('nccGdBang').innerHTML = gd.length ? `
+                    <div class="ncc-tab-wrap"><table class="ncc-tab-table">
+                        <thead><tr>
+                            <th>STT</th><th>Mã phiếu</th><th>Người lập</th><th>Ngày chứng từ</th>
+                            <th>Ngày lập</th><th>Tiền hàng</th><th>Tổng tiền</th>
+                            <th>Trạng thái</th><th>Thanh toán</th><th>Còn nợ</th><th>Ghi chú</th>
+                        </tr></thead>
+                        <tbody>${gd.map((p, i) => {
+                            const con = Math.max(0, Number(p.total_amount || 0) - Number(p.paid_amount || 0));
+                            return `<tr>
+                                <td>${i + 1}</td>
+                                <td><span class="ncc-code">${esc(p.po_code || '')}</span></td>
+                                <td>${esc(p.creator_name || '—')}</td>
+                                <td>${ngay(p.document_date)}</td>
+                                <td>${ngay(p.created_at)}</td>
+                                <td class="is-tien">${money(p.items_amount)}</td>
+                                <td class="is-tien"><b>${money(p.total_amount)}</b></td>
+                                <td>${esc(NHAN_PHIEU[p.status] || p.status || '')}</td>
+                                <td>${p.status === 'cancelled' ? '—' : esc(NHAN_TRA[p.payment_status] || '')}</td>
+                                <td class="is-tien">${p.status === 'approved' && con > 0 ? money(con) : '—'}</td>
+                                <td class="is-ghichu" title="${esc(p.note || '')}">${esc(p.note || '')}</td>
+                            </tr>`;
+                        }).join('')}</tbody>
+                    </table></div>`
+                    : '<p class="ncc-tab-rong">Bên này chưa có phiếu mua nào khớp bộ lọc.</p>';
+
+                // --- Công nợ: chỉ phiếu ĐÃ DUYỆT mà còn nợ ---
+                //
+                // Phiếu lưu tạm chưa mua gì, phiếu huỷ thì không bao giờ mua —
+                // đưa chúng vào bảng công nợ là dựng ra một khoản nợ không có thật.
+                const kwNo = document.getElementById('nccNoTim').value.trim();
+                const no = locPhieu('', '', kwNo).filter((p) =>
+                    p.status === 'approved'
+                    && Number(p.total_amount || 0) - Number(p.paid_amount || 0) > 0);
+
+                if (tienCuaNCC) {
+                    document.getElementById('nccNoTong').innerHTML = `
+                        <div class="ncc-tien-o"><span class="ncc-tien-lb">Tổng mua</span>
+                            <span class="ncc-tien-vl">${money(tienCuaNCC.tong_mua)}</span></div>
+                        <div class="ncc-tien-o"><span class="ncc-tien-lb">Đã trả</span>
+                            <span class="ncc-tien-vl">${money(tienCuaNCC.da_tra)}</span></div>
+                        <div class="ncc-tien-o"><span class="ncc-tien-lb">Còn nợ</span>
+                            <span class="ncc-tien-vl is-no">${money(tienCuaNCC.con_no)}</span></div>`;
+                }
+
+                document.getElementById('nccNoBang').innerHTML = no.length ? `
+                    <div class="ncc-tab-wrap"><table class="ncc-tab-table">
+                        <thead><tr>
+                            <th>STT</th><th>Mã phiếu</th><th>Người lập</th><th>Ngày lập</th>
+                            <th>Tổng tiền</th><th>Đã trả</th><th>Còn nợ</th><th>Thanh toán</th><th>Ghi chú</th>
+                        </tr></thead>
+                        <tbody>${no.map((p, i) => `<tr>
+                            <td>${i + 1}</td>
+                            <td><span class="ncc-code">${esc(p.po_code || '')}</span></td>
+                            <td>${esc(p.creator_name || '—')}</td>
+                            <td>${ngay(p.created_at)}</td>
+                            <td class="is-tien">${money(p.total_amount)}</td>
+                            <td class="is-tien">${money(p.paid_amount)}</td>
+                            <td class="is-tien"><b>${money(Number(p.total_amount || 0) - Number(p.paid_amount || 0))}</b></td>
+                            <td>${esc(NHAN_TRA[p.payment_status] || '')}</td>
+                            <td class="is-ghichu" title="${esc(p.note || '')}">${esc(p.note || '')}</td>
+                        </tr>`).join('')}</tbody>
+                    </table></div>`
+                    : '<p class="ncc-tab-rong">Bên này không còn khoản nợ nào.</p>';
+            }
+
+            ['nccGdTim', 'nccGdTu', 'nccGdDen', 'nccNoTim'].forEach((id) => {
+                document.getElementById(id).addEventListener('input', () => { if (phieuCuaNCC) veTab(); });
+            });
 
             document.getElementById('nccDetailEdit').addEventListener('click', () => {
                 if (!dangXem) return;

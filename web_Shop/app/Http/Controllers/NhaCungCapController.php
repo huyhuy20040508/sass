@@ -375,6 +375,59 @@ class NhaCungCapController extends Controller
         );
     }
 
+    /**
+     * Phiếu mua của MỘT nhà cung cấp — hai tab "Lịch sử giao dịch" và "Công nợ"
+     * trong hộp chi tiết cùng đọc đường này.
+     *
+     * Hai tab ấy từng bị gỡ (557d907) vì chúng cộng từ purchase_orders, mà bảng
+     * đó đã bị xoá. Nay bảng có lại nên tab quay về.
+     *
+     * Tiền cộng ở đây chứ không gọi thêm một đường API nữa: danh sách phiếu đã
+     * về tay rồi, cộng lại là mấy phép cộng — thêm một lượt gọi mạng chỉ để lấy
+     * ba con số là đắt hơn hẳn.
+     */
+    public function phieuMua(Request $request, int $id)
+    {
+        try {
+            $res = $this->api->phieuMuaHang([
+                'supplier_id' => $id,
+                'sort' => 'newest',
+                'page' => 1,
+                'page_size' => 200,
+            ]);
+            if (! $res->successful()) {
+                return response()->json(['message' => $res->json('message') ?: 'Không đọc được phiếu mua.'], 502);
+            }
+
+            $list = $res->json('data') ?? [];
+        } catch (\Throwable $e) {
+            Log::error('Load phieu mua cua NCC failed', ['id' => $id, 'msg' => $e->getMessage()]);
+
+            return response()->json(['message' => 'Không kết nối được API.'], 502);
+        }
+
+        // Tiền CHỈ cộng trên phiếu đã duyệt: phiếu lưu tạm chưa mua gì, phiếu
+        // huỷ thì không bao giờ mua. Cộng cả hai vào là con số nói dối.
+        $tongMua = 0.0;
+        $daTra = 0.0;
+        foreach ($list as $p) {
+            if (($p['status'] ?? '') !== 'approved') {
+                continue;
+            }
+            $tongMua += (float) ($p['total_amount'] ?? 0);
+            $daTra += (float) ($p['paid_amount'] ?? 0);
+        }
+
+        return response()->json([
+            'data' => $list,
+            'tien' => [
+                'tong_mua' => $tongMua,
+                'da_tra' => $daTra,
+                'con_no' => max(0, $tongMua - $daTra),
+            ],
+        ]);
+    }
+
     /** Ảnh tải lên ngay lúc chọn, form chỉ mang theo đường dẫn. */
     public function uploadAnh(Request $request)
     {

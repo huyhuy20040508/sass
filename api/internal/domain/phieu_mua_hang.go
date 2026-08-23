@@ -62,6 +62,10 @@ type PurchaseOrder struct {
 
 	CreatedBy *uint `json:"created_by"`
 	HandledBy *uint `json:"handled_by"`
+	// CreatedByName là TÊN người lập, tra kèm khi đọc lên — bảng không có cột
+	// này. Chỉ có id thì mọi màn hình muốn in tên đều phải tự đi tra một lượt
+	// nữa, và mỗi nơi lại tra một kiểu.
+	CreatedByName string `json:"created_by_name" gorm:"-"`
 
 	ApprovedAt  *time.Time `json:"approved_at"`
 	CancelledAt *time.Time `json:"cancelled_at"`

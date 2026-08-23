@@ -1184,6 +1184,12 @@ definitions:
         type: string
       created_by:
         type: integer
+      created_by_name:
+        description: |-
+          CreatedByName là TÊN người lập, tra kèm khi đọc lên — bảng không có cột
+          này. Chỉ có id thì mọi màn hình muốn in tên đều phải tự đi tra một lượt
+          nữa, và mỗi nơi lại tra một kiểu.
+        type: string
       discount_amount:
         type: number
       document_date:
@@ -6556,6 +6562,12 @@ definitions:
         type: string
       created_by:
         type: integer
+      created_by_name:
+        description: |-
+          CreatedByName là TÊN người lập, tra kèm khi đọc lên — bảng không có cột
+          này. Chỉ có id thì mọi màn hình muốn in tên đều phải tự đi tra một lượt
+          nữa, và mỗi nơi lại tra một kiểu.
+        type: string
       discount_amount:
         type: number
       document_date:
@@ -11752,6 +11764,39 @@ paths:
       security:
       - BearerAuth: []
       summary: Đổi trạng thái kinh doanh của sản phẩm
+      tags:
+      - Admin - Products
+  /admin/products/anh:
+    post:
+      consumes:
+      - multipart/form-data
+      description: |-
+        Nhận MỘT file ảnh (multipart, khoá `file`) rồi trả về địa chỉ đọc lại được để gán vào `thumbnail` của mặt hàng. Tối đa 5MB, chỉ nhận .jpg .jpeg .png .webp.
+        File cất theo từng cửa hàng (`uploads/<tenant>/<năm>/<tháng>/`) nên hai cửa hàng không bao giờ ghi đè lên nhau.
+      parameters:
+      - description: Ảnh cần tải lên
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/response.Body'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.Body'
+        "413":
+          description: Request Entity Too Large
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Tải ảnh lên
       tags:
       - Admin - Products
   /admin/products/bulk-delete:
