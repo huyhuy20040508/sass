@@ -674,13 +674,32 @@ class PhieuMuaHangController extends Controller
         }
     }
 
-    /** Nhân viên phụ trách mua — ô "Người mua" trong hộp thoại. */
+    /**
+     * Trạng thái "đang làm" của hồ sơ nhân viên — GẠCH DƯỚI.
+     *
+     * Chép từ domain.NhanSuDangLam bên API. Viết thành 'dang-lam' gạch ngang
+     * thì repository ghép thẳng vào `WHERE status = ?` và không dòng nào khớp:
+     * cửa hàng có đủ người mà ô chọn vẫn rỗng, lại chẳng có lỗi nào nổi lên.
+     */
+    public const NHAN_SU_DANG_LAM = 'dang_lam';
+
+    /**
+     * Nhân viên phụ trách mua — ô "Nhân viên mua hàng" trong hộp thoại.
+     *
+     * Chỉ người ĐANG LÀM: người đã nghỉ không nên nằm trong ô chọn của một
+     * chứng từ lập hôm nay. Phiếu cũ vẫn tra ra tên họ vì phiếu giữ id.
+     */
     protected function danhMucNhanVien(): array
     {
         try {
-            $res = $this->api->nhanSu(['status' => 'dang-lam']);
+            $res = $this->api->nhanSu(['status' => self::NHAN_SU_DANG_LAM]);
+            if (! $res->successful()) {
+                Log::error('Load nhan su cho phieu mua failed', ['status' => $res->status()]);
 
-            return $res->successful() ? ($res->json('data') ?? []) : [];
+                return [];
+            }
+
+            return $res->json('data') ?? [];
         } catch (\Throwable $e) {
             Log::error('Load nhan su cho phieu mua failed', ['msg' => $e->getMessage()]);
 
