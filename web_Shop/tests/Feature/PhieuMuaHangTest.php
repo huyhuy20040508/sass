@@ -135,6 +135,41 @@ class PhieuMuaHangTest extends TestCase
     }
 
     /**
+     * Ô "Nhân viên mua hàng" phải hỏi API bằng ĐÚNG giá trị trạng thái.
+     *
+     * Lỗi đã xảy ra thật: gửi 'dang-lam' gạch ngang trong khi API nhận
+     * 'dang_lam' gạch dưới. Repository ghép thẳng vào `WHERE status = ?` nên
+     * không dòng nào khớp — cửa hàng có đủ người mà ô chọn vẫn rỗng, lại chẳng
+     * có lỗi nào nổi lên để mà lần ra.
+     */
+    public function test_o_nhan_vien_hoi_dung_trang_thai(): void
+    {
+        Http::fake([
+            '*/admin/nhan-su*' => Http::response(['data' => [
+                ['id' => 7, 'code' => 'NV0007', 'full_name' => 'Trần Thu Hà'],
+            ]], 200),
+            '*' => Http::response(['data' => [], 'meta' => []], 200),
+        ]);
+
+        $html = $this->withSession($this->phien())->get('/admin/purchase-orders')->getContent();
+
+        Http::assertSent(function ($req) {
+            if (! str_contains($req->url(), '/admin/nhan-su')) {
+                return false;
+            }
+
+            // Gạch DƯỚI, đúng domain.NhanSuDangLam bên API.
+            return str_contains($req->url(), 'status=dang_lam');
+        });
+
+        // Và người đó phải hiện ra trong ô chọn.
+        $dau = strpos($html, 'id="pmhNguoiMua"');
+        $o = substr($html, $dau, strpos($html, '</select>', $dau) - $dau);
+        $this->assertStringContainsString('Trần Thu Hà', $o);
+        $this->assertStringContainsString('NV0007', $o);
+    }
+
+    /**
      * Ô "Chọn nhóm hàng" chỉ bày nhóm CÓ hàng, không bày nhóm rỗng.
      *
      * Trang đọc đường riêng của phiếu mua chứ không lấy cả danh mục nhóm: ô này
