@@ -43,6 +43,8 @@ type Handlers struct {
 	Auth     *handler.AuthHandler
 	Category *handler.CategoryHandler
 	Product  *handler.ProductHandler
+	// Tep nhận file tải lên (ảnh mặt hàng) — xem handler.TepHandler.
+	Tep      *handler.TepHandler
 	Customer *handler.CustomerHandler
 	Order    *handler.OrderHandler
 	Return   *handler.OrderReturnHandler
@@ -179,6 +181,14 @@ func New(
 
 	// Swagger UI: http://localhost:<port>/swagger/index.html
 	r.GET("/swagger/*any", ginswagger.WrapHandler(swaggerfiles.Handler))
+
+	// Ảnh mặt hàng người dùng tải lên, phục vụ lại như file tĩnh.
+	//
+	// KHÔNG hỏi token: đây là ảnh bày ra ngoài cửa hàng, mà thẻ <img> của trình
+	// duyệt lẫn ô ảnh của app đều không gắn được header Authorization. Đổi lại
+	// tên file là 16 byte ngẫu nhiên (xem handler.TepHandler) nên không dò ra
+	// được ảnh của cửa hàng khác bằng cách thử.
+	r.Static("/uploads", cfg.App.UploadDir)
 
 	// --- Hạn mức gọi theo IP ------------------------------------------------
 	//
@@ -555,6 +565,13 @@ func New(
 			// hình bán tại quầy tra hàng bằng /orders/pos/scan và danh mục công
 			// khai GET /products, cả hai đều còn mở cho nhân viên.
 			q.Dat(manage, http.MethodPost, "/products", "san-pham.them", h.Product.Create)
+			// "anh" đứng TRƯỚC "/products/:id" để gin không hiểu nó là một id.
+			//
+			// Gắn quyền `san-pham.them`: tải ảnh lên là một bước của việc khai
+			// hàng. Người chỉ có `san-pham.sua` mà không có `.them` sẽ bị chặn ở
+			// đây — chấp nhận, vì hai quyền ấy hầu như luôn đi cùng nhau, và
+			// một đường chỉ khai được một chuỗi quyền.
+			q.Dat(manage, http.MethodPost, "/products/anh", "san-pham.them", h.Tep.TaiAnh)
 			// Xoá hàng loạt đặt TRƯỚC nhóm :id cho dễ đọc — một giao dịch thay vì
 			// N lượt gọi nối đuôi nhau từ trang quản trị.
 			q.Dat(manage, http.MethodPost, "/products/bulk-delete", "san-pham.xoa", h.Product.BulkDelete)

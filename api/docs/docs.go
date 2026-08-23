@@ -7551,6 +7551,55 @@ const docTemplate = `{
                 }
             }
         },
+        "/admin/products/anh": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Nhận MỘT file ảnh (multipart, khoá ` + "`" + `file` + "`" + `) rồi trả về địa chỉ đọc lại được để gán vào ` + "`" + `thumbnail` + "`" + ` của mặt hàng. Tối đa 5MB, chỉ nhận .jpg .jpeg .png .webp.\nFile cất theo từng cửa hàng (` + "`" + `uploads/\u003ctenant\u003e/\u003cnăm\u003e/\u003ctháng\u003e/` + "`" + `) nên hai cửa hàng không bao giờ ghi đè lên nhau.",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Products"
+                ],
+                "summary": "Tải ảnh lên",
+                "parameters": [
+                    {
+                        "type": "file",
+                        "description": "Ảnh cần tải lên",
+                        "name": "file",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "413": {
+                        "description": "Request Entity Too Large",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/products/bulk-delete": {
             "post": {
                 "security": [
@@ -17380,6 +17429,10 @@ const docTemplate = `{
                 "created_by": {
                     "type": "integer"
                 },
+                "created_by_name": {
+                    "description": "CreatedByName là TÊN người lập, tra kèm khi đọc lên — bảng không có cột\nnày. Chỉ có id thì mọi màn hình muốn in tên đều phải tự đi tra một lượt\nnữa, và mỗi nơi lại tra một kiểu.",
+                    "type": "string"
+                },
                 "discount_amount": {
                     "type": "number"
                 },
@@ -23959,6 +24012,10 @@ const docTemplate = `{
                 },
                 "created_by": {
                     "type": "integer"
+                },
+                "created_by_name": {
+                    "description": "CreatedByName là TÊN người lập, tra kèm khi đọc lên — bảng không có cột\nnày. Chỉ có id thì mọi màn hình muốn in tên đều phải tự đi tra một lượt\nnữa, và mỗi nơi lại tra một kiểu.",
+                    "type": "string"
                 },
                 "discount_amount": {
                     "type": "number"

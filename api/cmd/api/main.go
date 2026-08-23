@@ -452,6 +452,7 @@ func main() {
 		Auth:         handler.NewAuthHandler(authSvc),
 		Category:     handler.NewCategoryHandler(categorySvc),
 		Product:      handler.NewProductHandler(productSvc, promotionSvc),
+		Tep:          handler.NewTepHandler(cfg.App.UploadDir, cfg.App.BaseURL),
 		Customer:     handler.NewCustomerHandler(customerSvc),
 		Order:        handler.NewOrderHandler(orderSvc),
 		Return:       handler.NewOrderReturnHandler(returnSvc),

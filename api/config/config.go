@@ -62,6 +62,13 @@ type AppConfig struct {
 	Env     string
 	Port    string
 	BaseURL string
+	// UploadDir là thư mục cất file người dùng tải lên (ảnh mặt hàng). Router
+	// phục vụ lại chính thư mục này ở /uploads.
+	//
+	// Đường TƯƠNG ĐỐI tính từ chỗ chạy tiến trình. Mặc định "./uploads" để máy
+	// của người sửa chạy được ngay; máy thật nên trỏ ra ngoài thư mục mã nguồn
+	// (vd /var/lib/selliotech/uploads) để mỗi lượt triển khai không xoá mất ảnh.
+	UploadDir string
 	// TrustedProxies là danh sách máy chủ đứng trước API được phép khai hộ địa
 	// chỉ khách qua header X-Forwarded-For / X-Real-IP.
 	//
@@ -366,6 +373,7 @@ func Load() (*Config, error) {
 	v.SetDefault("APP_ENV", "development")
 	v.SetDefault("APP_PORT", "8080")
 	v.SetDefault("APP_BASE_URL", "http://localhost:8080")
+	v.SetDefault("UPLOAD_DIR", "./uploads")
 	v.SetDefault("DB_HOST", "127.0.0.1")
 	v.SetDefault("DB_PORT", "3306")
 	v.SetDefault("DB_USER", "root")
@@ -464,6 +472,7 @@ func Load() (*Config, error) {
 			Env:            v.GetString("APP_ENV"),
 			Port:           v.GetString("APP_PORT"),
 			BaseURL:        v.GetString("APP_BASE_URL"),
+			UploadDir:      v.GetString("UPLOAD_DIR"),
 			TrustedProxies: splitAndTrim(v.GetString("TRUSTED_PROXIES")),
 
 			EnableStorefront: v.GetBool("STOREFRONT_API_ENABLED"),
