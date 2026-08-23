@@ -472,7 +472,7 @@ func Load() (*Config, error) {
 			Env:            v.GetString("APP_ENV"),
 			Port:           v.GetString("APP_PORT"),
 			BaseURL:        v.GetString("APP_BASE_URL"),
-			UploadDir:        v.GetString("UPLOAD_DIR"),
+			UploadDir:      v.GetString("UPLOAD_DIR"),
 			TrustedProxies: splitAndTrim(v.GetString("TRUSTED_PROXIES")),
 
 			EnableStorefront: v.GetBool("STOREFRONT_API_ENABLED"),

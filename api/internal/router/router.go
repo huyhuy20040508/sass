@@ -44,7 +44,7 @@ type Handlers struct {
 	Category *handler.CategoryHandler
 	Product  *handler.ProductHandler
 	// Tep nhận file tải lên (ảnh mặt hàng) — xem handler.TepHandler.
-	Tep *handler.TepHandler
+	Tep      *handler.TepHandler
 	Customer *handler.CustomerHandler
 	Order    *handler.OrderHandler
 	Return   *handler.OrderReturnHandler
