@@ -724,15 +724,15 @@
         /* Bảng — cùng khuôn với mọi trang danh sách: rộng hết khung, mọi ô canh
            giữa, bề rộng khai theo % và cộng đúng 100%. */
         .tkc-table-wrap { width: 100%; overflow-x: auto; padding: 0 20px; }
-        .tkc-table { width: 100%; min-width: 900px; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
+        .tkc-table { width: 100%; min-width: 1160px; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
         .tkc-table thead tr { background: #f0f0f0; color: #262626; }
         .tkc-table th, .tkc-table td { padding: 14px 10px; vertical-align: middle; white-space: nowrap; text-align: center; }
         .tkc-table th { font-weight: 700; }
         .tkc-table tbody tr { border-bottom: 1px solid #f0f0f0; }
         .tkc-table tbody tr.tkc-row:hover { background: #fafafa; }
 
-        .tkc-table th.tkc-c-check,   .tkc-table td.tkc-c-check   { width: 4%; }
-        .tkc-table th.tkc-c-stt,     .tkc-table td.tkc-c-stt     { width: 4%; }
+        .tkc-table th.tkc-c-check,   .tkc-table td.tkc-c-check   { width: 3%; }
+        .tkc-table th.tkc-c-stt,     .tkc-table td.tkc-c-stt     { width: 3%; }
         .tkc-table th.tkc-c-sku,     .tkc-table td.tkc-c-sku     { width: 11%; overflow: hidden; text-overflow: ellipsis; }
         .tkc-table th.tkc-c-name,    .tkc-table td.tkc-c-name    { width: 18%; overflow: hidden; text-overflow: ellipsis; }
         .tkc-table th.tkc-c-variant, .tkc-table td.tkc-c-variant { width: 10%; overflow: hidden; text-overflow: ellipsis; }
@@ -740,7 +740,7 @@
         .tkc-table th.tkc-c-unit,    .tkc-table td.tkc-c-unit    { width: 6%; }
         .tkc-table th.tkc-c-qty,     .tkc-table td.tkc-c-qty     { width: 8%; font-variant-numeric: tabular-nums; }
         .tkc-table th.tkc-c-state,   .tkc-table td.tkc-c-state   { width: 8%; }
-        .tkc-table th.tkc-c-value,   .tkc-table td.tkc-c-value   { width: 13%; font-variant-numeric: tabular-nums; }
+        .tkc-table th.tkc-c-value,   .tkc-table td.tkc-c-value   { width: 15%; font-variant-numeric: tabular-nums; }
         .tkc-table th.tkc-c-act,     .tkc-table td.tkc-c-act     { width: 8%; }
         .tkc-table td.tkc-c-act { white-space: nowrap; }
         .tkc-table td.tkc-c-act .tkc-rowbtn + .tkc-rowbtn { margin-left: 6px; }

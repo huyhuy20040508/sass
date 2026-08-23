@@ -72,6 +72,8 @@ type Handlers struct {
 	ViTri *handler.ViTriHandler
 	// NhaCungCap — danh mục bên bán hàng cho cửa hàng (Quản lý kho → Nhà cung cấp).
 	NhaCungCap *handler.NhaCungCapHandler
+	// PhieuMuaHang — chứng từ mua vào (Quản lý kho → Phiếu mua hàng).
+	PhieuMuaHang *handler.PhieuMuaHangHandler
 	// Thue — thuế suất (Hàng hóa → Thuế).
 	Thue *handler.ThueHandler
 	// Ca là ca làm việc + sổ quỹ tiền mặt — cụm trả lời câu hỏi cuối ngày: tiền
@@ -673,6 +675,26 @@ func New(
 			q.Dat(manage, http.MethodPut, "/nha-cung-cap/:id", "nha-cung-cap.sua", h.NhaCungCap.Update)
 			q.Dat(manage, http.MethodPut, "/nha-cung-cap/:id/trang-thai", "nha-cung-cap.sua", h.NhaCungCap.DoiTrangThai)
 			q.Dat(manage, http.MethodDelete, "/nha-cung-cap/:id", "nha-cung-cap.xoa", h.NhaCungCap.Delete)
+
+			// Phiếu mua hàng — chứng từ mua vào, một loại duy nhất.
+			//
+			// "stats" và "mat-hang" đứng TRƯỚC ":id" để gin không hiểu nhầm chúng
+			// là một ID.
+			//
+			// Duyệt đi đường RIÊNG với quyền riêng: đó là lúc duy nhất phiếu mua
+			// chạm vào tồn kho, nên ai lập phiếu và ai chịu trách nhiệm về số tồn
+			// là hai việc tách được.
+			q.Dat(manage, http.MethodGet, "/phieu-mua-hang", "phieu-mua-hang.xem", h.PhieuMuaHang.List)
+			q.Dat(manage, http.MethodGet, "/phieu-mua-hang/stats", "phieu-mua-hang.xem", h.PhieuMuaHang.Stats)
+			q.Dat(manage, http.MethodGet, "/phieu-mua-hang/mat-hang", "phieu-mua-hang.xem", h.PhieuMuaHang.Variants)
+			q.Dat(manage, http.MethodGet, "/phieu-mua-hang/nhom-hang", "phieu-mua-hang.xem", h.PhieuMuaHang.NhomHang)
+			q.Dat(manage, http.MethodPost, "/phieu-mua-hang", "phieu-mua-hang.them", h.PhieuMuaHang.Create)
+			q.Dat(manage, http.MethodGet, "/phieu-mua-hang/:id", "phieu-mua-hang.xem", h.PhieuMuaHang.Get)
+			q.Dat(manage, http.MethodPut, "/phieu-mua-hang/:id", "phieu-mua-hang.sua", h.PhieuMuaHang.Update)
+			q.Dat(manage, http.MethodPost, "/phieu-mua-hang/:id/duyet", "phieu-mua-hang.duyet", h.PhieuMuaHang.Approve)
+			q.Dat(manage, http.MethodPost, "/phieu-mua-hang/:id/huy", "phieu-mua-hang.sua", h.PhieuMuaHang.Cancel)
+			q.Dat(manage, http.MethodPost, "/phieu-mua-hang/:id/thanh-toan", "phieu-mua-hang.sua", h.PhieuMuaHang.Pay)
+			q.Dat(manage, http.MethodDelete, "/phieu-mua-hang/:id", "phieu-mua-hang.xoa", h.PhieuMuaHang.Delete)
 
 			// Cấu hình hệ thống — key-value, ghi nhiều khoá một lần.
 			//

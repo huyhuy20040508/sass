@@ -176,6 +176,16 @@ var DanhMucQuyen = []KhuQuyen{
 						Prefix: "nha-cung-cap", Ten: "Nhà cung cấp",
 						Viec: []string{QuyenXem, QuyenThem, QuyenSua, QuyenXoa},
 					},
+					{
+						Prefix: "phieu-mua-hang", Ten: "Phiếu mua hàng",
+						Viec: []string{QuyenXem, QuyenThem, QuyenSua, QuyenXoa},
+						Le: []QuyenLe{
+							// Duyệt tách riêng khỏi "sửa": duyệt là lúc hàng vào kho
+							// thật. Nhân viên lập phiếu được, còn ai gánh trách nhiệm
+							// về số tồn thì mới được bấm nút đó.
+							{Ma: "duyet", Ten: "Duyệt phiếu và nhập kho"},
+						},
+					},
 				},
 			},
 			{

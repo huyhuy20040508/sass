@@ -705,26 +705,34 @@
 
         /* Bảng — cách sắp xếp của v2 (mọi ô canh giữa), màu của bản hiện tại. */
         .cn-table-wrap { padding: 0 20px 24px; overflow-x: auto; }
-        .cn-table { width: 100%; min-width: 1120px; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
+        .cn-table { width: 100%; min-width: 1280px; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
         .cn-table th {
             font-weight: 600; color: #595959; background: #fafafa;
             padding: 12px 8px; border-bottom: 1px solid #f0f0f0; white-space: nowrap;
         }
-        .cn-table th, .cn-table td { text-align: center; vertical-align: middle; }
+        .cn-table th, .cn-table td { text-align: center; vertical-align: middle; white-space: nowrap; }
+        /* Ô nằm một dòng; cột chữ dài cắt bằng dấu ba chấm, không thì
+           chữ tràn sang ô bên cạnh. Riêng dòng "chưa có dữ liệu" là một
+           câu dài nên cho xuống hàng. */
+        .cn-table td.cn-c-name,
+        .cn-table td.cn-c-type,
+        .cn-table td.cn-c-etax { overflow: hidden; text-overflow: ellipsis; }
+        .cn-empty { white-space: normal; }
+
         .cn-table td { padding: 14px 8px; border-bottom: 1px solid #f5f5f5; }
         .cn-table tbody tr:hover td { background: #fafafa; }
 
         /* Bề rộng theo TỈ LỆ, tổng đúng 100% — bỏ trống một cột là bảng hở khoảng chết. */
-        .cn-table th.cn-c-stt,     .cn-table td.cn-c-stt     { width: 4%; }
-        .cn-table th.cn-c-code,    .cn-table td.cn-c-code    { width: 10%; }
-        .cn-table th.cn-c-name,    .cn-table td.cn-c-name    { width: 18%; }
-        .cn-table th.cn-c-tax,     .cn-table td.cn-c-tax     { width: 10%; }
-        .cn-table th.cn-c-phone,   .cn-table td.cn-c-phone   { width: 10%; }
+        .cn-table th.cn-c-stt,     .cn-table td.cn-c-stt     { width: 3%; }
+        .cn-table th.cn-c-code,    .cn-table td.cn-c-code    { width: 9%; }
+        .cn-table th.cn-c-name,    .cn-table td.cn-c-name    { width: 17%; }
+        .cn-table th.cn-c-tax,     .cn-table td.cn-c-tax     { width: 9%; }
+        .cn-table th.cn-c-phone,   .cn-table td.cn-c-phone   { width: 9%; }
         .cn-table th.cn-c-etax,    .cn-table td.cn-c-etax    { width: 10%; }
-        .cn-table th.cn-c-type,    .cn-table td.cn-c-type    { width: 10%; }
-        .cn-table th.cn-c-created, .cn-table td.cn-c-created { width: 12%; }
-        .cn-table th.cn-c-status,  .cn-table td.cn-c-status  { width: 6%; }
-        .cn-table th.cn-c-act,     .cn-table td.cn-c-act     { width: 10%; }
+        .cn-table th.cn-c-type,    .cn-table td.cn-c-type    { width: 11%; }
+        .cn-table th.cn-c-created, .cn-table td.cn-c-created { width: 11%; }
+        .cn-table th.cn-c-status,  .cn-table td.cn-c-status  { width: 7%; }
+        .cn-table th.cn-c-act,     .cn-table td.cn-c-act     { width: 14%; }
 
         .cn-table .is-hidden { display: none; }
 
@@ -916,13 +924,15 @@
         .cn-vpre:last-child { margin-bottom: 0; }
 
         @media (max-width: 1120px) {
-            .cn-cols-form { grid-template-columns: 176px 1fr 1fr; }
+            .cn-cols-form { grid-template-columns: 176px 1fr 1fr;
+        }
             .cn-col:nth-child(4) { grid-column: 2 / -1; border-left: 0; padding: 14px 0 0; margin-top: 4px; border-top: 1px solid #f0f0f0; }
             .cn-col:nth-child(4) .cn-doc-them { grid-template-columns: 1fr 1fr; }
             .cn-view-grid { grid-template-columns: 1fr 1fr; }
         }
         @media (max-width: 760px) {
-            .cn-cols-form, .cn-row2, .cn-row-viTri, .cn-view-grid { grid-template-columns: 1fr; }
+            .cn-cols-form, .cn-row2, .cn-row-viTri, .cn-view-grid { grid-template-columns: 1fr;
+        }
             .cn-col, .cn-col:first-child, .cn-col:last-child { padding: 0; }
             .cn-col + .cn-col { border-left: 0; border-top: 1px solid #f0f0f0; padding-top: 14px; }
             .cn-col:nth-child(4) { grid-column: auto; }

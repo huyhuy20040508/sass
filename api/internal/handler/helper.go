@@ -136,6 +136,20 @@ func handleServiceError(c *gin.Context, err error) {
 		response.Error(c, 422, "Không khai quy đổi cho chính đơn vị tính của mặt hàng")
 	case errors.Is(err, domain.ErrQuyDoiSoLuong):
 		response.Error(c, 422, "Số lượng quy đổi phải lớn hơn 0")
+	// Phiếu mua hàng
+	case errors.Is(err, domain.ErrPurchaseEmpty):
+		response.Error(c, 422, "Phiếu mua hàng phải có ít nhất một dòng hàng")
+	case errors.Is(err, domain.ErrPurchaseLocked):
+		response.Error(c, 409, "Phiếu đã duyệt hoặc đã huỷ nên không sửa được. "+
+			"Muốn chữa số đã vào kho thì cân đối ở màn Tồn kho, nơi có bút toán riêng ghi lại ai sửa và sửa vì sao")
+	case errors.Is(err, domain.ErrPurchaseUnitRatio):
+		response.Error(c, 422, "Số lượng quy đổi ra đơn vị tính chính phải là số nguyên — đổi số lượng hoặc chọn đơn vị khác")
+	case errors.Is(err, domain.ErrPurchaseUnitLa):
+		response.Error(c, 422, "Đơn vị mua này chưa khai quy đổi cho mặt hàng")
+	case errors.Is(err, domain.ErrPurchasePaidQuaTong):
+		response.ValidationError(c, map[string]string{
+			"paid_amount": "Số tiền đã trả không được lớn hơn tổng tiền phiếu",
+		})
 	case errors.Is(err, domain.ErrHuongKhongHopLe):
 		response.ValidationError(c, map[string]string{"huong": "Hướng di chuyển không hợp lệ"})
 	case errors.Is(err, domain.ErrConflict):

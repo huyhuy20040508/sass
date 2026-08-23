@@ -14,6 +14,7 @@ use App\Http\Controllers\DonViTinhController;
 use App\Http\Controllers\GoiDichVuController;
 use App\Http\Controllers\TonKhoChiNhanhController;
 use App\Http\Controllers\NhaCungCapController;
+use App\Http\Controllers\PhieuMuaHangController;
 use App\Http\Controllers\NhanSuController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\OrderController;
@@ -341,6 +342,23 @@ Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:quan_ly'])->prefix('ad
         Route::put('/suppliers/{id}/status', [NhaCungCapController::class, 'updateStatus'])
             ->whereNumber('id')->name('nha-cung-cap.updateStatus');
         Route::delete('/suppliers/{id}', [NhaCungCapController::class, 'destroy'])->whereNumber('id')->name('nha-cung-cap.destroy');
+
+        // Phiếu mua hàng — chứng từ mua vào, một loại duy nhất (theo màn cùng
+        // tên của bản order v2). Đường tĩnh đứng TRƯỚC '/{id}'.
+        Route::get('/purchase-orders', [PhieuMuaHangController::class, 'index'])->name('phieu-mua-hang.index');
+        Route::get('/purchase-orders/export', [PhieuMuaHangController::class, 'export'])->name('phieu-mua-hang.export');
+        Route::get('/purchase-orders/products', [PhieuMuaHangController::class, 'matHang'])->name('phieu-mua-hang.matHang');
+        Route::post('/purchase-orders/photo', [PhieuMuaHangController::class, 'uploadAnh'])->name('phieu-mua-hang.anh');
+        Route::post('/purchase-orders/quick-supplier', [PhieuMuaHangController::class, 'themNhanhNhaCungCap'])->name('phieu-mua-hang.themNhanhNCC');
+        Route::post('/purchase-orders/bulk-approve', [PhieuMuaHangController::class, 'bulkApprove'])->name('phieu-mua-hang.bulkApprove');
+        Route::post('/purchase-orders/bulk-delete', [PhieuMuaHangController::class, 'bulkDestroy'])->name('phieu-mua-hang.bulkDestroy');
+        Route::post('/purchase-orders', [PhieuMuaHangController::class, 'store'])->name('phieu-mua-hang.store');
+        Route::get('/purchase-orders/{id}', [PhieuMuaHangController::class, 'show'])->whereNumber('id')->name('phieu-mua-hang.show');
+        Route::put('/purchase-orders/{id}', [PhieuMuaHangController::class, 'update'])->whereNumber('id')->name('phieu-mua-hang.update');
+        Route::post('/purchase-orders/{id}/approve', [PhieuMuaHangController::class, 'approve'])->whereNumber('id')->name('phieu-mua-hang.approve');
+        Route::post('/purchase-orders/{id}/cancel', [PhieuMuaHangController::class, 'cancel'])->whereNumber('id')->name('phieu-mua-hang.cancel');
+        Route::post('/purchase-orders/{id}/payment', [PhieuMuaHangController::class, 'pay'])->whereNumber('id')->name('phieu-mua-hang.pay');
+        Route::delete('/purchase-orders/{id}', [PhieuMuaHangController::class, 'destroy'])->whereNumber('id')->name('phieu-mua-hang.destroy');
 
     });
 

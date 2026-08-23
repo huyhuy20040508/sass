@@ -305,11 +305,12 @@ func (r *inventoryRepository) Histories(ctx context.Context, variantID, shopID u
 		Joins("LEFT JOIN users u ON u.id = t.created_by").
 		Joins("LEFT JOIN shops sh ON sh.id = t.shop_id").
 		Joins("LEFT JOIN orders o ON o.id = t.reference_id AND t.reference_type = 'order'").
-		Joins("LEFT JOIN order_returns rt ON rt.id = t.reference_id AND t.reference_type = 'order_return'")).
+		Joins("LEFT JOIN order_returns rt ON rt.id = t.reference_id AND t.reference_type = 'order_return'").
+		Joins("LEFT JOIN purchase_orders po ON po.id = t.reference_id AND t.reference_type = 'purchase_order'")).
 		Select(`t.id, t.shop_id, COALESCE(sh.name, '') AS shop_name,
 			t.type, t.quantity, t.quantity_before, t.quantity_after,
 			COALESCE(t.reference_type, '') AS reference_type, t.reference_id,
-			COALESCE(o.order_code, rt.return_code, '') AS reference_code,
+			COALESCE(o.order_code, rt.return_code, po.po_code, '') AS reference_code,
 			t.unit_cost, COALESCE(t.note, '') AS note,
 			COALESCE(u.full_name, '') AS created_by_name, t.created_at`).
 		Order("t.id DESC").

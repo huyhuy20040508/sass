@@ -754,8 +754,17 @@
         /* MỘT mực đệm cho cả tiêu đề lẫn ô dữ liệu — hai mực khác nhau là hàng tiêu
            đề trông lệch hẳn so với phần thân. */
         .nsu-table th, .nsu-table td {
-            padding: 14px 10px; vertical-align: middle; text-align: center;
+            padding: 14px 10px; vertical-align: middle; text-align: center; white-space: nowrap;
         }
+        /* Ô nằm một dòng; cột chữ dài cắt bằng dấu ba chấm, không thì
+           chữ tràn sang ô bên cạnh. Riêng dòng "chưa có dữ liệu" là một
+           câu dài nên cho xuống hàng. */
+        .nsu-table td.nsu-c-name,
+        .nsu-table td.nsu-c-quyen,
+        .nsu-table td.nsu-c-ca,
+        .nsu-table td.nsu-c-shop { overflow: hidden; text-overflow: ellipsis; }
+        .nsu-empty { white-space: normal; }
+
         .nsu-table th {
             font-weight: 600; color: #595959; background: #fafafa;
             border-bottom: 1px solid #f0f0f0; white-space: nowrap;
@@ -970,13 +979,15 @@
         /* Hẹp hơn thì xuống hai cột và bỏ vạch ngăn — vạch dọc chỉ đúng khi mọi
            cột nằm trên cùng một hàng; xuống hàng rồi thì nó chỉ vào chỗ trống. */
         @media (max-width: 1040px) {
-            .nsu-cols { grid-template-columns: 1fr 1fr; gap: 18px 20px; }
+            .nsu-cols { grid-template-columns: 1fr 1fr; gap: 18px 20px;
+        }
             .nsu-col, .nsu-col:first-child, .nsu-col:last-child { padding: 0; }
             .nsu-col + .nsu-col { border-left: 0; }
             .nsu-grid { grid-template-columns: 1fr 1fr; }
         }
         @media (max-width: 720px) {
-            .nsu-row, .nsu-grid, .nsu-cols { grid-template-columns: 1fr; }
+            .nsu-row, .nsu-grid, .nsu-cols { grid-template-columns: 1fr;
+        }
         }
     </style>
 
