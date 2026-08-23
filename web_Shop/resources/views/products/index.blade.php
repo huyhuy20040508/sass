@@ -597,7 +597,7 @@
            canh giữa, bề rộng khai theo % và cộng đúng 100%. Để một cột không có
            width là cột đó nuốt hết phần dư, các cột còn lại dồn cục. */
         .prd-table-wrap { width: 100%; overflow-x: auto; padding: 0 20px; }
-        .prd-table { width: 100%; min-width: 900px; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
+        .prd-table { width: 100%; min-width: 1400px; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
         .prd-table thead tr { background: #f0f0f0; color: #262626; }
         .prd-table th, .prd-table td { padding: 14px 10px; vertical-align: middle; white-space: nowrap; text-align: center; }
         .prd-table th { font-weight: 700; }
@@ -605,17 +605,17 @@
         .prd-table tbody tr:hover { background: #fafafa; }
         .prd-table tbody tr.is-selected, .prd-table tbody tr.is-selected:hover { background: #e6f7ff; }
 
-        .prd-table th.prd-c-check,  .prd-table td.prd-c-check  { width: 4%; }
-        .prd-table th.prd-c-stt,    .prd-table td.prd-c-stt    { width: 4%; }
-        .prd-table th.prd-c-sku,    .prd-table td.prd-c-sku    { width: 12%; overflow: hidden; text-overflow: ellipsis; }
-        .prd-table th.prd-c-name,   .prd-table td.prd-c-name   { width: 19%; overflow: hidden; text-overflow: ellipsis; }
-        .prd-table th.prd-c-cat,    .prd-table td.prd-c-cat    { width: 12%; overflow: hidden; text-overflow: ellipsis; }
-        .prd-table th.prd-c-vat,    .prd-table td.prd-c-vat    { width: 6%; font-variant-numeric: tabular-nums; }
-        .prd-table th.prd-c-unit,   .prd-table td.prd-c-unit   { width: 7%; }
-        .prd-table th.prd-c-price,  .prd-table td.prd-c-price  { width: 10%; }
+        .prd-table th.prd-c-check,  .prd-table td.prd-c-check  { width: 3%; }
+        .prd-table th.prd-c-stt,    .prd-table td.prd-c-stt    { width: 3%; }
+        .prd-table th.prd-c-sku,    .prd-table td.prd-c-sku    { width: 11%; overflow: hidden; text-overflow: ellipsis; }
+        .prd-table th.prd-c-name,   .prd-table td.prd-c-name   { width: 20%; overflow: hidden; text-overflow: ellipsis; }
+        .prd-table th.prd-c-cat,    .prd-table td.prd-c-cat    { width: 11%; overflow: hidden; text-overflow: ellipsis; }
+        .prd-table th.prd-c-vat,    .prd-table td.prd-c-vat    { width: 5%; font-variant-numeric: tabular-nums; }
+        .prd-table th.prd-c-unit,   .prd-table td.prd-c-unit   { width: 6%; }
+        .prd-table th.prd-c-price,  .prd-table td.prd-c-price  { width: 9%; }
         .prd-table th.prd-c-branch, .prd-table td.prd-c-branch { width: 10%; overflow: hidden; text-overflow: ellipsis; }
         .prd-table th.prd-c-status, .prd-table td.prd-c-status { width: 8%; }
-        .prd-table th.prd-c-act,    .prd-table td.prd-c-act    { width: 8%; }
+        .prd-table th.prd-c-act,    .prd-table td.prd-c-act    { width: 14%; }
 
         /* Tiêu đề cột bấm được để sắp xếp */
         .prd-th-sort {

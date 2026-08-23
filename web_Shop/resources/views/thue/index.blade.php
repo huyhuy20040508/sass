@@ -169,7 +169,13 @@
         .tax-table { width: 100%; min-width: 900px; border-collapse: collapse; font-size: 14px; table-layout: fixed; }
         .tax-table thead tr { background: #f0f0f0; color: #262626; }
         /* Canh giữa mọi ô + khoảng cách lấy theo bản v2; MÀU giữ của bản hiện tại */
-        .tax-table th, .tax-table td { padding: 15px 14px; vertical-align: middle; text-align: center; }
+        .tax-table th, .tax-table td { padding: 15px 14px; vertical-align: middle; text-align: center; white-space: nowrap; }
+        /* Ô nằm một dòng; cột chữ dài cắt bằng dấu ba chấm, không thì
+           chữ tràn sang ô bên cạnh. Riêng dòng "chưa có dữ liệu" là một
+           câu dài nên cho xuống hàng. */
+        .tax-table td.tax-c-name { overflow: hidden; text-overflow: ellipsis; }
+        .tax-empty { white-space: normal; }
+
         .tax-table th { font-weight: 700; white-space: nowrap; }
         /* Bề rộng theo TỈ LỆ, tổng đúng 100% -> phần dư chia đều cho mọi cột. */
         .tax-table th.tax-c-stt,    .tax-table td.tax-c-stt    { width: 8%; }

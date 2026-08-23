@@ -445,7 +445,7 @@
 
         .bnr-table th.bnr-c-check,  .bnr-table td.bnr-c-check  { width: 3%;  padding-right: 8px; }
         .bnr-table th.bnr-c-order,  .bnr-table td.bnr-c-order  { width: 8%;  text-align: center; }
-        .bnr-table th.bnr-c-name,   .bnr-table td.bnr-c-name   { width: 33%; }
+        .bnr-table th.bnr-c-name,   .bnr-table td.bnr-c-name   { width: 31%; }
         .bnr-table th.bnr-c-pos,    .bnr-table td.bnr-c-pos    { width: 13%; text-align: center; }
         .bnr-table th.bnr-c-time,   .bnr-table td.bnr-c-time   { width: 18%; text-align: center; }
         .bnr-table th.bnr-c-state,  .bnr-table td.bnr-c-state  { width: 10%; text-align: center; }

@@ -432,7 +432,14 @@
             font-weight: 600; color: #595959; background: #fafafa;
             padding: 12px; border-bottom: 1px solid #f0f0f0; white-space: nowrap;
         }
-        .tt-table th, .tt-table td { text-align: center; vertical-align: middle; }
+        .tt-table th, .tt-table td { text-align: center; vertical-align: middle; white-space: nowrap; }
+        /* Ô nằm một dòng; cột chữ dài cắt bằng dấu ba chấm, không thì
+           chữ tràn sang ô bên cạnh. Riêng dòng "chưa có dữ liệu" là một
+           câu dài nên cho xuống hàng. */
+        .tt-table td.tt-c-name,
+        .tt-table td.tt-c-vals { overflow: hidden; text-overflow: ellipsis; }
+        .tt-empty { white-space: normal; }
+
         .tt-table td { padding: 14px 12px; border-bottom: 1px solid #f5f5f5; }
         .tt-table tbody tr:hover td { background: #fafafa; }
 
