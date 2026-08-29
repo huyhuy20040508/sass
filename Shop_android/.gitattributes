@@ -1,4 +1,0 @@
-# gradlew phai giu LF, khong thi chay tren Linux/CI se loi
-gradlew text eol=lf
-*.bat text eol=crlf
-*.jar binary
