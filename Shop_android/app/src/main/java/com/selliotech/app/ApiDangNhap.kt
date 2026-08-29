@@ -1,5 +1,7 @@
 package com.selliotech.app
 
+import android.os.SystemClock
+import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -26,6 +28,7 @@ suspend fun goiApi(
     than: String? = null,
     token: String? = null,
 ): TraLoi = withContext(Dispatchers.IO) {
+    val batDau = SystemClock.elapsedRealtime()
     var ket: HttpURLConnection? = null
     try {
         ket = (URL("$BASE_URL$duong").openConnection() as HttpURLConnection).apply {
@@ -44,12 +47,35 @@ suspend fun goiApi(
         val ma = ket.responseCode
         // Lỗi 4xx/5xx nằm ở errorStream chứ không phải inputStream.
         val luong = if (ma in 200..299) ket.inputStream else ket.errorStream
-        TraLoi(ma, luong?.bufferedReader()?.use(BufferedReader::readText).orEmpty())
+        val than = luong?.bufferedReader()?.use(BufferedReader::readText).orEmpty()
+        ghiGio(phuongThuc, duong, ma, batDau, than.length)
+        TraLoi(ma, than)
     } catch (e: Exception) {
+        ghiGio(phuongThuc, duong, 0, batDau, 0)
         TraLoi(0, e.message.orEmpty())
     } finally {
         ket?.disconnect()
     }
+}
+
+/**
+ * Ghi vào logcat mỗi lượt gọi hết bao lâu — CHỈ ở bản gỡ lỗi.
+ *
+ * Không có nó thì lúc người dùng kêu "màn tải lâu", chẳng ai tách được là chậm
+ * ở máy chủ, ở đường truyền hay ở chính app; ai cũng chỉ ngồi đoán.
+ *
+ * `elapsedRealtime` chứ không phải `currentTimeMillis`: đồng hồ hệ thống nhảy
+ * một cái khi máy đồng bộ giờ là ra một con số âm.
+ *
+ * internal chứ không private: lượt tải ảnh tự dựng kết nối multipart nên không
+ * đi qua `goiApi`, mà nó lại là lượt gọi NẶNG NHẤT của cả app — thiếu đúng nó
+ * trong log là lúc người dùng kêu "tải ảnh lâu" thì chẳng có gì để soi.
+ */
+internal fun ghiGio(phuongThuc: String, duong: String, ma: Int, batDau: Long, coThan: Int) {
+    if (!BuildConfig.DEBUG) return
+
+    val het = SystemClock.elapsedRealtime() - batDau
+    Log.d("SellioApi", "$phuongThuc $duong -> $ma, ${het}ms, ${coThan}B")
 }
 
 /** Câu lỗi hợp lý cho người dùng khi máy chủ không nói gì rõ ràng. */
@@ -113,30 +139,76 @@ suspend fun dangNhapCuaHang(
 }
 
 /**
- * Làm mới access token. Trả null nghĩa là refresh token cũng hỏng — phải bắt
- * người dùng đăng nhập lại chứ không thử lại được nữa.
+ * Kết quả một lượt làm mới token. BA nhánh, không phải hai.
+ *
+ * Đây là chỗ đã hỏng một lần và hỏng rất nặng: bản cũ trả về `Phien?`, tức gộp
+ * "máy chủ CHỐI refresh token" với "không gọi tới được máy chủ" thành cùng một
+ * giá trị null — rồi chỗ gọi thấy null là XOÁ SẠCH PHIÊN. Nghĩa là người bán đi
+ * vào góc khuất sóng đúng lúc access token vừa hết hạn thì bị đăng xuất giữa ca,
+ * phải gõ lại mã cửa hàng và mật khẩu trong khi tài khoản của họ chẳng có vấn đề
+ * gì. Mất mạng là chuyện xảy ra hàng ngày; phiên chết thì hiếm.
  */
-suspend fun lamMoiToken(refreshToken: String): Phien? {
-    if (refreshToken.isBlank()) return null
+sealed interface KetQuaLamMoi {
+    /** Đổi được token mới. */
+    data class Xuoi(val phien: Phien) : KetQuaLamMoi
+
+    /** Máy chủ trả lời và nói KHÔNG: refresh token hết hạn hoặc bị thu hồi. */
+    data object PhienChet : KetQuaLamMoi
+
+    /** Không gọi tới được máy chủ (mất mạng, máy chủ lỗi). Phiên vẫn còn nguyên. */
+    data object KhongToi : KetQuaLamMoi
+}
+
+/**
+ * Đọc MÃ HTTP của lượt làm mới thành kết luận về phiên. null = chưa kết luận
+ * được, phải đọc tiếp phần thân.
+ *
+ * Tách khỏi hàm gọi mạng để kiểm được bằng bộ kiểm thường: cái luật "mã nào thì
+ * coi là phiên chết" chính là chốt duy nhất ngăn lỗi tự đăng xuất quay lại.
+ */
+fun phanLoaiLamMoi(ma: Int, refreshRong: Boolean = false): KetQuaLamMoi? = when {
+    // Không có refresh token thì khỏi gọi: chẳng có gì để làm mới.
+    refreshRong -> KetQuaLamMoi.PhienChet
+    // ma = 0 là chưa chạm tới máy chủ; 5xx là máy chủ đang hỏng. Cả hai đều
+    // KHÔNG nói gì về việc phiên còn sống hay không.
+    ma == 0 || ma >= 500 -> KetQuaLamMoi.KhongToi
+    // Máy chủ trả lời và không cho: phiên chết thật.
+    ma >= 400 -> KetQuaLamMoi.PhienChet
+    else -> null
+}
+
+/**
+ * Làm mới access token.
+ *
+ * Chỉ coi là PHIÊN CHẾT khi máy chủ thật sự trả lời và từ chối (4xx). Mọi thứ
+ * khác — không nối được, hết giờ chờ, máy chủ 5xx — đều là `KhongToi`, và phiên
+ * phải được giữ nguyên để lát nữa có sóng là dùng lại được.
+ */
+suspend fun lamMoiToken(refreshToken: String): KetQuaLamMoi {
+    phanLoaiLamMoi(0, refreshRong = refreshToken.isBlank())?.let { return it }
 
     val than = JSONObject().put("refresh_token", refreshToken).toString()
     val traLoi = goiApi("/auth/refresh", "POST", than)
+    phanLoaiLamMoi(traLoi.ma)?.let { return it }
+
     val data = traLoi.json()?.optJSONObject("data")
-    if (!traLoi.xuoi || data == null) return null
+    if (data == null) return KetQuaLamMoi.PhienChet
 
     val access = data.optString("access_token")
-    if (access.isBlank()) return null
+    if (access.isBlank()) return KetQuaLamMoi.PhienChet
 
     // Chỉ hai token là mới; phần hồ sơ do nơi gọi giữ (đường này không trả tenant).
-    return Phien(
-        accessToken = access,
-        refreshToken = data.optString("refresh_token").ifBlank { refreshToken },
-        hetHanLuc = hanTu(data.optLong("expires_in")),
-        maCuaHang = "",
-        tenCuaHang = "",
-        tenDangNhap = "",
-        vaiTro = "",
-        cuaHangKhoa = false,
+    return KetQuaLamMoi.Xuoi(
+        Phien(
+            accessToken = access,
+            refreshToken = data.optString("refresh_token").ifBlank { refreshToken },
+            hetHanLuc = hanTu(data.optLong("expires_in")),
+            maCuaHang = "",
+            tenCuaHang = "",
+            tenDangNhap = "",
+            vaiTro = "",
+            cuaHangKhoa = false,
+        ),
     )
 }
 
@@ -156,35 +228,62 @@ suspend fun goiCoToken(
     phuongThuc: String = "GET",
     than: String? = null,
 ): TraLoi {
+    val token = tokenSong(kho) ?: return TraLoi(401, "")
     val phien = kho.doc() ?: return TraLoi(401, "")
-
-    val token = if (phien.conHan()) {
-        phien.accessToken
-    } else {
-        lamMoiVaGhi(kho, phien) ?: return TraLoi(401, "")
-    }
 
     val traLoi = goiApi(duong, phuongThuc, than, token)
     if (traLoi.ma != 401) return traLoi
 
     // Máy chủ vẫn chối dù token còn trong hạn theo đồng hồ máy — đồng hồ lệch,
     // hoặc phiên bị thu hồi bên kia. Thử làm mới đúng một lần.
-    val moi = lamMoiVaGhi(kho, phien) ?: return TraLoi(401, "")
+    return when (val kq = lamMoiToken(phien.refreshToken)) {
+        is KetQuaLamMoi.Xuoi -> {
+            kho.ghiTokenMoi(kq.phien.accessToken, kq.phien.refreshToken, kq.phien.hetHanLuc)
+            goiApi(duong, phuongThuc, than, kq.phien.accessToken)
+        }
 
-    return goiApi(duong, phuongThuc, than, moi)
+        KetQuaLamMoi.PhienChet -> {
+            kho.xoa()
+            TraLoi(401, "")
+        }
+
+        // Mất mạng giữa chừng: trả nguyên lượt 401 vừa nhận, KHÔNG xoá phiên.
+        KetQuaLamMoi.KhongToi -> traLoi
+    }
 }
 
-/** Làm mới rồi cất lại. Trả null = phiên chết, đã xoá sạch. */
-private suspend fun lamMoiVaGhi(kho: KhoPhien, cu: Phien): String? {
-    val moi = lamMoiToken(cu.refreshToken)
-    if (moi == null) {
-        kho.xoa()
+/**
+ * Access token còn dùng được, tự làm mới nếu đã hết hạn. null = phiên chết hẳn.
+ *
+ * Tách ra vì không phải lượt gọi nào cũng đi qua `goiCoToken`: lượt tải ảnh phải
+ * tự dựng thân multipart nên cần cầm token trong tay. Hai chỗ cùng tự đọc phiên
+ * rồi tự quyết khi nào làm mới là sớm muộn một chỗ quên nhánh hết hạn.
+ *
+ * MẤT MẠNG THÌ TRẢ VỀ TOKEN CŨ chứ không trả null. Token ấy đã hết hạn nên lượt
+ * gọi sẽ hỏng — nhưng hỏng vì mạng, và màn hình nói "kiểm tra mạng rồi thử lại"
+ * đúng như chuyện đang xảy ra. Trả null ở đây thì lượt gọi biến thành 401 giả,
+ * màn hình đổ cho quyền hoặc cho phiên trong khi lỗi thật là cái cột sóng.
+ */
+suspend fun tokenSong(kho: KhoPhien): String? {
+    val phien = kho.doc() ?: return null
+    if (phien.conHan()) return phien.accessToken
 
-        return null
+    return when (val kq = lamMoiToken(phien.refreshToken)) {
+        is KetQuaLamMoi.Xuoi -> {
+            kho.ghiTokenMoi(kq.phien.accessToken, kq.phien.refreshToken, kq.phien.hetHanLuc)
+            kq.phien.accessToken
+        }
+
+        // Máy chủ CHỐI: phiên chết thật, dọn sạch rồi bắt đăng nhập lại.
+        KetQuaLamMoi.PhienChet -> {
+            kho.xoa()
+            null
+        }
+
+        // Không tới được máy chủ: GIỮ NGUYÊN phiên, đưa token cũ đi cho lượt gọi
+        // hỏng đúng kiểu lỗi mạng.
+        KetQuaLamMoi.KhongToi -> phien.accessToken
     }
-    kho.ghiTokenMoi(moi.accessToken, moi.refreshToken, moi.hetHanLuc)
-
-    return moi.accessToken
 }
 
 /** Quyền của tài khoản đang đăng nhập — dùng để ẩn/hiện chức năng trong app. */

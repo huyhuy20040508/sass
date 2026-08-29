@@ -53,6 +53,9 @@ android {
     }
     buildFeatures {
         compose = true
+        // Cần BuildConfig.DEBUG để bản gỡ lỗi ghi giờ mỗi lượt gọi API còn bản
+        // phát hành thì im — xem `goiApi`.
+        buildConfig = true
     }
 }
 

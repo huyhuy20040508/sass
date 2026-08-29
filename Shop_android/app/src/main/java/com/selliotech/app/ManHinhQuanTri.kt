@@ -100,7 +100,7 @@ private data class SoLieu(
 fun ManHinhQuanTri(
     kho: KhoPhien,
     modifier: Modifier = Modifier,
-    onXemHang: (LocHang) -> Unit,
+    onXemHang: (LocTon) -> Unit,
 ) {
     var kyChon by remember { mutableStateOf(Ky.HOM_NAY) }
     var so by remember { mutableStateOf<SoLieu?>(null) }
@@ -386,7 +386,7 @@ private data class ViecCanLam(
     val nhan: String,
     val so: Long,
     val mau: Color,
-    val loc: LocHang,
+    val loc: LocTon,
 )
 
 /**
@@ -398,19 +398,19 @@ private data class ViecCanLam(
  * mà màu với vị trí đã nói đủ.
  */
 @Composable
-private fun KhoiCanXuLy(so: ThongKeKho?, onXemHang: (LocHang) -> Unit) {
+private fun KhoiCanXuLy(so: ThongKeKho?, onXemHang: (LocTon) -> Unit) {
     if (so == null) return
 
     val viec = listOfNotNull(
-        ViecCanLam("Hết hàng", so.hetHang, mauPhu.do_, LocHang(ton = "out", nhan = "Hết hàng"))
+        ViecCanLam("Hết hàng", so.hetHang, mauPhu.do_, LocTon(ton = "out"))
             .takeIf { so.hetHang > 0 },
-        ViecCanLam("Sắp hết", so.sapHet, mauPhu.cam, LocHang(ton = "low", nhan = "Sắp hết"))
+        ViecCanLam("Sắp hết", so.sapHet, mauPhu.cam, LocTon(ton = "low"))
             .takeIf { so.sapHet > 0 },
         ViecCanLam(
             "Chưa khai giá vốn",
             so.thieuGiaVon,
             mauPhu.lam,
-            LocHang(giaVon = "missing", nhan = "Chưa khai giá vốn"),
+            LocTon(giaVon = "missing"),
         ).takeIf { so.thieuGiaVon > 0 },
     )
 
@@ -591,9 +591,6 @@ private fun DongBanChay(hang: HangBanChay, thuTu: Int) {
     }
 }
 
-/** Ngưỡng "sắp hết", khớp mặc định của API. */
-private const val NGUONG_SAP_HET = 5L
-
 private fun nhanTon(ton: Long): String = if (ton <= 0) "đã hết hàng" else "còn $ton"
 
 @Composable
@@ -605,7 +602,7 @@ private fun mauTon(ton: Long): Color = when {
 
 /** Kho: hai con số nền, đứng cuối vì chúng không đòi hành động. */
 @Composable
-private fun KhoiKho(so: ThongKeKho, onXemHang: (LocHang) -> Unit) {
+private fun KhoiKho(so: ThongKeKho, onXemHang: (LocTon) -> Unit) {
     Column {
         TieuDeKhoi("Kho")
 
@@ -619,7 +616,7 @@ private fun KhoiKho(so: ThongKeKho, onXemHang: (LocHang) -> Unit) {
                     bamDuoc = true,
                     modifier = Modifier
                         .weight(1f)
-                        .clickable { onXemHang(LocHang()) },
+                        .clickable { onXemHang(LocTon()) },
                 )
                 VachDoc()
                 OChiSoKho(

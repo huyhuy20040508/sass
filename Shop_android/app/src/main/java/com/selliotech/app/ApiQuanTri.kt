@@ -53,9 +53,16 @@ data class ThongKeKho(
     val thieuGiaVon: Long,
 )
 
-/** Một dòng hàng trong kho. Khớp domain.InventoryItem bên API. */
-data class DongHang(
+/**
+ * Một dòng hàng trong kho. Khớp domain.InventoryItem bên API.
+ *
+ * Giữ luôn giá vốn, giá trị tồn và lần phát sinh cuối — một lượt gọi đã trả sẵn
+ * cả ba, nên tấm chi tiết mở lên là có ngay, không phải gọi thêm một lượt nữa
+ * chỉ để bày mấy dòng chữ.
+ */
+data class DongTon(
     val bienTheId: Long,
+    val sanPhamId: Long,
     val ten: String,
     val sku: String,
     val tenBienThe: String,
@@ -63,9 +70,34 @@ data class DongHang(
     val danhMuc: String,
     val ton: Int,
     val gia: Double,
+    /** null = CHƯA KHAI giá vốn, khác hẳn giá vốn bằng 0. */
+    val giaVon: Double?,
+    /** Tồn × giá vốn. Hàng chưa khai giá vốn cho 0 ₫ ở đây. */
+    val giaTriKho: Double,
     val anh: String,
     val dangBan: Boolean,
-)
+    /** Lần cuối có bút toán kho, dạng ISO của máy chủ. Rỗng = chưa từng. */
+    val lanCuoi: String,
+) {
+    /** Tình trạng tồn, dùng cho màu vạch và huy hiệu. */
+    fun mucTon(nguong: Int = NGUONG_SAP_HET): MucTon = when {
+        ton <= 0 -> MucTon.HET
+        ton <= nguong -> MucTon.SAP_HET
+        else -> MucTon.CON
+    }
+}
+
+/** Ba mức tồn mà cả app nói chung một ngôn ngữ. */
+enum class MucTon(val nhan: String) { HET("Hết hàng"), SAP_HET("Sắp hết"), CON("Còn hàng") }
+
+/**
+ * Ngưỡng "sắp hết" mặc định của cả app.
+ *
+ * Một con số duy nhất cho cả bộ lọc, màu vạch và ô thống kê. Ba chỗ tự gõ 5 là
+ * ba chỗ có thể lệch nhau, mà lúc lệch thì người dùng lọc ra "sắp hết" rồi thấy
+ * dòng trong danh sách tô màu xanh.
+ */
+const val NGUONG_SAP_HET = 5
 
 /** Ngày hôm nay theo định dạng API nhận: YYYY-MM-DD. */
 private fun homNay(): String =
@@ -153,7 +185,7 @@ suspend fun layHangBanChay(
 }
 
 /** Thống kê kho. `sapHet` đếm theo ngưỡng truyền lên, không phải ngưỡng cố định. */
-suspend fun layThongKeKho(kho: KhoPhien, nguongSapHet: Int = 5): ThongKeKho? {
+suspend fun layThongKeKho(kho: KhoPhien, nguongSapHet: Int = NGUONG_SAP_HET): ThongKeKho? {
     val traLoi = goiCoToken(kho, "/admin/inventory/stats?low_stock=$nguongSapHet")
     val data = traLoi.json()?.optJSONObject("data")
     if (!traLoi.xuoi || data == null) return null
@@ -169,83 +201,221 @@ suspend fun layThongKeKho(kho: KhoPhien, nguongSapHet: Int = 5): ThongKeKho? {
 }
 
 /** Một trang danh sách hàng, kèm tổng số dòng khớp bộ lọc. */
-data class TrangHang(val dong: List<DongHang>, val tong: Long, val conNua: Boolean)
+data class TrangTon(val dong: List<DongTon>, val tong: Long, val conNua: Boolean)
+
+/**
+ * Cách xếp danh sách hàng. `ma` là giá trị API nhận, `nhan` là chữ hiện trên nút.
+ *
+ * Mặc định là tồn ít lên trước — mở màn kho ra thì việc cần làm phải nằm ngay
+ * trên đầu, chứ không phải mặt hàng nào tình cờ khai trước.
+ */
+enum class XepTon(val ma: String, val nhan: String) {
+    TON_IT("stock_asc", "Tồn ít nhất"),
+    TON_NHIEU("stock_desc", "Tồn nhiều nhất"),
+    TEN_AZ("name_asc", "Tên A → Z"),
+    TEN_ZA("name_desc", "Tên Z → A"),
+    GIA_TRI("value_desc", "Giá trị kho cao nhất"),
+    MOI("newest", "Mới khai gần đây"),
+}
+
+/**
+ * Bộ lọc đang áp lên danh sách hàng.
+ *
+ * Một vật duy nhất giữ TẤT CẢ điều kiện, kể cả kiểu sắp xếp. Tách ra mỗi thứ một
+ * biến trạng thái là mỗi lần đổi một thứ lại phải nhớ gom đủ mấy thứ còn lại để
+ * gọi lại API, quên một cái là danh sách về sai mà không ai thấy.
+ */
+data class LocTon(
+    /** Tồn: out = hết, low = sắp hết, in = còn nhiều. Rỗng = không lọc. */
+    val ton: String = "",
+    /** Giá vốn: missing = chưa khai, set = đã khai. Rỗng = không lọc. */
+    val giaVon: String = "",
+    val danhMucId: Long = 0,
+    /** Tên nhóm, giữ sẵn để vẽ con chip mà không phải tra lại danh sách nhóm. */
+    val danhMucTen: String = "",
+    /** null = cả hai, true = đang bán, false = ngừng bán. */
+    val dangBan: Boolean? = null,
+    val xep: XepTon = XepTon.TON_IT,
+) {
+    val coLoc: Boolean get() = soDieuKien > 0
+
+    /** Số điều kiện đang bật — con số nhỏ trên nút lọc. Sắp xếp KHÔNG tính. */
+    val soDieuKien: Int
+        get() = listOf(
+            ton.isNotBlank(),
+            giaVon.isNotBlank(),
+            danhMucId > 0,
+            dangBan != null,
+        ).count { it }
+}
+
+/** Một điều kiện đang bật: chữ trên chip, và bộ lọc còn lại sau khi gỡ nó ra. */
+data class ChipTon(val nhan: String, val con: LocTon)
+
+/**
+ * Các chip của một bộ lọc.
+ *
+ * Mỗi chip tự mang theo bộ lọc CÒN LẠI sau khi gỡ chính nó, nên chỗ vẽ chỉ việc
+ * gán thẳng — không phải viết thêm một nhánh `when` nữa để biết bỏ chip này thì
+ * trạng thái mới là gì.
+ */
+fun LocTon.chips(): List<ChipTon> = buildList {
+    when (ton) {
+        "out" -> add(ChipTon("Hết hàng", copy(ton = "")))
+        "low" -> add(ChipTon("Sắp hết", copy(ton = "")))
+        "in" -> add(ChipTon("Còn hàng", copy(ton = "")))
+    }
+    when (giaVon) {
+        "missing" -> add(ChipTon("Chưa khai giá vốn", copy(giaVon = "")))
+        "set" -> add(ChipTon("Đã khai giá vốn", copy(giaVon = "")))
+    }
+    if (danhMucId > 0) {
+        add(ChipTon(danhMucTen.ifBlank { "Một nhóm hàng" }, copy(danhMucId = 0, danhMucTen = "")))
+    }
+    when (dangBan) {
+        true -> add(ChipTon("Đang bán", copy(dangBan = null)))
+        false -> add(ChipTon("Ngừng bán", copy(dangBan = null)))
+        null -> Unit
+    }
+}
+
+/**
+ * Đường gọi của một trang danh sách hàng.
+ *
+ * Tách khỏi hàm gọi mạng để kiểm được bằng bộ kiểm thường: chỗ dễ sai nhất của cả
+ * màn nằm ở đây — quên gửi kèm `low_stock` thì bộ lọc "sắp hết" trả về rỗng mà API
+ * vẫn đáp 200, nhìn y hệt một cái kho không có hàng.
+ */
+fun duongTonKho(
+    loc: LocTon,
+    tuKhoa: String = "",
+    trang: Int = 1,
+    coTrang: Int = 30,
+    nguongSapHet: Int = NGUONG_SAP_HET,
+): String = buildString {
+    append("/admin/inventory?page=").append(trang)
+    append("&page_size=").append(coTrang)
+    append("&sort=").append(loc.xep.ma)
+    append("&low_stock=").append(nguongSapHet)
+    if (tuKhoa.isNotBlank()) {
+        append("&keyword=").append(URLEncoder.encode(tuKhoa, "UTF-8"))
+    }
+    if (loc.ton.isNotBlank()) append("&stock=").append(loc.ton)
+    if (loc.giaVon.isNotBlank()) append("&cost=").append(loc.giaVon)
+    if (loc.danhMucId > 0) append("&category_id=").append(loc.danhMucId)
+    loc.dangBan?.let { append("&is_active=").append(it) }
+}
 
 /**
  * Danh sách hàng trong kho.
  *
  * Dùng /admin/inventory chứ không phải /products: một lượt gọi đã có sẵn tồn, giá
- * hiệu lực, đơn vị tính và danh mục — màn hình không phải ghép từ hai nguồn.
+ * hiệu lực, giá vốn, đơn vị tính và danh mục — màn hình không phải ghép từ hai
+ * nguồn, và tấm chi tiết mở lên không tốn thêm lượt gọi nào.
  */
-suspend fun layHangHoa(
+suspend fun layTonKho(
     kho: KhoPhien,
+    loc: LocTon = LocTon(),
     tuKhoa: String = "",
-    sapXep: String = "",
-    /** Lọc theo tồn: out = hết, low = sắp hết, in = còn nhiều. Rỗng = không lọc. */
-    locTon: String = "",
-    /** Lọc theo giá vốn: missing = chưa khai, set = đã khai. */
-    locGiaVon: String = "",
-    nguongSapHet: Int = 5,
     trang: Int = 1,
     coTrang: Int = 30,
-): TrangHang? {
-    val duong = buildString {
-        append("/admin/inventory?page=").append(trang)
-        append("&page_size=").append(coTrang)
-        if (tuKhoa.isNotBlank()) {
-            append("&keyword=").append(URLEncoder.encode(tuKhoa, "UTF-8"))
-        }
-        if (sapXep.isNotBlank()) append("&sort=").append(sapXep)
-        if (locTon.isNotBlank()) {
-            append("&stock=").append(locTon)
-            // low_stock là NGƯỠNG của bộ lọc "sắp hết", phải gửi kèm chứ không
-            // thì API lấy 0 và không dòng nào lọt.
-            append("&low_stock=").append(nguongSapHet)
-        }
-        if (locGiaVon.isNotBlank()) append("&cost=").append(locGiaVon)
-    }
-
-    val traLoi = goiCoToken(kho, duong)
+): TrangTon? {
+    val traLoi = goiCoToken(kho, duongTonKho(loc, tuKhoa, trang, coTrang))
     val json = traLoi.json()
     if (!traLoi.xuoi || json == null) return null
 
     val mang = json.optJSONArray("data") ?: return null
     val dong = (0 until mang.length()).mapNotNull { i ->
-        mang.optJSONObject(i)?.thanhDongHang()
+        mang.optJSONObject(i)?.thanhDongTon()
     }
 
     val meta = json.optJSONObject("meta")
     val tong = meta?.optLong("total") ?: dong.size.toLong()
     val tongTrang = meta?.optInt("total_pages") ?: 1
 
-    return TrangHang(dong = dong, tong = tong, conNua = trang < tongTrang)
+    return TrangTon(dong = dong, tong = tong, conNua = trang < tongTrang)
 }
 
-private fun JSONObject.thanhDongHang() = DongHang(
+private fun JSONObject.thanhDongTon() = DongTon(
     bienTheId = optLong("variant_id"),
+    sanPhamId = optLong("product_id"),
     ten = optString("product_name"),
     sku = optString("sku"),
-    tenBienThe = optString("variant_name"),
-    donVi = optString("unit_name"),
-    danhMuc = optString("category_name"),
+    tenBienThe = chuoi("variant_name"),
+    donVi = chuoi("unit_name"),
+    danhMuc = chuoi("category_name"),
     ton = optInt("stock_quantity"),
     gia = optDouble("price", 0.0),
-    anh = optString("thumbnail"),
+    // isNull chứ không phải optDouble có mặc định: NULL ở đây nghĩa là CHƯA KHAI
+    // giá vốn, khác hẳn khai bằng 0. Nhập nhèm hai thứ là mất luôn bộ lọc "chưa
+    // khai" lẫn con số giá trị kho đang hụt.
+    giaVon = if (isNull("cost_price")) null else optDouble("cost_price", 0.0),
+    giaTriKho = optDouble("stock_value", 0.0),
+    anh = chuoi("thumbnail"),
     // product_active = false: hàng còn trong kho nhưng sản phẩm cha đang ẩn,
     // tức không bán ra được. Phải nói ra chứ không thì con số tồn gây hiểu nhầm.
     dangBan = optBoolean("is_active", true) && optBoolean("product_active", true),
+    lanCuoi = chuoi("last_moved_at"),
 )
 
 /**
- * Bộ lọc đang áp lên danh sách hàng.
+ * Chuỗi của một khoá, JSON null thành rỗng.
  *
- * `nhan` là chữ hiện trên con chip để người dùng biết mình đang xem một lát cắt
- * chứ không phải cả kho — thiếu nó thì màn "hết hàng" trông y hệt màn "kho rỗng".
+ * `optString` của org.json trả về đúng bốn chữ "null" khi gặp JSON null, và bốn
+ * chữ đó sẽ chạy thẳng ra màn hình. Mọi trường có thể null phải đi qua đây.
  */
-data class LocHang(
-    val ton: String = "",
-    val giaVon: String = "",
-    val nhan: String = "",
-) {
-    val coLoc: Boolean get() = ton.isNotBlank() || giaVon.isNotBlank()
+private fun JSONObject.chuoi(khoa: String): String =
+    if (isNull(khoa)) "" else optString(khoa)
+
+/** Một nhóm hàng hoá. `bac` là độ sâu trong cây, dùng để thụt đầu dòng. */
+data class DanhMuc(val id: Long, val ten: String, val cha: Long = 0, val bac: Int = 0)
+
+/**
+ * Danh sách nhóm hàng, đã xếp theo cây.
+ *
+ * API trả một mảng PHẲNG theo sort_order, cha con lẫn lộn. Bày nguyên như thế thì
+ * "Nước ngọt" nằm cách "Đồ uống" mười dòng và không ai đoán ra chúng cùng một nhánh.
+ */
+suspend fun layDanhMuc(kho: KhoPhien): List<DanhMuc>? {
+    val traLoi = goiCoToken(kho, "/categories")
+    val json = traLoi.json()
+    if (!traLoi.xuoi || json == null) return null
+
+    val mang = json.optJSONArray("data") ?: return null
+    val phang = (0 until mang.length()).mapNotNull { i ->
+        mang.optJSONObject(i)?.let {
+            DanhMuc(
+                id = it.optLong("id"),
+                ten = it.optString("name"),
+                cha = if (it.isNull("parent_id")) 0 else it.optLong("parent_id"),
+            )
+        }
+    }
+
+    return xepCay(phang)
+}
+
+/**
+ * Xếp mảng phẳng thành thứ tự cây: cha trước, rồi tới con của nó với `bac` sâu hơn.
+ *
+ * Nhóm trỏ tới một cha không còn trong danh sách vẫn phải lọt ra — coi như nhóm
+ * gốc. Bỏ nó đi là mất hẳn một nhóm khỏi bộ lọc mà chẳng ai hiểu vì sao.
+ */
+fun xepCay(phang: List<DanhMuc>): List<DanhMuc> {
+    val coMat = phang.mapTo(HashSet()) { it.id }
+    val theoCha = phang.groupBy { if (it.cha != 0L && it.cha in coMat) it.cha else 0L }
+    val ra = mutableListOf<DanhMuc>()
+
+    fun duyet(cha: Long, bac: Int) {
+        // Chặn ở bậc 5: dữ liệu vòng (A là cha của B, B là cha của A) sẽ đệ quy
+        // vô tận và app tắt ngóm ngay khi mở bộ lọc.
+        if (bac > 5) return
+        theoCha[cha].orEmpty().forEach {
+            ra += it.copy(bac = bac)
+            duyet(it.id, bac + 1)
+        }
+    }
+    duyet(0L, 0)
+
+    return ra
 }

@@ -2,6 +2,7 @@ package com.selliotech.app
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
@@ -12,6 +13,7 @@ import com.composables.icons.lucide.Package
 import com.composables.icons.lucide.ScanBarcode
 import com.composables.icons.lucide.Store
 import com.composables.icons.lucide.User
+import com.composables.icons.lucide.Warehouse
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -24,12 +26,14 @@ import androidx.compose.ui.Modifier
 import com.selliotech.app.ui.theme.Luc
 import com.selliotech.app.ui.theme.SelliotechTheme
 import com.selliotech.app.ui.theme.TimSellio
+import com.selliotech.app.ui.theme.Cam
 import com.selliotech.app.ui.theme.Xanh
 
 // Mã tab. Chuỗi chứ không phải enum: mỗi khu có bộ tab riêng, một enum gộp cả
 // hai thì luôn có nửa số giá trị vô nghĩa với khu đang đứng.
 private const val TAB_TONG_QUAN = "tong-quan"
 private const val TAB_HANG_HOA = "hang-hoa"
+private const val TAB_TON_KHO = "ton-kho"
 private const val TAB_BAN_HANG = "ban-hang"
 private const val TAB_TAI_KHOAN = "tai-khoan"
 
@@ -45,8 +49,8 @@ private sealed interface ManHinh {
     data class Lam(
         val phien: Phien,
         val tab: String,
-        /** Bộ lọc mà tab Hàng hoá mở lên kèm — đến từ dòng Cần xử lý. */
-        val loc: LocHang = LocHang(),
+        /** Bộ lọc mà tab Tồn kho mở lên kèm — đến từ dòng Cần xử lý. */
+        val loc: LocTon = LocTon(),
     ) : ManHinh
 
     /**
@@ -64,6 +68,7 @@ private fun tabCuaKhu(khu: String): List<MucTab> = if (khu == Khu.QUAN_LY) {
     listOf(
         MucTab(TAB_TONG_QUAN, "Tổng quan", Lucide.House),
         MucTab(TAB_HANG_HOA, "Hàng hoá", Lucide.Package),
+        MucTab(TAB_TON_KHO, "Tồn kho", Lucide.Warehouse),
         MucTab(TAB_TAI_KHOAN, "Tài khoản", Lucide.User),
     )
 } else {
@@ -83,7 +88,8 @@ private fun tabCuaKhu(khu: String): List<MucTab> = if (khu == Khu.QUAN_LY) {
 private fun ungDungCuaKhu(khu: String): List<OUngDung> = if (khu == Khu.QUAN_LY) {
     listOf(
         OUngDung(TAB_TONG_QUAN, "Tổng quan", Lucide.House, Xanh),
-        OUngDung(TAB_HANG_HOA, "Hàng hoá & tồn kho", Lucide.Package, Luc),
+        OUngDung(TAB_HANG_HOA, "Hàng hoá", Lucide.Package, Luc),
+        OUngDung(TAB_TON_KHO, "Tồn kho", Lucide.Warehouse, Cam),
         OUngDung(TAB_TAI_KHOAN, "Tài khoản", Lucide.User, TimSellio),
     )
 } else {
@@ -110,19 +116,30 @@ class MainActivity : ComponentActivity() {
                         cu == null -> ManHinh.DangNhap
                         cu.conHan() -> noiVao(kho, cu)
                         else -> {
-                            val moi = lamMoiToken(cu.refreshToken)
-                            if (moi == null) {
-                                kho.xoa()
-                                ManHinh.DangNhap
-                            } else {
-                                // Lượt làm mới không trả tên cửa hàng, giữ lấy phần cũ.
-                                val gop = cu.copy(
-                                    accessToken = moi.accessToken,
-                                    refreshToken = moi.refreshToken,
-                                    hetHanLuc = moi.hetHanLuc,
-                                )
-                                kho.ghiTokenMoi(gop.accessToken, gop.refreshToken, gop.hetHanLuc)
-                                noiVao(kho, gop)
+                            when (val kq = lamMoiToken(cu.refreshToken)) {
+                                is KetQuaLamMoi.Xuoi -> {
+                                    // Lượt làm mới không trả tên cửa hàng, giữ lấy phần cũ.
+                                    val gop = cu.copy(
+                                        accessToken = kq.phien.accessToken,
+                                        refreshToken = kq.phien.refreshToken,
+                                        hetHanLuc = kq.phien.hetHanLuc,
+                                    )
+                                    kho.ghiTokenMoi(gop.accessToken, gop.refreshToken, gop.hetHanLuc)
+                                    noiVao(kho, gop)
+                                }
+
+                                // Máy chủ chối refresh token: phiên chết thật.
+                                KetQuaLamMoi.PhienChet -> {
+                                    kho.xoa()
+                                    ManHinh.DangNhap
+                                }
+
+                                // Mở app lúc không có mạng: VÀO THẲNG như thường,
+                                // giữ nguyên phiên. Mấy màn bên trong sẽ báo lỗi
+                                // mạng và tự tải lại khi có sóng — còn đá người ta
+                                // ra màn đăng nhập là bắt gõ lại mật khẩu cho một
+                                // tài khoản chẳng có vấn đề gì.
+                                KetQuaLamMoi.KhongToi -> noiVao(kho, cu)
                             }
                         }
                     }
@@ -149,19 +166,31 @@ class MainActivity : ComponentActivity() {
                         onXong = { dang = ManHinh.ChonKhu(it) },
                     )
 
-                    is ManHinh.ChonKhu -> ManHinhChonKhu(
-                        phien = noi.phien,
-                        onChon = { khu ->
-                            kho.ghiKhu(khu)
-                            dang = noiLamViec(noi.phien.copy(khu = khu))
-                        },
-                        onDangXuat = dangXuat,
-                    )
+                    is ManHinh.ChonKhu -> {
+                        // Chặn Back ở màn chọn khu: lùi một bước từ đây là về
+                        // màn đăng nhập trong khi phiên vẫn còn — người dùng
+                        // gõ lại mật khẩu cho một thứ họ chưa hề thoát ra.
+                        BackHandler {}
+                        ManHinhChonKhu(
+                            phien = noi.phien,
+                            onChon = { khu ->
+                                kho.ghiKhu(khu)
+                                dang = noiLamViec(noi.phien.copy(khu = khu))
+                            },
+                            onDangXuat = dangXuat,
+                        )
+                    }
 
-                    is ManHinh.QuetMa -> ManHinhQuetMa(
-                        kho = kho,
-                        onQuayLai = { dang = ManHinh.Lam(noi.phien, noi.tabVe) },
-                    )
+                    is ManHinh.QuetMa -> {
+                        // Camera chiếm trọn màn nên Back phải trả người ta về
+                        // đúng tab đã đứng lúc bấm quét, y như nút Quay lại ở
+                        // trên màn — chứ không phải thoát app.
+                        BackHandler { dang = ManHinh.Lam(noi.phien, noi.tabVe) }
+                        ManHinhQuetMa(
+                            kho = kho,
+                            onQuayLai = { dang = ManHinh.Lam(noi.phien, noi.tabVe) },
+                        )
+                    }
 
                     is ManHinh.Lam -> KhungLamViec(
                         phien = noi.phien,
@@ -170,8 +199,7 @@ class MainActivity : ComponentActivity() {
                         loc = noi.loc,
                         // Bấm thẳng vào tab thì xem CẢ kho, bộ lọc cũ bỏ đi.
                         onChonTab = { dang = ManHinh.Lam(noi.phien, it) },
-                        onXemHang = { l -> dang = ManHinh.Lam(noi.phien, TAB_HANG_HOA, l) },
-                        onBoLoc = { dang = ManHinh.Lam(noi.phien, TAB_HANG_HOA) },
+                        onXemHang = { l -> dang = ManHinh.Lam(noi.phien, TAB_TON_KHO, l) },
                         onQuetMa = { dang = ManHinh.QuetMa(noi.phien, noi.tab) },
                         onDoiKhu = { dang = ManHinh.ChonKhu(noi.phien) },
                         onDangXuat = dangXuat,
@@ -188,10 +216,9 @@ private fun KhungLamViec(
     phien: Phien,
     tab: String,
     kho: KhoPhien,
-    loc: LocHang,
+    loc: LocTon,
     onChonTab: (String) -> Unit,
-    onXemHang: (LocHang) -> Unit,
-    onBoLoc: () -> Unit,
+    onXemHang: (LocTon) -> Unit,
     onQuetMa: () -> Unit,
     onDoiKhu: () -> Unit,
     onDangXuat: () -> Unit,
@@ -199,6 +226,18 @@ private fun KhungLamViec(
     val tenTiem = phien.tenCuaHang.ifBlank { phien.maCuaHang }
     val laQuanLy = phien.khu == Khu.QUAN_LY
     var moUngDung by remember { mutableStateOf(false) }
+
+    // NÚT BACK: đang ở tab khác thì quay về tab ĐẦU, chỉ ở tab đầu mới thoát app.
+    //
+    // Trước đây app không xử lý Back chỗ nào cả, nên đứng ở Hàng hoá bấm Back là
+    // rơi thẳng ra màn hình chính của máy — mất luôn chỗ đang đứng. Người dùng
+    // Android quen Back là "lùi một bước", mà lùi một bước từ Hàng hoá phải là
+    // Tổng quan chứ không phải ra khỏi phần mềm.
+    //
+    // Tấm trượt và hộp thoại KHÔNG cần lo ở đây: chúng là cửa sổ riêng và tự
+    // nuốt cú Back của mình trước khi tới lượt chốt này.
+    val tabDau = tabCuaKhu(phien.khu).first().ma
+    BackHandler(enabled = tab != tabDau) { onChonTab(tabDau) }
 
     KhungApp(
         // Mũ app nói người này đang đứng ĐÂU: tiệm nào, khu nào. Người trông
@@ -237,11 +276,15 @@ private fun KhungLamViec(
                 onXemHang = onXemHang,
             )
 
-            TAB_HANG_HOA -> ManHinhHangHoa(
+            TAB_HANG_HOA -> ManHinhSanPham(
+                kho = kho,
+                modifier = nen,
+            )
+
+            TAB_TON_KHO -> ManHinhTonKho(
                 kho = kho,
                 modifier = nen,
                 loc = loc,
-                onBoLoc = onBoLoc,
             )
 
             TAB_BAN_HANG -> ManHinhChinh(

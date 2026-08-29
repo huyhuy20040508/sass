@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Đường mà FileProvider được phép chia tệp ra ngoài.
+
+  CHỈ một thư mục con trong bộ nhớ tạm của app, không phải cả bộ nhớ: khai rộng
+  là mọi tệp app từng ghi (kể cả phiên đăng nhập cất tạm) đều chia được ra ngoài
+  nếu có chỗ nào lỡ dựng nhầm đường dẫn.
+-->
+<paths>
+    <cache-path name="tep-xuat" path="tep-xuat/" />
+</paths>

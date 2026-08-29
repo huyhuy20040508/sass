@@ -179,7 +179,20 @@ Luôn qua `tienVN()`: `1.250.000 ₫` — dấu chấm ngăn nghìn theo lối V
 | `SoTien(so)` | Số tiền lớn |
 | `VachUuTien(mau)` | Vạch màu đầu một dòng danh sách |
 | `OXuong(...)` | Ô xám thế chỗ nội dung lúc đang tải |
-| `ChipChon(chu, chon)` | Chip chọn một trong nhiều — dải chọn kỳ |
+| `ChipChon(chu, chon)` | Chip chọn một trong nhiều — dải chọn kỳ, chip trong tấm lọc |
+| `ChipGo(nhan, onGo)` | Chip của một điều kiện đang lọc, bấm X là gỡ đúng điều kiện đó |
+| `NutO(bieuTuong, moTa)` | Nút vuông chỉ có icon, mang được con số nhỏ ở góc |
+| `DongChon(nhan, chon)` | Dòng chọn một-trong-nhiều trong tấm trượt, có dấu tích |
+| `TrangRong(bieuTuong, tieuDe)` | Màn trống có hình, kèm một lối ra nếu có |
+| `ngayGon(iso)` | "Hôm qua" / "3 ngày trước" / `dd/MM/yyyy` |
+| `ONhap(nhan, gia)` | Ô nhập có nhãn; viền xám → xanh lúc gõ → đỏ khi sai |
+| `ONhapTien(nhan, so)` | Ô tiền, chỉ nhận chữ số, tự chấm phân nhóm khi gõ |
+| `ONhapAnh(anh, dangTai)` | Ô ảnh: chọn bằng bộ chọn của hệ điều hành, tải lên ngay |
+| `CongTac(nhan, bat)` | Công tắc gạt, CẢ DÒNG bấm được, có câu giải thích |
+| `HoiXacNhan(...)` | Hộp thoại hỏi lại trước việc không lùi được |
+| `AnhVuong(duong, chuThay)` | Ô ảnh vuông, chưa có ảnh thì rơi về chữ cái đầu |
+| `ONutViec(bieuTuong, nhan)` | Ô thao tác: icon vuông + nhãn nhỏ, xếp NGANG thành một hàng |
+| `MucGap(nhan, tomTat)` | Mục gập lại, tóm tắt phần đang chọn ngay trên hàng tiêu đề |
 | `mucThayDoi(gio, truoc)` | % thay đổi, trả `null` khi không so được |
 | `HuyThayDoi(muc)` | Huy hiệu ▲▼ kèm phần trăm |
 
@@ -403,6 +416,170 @@ trong kho thì phải nhập ngay chứ không phải tuần sau.
 
 ---
 
+## Trang danh sách
+
+Bản web của một trang danh sách là thanh công cụ dài cộng một cái bảng mười cột.
+Không bê nguyên sang được: bảng ngang phải cuộn hai chiều, còn thanh công cụ ăn
+hết nửa màn trên. Màn Hàng hoá là bản mẫu, màn danh sách sau cứ theo đây.
+
+**MỘT TRANG BÊN WEB LÀ MỘT MÀN BÊN APP.** Hàng hoá (`/products`) và Tồn kho
+(`/admin/inventory`) là hai trang riêng bên web, nên ở đây cũng là hai màn riêng
+— đã thử gộp một lần và hỏng: trang hàng hoá mọc thêm cột tồn thì người khai
+hàng phải lội qua một cột họ không cần, còn người đi đếm kho vẫn thiếu ngưỡng
+sắp hết với giá vốn. Hai trang trả lời hai câu hỏi:
+
+| Màn | Câu hỏi | Đơn vị mỗi dòng |
+|---|---|---|
+| Hàng hoá | Bán món gì, giá bao nhiêu, món nào đang ẩn | Mặt hàng |
+| Tồn kho | Món ấy còn mấy cái | Biến thể |
+
+| Khối | Nằm đâu | Giữ gì |
+|---|---|---|
+| Mũ trang | Nền xám | Chip nhận diện, tên màn |
+| Ô tìm + nút lọc | Nền xám | MỘT khối liền (`OTimLoc`), ngăn giữa bằng vạch dọc |
+| Dải chip | Nền xám | Mỗi điều kiện đang bật một chip, bấm X gỡ đúng chip đó |
+| Thanh đếm | **Đỉnh tấm trắng** | "N mặt hàng" bên trái, nút sắp xếp bên phải, vạch mảnh dưới chân |
+| Danh sách | Tấm trắng | Cuộn dưới thanh đếm, chạy tiếp xuống dưới thanh nổi |
+
+**Thanh đếm thuộc về TẤM TRẮNG, không phải nền xám.** Nền xám giữ phần nhận
+diện và ô tìm — thứ nói về màn hình; tấm trắng giữ dữ liệu, mà số dòng với cách
+sắp xếp là hai câu nói về chính đống dữ liệu ấy. Nó cũng đứng yên trong lúc
+danh sách cuộn: đang lướt giữa danh sách mà muốn đổi cách sắp xếp lại phải kéo
+ngược lên tận đầu là hỏng.
+
+**Ô tìm và nút lọc là MỘT khối, không phải hai vật rời.** Trước đây là một viên
+thuốc bo tròn đứng cạnh một ô vuông bo 12 — hai hình khác nhau, hai đường viền
+rời, mắt đọc thành hai thứ chẳng liên quan. Chúng làm cùng một việc là thu hẹp
+danh sách bên dưới, nên phải là một khối, ngăn nhau bằng vạch dọc mảnh chứ không
+bằng khoảng trống. Dùng `OTimLoc` chứ đừng dựng lại.
+
+**Viền của khối ấy NÓI TRẠNG THÁI:** xám `vien` lúc thường, xanh chủ đạo dày 1.5
+lúc đang gõ, và xanh nhạt kèm nửa bên phải tô nền khi đang lọc. Đừng dùng
+`vienNhat` cho khối này — nó chỉ lệch nền trang đúng một nấc, nhìn xa là cái ô
+tan vào nền và trang trông như thiếu mất ô tìm.
+
+**Con số điều kiện nằm cạnh icon lọc**, không phải chấm tròn đính góc: chấm tròn
+đính vào một khối bo tròn thì hoặc bị cắt, hoặc phải thò ra ngoài mép và phá mất
+đường bao.
+
+**Tấm lọc mang theo SỐ DÒNG ĐANG KHỚP ở tiêu đề**, nhảy theo từng cú bấm chip.
+Bộ lọc ăn ngay nhưng tấm lọc che mất danh sách phía sau; không có con số đó thì
+bấm xong phải đóng tấm mới biết vừa lọc ra cái gì, rồi lại mở ra sửa.
+
+**Thứ tự mục trong tấm lọc chép đúng bản web**, và phần còn lại nằm dưới một vạch
+"Nâng cao". Người dùng đi lại giữa web và app suốt ngày; đảo thứ tự là mỗi lần
+đổi máy lại phải dò xem ô mình cần nằm đâu.
+
+**Gọi hỏng KHÁC HẲN không có dữ liệu.** Danh sách nhóm lấy về `null` thì ghi
+"Không lấy được danh sách nhóm" kèm nút Thử lại, chứ không được `orEmpty()` rồi
+ghi "Chưa khai nhóm hàng nào" — câu ấy dành cho cửa hàng thật sự chưa khai nhóm,
+nói nhầm là người dùng đi tạo lại đúng những nhóm họ đã có.
+
+**Ô tìm lọc REALTIME, không có nút "Tìm** — đúng như trang danh sách bên web.
+Chờ 350ms cho người dùng gõ xong rồi mới gọi; còn cú bấm chip thì đi ngay, vì nó
+là một ý định dứt khoát chứ không phải một chuỗi đang gõ dở.
+
+**Ô tìm và cụm lọc ĐỨNG YÊN, chỉ danh sách cuộn.** Đang lọc kho mà phải kéo
+ngược lên đầu mới gõ được từ khoá là mất một nhịp ở mỗi lần tìm.
+
+**Nút lọc mang con số.** Không có nó thì lúc đang lọc và lúc không lọc cái nút
+trông y hệt nhau, mà đó đúng là lúc người dùng cần biết nhất — danh sách ngắn
+bất thường vì họ lọc từ hôm qua chứ không phải vì kho hết hàng.
+
+**Bộ lọc và sắp xếp lui vào tấm trượt**, trên màn chỉ để lại hai cái nút. Nhét
+cả cụm lọc lên màn thì danh sách — thứ người ta mở màn này để xem — bị đẩy xuống
+quá nửa màn hình.
+
+**Không phân trang.** Cuộn còn cách đáy bốn dòng là gọi trang sau. Nút "Tải
+thêm" bắt người ta dừng tay bấm một cái ở mỗi ba mươi dòng.
+
+**Kéo xuống để tải lại** (`PullToRefreshBox`), kể cả trên màn lỗi và màn rỗng —
+đó chính là lúc người ta muốn thử lại nhất. Lúc kéo thì GIỮ danh sách cũ, đừng
+thay bằng khung xương: vòng xoay của chính cú kéo đã nói là đang chạy.
+
+**Màn trống phải nói ĐÚNG lý do trống.** Kho rỗng, gõ hụt từ khoá, và lọc quá
+tay là ba tình huống nhìn giống hệt nhau nhưng đòi ba việc khác nhau. Một câu
+"Không có dữ liệu" chung cho cả ba là bỏ mặc người dùng đoán.
+
+**Dòng mở đầu bằng vạch ưu tiên — TRỪ KHI mỗi dòng có một hình riêng.** Vạch
+3dp là mặc định, và nó thắng ô icon tròn vì icon giống hệt nhau ở mọi dòng thì
+chẳng nói thêm được gì. Nhưng ảnh mặt hàng thì mỗi dòng một khác, và với người
+bán, cái hình là thứ nhận ra món hàng nhanh nhất — nhanh hơn đọc tên. Nên trang
+Hàng hoá mở đầu bằng ô ảnh 52dp (chưa có ảnh thì rơi về ô chữ cái đầu, giữ
+nguyên nhịp bố cục), còn trang Tồn kho vẫn là vạch màu vì ở đó mỗi dòng là một
+con số chứ không phải một món đồ. Trạng thái lúc ấy chuyển thành ẢNH NHẠT ĐI
+kèm huy hiệu, chứ không mọc thêm một cái chấm màu nữa.
+
+**Cột phải căn TRÊN, thẳng hàng với dòng tên**, không căn giữa dòng. Tên dài hai
+dòng mà giá căn giữa thì cả cột giá nhấp nhô theo độ dài của tên bên trái.
+
+**Huy hiệu chỉ dán cho thứ KHÁC THƯỜNG.** Dán "Đang bán" lên mọi dòng, hay "1
+biến thể" lên món không có biến thể nào, là huy hiệu hoá nền và mắt thôi đọc.
+Dòng bình thường không có hàng huy hiệu, nên mọi dòng cao bằng nhau và cái nào
+có huy hiệu thì đập vào mắt ngay.
+
+**Bấm một dòng thì mở tấm chi tiết**, dựng từ dữ liệu ĐÃ CÓ trong dòng — không
+gọi thêm lượt mạng nào. Tấm đó không có nút Sửa hay Xoá chừng nào app chưa sửa
+được thật: bày một cái nút rồi báo "chưa làm được" là cách nhanh nhất để người
+dùng thôi tin mấy cái nút còn lại.
+
+---
+
+## Biểu mẫu
+
+Hộp thoại khai hàng bên web bày hai cột và lưới bốn ô mỗi hàng. Điện thoại chỉ
+đủ một cột, mà mười lăm ô xếp thẳng một mạch thì cuộn mãi không biết còn bao xa.
+
+**Chia thành KHỐI CÓ TÊN, ngăn nhau bằng vạch.** Tên khối viết hoa, cỡ nhỏ nhất,
+màu chủ đạo. Mỗi lần cuộn tới một cái vạch là người dùng biết mình vừa xong một
+phần.
+
+**Thứ tự ô trong khối chép đúng bản web.** Người khai hàng quen tay ở máy tính,
+sang điện thoại không phải học lại.
+
+**Nhãn nằm HẲN TRÊN ô, không phải nhãn nổi.** Nhãn nổi lúc gõ co lại còn nửa cỡ,
+mà đó đúng là lúc cần đọc nó nhất. Ô bắt buộc đánh dấu sao đỏ chứ không ghi
+"(bắt buộc)" — mỗi nhãn dài thêm một dòng thì biểu mẫu dài thêm nửa màn.
+
+**Viền ô nói trạng thái:** xám lúc thường, xanh chủ đạo lúc đang gõ, đỏ khi ô đó
+sai. Câu lỗi nằm NGAY DƯỚI ô, không gom xuống chân biểu mẫu — gom xuống chân thì
+đọc xong phải cuộn ngược lên dò xem ô nào đang nói tới.
+
+**Chỉ tô đỏ SAU khi bấm Lưu.** Tô ngay lúc mở tấm là mắng người ta trước khi họ
+kịp gõ chữ nào.
+
+**Ô tiền giữ chuỗi CHỮ SỐ TRẦN trong trạng thái**, dấu chấm chỉ là lớp hiển thị.
+Giữ dấu chấm thẳng trong trạng thái là lần nào đọc ra cũng phải nhớ bóc chúng
+đi, mà quên một chỗ là "1.250.000" thành 1 đồng.
+
+**Ô chọn giữ ID, không giữ đối tượng.** Danh sách nhóm/đơn vị/chi nhánh tải về
+SAU khi tấm đã mở; giữ đối tượng thì lúc đổ dữ liệu cũ vào chưa có gì để trỏ tới
+và ô hiện ra trống trong khi mặt hàng vẫn đang thuộc nhóm đó.
+
+**Ảnh tải lên NGAY khi chọn, không đợi bấm Lưu.** Đợi tới lúc Lưu thì một lượt
+bấm phải làm hai việc dài, và ảnh hỏng kéo cả mặt hàng hỏng theo trong khi phần
+chữ chẳng có lỗi gì.
+
+**Gom việc thành MỘT HÀNG, đừng xếp dọc.** Bốn nút chạy hết bề ngang xếp chồng
+ăn gần một phần ba màn hình và đẩy hết phần thông tin lên trên nếp gấp; cùng bốn
+việc ấy làm `ONutViec` nằm ngang thì vừa đúng một dòng. Nút nào chưa dùng được
+thì GIẤU HẲN, đừng bày nút xám kèm một đoạn văn giải thích vì sao nó xám.
+
+**Mấy ô thông tin ngắn xếp LƯỚI HAI CỘT**, nhãn mờ trên, giá trị đậm dưới. Xếp
+dọc từng dòng là phí nửa bề ngang và đẩy phần dưới xuống thêm mấy dòng.
+
+**Danh sách chọn dài thì GẬP LẠI.** Một cửa hàng điện máy có mười hai thuộc
+tính, mỗi cái cả chục giá trị — đổ hết ra là cuộn mười màn mới tới nút Lưu,
+trong khi khai một mặt hàng thường chỉ đụng tới hai ba cái. Dùng `MucGap`, và
+LUÔN đưa phần đang chọn lên hàng tiêu đề: gập lại mà không thấy mình đã tick gì
+thì phải mở từng cái ra dò.
+
+**Việc không lùi được thì hỏi lại**, và trong hộp thoại ấy nút VIỆC để đỏ, nút
+thoát ra để xanh. Ngoài chuyện đúng quy tắc màu của hệ thống, nó còn tiện thêm
+một tầng: cái nút to bắt mắt nhất lại chính là nút an toàn.
+
+---
+
 ## Mấy quy tắc hình
 
 **Chuyển sắc là dành cho tiền.** Mảng xanh chuyển sắc chỉ đắp lên thẻ doanh
@@ -452,10 +629,10 @@ Ghi ra đây để không ai tưởng là đã đủ:
 
 - **Phông chữ riêng.** Đang dùng phông hệ thống. Muốn lên hẳn một bậc thì nhúng
   Be Vietnam Pro hoặc Inter — cả hai có dấu tiếng Việt tử tế. Tốn ~300KB.
-- **Tấm trượt từ dưới lên, trạng thái rỗng có hình.** Chưa có thành phần chuẩn,
-  dựng tới đâu thêm tới đó.
-- **Kéo xuống để tải lại.** Màn Tổng quan gọi đúng một lượt lúc mở, muốn số mới
-  phải rời tab rồi quay lại.
+- **Kéo xuống để tải lại ở màn Tổng quan.** Màn Hàng hoá đã có; Tổng quan vẫn
+  gọi đúng một lượt lúc mở, muốn số mới phải rời tab rồi quay lại.
+- **Lọc nhiều nhóm hàng cùng lúc.** Bên web chọn được nhiều nhóm, ở đây mới một
+  — `category_id` của API chỉ nhận một giá trị. Sửa được thì phải sửa từ API.
 - **Bóng màu cần API 28, kính mờ cần API 31.** Máy Android 8.0/8.1 (`minSdk` 26)
   đổ bóng đen thay vì bóng ngả xanh; máy dưới Android 12 thì thanh nổi đục hẳn
   chứ không nhìn xuyên. Không sai, chỉ kém một nhịp.

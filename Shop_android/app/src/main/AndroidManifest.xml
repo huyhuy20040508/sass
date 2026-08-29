@@ -23,6 +23,23 @@
             android:name="com.google.mlkit.vision.DEPENDENCIES"
             android:value="barcode" />
 
+        <!-- Chia tệp CSV ra ngoài (Zalo, Drive, Gmail...) mà không cần quyền
+             ghi bộ nhớ: FileProvider cấp quyền đọc TẠM cho đúng một tệp, đúng
+             một app nhận, và quyền ấy hết hiệu lực khi người dùng rời đi.
+
+             Xin quyền ghi bộ nhớ ngoài thì được y hệt nhưng đổi lại app đọc
+             ghi được cả kho ảnh của người ta — đòi quá tay cho một việc xuất
+             tệp. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.tep"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/duong_tep_chia_se" />
+        </provider>
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
