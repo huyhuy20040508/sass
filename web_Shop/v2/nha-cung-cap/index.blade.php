@@ -12,29 +12,77 @@
         @media screen and (min-width: 426px) and (max-width: 991px) {
             .modal .modal-body .nav-detail { grid-template-columns: repeat(3, 1fr); }
         }
-        /* Bảng danh sách: 14 cột không nhét vừa màn thường, nên CHO CUỘN NGANG
-           chứ không bóp cột lại. min-width là bề rộng đủ thở của cả 14 cột; bỏ
-           bớt cột thì các cột còn lại tự giãn ra chiếm chỗ, không để hở. */
+        /* Bảng danh sách: 14 cột CHIA THEO %, cộng đúng 100 — bảng luôn vừa khít
+           khung, không cuộn ngang, cột Hành động không bao giờ rơi ra ngoài màn.
+           `table-layout: fixed` để bề rộng do hàng tiêu đề quyết chứ không do nội
+           dung. Ô dữ liệu dài cắt bằng "…" (chữ đủ nằm ở title); nhãn cột dài thì
+           XUỐNG DÒNG chứ không cắt — cắt "Tổng thanh…" là mất đúng chữ phân biệt.
+           Tắt bớt cột thì phần % hụt được trình duyệt chia lại cho cột còn lại.
+           `overflow-x: auto` chỉ là đường lùi. */
         .list .table-responsive { overflow-x: auto; }
-        table.table-supplier.none_mobile { min-width: 1500px; }
+        table.table-supplier.none_mobile { width: 100%; table-layout: fixed; }
+        table.table-supplier.none_mobile th { white-space: normal; line-height: 1.3; }
+        table.table-supplier.none_mobile td { overflow: hidden; text-overflow: ellipsis; }
+        /* Đệm ngang 4px thay vì 8px của v2: 14 cột × 8px là thêm gần một cột tiền. */
+table.table-supplier.none_mobile th, table.table-supplier.none_mobile td { padding: 8px 4px; }
+table.table-supplier.none_mobile td.action a { padding: 0 2px; }
+        /* Chia % — đo thật ở khung 1182px (màn 1536): cột SỐ (tiền tới 13 chữ số,
+           SĐT, MST) và 4 nút Hành động không bị cắt; chữ tự do (tên, email, địa
+           chỉ) chịu cắt "…" vì đã có title. Màn 1366 chỉ tiền tỷ mới bị cắt.
+           ☐ 2.5 · STT 3.5 · Mã 8 · Tên 11 · MST 7 · SĐT 7 · Email 8 · Địa chỉ 8 · Địa chỉ 2 4.5
+           · Trạng thái 4.5 · Tổng mua 9.5 · Tổng TT 9.5 · Còn nợ 7.5 · Hành động 9.5 = 100 */
+        table.table-supplier.none_mobile th:first-child { width: 2.5%; }
+        table.table-supplier.none_mobile th:nth-child(2) { width: 3.5%; }
+        table.table-supplier.none_mobile th.show_code { width: 8%; }
+        table.table-supplier.none_mobile th.show_name { width: 11%; }
+        table.table-supplier.none_mobile th.show_tax_code { width: 7%; }
+        table.table-supplier.none_mobile th.show_phone { width: 7%; }
+        table.table-supplier.none_mobile th.show_email { width: 8%; }
+        table.table-supplier.none_mobile th.show_address { width: 8%; }
+        table.table-supplier.none_mobile th.show_address_2 { width: 4.5%; }
+        table.table-supplier.none_mobile th.show_status { width: 4.5%; }
+        table.table-supplier.none_mobile th.show_total_purchases { width: 9.5%; }
+        table.table-supplier.none_mobile th.show_total_payment { width: 9.5%; }
+        table.table-supplier.none_mobile th.show_still_in_debt { width: 7.5%; }
+        table.table-supplier.none_mobile th:last-child { width: 9.5%; }
 
-        /* Bốn cột chữ dài cắt bằng "…" — không thì một địa chỉ 200 ký tự kéo
-           bảng ra vài nghìn pixel. Di chuột vào ô để xem đủ (thuộc tính title). */
-        table.table-supplier.none_mobile .item-name,
-        table.table-supplier.none_mobile .item-email,
-        table.table-supplier.none_mobile .item-address,
-        table.table-supplier.none_mobile .show_address_2 {
-            max-width: 240px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        /* Hai bảng trong hộp chi tiết: gọn, cuộn ngang khi hẹp. */
+        /* Hai bảng trong hộp chi tiết: chia cột theo %, vừa khít hộp, không cuộn ngang;
+           ô dài cắt "…" (ghi chú có title). Tiêu đề màu #c4c9d7 theo ý chủ tiệm. */
         .ncc-tab-wrap { overflow-x: auto; }
-        .ncc-tab-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-        .ncc-tab-table th, .ncc-tab-table td { border: 1px solid #eee; padding: 6px 8px; text-align: center; }
-        .ncc-tab-table th { background: #fafafa; font-weight: 600; white-space: nowrap; }
-        .ncc-tab-table td.is-tien { text-align: right; white-space: nowrap; }
+        .ncc-tab-table { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 12.5px; }
+        .ncc-tab-table th, .ncc-tab-table td {
+            border: 1px solid #eee; padding: 6px 4px; text-align: center;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .ncc-tab-table th { background: #c4c9d7; font-weight: 600; }
+        .ncc-tab-table td.is-tien { text-align: right; }
+        /* Lịch sử (đo thật trong hộp rộng ~1165px): mã 15 ký tự, ngày, tiền, trạng thái
+           không bị cắt; chỉ ghi chú chịu cắt "…" (có title).
+           STT 3.5 · Mã 13 · Người lập 8 · Chi nhánh 8 · Ngày CT 9.5 · Ngày lập 8
+           · Tiền hàng 9.5 · Tổng tiền 9.5 · Trạng thái 7 · Thanh toán 9 · Còn nợ 9.5 · Ghi chú 5.5 = 100 */
+        .ncc-tab-lich-su th:nth-child(1) { width: 3.5%; } .ncc-tab-lich-su th:nth-child(2) { width: 13%; }
+        .ncc-tab-lich-su th:nth-child(3) { width: 8%; }   .ncc-tab-lich-su th:nth-child(4) { width: 8%; }
+        .ncc-tab-lich-su th:nth-child(5) { width: 9.5%; } .ncc-tab-lich-su th:nth-child(6) { width: 8%; }
+        .ncc-tab-lich-su th:nth-child(7) { width: 9.5%; } .ncc-tab-lich-su th:nth-child(8) { width: 9.5%; }
+        .ncc-tab-lich-su th:nth-child(9) { width: 7%; }   .ncc-tab-lich-su th:nth-child(10) { width: 9%; }
+        .ncc-tab-lich-su th:nth-child(11) { width: 9.5%; } .ncc-tab-lich-su th:nth-child(12) { width: 5.5%; }
+        /* Công nợ: STT 4 · Mã 13 · Người lập 10 · Chi nhánh 10 · Ngày lập 9 · Tổng tiền 10.5
+           · Đã trả 9.5 · Còn nợ 10.5 · Thanh toán 9.5 · Còn hạn 8 · Ghi chú 6 = 100 */
+        .ncc-tab-cong-no th:nth-child(1) { width: 4%; }    .ncc-tab-cong-no th:nth-child(2) { width: 13%; }
+        .ncc-tab-cong-no th:nth-child(3) { width: 10%; }   .ncc-tab-cong-no th:nth-child(4) { width: 10%; }
+        .ncc-tab-cong-no th:nth-child(5) { width: 9%; }    .ncc-tab-cong-no th:nth-child(6) { width: 10.5%; }
+        .ncc-tab-cong-no th:nth-child(7) { width: 9.5%; }  .ncc-tab-cong-no th:nth-child(8) { width: 10.5%; }
+        .ncc-tab-cong-no th:nth-child(9) { width: 9.5%; }  .ncc-tab-cong-no th:nth-child(10) { width: 8%; }
+        .ncc-tab-cong-no th:nth-child(11) { width: 6%; }
+        /* Còn hạn: quá hạn đỏ, còn đúng hôm nay cam — nhìn lướt bảng là biết phải trả ai trước. */
+        .ncc-tab-table td.qua-han { color: #ff4d4f; font-weight: 600; }
+        .ncc-tab-table td.het-han-hom-nay { color: #fa8c16; font-weight: 600; }
+        /* Chân tab: ô "Hiển thị N" bên trái, dãy số trang canh giữa — như chân trang danh sách. */
+        .ncc-tab-chan { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
+        .ncc-tab-chan .select-width { width: auto; }
+        .ncc-tab-pagi { flex: 1; }
+        .ncc-tab-pagi nav { display: flex; justify-content: center; }
+        .ncc-tab-pagi .pagination { margin: 0; }
         .ncc-tab-rong { padding: 24px 0; text-align: center; color: #8c8c8c; }
         .ncc-tien { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
         .ncc-tien-o { flex: 1 1 160px; border: 1px solid #eee; border-radius: 6px; padding: 8px 12px; }
@@ -46,6 +94,11 @@
 
 @php
     $C = \App\Http\Controllers\NhaCungCapController::class;
+    // Đang lọc mà bảng rỗng thì nói "không khớp bộ lọc", đừng nói "chưa có":
+    // chưa có là chưa khai gì, còn khớp là khai rồi nhưng lọc không ra — hai
+    // việc phải làm khác hẳn nhau. Cùng khuôn với khu cũ (resources/views/chi-nhanh).
+    $hasFilter = collect($filters)->only(['keyword', 'status'])
+        ->contains(fn ($v) => $v !== '' && $v !== null && $v !== 0 && $v !== [] && $v !== 'all');
     $stt = ($meta['page'] - 1) * $meta['page_size'];
     $anhMacDinh = asset('v2/images/image_defaul.png');
 
@@ -246,7 +299,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="14" class="text-center py-4">{{ $C::EMPTY_TEXT }}</td>
+                                    <td colspan="14" class="text-center py-4">{{ $hasFilter ? 'Không có nhà cung cấp nào khớp bộ lọc đang bật.' : $C::EMPTY_TEXT }}</td>
                                 </tr>
                             @endforelse
                         </table>
@@ -529,8 +582,10 @@
                                 </div>
                             </div>
 
+                            {{-- Hai tab dưới đọc từ máy chủ theo bộ lọc + trang, không lọc tại chỗ.
+                                 Ô "Hiển thị N" và nút Xuất Excel là của riêng từng tab. --}}
                             <div class="tab-pane fade" id="transaction-history" role="tabpanel">
-                                <div class="d-flex flex-wrap gap-2 filter-supplier-container mb-3">
+                                <div class="d-flex flex-wrap align-items-center gap-2 filter-supplier-container mb-3">
                                     <div class="input-group" style="max-width: 250px">
                                         <input type="text" class="form-control" id="search_purchase"
                                             placeholder="{{ __('message.enter_search_info') }}">
@@ -544,20 +599,44 @@
                                         <input type="text" class="form-control" id="to-date" style="max-width: 160px"
                                             placeholder="Đến ngày" autocomplete="off">
                                     </div>
+                                    <a class="btn btn-sm d-flex align-items-center btn-export ncc-tab-xuat ms-auto" data-tab="lich-su" href="#">
+                                        <i class="fa-solid fa-file-export my-auto mx-1"></i> {{ __('message.export-excel') }}
+                                    </a>
                                 </div>
                                 <div class="col-md-12" id="list-purchase-order"></div>
+                                <div class="ncc-tab-chan">
+                                    <select class="form-control select-width ncc-tab-size" data-tab="lich-su">
+                                        @foreach ($C::MUC_SO_DONG as $muc)
+                                            <option value="{{ $muc }}">{{ __('message.display', ['name' => $muc]) }}</option>
+                                        @endforeach
+                                    </select>
+                                    <div class="ncc-tab-pagi" data-tab="lich-su" id="pagi-purchase-order"></div>
+                                </div>
                             </div>
 
                             <div class="tab-pane fade" id="debt-history" role="tabpanel">
                                 <div class="ncc-tien" id="debt-summary"></div>
-                                <div class="input-group mb-3" style="max-width: 250px">
-                                    <input type="text" class="form-control" id="search_debt"
-                                        placeholder="{{ __('message.enter_search_info') }}">
-                                    <button class="btn seach-item" type="button">
-                                        <i class="fa-solid fa-magnifying-glass"></i>
-                                    </button>
+                                <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+                                    <div class="input-group" style="max-width: 250px">
+                                        <input type="text" class="form-control" id="search_debt"
+                                            placeholder="{{ __('message.enter_search_info') }}">
+                                        <button class="btn seach-item" type="button">
+                                            <i class="fa-solid fa-magnifying-glass"></i>
+                                        </button>
+                                    </div>
+                                    <a class="btn btn-sm d-flex align-items-center btn-export ncc-tab-xuat ms-auto" data-tab="cong-no" href="#">
+                                        <i class="fa-solid fa-file-export my-auto mx-1"></i> {{ __('message.export-excel') }}
+                                    </a>
                                 </div>
                                 <div class="col-md-12" id="list-debt"></div>
+                                <div class="ncc-tab-chan">
+                                    <select class="form-control select-width ncc-tab-size" data-tab="cong-no">
+                                        @foreach ($C::MUC_SO_DONG as $muc)
+                                            <option value="{{ $muc }}">{{ __('message.display', ['name' => $muc]) }}</option>
+                                        @endforeach
+                                    </select>
+                                    <div class="ncc-tab-pagi" data-tab="cong-no" id="pagi-debt"></div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -590,8 +669,8 @@
                     </div>
                 </div>
                 <div class="modal-footer justify-content-center">
-                    <button type="button" class="bt btn_gray" data-bs-dismiss="modal">{{ __('message.close') }}</button>
-                    <button type="button" class="bt btn_red delete-value">{{ __('message.delete') }}</button>
+                    <button type="button" class="bt btn_red" data-bs-dismiss="modal">{{ __('message.close') }}</button>
+                    <button type="button" class="bt btn_green delete-value">{{ __('message.delete') }}</button>
                 </div>
             </div>
         </div>
@@ -751,7 +830,7 @@
 
         $(document).on('click', '.add-item', function () {
             xoaTrangCrUd();
-            $crud.find('.modal-title').text('{{ __('message.add-new') }}');
+            $crud.find('.modal-title').text('{{ __('message.create') }}');
             $crud.modal('show');
         });
 
@@ -764,7 +843,7 @@
             const s = cuaDong(this);
             if (!s) return;
             xoaTrangCrUd();
-            $crud.find('.modal-title').text('{{ __('message.add-new') }}');
+            $crud.find('.modal-title').text('{{ __('message.create') }}');
             doVaoCrUd(s, false);
             // Thêm chữ "copy" vào tên: hai dòng trùng tên y hệt thì lúc chọn bên
             // bán trong phiếu mua không biết đâu là đâu.
@@ -819,9 +898,6 @@
         // =====================================================================
         const $detail = $('#modalDetail');
         let dangXem = null;
-        // Phiếu nạp MỘT lần cho mỗi lượt mở rồi lọc tại chỗ: hai tab sau cùng đọc
-        // một danh sách, gọi hai lượt là hỏi máy chủ hai lần cho cùng một câu.
-        let phieuCuaNCC = null;
 
         $(document).on('click', '.detail-item', function () {
             const s = cuaDong(this);
@@ -848,14 +924,28 @@
             $detail.find('input.ip_total_purchases').val(tien(s.total_purchases));
             $detail.find('input.ip_total_debt').val(tien(s.still_in_debt));
 
-            // Quên phiếu của bên vừa xem — không thì mở bên khác lại thấy lịch sử người trước.
-            phieuCuaNCC = null;
-            $('#search_purchase, #search_debt, #from-date, #to-date').val('');
-            $('#list-purchase-order, #list-debt, #debt-summary').empty();
+            // Về trạng thái đầu cho bên vừa mở — không thì thấy bộ lọc và trang của
+            // người trước. Lịch sử lọc sẵn THÁNG NÀY (quy tắc chung của mọi sổ chứng
+            // từ); công nợ không lọc ngày.
+            $('#search_purchase, #search_debt').val('');
+            $('#from-date').val(moment().startOf('month').format('DD-MM-YYYY'));
+            $('#to-date').val(moment().format('DD-MM-YYYY'));
+            Object.values(TAB).forEach((t) => { t.page = 1; });
             $detail.find('.nav-detail .nav-link').first().tab('show');
 
+            // Ba ô tổng lấy con số API đã gộp trên TOÀN BỘ phiếu, không cộng lại
+            // từ bảng dưới — bảng chỉ là một trang.
+            $('#debt-summary').html(`
+                <div class="ncc-tien-o"><span class="ncc-tien-lb">Tổng mua</span>
+                    <span class="ncc-tien-vl">${tien(s.total_purchases)}</span></div>
+                <div class="ncc-tien-o"><span class="ncc-tien-lb">Đã trả</span>
+                    <span class="ncc-tien-vl">${tien(s.total_payment)}</span></div>
+                <div class="ncc-tien-o"><span class="ncc-tien-lb">Còn nợ</span>
+                    <span class="ncc-tien-vl is-no">${tien(s.still_in_debt)}</span></div>`);
+
             $detail.modal('show');
-            napPhieu();
+            napTab('lich-su');
+            napTab('cong-no');
         });
 
         $(document).on('click', '#modalDetail .detail-edit', function () {
@@ -867,112 +957,152 @@
         const NHAN_TRA = { unpaid: 'Chưa trả', partial: 'Trả một phần', paid: 'Đã trả đủ' };
         const NHAN_PHIEU = { draft: 'Lưu tạm', approved: 'Đã duyệt', cancelled: 'Đã huỷ' };
 
-        function napPhieu() {
-            if (!dangXem) return;
-            const dangDoc = '<p class="ncc-tab-rong">Đang đọc…</p>';
-            $('#list-purchase-order').html(dangDoc);
-            $('#list-debt').html(dangDoc);
+        // Hai tab, mỗi tab giữ trang đang xem và số thứ tự lượt gọi của mình.
+        // `luot` để lượt trả lời chậm không đè lên lượt mới hơn: gõ nhanh ba chữ
+        // là ba lượt gọi, mà lượt về sau cùng chưa chắc là lượt gửi sau cùng.
+        const TAB = {
+            'lich-su': { list: '#list-purchase-order', pagi: '#pagi-purchase-order', page: 1, luot: 0 },
+            'cong-no': { list: '#list-debt', pagi: '#pagi-debt', page: 1, luot: 0 },
+        };
 
-            $.getJSON(URL_BASE + '/' + dangXem.id + '/purchase-orders')
-                .done((data) => {
-                    phieuCuaNCC = data.data || [];
-                    veTab();
-                })
+        /** Bộ lọc đang bật của một tab. Ngày luôn gửi (kể cả rỗng): rỗng = bỏ lọc. */
+        function locCuaTab(tab) {
+            const q = { tab, page: TAB[tab].page, page_size: $(`.ncc-tab-size[data-tab="${tab}"]`).val() || 10 };
+            if (tab === 'lich-su') {
+                q.keyword = $('#search_purchase').val().trim();
+                q.from_date = $('#from-date').val();
+                q.to_date = $('#to-date').val();
+            } else {
+                q.keyword = $('#search_debt').val().trim();
+            }
+            return q;
+        }
+
+        function napTab(tab) {
+            if (!dangXem) return;
+            const t = TAB[tab];
+            const q = locCuaTab(tab);
+            $(t.list).html('<p class="ncc-tab-rong">Đang đọc…</p>');
+            $(t.pagi).empty();
+            // Nút Xuất Excel đi theo đúng bộ lọc đang bật.
+            $(`.ncc-tab-xuat[data-tab="${tab}"]`).attr('href', URL_BASE + '/' + dangXem.id + '/purchase-orders/export?' + $.param(q));
+
+            const luot = ++t.luot;
+            $.getJSON(URL_BASE + '/' + dangXem.id + '/purchase-orders', q)
+                .done((r) => { if (luot === t.luot) veTab(tab, r.data || [], r.meta || {}); })
                 .fail((x) => {
-                    phieuCuaNCC = [];
-                    const cau = '<p class="ncc-tab-rong">'
-                        + esc((x.responseJSON && x.responseJSON.message) || 'Không đọc được phiếu mua.') + '</p>';
-                    $('#list-purchase-order').html(cau);
-                    $('#list-debt').html(cau);
+                    if (luot !== t.luot) return;
+                    $(t.list).html('<p class="ncc-tab-rong">'
+                        + esc((x.responseJSON && x.responseJSON.message) || 'Không đọc được phiếu mua.') + '</p>');
                 });
         }
 
-        /** Lọc theo từ khoá và khoảng ngày lập. Hai ô ngày ở khuôn DD-MM-YYYY của v2. */
-        function locPhieu(tu, den, kw) {
-            const doiNgay = (s) => (s ? s.split('-').reverse().join('-') : '');
-            tu = doiNgay(tu);
-            den = doiNgay(den);
-
-            return (phieuCuaNCC || []).filter((p) => {
-                if (kw) {
-                    const dong = ((p.po_code || '') + ' ' + (p.note || '')).toLowerCase();
-                    if (!dong.includes(kw.toLowerCase())) return false;
-                }
-                const ngayLap = (p.created_at || '').slice(0, 10);
-                if (tu && ngayLap < tu) return false;
-                if (den && ngayLap > den) return false;
-                return true;
-            });
+        /** Còn mấy ngày tới hạn trả (theo `debt_due_date` ghi lúc lập phiếu).
+         *  Phiếu không ghi hạn thì để TRỐNG — chủ tiệm chốt vậy, không "—". */
+        function conHan(p) {
+            if (!p.debt_due_date) return { chu: '', lop: '', title: '' };
+            const han = moment(String(p.debt_due_date).slice(0, 10), 'YYYY-MM-DD');
+            const ngayCon = han.diff(moment().startOf('day'), 'days');
+            const title = 'Hạn thanh toán: ' + han.format('DD/MM/YYYY');
+            if (ngayCon < 0) return { chu: 'Quá ' + (-ngayCon) + ' ngày', lop: 'qua-han', title };
+            if (ngayCon === 0) return { chu: 'Hôm nay', lop: 'het-han-hom-nay', title };
+            return { chu: ngayCon + ' ngày', lop: '', title };
         }
 
-        function veTab() {
-            // --- Lịch sử giao dịch ---
-            const gd = locPhieu($('#from-date').val(), $('#to-date').val(), $('#search_purchase').val().trim());
-            $('#list-purchase-order').html(gd.length ? `
-                <div class="ncc-tab-wrap"><table class="ncc-tab-table">
-                    <thead><tr>
-                        <th>STT</th><th>Mã phiếu</th><th>Người lập</th><th>Ngày chứng từ</th>
-                        <th>Ngày lập</th><th>Tiền hàng</th><th>Tổng tiền</th>
-                        <th>Trạng thái</th><th>Thanh toán</th><th>Còn nợ</th><th>Ghi chú</th>
-                    </tr></thead>
-                    <tbody>${gd.map((p, i) => {
-                        const con = Math.max(0, Number(p.total_amount || 0) - Number(p.paid_amount || 0));
-                        return `<tr>
-                            <td>${i + 1}</td>
+        function veTab(tab, rows, meta) {
+            const t = TAB[tab];
+            const stt0 = ((meta.page || 1) - 1) * (meta.page_size || rows.length);
+            const con = (p) => Math.max(0, Number(p.total_amount || 0) - Number(p.paid_amount || 0));
+
+            if (tab === 'lich-su') {
+                $(t.list).html(rows.length ? `
+                    <div class="ncc-tab-wrap"><table class="ncc-tab-table ncc-tab-lich-su">
+                        <thead><tr>
+                            <th>STT</th><th>Mã phiếu</th><th>Người lập</th><th>Chi nhánh</th><th>Ngày chứng từ</th>
+                            <th>Ngày lập</th><th>Tiền hàng</th><th>Tổng tiền</th>
+                            <th>Trạng thái</th><th>Thanh toán</th><th>Còn nợ</th><th>Ghi chú</th>
+                        </tr></thead>
+                        <tbody>${rows.map((p, i) => `<tr>
+                            <td>${stt0 + i + 1}</td>
                             <td>${esc(p.po_code || '')}</td>
-                            <td>${esc(p.creator_name || '')}</td>
+                            <td>${esc(p.created_by_name || '')}</td>
+                            <td>${esc(p.shop_name || '')}</td>
                             <td>${ngay(p.document_date)}</td>
                             <td>${ngay(p.created_at)}</td>
                             <td class="is-tien">${tien(p.items_amount)}</td>
                             <td class="is-tien"><b>${tien(p.total_amount)}</b></td>
                             <td>${esc(NHAN_PHIEU[p.status] || p.status || '')}</td>
                             <td>${p.status === 'cancelled' ? '' : esc(NHAN_TRA[p.payment_status] || '')}</td>
-                            <td class="is-tien">${p.status === 'approved' && con > 0 ? tien(con) : ''}</td>
+                            <td class="is-tien">${p.status === 'approved' && con(p) > 0 ? tien(con(p)) : ''}</td>
                             <td title="${esc(p.note || '')}">${esc(p.note || '')}</td>
-                        </tr>`;
-                    }).join('')}</tbody>
-                </table></div>`
-                : '<p class="ncc-tab-rong">Bên này chưa có phiếu mua nào khớp bộ lọc.</p>');
+                        </tr>`).join('')}</tbody>
+                    </table></div>`
+                    : '<p class="ncc-tab-rong">Bên này chưa có phiếu mua nào khớp bộ lọc.</p>');
+            } else {
+                $(t.list).html(rows.length ? `
+                    <div class="ncc-tab-wrap"><table class="ncc-tab-table ncc-tab-cong-no">
+                        <thead><tr>
+                            <th>STT</th><th>Mã phiếu</th><th>Người lập</th><th>Chi nhánh</th><th>Ngày lập</th>
+                            <th>Tổng tiền</th><th>Đã trả</th><th>Còn nợ</th><th>Thanh toán</th><th>Còn hạn</th><th>Ghi chú</th>
+                        </tr></thead>
+                        <tbody>${rows.map((p, i) => { const h = conHan(p); return `<tr>
+                            <td>${stt0 + i + 1}</td>
+                            <td>${esc(p.po_code || '')}</td>
+                            <td>${esc(p.created_by_name || '')}</td>
+                            <td>${esc(p.shop_name || '')}</td>
+                            <td>${ngay(p.created_at)}</td>
+                            <td class="is-tien">${tien(p.total_amount)}</td>
+                            <td class="is-tien">${tien(p.paid_amount)}</td>
+                            <td class="is-tien"><b>${tien(con(p))}</b></td>
+                            <td>${esc(NHAN_TRA[p.payment_status] || '')}</td>
+                            <td class="${h.lop}" title="${esc(h.title)}">${esc(h.chu)}</td>
+                            <td title="${esc(p.note || '')}">${esc(p.note || '')}</td>
+                        </tr>`; }).join('')}</tbody>
+                    </table></div>`
+                    : '<p class="ncc-tab-rong">Bên này không còn khoản nợ nào.</p>');
+            }
 
-            // --- Công nợ: CHỈ phiếu đã duyệt mà còn nợ ---
-            // Phiếu lưu tạm chưa mua gì, phiếu huỷ thì không bao giờ mua — đưa vào
-            // bảng công nợ là dựng ra một khoản nợ không có thật.
-            const no = locPhieu('', '', $('#search_debt').val().trim()).filter((p) =>
-                p.status === 'approved' && Number(p.total_amount || 0) - Number(p.paid_amount || 0) > 0);
-
-            // Ba ô tổng lấy con số API đã gộp trên TOÀN BỘ phiếu, không cộng lại
-            // từ bảng dưới — bảng chỉ nạp 100 phiếu gần nhất nên cộng ở đây sẽ
-            // ra một con số nhỏ hơn sự thật mà không ai nhận ra.
-            $('#debt-summary').html(`
-                <div class="ncc-tien-o"><span class="ncc-tien-lb">Tổng mua</span>
-                    <span class="ncc-tien-vl">${tien(dangXem.total_purchases)}</span></div>
-                <div class="ncc-tien-o"><span class="ncc-tien-lb">Đã trả</span>
-                    <span class="ncc-tien-vl">${tien(dangXem.total_payment)}</span></div>
-                <div class="ncc-tien-o"><span class="ncc-tien-lb">Còn nợ</span>
-                    <span class="ncc-tien-vl is-no">${tien(dangXem.still_in_debt)}</span></div>`);
-
-            $('#list-debt').html(no.length ? `
-                <div class="ncc-tab-wrap"><table class="ncc-tab-table">
-                    <thead><tr>
-                        <th>STT</th><th>Mã phiếu</th><th>Người lập</th><th>Ngày lập</th>
-                        <th>Tổng tiền</th><th>Đã trả</th><th>Còn nợ</th><th>Thanh toán</th><th>Ghi chú</th>
-                    </tr></thead>
-                    <tbody>${no.map((p, i) => `<tr>
-                        <td>${i + 1}</td>
-                        <td>${esc(p.po_code || '')}</td>
-                        <td>${esc(p.creator_name || '')}</td>
-                        <td>${ngay(p.created_at)}</td>
-                        <td class="is-tien">${tien(p.total_amount)}</td>
-                        <td class="is-tien">${tien(p.paid_amount)}</td>
-                        <td class="is-tien"><b>${tien(Number(p.total_amount || 0) - Number(p.paid_amount || 0))}</b></td>
-                        <td>${esc(NHAN_TRA[p.payment_status] || '')}</td>
-                        <td title="${esc(p.note || '')}">${esc(p.note || '')}</td>
-                    </tr>`).join('')}</tbody>
-                </table></div>`
-                : '<p class="ncc-tab-rong">Bên này không còn khoản nợ nào.</p>');
+            $(t.pagi).html(vePhanTrang(meta.page || 1, meta.total_pages || 1));
         }
 
-        $(document).on('input', '#search_purchase, #search_debt', () => { if (phieuCuaNCC) veTab(); });
+        /** Dựng đúng khuôn của v2::partials.pagination: hai đầu, cụm quanh trang đang xem, "…" ở chỗ đứt. */
+        function vePhanTrang(trang, tong) {
+            if (tong <= 1) return '';
+            const so = tong <= 9
+                ? Array.from({ length: tong }, (_, i) => i + 1)
+                : [...new Set([1, 2, trang - 1, trang, trang + 1, tong - 1, tong])].filter((p) => p >= 1 && p <= tong).sort((a, b) => a - b);
+            const o = [];
+            let truoc = 0;
+            so.forEach((p) => { if (truoc && p > truoc + 1) o.push('...'); o.push(p); truoc = p; });
+
+            const nut = (p, nhan, dis, active) => dis || active
+                ? `<li class="page-item ${active ? 'active' : 'disabled'}"><span class="page-link">${nhan}</span></li>`
+                : `<li class="page-item"><a class="page-link" href="#" data-page="${p}">${nhan}</a></li>`;
+
+            return '<nav><ul class="pagination">'
+                + nut(trang - 1, '&lsaquo;', trang <= 1)
+                + o.map((p) => (p === '...' ? nut(0, '…', true) : nut(p, p, false, p === trang))).join('')
+                + nut(trang + 1, '&rsaquo;', trang >= tong)
+                + '</ul></nav>';
+        }
+
+        $(document).on('click', '.ncc-tab-pagi a.page-link', function (e) {
+            e.preventDefault();
+            const tab = $(this).closest('.ncc-tab-pagi').data('tab');
+            TAB[tab].page = Number($(this).data('page')) || 1;
+            napTab(tab);
+        });
+
+        // Lọc realtime: gõ xong 300ms mới hỏi máy chủ, và về trang 1 vì bộ lọc đã đổi.
+        const hen = {};
+        function locLaiTab(tab) {
+            TAB[tab].page = 1;
+            clearTimeout(hen[tab]);
+            hen[tab] = setTimeout(() => napTab(tab), 300);
+        }
+        $(document).on('input', '#search_purchase, #from-date, #to-date', () => locLaiTab('lich-su'));
+        $(document).on('input', '#search_debt', () => locLaiTab('cong-no'));
+        $(document).on('change', '.ncc-tab-size', function () { locLaiTab($(this).data('tab')); });
 
         // Hai ô ngày dùng lịch một ngày của v2, khuôn DD-MM-YYYY.
         $('#from-date, #to-date').each(function () {
@@ -981,7 +1111,7 @@
                 locale: V2.lichVN(),
             }, function (start) {
                 $(this.element).val(start.format('DD-MM-YYYY'));
-                if (phieuCuaNCC) veTab();
+                locLaiTab('lich-su');
             });
         });
 

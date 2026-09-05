@@ -96,13 +96,12 @@ class ChonCuaVaoController extends Controller
         // API mới là nơi tra sổ và từ chối chi nhánh của cửa hàng khác. Chép luật
         // sang đây là để hai bản lệch nhau.
         if ($request->has('chi_nhanh')) {
-            // 0 = xem gộp mọi chi nhánh: bỏ hẳn khoá khỏi phiên thay vì ghi số 0,
-            // để ApiClient không đính header nào cả.
-            if ((int) ($du['chi_nhanh'] ?? 0) === 0) {
-                session()->forget(ApiClient::KHOA_CHI_NHANH);
-            } else {
-                session([ApiClient::KHOA_CHI_NHANH => (int) $du['chi_nhanh']]);
-            }
+            // 0 = xem gộp mọi chi nhánh. GHI SỐ 0 chứ không bỏ khoá: bỏ khoá là
+            // "chưa chọn", và ChiNhanhDangLam sẽ ghim chi nhánh đầu tiên đè lên —
+            // mục "Tất cả chi nhánh" chọn xong lại rơi về chi nhánh 1. Số 0 trong
+            // phiên thì ApiClient không đính header (API đọc gộp) và không ai ghim
+            // lại nữa.
+            session([ApiClient::KHOA_CHI_NHANH => max(0, (int) ($du['chi_nhanh'] ?? 0))]);
         }
 
         return redirect()->to($chon['href']);

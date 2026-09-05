@@ -6,6 +6,11 @@
 
 @php
     $C = \App\Http\Controllers\DieuChinhTonKhoController::class;
+    // Đang lọc mà bảng rỗng thì nói "không khớp bộ lọc", đừng nói "chưa có":
+    // chưa có là chưa khai gì, còn khớp là khai rồi nhưng lọc không ra — hai
+    // việc phải làm khác hẳn nhau. Cùng khuôn với khu cũ (resources/views/chi-nhanh).
+    $hasFilter = collect($filters)->only(['keyword', 'type', 'status', 'warehouse_status', 'created_by', 'from_date', 'to_date'])
+        ->contains(fn ($v) => $v !== '' && $v !== null && $v !== 0 && $v !== [] && $v !== 'all');
     $stt = ($meta['page'] - 1) * $meta['page_size'];
     $trangThaiChon = array_filter(explode(',', $filters['status']));
     $nguoiTaoChon = array_filter(explode(',', (string) $filters['created_by']));
@@ -244,7 +249,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="12" class="text-center py-4">{{ $C::EMPTY_TEXT }}</td>
+                                    <td colspan="12" class="text-center py-4">{{ $hasFilter ? 'Không có phiếu điều chỉnh nào khớp bộ lọc đang bật.' : $C::EMPTY_TEXT }}</td>
                                 </tr>
                             @endforelse
                         </table>
@@ -307,8 +312,8 @@
                     </div>
                 </div>
                 <div class="modal-footer justify-content-center">
-                    <button type="button" class="bt btn_gray" data-bs-dismiss="modal">{{ __('message.close') }}</button>
-                    <button type="button" class="bt btn_red delete-value">{{ __('message.delete') }}</button>
+                    <button type="button" class="bt btn_red" data-bs-dismiss="modal">{{ __('message.close') }}</button>
+                    <button type="button" class="bt btn_green delete-value">{{ __('message.delete') }}</button>
                 </div>
             </div>
         </div>

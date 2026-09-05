@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Services\ApiClient;
+use App\Services\ChiNhanhDangLam;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -50,10 +51,21 @@ class ChiNhanhTheoTab
         // form) và header (mọi lượt gọi ngầm bằng jQuery/fetch). Hai kiểu gọi
         // khác nhau có hai chỗ tự nhiên để đính kèm; ép cả hai về một kiểu là
         // đẻ thêm chỗ để quên.
-        $raw = $request->header(self::HEADER) ?: $request->input(self::THAM_SO);
-        $id = (int) $raw;
+        $raw = $request->header(self::HEADER);
+        if ($raw === null || $raw === '') {
+            $raw = $request->input(self::THAM_SO);
+        }
 
-        // ĐẶT LẠI Ở MỌI REQUEST, kể cả khi không khai gì (id = 0 → null).
+        // Ba trạng thái, không phải hai:
+        //   - không khai (null / rỗng / chữ bậy) → theo phiên — đường của tab vừa
+        //     mở, và của mọi cửa hàng một chi nhánh;
+        //   - khai "0"  → cố ý xem GỘP mọi chi nhánh, thắng phiên;
+        //   - khai >0   → đúng chi nhánh đó.
+        // Gộp "0" với "không khai" là tab đang xem gộp bị kéo về chi nhánh mà tab
+        // khác vừa chọn — đúng lỗi cơ chế này sinh ra để chữa.
+        $khai = $raw !== null && $raw !== '' && is_numeric($raw);
+
+        // ĐẶT LẠI Ở MỌI REQUEST, kể cả khi không khai gì (→ null).
         //
         // Chỗ giữ là một biến STATIC, nên nó sống lâu hơn một lượt xử lý ở bất
         // cứ đâu tiến trình PHP được dùng lại: bài kiểm chạy nhiều request
@@ -61,13 +73,8 @@ class ChiNhanhTheoTab
         // thì request sau thừa hưởng chi nhánh của request trước — một lượt gọi
         // vô hại kéo theo cả loạt lượt sau ghi vào kho sai. Ba bài kiểm đã đỏ
         // đúng vì lỗi này, và chúng chỉ đỏ khi chạy cả bộ.
-        ApiClient::datChiNhanhCuaRequest($id > 0 ? $id : null);
-
-        // Không khai (hoặc khai bậy) thì đi tiếp bằng chi nhánh trong phiên —
-        // đường của tab vừa mở, và của mọi cửa hàng một chi nhánh.
-        if ($id <= 0) {
-            return $next($request);
-        }
+        ApiClient::datChiNhanhCuaRequest($khai ? max(0, (int) $raw) : null);
+        ChiNhanhDangLam::quenCache();
 
         // KHÔNG xác minh id ở đây: API mới là nơi tra sổ và từ chối chi nhánh của
         // cửa hàng khác, chi nhánh đã đóng, hay chi nhánh người này không được

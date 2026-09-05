@@ -13,6 +13,11 @@
 
 @php
     $C = \App\Http\Controllers\TonKhoChiNhanhController::class;
+    // Đang lọc mà bảng rỗng thì nói "không khớp bộ lọc", đừng nói "chưa có":
+    // chưa có là chưa khai gì, còn khớp là khai rồi nhưng lọc không ra — hai
+    // việc phải làm khác hẳn nhau. Cùng khuôn với khu cũ (resources/views/chi-nhanh).
+    $hasFilter = collect($filters)->only(['keyword', 'category_id', 'stock'])
+        ->contains(fn ($v) => $v !== '' && $v !== null && $v !== 0 && $v !== [] && $v !== 'all');
     $low = (int) $filters['low_stock'];
 
     // Tổng của TỪNG chi nhánh tính trên toàn bộ lọc, không phải trên trang đang
@@ -322,7 +327,7 @@
                                     @endforeach
                                 @empty
                                     <tr>
-                                        <td colspan="11" class="text-center py-4">{{ $C::EMPTY_TEXT }}</td>
+                                        <td colspan="11" class="text-center py-4">{{ $hasFilter ? $C::EMPTY_TEXT : 'Chi nhánh này chưa có dòng tồn nào. Nhập hàng hoặc điều chuyển hàng về đây để có tồn.' }}</td>
                                     </tr>
                                 @endforelse
                             </tbody>

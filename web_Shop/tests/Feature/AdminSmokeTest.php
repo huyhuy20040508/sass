@@ -461,6 +461,7 @@ class AdminSmokeTest extends TestCase
             'admin.chi-nhanh.etax' => ['id' => $this->firstValue('/admin/chi-nhanh', 'id')],
             'admin.dieu-chinh-ton-kho.show' => ['id' => $this->firstValue('/admin/dieu-chinh-ton-kho', 'id')],
             'admin.nha-cung-cap.phieuMua' => ['id' => $this->firstValue('/admin/nha-cung-cap', 'id')],
+            'admin.nha-cung-cap.phieuMuaExport' => ['id' => $this->firstValue('/admin/nha-cung-cap', 'id')],
             'admin.phieu-mua-hang.show' => ['id' => $this->firstValue('/admin/phieu-mua-hang', 'id')],
             'admin.phieu-mua-hang.exportOne' => ['id' => $this->firstValue('/admin/phieu-mua-hang', 'id')],
             'admin.tra-hang-nha-cung-cap.show' => ['id' => $this->firstValue('/admin/tra-hang-nha-cung-cap', 'id')],

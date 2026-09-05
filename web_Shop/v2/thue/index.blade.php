@@ -143,7 +143,7 @@
                         </div>
                     </div>
                 </div>
-                <div class="modal-footer">
+                <div class="modal-footer justify-content-center">
                     <button type="button" class="bt btn_red" data-bs-dismiss="modal">{{ __('message.close') }}</button>
                     <button type="button" class="bt btn_green save-item">{{ __('message.save') }}</button>
                 </div>
