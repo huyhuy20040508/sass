@@ -148,6 +148,9 @@ class ModuleLamViec
     /**
      * Hai module của phần mềm, chưa lọc theo cửa.
      *
+     * Quản trị đứng trước Thu ngân — thứ tự bày ở màn Cửa vào và nút đổi module
+     * (chủ tiệm chốt).
+     *
      * Mỗi mục mang hai hình cho hai cỡ: `icon` (nét SVG) cho nút đổi module trên
      * hai thanh trên cùng, nơi hình chỉ còn 17px; `anh` (ảnh chụp) cho hai ô to ở
      * màn chọn cửa. Ảnh chụp thu về 17px chỉ còn một vệt màu, nét SVG phóng to
@@ -157,20 +160,20 @@ class ModuleLamViec
     {
         return [
             [
-                'ma' => self::THU_NGAN,
-                'ten' => 'Thu ngân',
-                'mo_ta' => 'Bán hàng, điều phối ca, sổ quỹ',
-                'href' => self::trangChu(self::THU_NGAN),
-                'anh' => 'images/cua-thu-ngan.jpg',
-                'icon' => '<rect x="2.5" y="7" width="19" height="12" rx="2"/><path d="M2.5 11h19"/><circle cx="12" cy="15" r="1.6"/><path d="M6 4.5h12"/>',
-            ],
-            [
                 'ma' => self::QUAN_TRI,
                 'ten' => 'Quản trị',
                 'mo_ta' => 'Hàng hoá, kho, khách hàng, báo cáo',
                 'href' => self::trangChu(self::QUAN_TRI),
                 'anh' => 'images/cua-quan-tri.jpg',
                 'icon' => '<rect x="3" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5"/>',
+            ],
+            [
+                'ma' => self::THU_NGAN,
+                'ten' => 'Thu ngân',
+                'mo_ta' => 'Bán hàng, điều phối ca, sổ quỹ',
+                'href' => self::trangChu(self::THU_NGAN),
+                'anh' => 'images/cua-thu-ngan.jpg',
+                'icon' => '<rect x="2.5" y="7" width="19" height="12" rx="2"/><path d="M2.5 11h19"/><circle cx="12" cy="15" r="1.6"/><path d="M6 4.5h12"/>',
             ],
         ];
     }

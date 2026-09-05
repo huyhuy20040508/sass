@@ -180,8 +180,8 @@
                     </div>
                 </div>
                 <div class="modal-footer justify-content-center">
-                    <button type="button" class="bt btn_gray" data-bs-dismiss="modal">{{ __('message.close') }}</button>
-                    <button type="button" class="bt btn_red delete-value">{{ __('message.delete') }}</button>
+                    <button type="button" class="bt btn_red" data-bs-dismiss="modal">{{ __('message.close') }}</button>
+                    <button type="button" class="bt btn_green delete-value">{{ __('message.delete') }}</button>
                 </div>
             </div>
         </div>
@@ -204,8 +204,8 @@
                     </div>
                 </div>
                 <div class="modal-footer justify-content-center">
-                    <button type="button" class="bt btn_gray" data-bs-dismiss="modal">{{ __('message.close') }}</button>
-                    <button type="button" class="bt btn_red delete-value-child">{{ __('message.delete') }}</button>
+                    <button type="button" class="bt btn_red" data-bs-dismiss="modal">{{ __('message.close') }}</button>
+                    <button type="button" class="bt btn_green delete-value-child">{{ __('message.delete') }}</button>
                 </div>
             </div>
         </div>
@@ -438,7 +438,7 @@
                 return;
             }
             xoaTrangHop();
-            $hop.find('.modal-title').text('{{ __('message.add-new') }}');
+            $hop.find('.modal-title').text('{{ __('message.create') }}');
             $hop.find('#parent-group').val(nhomDangChon.data.id);
             $hop.find('#parent-name').text(nhomDangChon.data.name);
             $hop.modal('show');

@@ -51,10 +51,29 @@ class ApiClient
      */
     protected static ?int $chiNhanhCuaRequest = null;
 
-    /** Ghi chi nhánh của request hiện tại. Chỉ ChiNhanhTheoTab gọi. */
+    /**
+     * Ghi chi nhánh của request hiện tại. Chỉ ChiNhanhTheoTab gọi.
+     *
+     * null = request không khai gì. 0 = khai RÕ "xem gộp mọi chi nhánh" — khác
+     * hẳn không khai: 0 thắng phiên (tab đang xem gộp không được rơi về chi
+     * nhánh mà tab khác vừa chọn), còn không khai thì rơi về phiên.
+     */
     public static function datChiNhanhCuaRequest(?int $id): void
     {
-        self::$chiNhanhCuaRequest = $id !== null && $id > 0 ? $id : null;
+        self::$chiNhanhCuaRequest = $id !== null && $id >= 0 ? $id : null;
+    }
+
+    /**
+     * Người dùng ĐÃ chọn chi nhánh chưa — kể cả chọn "Tất cả" (0)?
+     *
+     * "Chưa chọn" (phiên không có khoá) và "chọn Tất cả" (khoá = 0) cùng làm
+     * chiNhanhDangLam() trả 0, nhưng phải xử lý khác nhau: chưa chọn thì
+     * ChiNhanhDangLam ghim chi nhánh đầu tiên vào phiên, còn Tất cả là lựa chọn
+     * của người dùng và phải được giữ nguyên.
+     */
+    public static function daKhaiChiNhanh(): bool
+    {
+        return self::$chiNhanhCuaRequest !== null || session()->has(self::KHOA_CHI_NHANH);
     }
 
     /**

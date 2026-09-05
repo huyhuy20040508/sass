@@ -26,13 +26,17 @@
     $moGiam = $dangTang || $dangGiam ? ($dangTang ? 0.25 : 1) : 0.4;
 @endphp
 
+{{-- `white-space: nowrap` trên thẻ a: tiêu đề cột nay được xuống dòng (bảng chia
+     theo %), mà cặp mũi tên rớt xuống dòng riêng là hàng tiêu đề cao hơn hẳn
+     các trang không có nút sắp xếp. Chồng mũi tên cũng ép vừa MỘT dòng chữ
+     (cao 16px) để không đội hàng lên. --}}
 <a href="{{ request()->fullUrlWithQuery(['sort' => $keTiep, 'page' => 1]) }}"
-    class="js-table-sort text-decoration-none" style="color: #212521;" data-sort-by="{{ $key }}"
+    class="js-table-sort text-decoration-none" style="color: #212521; white-space: nowrap;" data-sort-by="{{ $key }}"
     title="Sắp xếp theo {{ mb_strtolower($label) }}">
     {{ $label }}
     <span class="sort-icons"
-        style="margin-left:6px; display:inline-flex; flex-direction:column; line-height:10px; vertical-align:middle;">
-        <i class="fa fa-caret-up" style="font-size: 16px; opacity: {{ $moTang }}; overflow: hidden;"></i>
-        <i class="fa fa-caret-down" style="font-size: 16px; margin-top:-2px; opacity: {{ $moGiam }}; overflow: hidden;"></i>
+        style="margin-left:4px; display:inline-flex; flex-direction:column; line-height:7px; vertical-align:middle;">
+        <i class="fa fa-caret-up" style="font-size: 14px; opacity: {{ $moTang }};"></i>
+        <i class="fa fa-caret-down" style="font-size: 14px; opacity: {{ $moGiam }};"></i>
     </span>
 </a>

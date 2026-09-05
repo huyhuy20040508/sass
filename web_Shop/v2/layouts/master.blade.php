@@ -294,7 +294,7 @@
                 // Chi nhánh của TAB đi kèm mọi lượt gọi ngầm — xem khối
                 // "CHI NHÁNH THEO TAB". Thiếu nó thì lượt gọi rơi về chi nhánh
                 // trong phiên, tức là chi nhánh mà TAB KHÁC vừa chọn.
-                'X-Chi-Nhanh-Tab': String((window.V2 && V2.chiNhanhTab) || ''),
+                'X-Chi-Nhanh-Tab': String((window.V2 && V2.chiNhanhTab != null) ? V2.chiNhanhTab : ''),
             },
             statusCode: {
                 401: function (response) {
@@ -370,12 +370,18 @@
             var the = document.querySelector('meta[name="chi-nhanh"]');
             var cuaTrang = the ? parseInt(the.content, 10) || 0 : 0;
 
-            var cuaTab = 0;
-            try { cuaTab = parseInt(sessionStorage.getItem(KHOA), 10) || 0; } catch (e) {}
+            // null = tab CHƯA quyết; 0 = tab đã chọn "Tất cả chi nhánh" (xem gộp).
+            // Hai thứ phải phân biệt: coi 0 là "chưa quyết" thì tab đang xem gộp
+            // cứ mỗi lượt mở trang lại nhận lấy chi nhánh mà tab khác vừa chọn.
+            var cuaTab = null;
+            try {
+                var luu = sessionStorage.getItem(KHOA);
+                cuaTab = luu === null ? null : (parseInt(luu, 10) || 0);
+            } catch (e) {}
 
             // Tab vừa mở (hoặc trình duyệt chặn sessionStorage): nhận lấy chi
             // nhánh mà máy chủ vừa vẽ và coi đó là của mình từ giờ.
-            if (!cuaTab) {
+            if (cuaTab === null) {
                 cuaTab = cuaTrang;
                 try { sessionStorage.setItem(KHOA, String(cuaTab)); } catch (e) {}
             }
@@ -385,8 +391,8 @@
 
             /** Đổi chi nhánh của RIÊNG tab này rồi nạp lại trang. */
             V2.doiChiNhanhTab = function (id) {
-                id = parseInt(id, 10) || 0;
-                if (!id) return;
+                id = parseInt(id, 10);
+                if (isNaN(id) || id < 0) return;
                 try { sessionStorage.setItem(KHOA, String(id)); } catch (e) {}
                 V2.chiNhanhTab = id;
                 location.href = V2.themChiNhanh(location.href, id);
@@ -394,8 +400,8 @@
 
             /** Gắn ?chi_nhanh=… vào một địa chỉ. Bỏ qua link ra ngoài. */
             V2.themChiNhanh = function (url, id) {
-                id = id || V2.chiNhanhTab;
-                if (!id) return url;
+                if (id == null) id = V2.chiNhanhTab;
+                if (id == null) return url;
                 try {
                     var u = new URL(url, location.origin);
                     if (u.origin !== location.origin) return url;
@@ -412,7 +418,7 @@
             // Chỉ nạp lại khi THẬT SỰ lệch, và chỉ với lượt mở trang (có thẻ
             // meta). Không có vòng lặp: lượt sau mang ?chi_nhanh nên máy chủ vẽ
             // đúng, hai con số bằng nhau và điều kiện này tắt.
-            if (cuaTrang && cuaTab && cuaTrang !== cuaTab) {
+            if (cuaTab !== null && cuaTrang !== cuaTab) {
                 location.replace(V2.themChiNhanh(location.href, cuaTab));
 
                 return;
@@ -425,7 +431,7 @@
             // form để đọc ra.
             document.addEventListener('submit', function (e) {
                 var form = e.target;
-                if (!form || form.tagName !== 'FORM' || !V2.chiNhanhTab) return;
+                if (!form || form.tagName !== 'FORM' || V2.chiNhanhTab == null) return;
                 if (form.querySelector('input[name="chi_nhanh"]')) return;
 
                 var o = document.createElement('input');

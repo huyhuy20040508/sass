@@ -264,23 +264,18 @@
                 <div class="header_menu">
                     <div class="btn-dropdown-container-wapper">
                         <div class="dropdown">
-                            {{-- TÊN CHI NHÁNH ĐANG LÀM VIỆC, hiện ngay trên nút.
-                                 Trước đây nút này chỉ có ba gạch, nên muốn biết mình
-                                 đang đứng ở kho nào phải bấm ra xem — mà con số tồn,
-                                 doanh thu và mọi chứng từ vừa lập đều đổi nghĩa theo
-                                 nó. Cửa hàng một chi nhánh thì giấu đi cho gọn. --}}
-                            <button class="btn btn-dropdown-container dropdown-toggle d-flex align-items-center gap-2"
+                            {{-- Nút chỉ có ba gạch như bản v2; chi nhánh đang làm việc
+                                 được đánh dấu NGAY TRONG danh sách bên dưới (li.selected),
+                                 không in tên ra nút — chủ tiệm chốt vậy. --}}
+                            <button class="btn btn-dropdown-container dropdown-toggle d-flex align-items-center"
                                 data-bs-toggle="dropdown"
-                                title="{{ $cnDangLam['dangChon'] ? 'Chi nhánh đang làm việc — bấm để đổi' : '' }}">
+                                title="{{ count($cnDangLam['ds']) > 1 ? 'Chi nhánh đang làm việc — bấm để đổi' : '' }}">
                                 <i class="fa fa-bars"></i>
-                                @if(count($cnDangLam['ds']) > 1 && $cnDangLam['dangChon'])
-                                    <span class="ten-chi-nhanh-dang-lam d-none d-md-inline">
-                                        {{ \App\Services\ChiNhanhDangLam::ten() }}
-                                    </span>
-                                @endif
                             </button>
                             <div class="dropdown-menu z-index-10000">
                                 <ul class="dropdown-menu-branch-container">
+                                    {{-- Chỉ các chi nhánh vào được. "Tất cả" (xem gộp) không bày ở
+                                         đây — chủ tiệm chốt; muốn xem gộp thì chọn ở màn Cửa vào. --}}
                                     @foreach ($cnDangLam['ds'] as $branch)
                                         <li data-value="{{ $branch['id'] }}"
                                             class="{{ $cnDangLam['dangChon'] === (int) $branch['id'] ? 'selected' : '' }}">
@@ -608,7 +603,7 @@
             <div class="modal-footer">
                 <button type="button" class="bt btn_gray denied-delete"
                     data-bs-dismiss="modal">{{ __('message.close') }}</button>
-                <button type="button" class="bt btn_red btn_logout">{{ __('message.logout') }}</button>
+                <button type="button" class="bt btn_green btn_logout">{{ __('message.logout') }}</button>
             </div>
 
         </div>
@@ -638,8 +633,8 @@
                     </div>
                 </div>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="bt btn_gray" data-bs-dismiss="modal">{{ __('message.close') }}</button>
+            <div class="modal-footer justify-content-center">
+                <button type="button" class="bt btn_red" data-bs-dismiss="modal">{{ __('message.close') }}</button>
             </div>
 
         </div>
@@ -685,8 +680,8 @@
                     </div>
                 </div>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="bt btn_gray" data-bs-dismiss="modal">{{ __('message.close') }}</button>
+            <div class="modal-footer justify-content-center">
+                <button type="button" class="bt btn_red" data-bs-dismiss="modal">{{ __('message.close') }}</button>
                 <button type="button" class="bt btn_green update-password">{{ __('message.save') }}</button>
             </div>
 
@@ -908,7 +903,8 @@
     //     không phải chọn lại mỗi lần mở thêm cửa sổ.
     $('.dropdown-menu-branch-container li').on('click', function () {
         let branch_id = $(this).attr("data-value");
-        if (!branch_id) return;
+        // "0" là Tất cả chi nhánh — hợp lệ, đừng lọc bằng phép falsy.
+        if (branch_id === undefined || branch_id === '') return;
 
         // Ghi cho tab TRƯỚC khi gửi: controller `dangLam` trả về chính trang
         // đang mở, và lúc trang ấy vẽ lại thì khối bên layout đã phải đọc được

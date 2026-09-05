@@ -377,12 +377,29 @@
         /* Ô chọn nhiều nhóm hàng: select2 của v2, khung lọc hẹp nên kéo hết bề ngang. */
         .fillter-box .select2-container { width: 100% !important; }
 
-        /* Bảng: 11 cột không nhét vừa màn thường nên CHO CUỘN NGANG chứ không
-           bóp cột lại. Bốn cột chữ dài cắt bằng "…", di chuột vào xem đủ. */
-        #sortableTable { min-width: 1200px; }
-        #sortableTable .item-name, #sortableTable .item-group {
-            max-width: 240px; overflow: hidden; text-overflow: ellipsis;
-        }
+        /* Bảng 11 cột CHIA THEO %, cộng đúng 100 — vừa khít khung, không cuộn ngang,
+           cột Hành động luôn trong màn. `table-layout: fixed` để bề rộng do hàng tiêu
+           đề quyết; ô dữ liệu dài cắt "…" (chữ đủ ở title), nhãn cột dài xuống dòng.
+           Tắt bớt cột thì % hụt được chia lại cho các cột còn lại. */
+        #sortableTable { width: 100%; table-layout: fixed; }
+        #sortableTable th { white-space: normal; line-height: 1.3; }
+        #sortableTable td { overflow: hidden; text-overflow: ellipsis; }
+        #sortableTable th, #sortableTable td { padding: 8px 6px; }
+        /* Đo thật ở khung 1182px: 5 nút Hành động (lên, xuống, sửa, chép, xoá) và cột
+           Chi nhánh không bị cắt kể cả màn 1366; tên hàng chịu cắt "…" (có title).
+           ☐ 3 · STT 4 · Mã 8 · Tên 22.5 · Nhóm 11.5 · VAT 5 · ĐVT 5.5 · Giá bán 8 · Chi nhánh 13.5
+           · Trạng thái 6 · Hành động 13 = 100 */
+        #sortableTable th:first-child { width: 3%; }
+        #sortableTable th:nth-child(2) { width: 4%; }
+        #sortableTable th.show_code { width: 8%; }
+        #sortableTable th.show_name { width: 22.5%; }
+        #sortableTable th.show_group { width: 11.5%; }
+        #sortableTable th.show_vat { width: 5%; }
+        #sortableTable th.show_unit { width: 5.5%; }
+        #sortableTable th.show_sale_price { width: 8%; }
+        #sortableTable th.show_branch { width: 13.5%; }
+        #sortableTable th.show_status { width: 6%; }
+        #sortableTable th:last-child { width: 13%; }
         /* Hàng nút trên bảng: mọi nút cùng một khối — cao 32px, bo 6px, chữ
            14px — theo đúng luật `.bt` của v2. Nút "Nâng cao" là dropdown nên
            Bootstrap tự nhét padding riêng, phải kéo về cho bằng ba nút kia. */
@@ -931,8 +948,8 @@
                     </div>
                 </div>
                 <div class="modal-footer justify-content-center">
-                    <button type="button" class="bt btn_gray" data-bs-dismiss="modal">{{ __('message.close') }}</button>
-                    <button type="button" class="bt btn_red delete-value">{{ __('message.delete') }}</button>
+                    <button type="button" class="bt btn_red" data-bs-dismiss="modal">{{ __('message.close') }}</button>
+                    <button type="button" class="bt btn_green delete-value">{{ __('message.delete') }}</button>
                 </div>
             </div>
         </div>

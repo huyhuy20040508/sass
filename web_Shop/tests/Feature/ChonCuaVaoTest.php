@@ -227,8 +227,14 @@ class ChonCuaVaoTest extends TestCase
             ->assertSessionHas(ApiClient::KHOA_CHI_NHANH, 5);
     }
 
-    /** 0 = xem gộp cả cửa hàng: BỎ HẲN khoá khỏi phiên để ApiClient không đính header nào. */
-    public function test_chon_tat_ca_chi_nhanh_thi_bo_khoa_khoi_phien(): void
+    /**
+     * 0 = xem gộp cả cửa hàng: ghi SỐ 0 vào phiên, không bỏ khoá.
+     *
+     * Bỏ khoá là "chưa chọn", và ChiNhanhDangLam ghim chi nhánh đầu tiên đè lên
+     * ngay lượt vẽ trang kế — mục "Tất cả chi nhánh" chọn xong vẫn rơi về chi
+     * nhánh 1, đúng lỗi từng có trên prod.
+     */
+    public function test_chon_tat_ca_chi_nhanh_thi_ghi_so_0_vao_phien(): void
     {
         $this->fakeApi();
 
@@ -238,7 +244,7 @@ class ChonCuaVaoTest extends TestCase
         $this->withSession($phien)
             ->post(route('chon-cua.vao'), ['module' => 'quan-tri', 'chi_nhanh' => 0])
             ->assertRedirect(route('admin.dashboard'))
-            ->assertSessionMissing(ApiClient::KHOA_CHI_NHANH);
+            ->assertSessionHas(ApiClient::KHOA_CHI_NHANH, 0);
     }
 
     /**

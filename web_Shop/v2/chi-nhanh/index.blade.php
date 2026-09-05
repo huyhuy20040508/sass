@@ -73,14 +73,30 @@
             .left-info { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 280px; }
         }
 
-        /* Bảng 11 cột không nhét vừa màn thường — CHO CUỘN NGANG chứ không bóp
-           cột lại. Tắt bớt cột thì các cột còn lại tự giãn ra chiếm chỗ. */
+        /* Bảng 11 cột CHIA THEO %, cộng đúng 100 — vừa khít khung, không cuộn ngang,
+           cột Hành động luôn trong màn. `table-layout: fixed` để bề rộng do hàng tiêu
+           đề quyết; ô dữ liệu dài cắt "…" (chữ đủ ở title), nhãn cột dài xuống dòng.
+           Tắt bớt cột thì % hụt được chia lại cho các cột còn lại. */
         .table-list-container { overflow-x: auto; }
-        table.table-list-branch { min-width: 1200px; width: 100%; }
-
-        /* Hai cột chữ dài cắt bằng "…"; di chuột vào ô để xem đủ (title). */
-        table.table-list-branch .item-name,
-        table.table-list-branch .item-creator { max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
+        table.table-list-branch { width: 100%; table-layout: fixed; }
+        table.table-list-branch th { white-space: normal; line-height: 1.3; }
+        table.table-list-branch td { overflow: hidden; text-overflow: ellipsis; }
+        table.table-list-branch th, table.table-list-branch td { padding: 8px 6px; }
+        /* Đo thật ở khung 1182px: MST 13 ký tự, thời gian tạo đủ giờ phút giây và 3 nút
+           Hành động không bị cắt; tên chi nhánh chịu cắt "…" (có title).
+           STT 4 · Mã 8 · Tên 12.5 · MST 12 · SĐT 8 · HĐĐT 8 · Công ty/CN 9 · Người tạo 9
+           · Thời gian tạo 14.5 · Trạng thái 6.5 · Hành động 8.5 = 100 */
+        table.table-list-branch th:first-child { width: 4%; }
+        table.table-list-branch th.show_branch_code { width: 8%; }
+        table.table-list-branch th.show_branch_name { width: 12.5%; }
+        table.table-list-branch th.show_tax_code { width: 12%; }
+        table.table-list-branch th.show_phone { width: 8%; }
+        table.table-list-branch th.show_hddt { width: 8%; }
+        table.table-list-branch th.show_type { width: 9%; }
+        table.table-list-branch th.show_creator { width: 9%; }
+        table.table-list-branch th.show_creation_time { width: 14.5%; }
+        table.table-list-branch th.show_status { width: 6.5%; }
+        table.table-list-branch th.show_action { width: 8.5%; }
 
         /* Dấu "Đang làm việc" ở dòng chi nhánh mình đang đứng. */
         .cn-here {
@@ -101,6 +117,11 @@
 
 @php
     $C = \App\Http\Controllers\ChiNhanhController::class;
+    // Đang lọc mà bảng rỗng thì nói "không khớp bộ lọc", đừng nói "chưa có":
+    // chưa có là chưa khai gì, còn khớp là khai rồi nhưng lọc không ra — hai
+    // việc phải làm khác hẳn nhau. Cùng khuôn với khu cũ (resources/views/chi-nhanh).
+    $hasFilter = collect($filters)->only(['keyword', 'branch', 'status'])
+        ->contains(fn ($v) => $v !== '' && $v !== null && $v !== 0 && $v !== [] && $v !== 'all');
     $MAX = $C::CHU_HOA_DON_TOI_DA;
     $anhMacDinh = asset('v2/images/image_defaul.png');
 
@@ -358,7 +379,7 @@
                                     </tr>
                                 @empty
                                     <tr>
-                                        <td colspan="11" class="text-center py-4">{{ $C::EMPTY_TEXT }}</td>
+                                        <td colspan="11" class="text-center py-4">{{ $hasFilter ? 'Không có chi nhánh nào khớp bộ lọc đang bật.' : $C::EMPTY_TEXT }}</td>
                                     </tr>
                                 @endforelse
                             </tbody>
@@ -795,8 +816,8 @@
                     </div>
                 </div>
                 <div class="modal-footer justify-content-center">
-                    <button type="button" class="bt btn_gray" data-bs-dismiss="modal">{{ __('message.close') }}</button>
-                    <button type="button" class="bt btn_red delete-value">{{ __('message.delete') }}</button>
+                    <button type="button" class="bt btn_red" data-bs-dismiss="modal">{{ __('message.close') }}</button>
+                    <button type="button" class="bt btn_green delete-value">{{ __('message.delete') }}</button>
                 </div>
             </div>
         </div>

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Services\ApiClient;
 use App\Services\ImageStore;
+use App\Support\XlsxDon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
@@ -23,7 +24,8 @@ class NhaCungCapController extends Controller
 
     public const TITLE_PAGE = 'Danh sách nhà cung cấp';
 
-    public const EMPTY_TEXT = 'Chưa có nhà cung cấp nào. Bấm "Thêm nhà cung cấp" để khai đầu mối nhập hàng.';
+    // Gọi đúng chữ trên nút ("Tạo"), không gọi tên khác — một hành động, một tên.
+    public const EMPTY_TEXT = 'Chưa có nhà cung cấp nào. Bấm "Tạo" để khai đầu mối nhập hàng.';
 
     /** Cột `status` bên v2: 1 là còn nhập hàng, 0 là đã dừng. */
     public const DANG_HOP_TAC = 1;
@@ -129,36 +131,38 @@ class NhaCungCapController extends Controller
         }
 
         $list = $this->locSapXep(array_map([$this, 'veKieuXem'], $all), $filters);
-        $ten = 'nha-cung-cap-'.date('Ymd-His').'.csv';
 
-        return response()->streamDownload(function () use ($list) {
-            $out = fopen('php://output', 'w');
-            fwrite($out, "\xEF\xBB\xBF");
-            fputcsv($out, [
-                'STT', 'Mã nhà cung cấp', 'Tên nhà cung cấp', 'Mã số thuế', 'Điện thoại',
-                'Email', 'Địa chỉ', 'Địa chỉ 2', 'Trạng thái',
-                'Tổng mua hàng', 'Tổng tiền thanh toán', 'Còn nợ',
-            ]);
+        // Nút đề "Xuất Excel" thì tệp phải là .xlsx thật — trước đây trả .csv, Excel
+        // mở được nhưng nhãn nói một đằng tệp ra một nẻo, và số điện thoại "0912…"
+        // mở bằng CSV là Excel cắt mất số 0 đầu.
+        $hang = [[
+            'STT', 'Mã nhà cung cấp', 'Tên nhà cung cấp', 'Mã số thuế', 'Điện thoại',
+            'Email', 'Địa chỉ', 'Địa chỉ 2', 'Trạng thái',
+            'Tổng mua hàng', 'Tổng tiền thanh toán', 'Còn nợ',
+        ]];
 
-            foreach ($list as $i => $ncc) {
-                fputcsv($out, [
-                    $i + 1,
-                    $ncc['code'] ?? '',
-                    $ncc['name'] ?? '',
-                    $ncc['tax_code'] ?? '',
-                    $ncc['phone'] ?? '',
-                    $ncc['email'] ?? '',
-                    $ncc['address'] ?? '',
-                    $ncc['address_line2'] ?? '',
-                    self::TRANG_THAI[(int) ($ncc['status'] ?? 1)] ?? '',
-                    // Số trần, không dấu chấm ngăn nghìn: Excel còn cộng được.
-                    (float) ($ncc['total_purchases'] ?? 0),
-                    (float) ($ncc['total_payment'] ?? 0),
-                    (float) ($ncc['still_in_debt'] ?? 0),
-                ]);
-            }
-            fclose($out);
-        }, $ten, ['Content-Type' => 'text/csv; charset=UTF-8']);
+        foreach ($list as $i => $ncc) {
+            $hang[] = [
+                $i + 1,
+                (string) ($ncc['code'] ?? ''),
+                (string) ($ncc['name'] ?? ''),
+                (string) ($ncc['tax_code'] ?? ''),
+                (string) ($ncc['phone'] ?? ''),
+                (string) ($ncc['email'] ?? ''),
+                (string) ($ncc['address'] ?? ''),
+                (string) ($ncc['address_line2'] ?? ''),
+                self::TRANG_THAI[(int) ($ncc['status'] ?? 1)] ?? '',
+                // Số trần, không dấu chấm ngăn nghìn: Excel còn cộng được.
+                (float) ($ncc['total_purchases'] ?? 0),
+                (float) ($ncc['total_payment'] ?? 0),
+                (float) ($ncc['still_in_debt'] ?? 0),
+            ];
+        }
+
+        return response(XlsxDon::noiDung($hang, 'Nha cung cap'), 200, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Content-Disposition' => 'attachment; filename="nha-cung-cap-'.date('Ymd-His').'.xlsx"',
+        ]);
     }
 
     /** File mẫu — giữ đúng thứ tự cột, vì lượt nhập có thể đọc theo vị trí. */
@@ -384,42 +388,221 @@ class NhaCungCapController extends Controller
         );
     }
 
+    /** Hai tab trong hộp Chi tiết đọc chung một đường, khác nhau ở `tab`. */
+    public const TAB_PHIEU = ['lich-su', 'cong-no'];
+
+    /** Nhãn trạng thái phiếu / thanh toán cho tệp xuất — cùng chữ với màn Phiếu mua hàng. */
+    protected const NHAN_PHIEU = ['draft' => 'Lưu tạm', 'approved' => 'Đã duyệt', 'cancelled' => 'Đã huỷ'];
+
+    protected const NHAN_TRA = ['unpaid' => 'Chưa trả', 'partial' => 'Trả một phần', 'paid' => 'Đã trả đủ'];
+
     /**
-     * Phiếu mua của MỘT nhà cung cấp — hai tab "Lịch sử giao dịch" và "Công nợ"
-     * trong hộp chi tiết cùng đọc đường này.
+     * Phiếu mua của MỘT nhà cung cấp — tab "Lịch sử giao dịch" và "Công nợ".
      *
-     * Hai tab ấy từng bị gỡ (557d907) vì chúng cộng từ purchase_orders, mà bảng
-     * đó đã bị xoá. Nay bảng có lại nên tab quay về.
+     * Đọc TOÀN CỬA HÀNG (`shop_id=0`), không cắt theo chi nhánh đang đứng. Sổ
+     * của một nhà cung cấp là của cả công ty: ba con số tổng trên đầu tab đã
+     * gộp mọi chi nhánh, mà bảng dưới chỉ bày phiếu của một quầy thì hai nửa
+     * nói hai chuyện — đứng ở chi nhánh mới mở, tab trống trơn dù bên này còn
+     * nợ mình cả trăm triệu. Thay vào đó mỗi dòng bày rõ cột "Chi nhánh", đúng
+     * như bản v2.
      *
-     * CHỈ trả danh sách phiếu. Ba con số tổng KHÔNG cộng ở đây nữa: đường này
-     * cắt trang ở 100 phiếu, nên cộng trên phần lấy được sẽ ra một con số nhỏ
-     * hơn sự thật mà không chỗ nào lộ ra. Chúng nay đi kèm mỗi dòng của
-     * /admin/nha-cung-cap, gộp bằng một câu SQL trên TOÀN BỘ phiếu.
+     * Tìm, lọc ngày và phân trang làm ở API, không kéo 100 phiếu về rồi lọc ở
+     * trình duyệt như trước: nhà cung cấp lâu năm có cả nghìn phiếu, 100 phiếu
+     * gần nhất là một lát cắt mà không ai biết mình đang nhìn lát cắt.
      */
     public function phieuMua(Request $request, int $id)
     {
+        $loc = $this->locPhieu($request);
+
         try {
-            $res = $this->api->phieuMuaHang([
-                'supplier_id' => $id,
-                'sort' => 'newest',
-                'page' => 1,
-                // 100 là TRẦN của API. Gửi 200 thì bên đó không kẹp xuống 100 mà
-                // rơi về mặc định 20 — hai tab chỉ hiện 20 phiếu gần nhất mà
-                // không báo gì.
-                'page_size' => 100,
-            ]);
+            $res = $this->api->phieuMuaHang($this->queryPhieu($id, $loc));
             if (! $res->successful()) {
                 return response()->json(['message' => $res->json('message') ?: 'Không đọc được phiếu mua.'], 502);
             }
-
-            $list = $res->json('data') ?? [];
+            $list = $this->kemTenChiNhanh($res->json('data') ?? []);
+            $meta = (array) ($res->json('meta') ?? []);
         } catch (\Throwable $e) {
             Log::error('Load phieu mua cua NCC failed', ['id' => $id, 'msg' => $e->getMessage()]);
 
             return response()->json(['message' => 'Không kết nối được API.'], 502);
         }
 
-        return response()->json(['data' => $list]);
+        return response()->json([
+            'data' => $list,
+            'meta' => [
+                'page' => (int) ($meta['page'] ?? $loc['page']),
+                'page_size' => (int) ($meta['page_size'] ?? $loc['page_size']),
+                'total' => (int) ($meta['total'] ?? count($list)),
+                'total_pages' => max(1, (int) ($meta['total_pages'] ?? 1)),
+            ],
+            'filters' => $loc,
+        ]);
+    }
+
+    /**
+     * Xuất tab đang xem ra .xlsx theo đúng bộ lọc đang bật.
+     *
+     * API cắt trang ở 100 nên đọc từng trang tới hết (trần 2.000 phiếu — quá
+     * mức đó là việc của báo cáo, không phải của một hộp chi tiết).
+     */
+    public function phieuMuaExport(Request $request, int $id)
+    {
+        $loc = $this->locPhieu($request);
+        $loc['page_size'] = 100;
+        $list = [];
+
+        try {
+            for ($trang = 1; $trang <= 20; $trang++) {
+                $loc['page'] = $trang;
+                $res = $this->api->phieuMuaHang($this->queryPhieu($id, $loc));
+                if (! $res->successful()) {
+                    return back()->with('error', $res->json('message') ?: 'Không đọc được phiếu mua để xuất tệp.');
+                }
+                $list = array_merge($list, $res->json('data') ?? []);
+                if ($trang >= (int) ($res->json('meta.total_pages') ?? 1)) {
+                    break;
+                }
+            }
+            $list = $this->kemTenChiNhanh($list);
+        } catch (\Throwable $e) {
+            Log::error('Export phieu mua cua NCC failed', ['id' => $id, 'msg' => $e->getMessage()]);
+
+            return back()->with('error', 'Không kết nối được API để xuất tệp.');
+        }
+
+        $congNo = $loc['tab'] === 'cong-no';
+        $hang = [$congNo
+            ? ['STT', 'Mã phiếu', 'Người lập', 'Chi nhánh', 'Ngày lập', 'Tổng tiền', 'Đã trả', 'Còn nợ', 'Thanh toán',
+                'Hạn thanh toán', 'Còn hạn (ngày)', 'Ghi chú']
+            : ['STT', 'Mã phiếu', 'Người lập', 'Chi nhánh', 'Ngày chứng từ', 'Ngày lập', 'Tiền hàng', 'Tổng tiền',
+                'Đã trả', 'Còn nợ', 'Trạng thái', 'Thanh toán', 'Ghi chú']];
+
+        foreach ($list as $i => $p) {
+            $tong = (float) ($p['total_amount'] ?? 0);
+            $daTra = (float) ($p['paid_amount'] ?? 0);
+            // Còn nợ chỉ có nghĩa với phiếu đã duyệt — phiếu tạm/huỷ chưa mua gì.
+            $con = ($p['status'] ?? '') === 'approved' ? max(0, $tong - $daTra) : 0;
+            $chung = [$i + 1, (string) ($p['po_code'] ?? ''), (string) ($p['created_by_name'] ?? ''), (string) ($p['shop_name'] ?? '')];
+            // Số trần, không dấu chấm ngăn nghìn: Excel còn cộng được.
+            $hang[] = $congNo
+                ? [...$chung, $this->ngayXuat($p['created_at'] ?? null), $tong, $daTra, $con,
+                    self::NHAN_TRA[$p['payment_status'] ?? ''] ?? '',
+                    $this->ngayXuat($p['debt_due_date'] ?? null), $this->conHan($p['debt_due_date'] ?? null),
+                    (string) ($p['note'] ?? '')]
+                : [...$chung, $this->ngayXuat($p['document_date'] ?? null), $this->ngayXuat($p['created_at'] ?? null),
+                    (float) ($p['items_amount'] ?? 0), $tong, $daTra, $con,
+                    self::NHAN_PHIEU[$p['status'] ?? ''] ?? '', self::NHAN_TRA[$p['payment_status'] ?? ''] ?? '',
+                    (string) ($p['note'] ?? '')];
+        }
+
+        $ten = 'ncc-'.$id.'-'.($congNo ? 'cong-no' : 'lich-su-giao-dich').'-'.date('Ymd-His');
+
+        return response(XlsxDon::noiDung($hang, $congNo ? 'Cong no' : 'Lich su giao dich'), 200, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Content-Disposition' => 'attachment; filename="'.$ten.'.xlsx"',
+        ]);
+    }
+
+    /** Bộ lọc của hai tab, đọc từ query. */
+    protected function locPhieu(Request $request): array
+    {
+        $tab = (string) $request->query('tab', 'lich-su');
+        $tab = in_array($tab, self::TAB_PHIEU, true) ? $tab : 'lich-su';
+        $congNo = $tab === 'cong-no';
+        $size = (int) $request->query('page_size', self::SO_DONG_MOI_TRANG);
+
+        return [
+            'tab' => $tab,
+            'keyword' => trim((string) $request->query('keyword', '')),
+            // Lịch sử giao dịch mở ra là đã lọc THÁNG NÀY — quy tắc chung của mọi
+            // sổ chứng từ (xem PhieuMuaHangController::filters). Gửi `from_date=`
+            // rỗng là cố ý bỏ lọc, khác với không gửi gì. Tab Công nợ KHÔNG lọc
+            // ngày: khoản nợ cũ mấy vẫn phải hiện, giấu đi là quên đòi.
+            'from_date' => $congNo ? '' : ($request->has('from_date') ? $this->ngayLoc($request->query('from_date')) : date('Y-m-01')),
+            'to_date' => $congNo ? '' : ($request->has('to_date') ? $this->ngayLoc($request->query('to_date')) : date('Y-m-d')),
+            'page' => max(1, (int) $request->query('page', 1)),
+            'page_size' => in_array($size, self::MUC_SO_DONG, true) ? $size : self::SO_DONG_MOI_TRANG,
+        ];
+    }
+
+    /** Đổi bộ lọc tab thành query API. */
+    protected function queryPhieu(int $id, array $loc): array
+    {
+        $q = [
+            'supplier_id' => $id,
+            // 0 = "mọi chi nhánh", phải khai tường minh — không gửi là API cắt theo
+            // chi nhánh đang đứng (xem chiNhanhLoc bên API).
+            'shop_id' => 0,
+            'keyword' => $loc['keyword'],
+            'from_date' => $loc['from_date'],
+            'to_date' => $loc['to_date'],
+            'sort' => 'newest',
+            'page' => $loc['page'],
+            'page_size' => $loc['page_size'],
+        ];
+
+        // Công nợ: CHỈ phiếu đã duyệt mà chưa trả đủ. Phiếu lưu tạm chưa mua gì,
+        // phiếu huỷ thì không bao giờ mua — đưa vào là dựng ra một khoản nợ không có thật.
+        if ($loc['tab'] === 'cong-no') {
+            $q['status'] = 'approved';
+            $q['payment_status'] = 'unpaid,partial';
+        }
+
+        return $q;
+    }
+
+    /** Gắn tên chi nhánh vào từng phiếu — API chỉ trả `shop_id`. */
+    protected function kemTenChiNhanh(array $list): array
+    {
+        if ($list === []) {
+            return $list;
+        }
+
+        $ten = [];
+        try {
+            $res = $this->api->chiNhanh();
+            foreach ($res->successful() ? ($res->json('data') ?? []) : [] as $cn) {
+                $ten[(int) ($cn['id'] ?? 0)] = (string) ($cn['name'] ?? '');
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Load ten chi nhanh cho tab NCC failed', ['msg' => $e->getMessage()]);
+        }
+
+        return array_map(function (array $p) use ($ten) {
+            $p['shop_name'] = $ten[(int) ($p['shop_id'] ?? 0)] ?? '';
+
+            return $p;
+        }, $list);
+    }
+
+    /** Ô lịch của v2 gửi DD-MM-YYYY; API nhận YYYY-MM-DD. Sai khuôn là bỏ lọc. */
+    protected function ngayLoc($v): string
+    {
+        $v = trim((string) $v);
+
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $v)) {
+            return $v;
+        }
+        if (preg_match('/^(\d{2})-(\d{2})-(\d{4})$/', $v, $m)) {
+            return $m[3].'-'.$m[2].'-'.$m[1];
+        }
+
+        return '';
+    }
+
+    protected function ngayXuat(?string $v): string
+    {
+        return $v ? date('d/m/Y', strtotime($v)) : '';
+    }
+
+    /** Số ngày tới hạn trả, âm là đã quá hạn; không ghi hạn thì để trống (Excel còn lọc/sắp được). */
+    protected function conHan(?string $han): int|string
+    {
+        if (! $han) {
+            return '';
+        }
+
+        return (int) floor((strtotime(substr($han, 0, 10)) - strtotime(date('Y-m-d'))) / 86400);
     }
 
     /** Ảnh tải lên ngay lúc chọn, form chỉ mang theo đường dẫn. */

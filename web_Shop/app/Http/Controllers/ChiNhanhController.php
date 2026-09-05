@@ -205,14 +205,12 @@ class ChiNhanhController extends Controller
      */
     public function dangLam(Request $request)
     {
-        $du = $request->validate(['id' => ['required', 'integer', 'min:1']]);
+        $du = $request->validate(['id' => ['required', 'integer', 'min:0']]);
 
-        // KHÔNG còn nhận id = 0 ("xem gộp mọi chi nhánh"). Trạng thái ấy nghe thì
-        // vô hại nhưng hai nửa hệ thống hiểu nó ngược nhau: màn kho cộng gộp cả
-        // cửa hàng, còn lượt GHI thì rơi vào một chi nhánh do API đoán — nhập
-        // hàng cho chi nhánh mới mà hàng chui vào chi nhánh cũ. Muốn xem số liệu
-        // của cả cửa hàng thì dùng ô lọc "Chi nhánh" ngay trong từng màn, chỗ đó
-        // chỉ ảnh hưởng tới lượt ĐỌC.
+        // id = 0 là "Tất cả chi nhánh" — xem gộp số liệu cả cửa hàng. Từng bị cấm
+        // vì lượt GHI khi ấy rơi vào một chi nhánh do API đoán; nay API từ chối
+        // lượt ghi mơ hồ (409 "Chưa chọn chi nhánh làm việc") nên xem gộp là an
+        // toàn, và người dùng cần một đường về lại nó từ thanh trên cùng.
         session([ApiClient::KHOA_CHI_NHANH => (int) $du['id']]);
 
         return back();

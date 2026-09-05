@@ -7,6 +7,11 @@
 
 @php
     $C = \App\Http\Controllers\PhieuMuaHangController::class;
+    // Đang lọc mà bảng rỗng thì nói "không khớp bộ lọc", đừng nói "chưa có":
+    // chưa có là chưa khai gì, còn khớp là khai rồi nhưng lọc không ra — hai
+    // việc phải làm khác hẳn nhau. Cùng khuôn với khu cũ (resources/views/chi-nhanh).
+    $hasFilter = collect($filters)->only(['keyword', 'status', 'payment_status', 'warehouse_status', 'supplier_id', 'variant_id', 'from_date', 'to_date'])
+        ->contains(fn ($v) => $v !== '' && $v !== null && $v !== 0 && $v !== [] && $v !== 'all');
     $stt = ($meta['page'] - 1) * $meta['page_size'];
     $anhMacDinh = asset('v2/images/image_defaul.png');
 
@@ -191,11 +196,35 @@
 
         {{-- Khoảng cách giữa các khối lọc nay là luật CHUNG, nằm ở v2::layouts.master. --}}
 
-        /* Bảng danh sách: 14 cột không nhét vừa màn thường nên CHO CUỘN NGANG chứ
-           không bóp cột lại. Tắt bớt cột thì phần còn lại tự giãn ra, không để hở. */
+        /* Bảng danh sách: 14 cột CHIA THEO %, cộng đúng 100 — vừa khít khung, không
+           cuộn ngang, cột Hành động luôn trong màn. `table-layout: fixed` để bề rộng
+           do hàng tiêu đề quyết; ô dữ liệu dài cắt "…" (chữ đủ ở title), nhãn cột
+           dài xuống dòng. Tắt cột (.col-x ẩn) thì % hụt được chia lại cho cột còn lại. */
         .list .table-responsive { overflow-x: auto; }
-        table.table-purchase.none_mobile { min-width: 1500px; }
-        table.table-purchase .item-note { max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+        table.table-purchase.none_mobile { width: 100%; table-layout: fixed; }
+        table.table-purchase.none_mobile th { white-space: normal; line-height: 1.3; }
+        table.table-purchase.none_mobile td { overflow: hidden; text-overflow: ellipsis; }
+        /* Đệm ngang 4px thay vì 8px của v2: 14 cột × 8px là thêm gần một cột tiền. */
+table.table-purchase.none_mobile th, table.table-purchase.none_mobile td { padding: 8px 4px; }
+        /* Chia % — đo thật ở khung 1182px (màn 1536): mã phiếu (16 ký tự), ngày,
+           tiền, ba cột trạng thái và nút Hành động không bị cắt; tên NCC, người
+           tạo, ghi chú chịu cắt "…" (có title).
+           ☐ 2.5 · STT 3.5 · Mã 13.5 · NCC 6.5 · Ngày CT 8.5 · Tiền hàng 9 · Tổng tiền 9 · Còn nợ 8.5
+           · TT đơn 7 · TT kho 8 · TT thanh toán 8.5 · Người tạo 4.5 · Ghi chú 5 · Hành động 6 = 100 */
+        table.table-purchase.none_mobile th:first-child { width: 2.5%; }
+        table.table-purchase.none_mobile th:nth-child(2) { width: 3.5%; }
+        table.table-purchase.none_mobile th.col-code { width: 13.5%; }
+        table.table-purchase.none_mobile th.col-supplier { width: 6.5%; }
+        table.table-purchase.none_mobile th.col-docdate { width: 8.5%; }
+        table.table-purchase.none_mobile th.col-items { width: 9%; }
+        table.table-purchase.none_mobile th.col-total { width: 9%; }
+        table.table-purchase.none_mobile th.col-debt { width: 8.5%; }
+        table.table-purchase.none_mobile th.col-status { width: 7%; }
+        table.table-purchase.none_mobile th.col-warehouse { width: 8%; }
+        table.table-purchase.none_mobile th.col-pay { width: 8.5%; }
+        table.table-purchase.none_mobile th.col-creator { width: 4.5%; }
+        table.table-purchase.none_mobile th.col-note { width: 5%; }
+        table.table-purchase.none_mobile th:last-child { width: 6%; }
 
         /* ---- Canh lưới hàng ----
            style.css của v2 ép `th, td { text-align: center !important }` cho MỌI
@@ -618,7 +647,7 @@
                                             </b>
                                         @endif
                                     </td>
-                                    <td class="text-left col-creator">{{ $p['created_by_name'] ?? '' }}</td>
+                                    <td class="text-left col-creator" title="{{ $p['created_by_name'] ?? '' }}">{{ $p['created_by_name'] ?? '' }}</td>
                                     <td class="text-left col-note item-note" title="{{ $p['note'] ?? '' }}">{{ $p['note'] ?? '' }}</td>
                                     {{-- Con mắt mở phiếu. Huỷ và Xoá chỉ hiện ở phiếu LƯU TẠM —
                                          y như v2, bên đó cột này cũng chỉ bày nút xoá khi
@@ -634,7 +663,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="14" class="text-center py-4">{{ $C::EMPTY_TEXT }}</td>
+                                    <td colspan="14" class="text-center py-4">{{ $hasFilter ? 'Không có phiếu mua hàng nào khớp bộ lọc đang bật.' : $C::EMPTY_TEXT }}</td>
                                 </tr>
                             @endforelse
                         </table>
@@ -1242,7 +1271,7 @@
                     <small class="text-secondary">Vài tuần sau không ai nhớ vì sao phiếu chết — lý do nằm lại trong lịch sử phiếu.</small>
                 </div>
                 <div class="modal-footer justify-content-center">
-                    <button type="button" class="bt btn_gray" data-bs-dismiss="modal">{{ __('message.close') }}</button>
+                    <button type="button" class="bt btn_red" data-bs-dismiss="modal">{{ __('message.close') }}</button>
                     <button type="button" class="bt btn_red save-cancel">{{ __('message.cancel') }}</button>
                 </div>
             </div>
@@ -1273,8 +1302,8 @@
                     </div>
                 </div>
                 <div class="modal-footer justify-content-center">
-                    <button type="button" class="bt btn_gray" data-bs-dismiss="modal">{{ __('message.close') }}</button>
-                    <button type="button" class="bt btn_red delete-value">{{ __('message.delete') }}</button>
+                    <button type="button" class="bt btn_red" data-bs-dismiss="modal">{{ __('message.close') }}</button>
+                    <button type="button" class="bt btn_green delete-value">{{ __('message.delete') }}</button>
                 </div>
             </div>
         </div>
