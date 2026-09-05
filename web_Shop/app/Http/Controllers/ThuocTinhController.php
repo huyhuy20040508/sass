@@ -30,6 +30,8 @@ use Illuminate\Support\Facades\Log;
  */
 class ThuocTinhController extends Controller
 {
+    use \App\Http\Controllers\Concerns\TraLoiHopThoai;
+
     /** Nhãn NGẮN cho thanh điều hướng. */
     public const TITLE = 'Thuộc tính';
 
@@ -38,7 +40,7 @@ class ThuocTinhController extends Controller
 
     public const EMPTY_TEXT = 'Chưa có thuộc tính nào. Bấm "Thêm thuộc tính" để khai cái đầu tiên.';
 
-    public const SO_DONG_MOI_TRANG = 20;
+    public const SO_DONG_MOI_TRANG = 10;
 
     public const MUC_SO_DONG = [10, 20, 30, 40, 50];
 
@@ -46,12 +48,6 @@ class ThuocTinhController extends Controller
     public const TRANG_THAI = [
         'active' => 'Đang dùng',
         'inactive' => 'Đã tắt',
-    ];
-
-    /** Ô lọc cờ định lượng nguyên vật liệu. '' = không lọc. */
-    public const LOC_DINH_LUONG = [
-        'yes' => 'Có định lượng NVL',
-        'no' => 'Không định lượng NVL',
     ];
 
     /** Số giá trị bày thẳng trên dòng, dư ra thì gom thành "+n". */
@@ -67,9 +63,9 @@ class ThuocTinhController extends Controller
         $list = [];
 
         try {
-            // Lọc trạng thái và lọc cờ định lượng làm ở đây chứ không gửi API:
-            // hai tham số bên đó (`active`, `raw_material`) chỉ lọc được một
-            // chiều "chỉ lấy cái đang bật", không có đường lấy riêng phần đã tắt.
+            // Lọc trạng thái làm ở đây chứ không gửi API: tham số `active` bên
+            // đó chỉ lọc được một chiều "chỉ lấy cái đang bật", không có đường
+            // lấy riêng phần đã tắt.
             $res = $this->api->thuocTinh($filters['keyword']);
             if ($res->successful()) {
                 $list = $res->json('data') ?? [];
@@ -92,16 +88,11 @@ class ThuocTinhController extends Controller
             $list = array_values(array_filter($list, fn ($tt) => (bool) ($tt['is_active'] ?? false) === $bat));
         }
 
-        if ($filters['raw_material'] !== '') {
-            $co = $filters['raw_material'] === 'yes';
-            $list = array_values(array_filter($list, fn ($tt) => (bool) ($tt['raw_material'] ?? false) === $co));
-        }
-
         $soDong = $this->soDongMoiTrang($request);
         $soTrang = max(1, (int) ceil(count($list) / $soDong));
         $trang = min(max(1, (int) $request->query('page', 1)), $soTrang);
 
-        $view = view('thuoc-tinh.index', [
+        $view = view('v2::thuoc-tinh.index', [
             'list' => array_slice($list, ($trang - 1) * $soDong, $soDong),
             'tong' => $tong,
             'dangDung' => $dangDung,
@@ -125,7 +116,8 @@ class ThuocTinhController extends Controller
 
         return $this->send(
             fn () => $this->api->taoThuocTinh($data),
-            'Đã thêm thuộc tính "'.$data['name'].'".'
+            'Đã thêm thuộc tính "'.$data['name'].'".',
+            $request
         );
     }
 
@@ -136,7 +128,8 @@ class ThuocTinhController extends Controller
 
         return $this->send(
             fn () => $this->api->suaThuocTinh($id, $data),
-            'Đã cập nhật thuộc tính "'.$data['name'].'".'
+            'Đã cập nhật thuộc tính "'.$data['name'].'".',
+            $request
         );
     }
 
@@ -155,16 +148,18 @@ class ThuocTinhController extends Controller
             fn () => $this->api->doiTrangThaiThuocTinh($id, $bat),
             $bat
                 ? 'Đã bật lại thuộc tính này.'
-                : 'Đã tắt thuộc tính này — ô chọn thuộc tính lúc khai mặt hàng sẽ thôi bày nó ra.'
+                : 'Đã tắt thuộc tính này — ô chọn thuộc tính lúc khai mặt hàng sẽ thôi bày nó ra.',
+            $request
         );
     }
 
     /** Xoá một thuộc tính, kèm toàn bộ giá trị của nó. */
-    public function destroy(int $id)
+    public function destroy(Request $request, int $id)
     {
         return $this->send(
             fn () => $this->api->xoaThuocTinh($id),
-            'Đã xoá thuộc tính.'
+            'Đã xoá thuộc tính.',
+            $request
         );
     }
 
@@ -197,7 +192,7 @@ class ThuocTinhController extends Controller
             }
         }
 
-        $ve = redirect()->route('admin.thuoc-tinh.index');
+        $ve = $this->veDanhSach($request);
 
         return $hong > 0
             ? $ve->with('error', "Đã xoá {$ok} thuộc tính; {$hong} thuộc tính xoá không thành công.")
@@ -219,12 +214,10 @@ class ThuocTinhController extends Controller
     protected function filters(Request $request): array
     {
         $status = (string) $request->query('status', '');
-        $dinhLuong = (string) $request->query('raw_material', '');
 
         return [
             'keyword' => trim((string) $request->query('keyword', '')),
             'status' => isset(self::TRANG_THAI[$status]) ? $status : '',
-            'raw_material' => isset(self::LOC_DINH_LUONG[$dinhLuong]) ? $dinhLuong : '',
         ];
     }
 
@@ -242,7 +235,6 @@ class ThuocTinhController extends Controller
             'code' => ['nullable', 'string', 'max:20', 'regex:/^[A-Za-z0-9]+$/'],
             'name' => ['required', 'string', 'max:100'],
             'is_active' => ['nullable', 'boolean'],
-            'raw_material' => ['nullable', 'boolean'],
             'values' => ['nullable', 'array', 'max:100'],
             'values.*.id' => ['nullable', 'integer'],
             'values.*.code' => ['nullable', 'string', 'max:32', 'regex:/^[A-Za-z0-9]+$/'],
@@ -276,33 +268,42 @@ class ThuocTinhController extends Controller
             'code' => mb_strtoupper(trim($du['code'] ?? '')),
             'name' => trim($du['name']),
             'is_active' => (bool) ($du['is_active'] ?? false),
-            'raw_material' => (bool) ($du['raw_material'] ?? false),
             'values' => $values,
         ];
     }
 
     /** Gọi API rồi quay về bảng kèm thông báo. */
-    protected function send(callable $call, string $success)
+    protected function send(callable $call, string $success, ?Request $request = null)
     {
         try {
             $res = $call();
         } catch (\Throwable $e) {
             Log::error('Thuoc tinh API call failed', ['msg' => $e->getMessage()]);
 
-            return back()->withInput()->with('error', 'Không kết nối được API. Vui lòng thử lại.');
+            return $this->traLoiHopThoai($request, false, 'Không kết nối được API. Vui lòng thử lại.');
         }
 
-        if ($res->successful()) {
-            return redirect()->route('admin.thuoc-tinh.index')->with('success', $success);
-        }
+        return $res->successful()
+            ? $this->traLoiHopThoai($request, true, $success, fn () => $this->veDanhSach($request))
+            : $this->traLoiHopThoai($request, false, $this->cauLoiApi($res, 'Thao tác không thành công.'));
+    }
 
-        // 422 trả lỗi theo từng ô; gom thành một câu vì hộp thoại đã đóng sau khi
-        // trang tải lại.
-        $loi = $res->json('errors');
-        $message = is_array($loi) && $loi
-            ? implode(' ', $loi)
-            : ($res->json('message') ?: 'Thao tác không thành công.');
+    /**
+     * Quay về ĐÚNG trang người dùng đang đứng.
+     *
+     * Trang gửi kèm `return` là đường dẫn hiện tại (kèm bộ lọc và số trang). Bỏ
+     * qua nó mà về thẳng route index là mỗi lượt Lưu lại ném người dùng về trang
+     * 1 chưa lọc — đang sửa dở dòng thứ 40 thì phải lọc và lật trang lại từ đầu.
+     *
+     * Chỉ nhận đường dẫn nội bộ (bắt đầu bằng `/`): `return` đến từ trình duyệt,
+     * nhận cả đường ngoài là mở đường chuyển hướng sang trang lạ.
+     */
+    protected function veDanhSach(?Request $request)
+    {
+        $ve = trim((string) ($request?->input('return') ?? ''));
 
-        return back()->withInput()->with('error', $message);
+        return $ve !== '' && str_starts_with($ve, '/')
+            ? redirect($ve)
+            : redirect()->route('admin.thuoc-tinh.index');
     }
 }

@@ -54,6 +54,13 @@ func (s *viTriService) GetByID(ctx context.Context, id uint) (*domain.ViTri, err
 }
 
 func (s *viTriService) Create(ctx context.Context, req *dto.ViTriRequest) (*domain.ViTri, error) {
+	// Kệ thuộc về MỘT chi nhánh, chốt ngay lúc khai và không đổi nữa: nó là chỗ
+	// vật lý của một mặt bằng, không phải một cái nhãn dùng chung.
+	shopID, err := s.repo.ChiNhanhGhi(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	code := strings.ToUpper(strings.TrimSpace(req.Code))
 	name := strings.TrimSpace(req.Name)
 
@@ -61,18 +68,19 @@ func (s *viTriService) Create(ctx context.Context, req *dto.ViTriRequest) (*doma
 	// khai một lần rồi thôi; bắt người khai tự nghĩ ra chuỗi viết tắt vừa không
 	// trùng vừa đọc được chỉ tổ chặn họ ở ô đầu tiên.
 	if code == "" {
-		next, err := s.maTuSinh(ctx)
+		next, err := s.maTuSinh(ctx, shopID)
 		if err != nil {
 			return nil, err
 		}
 		code = next
 	}
 
-	if err := s.kiemTraTrung(ctx, code, name, 0); err != nil {
+	if err := s.kiemTraTrung(ctx, code, name, 0, shopID); err != nil {
 		return nil, err
 	}
 
 	vt := &domain.ViTri{
+		ShopID:   shopID,
 		Code:     code,
 		Name:     name,
 		IsActive: req.IsActive == nil || *req.IsActive,
@@ -98,7 +106,9 @@ func (s *viTriService) Update(ctx context.Context, id uint, req *dto.ViTriReques
 	}
 	name := strings.TrimSpace(req.Name)
 
-	if err := s.kiemTraTrung(ctx, code, name, id); err != nil {
+	// Kiểm trùng trong CHÍNH chi nhánh của kệ đang sửa, không phải chi nhánh
+	// người sửa đang đứng: kệ không đổi mặt bằng vì ai đó mở nó lên xem.
+	if err := s.kiemTraTrung(ctx, code, name, id, vt.ShopID); err != nil {
 		return nil, err
 	}
 
@@ -174,9 +184,9 @@ func (s *viTriService) danhDauDangDung(ctx context.Context, list []domain.ViTri)
 
 // maTuSinh đặt mã cho vị trí mới: theo quy tắc đánh số của cửa hàng nếu đã bật
 // (Cài đặt → Thông số chung), không thì giữ dải VT001.
-func (s *viTriService) maTuSinh(ctx context.Context) (string, error) {
+func (s *viTriService) maTuSinh(ctx context.Context, shopID uint) (string, error) {
 	ma, err := s.quyTac.SinhMa(ctx, domain.LoaiViTri, 0, func(ma string) (bool, error) {
-		return s.repo.ExistsByCode(ctx, ma, 0)
+		return s.repo.ExistsByCode(ctx, ma, 0, shopID)
 	})
 	if err != nil {
 		return "", err
@@ -185,13 +195,15 @@ func (s *viTriService) maTuSinh(ctx context.Context) (string, error) {
 		return ma, nil
 	}
 
-	return s.repo.NextCode(ctx)
+	return s.repo.NextCode(ctx, shopID)
 }
 
-// kiemTraTrung chặn trùng mã và trùng tên trong cùng cửa hàng. excludeID > 0 là
+// kiemTraTrung chặn trùng mã và trùng tên trong cùng MỘT CHI NHÁNH — không phải
+// cùng cửa hàng: hai mặt bằng khác nhau cùng có "Kệ A" là chuyện thường, và bắt
+// họ nghĩ ra tên khác nhau chỉ vì database là bắt sai người. excludeID > 0 là
 // lượt sửa: bỏ qua chính dòng đang sửa.
-func (s *viTriService) kiemTraTrung(ctx context.Context, code, name string, excludeID uint) error {
-	trungMa, err := s.repo.ExistsByCode(ctx, code, excludeID)
+func (s *viTriService) kiemTraTrung(ctx context.Context, code, name string, excludeID, shopID uint) error {
+	trungMa, err := s.repo.ExistsByCode(ctx, code, excludeID, shopID)
 	if err != nil {
 		return err
 	}
@@ -199,7 +211,7 @@ func (s *viTriService) kiemTraTrung(ctx context.Context, code, name string, excl
 		return domain.ErrViTriTrungMa
 	}
 
-	trungTen, err := s.repo.ExistsByName(ctx, name, excludeID)
+	trungTen, err := s.repo.ExistsByName(ctx, name, excludeID, shopID)
 	if err != nil {
 		return err
 	}

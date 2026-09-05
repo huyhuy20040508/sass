@@ -196,6 +196,12 @@ func (r *caLamViecRepository) FindByID(ctx context.Context, id uint) (*domain.Ca
 	if err != nil {
 		return nil, err
 	}
+	// Ca của chi nhánh khác thì coi như không có. Cái két là vật lý, nó nằm ở một
+	// chỗ — mở sổ quỹ của quầy khác ra xem là chuyện không nên làm được.
+	if err := chanChungTuKhacChiNhanh(ctx, r.db, ca.ShopID); err != nil {
+		return nil, err
+	}
+
 	return &ca, nil
 }
 

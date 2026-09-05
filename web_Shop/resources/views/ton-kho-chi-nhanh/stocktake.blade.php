@@ -30,9 +30,6 @@
         if ($filters['stock'] !== 'all') {
             $scope[] = 'mức tồn: '.($STOCK_STATES[$filters['stock']] ?? $filters['stock']);
         }
-        if ($filters['is_active'] !== '') {
-            $scope[] = $filters['is_active'] === '1' ? 'chỉ hàng đang bán' : 'chỉ hàng ngừng bán';
-        }
         if ($filters['category_id'] > 0) {
             $scope[] = 'lọc theo danh mục';
         }
@@ -47,7 +44,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Phiếu kiểm kê kho ({{ count($rows) }} dòng) — {{ config('app.name') }}</title>
+    <title>Phiếu kiểm kê kho ({{ $daIn }} dòng) — {{ config('app.name') }}</title>
     <style>
         * { box-sizing: border-box; }
         body {
@@ -142,7 +139,7 @@
 </head>
 <body>
     <div class="st-toolbar">
-        <b>Phiếu kiểm kê kho — {{ count($rows) }} biến thể</b>
+        <b>Phiếu kiểm kê kho — {{ $daIn }} biến thể</b>
         <label class="st-blind">
             <input type="checkbox" id="stBlind">
             Ẩn cột tồn sổ sách (đếm mù)

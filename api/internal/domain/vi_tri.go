@@ -29,7 +29,17 @@ import (
 type ViTri struct {
 	ID uint `json:"id" gorm:"primaryKey"`
 	TenantOwned
+	// ShopID là CHI NHÁNH SỞ HỮU cái kệ này (migration 0052).
+	//
+	// Kệ là một chỗ VẬT LÝ: "Kệ A" của Quận 1 và "Kệ A" của Quận 7 là hai chỗ
+	// khác nhau, ở hai mặt bằng khác nhau. Trước 0052 bảng này để chung cho cả
+	// cửa hàng, nên ô chọn vị trí trộn kệ của mọi chi nhánh và người soạn hàng ở
+	// quận này đọc thấy tên kho của quận khác.
+	ShopID uint `json:"shop_id"`
 	// Code là mã ngắn người dùng tự đặt (KEA1, KHOLANH…), luôn viết hoa.
+	//
+	// Duy nhất TRONG MỘT CHI NHÁNH, không phải trong cả cửa hàng: hai chi nhánh
+	// cùng đặt "KEA1" cho kệ A của mình là chuyện bình thường.
 	Code string `json:"code"`
 	Name string `json:"name"`
 	// IsActive = có bày ra ở ô chọn vị trí của mặt hàng không. Tắt chứ không xoá
@@ -48,6 +58,10 @@ func (ViTri) TableName() string { return "product_locations" }
 // ViTriFilter — tham số lọc khi liệt kê vị trí.
 type ViTriFilter struct {
 	Keyword string // tên hoặc mã
+	// ShopID cắt theo chi nhánh. 0 = không cắt (chỉ dùng ở báo cáo và khi người
+	// dùng chủ động chọn "tất cả") — mọi màn hình thường phải truyền chi nhánh
+	// đang làm việc, không thì ô chọn kệ lại trộn kệ của mọi mặt bằng.
+	ShopID uint
 	// OnlyActive = true: chỉ vị trí đang bật (ô chọn lúc khai mặt hàng dùng cái này).
 	OnlyActive bool
 }
@@ -57,14 +71,14 @@ type ViTriRepository interface {
 	List(ctx context.Context, f ViTriFilter) ([]ViTri, error)
 	FindByID(ctx context.Context, id uint) (*ViTri, error)
 	// ExistsByCode tính cả dòng đã xoá mềm — mã vẫn bị UNIQUE index giữ chỗ.
-	ExistsByCode(ctx context.Context, code string, excludeID uint) (bool, error)
+	ExistsByCode(ctx context.Context, code string, excludeID, shopID uint) (bool, error)
 	// NextCode sinh mã kế tiếp theo dạng VT001 khi cửa hàng chưa bật quy tắc
 	// đánh số riêng cho vị trí.
-	NextCode(ctx context.Context) (string, error)
+	NextCode(ctx context.Context, shopID uint) (string, error)
 	// ExistsByName so KHÔNG phân biệt hoa thường nhưng CÓ phân biệt dấu, nên
 	// "Kệ Đá" và "Ke Da" là hai vị trí khác nhau còn "kệ a" và "Kệ A" thì không.
 	// Chỉ tính dòng chưa xoá: tên không bị ràng buộc duy nhất dưới database.
-	ExistsByName(ctx context.Context, name string, excludeID uint) (bool, error)
+	ExistsByName(ctx context.Context, name string, excludeID, shopID uint) (bool, error)
 	Create(ctx context.Context, vt *ViTri) error
 	Update(ctx context.Context, vt *ViTri) error
 	Delete(ctx context.Context, id uint) error
@@ -72,6 +86,11 @@ type ViTriRepository interface {
 	// một lượt chứ không hỏi từng dòng: bảng 50 dòng mà mỗi dòng một câu đếm là
 	// 50 lượt đi database cho một cái nút xám.
 	DangDuocDung(ctx context.Context, ids []uint) (map[uint]bool, error)
+	// ChiNhanhGhi trả về chi nhánh mà lượt THÊM/SỬA kệ này thuộc về — cùng luật
+	// với mọi đường ghi khác: có chi nhánh trong request thì lấy, cửa hàng một
+	// chi nhánh thì tự suy ra, nhiều chi nhánh mà không khai thì từ chối
+	// (ErrChuaChonChiNhanh) chứ không đoán.
+	ChiNhanhGhi(ctx context.Context) (uint, error)
 }
 
 // Hai lỗi trùng dữ liệu, tách nhau vì người đọc phải sửa hai ô khác nhau.

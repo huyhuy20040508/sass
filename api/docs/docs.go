@@ -6839,9 +6839,15 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
-                        "type": "integer",
-                        "description": "Chỉ phiếu có chứa mặt hàng này",
+                        "type": "string",
+                        "description": "Chỉ phiếu có chứa một trong các mặt hàng này (id ngăn bởi dấu phẩy)",
                         "name": "variant_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Số lô ghi trên dòng hàng, khớp một phần",
+                        "name": "lot_number",
                         "in": "query"
                     },
                     {
@@ -7413,7 +7419,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "` + "`" + `paid_amount` + "`" + ` là số LUỸ KẾ đã trả cho phiếu, không phải số vừa trả thêm. Server so với tổng tiền ĐANG lưu chứ không tin con số client gửi kèm.",
+                "description": "` + "`" + `paid_amount` + "`" + ` là số LUỸ KẾ đã trả cho phiếu, không phải số vừa trả thêm. Server so với tổng tiền ĐANG lưu chứ không tin con số client gửi kèm.\nBật ` + "`" + `is_debt` + "`" + ` thì bắt buộc có ` + "`" + `debt_due_date` + "`" + `, ` + "`" + `debt_contact_name` + "`" + ` và ` + "`" + `debt_contact_phone` + "`" + `, và số đã trả phải NHỎ HƠN tổng tiền — trả đủ thì không còn gì để nợ.\nTắt ` + "`" + `is_debt` + "`" + ` thì ba trường ấy bị dọn sạch, không để lại hạn nợ của một khoản không còn tồn tại.",
                 "consumes": [
                     "application/json"
                 ],
@@ -7656,6 +7662,57 @@ const docTemplate = `{
                     },
                     "422": {
                         "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/products/sap-xep": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Nhận NGUYÊN danh sách id theo trình tự đang hiện trên trang (phần tử đầu nằm trên cùng) và phát lại chính những giá trị ` + "`" + `sort` + "`" + ` mà mấy dòng ấy đang giữ — nên các mặt hàng ở trang khác không bị xê dịch.\nTrả 404 nếu một id trong danh sách không còn (vừa bị xoá ở nơi khác).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Products"
+                ],
+                "summary": "Ghi lại trình tự hàng hoá sau một lượt kéo thả",
+                "parameters": [
+                    {
+                        "description": "Trình tự mới",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.SapXepLaiRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
@@ -10036,7 +10093,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Mỗi dòng trả kèm luôn danh sách giá trị (` + "`" + `values` + "`" + `) — thuộc tính không có giá trị nào thì chẳng dùng được vào việc gì, tách thành lượt gọi riêng chỉ tổ khiến màn hình phải gọi hai lần.\nĐặt ` + "`" + `active=true` + "`" + ` để chỉ lấy thuộc tính đang bật (ô chọn lúc khai mặt hàng), ` + "`" + `raw_material=true` + "`" + ` để chỉ lấy thuộc tính dùng định lượng nguyên vật liệu.\nCố ý KHÔNG phân trang: danh sách thuộc tính của một cửa hàng chỉ vài chục dòng, trang quản trị tự cắt trang.",
+                "description": "Mỗi dòng trả kèm luôn danh sách giá trị (` + "`" + `values` + "`" + `) — thuộc tính không có giá trị nào thì chẳng dùng được vào việc gì, tách thành lượt gọi riêng chỉ tổ khiến màn hình phải gọi hai lần.\nĐặt ` + "`" + `active=true` + "`" + ` để chỉ lấy thuộc tính đang bật (ô chọn lúc khai mặt hàng).\nCố ý KHÔNG phân trang: danh sách thuộc tính của một cửa hàng chỉ vài chục dòng, trang quản trị tự cắt trang.",
                 "produces": [
                     "application/json"
                 ],
@@ -10055,12 +10112,6 @@ const docTemplate = `{
                         "type": "boolean",
                         "description": "true = chỉ thuộc tính đang bật",
                         "name": "active",
-                        "in": "query"
-                    },
-                    {
-                        "type": "boolean",
-                        "description": "true = chỉ thuộc tính dùng định lượng nguyên vật liệu",
-                        "name": "raw_material",
                         "in": "query"
                     }
                 ],
@@ -10376,6 +10427,552 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/tra-hang-nha-cung-cap": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Lọc theo từ khoá (mã phiếu / mã hoặc tên bên bán / ghi chú), trạng thái, nhà cung cấp và khoảng ngày lập.\n` + "`" + `status` + "`" + ` nhận nhiều giá trị ngăn bởi dấu phẩy — bộ lọc ngoài bảng là các ô tick.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Trả hàng nhà cung cấp"
+                ],
+                "summary": "Danh sách phiếu trả hàng nhà cung cấp",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Mã phiếu, mã/tên bên bán hoặc ghi chú",
+                        "name": "keyword",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "draft | approved (ngăn bởi dấu phẩy)",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Lọc theo nhà cung cấp",
+                        "name": "supplier_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "YYYY-MM-DD",
+                        "name": "from_date",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "YYYY-MM-DD",
+                        "name": "to_date",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "newest | oldest | total_desc | total_asc | document_desc",
+                        "name": "sort",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Trang, mặc định 1",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Số dòng mỗi trang, mặc định 20, tối đa 100",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/domain.SupplierReturn"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Phiếu lập ra LUÔN là phiếu lưu tạm, chưa đụng tới kho. Muốn trừ kho thì gọi tiếp POST {id}/duyet.\nClient chỉ gửi ` + "`" + `purchase_item_id` + "`" + ` và ` + "`" + `quantity` + "`" + `: giá nhập, đơn vị, số lô, thuế suất đều lấy lại từ dòng phiếu mua gốc.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Trả hàng nhà cung cấp"
+                ],
+                "summary": "Lập phiếu trả hàng nhà cung cấp",
+                "parameters": [
+                    {
+                        "description": "Nội dung phiếu",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.SupplierReturnCreateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.TraHangNCCDetail"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/tra-hang-nha-cung-cap/dong-phieu-mua": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Mỗi dòng trả kèm ` + "`" + `returned` + "`" + ` (đã trả ở các phiếu ĐÃ DUYỆT), ` + "`" + `stock` + "`" + ` (tồn còn lại tại kho của phiếu mua, quy về đơn vị của dòng) và ` + "`" + `returnable` + "`" + ` = min(mua - đã trả, tồn).\n` + "`" + `returnable` + "`" + ` là con số màn hình kẹp ô nhập, và cũng là con số API kiểm lại lúc lưu rồi kiểm lần nữa lúc duyệt.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Trả hàng nhà cung cấp"
+                ],
+                "summary": "Dòng hàng của một phiếu mua, kèm phần còn trả được",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID phiếu mua",
+                        "name": "purchase_id",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/domain.SupplierReturnPurchaseDetail"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/tra-hang-nha-cung-cap/phieu-mua": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Chỉ phiếu ĐÃ DUYỆT: phiếu lưu tạm chưa đưa hàng vào kho nên chưa có gì để trả.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Trả hàng nhà cung cấp"
+                ],
+                "summary": "Phiếu mua trả hàng được của một nhà cung cấp",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID nhà cung cấp",
+                        "name": "supplier_id",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Số phiếu tối đa, mặc định 200",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/domain.SupplierReturnPurchase"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/tra-hang-nha-cung-cap/stats": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Đếm phiếu theo trạng thái và tổng tiền đã trả lại. Tiền chỉ cộng trên phiếu ĐÃ DUYỆT.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Trả hàng nhà cung cấp"
+                ],
+                "summary": "Con số đầu trang trả hàng nhà cung cấp",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/domain.SupplierReturnStats"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/tra-hang-nha-cung-cap/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Kèm dòng hàng, lịch sử thao tác và hai cờ ` + "`" + `can_edit` + "`" + ` / ` + "`" + `can_approve` + "`" + ` để trang quản trị dựng nút mà không phải chép lại luật.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Trả hàng nhà cung cấp"
+                ],
+                "summary": "Chi tiết phiếu trả hàng",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID phiếu",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.TraHangNCCDetail"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Chỉ phiếu LƯU TẠM sửa được. Phiếu đã duyệt là kho đã trừ theo nó nên khoá lại.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Trả hàng nhà cung cấp"
+                ],
+                "summary": "Sửa phiếu trả hàng",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID phiếu",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Nội dung phiếu",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.SupplierReturnUpdateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.TraHangNCCDetail"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Chỉ xoá được phiếu lưu tạm. Phiếu đã duyệt nằm lại trong sổ vì kho đã đổi theo nó.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Trả hàng nhà cung cấp"
+                ],
+                "summary": "Xoá phiếu trả hàng",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID phiếu",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/tra-hang-nha-cung-cap/{id}/duyet": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Lúc DUY NHẤT phiếu trả chạm vào tồn kho: trừ hàng khỏi kho của chi nhánh đã lập phiếu và ghi bút toán sổ kho (type='export', reference_type='supplier_return'). Duyệt xong phiếu khoá lại.\nTrần trả hàng được kiểm LẠI ngay trước khi trừ kho — giữa lúc lập phiếu và lúc bấm duyệt, một phiếu trả khác có thể đã ăn hết phần còn lại.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Trả hàng nhà cung cấp"
+                ],
+                "summary": "Duyệt phiếu trả và xuất kho",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID phiếu",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Ghi chú lượt duyệt",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/dto.SupplierReturnApproveRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.TraHangNCCDetail"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
@@ -12808,6 +13405,12 @@ const docTemplate = `{
                         "type": "boolean",
                         "description": "true = lấy cả danh mục ẩn",
                         "name": "all",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "true = chỉ nhóm đang có mặt hàng",
+                        "name": "has_products",
                         "in": "query"
                     }
                 ],
@@ -16236,6 +16839,17 @@ const docTemplate = `{
                 "is_active": {
                     "type": "boolean"
                 },
+                "is_stock_deducted": {
+                    "description": "IsStockDeducted dựng cột \"Loại hàng hoá\" của bảng tồn kho: bán ra có trừ\nkho không. Tắt = hàng dịch vụ / hàng đặt gia công, dòng tồn của nó luôn\nđứng yên — nói ra ở ngay trên bảng thì người đếm kho khỏi đi tìm xem vì\nsao món đó không bao giờ nhúc nhích.",
+                    "type": "boolean"
+                },
+                "lots": {
+                    "description": "Lots là con số Quantity ở trên CHIA NHỎ theo lô — ba cột cuối của bảng\ntồn kho (số lô, số lượng, hạn dùng), đúng như bản order v2.\n\nTổng Quantity của mấy dòng này luôn bằng Quantity ở trên: cả hai đọc từ\nhai bảng được ghi trong cùng một giao dịch (xem migration 0047). Rỗng chỉ\nxảy ra với biến thể chưa từng có dòng tồn nào ở chi nhánh đó.\n\ngorm:\"-\" vì đây KHÔNG phải quan hệ: danh sách do napLoChoDong nạp bằng một\ncâu riêng cho cả trang. Bỏ thẻ này thì GORM coi nó là quan hệ và câu Scan\nchết với \"define a valid foreign key for relations\".",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.DongTonLo"
+                    }
+                },
                 "product_id": {
                     "type": "integer"
                 },
@@ -16271,6 +16885,20 @@ const docTemplate = `{
                 },
                 "variant_name": {
                     "type": "string"
+                }
+            }
+        },
+        "domain.DongTonLo": {
+            "type": "object",
+            "properties": {
+                "expire_date": {
+                    "type": "string"
+                },
+                "lot_number": {
+                    "type": "string"
+                },
+                "quantity": {
+                    "type": "integer"
                 }
             }
         },
@@ -16774,8 +17402,20 @@ const docTemplate = `{
                 "short_name": {
                     "type": "string"
                 },
+                "still_in_debt": {
+                    "description": "StillInDebt là phần còn nợ. Trả dư một phiếu không được bù cho phiếu khác\nnên nó cộng phần còn thiếu của TỪNG phiếu, không phải hiệu hai số trên.",
+                    "type": "number"
+                },
                 "tax_code": {
                     "type": "string"
+                },
+                "total_payment": {
+                    "description": "TotalPayment là số đã trả.",
+                    "type": "number"
+                },
+                "total_purchases": {
+                    "description": "TotalPurchases là tổng tiền hàng đã mua của bên này.",
+                    "type": "number"
                 },
                 "updated_at": {
                     "type": "string"
@@ -17393,6 +18033,24 @@ const docTemplate = `{
                 }
             }
         },
+        "domain.PurchaseLot": {
+            "type": "object",
+            "properties": {
+                "expire_date": {
+                    "description": "ExpireDate khuôn YYYY-MM-DD; rỗng = lô không có hạn dùng.",
+                    "type": "string"
+                },
+                "lot_number": {
+                    "type": "string"
+                },
+                "quantity": {
+                    "type": "integer"
+                },
+                "unit_cost": {
+                    "type": "number"
+                }
+            }
+        },
         "domain.PurchaseNhomHang": {
             "type": "object",
             "properties": {
@@ -17433,6 +18091,17 @@ const docTemplate = `{
                     "description": "CreatedByName là TÊN người lập, tra kèm khi đọc lên — bảng không có cột\nnày. Chỉ có id thì mọi màn hình muốn in tên đều phải tự đi tra một lượt\nnữa, và mỗi nơi lại tra một kiểu.",
                     "type": "string"
                 },
+                "debt_contact_name": {
+                    "description": "Người đại diện bên bán đứng ra nhận nợ, và số gọi khi tới hạn. Không có\nhai thứ này thì \"còn nợ 3.000.000\" là con số chết.",
+                    "type": "string"
+                },
+                "debt_contact_phone": {
+                    "type": "string"
+                },
+                "debt_due_date": {
+                    "description": "DebtDueDate là hạn trả nốt phần còn nợ.",
+                    "type": "string"
+                },
                 "discount_amount": {
                     "type": "number"
                 },
@@ -17448,6 +18117,10 @@ const docTemplate = `{
                 "id": {
                     "type": "integer"
                 },
+                "is_debt": {
+                    "description": "IsDebt KHÔNG suy ra từ paid \u003c total: trả thiếu vì mới trả một phần khác\nhẳn trả thiếu vì hai bên ĐÃ thoả thuận cho nợ tới hạn. Chỉ cái thứ hai\nmới lên danh sách công nợ phải đòi.",
+                    "type": "boolean"
+                },
                 "items": {
                     "type": "array",
                     "items": {
@@ -17462,6 +18135,14 @@ const docTemplate = `{
                 },
                 "paid_amount": {
                     "type": "number"
+                },
+                "payment_attachment": {
+                    "description": "PaymentAttachment là ảnh uỷ nhiệm chi / biên lai. Tách hẳn khỏi\nAttachment — cột kia là chứng từ bên bán GIAO HÀNG.",
+                    "type": "string"
+                },
+                "payment_method": {
+                    "description": "---- Thoả thuận trả tiền, dựng theo bản order v2 ----\n\nPaymentMethod rỗng = chưa ghi nhận lượt trả nào.",
+                    "type": "string"
                 },
                 "payment_status": {
                     "type": "string"
@@ -17612,6 +18293,48 @@ const docTemplate = `{
                 }
             }
         },
+        "domain.PurchasePayment": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "description": "Amount là tiền của RIÊNG lượt này, không phải số luỹ kế. ÂM = lượt chữa\nlại con số đã ghi sai — nhìn vào sổ là biết ngay đây không phải lượt trả.",
+                    "type": "number"
+                },
+                "attachment": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "integer"
+                },
+                "created_by_name": {
+                    "description": "CreatedByName tra kèm khi đọc lên — bảng không có cột này.",
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "note": {
+                    "type": "string"
+                },
+                "paid_after": {
+                    "description": "PaidAfter là số luỹ kế SAU lượt này. Thừa về mặt dữ liệu nhưng đọc sổ mà\nphải tự cộng từ đầu mới biết lúc ấy đã trả tới đâu thì không ai đọc.",
+                    "type": "number"
+                },
+                "payment_method": {
+                    "type": "string"
+                },
+                "purchase_order_id": {
+                    "type": "integer"
+                },
+                "shop_id": {
+                    "description": "ShopID chép từ phiếu lúc ghi, để báo cáo theo chi nhánh khỏi nối bảng.",
+                    "type": "integer"
+                }
+            }
+        },
         "domain.PurchaseStats": {
             "type": "object",
             "properties": {
@@ -17665,6 +18388,13 @@ const docTemplate = `{
                 "cost_price": {
                     "description": "CostPrice là giá vốn đang khai (nil = chưa khai) — gợi ý giá nhập cho\nngười lập phiếu.",
                     "type": "number"
+                },
+                "lots": {
+                    "description": "Lots là các lô ĐANG CÒN HÀNG của mặt hàng tại chi nhánh đang làm việc, xếp\ntheo hạn dùng gần nhất. Ô số lô trên lưới hàng đổ danh sách này ra thay vì\nbắt gõ tay — gõ sai một ký tự là đẻ ra một lô mới mà không ai nhận ra.\n\ngorm:\"-\" như Units: dựng từ bảng stock_lots ở napLo, không phải quan hệ.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.PurchaseLot"
+                    }
                 },
                 "product_id": {
                     "type": "integer"
@@ -18098,6 +18828,356 @@ const docTemplate = `{
                 }
             }
         },
+        "domain.SupplierReturn": {
+            "type": "object",
+            "properties": {
+                "address": {
+                    "type": "string"
+                },
+                "address_2": {
+                    "type": "string"
+                },
+                "approved_at": {
+                    "type": "string"
+                },
+                "branch_name": {
+                    "type": "string"
+                },
+                "contact_phone": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "integer"
+                },
+                "creator_name": {
+                    "description": "Ba cột tên dưới đây tra kèm khi đọc lên, bảng không có chúng. Chỉ có id thì\nmọi màn hình muốn in tên đều phải tự đi tra một lượt nữa.",
+                    "type": "string"
+                },
+                "document_date": {
+                    "type": "string"
+                },
+                "expired_date": {
+                    "type": "string"
+                },
+                "handled_by": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.SupplierReturnItem"
+                    }
+                },
+                "items_amount": {
+                    "type": "number"
+                },
+                "note": {
+                    "type": "string"
+                },
+                "purchase_order_code": {
+                    "type": "string"
+                },
+                "purchase_order_id": {
+                    "type": "integer"
+                },
+                "purchaser_code": {
+                    "type": "string"
+                },
+                "purchaser_id": {
+                    "type": "integer"
+                },
+                "purchaser_name": {
+                    "type": "string"
+                },
+                "receiver_delivery_note": {
+                    "type": "string"
+                },
+                "return_code": {
+                    "type": "string"
+                },
+                "shop_id": {
+                    "description": "ShopID là chi nhánh lập phiếu, cũng là kho hàng sẽ rời đi khi duyệt.",
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "supplier_code": {
+                    "description": "SupplierCode/Name/địa chỉ/số máy là bản CHỤP hồ sơ bên bán lúc lập phiếu.",
+                    "type": "string"
+                },
+                "supplier_id": {
+                    "type": "integer"
+                },
+                "supplier_name": {
+                    "type": "string"
+                },
+                "supplier_phone": {
+                    "type": "string"
+                },
+                "total_amount": {
+                    "type": "number"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "vat_amount": {
+                    "type": "number"
+                },
+                "vat_percent": {
+                    "type": "integer"
+                }
+            }
+        },
+        "domain.SupplierReturnHistory": {
+            "type": "object",
+            "properties": {
+                "changed_by": {
+                    "type": "integer"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "from_status": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "note": {
+                    "type": "string"
+                },
+                "supplier_return_id": {
+                    "type": "integer"
+                },
+                "to_status": {
+                    "type": "string"
+                }
+            }
+        },
+        "domain.SupplierReturnItem": {
+            "type": "object",
+            "properties": {
+                "base_quantity": {
+                    "type": "integer"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "expire_date": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "line_amount": {
+                    "type": "number"
+                },
+                "lot_number": {
+                    "type": "string"
+                },
+                "product_id": {
+                    "type": "integer"
+                },
+                "product_name": {
+                    "type": "string"
+                },
+                "product_variant_id": {
+                    "type": "integer"
+                },
+                "purchase_order_item_id": {
+                    "description": "PurchaseOrderItemID trỏ dòng phiếu mua gốc — trần số lượng trả tính theo nó.",
+                    "type": "integer"
+                },
+                "purchase_quantity": {
+                    "description": "PurchaseQuantity là số đã MUA của dòng gốc — cột \"Số lượng nhập\" trên màn.\nTra kèm khi đọc phiếu, bảng không có cột này.",
+                    "type": "integer"
+                },
+                "quantity": {
+                    "description": "Quantity là số đơn vị TRẢ; BaseQuantity = Quantity × UnitRatio và ĐÂY là số\ntrừ khỏi kho.",
+                    "type": "integer"
+                },
+                "remaining_stock": {
+                    "description": "RemainingStock là tồn còn lại của mặt hàng tại kho của phiếu, quy về đơn vị\ntrả — màn SỬA phiếu kẹp ô nhập theo tình hình HÔM NAY, không phải lúc lập.",
+                    "type": "integer"
+                },
+                "supplier_return_id": {
+                    "type": "integer"
+                },
+                "thumbnail": {
+                    "type": "string"
+                },
+                "total_cost": {
+                    "type": "number"
+                },
+                "unit_cost": {
+                    "type": "number"
+                },
+                "unit_id": {
+                    "type": "integer"
+                },
+                "unit_name": {
+                    "type": "string"
+                },
+                "unit_ratio": {
+                    "type": "number"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "variant_name": {
+                    "type": "string"
+                },
+                "variant_sku": {
+                    "type": "string"
+                },
+                "vat_amount": {
+                    "type": "number"
+                },
+                "vat_percent": {
+                    "type": "integer"
+                }
+            }
+        },
+        "domain.SupplierReturnLine": {
+            "type": "object",
+            "properties": {
+                "expire_date": {
+                    "type": "string"
+                },
+                "lot_number": {
+                    "type": "string"
+                },
+                "product_id": {
+                    "type": "integer"
+                },
+                "product_name": {
+                    "type": "string"
+                },
+                "purchase_item_id": {
+                    "type": "integer"
+                },
+                "quantity": {
+                    "type": "integer"
+                },
+                "returnable": {
+                    "description": "Returnable = min(Quantity - Returned, Stock), không âm. Đây là con số màn\nhình kẹp ô nhập, và cũng là con số API kiểm lại lúc lưu.",
+                    "type": "integer"
+                },
+                "returned": {
+                    "description": "Returned là số đã trả ở các phiếu ĐÃ DUYỆT trước đó, tính theo đơn vị của\ndòng phiếu mua này.",
+                    "type": "integer"
+                },
+                "stock": {
+                    "description": "Stock là tồn còn lại tại kho của phiếu mua, quy về đơn vị của dòng này.",
+                    "type": "integer"
+                },
+                "thumbnail": {
+                    "type": "string"
+                },
+                "unit_cost": {
+                    "type": "number"
+                },
+                "unit_id": {
+                    "type": "integer"
+                },
+                "unit_name": {
+                    "type": "string"
+                },
+                "unit_ratio": {
+                    "type": "number"
+                },
+                "variant_id": {
+                    "type": "integer"
+                },
+                "variant_name": {
+                    "type": "string"
+                },
+                "variant_sku": {
+                    "type": "string"
+                },
+                "vat_percent": {
+                    "type": "integer"
+                }
+            }
+        },
+        "domain.SupplierReturnPurchase": {
+            "type": "object",
+            "properties": {
+                "approved_at": {
+                    "type": "string"
+                },
+                "document_date": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "po_code": {
+                    "type": "string"
+                },
+                "total_amount": {
+                    "type": "number"
+                }
+            }
+        },
+        "domain.SupplierReturnPurchaseDetail": {
+            "type": "object",
+            "properties": {
+                "document_date": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "lines": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.SupplierReturnLine"
+                    }
+                },
+                "po_code": {
+                    "type": "string"
+                },
+                "purchaser_id": {
+                    "description": "PurchaserID là nhân viên mua hàng ghi trên PHIẾU MUA. Màn lập phiếu trả\nđiền sẵn ô \"Nhân viên mua hàng\" theo người này: trả lô hàng của phiếu nào\nthì người mua lô ấy là người biết chuyện, bắt chọn lại từ đầu chỉ mời chọn\nnhầm sang một cái tên không liên quan tới lô hàng.",
+                    "type": "integer"
+                },
+                "supplier_id": {
+                    "type": "integer"
+                },
+                "vat_mode": {
+                    "type": "string"
+                },
+                "vat_percent": {
+                    "type": "integer"
+                }
+            }
+        },
+        "domain.SupplierReturnStats": {
+            "type": "object",
+            "properties": {
+                "approved": {
+                    "type": "integer"
+                },
+                "draft": {
+                    "type": "integer"
+                },
+                "returned_amount": {
+                    "description": "ReturnedAmount là tiền hàng đã trả lại thật (chỉ phiếu đã duyệt).",
+                    "type": "number"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
         "domain.Tenant": {
             "type": "object",
             "properties": {
@@ -18140,10 +19220,6 @@ const docTemplate = `{
                 },
                 "name": {
                     "type": "string"
-                },
-                "raw_material": {
-                    "description": "RawMaterial = thuộc tính này được dùng để khai định lượng nguyên vật liệu\ncho món. Giữ đúng nghĩa cột raw_material_quantification của bản cũ.",
-                    "type": "boolean"
                 },
                 "updated_at": {
                     "type": "string"
@@ -21734,14 +22810,6 @@ const docTemplate = `{
                     "description": "LocationID là chỗ để hàng (Hàng hóa → Vị trí). Con trỏ để phân biệt:\n  nil -\u003e không đụng tới vị trí (giữ nguyên cái đang có khi SỬA).\n  0   -\u003e gỡ vị trí, trả mặt hàng về \"chưa gán\".\n  \u003e0  -\u003e gán vào vị trí ấy.",
                     "type": "integer"
                 },
-                "meta_description": {
-                    "type": "string",
-                    "maxLength": 320
-                },
-                "meta_title": {
-                    "type": "string",
-                    "maxLength": 255
-                },
                 "name": {
                     "type": "string",
                     "maxLength": 200
@@ -21760,10 +22828,6 @@ const docTemplate = `{
                     "items": {
                         "type": "integer"
                     }
-                },
-                "short_description": {
-                    "type": "string",
-                    "maxLength": 500
                 },
                 "sku": {
                     "description": "SKU bỏ trống = sinh theo quy tắc mã hàng hoá; chưa bật quy tắc thì API trả\n422 đòi nhập tay. Lúc SỬA, bỏ trống là giữ mã cũ.",
@@ -22131,6 +23195,24 @@ const docTemplate = `{
         "dto.PurchasePaymentRequest": {
             "type": "object",
             "properties": {
+                "debt_contact_name": {
+                    "description": "Người đại diện bên bán và số gọi khi tới hạn. Bắt buộc khi IsDebt.",
+                    "type": "string",
+                    "maxLength": 150
+                },
+                "debt_contact_phone": {
+                    "type": "string",
+                    "maxLength": 30
+                },
+                "debt_due_date": {
+                    "description": "DebtDueDate khuôn YYYY-MM-DD. Bắt buộc khi IsDebt.",
+                    "type": "string",
+                    "example": "2026-10-03"
+                },
+                "is_debt": {
+                    "description": "IsDebt = hai bên thoả thuận cho nợ phần còn lại. KHÔNG suy ra từ\nPaidAmount \u003c TotalAmount: trả thiếu vì mới trả một phần khác hẳn trả\nthiếu vì đã hẹn ngày trả nốt.",
+                    "type": "boolean"
+                },
                 "note": {
                     "type": "string",
                     "maxLength": 500
@@ -22139,6 +23221,20 @@ const docTemplate = `{
                     "type": "number",
                     "minimum": 0,
                     "example": 500000
+                },
+                "payment_attachment": {
+                    "description": "PaymentAttachment là đường dẫn ảnh uỷ nhiệm chi / biên lai đã tải lên.",
+                    "type": "string",
+                    "maxLength": 255
+                },
+                "payment_method": {
+                    "description": "PaymentMethod: cash | transfer. Rỗng khi trả 0 đồng — lượt ấy chỉ chốt\nthoả thuận nợ chứ chưa có đồng nào đổi chủ.",
+                    "type": "string",
+                    "enum": [
+                        "cash",
+                        "transfer"
+                    ],
+                    "example": "cash"
                 }
             }
         },
@@ -22671,6 +23767,21 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.SapXepLaiRequest": {
+            "type": "object",
+            "required": [
+                "ids"
+            ],
+            "properties": {
+                "ids": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "type": "integer"
+                    }
+                }
+            }
+        },
         "dto.SettingField": {
             "type": "object",
             "properties": {
@@ -22699,6 +23810,13 @@ const docTemplate = `{
                     "type": "number",
                     "example": 1000000
                 },
+                "options": {
+                    "description": "Options chỉ có ở khoá dạng select — các giá trị hợp lệ kèm nhãn, theo đúng\nthứ tự form admin nên bày ra. Rỗng với mọi kiểu khác.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.SettingOption"
+                    }
+                },
                 "public": {
                     "description": "Public = true: khoá này lộ ra ở GET /settings cho storefront đọc.",
                     "type": "boolean",
@@ -22714,9 +23832,22 @@ const docTemplate = `{
                     "example": "contact"
                 },
                 "type": {
-                    "description": "Type: text | number | email | phone | image | url",
+                    "description": "Type: text | number | email | phone | image | url | bool | select",
                     "type": "string",
                     "example": "number"
+                }
+            }
+        },
+        "dto.SettingOption": {
+            "type": "object",
+            "properties": {
+                "label": {
+                    "type": "string",
+                    "example": "FIFO — lô vào kho trước thì ra trước"
+                },
+                "value": {
+                    "type": "string",
+                    "example": "fifo"
                 }
             }
         },
@@ -22869,6 +24000,127 @@ const docTemplate = `{
                 "source": {
                     "type": "string",
                     "maxLength": 30
+                }
+            }
+        },
+        "dto.SupplierReturnApproveRequest": {
+            "type": "object",
+            "properties": {
+                "note": {
+                    "type": "string",
+                    "maxLength": 500
+                }
+            }
+        },
+        "dto.SupplierReturnCreateRequest": {
+            "type": "object",
+            "required": [
+                "items",
+                "purchase_order_id",
+                "supplier_id"
+            ],
+            "properties": {
+                "document_date": {
+                    "type": "string",
+                    "example": "2026-08-23"
+                },
+                "expired_date": {
+                    "type": "string",
+                    "example": "2026-09-23"
+                },
+                "items": {
+                    "type": "array",
+                    "maxItems": 200,
+                    "minItems": 1,
+                    "items": {
+                        "$ref": "#/definitions/dto.SupplierReturnItemRequest"
+                    }
+                },
+                "note": {
+                    "type": "string",
+                    "maxLength": 500
+                },
+                "purchase_order_id": {
+                    "description": "PurchaseOrderID BẮT BUỘC: trả được bao nhiêu tính theo số đã mua của đúng\nphiếu ấy, nên không có phiếu mua thì không có trần nào để kẹp.",
+                    "type": "integer",
+                    "minimum": 1,
+                    "example": 12
+                },
+                "purchaser_id": {
+                    "type": "integer",
+                    "example": 7
+                },
+                "receiver_delivery_note": {
+                    "type": "string",
+                    "maxLength": 50
+                },
+                "supplier_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "example": 4
+                }
+            }
+        },
+        "dto.SupplierReturnItemRequest": {
+            "type": "object",
+            "required": [
+                "purchase_item_id",
+                "quantity"
+            ],
+            "properties": {
+                "purchase_item_id": {
+                    "description": "PurchaseItemID là dòng của phiếu mua gốc (purchase_order_items.id).",
+                    "type": "integer",
+                    "example": 58
+                },
+                "quantity": {
+                    "description": "Quantity là số đơn vị TRẢ, tính theo đúng đơn vị của dòng phiếu mua. Số\nNGUYÊN: sổ kho đếm nguyên, nhận 0,5 rồi làm tròn lúc ghi kho là mỗi phiếu\nlệch một ít.",
+                    "type": "integer",
+                    "minimum": 1,
+                    "example": 2
+                }
+            }
+        },
+        "dto.SupplierReturnUpdateRequest": {
+            "type": "object",
+            "required": [
+                "items",
+                "purchase_order_id",
+                "supplier_id"
+            ],
+            "properties": {
+                "document_date": {
+                    "type": "string"
+                },
+                "expired_date": {
+                    "type": "string"
+                },
+                "items": {
+                    "type": "array",
+                    "maxItems": 200,
+                    "minItems": 1,
+                    "items": {
+                        "$ref": "#/definitions/dto.SupplierReturnItemRequest"
+                    }
+                },
+                "note": {
+                    "type": "string",
+                    "maxLength": 500
+                },
+                "purchase_order_id": {
+                    "type": "integer",
+                    "minimum": 1
+                },
+                "purchaser_id": {
+                    "type": "integer"
+                },
+                "receiver_delivery_note": {
+                    "type": "string",
+                    "maxLength": 50
+                },
+                "supplier_id": {
+                    "type": "integer",
+                    "minimum": 1
                 }
             }
         },
@@ -23210,10 +24462,6 @@ const docTemplate = `{
                     "type": "string",
                     "maxLength": 100
                 },
-                "raw_material": {
-                    "description": "RawMaterial = dùng thuộc tính này để khai định lượng nguyên vật liệu.\nBỏ trống = false.",
-                    "type": "boolean"
-                },
                 "values": {
                     "description": "Bỏ trống hẳn trường này = KHÔNG đụng tới danh sách giá trị (lượt sửa chỉ\nđổi tên chẳng hạn). Gửi mảng rỗng mới là \"xoá hết giá trị\".",
                     "type": "array",
@@ -23484,13 +24732,16 @@ const docTemplate = `{
                 "is_active": {
                     "type": "boolean"
                 },
+                "is_default": {
+                    "description": "Pos là thứ tự bày ra. Bỏ trống thì lấy theo thứ tự gửi lên.\nIsDefault đánh dấu biến thể mà màn bán hàng chọn sẵn. nil = để máy chủ\nquyết (hàng đơn thì chính dòng duy nhất là mặc định).",
+                    "type": "boolean"
+                },
                 "name": {
                     "description": "Name là tên biến thể. Bỏ trống thì server tự ghép từ Attributes bên dưới\n(\"128GB · Đen\") — màn hình không phải tự nghĩ ra công thức đặt tên, và\nhàng thêm từ giao diện với hàng thêm qua API không thành hai kiểu.",
                     "type": "string",
                     "maxLength": 255
                 },
                 "pos": {
-                    "description": "Pos là thứ tự bày ra. Bỏ trống thì lấy theo thứ tự gửi lên.",
                     "type": "integer"
                 },
                 "price": {
@@ -23998,7 +25249,7 @@ const docTemplate = `{
                     "type": "boolean"
                 },
                 "can_pay": {
-                    "description": "CanPay = phiếu đã duyệt và còn nợ nhà cung cấp.",
+                    "description": "CanPay = phiếu đã duyệt và CHƯA trả đồng nào. Trả một phần rồi thì khoản\nnợ ấy thuộc về màn công nợ, không trả tiếp từ màn phiếu mua nữa.",
                     "type": "boolean"
                 },
                 "cancel_reason": {
@@ -24015,6 +25266,17 @@ const docTemplate = `{
                 },
                 "created_by_name": {
                     "description": "CreatedByName là TÊN người lập, tra kèm khi đọc lên — bảng không có cột\nnày. Chỉ có id thì mọi màn hình muốn in tên đều phải tự đi tra một lượt\nnữa, và mỗi nơi lại tra một kiểu.",
+                    "type": "string"
+                },
+                "debt_contact_name": {
+                    "description": "Người đại diện bên bán đứng ra nhận nợ, và số gọi khi tới hạn. Không có\nhai thứ này thì \"còn nợ 3.000.000\" là con số chết.",
+                    "type": "string"
+                },
+                "debt_contact_phone": {
+                    "type": "string"
+                },
+                "debt_due_date": {
+                    "description": "DebtDueDate là hạn trả nốt phần còn nợ.",
                     "type": "string"
                 },
                 "discount_amount": {
@@ -24038,6 +25300,10 @@ const docTemplate = `{
                 "id": {
                     "type": "integer"
                 },
+                "is_debt": {
+                    "description": "IsDebt KHÔNG suy ra từ paid \u003c total: trả thiếu vì mới trả một phần khác\nhẳn trả thiếu vì hai bên ĐÃ thoả thuận cho nợ tới hạn. Chỉ cái thứ hai\nmới lên danh sách công nợ phải đòi.",
+                    "type": "boolean"
+                },
                 "items": {
                     "type": "array",
                     "items": {
@@ -24053,8 +25319,23 @@ const docTemplate = `{
                 "paid_amount": {
                     "type": "number"
                 },
+                "payment_attachment": {
+                    "description": "PaymentAttachment là ảnh uỷ nhiệm chi / biên lai. Tách hẳn khỏi\nAttachment — cột kia là chứng từ bên bán GIAO HÀNG.",
+                    "type": "string"
+                },
+                "payment_method": {
+                    "description": "---- Thoả thuận trả tiền, dựng theo bản order v2 ----\n\nPaymentMethod rỗng = chưa ghi nhận lượt trả nào.",
+                    "type": "string"
+                },
                 "payment_status": {
                     "type": "string"
+                },
+                "payments": {
+                    "description": "Payments là sổ TỪNG LƯỢT trả tiền — ` + "`" + `paid_amount` + "`" + ` chỉ nói tổng, sổ này nói\ntổng ấy tới từ mấy lượt, mỗi lượt bao nhiêu và bằng hình thức gì.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.PurchasePayment"
+                    }
                 },
                 "po_code": {
                     "type": "string"
@@ -24239,6 +25520,127 @@ const docTemplate = `{
                 "returnable": {
                     "description": "Returnable = false nghĩa là đơn không nằm trong diện trả hàng; Reason nói rõ vì sao.",
                     "type": "boolean"
+                }
+            }
+        },
+        "service.TraHangNCCDetail": {
+            "type": "object",
+            "properties": {
+                "address": {
+                    "type": "string"
+                },
+                "address_2": {
+                    "type": "string"
+                },
+                "approved_at": {
+                    "type": "string"
+                },
+                "branch_name": {
+                    "type": "string"
+                },
+                "can_approve": {
+                    "description": "CanApprove = phiếu còn duyệt được. Trang quản trị dựng nút từ hai cờ này\nthay vì chép lại luật vào giao diện rồi lệch với server.",
+                    "type": "boolean"
+                },
+                "can_edit": {
+                    "description": "CanEdit = phiếu còn sửa/xoá được (chỉ phiếu lưu tạm).",
+                    "type": "boolean"
+                },
+                "contact_phone": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "integer"
+                },
+                "creator_name": {
+                    "description": "Ba cột tên dưới đây tra kèm khi đọc lên, bảng không có chúng. Chỉ có id thì\nmọi màn hình muốn in tên đều phải tự đi tra một lượt nữa.",
+                    "type": "string"
+                },
+                "document_date": {
+                    "type": "string"
+                },
+                "expired_date": {
+                    "type": "string"
+                },
+                "handled_by": {
+                    "type": "integer"
+                },
+                "histories": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.SupplierReturnHistory"
+                    }
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.SupplierReturnItem"
+                    }
+                },
+                "items_amount": {
+                    "type": "number"
+                },
+                "note": {
+                    "type": "string"
+                },
+                "purchase_order_code": {
+                    "type": "string"
+                },
+                "purchase_order_id": {
+                    "type": "integer"
+                },
+                "purchaser_code": {
+                    "type": "string"
+                },
+                "purchaser_id": {
+                    "type": "integer"
+                },
+                "purchaser_name": {
+                    "type": "string"
+                },
+                "receiver_delivery_note": {
+                    "type": "string"
+                },
+                "return_code": {
+                    "type": "string"
+                },
+                "shop_id": {
+                    "description": "ShopID là chi nhánh lập phiếu, cũng là kho hàng sẽ rời đi khi duyệt.",
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "supplier_code": {
+                    "description": "SupplierCode/Name/địa chỉ/số máy là bản CHỤP hồ sơ bên bán lúc lập phiếu.",
+                    "type": "string"
+                },
+                "supplier_id": {
+                    "type": "integer"
+                },
+                "supplier_name": {
+                    "type": "string"
+                },
+                "supplier_phone": {
+                    "type": "string"
+                },
+                "total_amount": {
+                    "type": "number"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "vat_amount": {
+                    "type": "number"
+                },
+                "vat_percent": {
+                    "type": "integer"
                 }
             }
         }

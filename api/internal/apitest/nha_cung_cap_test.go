@@ -21,6 +21,10 @@ type nhaCungCap struct {
 	Address  string `json:"address"`
 	Phone    string `json:"phone"`
 	IsActive bool   `json:"is_active"`
+
+	TotalPurchases float64 `json:"total_purchases"`
+	TotalPayment   float64 `json:"total_payment"`
+	StillInDebt    float64 `json:"still_in_debt"`
 }
 
 func themNCC(t *testing.T, h *heThong, token string, than map[string]any) (int, nhaCungCap) {
@@ -223,5 +227,44 @@ func TestNhaCungCap_CoLapGiuaHaiCuaHang(t *testing.T) {
 
 	if ds := docNCC(t, h, a.token, ""); len(ds) != 1 || ds[0].Name != "Riêng của A" {
 		t.Fatalf("dòng của A phải còn nguyên, nhận %+v", ds)
+	}
+}
+
+// TestNhaCungCap_BaSoTienChiTinhPhieuDaDuyet — ba cột tiền trên trang danh sách.
+//
+// Chỗ đáng hỏng: đếm cả phiếu lưu tạm. Phiếu gõ dở chưa mua gì, cộng nó vào là
+// bịa ra một khoản nợ mà bên bán không hề đòi.
+func TestNhaCungCap_BaSoTienChiTinhPhieuDaDuyet(t *testing.T) {
+	h := dungHeThong(t)
+	a, _ := haiCuaHang(t, h)
+
+	_, ncc := themNCC(t, h, a.token, map[string]any{"name": "Ben ban " + a.vet, "address": "Ha Noi"})
+
+	// Phiếu ĐÃ DUYỆT 100.000, trả trước 40.000.
+	_, daDuyet := lapPhieu(t, h, a.token, map[string]any{
+		"supplier_id": ncc.ID,
+		"items":       []any{dongHang(a.bienThe, 10, 10000)},
+	})
+	duyet(t, h, a, daDuyet.ID)
+	res := h.goi(t, a.token, http.MethodPost,
+		fmt.Sprintf("%s/%d/thanh-toan", duongPhieuMua, daDuyet.ID), map[string]any{"paid_amount": 40000})
+	if res.ma != http.StatusOK {
+		t.Fatalf("ghi nhận thanh toán trả %d\n%s", res.ma, catBot(res.than))
+	}
+
+	// Phiếu LƯU TẠM 500.000 của cùng bên — không được lọt vào con số nào.
+	lapPhieu(t, h, a.token, map[string]any{
+		"supplier_id": ncc.ID,
+		"items":       []any{dongHang(a.bienThe, 50, 10000)},
+	})
+
+	ds := docNCC(t, h, a.token, "")
+	if len(ds) != 1 {
+		t.Fatalf("danh mục phải có đúng 1 dòng, nhận %d", len(ds))
+	}
+	got := ds[0]
+	if got.TotalPurchases != 100000 || got.TotalPayment != 40000 || got.StillInDebt != 60000 {
+		t.Fatalf("ba số tiền phải là 100.000 / 40.000 / 60.000, nhận %v / %v / %v",
+			got.TotalPurchases, got.TotalPayment, got.StillInDebt)
 	}
 }

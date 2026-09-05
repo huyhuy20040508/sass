@@ -3,6 +3,7 @@ package domain
 import (
 	"context"
 	"errors"
+	"gorm.io/gorm"
 	"sort"
 	"time"
 )
@@ -30,6 +31,8 @@ type NhomQuyen struct {
 
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+	// DeletedAt: xoá là ẩn khỏi phần mềm, dòng vẫn nằm trong sổ để phục hồi.
+	DeletedAt gorm.DeletedAt `json:"-" gorm:"index"`
 }
 
 func (NhomQuyen) TableName() string { return "permission_groups" }
@@ -141,6 +144,8 @@ type QuyenRepository interface {
 	FindByID(ctx context.Context, id uint) (*NhomQuyen, error)
 	FindByCode(ctx context.Context, code string) (*NhomQuyen, error)
 	ExistsByCode(ctx context.Context, code string, excludeID uint) (bool, error)
+	// ExistsByName chặn hai nhóm quyền cùng tên trong một cửa hàng.
+	ExistsByName(ctx context.Context, name string, excludeID uint) (bool, error)
 	Create(ctx context.Context, nq *NhomQuyen) error
 	Update(ctx context.Context, nq *NhomQuyen) error
 	// Delete xoá CỨNG. Nhóm còn người dùng thì khoá ngoại chặn lại, và tầng

@@ -36,7 +36,10 @@ class ChiNhanhDangLam
             return self::$nho;
         }
 
-        $dangChon = session(ApiClient::KHOA_CHI_NHANH);
+        // Đọc qua ApiClient chứ không thẳng session: chi nhánh của TAB (tham số
+        // `chi_nhanh`) phải thắng giá trị dùng chung của phiên, không thì thanh
+        // trên cùng vẽ ra một chi nhánh còn request lại gửi đi chi nhánh khác.
+        $dangChon = ApiClient::chiNhanhDangLam() ?: null;
         $ds = [];
 
         try {
@@ -57,7 +60,54 @@ class ChiNhanhDangLam
             $dangChon = null;
         }
 
+        // PHIÊN PHẢI LUÔN CÓ MỘT CHI NHÁNH. Trạng thái "chưa chọn" từng là mặc
+        // định sau mỗi lượt đăng nhập, và nó nguy hiểm ở chỗ hai nửa hệ thống
+        // hiểu nó ngược nhau: màn hình kho cộng gộp cả cửa hàng, còn lượt GHI
+        // thì rơi vào chi nhánh có id nhỏ nhất. Mở chi nhánh mới rồi nhập hàng
+        // cho nó, hàng lại chui vào chi nhánh cũ — mà không dấu hiệu nào trên
+        // màn hình nói ra điều đó.
+        //
+        // Bắt lại ở đây (không chỉ ở AuthController) vì còn những phiên mở từ
+        // trước bản sửa, và vì chi nhánh đang chọn có thể vừa bị đóng ngay phía
+        // trên.
+        if ($dangChon === null && $ds !== []) {
+            $dangChon = (int) ($ds[0]['id'] ?? 0);
+            if ($dangChon > 0) {
+                session([ApiClient::KHOA_CHI_NHANH => $dangChon]);
+            } else {
+                $dangChon = null;
+            }
+        }
+
         return self::$nho = ['ds' => $ds, 'dangChon' => $dangChon === null ? null : (int) $dangChon];
+    }
+
+    /**
+     * Ghim chi nhánh làm việc vào phiên ngay sau khi đăng nhập.
+     *
+     * $cuaToi là `chi_nhanh_id` API trả về lúc đăng nhập — chi nhánh mà hồ sơ
+     * nhân sự của người này được phân về. Có thì lấy đúng cái đó: nhân viên của
+     * chi nhánh 3 mà ghim nhầm chi nhánh 1 là mọi request sau đó ăn 403 "bạn
+     * không làm việc tại chi nhánh này".
+     *
+     * Không có (chủ tiệm, hoặc chưa phân công) thì lấy chi nhánh đang mở đầu
+     * tiên — họ đổi được ở thanh trên cùng.
+     *
+     * Hỏng thì im lặng: đây là bước tiện lợi, không phải điều kiện để đăng nhập.
+     * Phiên vẫn mở, và danhSach() ở lượt vẽ trang đầu tiên sẽ ghim lại.
+     */
+    public static function datLucDangNhap(?int $cuaToi): void
+    {
+        self::$nho = null;
+
+        if ($cuaToi !== null && $cuaToi > 0) {
+            session([ApiClient::KHOA_CHI_NHANH => $cuaToi]);
+
+            return;
+        }
+
+        session()->forget(ApiClient::KHOA_CHI_NHANH);
+        self::danhSach();
     }
 
     /**

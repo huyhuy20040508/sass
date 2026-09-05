@@ -28,6 +28,32 @@ func (r *categoryRepository) List(ctx context.Context, onlyActive bool) ([]domai
 	return cats, err
 }
 
+// ListCoHang — xem chú thích ở domain.CategoryRepository.
+//
+// Đếm bằng EXISTS chứ không JOIN + DISTINCT: chỉ cần biết nhóm có hay không có
+// mặt hàng, mà EXISTS thì database dừng ngay ở dòng đầu tiên tìm được.
+//
+// Bộ điều kiện lấy đúng của bảng tồn kho (xem TonTheoChiNhanh): chỉ loại dòng
+// đã xoá mềm, KHÔNG loại hàng ngừng bán — bảng tồn kho vẫn liệt kê hàng ngừng
+// bán, nên nhóm chứa toàn hàng ngừng bán mà biến mất khỏi ô lọc thì ô lọc và
+// bảng nói hai chuyện khác nhau.
+func (r *categoryRepository) ListCoHang(ctx context.Context, onlyActive bool) ([]domain.Category, error) {
+	var cats []domain.Category
+	q := r.db.WithContext(ctx).Model(&domain.Category{}).
+		Order("sort_order ASC, id ASC").
+		Where(`EXISTS (
+			SELECT 1 FROM products p
+			JOIN product_variants v ON v.product_id = p.id AND v.deleted_at IS NULL
+			WHERE p.category_id = categories.id AND p.deleted_at IS NULL
+		)`)
+	if onlyActive {
+		q = q.Where("is_active = ?", true)
+	}
+	err := q.Find(&cats).Error
+
+	return cats, err
+}
+
 func (r *categoryRepository) FindByID(ctx context.Context, id uint) (*domain.Category, error) {
 	var c domain.Category
 	err := r.db.WithContext(ctx).First(&c, id).Error
@@ -55,6 +81,23 @@ func (r *categoryRepository) ExistsBySlug(ctx context.Context, slug string, excl
 		q = q.Where("id <> ?", excludeID)
 	}
 	err := q.Count(&count).Error
+	return count > 0, err
+}
+
+// ExistsByName — trùng TÊN trong cùng cửa hàng, không phân biệt hoa thường.
+//
+// KHÔNG Unscoped, khác hẳn ExistsBySlug ở trên: mã bị khoá duy nhất ở tầng DB
+// nên nhóm đã xoá vẫn giữ chỗ, còn tên thì không — xoá một nhóm rồi mà tên nó
+// vẫn cấm dùng lại thì người dùng không có đường nào gỡ.
+func (r *categoryRepository) ExistsByName(ctx context.Context, name string, excludeID uint) (bool, error) {
+	var count int64
+	q := r.db.WithContext(ctx).Model(&domain.Category{}).
+		Where("LOWER(name) COLLATE utf8mb4_bin = LOWER(?)", name)
+	if excludeID > 0 {
+		q = q.Where("id <> ?", excludeID)
+	}
+	err := q.Count(&count).Error
+
 	return count > 0, err
 }
 

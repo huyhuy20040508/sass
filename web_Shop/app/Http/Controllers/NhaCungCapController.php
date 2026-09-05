@@ -16,6 +16,8 @@ use Illuminate\Support\Facades\Log;
  */
 class NhaCungCapController extends Controller
 {
+    use \App\Http\Controllers\Concerns\TraLoiHopThoai;
+
     /** Nhãn ngắn cho thanh điều hướng. */
     public const TITLE = 'Nhà cung cấp';
 
@@ -40,7 +42,7 @@ class NhaCungCapController extends Controller
         'ma_az' => 'Mã tăng dần',
     ];
 
-    public const SO_DONG_MOI_TRANG = 20;
+    public const SO_DONG_MOI_TRANG = 10;
 
     public const MUC_SO_DONG = [10, 20, 30, 40, 50];
 
@@ -95,7 +97,9 @@ class NhaCungCapController extends Controller
         $soTrang = max(1, (int) ceil($tong / $filters['page_size']));
         $trang = min($filters['page'], $soTrang);
 
-        $view = view('nha-cung-cap.index', [
+        // Màn đã chuyển sang khu v2; view cũ ở resources/views/nha-cung-cap giữ
+        // lại phòng khi cần đối chiếu, không còn route nào trỏ vào.
+        $view = view('v2::nha-cung-cap.index', [
             'list' => array_values(array_slice($loc, ($trang - 1) * $filters['page_size'], $filters['page_size'])),
             'filters' => array_merge($filters, ['page' => $trang]),
             'thongKe' => $this->thongKe($all),
@@ -133,6 +137,7 @@ class NhaCungCapController extends Controller
             fputcsv($out, [
                 'STT', 'Mã nhà cung cấp', 'Tên nhà cung cấp', 'Mã số thuế', 'Điện thoại',
                 'Email', 'Địa chỉ', 'Địa chỉ 2', 'Trạng thái',
+                'Tổng mua hàng', 'Tổng tiền thanh toán', 'Còn nợ',
             ]);
 
             foreach ($list as $i => $ncc) {
@@ -146,6 +151,10 @@ class NhaCungCapController extends Controller
                     $ncc['address'] ?? '',
                     $ncc['address_line2'] ?? '',
                     self::TRANG_THAI[(int) ($ncc['status'] ?? 1)] ?? '',
+                    // Số trần, không dấu chấm ngăn nghìn: Excel còn cộng được.
+                    (float) ($ncc['total_purchases'] ?? 0),
+                    (float) ($ncc['total_payment'] ?? 0),
+                    (float) ($ncc['still_in_debt'] ?? 0),
                 ]);
             }
             fclose($out);
@@ -382,9 +391,10 @@ class NhaCungCapController extends Controller
      * Hai tab ấy từng bị gỡ (557d907) vì chúng cộng từ purchase_orders, mà bảng
      * đó đã bị xoá. Nay bảng có lại nên tab quay về.
      *
-     * Tiền cộng ở đây chứ không gọi thêm một đường API nữa: danh sách phiếu đã
-     * về tay rồi, cộng lại là mấy phép cộng — thêm một lượt gọi mạng chỉ để lấy
-     * ba con số là đắt hơn hẳn.
+     * CHỈ trả danh sách phiếu. Ba con số tổng KHÔNG cộng ở đây nữa: đường này
+     * cắt trang ở 100 phiếu, nên cộng trên phần lấy được sẽ ra một con số nhỏ
+     * hơn sự thật mà không chỗ nào lộ ra. Chúng nay đi kèm mỗi dòng của
+     * /admin/nha-cung-cap, gộp bằng một câu SQL trên TOÀN BỘ phiếu.
      */
     public function phieuMua(Request $request, int $id)
     {
@@ -393,7 +403,10 @@ class NhaCungCapController extends Controller
                 'supplier_id' => $id,
                 'sort' => 'newest',
                 'page' => 1,
-                'page_size' => 200,
+                // 100 là TRẦN của API. Gửi 200 thì bên đó không kẹp xuống 100 mà
+                // rơi về mặc định 20 — hai tab chỉ hiện 20 phiếu gần nhất mà
+                // không báo gì.
+                'page_size' => 100,
             ]);
             if (! $res->successful()) {
                 return response()->json(['message' => $res->json('message') ?: 'Không đọc được phiếu mua.'], 502);
@@ -406,26 +419,7 @@ class NhaCungCapController extends Controller
             return response()->json(['message' => 'Không kết nối được API.'], 502);
         }
 
-        // Tiền CHỈ cộng trên phiếu đã duyệt: phiếu lưu tạm chưa mua gì, phiếu
-        // huỷ thì không bao giờ mua. Cộng cả hai vào là con số nói dối.
-        $tongMua = 0.0;
-        $daTra = 0.0;
-        foreach ($list as $p) {
-            if (($p['status'] ?? '') !== 'approved') {
-                continue;
-            }
-            $tongMua += (float) ($p['total_amount'] ?? 0);
-            $daTra += (float) ($p['paid_amount'] ?? 0);
-        }
-
-        return response()->json([
-            'data' => $list,
-            'tien' => [
-                'tong_mua' => $tongMua,
-                'da_tra' => $daTra,
-                'con_no' => max(0, $tongMua - $daTra),
-            ],
-        ]);
+        return response()->json(['data' => $list]);
     }
 
     /** Ảnh tải lên ngay lúc chọn, form chỉ mang theo đường dẫn. */
@@ -646,14 +640,12 @@ class NhaCungCapController extends Controller
         } catch (\Throwable $e) {
             Log::error('Nha cung cap API call failed', ['msg' => $e->getMessage()]);
 
-            return back()->withInput()->with('error', 'Không kết nối được API. Vui lòng thử lại.');
+            return $this->traLoiHopThoai($request, false, 'Không kết nối được API. Vui lòng thử lại.');
         }
 
-        if ($res->successful()) {
-            return $this->veDanhSach($request)->with('success', $success);
-        }
-
-        return back()->withInput()->with('error', $res->json('message') ?: 'Thao tác không thành công.');
+        return $res->successful()
+            ? $this->traLoiHopThoai($request, true, $success, fn () => $this->veDanhSach($request))
+            : $this->traLoiHopThoai($request, false, $this->cauLoiApi($res, 'Thao tác không thành công.'));
     }
 
     /** Về đúng URL cũ nếu form có gửi kèm. */

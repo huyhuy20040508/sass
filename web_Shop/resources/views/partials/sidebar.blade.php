@@ -130,10 +130,24 @@
                             'label' => \App\Http\Controllers\TonKhoChiNhanhController::TITLE,
                             'active' => request()->routeIs('admin.ton-kho-chi-nhanh.*'),
                         ],
+                        // Điều chỉnh tồn kho đứng ngay sau Tồn kho: cùng nói về
+                        // số tồn, một bên xem một bên nắn lại có duyệt.
+                        [
+                            'href' => route('admin.dieu-chinh-ton-kho.index'),
+                            'label' => \App\Http\Controllers\DieuChinhTonKhoController::TITLE,
+                            'active' => request()->routeIs('admin.dieu-chinh-ton-kho.*'),
+                        ],
                         [
                             'href' => route('admin.phieu-mua-hang.index'),
                             'label' => \App\Http\Controllers\PhieuMuaHangController::TITLE,
                             'active' => request()->routeIs('admin.phieu-mua-hang.*'),
+                        ],
+                        // Chiều trả lại đứng ngay sau phiếu mua: cùng một cặp
+                        // chứng từ, đọc menu từ trên xuống là đi đúng thứ tự.
+                        [
+                            'href' => route('admin.tra-hang-nha-cung-cap.index'),
+                            'label' => \App\Http\Controllers\TraHangNhaCungCapController::TITLE,
+                            'active' => request()->routeIs('admin.tra-hang-nha-cung-cap.*'),
                         ],
                         [
                             'href' => route('admin.nha-cung-cap.index'),

@@ -34,6 +34,9 @@ func reportQuery(c *gin.Context) service.ReportQuery {
 		GroupBy: c.Query("group_by"),
 		Sort:    c.Query("sort"),
 		Limit:   limit,
+		// Mặc định là chi nhánh ĐANG LÀM VIỆC. Chủ tiệm muốn xem cả cửa hàng thì
+		// gửi shop_id=0 — cùng quy ước với mọi màn danh sách khác.
+		ShopID: chiNhanhLoc(c),
 	}
 }
 

@@ -56,6 +56,24 @@ type PurchaseOrder struct {
 	PaidAmount    float64 `json:"paid_amount"`
 	PaymentStatus string  `json:"payment_status"`
 
+	// ---- Thoả thuận trả tiền, dựng theo bản order v2 ----
+	//
+	// PaymentMethod rỗng = chưa ghi nhận lượt trả nào.
+	PaymentMethod string `json:"payment_method"`
+	// IsDebt KHÔNG suy ra từ paid < total: trả thiếu vì mới trả một phần khác
+	// hẳn trả thiếu vì hai bên ĐÃ thoả thuận cho nợ tới hạn. Chỉ cái thứ hai
+	// mới lên danh sách công nợ phải đòi.
+	IsDebt bool `json:"is_debt"`
+	// DebtDueDate là hạn trả nốt phần còn nợ.
+	DebtDueDate *time.Time `json:"debt_due_date" gorm:"type:date"`
+	// Người đại diện bên bán đứng ra nhận nợ, và số gọi khi tới hạn. Không có
+	// hai thứ này thì "còn nợ 3.000.000" là con số chết.
+	DebtContactName  string `json:"debt_contact_name"`
+	DebtContactPhone string `json:"debt_contact_phone"`
+	// PaymentAttachment là ảnh uỷ nhiệm chi / biên lai. Tách hẳn khỏi
+	// Attachment — cột kia là chứng từ bên bán GIAO HÀNG.
+	PaymentAttachment string `json:"payment_attachment"`
+
 	Note         string `json:"note"`
 	Attachment   string `json:"attachment"`
 	CancelReason string `json:"cancel_reason"`
@@ -86,6 +104,20 @@ const (
 	// PurchaseStatusCancelled — đã huỷ (chỉ từ lưu tạm) — điểm cuối.
 	PurchaseStatusCancelled = "cancelled"
 )
+
+// Hình thức trả tiền nhà cung cấp. Để chuỗi chứ không phải số như v2 (bên đó
+// 1 = tiền mặt, 4 = chuyển khoản — hai con số rời rạc, đọc câu lệnh SQL không
+// đoán ra nghĩa).
+const (
+	PurchasePayMethodCash     = "cash"
+	PurchasePayMethodTransfer = "transfer"
+)
+
+// HopLePhuongThucTra nhận cả chuỗi RỖNG: lượt trả 0 đồng (chỉ chốt thoả thuận
+// nợ) thì chưa có hình thức nào để khai.
+func HopLePhuongThucTra(v string) bool {
+	return v == "" || v == PurchasePayMethodCash || v == PurchasePayMethodTransfer
+}
 
 // Cách khai thuế của phiếu — bản v2 gọi là allow_vat_purchase.
 const (
@@ -164,14 +196,51 @@ type PurchaseOrderHistory struct {
 	CreatedAt       time.Time `json:"created_at"`
 }
 
+// PurchasePayment — MỘT lượt trả tiền nhà cung cấp cho một phiếu.
+//
+// PurchaseOrder.PaidAmount là số LUỸ KẾ và vẫn là nguồn sự thật cho mọi màn danh
+// sách; bảng này giải thích con số ấy tới từ mấy lượt. Bất biến phải giữ:
+//
+//	purchase_orders.paid_amount = SUM(purchase_payments.amount)
+//
+// Bên bản v2 nó là `cab_debt_detail`. Xem migration 0049.
+type PurchasePayment struct {
+	ID uint `json:"id" gorm:"primaryKey"`
+	TenantOwned
+	// ShopID chép từ phiếu lúc ghi, để báo cáo theo chi nhánh khỏi nối bảng.
+	ShopID          uint `json:"shop_id"`
+	PurchaseOrderID uint `json:"purchase_order_id"`
+
+	// Amount là tiền của RIÊNG lượt này, không phải số luỹ kế. ÂM = lượt chữa
+	// lại con số đã ghi sai — nhìn vào sổ là biết ngay đây không phải lượt trả.
+	Amount float64 `json:"amount"`
+	// PaidAfter là số luỹ kế SAU lượt này. Thừa về mặt dữ liệu nhưng đọc sổ mà
+	// phải tự cộng từ đầu mới biết lúc ấy đã trả tới đâu thì không ai đọc.
+	PaidAfter float64 `json:"paid_after"`
+
+	PaymentMethod string `json:"payment_method"`
+	Note          string `json:"note"`
+	Attachment    string `json:"attachment"`
+
+	CreatedBy *uint `json:"created_by"`
+	// CreatedByName tra kèm khi đọc lên — bảng không có cột này.
+	CreatedByName string    `json:"created_by_name" gorm:"-"`
+	CreatedAt     time.Time `json:"created_at"`
+}
+
 // PurchaseFilter là tham số lọc/sắp xếp/phân trang khi liệt kê phiếu mua hàng.
 type PurchaseFilter struct {
 	Keyword       string // mã phiếu / tên bên bán / ghi chú
 	Status        string // rỗng hoặc all = mọi trạng thái; cho phép nhiều giá trị ngăn bởi dấu phẩy
 	PaymentStatus string // all | unpaid | partial | paid
 	SupplierID    uint   // 0 = mọi nhà cung cấp
-	// VariantID lọc phiếu có chứa một mặt hàng cụ thể — cột "Hàng hoá" của bộ lọc.
-	VariantID uint
+	// ShopID cắt theo chi nhánh LẬP phiếu. 0 = không cắt. Xem OrderFilter.ShopID.
+	ShopID uint
+	// VariantIDs lọc phiếu có chứa MỘT TRONG các mặt hàng này — ô "Hàng hoá" của
+	// bộ lọc là ô chọn nhiều, chọn hai món thì phải ra hợp của hai tập.
+	VariantIDs []uint
+	// LotNumber lọc theo số lô ghi trên dòng hàng — khớp một phần, ô "Số lô".
+	LotNumber string
 	FromDate  string // YYYY-MM-DD (theo created_at)
 	ToDate    string // YYYY-MM-DD
 	Sort      string // newest | oldest | total_desc | total_asc | document_desc
@@ -231,6 +300,21 @@ type PurchaseVariant struct {
 	// products.unit_conversions ở napDonVi. Bỏ thẻ này thì GORM coi nó là một
 	// quan hệ và câu Scan chết với "define a valid foreign key for relations".
 	Units []PurchaseUnit `json:"units" gorm:"-"`
+	// Lots là các lô ĐANG CÒN HÀNG của mặt hàng tại chi nhánh đang làm việc, xếp
+	// theo hạn dùng gần nhất. Ô số lô trên lưới hàng đổ danh sách này ra thay vì
+	// bắt gõ tay — gõ sai một ký tự là đẻ ra một lô mới mà không ai nhận ra.
+	//
+	// gorm:"-" như Units: dựng từ bảng stock_lots ở napLo, không phải quan hệ.
+	Lots []PurchaseLot `json:"lots" gorm:"-"`
+}
+
+// PurchaseLot là một lô đang có hàng, cho ô chọn số lô của lưới hàng.
+type PurchaseLot struct {
+	LotNumber string `json:"lot_number"`
+	// ExpireDate khuôn YYYY-MM-DD; rỗng = lô không có hạn dùng.
+	ExpireDate string  `json:"expire_date"`
+	Quantity   int     `json:"quantity"`
+	UnitCost   float64 `json:"unit_cost"`
 }
 
 // PurchaseNhomHang — một nhóm hàng CÓ hàng mua được, cho ô lọc nhóm đứng cạnh
@@ -258,6 +342,8 @@ type PurchaseOrderRepository interface {
 	Stats(ctx context.Context) (PurchaseStats, error)
 	// Histories trả lịch sử thao tác của phiếu, cũ -> mới.
 	Histories(ctx context.Context, purchaseID uint) ([]PurchaseOrderHistory, error)
+	// Payments trả sổ từng lượt trả tiền của phiếu, cũ -> mới, kèm tên người ghi.
+	Payments(ctx context.Context, purchaseID uint) ([]PurchasePayment, error)
 
 	// SearchVariants tìm mặt hàng để đưa vào phiếu (ô chọn hàng). categoryID = 0
 	// là mọi nhóm hàng — màn lập phiếu có ô lọc nhóm đứng cạnh ô tìm.
@@ -286,7 +372,16 @@ type PurchaseOrderRepository interface {
 	Approve(ctx context.Context, id uint, a PurchaseApproval) (*PurchaseOrder, error)
 	// LockAndUpdate đọc-sửa-ghi phiếu dưới khoá dòng — dùng cho huỷ phiếu và ghi
 	// nhận thanh toán, hai đường không đụng tới kho.
-	LockAndUpdate(ctx context.Context, id uint, apply func(po *PurchaseOrder) (*PurchaseOrderHistory, []string, error)) (*PurchaseOrder, error)
+	//
+	// `apply` trả về thêm một dòng SỔ TRẢ TIỀN (nil nếu lượt này không đụng tới
+	// tiền). Dòng ấy ghi TRONG cùng giao dịch với `paid_amount`: tách ra ngoài
+	// thì một lượt hỏng giữa chừng để lại số luỹ kế đã đổi mà sổ không có dòng
+	// nào, và bất biến SUM(amount) = paid_amount gãy im lặng.
+	LockAndUpdate(
+		ctx context.Context,
+		id uint,
+		apply func(po *PurchaseOrder) (*PurchaseOrderHistory, *PurchasePayment, []string, error),
+	) (*PurchaseOrder, error)
 	// Delete xoá mềm phiếu — tầng service chỉ cho gọi với phiếu lưu tạm.
 	Delete(ctx context.Context, id uint) error
 }
@@ -318,4 +413,16 @@ var (
 
 	// ErrPurchasePaidQuaTong — trả nhiều hơn tổng tiền phiếu.
 	ErrPurchasePaidQuaTong = errors.New("số tiền đã trả không được lớn hơn tổng tiền phiếu")
+
+	// ErrPurchaseNoThieuHan — nhận nợ mà không hẹn ngày trả. Bản v2 cũng bắt
+	// buộc ô này khi bật ghi nợ: một khoản nợ không có hạn thì không bao giờ
+	// lên được danh sách phải đòi.
+	ErrPurchaseNoThieuHan = errors.New("ghi nợ thì phải hẹn ngày trả nốt")
+
+	// ErrPurchaseNoThieuNguoi — nhận nợ mà không biết đòi ai.
+	ErrPurchaseNoThieuNguoi = errors.New("ghi nợ thì phải có người đại diện bên bán và số điện thoại")
+
+	// ErrPurchaseNoDaTraDu — bật ghi nợ nhưng đã trả đủ. Hai việc chỏi nhau:
+	// không còn đồng nào để nợ.
+	ErrPurchaseNoDaTraDu = errors.New("đã trả đủ thì không còn gì để ghi nợ")
 )

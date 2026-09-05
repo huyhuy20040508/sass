@@ -10,13 +10,23 @@ var (
 	ErrUserInactive       = errors.New("tài khoản đang không hoạt động, vui lòng liên hệ cửa hàng")
 	ErrForbidden          = errors.New("không có quyền thực hiện")
 	ErrSlugExists         = errors.New("slug đã tồn tại")
-	ErrConflict           = errors.New("dữ liệu bị xung đột")
-	ErrInvalidStatus      = errors.New("không thể chuyển sang trạng thái này")
+	// ErrCategoryTrungTen — hai nhóm hàng hoá cùng tên trong một cửa hàng.
+	ErrCategoryTrungTen = errors.New("tên nhóm hàng hoá đã tồn tại")
+	ErrConflict         = errors.New("dữ liệu bị xung đột")
+	ErrInvalidStatus    = errors.New("không thể chuyển sang trạng thái này")
 
 	// SKU trùng. Trước đây chỉ có UNIQUE ở DB đỡ, nên người dùng nhận về đúng một
 	// câu "Đã có lỗi xảy ra" mà không biết phải sửa gì — trong khi SKU tự sinh
 	// ghép từ tên hàng thì đụng nhau là chuyện thường ngày.
 	ErrSKUExists = errors.New("SKU đã tồn tại")
+	// ErrProductTrungTen — hai mặt hàng cùng tên trong một cửa hàng.
+	ErrProductTrungTen = errors.New("tên mặt hàng đã tồn tại")
+
+	// ErrNhanVienTrungTen — hai hồ sơ nhân sự cùng tên trong một cửa hàng.
+	ErrNhanVienTrungTen = errors.New("tên nhân viên đã tồn tại")
+
+	// ErrNhomQuyenTrungTen — hai nhóm quyền cùng tên trong một cửa hàng.
+	ErrNhomQuyenTrungTen = errors.New("tên nhóm quyền đã tồn tại")
 
 	// Đã ở đầu (hoặc cuối) danh sách nên không đổi chỗ được nữa. Không phải lỗi
 	// hệ thống — nói thẳng cho người bấm biết là hết đường đi.
@@ -149,7 +159,11 @@ var (
 	// Đặt hàng từ storefront
 	ErrVariantNotFound = errors.New("sản phẩm không còn bán hoặc đã đổi phiên bản")
 	ErrOutOfStock      = errors.New("sản phẩm không đủ hàng")
-	ErrEmptyCart       = errors.New("giỏ hàng trống")
+	// Cửa hàng bật "không cho bán hàng đã quá hạn dùng", và số hàng CÒN HẠN không
+	// đủ. Tách khỏi ErrOutOfStock vì cách xử khác hẳn: kho vẫn còn hàng, chỉ là
+	// hàng ấy hết hạn — người bán cần biết để đi huỷ lô chứ không phải đi nhập thêm.
+	ErrHangHetHan = errors.New("hàng còn trong kho nhưng đã quá hạn dùng")
+	ErrEmptyCart  = errors.New("giỏ hàng trống")
 	// Hình thức thanh toán bị cửa hàng tắt ở trang Cài đặt, hoặc bật chuyển khoản
 	// nhưng chưa khai đủ thông tin tài khoản nhận tiền.
 	ErrPaymentMethodDisabled = errors.New("cửa hàng hiện không nhận hình thức thanh toán này")
@@ -194,6 +208,9 @@ var (
 	// mã ghi xuống không được.
 	ErrMaChiNhanhDaCo = errors.New("mã chi nhánh này đã có người dùng")
 
+	// ErrTenChiNhanhDaCo — tên đã có chi nhánh khác dùng, dù mã khác.
+	ErrTenChiNhanhDaCo = errors.New("tên chi nhánh này đã có người dùng")
+
 	// ErrMaChiNhanhInvalid — mã có dấu, có khoảng trắng hoặc ký tự lạ.
 	//
 	// Mã chi nhánh đi vào chứng từ và (về sau) vào đường dẫn, nên nó phải là thứ
@@ -220,6 +237,43 @@ var (
 	// động là cửa hàng không bán được gì nữa, và không có màn hình nào nói ra lý
 	// do — nên chặn ngay tại đây, lúc người dùng còn hiểu mình vừa bấm gì.
 	ErrChiNhanhCuoiCung = errors.New("phải còn ít nhất một chi nhánh đang hoạt động")
+
+	// ErrChuaChonChiNhanh — cửa hàng có từ HAI chi nhánh đang mở mà request không
+	// nói mình đứng ở đâu (thiếu header X-Chi-Nhanh).
+	//
+	// Trước đây chỗ này tự đoán: lấy chi nhánh có id nhỏ nhất. Nghĩa là mở chi
+	// nhánh mới rồi nhập hàng cho nó, hàng lại chui vào chi nhánh cũ — không lỗi
+	// nào nổi lên, và chỉ lộ ra lúc có người đếm hàng thật. Đoán một con số rồi
+	// ghi chứng từ theo nó là thứ không được phép làm.
+	//
+	// Cửa hàng chỉ có MỘT chi nhánh thì không phải chọn gì cả — nhánh ấy vẫn êm.
+	ErrChuaChonChiNhanh = errors.New("chưa chọn chi nhánh làm việc")
+
+	// ErrChiNhanhDaDong — header trỏ vào một chi nhánh đã ngừng hoạt động.
+	// Giao diện chỉ bày chi nhánh đang mở, nhưng chốt chặn phải nằm ở đây.
+	ErrChiNhanhDaDong = errors.New("chi nhánh đã ngừng hoạt động")
+
+	// ErrKhongThuocChiNhanh — người đăng nhập không được làm việc ở chi nhánh mà
+	// header khai. Nhân viên được phân về một chi nhánh thì chỉ bán và nhập hàng
+	// ở đó; đổi header sang chi nhánh khác là ghi chứng từ vào nơi mình không
+	// đứng.
+	ErrKhongThuocChiNhanh = errors.New("bạn không làm việc tại chi nhánh này")
+
+	// ErrHangKhongThuocChiNhanh — chứng từ đang lập ở chi nhánh này nhưng có mặt
+	// hàng đã gán riêng cho chi nhánh khác. err được bọc kèm tên mặt hàng: "mặt
+	// hàng nào" là thứ duy nhất giúp sửa được phiếu.
+	ErrHangKhongThuocChiNhanh = errors.New("mặt hàng không thuộc chi nhánh này")
+
+	// ErrPhieuVuaBiSua — có người khác lưu phiếu này trong lúc mình đang mở nó.
+	//
+	// Khoá dòng trong giao dịch giữ cho DỮ LIỆU không rách, nhưng nó không cứu
+	// được chuyện người lưu sau ghi đè sạch phần người lưu trước vừa nhập — và
+	// ghi đè trong im lặng, không dấu hiệu nào. Hai người sửa cùng một phiếu là
+	// chuyện thường ở cửa hàng đông ca.
+	//
+	// Chỉ nổi lên khi client CÓ gửi mốc `updated_at` nó đọc được lúc mở phiếu.
+	// Không gửi thì giữ nguyên hành vi cũ: bản cũ của giao diện vẫn lưu được.
+	ErrPhieuVuaBiSua = errors.New("phiếu vừa được người khác sửa")
 
 	// ErrVuotHanMuc — cửa hàng đã dùng hết một hạn mức của hợp đồng (xem
 	// han_muc.go). err được bọc kèm tên hạn mức và cặp số đang dùng / trần, vì

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Services\ApiClient;
 use App\Services\ImageStore;
+use App\Support\XlsxDon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
@@ -41,6 +42,13 @@ class PhieuMuaHangController extends Controller
         'cancelled' => 'off',
     ];
 
+    /** Cùng ba trạng thái đó, nhưng bằng class chữ của khung v2. */
+    public const CHU_TRANG_THAI = [
+        'draft' => 'text-danger',
+        'approved' => 'text-primary',
+        'cancelled' => 'text-secondary',
+    ];
+
     public const TRANG_THAI_TRA = [
         'unpaid' => 'Chưa trả',
         'partial' => 'Trả một phần',
@@ -51,6 +59,36 @@ class PhieuMuaHangController extends Controller
         'unpaid' => 'off',
         'partial' => 'warn',
         'paid' => 'ok',
+    ];
+
+    public const CHU_TRANG_THAI_TRA = [
+        'unpaid' => 'text-secondary',
+        'partial' => 'text-success',
+        'paid' => 'text-primary',
+    ];
+
+    /**
+     * Trạng thái nhập kho — ô lọc riêng của bản v2.
+     *
+     * Không phải một cột trong sổ: phiếu duyệt xong là hàng vào kho, nên trạng
+     * thái kho SUY RA từ trạng thái phiếu. Giữ ô lọc riêng vì bên v2 có, và vì
+     * người dùng nghĩ theo hai câu hỏi khác nhau ("phiếu đã chốt chưa" và "hàng
+     * về chưa"), dù ở đây hai câu ấy cho cùng một đáp án.
+     */
+    public const TRANG_THAI_KHO = [
+        'in' => 'Đã nhập kho',
+        'not_in' => 'Chưa nhập kho',
+    ];
+
+    public const CHU_TRANG_THAI_KHO = [
+        'in' => 'text-primary',
+        'not_in' => 'text-secondary',
+    ];
+
+    /** Mỗi trạng thái kho ứng với những trạng thái phiếu nào. */
+    protected const KHO_THEO_TRANG_THAI = [
+        'in' => ['approved'],
+        'not_in' => ['draft'],
     ];
 
     /** Cách khai thuế — bản v2 gọi là allow_vat_purchase. */
@@ -67,7 +105,13 @@ class PhieuMuaHangController extends Controller
         'total_asc' => 'Tiền ít nhất',
     ];
 
-    public const SO_DONG_MOI_TRANG = 20;
+    /** Nhãn hình thức trả tiền — khớp hằng bên API (domain.PurchasePayMethod*). */
+    public const CACH_TRA = [
+        'cash' => 'Tiền mặt',
+        'transfer' => 'Chuyển khoản',
+    ];
+
+    public const SO_DONG_MOI_TRANG = 10;
 
     public const MUC_SO_DONG = [10, 20, 30, 40, 50];
 
@@ -80,7 +124,9 @@ class PhieuMuaHangController extends Controller
         'total' => 'Tổng tiền',
         'debt' => 'Còn nợ',
         'status' => 'Trạng thái',
+        'warehouse' => 'Trạng thái kho',
         'pay' => 'Thanh toán',
+        'creator' => 'Người tạo',
         'note' => 'Ghi chú',
     ];
 
@@ -118,7 +164,8 @@ class PhieuMuaHangController extends Controller
             $error = 'Chưa nối được API phiếu mua hàng — trang đang hiện bảng rỗng.';
         }
 
-        $view = view('phieu-mua-hang.index', [
+        $view = view('v2::phieu-mua-hang.index', [
+            'thueTrucTiep' => $this->thueTrucTiep(),
             'list' => $list,
             'filters' => $filters,
             'meta' => $meta,
@@ -172,7 +219,17 @@ class PhieuMuaHangController extends Controller
         }
     }
 
-    /** Xuất đúng phần đang lọc. Lấy hết trang chứ không chỉ trang đang xem. */
+    /**
+     * Xuất danh sách đang lọc ra .xlsx.
+     *
+     * .xlsx THẬT chứ không phải .csv đội tên: nút trên màn ghi "Xuất Excel", mà
+     * CSV thì Excel hỏi lại một lượt về dấu phân cách, số tiền dài bị hiểu thành
+     * ngày, và cột nào cũng là chữ nên không cộng được. Xem App\Support\XlsxDon
+     * — dựng bằng ZipArchive sẵn có của PHP, không kéo thêm thư viện nào.
+     *
+     * Lấy hết trang chứ không chỉ trang đang xem: người ta lọc ra một nhóm rồi
+     * mới bấm xuất, mà mặc định mỗi trang chỉ mười dòng.
+     */
     public function export(Request $request)
     {
         $filters = $this->filters($request);
@@ -189,39 +246,140 @@ class PhieuMuaHangController extends Controller
             return back()->with('error', 'Không kết nối được API để xuất tệp.');
         }
 
-        $ten = 'phieu-mua-hang-'.date('Ymd-His').'.csv';
+        $hang = [[
+            'STT', 'Mã phiếu', 'Nhà cung cấp', 'Ngày chứng từ', 'Ngày lập',
+            'Tiền hàng', 'Chiết khấu', 'Thuế GTGT', 'Tổng tiền', 'Đã trả', 'Còn nợ',
+            'Trạng thái', 'Thanh toán', 'Ghi chú',
+        ]];
 
-        return response()->streamDownload(function () use ($list) {
-            $out = fopen('php://output', 'w');
-            fwrite($out, "\xEF\xBB\xBF");
-            fputcsv($out, [
-                'STT', 'Mã phiếu', 'Nhà cung cấp', 'Ngày chứng từ', 'Ngày lập',
-                'Tiền hàng', 'Chiết khấu', 'Thuế GTGT', 'Tổng tiền', 'Đã trả', 'Còn nợ',
-                'Trạng thái', 'Thanh toán', 'Ghi chú',
-            ]);
+        foreach ($list as $i => $p) {
+            $tong = (float) ($p['total_amount'] ?? 0);
+            $daTra = (float) ($p['paid_amount'] ?? 0);
+            $hang[] = [
+                $i + 1,
+                (string) ($p['po_code'] ?? ''),
+                (string) ($p['supplier_name'] ?? ''),
+                $this->ngay($p['document_date'] ?? null),
+                $this->ngay($p['created_at'] ?? null),
+                (float) ($p['items_amount'] ?? 0),
+                (float) ($p['discount_amount'] ?? 0),
+                (float) ($p['vat_amount'] ?? 0),
+                $tong,
+                $daTra,
+                max(0, $tong - $daTra),
+                self::TRANG_THAI[$p['status'] ?? ''] ?? '',
+                self::TRANG_THAI_TRA[$p['payment_status'] ?? ''] ?? '',
+                (string) ($p['note'] ?? ''),
+            ];
+        }
 
-            foreach ($list as $i => $p) {
-                $tong = (float) ($p['total_amount'] ?? 0);
-                $daTra = (float) ($p['paid_amount'] ?? 0);
-                fputcsv($out, [
-                    $i + 1,
-                    $p['po_code'] ?? '',
-                    $p['supplier_name'] ?? '',
-                    $this->ngay($p['document_date'] ?? null),
-                    $this->ngay($p['created_at'] ?? null),
-                    (float) ($p['items_amount'] ?? 0),
-                    (float) ($p['discount_amount'] ?? 0),
-                    (float) ($p['vat_amount'] ?? 0),
-                    $tong,
-                    $daTra,
-                    max(0, $tong - $daTra),
-                    self::TRANG_THAI[$p['status'] ?? ''] ?? '',
-                    self::TRANG_THAI_TRA[$p['payment_status'] ?? ''] ?? '',
-                    $p['note'] ?? '',
-                ]);
+        return $this->taiXlsx($hang, 'phieu-mua-hang-'.date('Ymd-His'), 'Phieu mua hang');
+    }
+
+    /**
+     * Xuất MỘT phiếu ra .xlsx — thông tin phiếu, từng dòng hàng, rồi tổng.
+     *
+     * Xuất bản ĐÃ LƯU chứ không phải thứ đang gõ dở trên màn: tệp này rời khỏi
+     * phần mềm, gửi cho kế toán hay bên bán, nên nó phải khớp với chứng từ trong
+     * sổ. (Nút In thì ngược lại — in đúng cái đang nhìn thấy, kể cả chưa lưu.)
+     */
+    public function exportOne(Request $request, int $id)
+    {
+        try {
+            $res = $this->api->phieuMuaHangChiTiet($id);
+            if (! $res->successful()) {
+                return back()->with('error', 'Không đọc được phiếu để xuất tệp.');
             }
-            fclose($out);
-        }, $ten, ['Content-Type' => 'text/csv; charset=UTF-8']);
+            $p = $res->json('data') ?? [];
+        } catch (\Throwable $e) {
+            Log::error('Export mot phieu mua hang failed', ['id' => $id, 'msg' => $e->getMessage()]);
+
+            return back()->with('error', 'Không kết nối được API để xuất tệp.');
+        }
+
+        $trucTiep = $this->thueTrucTiep();
+        $ma = (string) ($p['po_code'] ?? $id);
+
+        $hang = [
+            ['Phiếu mua hàng', $ma],
+            ['Nhà cung cấp', (string) ($p['supplier_name'] ?? '')],
+            ['Ngày chứng từ', $this->ngay($p['document_date'] ?? null)],
+            ['Ngày hết hạn', $this->ngay($p['expected_date'] ?? null)],
+            ['Trạng thái', self::TRANG_THAI[$p['status'] ?? ''] ?? ''],
+            ['Ghi chú', (string) ($p['note'] ?? '')],
+            [],
+        ];
+
+        // Thuế trực tiếp thì bỏ hẳn ba cột VAT, y như lưới trên màn và tờ in —
+        // xuất ra một dải "0" là mâu thuẫn với chính chứng từ người ta vừa xem.
+        $tieuDe = ['STT', 'Mã hàng hóa', 'Tên hàng hóa', 'Đơn vị', 'Số lượng', 'Giá nhập',
+            $trucTiep ? 'Thành tiền' : 'Thành tiền (chưa VAT)'];
+        if (! $trucTiep) {
+            $tieuDe = array_merge($tieuDe, ['VAT %', 'Tiền thuế VAT', 'Tổng tiền sau VAT']);
+        }
+        $hang[] = array_merge($tieuDe, ['Số lô', 'Ngày hết hạn']);
+
+        foreach (($p['items'] ?? []) as $i => $it) {
+            $sl = (float) ($it['quantity'] ?? 0);
+            $gia = (float) ($it['unit_cost'] ?? 0);
+            $vat = (int) ($it['vat_percent'] ?? 0);
+            $tienHang = round($gia * $sl);
+            $thue = (int) round($tienHang * max(0, $vat) / 100);
+
+            $dong = [
+                $i + 1,
+                (string) ($it['variant_sku'] ?? ''),
+                trim(implode(' · ', array_filter([$it['product_name'] ?? '', $it['variant_name'] ?? '']))),
+                (string) ($it['unit_name'] ?? ''),
+                $sl,
+                $gia,
+                (float) $tienHang,
+            ];
+            if (! $trucTiep) {
+                $dong = array_merge($dong, [$vat, (float) $thue, (float) ($tienHang + $thue)]);
+            }
+            $hang[] = array_merge($dong, [
+                (string) ($it['lot_number'] ?? ''),
+                $this->ngay($it['expire_date'] ?? null),
+            ]);
+        }
+
+        $hang[] = [];
+        if (! $trucTiep) {
+            $hang[] = ['Tổng thành tiền (chưa VAT)', (float) ($p['items_amount'] ?? 0)];
+            $hang[] = ['Tổng tiền thuế (VAT)', (float) ($p['vat_amount'] ?? 0)];
+        }
+        $hang[] = ['Tổng tiền', (float) ($p['total_amount'] ?? 0)];
+        $hang[] = ['Đã trả', (float) ($p['paid_amount'] ?? 0)];
+
+        // Sổ trả tiền đi kèm: tệp gửi cho kế toán mà chỉ có mỗi con số luỹ kế thì
+        // họ vẫn phải hỏi lại đã trả mấy lượt, bằng hình thức gì.
+        if (! empty($p['payments'])) {
+            $hang[] = [];
+            $hang[] = ['Sổ trả tiền'];
+            $hang[] = ['Thời điểm', 'Số tiền', 'Hình thức', 'Luỹ kế sau lượt', 'Người ghi', 'Ghi chú'];
+            foreach ($p['payments'] as $t) {
+                $hang[] = [
+                    $this->ngay($t['created_at'] ?? null),
+                    (float) ($t['amount'] ?? 0),
+                    self::CACH_TRA[$t['payment_method'] ?? ''] ?? '',
+                    (float) ($t['paid_after'] ?? 0),
+                    (string) ($t['created_by_name'] ?? ''),
+                    (string) ($t['note'] ?? ''),
+                ];
+            }
+        }
+
+        return $this->taiXlsx($hang, 'phieu-mua-hang-'.$ma, 'Phieu '.$ma);
+    }
+
+    /** Đẩy một bảng ra .xlsx cho trình duyệt tải về. */
+    protected function taiXlsx(array $hang, string $ten, string $tenSheet)
+    {
+        return response(XlsxDon::noiDung($hang, $tenSheet), 200, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Content-Disposition' => 'attachment; filename="'.$ten.'.xlsx"',
+        ]);
     }
 
     // ---------------------------------------------------------------------
@@ -245,18 +403,18 @@ class PhieuMuaHangController extends Controller
         } catch (\Throwable $e) {
             Log::error('Tao phieu mua hang failed', ['msg' => $e->getMessage()]);
 
-            return back()->withInput()->with('error', 'Không kết nối được API. Vui lòng thử lại.');
+            return $this->traLoiGhi($request, 'Không kết nối được API. Vui lòng thử lại.', false, 502);
         }
 
         if (! $res->successful()) {
-            return back()->withInput()->with('error', $this->loi($res, 'Lập phiếu không thành công.'));
+            return $this->traLoiGhi($request, $this->loi($res, 'Lập phiếu không thành công.'), false);
         }
 
         $phieu = $res->json('data') ?? [];
         $ma = $phieu['po_code'] ?? '';
 
         if (! $request->boolean('duyet')) {
-            return $this->veDanhSach($request)->with('success', 'Đã lưu tạm phiếu '.$ma.'.');
+            return $this->traLoiGhi($request, 'Đã lưu tạm phiếu '.$ma.'.');
         }
 
         return $this->duyetSauKhiLuu($request, (int) ($phieu['id'] ?? 0), $ma);
@@ -272,17 +430,17 @@ class PhieuMuaHangController extends Controller
         } catch (\Throwable $e) {
             Log::error('Sua phieu mua hang failed', ['id' => $id, 'msg' => $e->getMessage()]);
 
-            return back()->withInput()->with('error', 'Không kết nối được API. Vui lòng thử lại.');
+            return $this->traLoiGhi($request, 'Không kết nối được API. Vui lòng thử lại.', false, 502);
         }
 
         if (! $res->successful()) {
-            return back()->withInput()->with('error', $this->loi($res, 'Cập nhật phiếu không thành công.'));
+            return $this->traLoiGhi($request, $this->loi($res, 'Cập nhật phiếu không thành công.'), false);
         }
 
         $ma = $res->json('data.po_code') ?? '';
 
         if (! $request->boolean('duyet')) {
-            return $this->veDanhSach($request)->with('success', 'Đã cập nhật phiếu '.$ma.'.');
+            return $this->traLoiGhi($request, 'Đã cập nhật phiếu '.$ma.'.');
         }
 
         return $this->duyetSauKhiLuu($request, $id, $ma);
@@ -320,13 +478,38 @@ class PhieuMuaHangController extends Controller
         $o = $request->validate([
             'paid_amount' => ['required', 'numeric', 'min:0'],
             'note' => ['nullable', 'string', 'max:500'],
+            'payment_method' => ['nullable', 'in:cash,transfer'],
+            'is_debt' => ['nullable', 'boolean'],
+            // Khuôn ngày của đường API là Y-m-d; ô trên màn gõ d-m-Y nên trình
+            // duyệt đã đổi trước khi gửi.
+            'debt_due_date' => ['nullable', 'date_format:Y-m-d'],
+            'debt_contact_name' => ['nullable', 'string', 'max:150'],
+            'debt_contact_phone' => ['nullable', 'string', 'max:30'],
+            'payment_attachment' => ['nullable', 'string', 'max:255'],
         ], [
             'paid_amount.required' => 'Chưa nhập số tiền đã trả.',
             'paid_amount.min' => 'Số tiền đã trả không được là số âm.',
+            'payment_method.in' => 'Hình thức thanh toán chỉ nhận tiền mặt hoặc chuyển khoản.',
+            'debt_due_date.date_format' => 'Hạn nợ không đúng khuôn ngày.',
         ]);
 
+        // Ba trường của thoả thuận nợ chỉ gửi đi khi CÓ ghi nợ. Gửi kèm lúc
+        // không nợ thì server phải tự đoán xem nên tin cái nào — luật dọn sạch
+        // nằm bên đó, đây chỉ cần nói đúng ý định.
+        $coNo = $request->boolean('is_debt');
+        $them = [
+            'payment_method' => (string) ($o['payment_method'] ?? ''),
+            'payment_attachment' => (string) ($o['payment_attachment'] ?? ''),
+            'is_debt' => $coNo,
+            'debt_due_date' => $coNo ? (string) ($o['debt_due_date'] ?? '') : '',
+            'debt_contact_name' => $coNo ? trim((string) ($o['debt_contact_name'] ?? '')) : '',
+            'debt_contact_phone' => $coNo ? trim((string) ($o['debt_contact_phone'] ?? '')) : '',
+        ];
+
         return $this->goi(
-            fn () => $this->api->traTienPhieuMuaHang($id, (float) $o['paid_amount'], (string) ($o['note'] ?? '')),
+            fn () => $this->api->traTienPhieuMuaHang(
+                $id, (float) $o['paid_amount'], (string) ($o['note'] ?? ''), $them
+            ),
             'Đã ghi nhận thanh toán.',
             $request
         );
@@ -476,9 +659,26 @@ class PhieuMuaHangController extends Controller
             // Nhiều ô tick: giữ nguyên dạng chuỗi ngăn bởi dấu phẩy như API nhận.
             'status' => $this->locNhieu($request->query('status'), array_keys(self::TRANG_THAI)),
             'payment_status' => $this->locNhieu($request->query('payment_status'), array_keys(self::TRANG_THAI_TRA)),
+            'warehouse_status' => $this->locNhieu($request->query('warehouse_status'), array_keys(self::TRANG_THAI_KHO)),
             'supplier_id' => (int) $request->query('supplier_id', 0),
-            'from_date' => $this->ngayLoc($request->query('from_date')),
-            'to_date' => $this->ngayLoc($request->query('to_date')),
+            // Ô "Hàng hoá" của v2 là ô chọn nhiều — giữ nguyên dạng chuỗi ngăn bởi
+            // dấu phẩy như API nhận.
+            'variant_id' => $this->locSoNhieu($request->query('variant_id')),
+            // Mở màn là đã lọc sẵn THÁNG NÀY, đúng như bản v2 (và giống màn Điều
+            // chỉnh tồn kho bên cạnh). Sổ mua hàng chạy vài năm thì mặc định "cả
+            // sổ" là mỗi lượt vào trang lại đọc mấy nghìn dòng mà người dùng chỉ
+            // nhìn chục dòng đầu.
+            //
+            // Rẽ theo `has()` chứ không theo giá trị rỗng: gửi lên `from_date=`
+            // rỗng là người dùng CỐ Ý bỏ lọc ngày (nút "Mọi thời gian"), khác hẳn
+            // với không gửi gì — mà nếu chỉ nhìn giá trị thì hai cái đó giống nhau
+            // và không có cách nào tắt được bộ lọc mặc định.
+            'from_date' => $request->has('from_date')
+                ? $this->ngayLoc($request->query('from_date'))
+                : date('Y-m-01'),
+            'to_date' => $request->has('to_date')
+                ? $this->ngayLoc($request->query('to_date'))
+                : date('Y-m-d'),
             'sort' => isset(self::SAP_XEP[$sort]) ? $sort : 'newest',
             'page' => max(1, (int) $request->query('page', 1)),
             'page_size' => in_array($size, self::MUC_SO_DONG, true) ? $size : self::SO_DONG_MOI_TRANG,
@@ -490,15 +690,66 @@ class PhieuMuaHangController extends Controller
     {
         return [
             'keyword' => $f['keyword'],
-            'status' => $f['status'],
+            'status' => $this->trangThaiGuiDi($f),
             'payment_status' => $f['payment_status'],
             'supplier_id' => $f['supplier_id'] ?: '',
+            'variant_id' => $f['variant_id'],
             'from_date' => $f['from_date'],
             'to_date' => $f['to_date'],
             'sort' => $f['sort'],
             'page' => $f['page'],
             'page_size' => $f['page_size'],
         ];
+    }
+
+    /**
+     * Trạng thái phiếu gửi đi API — GỘP ô "Trạng thái đơn" với ô "Trạng thái kho".
+     *
+     * API chỉ biết trạng thái phiếu; trạng thái kho suy ra từ nó (xem
+     * TRANG_THAI_KHO). Tick cả hai ô thì phải ra GIAO của hai tập.
+     *
+     * Giao rỗng (VD "Đã duyệt" + "Chưa nhập kho") trả về 'none': để chuỗi rỗng là
+     * API hiểu thành "mọi trạng thái" và bảng bày ra đúng những phiếu người dùng
+     * vừa loại trừ.
+     */
+    protected function trangThaiGuiDi(array $f): string
+    {
+        $phieu = array_filter(explode(',', $f['status']));
+        $kho = array_filter(explode(',', $f['warehouse_status']));
+
+        if ($kho === []) {
+            return $f['status'];
+        }
+
+        $tuKho = array_merge(...array_map(fn ($k) => self::KHO_THEO_TRANG_THAI[$k], $kho));
+        $giao = $phieu === [] ? $tuKho : array_intersect($phieu, $tuKho);
+
+        return $giao === [] ? 'none' : implode(',', $giao);
+    }
+
+    /**
+     * Cửa hàng là hộ kinh doanh nộp thuế TRỰC TIẾP — bản v2 gọi là
+     * `admin('tax_type')->value == 'direct'`.
+     *
+     * Bật thì chiều mua KHÔNG có đường VAT: màn hình bỏ ô thuế của phiếu, ba cột
+     * thuế trên lưới hàng và hai dòng thuế ở khối tiền, còn payload luôn ghi 0.
+     *
+     * Ép ở CẢ hai đầu (giao diện giấu ô, controller ghi đè) chứ không chỉ giấu ô:
+     * giấu ô mà vẫn gửi con số cũ thì một cửa hàng bật công tắc này giữa chừng sẽ
+     * lập ra phiếu có thuế mà trên màn hình không chỗ nào nói ra.
+     */
+    protected function thueTrucTiep(): bool
+    {
+        return $this->api->settingBool('tax_direct');
+    }
+
+    /** Danh sách id ngăn bởi dấu phẩy: bỏ phần không phải số dương. */
+    protected function locSoNhieu($v): string
+    {
+        $phan = is_array($v) ? $v : explode(',', (string) $v);
+        $sach = array_values(array_unique(array_filter(array_map('intval', $phan), fn ($n) => $n > 0)));
+
+        return implode(',', $sach);
     }
 
     /**
@@ -515,12 +766,22 @@ class PhieuMuaHangController extends Controller
         return implode(',', $sach);
     }
 
-    /** Ngày lọc: chỉ nhận YYYY-MM-DD, sai khuôn thì bỏ qua chứ không đoán. */
+    /**
+     * Ngày lọc: nhận YYYY-MM-DD (link chia sẻ) lẫn DD-MM-YYYY (ô lịch của v2).
+     * Sai cả hai khuôn thì bỏ qua chứ không đoán.
+     */
     protected function ngayLoc($v): string
     {
         $v = trim((string) $v);
 
-        return preg_match('/^\d{4}-\d{2}-\d{2}$/', $v) ? $v : '';
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $v)) {
+            return $v;
+        }
+        if (preg_match('/^(\d{2})-(\d{2})-(\d{4})$/', $v, $m)) {
+            return $m[3].'-'.$m[2].'-'.$m[1];
+        }
+
+        return '';
     }
 
     protected function ngay(?string $v): string
@@ -563,6 +824,7 @@ class PhieuMuaHangController extends Controller
                     $fail('Phiếu chưa có dòng hàng nào.');
                 }
             }],
+            'updated_at' => ['nullable', 'string', 'max:40'],
         ], [
             'items.required' => 'Phiếu chưa có dòng hàng nào.',
             'document_date.date_format' => 'Ngày chứng từ không đúng định dạng.',
@@ -571,15 +833,23 @@ class PhieuMuaHangController extends Controller
 
         $items = json_decode((string) $o['items'], true);
 
+        // Hộ kinh doanh nộp thuế trực tiếp: chiều mua không có đường VAT. Ghi đè ở
+        // đây, không tin vào việc giao diện đã giấu ô — form gửi lại sau khi lưu
+        // hỏng, hay một lượt gọi tay, đều đi qua đúng chỗ này.
+        $trucTiep = $this->thueTrucTiep();
+
         return [
+            // Mốc của BẢN người dùng đang xem. API so lại để phát hiện có người
+            // khác vừa lưu phiếu này — xem service.kiemBanDangSua bên API.
+            'updated_at' => (string) ($o['updated_at'] ?? ''),
             'supplier_id' => (int) ($o['supplier_id'] ?? 0),
             'supplier_name' => trim((string) ($o['supplier_name'] ?? '')),
             'document_date' => (string) ($o['document_date'] ?? ''),
             'expected_date' => (string) ($o['expected_date'] ?? ''),
             'purchaser_id' => (int) ($o['purchaser_id'] ?? 0),
             'supplier_delivery_code' => trim((string) ($o['supplier_delivery_code'] ?? '')),
-            'vat_mode' => (string) ($o['vat_mode'] ?? 'order'),
-            'vat_percent' => (int) ($o['vat_percent'] ?? 0),
+            'vat_mode' => $trucTiep ? 'order' : (string) ($o['vat_mode'] ?? 'order'),
+            'vat_percent' => $trucTiep ? 0 : (int) ($o['vat_percent'] ?? 0),
             'discount_amount' => (float) ($o['discount_amount'] ?? 0),
             'paid_amount' => (float) ($o['paid_amount'] ?? 0),
             'note' => trim((string) ($o['note'] ?? '')),
@@ -593,7 +863,7 @@ class PhieuMuaHangController extends Controller
                 'unit_id' => (int) ($it['unit_id'] ?? 0),
                 'quantity' => (int) ($it['quantity'] ?? 0),
                 'unit_cost' => (float) ($it['unit_cost'] ?? 0),
-                'vat_percent' => (int) ($it['vat_percent'] ?? 0),
+                'vat_percent' => $trucTiep ? 0 : (int) ($it['vat_percent'] ?? 0),
                 'lot_number' => trim((string) ($it['lot_number'] ?? '')),
                 'expire_date' => trim((string) ($it['expire_date'] ?? '')),
             ], $items)),
@@ -604,7 +874,7 @@ class PhieuMuaHangController extends Controller
     protected function duyetSauKhiLuu(Request $request, int $id, string $ma)
     {
         if ($id <= 0) {
-            return $this->veDanhSach($request)->with('success', 'Đã lưu phiếu '.$ma.'.');
+            return $this->traLoiGhi($request, 'Đã lưu phiếu '.$ma.'.');
         }
 
         try {
@@ -612,21 +882,23 @@ class PhieuMuaHangController extends Controller
         } catch (\Throwable $e) {
             Log::error('Duyet phieu mua hang failed', ['id' => $id, 'msg' => $e->getMessage()]);
 
-            return $this->veDanhSach($request)->with(
-                'error',
-                'Đã lưu phiếu '.$ma.' nhưng chưa duyệt được — không kết nối được API. Mở phiếu và bấm Duyệt lại.'
+            return $this->traLoiGhi(
+                $request,
+                'Đã lưu phiếu '.$ma.' nhưng chưa duyệt được — không kết nối được API. Mở phiếu và bấm Duyệt lại.',
+                true, 200, true
             );
         }
 
         if ($res->successful()) {
-            return $this->veDanhSach($request)->with('success', 'Đã duyệt phiếu '.$ma.' — hàng đã vào kho.');
+            return $this->traLoiGhi($request, 'Đã duyệt phiếu '.$ma.' — hàng đã vào kho.');
         }
 
         // Phiếu ĐÃ lưu, chỉ lượt duyệt hỏng. Nói rõ cả hai vế: người dùng cần
         // biết dữ liệu còn nguyên, chỉ là hàng chưa vào kho.
-        return $this->veDanhSach($request)->with(
-            'error',
-            'Đã lưu tạm phiếu '.$ma.' nhưng chưa duyệt được: '.$this->loi($res, 'API từ chối lượt duyệt.')
+        return $this->traLoiGhi(
+            $request,
+            'Đã lưu tạm phiếu '.$ma.' nhưng chưa duyệt được: '.$this->loi($res, 'API từ chối lượt duyệt.'),
+            true, 200, true
         );
     }
 
@@ -778,6 +1050,40 @@ class PhieuMuaHangController extends Controller
         $cau = $ok > 0 ? sprintf($mauOk, $ok).' '.sprintf($mauHong, $hong) : sprintf($mauHong, $hong);
 
         return $ve->with($ok > 0 ? 'success' : 'error', $cau);
+    }
+
+    /**
+     * Trả lời một lượt GHI, theo đúng lối mà bên gọi đang dùng.
+     *
+     * Hộp thoại lưu bằng AJAX (V2.luuHop) và chờ JSON: lưu được thì nó tự đóng hộp,
+     * bắn toast rồi nạp lại danh sách TẠI CHỖ — đúng cách bản v2 làm
+     * (`$('#modalCreate').modal('hide'); list(1);`). Lưu hỏng thì hộp Ở NGUYÊN cùng
+     * mọi thứ vừa gõ, người dùng sửa đúng chỗ sai rồi bấm lại.
+     *
+     * Lối cũ (form gửi thật, tải lại cả trang) vẫn giữ: mấy đường ghi khác của màn
+     * này — duyệt, huỷ, thanh toán, xoá — còn dùng nó.
+     */
+    protected function traLoiGhi(
+        Request $request,
+        string $cau,
+        bool $ok = true,
+        int $ma = 422,
+        bool $canhBao = false
+    ) {
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => $ok,
+                // canhBao = phiếu ĐÃ lưu nhưng lượt duyệt kèm theo hỏng. Vẫn là 200
+                // để hộp thoại đóng lại — để nó mở là người dùng bấm Lưu lần nữa và
+                // đẻ ra phiếu thứ hai. Nhưng câu báo phải đỏ, không phải xanh.
+                'warning' => $canhBao,
+                'message' => $cau,
+            ], $ok ? 200 : $ma);
+        }
+
+        return $ok
+            ? $this->veDanhSach($request)->with($canhBao ? 'error' : 'success', $cau)
+            : back()->withInput()->with('error', $cau);
     }
 
     /** Về đúng URL cũ nếu form có gửi kèm. */

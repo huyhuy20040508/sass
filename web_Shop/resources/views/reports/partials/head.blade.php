@@ -26,6 +26,7 @@
 
     /** Giữ nguyên mọi bộ lọc khác khi đổi một tham số. */
     $link = fn (array $overrides = []) => route($currentRoute, array_merge([
+        'shop_id' => $filters['shop_id'] ?? '',
         'from_date' => $filters['from_date'],
         'to_date' => $filters['to_date'],
         'group_by' => $filters['group_by'],
@@ -42,6 +43,8 @@
         'range' => $code,
         'sort' => $filters['sort'],
         'limit' => $filters['limit'],
+        // Bấm một khoảng xem nhanh không được làm mất chi nhánh đang chọn.
+        'shop_id' => $filters['shop_id'] ?? '',
     ]);
 
 @endphp
@@ -85,6 +88,26 @@
     </div>
 
     <div class="rp-filters-right">
+        {{-- Chi nhánh xem báo cáo. Chỉ hiện khi cửa hàng có từ hai kho trở lên —
+             tiệm một điểm bán thì ô này không có gì để chọn.
+
+             "Tất cả chi nhánh" gửi shop_id=0, một giá trị khai TƯỜNG MINH: bỏ
+             trống nghĩa là "theo kho đang làm việc", nên hai thứ ấy không thể
+             dùng chung một ô rỗng. --}}
+        @if(count($chiNhanh ?? []) > 1)
+            <select name="shop_id" class="rp-select" title="Chi nhánh xem báo cáo"
+                onchange="this.form.submit()">
+                <option value="" @selected(($filters['shop_id'] ?? '') === '')>Chi nhánh đang làm</option>
+                <option value="0" @selected(($filters['shop_id'] ?? '') === '0')>Tất cả chi nhánh</option>
+                @foreach($chiNhanh as $cn)
+                    <option value="{{ $cn['id'] ?? 0 }}"
+                        @selected(($filters['shop_id'] ?? '') === (string) ($cn['id'] ?? 0))>
+                        {{ $cn['name'] ?? '' }}
+                    </option>
+                @endforeach
+            </select>
+        @endif
+
         {!! $extra ?? '' !!}
 
         @if($showGroup)

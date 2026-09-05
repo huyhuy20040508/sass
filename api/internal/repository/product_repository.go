@@ -3,8 +3,12 @@ package repository
 import (
 	"context"
 	"errors"
+	"fmt"
+	"slices"
+	"sort"
 	"strings"
 
+	"sass-api/internal/chinhanh"
 	"sass-api/internal/domain"
 
 	"gorm.io/gorm"
@@ -32,10 +36,60 @@ type productRepository struct{ db *gorm.DB }
 const tongTonExpr = `COALESCE((SELECT SUM(vs.quantity) FROM variant_stocks vs
 	WHERE vs.product_variant_id = product_variants.id), 0) AS stock_quantity`
 
-// bienTheKemTon là bộ Preload biến thể có kèm tổng tồn, dùng chung cho mọi
-// đường đọc sản phẩm — thiếu Select này thì stock_quantity im lặng bằng 0.
+// tonExprSanPham chọn biểu thức tồn theo ctx: ĐANG ĐỨNG Ở MỘT CHI NHÁNH thì trả
+// tồn của riêng kho đó, không thì trả bản cộng cả cửa hàng.
+//
+// Vì sao phải theo chi nhánh: cột "Tồn kho" của màn Hàng hoá trước đây luôn là
+// tổng mọi chi nhánh, nên người đứng ở quầy Quận 7 (kho còn 3) vẫn đọc ra 40 —
+// con số của cả chuỗi. Họ nhận đơn 10 cái, rồi lượt trừ kho từ chối vì kho ấy
+// chỉ có 3, sau khi khách đã trả tiền. Cùng một lỗi mà tonCuaChiNhanh đã chữa
+// bên đường bán hàng; đây là chỗ còn sót.
+//
+// Gian hàng công khai không mang chi nhánh nào trong ctx nên vẫn đọc bản cộng —
+// đúng ý "cả cửa hàng còn bao nhiêu".
+//
+// %d an toàn: shopID là uint đã qua middleware.ChiNhanhDangLam (đã tra sổ, đã
+// đối chiếu với cửa hàng), không sinh ra được ký tự nào ngoài chữ số.
+func tonExprSanPham(ctx context.Context) string {
+	if ctx == nil {
+		return tongTonExpr
+	}
+	shopID, ok := chinhanh.ID(ctx)
+	if !ok {
+		return tongTonExpr
+	}
+
+	return fmt.Sprintf(`COALESCE((SELECT SUM(vs.quantity) FROM variant_stocks vs
+		WHERE vs.product_variant_id = product_variants.id AND vs.shop_id = %d), 0) AS stock_quantity`, shopID)
+}
+
+// giaExprSanPham trả GIÁ RIÊNG của chi nhánh đang làm việc, hoặc chuỗi rỗng khi
+// không đứng ở chi nhánh nào.
+//
+// Truy vấn con thay vì LEFT JOIN: đây là một Preload, và thêm JOIN vào đó thì
+// biến thể chưa khai giá riêng sẽ biến mất khỏi danh sách. NULL ở đây mang đúng
+// nghĩa "chưa khai" — nơi đọc rơi về giá gốc.
+func giaExprSanPham(ctx context.Context) string {
+	if ctx == nil {
+		return ""
+	}
+	shopID, ok := chinhanh.ID(ctx)
+	if !ok {
+		return ""
+	}
+
+	return fmt.Sprintf(`, (SELECT vsp.price FROM variant_shop_prices vsp
+		WHERE vsp.product_variant_id = product_variants.id AND vsp.shop_id = %d) AS shop_price`, shopID)
+}
+
+// bienTheKemTon là bộ Preload biến thể có kèm tồn VÀ giá của chi nhánh đang làm
+// việc — thiếu Select này thì stock_quantity im lặng bằng 0 và shop_price im
+// lặng bằng nil, tức là màn hình hiện giá gốc cho một quầy có giá riêng.
 func bienTheKemTon(db *gorm.DB) *gorm.DB {
-	return db.Select("product_variants.*, " + tongTonExpr).Order("pos ASC, id ASC")
+	ctx := db.Statement.Context
+
+	return db.Select("product_variants.*, " + tonExprSanPham(ctx) + giaExprSanPham(ctx)).
+		Order("pos ASC, id ASC")
 }
 
 func NewProductRepository(db *gorm.DB) domain.ProductRepository {
@@ -72,13 +126,36 @@ func (r *productRepository) List(ctx context.Context, f domain.ProductFilter) ([
 	// Vị trí: lọc theo một chỗ cụ thể, hoặc lấy riêng phần CHƯA gán chỗ nào.
 	// Hai bộ lọc rời nhau chứ không phải hai giá trị của một trường — xem
 	// ProductFilter.NoLocation.
+	//
+	// Đọc BẢNG NỐI, và "chưa gán" tính THEO CHI NHÁNH ĐANG XEM: mặt hàng đã xếp
+	// kệ ở Quận 1 nhưng chưa xếp ở Quận 7 thì với người đứng ở Quận 7 nó đúng là
+	// "chưa biết để đâu" — đó mới là câu hỏi họ đang hỏi.
 	if f.NoLocation {
-		q = q.Where("location_id IS NULL")
+		if shopID := chiNhanhDoc(ctx, r.db); shopID > 0 {
+			q = q.Where(`NOT EXISTS (SELECT 1 FROM product_shop_locations psl
+				WHERE psl.product_id = products.id AND psl.shop_id = ?)`, shopID)
+		} else {
+			// Không đứng ở chi nhánh nào: "chưa gán" nghĩa là chưa xếp kệ ở BẤT KỲ
+			// kho nào — câu duy nhất còn nghĩa khi không có kho nào để hỏi.
+			q = q.Where(`NOT EXISTS (SELECT 1 FROM product_shop_locations psl
+				WHERE psl.product_id = products.id)`)
+		}
 	} else if f.LocationID != nil {
-		q = q.Where("location_id = ?", *f.LocationID)
+		q = q.Where(`EXISTS (SELECT 1 FROM product_shop_locations psl
+			WHERE psl.product_id = products.id AND psl.location_id = ?)`, *f.LocationID)
 	}
 	if f.UnitID != nil {
 		q = q.Where("unit_id = ?", *f.UnitID)
+	}
+	// Chi nhánh: hàng gán đích danh chi nhánh này, HOẶC hàng chưa gán chi nhánh
+	// nào (= dùng chung mọi chi nhánh). Xem ProductFilter.ShopID.
+	if f.ShopID != nil {
+		q = q.Where(`EXISTS (
+			SELECT 1 FROM product_shops ps
+			WHERE ps.product_id = products.id AND ps.shop_id = ?
+		) OR NOT EXISTS (
+			SELECT 1 FROM product_shops ps2 WHERE ps2.product_id = products.id
+		)`, *f.ShopID)
 	}
 	if f.IsMultiVariant != nil {
 		q = q.Where("is_multi_variant = ?", *f.IsMultiVariant)
@@ -140,7 +217,7 @@ func (r *productRepository) List(ctx context.Context, f domain.ProductFilter) ([
 
 	// Danh mục & thương hiệu luôn nạp: thẻ sản phẩm hiển thị chúng, và tầng
 	// khuyến mãi cần để biết chương trình có áp cho sản phẩm này không.
-	q = q.Preload("Category").Preload("Location").Preload("Unit").
+	q = q.Preload("Category").Preload("Unit").
 		Preload("Shops").Preload("Tags")
 	if !f.Slim {
 		q = q.Preload("Variants", bienTheKemTon).
@@ -151,14 +228,86 @@ func (r *productRepository) List(ctx context.Context, f domain.ProductFilter) ([
 	}
 
 	var products []domain.Product
-	err := q.Offset(offset).Limit(f.PageSize).Find(&products).Error
-	return products, total, err
+	if err := q.Offset(offset).Limit(f.PageSize).Find(&products).Error; err != nil {
+		return nil, 0, err
+	}
+
+	return products, total, r.napViTri(ctx, products)
+}
+
+// napViTri điền chỗ để hàng TẠI CHI NHÁNH ĐANG LÀM VIỆC cho cả trang — hai câu
+// truy vấn, không phải mỗi mặt hàng một câu.
+//
+// Không đứng ở chi nhánh nào (gian hàng công khai, báo cáo toàn cửa hàng) thì
+// để trống: "kệ nào" không có câu trả lời khi chưa biết đang hỏi kho nào, và
+// bịa ra kệ của một chi nhánh bất kỳ là dắt người soạn hàng đi nhầm chỗ.
+func (r *productRepository) napViTri(ctx context.Context, list []domain.Product) error {
+	if len(list) == 0 {
+		return nil
+	}
+
+	shopID := chiNhanhDoc(ctx, r.db)
+	if shopID == 0 {
+		return nil
+	}
+
+	ids := make([]uint, 0, len(list))
+	for _, p := range list {
+		ids = append(ids, p.ID)
+	}
+
+	var gan []struct {
+		ProductID  uint
+		LocationID uint
+	}
+	if err := r.db.WithContext(ctx).Table("product_shop_locations").
+		Select("product_id, location_id").
+		Where("shop_id = ? AND product_id IN ?", shopID, ids).
+		Scan(&gan).Error; err != nil {
+		return err
+	}
+	if len(gan) == 0 {
+		return nil
+	}
+
+	viTriIDs := make([]uint, 0, len(gan))
+	theoHang := make(map[uint]uint, len(gan))
+	for _, g := range gan {
+		theoHang[g.ProductID] = g.LocationID
+		if !slices.Contains(viTriIDs, g.LocationID) {
+			viTriIDs = append(viTriIDs, g.LocationID)
+		}
+	}
+
+	// Unscoped: kệ có thể đã xoá mềm mà mặt hàng vẫn còn trỏ tới — màn hình phải
+	// in ra được tên cũ chứ không phải một ô trống không giải thích gì.
+	var kes []domain.ViTri
+	if err := r.db.WithContext(ctx).Unscoped().
+		Where("id IN ?", viTriIDs).Find(&kes).Error; err != nil {
+		return err
+	}
+	theoKe := make(map[uint]*domain.ViTri, len(kes))
+	for i := range kes {
+		theoKe[kes[i].ID] = &kes[i]
+	}
+
+	for i := range list {
+		id, co := theoHang[list[i].ID]
+		if !co {
+			continue
+		}
+		vt := id
+		list[i].LocationID = &vt
+		list[i].Location = theoKe[id]
+	}
+
+	return nil
 }
 
 func (r *productRepository) FindByID(ctx context.Context, id uint) (*domain.Product, error) {
 	var p domain.Product
 	err := r.db.WithContext(ctx).
-		Preload("Category").Preload("Location").Preload("Unit").
+		Preload("Category").Preload("Unit").
 		Preload("Shops").Preload("Tags").
 		Preload("Variants", bienTheKemTon).
 		Preload("Variants.Attributes").
@@ -169,13 +318,22 @@ func (r *productRepository) FindByID(ctx context.Context, id uint) (*domain.Prod
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, domain.ErrNotFound
 	}
-	return &p, err
+	if err != nil {
+		return nil, err
+	}
+
+	mot := []domain.Product{p}
+	if err := r.napViTri(ctx, mot); err != nil {
+		return nil, err
+	}
+
+	return &mot[0], nil
 }
 
 func (r *productRepository) FindBySlug(ctx context.Context, slug string) (*domain.Product, error) {
 	var p domain.Product
 	err := r.db.WithContext(ctx).
-		Preload("Category").Preload("Location").Preload("Unit").
+		Preload("Category").Preload("Unit").
 		Preload("Shops").Preload("Tags").
 		Preload("Variants", bienTheKemTon).
 		Preload("Variants.Attributes").
@@ -195,6 +353,21 @@ func (r *productRepository) ExistsBySlug(ctx context.Context, slug string, exclu
 
 func (r *productRepository) ExistsBySKU(ctx context.Context, sku string, excludeID uint) (bool, error) {
 	return r.existsByColumn(ctx, "sku", sku, excludeID)
+}
+
+// ExistsByName — trùng TÊN mặt hàng trong cùng cửa hàng, không phân biệt hoa
+// thường. Hai mặt hàng cùng tên thì thu ngân gõ tên ra hai dòng y hệt nhau,
+// bán nhầm dòng nào cũng không biết.
+func (r *productRepository) ExistsByName(ctx context.Context, name string, excludeID uint) (bool, error) {
+	var count int64
+	q := r.db.WithContext(ctx).Model(&domain.Product{}).
+		Where("LOWER(name) COLLATE utf8mb4_bin = LOWER(?)", name)
+	if excludeID > 0 {
+		q = q.Where("id <> ?", excludeID)
+	}
+	err := q.Count(&count).Error
+
+	return count > 0, err
 }
 
 // Count đếm sản phẩm của cửa hàng cho lượt xét hạn mức hợp đồng.
@@ -241,11 +414,11 @@ func (r *productRepository) Create(ctx context.Context, p *domain.Product) error
 // Update ghi ĐÚNG dòng products, không đụng tới quan hệ.
 //
 // Omit(clause.Associations) là bắt buộc chứ không phải dọn dẹp: `p` vừa đi qua
-// FindByID nên Category/Location đã được preload sẵn, mà GORM thì tự lưu quan
-// hệ belongs-to TRƯỚC rồi lấy id của nó ghi đè lại khoá ngoại. Nghĩa là gỡ vị
-// trí (location_id = nil) bị chính đối tượng Location cũ còn nằm trong struct
-// gán ngược trở lại — sửa xong nhìn vẫn y nguyên. Biến thể và thư viện ảnh cũng
-// có đường ghi riêng (ReplaceVariants/ReplaceImages), không để Save đụng vào.
+// FindByID nên Category đã được preload sẵn, mà GORM thì tự lưu quan hệ
+// belongs-to TRƯỚC rồi lấy id của nó ghi đè lại khoá ngoại. Biến thể, thư viện
+// ảnh, chi nhánh, thẻ và VỊ TRÍ đều có đường ghi riêng
+// (ReplaceVariants/ReplaceImages/ReplaceShops/ReplaceTags/DatViTri), không để
+// Save đụng vào.
 func (r *productRepository) Update(ctx context.Context, p *domain.Product) error {
 	return r.db.WithContext(ctx).Omit(clause.Associations).Save(p).Error
 }
@@ -352,6 +525,47 @@ func (r *productRepository) DoiChoThuTu(ctx context.Context, id uint, huong stri
 		}
 		return tx.Model(&domain.Product{}).Where("id = ?", kt.ID).
 			UpdateColumn("sort", moiKe).Error
+	})
+}
+
+// SapXepLai gán lại thứ tự cho ĐÚNG những mặt hàng trong danh sách truyền vào,
+// theo đúng trình tự ấy (phần tử đầu nằm trên cùng).
+//
+// Cách làm: gom chính các giá trị `sort` mà mấy dòng này ĐANG giữ, xếp giảm dần,
+// rồi phát lại theo thứ tự mới. Không đánh số 1..n, và đó là điểm mấu chốt —
+// bảng đang phân trang, đánh số lại theo trang thì cả trang nhảy lên đầu (hoặc
+// rơi xuống đáy) so với những trang khác. Hoán vị trong đúng tập số cũ thì mọi
+// mặt hàng ngoài trang giữ nguyên chỗ đứng tương đối của nó.
+func (r *productRepository) SapXepLai(ctx context.Context, ids []uint) error {
+	if len(ids) == 0 {
+		return nil
+	}
+
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var ds []domain.Product
+		if err := tx.Select("id, sort").Where("id IN ?", ids).Find(&ds).Error; err != nil {
+			return err
+		}
+		// Thiếu dòng nào nghĩa là danh sách gửi lên nói tới mặt hàng không còn
+		// (vừa bị xoá ở tab khác). Nhận bừa thì số thứ tự phát lệch một nhịp cho
+		// tất cả những dòng phía sau.
+		if len(ds) != len(ids) {
+			return domain.ErrNotFound
+		}
+
+		soCu := make([]int, 0, len(ds))
+		for _, p := range ds {
+			soCu = append(soCu, p.Sort)
+		}
+		sort.Sort(sort.Reverse(sort.IntSlice(soCu)))
+
+		for i, id := range ids {
+			if err := tx.Model(&domain.Product{}).Where("id = ?", id).
+				UpdateColumn("sort", soCu[i]).Error; err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 }
 
@@ -604,4 +818,41 @@ func (r *productRepository) ReplaceImages(ctx context.Context, productID uint, i
 		}
 		return nil
 	})
+}
+
+// DatViTri gán hoặc gỡ kệ cho một mặt hàng TẠI CHI NHÁNH ĐANG LÀM VIỆC.
+//
+// nil = gỡ ra (xoá dòng), khác hẳn với "ghi id 0": bảng nối không có dòng nghĩa
+// là chi nhánh này chưa xếp kệ cho món ấy — cùng quy ước với `product_shops`
+// (rỗng = mọi chi nhánh) và `variant_shop_prices` (thiếu dòng = giá gốc).
+//
+// Không đứng ở chi nhánh nào thì KHÔNG làm gì: "xếp vào kệ nào" chưa có nghĩa
+// khi chưa biết đang nói về kho nào, và ghi bừa vào một chi nhánh là dắt người
+// soạn hàng đi nhầm chỗ. Nhánh này xảy ra với lượt nhập hàng loạt và lượt gọi
+// từ gian hàng — cả hai đều không khai kệ.
+func (r *productRepository) DatViTri(ctx context.Context, productID uint, locationID *uint) error {
+	if productID == 0 {
+		return nil
+	}
+
+	// Luật của đường GHI: cửa hàng một chi nhánh thì tự suy ra, nhiều chi nhánh
+	// mà không khai thì TỪ CHỐI. Trả 0 lặng lẽ như bản đầu là mất trắng phần
+	// người dùng vừa gõ mà không câu nào nói ra.
+	shopID, err := chiNhanhCuaRequest(ctx, r.db)
+	if err != nil {
+		return err
+	}
+
+	if locationID == nil || *locationID == 0 {
+		return r.db.WithContext(ctx).
+			Where("shop_id = ? AND product_id = ?", shopID, productID).
+			Delete(&domain.ViTriHangHoa{}).Error
+	}
+
+	dong := domain.ViTriHangHoa{ShopID: shopID, ProductID: productID, LocationID: *locationID}
+
+	return r.db.WithContext(ctx).Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "shop_id"}, {Name: "product_id"}},
+		DoUpdates: clause.AssignmentColumns([]string{"location_id", "updated_at"}),
+	}).Create(&dong).Error
 }

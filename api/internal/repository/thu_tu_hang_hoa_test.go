@@ -93,3 +93,63 @@ func TestDoiChoThuTuKhiTrungSo(t *testing.T) {
 		t.Fatalf("sau khi lên trên, A phải có thứ tự lớn hơn B: A=%d B=%d", sauA.Sort, sauB.Sort)
 	}
 }
+
+// Kéo thả: một dòng nhảy thẳng tới chỗ bất kỳ, không nhích từng bậc.
+//
+// Điều đáng canh nhất KHÔNG phải là ba dòng có đổi chỗ hay không, mà là TẬP giá
+// trị sort phải giữ nguyên. Bảng đang phân trang: đánh số lại 1..n theo trang thì
+// cả trang nhảy lên đầu (hoặc rơi xuống đáy) so với những trang chưa đụng tới.
+func TestSapXepLaiHangHoa(t *testing.T) {
+	db := testDB(t)
+	repo := NewProductRepository(db)
+	ctx := ctxTest()
+
+	// Trên bảng: C (30) · B (20) · A (10). Thêm D (5) đứng NGOÀI lượt kéo thả.
+	a := newProduct(t, db, "sp-keo-tha-a", "TEST-KT-A")
+	b := newProduct(t, db, "sp-keo-tha-b", "TEST-KT-B")
+	c := newProduct(t, db, "sp-keo-tha-c", "TEST-KT-C")
+	d := newProduct(t, db, "sp-keo-tha-d", "TEST-KT-D")
+	for id, sort := range map[uint]int{a.ID: 10, b.ID: 20, c.ID: 30, d.ID: 5} {
+		if err := db.WithContext(ctxTest()).Model(&domain.Product{}).
+			Where("id = ?", id).UpdateColumn("sort", sort).Error; err != nil {
+			t.Fatalf("không đặt được thứ tự ban đầu: %v", err)
+		}
+	}
+	docSort := func(id uint) int {
+		var p domain.Product
+		if err := db.WithContext(ctxTest()).First(&p, id).Error; err != nil {
+			t.Fatalf("không đọc lại được mặt hàng: %v", err)
+		}
+		return p.Sort
+	}
+
+	// Kéo A từ cuối lên đầu: trình tự mới A · C · B.
+	// PHÁ THỬ: nếu đổi sang đánh số 1..n thì A nhận 1 chứ không phải 30, và D
+	// (đang giữ 5) đột nhiên vượt lên trên cả ba — đúng cái bẫy phân trang.
+	if err := repo.SapXepLai(ctx, []uint{a.ID, c.ID, b.ID}); err != nil {
+		t.Fatalf("sắp xếp lại lỗi: %v", err)
+	}
+	if got := docSort(a.ID); got != 30 {
+		t.Fatalf("A đứng đầu phải nhận 30, nhận %d", got)
+	}
+	if got := docSort(c.ID); got != 20 {
+		t.Fatalf("C đứng giữa phải nhận 20, nhận %d", got)
+	}
+	if got := docSort(b.ID); got != 10 {
+		t.Fatalf("B đứng cuối phải nhận 10, nhận %d", got)
+	}
+	// D nằm ngoài danh sách gửi lên: không được xê dịch, và vẫn phải đứng SAU cả ba.
+	if got := docSort(d.ID); got != 5 {
+		t.Fatalf("D ngoài lượt kéo thả không được đổi, nhận %d", got)
+	}
+
+	// Một id không còn (vừa bị xoá ở tab khác): TỪ CHỐI cả lượt. Nhận bừa thì số
+	// thứ tự phát lệch một nhịp cho mọi dòng phía sau nó.
+	err := repo.SapXepLai(ctx, []uint{a.ID, 999999999})
+	if !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("id không có phải trả ErrNotFound, nhận %v", err)
+	}
+	if got := docSort(a.ID); got != 30 {
+		t.Fatalf("lượt bị từ chối không được ghi gì: A = %d", got)
+	}
+}

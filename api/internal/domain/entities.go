@@ -3,6 +3,7 @@
 package domain
 
 import (
+	"context"
 	"database/sql/driver"
 	"fmt"
 	"strings"
@@ -470,23 +471,32 @@ type Product struct {
 	TenantOwned
 	CategoryID uint      `json:"category_id"`
 	Category   *Category `json:"category,omitempty" gorm:"foreignKey:CategoryID"`
-	// LocationID là chỗ để hàng (Hàng hóa → Vị trí). nil = chưa gán, và đó là
-	// trạng thái hợp lệ: cửa hàng không quản kho theo kệ thì để trống cả cột.
-	LocationID *uint  `json:"location_id"`
-	Location   *ViTri `json:"location,omitempty" gorm:"foreignKey:LocationID"`
+	// LocationID là chỗ để hàng TẠI CHI NHÁNH ĐANG LÀM VIỆC (Hàng hóa → Vị trí).
+	// nil = chi nhánh đó chưa xếp kệ cho mặt hàng này, và đó là trạng thái hợp
+	// lệ: cửa hàng không quản kho theo kệ thì để trống cả cột.
+	//
+	// KHÔNG còn là cột của bảng `products` (migration 0052). Một mặt hàng nằm ở
+	// kệ khác nhau tại mỗi kho, nên chỗ để nó là bảng nối
+	// `product_shop_locations`; trường này do truy vấn con điền vào lúc đọc.
+	//
+	// `gorm:"->"` chứ không phải `gorm:"-"`: chỉ đọc, nhưng vẫn phải để GORM
+	// scan giá trị vào — với `-` thì trường luôn nil, y như chưa làm gì.
+	LocationID *uint `json:"location_id" gorm:"->"`
+	// Location là hồ sơ cái kệ ấy. `gorm:"-"`: repository tra kèm cho cả trang
+	// bằng MỘT câu, không phải quan hệ khoá ngoại nữa.
+	Location *ViTri `json:"location,omitempty" gorm:"-"`
 	// UnitID là đơn vị tính (Hàng hóa → Đơn vị). nil = chưa khai.
 	UnitID *uint      `json:"unit_id"`
 	Unit   *DonViTinh `json:"unit,omitempty" gorm:"foreignKey:UnitID"`
 	// UnitConversions là khối "Quy đổi đơn vị hàng hoá": 1 Thùng = 24 Cái.
 	// Xem domain/quy_doi_don_vi.go.
-	UnitConversions  DanhSachQuyDoi `json:"unit_conversions" gorm:"column:unit_conversions;serializer:json"`
-	Name             string         `json:"name"`
-	Slug             string         `json:"slug"`
-	SKU              string         `json:"sku" gorm:"column:sku"`
-	ShortDescription string         `json:"short_description"`
-	Description      string         `json:"description"`
-	BasePrice        float64        `json:"base_price"`
-	SalePrice        *float64       `json:"sale_price"`
+	UnitConversions DanhSachQuyDoi `json:"unit_conversions" gorm:"column:unit_conversions;serializer:json"`
+	Name            string         `json:"name"`
+	Slug            string         `json:"slug"`
+	SKU             string         `json:"sku" gorm:"column:sku"`
+	Description     string         `json:"description"`
+	BasePrice       float64        `json:"base_price"`
+	SalePrice       *float64       `json:"sale_price"`
 	// VAT là % thuế GTGT của mặt hàng. Hai giá trị âm là MÃ chứ không phải phần
 	// trăm: MucKhongChiuThue (-1, KCT) và MucKhongKeKhai (-2, KKKNT). Quy chúng
 	// về 0 là mất phân biệt với mức "0%".
@@ -538,13 +548,11 @@ type Product struct {
 	SoldCount uint `json:"sold_count"`
 	// Sort là thứ tự người bán TỰ XẾP bằng hai mũi tên lên/xuống trên bảng.
 	// Danh sách sắp theo cột này GIẢM DẦN — số lớn nằm trên.
-	Sort            int              `json:"sort"`
-	RatingAvg       float64          `json:"rating_avg"`
-	RatingCount     uint             `json:"rating_count"`
-	MetaTitle       string           `json:"meta_title"`
-	MetaDescription string           `json:"meta_description"`
-	Variants        []ProductVariant `json:"variants,omitempty" gorm:"foreignKey:ProductID"`
-	Images          []ProductImage   `json:"images,omitempty" gorm:"foreignKey:ProductID"`
+	Sort        int              `json:"sort"`
+	RatingAvg   float64          `json:"rating_avg"`
+	RatingCount uint             `json:"rating_count"`
+	Variants    []ProductVariant `json:"variants,omitempty" gorm:"foreignKey:ProductID"`
+	Images      []ProductImage   `json:"images,omitempty" gorm:"foreignKey:ProductID"`
 	// Shops là những chi nhánh QUẢN LÝ mặt hàng này. RỖNG = mọi chi nhánh, chứ
 	// không phải "không chi nhánh nào" — xem bảng product_shops ở migration 0032.
 	//
@@ -592,6 +600,18 @@ type ProductVariant struct {
 	// "Màu"="Đen"). Rỗng với dòng mặc định.
 	Attributes []ProductVariantAttribute `json:"attributes,omitempty" gorm:"foreignKey:VariantID"`
 	Price      *float64                  `json:"price"`
+	// ShopPrice là GIÁ RIÊNG của chi nhánh đang làm việc (`gorm:"-"` — dựng bằng
+	// truy vấn con lúc đọc, xem giaExprSanPham). nil = chi nhánh này chưa khai
+	// giá riêng, và giá thu tiền là Price / SalePrice / BasePrice như cũ.
+	//
+	// Có mặt để màn hình in ra ĐÚNG con số quầy sẽ thu: trước đây bảng hàng hoá
+	// luôn hiện giá gốc, nên chi nhánh khai giá riêng thì nhân viên nhìn một
+	// đằng máy tính tiền một nẻo.
+	//
+	// `gorm:"->"` chứ không phải `gorm:"-"`: cột này CHỈ ĐỌC (dựng bằng truy vấn
+	// con) nhưng vẫn phải để GORM scan giá trị vào — với `-` thì GORM bỏ qua hẳn
+	// và trường luôn nil, y như chưa làm gì.
+	ShopPrice *float64 `json:"shop_price,omitempty" gorm:"->"`
 	// CostPrice ghi đè giá vốn của sản phẩm cha khi biến thể có giá vốn riêng.
 	// nil = theo sản phẩm cha.
 	// Cũng bị xoá khỏi phản hồi công khai như Product.CostPrice.
@@ -668,6 +688,33 @@ type ProductShop struct {
 }
 
 func (ProductShop) TableName() string { return "product_shops" }
+
+// PromotionShop gắn một chương trình khuyến mãi vào một chi nhánh.
+//
+// Cùng lý do tồn tại với ProductShop: dòng ở đây phải mang tenant_id, mà chỉ
+// entity nhúng TenantOwned mới được plugin đóng dấu cửa hàng lúc INSERT.
+type PromotionShop struct {
+	ID uint `json:"id" gorm:"primaryKey"`
+	TenantOwned
+	PromotionID uint      `json:"promotion_id"`
+	ShopID      uint      `json:"shop_id"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+func (PromotionShop) TableName() string { return "promotion_shops" }
+
+// VoucherShop gắn một mã giảm giá vào một chi nhánh. Xem PromotionShop.
+type VoucherShop struct {
+	ID uint `json:"id" gorm:"primaryKey"`
+	TenantOwned
+	VoucherID uint      `json:"voucher_id"`
+	ShopID    uint      `json:"shop_id"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+func (VoucherShop) TableName() string { return "voucher_shops" }
 
 // ProductTag là một thẻ hàng hóa của cửa hàng: "Bán chạy nhất", "Món mới"…
 //
@@ -761,7 +808,11 @@ type Voucher struct {
 	// IsPublic quyết định mã có được KHOE RA ở ô nhập mã lúc thanh toán không.
 	// Mặc định false: mã gửi tay cho một người (đền bù đơn lỗi, quà khách quen) mà
 	// bị liệt kê công khai là ai cũng dùng được.
-	IsPublic  bool           `json:"is_public"`
+	IsPublic bool `json:"is_public"`
+	// Shops là những chi nhánh mã này DÙNG ĐƯỢC. RỖNG = mọi chi nhánh — cùng quy
+	// ước với Product.Shops, xem bảng voucher_shops ở migration 0053. Chỉ ĐỌC
+	// qua đường này; ghi thì gọi ReplaceShops.
+	Shops     []ChiNhanh     `json:"shops,omitempty" gorm:"many2many:voucher_shops;joinForeignKey:voucher_id;joinReferences:shop_id"`
 	CreatedAt time.Time      `json:"created_at"`
 	UpdatedAt time.Time      `json:"updated_at"`
 	DeletedAt gorm.DeletedAt `json:"-" gorm:"index"`
@@ -862,9 +913,17 @@ type Promotion struct {
 	EndAt             time.Time         `json:"end_at"`
 	IsActive          bool              `json:"is_active"`
 	Targets           []PromotionTarget `json:"targets,omitempty" gorm:"foreignKey:PromotionID"`
-	CreatedAt         time.Time         `json:"created_at"`
-	UpdatedAt         time.Time         `json:"updated_at"`
-	DeletedAt         gorm.DeletedAt    `json:"-" gorm:"index"`
+	// Shops là những chi nhánh chương trình này CHẠY. RỖNG = mọi chi nhánh, chứ
+	// không phải "không chi nhánh nào" — cùng quy ước với Product.Shops, xem
+	// bảng promotion_shops ở migration 0053.
+	//
+	// Chỉ ĐỌC qua đường này; ghi thì gọi ReplaceShops. Lý do y hệt ProductShop:
+	// bảng nối có tenant_id NOT NULL mà câu chèn many2many của GORM không đi qua
+	// plugin đóng dấu cửa hàng.
+	Shops     []ChiNhanh     `json:"shops,omitempty" gorm:"many2many:promotion_shops;joinForeignKey:promotion_id;joinReferences:shop_id"`
+	CreatedAt time.Time      `json:"created_at"`
+	UpdatedAt time.Time      `json:"updated_at"`
+	DeletedAt gorm.DeletedAt `json:"-" gorm:"index"`
 }
 
 // Running cho biết chương trình có đang chạy tại thời điểm at hay không.
@@ -1398,6 +1457,8 @@ type Banner struct {
 	EndAt     *time.Time `json:"end_at"`
 	CreatedAt time.Time  `json:"created_at"`
 	UpdatedAt time.Time  `json:"updated_at"`
+	// DeletedAt: xoá là ẩn khỏi phần mềm, dòng vẫn nằm trong sổ để phục hồi.
+	DeletedAt gorm.DeletedAt `json:"-" gorm:"index"`
 }
 
 type Setting struct {
@@ -1425,3 +1486,63 @@ type ActivityLog struct {
 	UserAgent   string    `json:"user_agent"`
 	CreatedAt   time.Time `json:"created_at"`
 }
+
+// GiaChiNhanh — GIÁ BÁN RIÊNG của một chi nhánh cho một biến thể.
+//
+// THIẾU DÒNG = DÙNG GIÁ GỐC (`ProductVariant.Price`, rồi `Product.SalePrice`,
+// rồi `Product.BasePrice`). Đó là hợp đồng của bảng này — xem migration 0051.
+//
+// Vì sao không phải một cột trên `product_variants`: một biến thể có bao nhiêu
+// giá là bằng số chi nhánh, và con số ấy đổi mỗi lần chủ tiệm mở thêm điểm bán.
+//
+// Vì sao không gieo sẵn đủ mọi cặp (chi nhánh × biến thể): tiệm 500 mặt hàng, 3
+// chi nhánh là 1.500 dòng phải khai, mà 1.499 trong số đó chỉ chép lại đúng giá
+// gốc — rồi sửa giá gốc một lần là cả 1.499 dòng ấy nói sai.
+type GiaChiNhanh struct {
+	ID uint `json:"id" gorm:"primaryKey"`
+	TenantOwned
+	ShopID           uint `json:"shop_id"`
+	ProductVariantID uint `json:"product_variant_id"`
+	// Price NOT NULL: dòng tồn tại nghĩa là "chi nhánh này có giá riêng", nên nó
+	// phải có số. Muốn trả về giá gốc thì XOÁ dòng, đừng ghi NULL.
+	Price float64 `json:"price"`
+
+	// ShopName tra kèm khi đọc, bảng không có cột này — màn khai giá bày tên chi
+	// nhánh chứ không bày id.
+	ShopName string `json:"shop_name" gorm:"-"`
+
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+func (GiaChiNhanh) TableName() string { return "variant_shop_prices" }
+
+// GiaChiNhanhRepository — sổ giá bán theo chi nhánh.
+type GiaChiNhanhRepository interface {
+	// TheoBienThe trả về mọi chi nhánh ĐÃ khai giá riêng cho biến thể này. Chi
+	// nhánh không có trong danh sách là chi nhánh đang dùng giá gốc.
+	TheoBienThe(ctx context.Context, variantID uint) ([]GiaChiNhanh, error)
+	Dat(ctx context.Context, shopID, variantID uint, gia float64) error
+	Xoa(ctx context.Context, shopID, variantID uint) error
+}
+
+// ViTriHangHoa — mặt hàng này nằm ở kệ nào, TẠI MỘT CHI NHÁNH (migration 0052).
+//
+// Bảng nối chứ không phải cột trên `products`: số vị trí của một mặt hàng bằng
+// số chi nhánh, và con số ấy đổi mỗi lần chủ tiệm mở thêm điểm bán. Trước 0052
+// nó là `products.location_id` — một giá trị cho cả chuỗi, nên chuỗi ba kho chỉ
+// khai được một kệ và tính năng "đi thẳng tới kệ" thành vô dụng.
+//
+// THIẾU DÒNG = chi nhánh đó chưa xếp kệ cho mặt hàng này.
+type ViTriHangHoa struct {
+	ID uint `json:"id" gorm:"primaryKey"`
+	TenantOwned
+	ShopID     uint `json:"shop_id"`
+	ProductID  uint `json:"product_id"`
+	LocationID uint `json:"location_id"`
+
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+func (ViTriHangHoa) TableName() string { return "product_shop_locations" }

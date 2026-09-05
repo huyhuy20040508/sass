@@ -73,6 +73,7 @@ func (h *ProductHandler) List(c *gin.Context) {
 	f := domain.ProductFilter{
 		Keyword:        c.Query("keyword"),
 		UnitID:         queryUintPtr(c, "unit_id"),
+		ShopID:         chiNhanhLocPtr(c),
 		IsMultiVariant: queryBoolPtr(c, "multi_variant"),
 		Status:         c.Query("status"),
 		// Bản cũ bày trạng thái và nhóm hàng thành các ô tick chọn nhiều — nhận
@@ -213,6 +214,32 @@ func (h *ProductHandler) Get(c *gin.Context) {
 	// lại giá vốn — repository ghi cả dòng, đọc thiếu là lưu xong mất luôn số đó.
 	h.promos.DecorateProduct(c.Request.Context(), p)
 	response.OK(c, p)
+}
+
+// SapXepLai godoc
+//
+//	@Summary		Ghi lại trình tự hàng hoá sau một lượt kéo thả
+//	@Description	Nhận NGUYÊN danh sách id theo trình tự đang hiện trên trang (phần tử đầu nằm trên cùng) và phát lại chính những giá trị `sort` mà mấy dòng ấy đang giữ — nên các mặt hàng ở trang khác không bị xê dịch.
+//	@Description	Trả 404 nếu một id trong danh sách không còn (vừa bị xoá ở nơi khác).
+//	@Tags			Admin - Products
+//	@Accept			json
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			body	body		dto.SapXepLaiRequest	true	"Trình tự mới"
+//	@Success		200		{object}	response.Body
+//	@Failure		400		{object}	response.Body
+//	@Failure		404		{object}	response.Body
+//	@Router			/admin/products/sap-xep [put]
+func (h *ProductHandler) SapXepLai(c *gin.Context) {
+	var req dto.SapXepLaiRequest
+	if !bindJSON(c, &req) {
+		return
+	}
+	if err := h.svc.SapXepLai(c.Request.Context(), req.IDs); err != nil {
+		handleServiceError(c, err)
+		return
+	}
+	response.OK(c, nil)
 }
 
 // DoiChoThuTu godoc

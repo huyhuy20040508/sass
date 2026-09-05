@@ -91,6 +91,7 @@ class ReportController extends Controller
         return $this->render('reports.revenue', 'revenue', $filters, fn () => $this->api->reportRevenue([
             'from' => $filters['from_date'],
             'to' => $filters['to_date'],
+            'shop_id' => $filters['shop_id'],
             'group_by' => $filters['group_by'],
         ]));
     }
@@ -102,6 +103,7 @@ class ReportController extends Controller
         return $this->render('reports.orders', 'orders', $filters, fn () => $this->api->reportOrders([
             'from' => $filters['from_date'],
             'to' => $filters['to_date'],
+            'shop_id' => $filters['shop_id'],
             'group_by' => $filters['group_by'],
         ]));
     }
@@ -113,6 +115,7 @@ class ReportController extends Controller
         return $this->render('reports.products', 'products', $filters, fn () => $this->api->reportProducts([
             'from' => $filters['from_date'],
             'to' => $filters['to_date'],
+            'shop_id' => $filters['shop_id'],
             'sort' => $filters['sort'],
             'limit' => $filters['limit'],
         ]));
@@ -125,6 +128,7 @@ class ReportController extends Controller
         return $this->render('reports.customers', 'customers', $filters, fn () => $this->api->reportCustomers([
             'from' => $filters['from_date'],
             'to' => $filters['to_date'],
+            'shop_id' => $filters['shop_id'],
             'group_by' => $filters['group_by'],
             'limit' => $filters['limit'],
         ]));
@@ -195,6 +199,23 @@ class ReportController extends Controller
             $sort = 'revenue';
         }
 
+        // CHI NHÁNH XEM BÁO CÁO.
+        //
+        // Ba trạng thái, và trạng thái thứ nhất là lý do ô này phải có mặt: từ khi
+        // báo cáo cắt theo chi nhánh đang làm việc, chủ tiệm chọn kho 2 ở thanh
+        // trên cùng là mất luôn đường xem toàn công ty — mà bảng "chia theo chi
+        // nhánh" ngay trong báo cáo doanh thu sinh ra chính là để so các kho với
+        // nhau, và nó teo lại còn một dòng.
+        //
+        //   ''   → chưa khai, dùng chi nhánh đang làm việc (mặc định)
+        //   '0'  → TẤT CẢ chi nhánh
+        //   '<n>'→ đúng một chi nhánh
+        //
+        // Nhân viên bị phân công thì API bỏ qua tham số này (xem chiNhanhLoc bên
+        // API) — ô chọn ở đây chỉ có nghĩa với người quản cả cửa hàng.
+        $shop = $request->query('shop_id');
+        $shop = $shop === null || $shop === '' ? '' : (string) (int) $shop;
+
         $limit = (int) $request->query('limit', 20);
         if (! in_array($limit, self::LIMITS, true)) {
             $limit = 20;
@@ -219,6 +240,7 @@ class ReportController extends Controller
             'group_by' => $group,
             'sort' => $sort,
             'limit' => $limit,
+            'shop_id' => $shop,
         ];
     }
 
@@ -252,7 +274,23 @@ class ReportController extends Controller
             'filters' => $filters,
             'report' => $data,
             'error' => $error,
+            'chiNhanh' => $this->chiNhanhChoLoc(),
         ]);
+    }
+
+    /**
+     * Danh sách chi nhánh cho ô lọc. Hỏng thì trả rỗng — ô chọn biến mất và báo
+     * cáo vẫn chạy theo chi nhánh đang làm việc như cũ.
+     */
+    protected function chiNhanhChoLoc(): array
+    {
+        try {
+            $res = $this->api->chiNhanh(true);
+
+            return $res->successful() ? ($res->json('data') ?? []) : [];
+        } catch (\Throwable $e) {
+            return [];
+        }
     }
 
     // ---------- Trợ giúp cho view ----------

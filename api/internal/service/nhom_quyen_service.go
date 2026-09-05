@@ -92,6 +92,9 @@ func (s *nhomQuyenService) Create(ctx context.Context, req *dto.NhomQuyenRequest
 	if err != nil {
 		return nil, err
 	}
+	if err := s.chanTrungTen(ctx, req.Name, 0); err != nil {
+		return nil, err
+	}
 
 	nq := &domain.NhomQuyen{
 		Code:        ma,
@@ -118,6 +121,9 @@ func (s *nhomQuyenService) Create(ctx context.Context, req *dto.NhomQuyenRequest
 func (s *nhomQuyenService) Update(ctx context.Context, id uint, req *dto.NhomQuyenRequest) (*dto.NhomQuyenResponse, error) {
 	nq, err := s.repo.FindByID(ctx, id)
 	if err != nil {
+		return nil, err
+	}
+	if err := s.chanTrungTen(ctx, req.Name, id); err != nil {
 		return nil, err
 	}
 
@@ -303,4 +309,19 @@ func chotQuyen(ds []string) ([]string, error) {
 	}
 
 	return ra, nil
+}
+
+// chanTrungTen — hai nhóm quyền cùng tên là không cho, dù mã khác. Lúc gán
+// quyền cho nhân viên, ô chọn ra hai dòng y hệt nhau mà bộ quyền bên trong
+// khác nhau — gán nhầm là mở cửa cho người không được giao.
+func (s *nhomQuyenService) chanTrungTen(ctx context.Context, name string, excludeID uint) error {
+	trung, err := s.repo.ExistsByName(ctx, strings.TrimSpace(name), excludeID)
+	if err != nil {
+		return err
+	}
+	if trung {
+		return domain.ErrNhomQuyenTrungTen
+	}
+
+	return nil
 }

@@ -31,7 +31,7 @@ class ThuocTinhTest extends TestCase
             '*/admin/thuoc-tinh*' => Http::response(['data' => [
                 [
                     'id' => 1, 'code' => 'SIZE', 'name' => 'Kích cỡ',
-                    'is_active' => true, 'raw_material' => true, 'in_use' => true,
+                    'is_active' => true, 'in_use' => true,
                     'values' => [
                         ['id' => 11, 'code' => 'SIZE01', 'name' => 'Nhỏ'],
                         ['id' => 12, 'code' => 'SIZE02', 'name' => 'Lớn'],
@@ -39,7 +39,7 @@ class ThuocTinhTest extends TestCase
                 ],
                 [
                     'id' => 2, 'code' => 'MAU', 'name' => 'Màu sắc',
-                    'is_active' => false, 'raw_material' => false, 'in_use' => false,
+                    'is_active' => false, 'in_use' => false,
                     'values' => [],
                 ],
             ]]),
@@ -47,7 +47,7 @@ class ThuocTinhTest extends TestCase
         ]);
     }
 
-    /** Bảng bày mã, tên, giá trị con và cờ định lượng. */
+    /** Bảng bày mã, tên và các giá trị con. */
     public function test_hien_bang_thuoc_tinh(): void
     {
         $this->fakeApi();
@@ -60,8 +60,8 @@ class ThuocTinhTest extends TestCase
         // Giá trị con bày thành chip ngay trên dòng.
         $res->assertSee('Nhỏ', false);
         $res->assertSee('Lớn', false);
-        // Một dòng bật cờ định lượng, một dòng không.
-        $res->assertSee('Đang dùng: <b>1</b>/2 thuộc tính', false);
+        // Cột Chi tiết gộp tên các giá trị con thành một chuỗi.
+        $res->assertSee('Nhỏ, Lớn', false);
     }
 
     /** Dòng đang được dùng thì nút xoá bị khoá, không cho bấm rồi mới báo lỗi. */
@@ -72,12 +72,12 @@ class ThuocTinhTest extends TestCase
         $html = $this->withSession($this->phienQuanTri())->get('/admin/attributes')->getContent();
 
         $this->assertStringContainsString('Đang được biến thể hoặc định lượng dùng', $html);
-        // Dòng không bị dùng vẫn còn form xoá thật.
-        $this->assertStringContainsString('/admin/attributes/2', $html);
+        // Dòng không bị dùng vẫn còn nút xoá bấm được (JS đọc data-id của dòng).
+        $this->assertStringContainsString('dele_bt delete-item', $html);
     }
 
     /** Lọc trạng thái và lọc cờ định lượng làm ở trang, không phiền tới API. */
-    public function test_loc_trang_thai_va_dinh_luong(): void
+    public function test_loc_trang_thai(): void
     {
         $this->fakeApi();
 
@@ -85,11 +85,6 @@ class ThuocTinhTest extends TestCase
         $res->assertOk();
         $res->assertSee('Màu sắc', false);
         $res->assertDontSee('data-tt-edit data-tt="{&quot;id&quot;:1', false);
-
-        $res = $this->withSession($this->phienQuanTri())->get('/admin/attributes?raw_material=yes');
-        $res->assertOk();
-        $res->assertSee('Kích cỡ', false);
-        $res->assertDontSee('Màu sắc', false);
     }
 
     /** Ô tìm kiếm thì gửi thẳng sang API — API tìm trên toàn danh sách. */
@@ -111,7 +106,6 @@ class ThuocTinhTest extends TestCase
             'code' => 'size',
             'name' => 'Kích cỡ',
             'is_active' => 1,
-            'raw_material' => 1,
             'values' => [
                 ['id' => '', 'code' => 's', 'name' => 'Nhỏ'],
                 // Dòng người dùng bấm thêm rồi để đấy — không gửi sang API.
@@ -130,7 +124,6 @@ class ThuocTinhTest extends TestCase
             $body = $request->data();
 
             return $body['code'] === 'SIZE'
-                && $body['raw_material'] === true
                 && count($body['values']) === 2
                 && $body['values'][0]['code'] === 'S'
                 && $body['values'][1]['name'] === 'Lớn'
@@ -233,5 +226,87 @@ class ThuocTinhTest extends TestCase
 
         $res->assertOk();
         $res->assertSee('API sập', false);
+    }
+
+    /** Xoá một thuộc tính. */
+    public function test_xoa_mot_thuoc_tinh(): void
+    {
+        $this->fakeApi();
+
+        $this->withSession($this->phienQuanTri())->delete('/admin/attributes/2');
+
+        Http::assertSent(fn ($request) => str_contains($request->url(), '/admin/thuoc-tinh/2')
+            && $request->method() === 'DELETE');
+    }
+
+    /**
+     * Lưu xong quay về ĐÚNG trang đang đứng.
+     *
+     * Trang gửi kèm `return`; bỏ qua nó là mỗi lượt Lưu lại ném người dùng về
+     * trang 1 chưa lọc — đang sửa dở dòng thứ 40 thì phải lọc và lật lại từ đầu.
+     */
+    public function test_luu_xong_ve_dung_trang_dang_dung(): void
+    {
+        $this->fakeApi();
+
+        $res = $this->withSession($this->phienQuanTri())->put('/admin/attributes/1', [
+            'name' => 'Kích cỡ',
+            'is_active' => 1,
+            'return' => '/admin/attributes?keyword=size&page=3',
+        ]);
+
+        $res->assertRedirect('/admin/attributes?keyword=size&page=3');
+    }
+
+    /** `return` đến từ trình duyệt: chỉ nhận đường nội bộ, không nhận đường ngoài. */
+    public function test_khong_nhan_duong_ve_ra_ngoai(): void
+    {
+        $this->fakeApi();
+
+        $res = $this->withSession($this->phienQuanTri())->put('/admin/attributes/1', [
+            'name' => 'Kích cỡ',
+            'is_active' => 1,
+            'return' => 'https://trang-la.example/cuop-phien',
+        ]);
+
+        $res->assertRedirect(route('admin.thuoc-tinh.index'));
+    }
+
+    /**
+     * Lưu HỎNG từ hộp thoại thì trả 422 JSON, KHÔNG chuyển hướng.
+     *
+     * Hộp thoại đọc `success` để quyết định đóng hay giữ lại. Trả chuyển hướng
+     * là trang tải lại, hộp biến mất rồi toast mới hiện — mất trắng mọi thứ vừa
+     * gõ và người dùng phải khai lại từ đầu mới biết mình sai chỗ nào.
+     */
+    public function test_luu_hong_tu_hop_thoai_tra_422_khong_chuyen_huong(): void
+    {
+        Http::fake([
+            '*/admin/thuoc-tinh' => Http::response([
+                'message' => 'Dữ liệu không hợp lệ',
+                'errors' => ['name' => 'Tên thuộc tính này đã có trong cửa hàng'],
+            ], 422),
+            '*' => Http::response(['data' => []]),
+        ]);
+
+        $res = $this->withSession($this->phienQuanTri())
+            ->postJson('/admin/attributes', ['name' => 'Trung ten', 'is_active' => 1]);
+
+        $res->assertStatus(422);
+        $res->assertJson(['success' => false]);
+        // Lấy câu theo TỪNG Ô chứ không lấy `message` chung chung.
+        $res->assertJsonPath('message', 'Tên thuộc tính này đã có trong cửa hàng');
+    }
+
+    /** Lưu ĐƯỢC thì trả 200 kèm câu để bắn toast xanh rồi đóng hộp. */
+    public function test_luu_xong_tu_hop_thoai_tra_200(): void
+    {
+        $this->fakeApi();
+
+        $res = $this->withSession($this->phienQuanTri())
+            ->postJson('/admin/attributes', ['name' => 'Trung ten', 'is_active' => 1]);
+
+        $res->assertOk();
+        $res->assertJson(['success' => true]);
     }
 }

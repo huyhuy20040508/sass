@@ -83,10 +83,9 @@ func (s *thuocTinhService) Create(ctx context.Context, req *dto.ThuocTinhRequest
 	}
 
 	tt := &domain.ThuocTinh{
-		Code:        code,
-		Name:        name,
-		IsActive:    req.IsActive == nil || *req.IsActive,
-		RawMaterial: req.RawMaterial != nil && *req.RawMaterial,
+		Code:     code,
+		Name:     name,
+		IsActive: req.IsActive == nil || *req.IsActive,
 	}
 	if err := s.repo.Create(ctx, tt, giaTri); err != nil {
 		return nil, err
@@ -117,9 +116,6 @@ func (s *thuocTinhService) Update(ctx context.Context, id uint, req *dto.ThuocTi
 	tt.Name = name
 	if req.IsActive != nil {
 		tt.IsActive = *req.IsActive
-	}
-	if req.RawMaterial != nil {
-		tt.RawMaterial = *req.RawMaterial
 	}
 
 	// Không gửi `values` = không đụng tới bảng giá trị. Gửi mảng RỖNG mới là

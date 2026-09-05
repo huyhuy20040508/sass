@@ -76,6 +76,12 @@ type Handlers struct {
 	NhaCungCap *handler.NhaCungCapHandler
 	// PhieuMuaHang — chứng từ mua vào (Quản lý kho → Phiếu mua hàng).
 	PhieuMuaHang *handler.PhieuMuaHangHandler
+	// TraHangNCC — chiều ngược của phiếu mua (Quản lý kho → Trả hàng nhà cung cấp).
+	TraHangNCC *handler.TraHangNCCHandler
+	// DieuChuyen — chuyển hàng giữa hai kho (Quản lý kho → Phiếu điều chuyển).
+	DieuChuyen *handler.PhieuDieuChuyenHandler
+	// GiaChiNhanh — giá bán riêng của từng chi nhánh cho một biến thể.
+	GiaChiNhanh *handler.GiaChiNhanhHandler
 	// Thue — thuế suất (Hàng hóa → Thuế).
 	Thue *handler.ThueHandler
 	// Ca là ca làm việc + sổ quỹ tiền mặt — cụm trả lời câu hỏi cuối ngày: tiền
@@ -134,6 +140,9 @@ func New(
 	// middleware.ChiNhanhDangLam. nil = không xác minh được ai nên không gắn chi
 	// nhánh nào, và mọi lượt ghi kho rơi về chi nhánh bán online.
 	chiNhanhRepo domain.ChiNhanhRepository,
+	// nhanSuRepo để biết người đăng nhập được phân về chi nhánh nào — chốt chặn
+	// nhân viên đổi header sang chi nhánh khác. nil = bỏ chốt đó, không khoá ai.
+	nhanSuRepo domain.NhanVienRepository,
 	// quyenRepo đọc NHÓM QUYỀN của người gọi. Mỗi đường của khu quản trị khai
 	// một chuỗi quyền (xem q.Dat bên dưới) và chốt này tra nó.
 	//
@@ -237,6 +246,17 @@ func New(
 				middleware.OptionalJWTAuth(jwtMgr),
 				middleware.TenantFromHost(tenMien),
 				middleware.TenantRequired(),
+				// CHI NHÁNH ĐANG LÀM VIỆC cũng đọc ở đây, không chỉ ở nhóm admin.
+				//
+				// Danh sách hàng hoá của TRANG QUẢN TRỊ đi qua chính /products của
+				// nhóm này (một endpoint, hai người đọc — xem chú thích ngay dưới).
+				// Thiếu chốt này thì trang Hàng hoá không biết mình đang đứng ở chi
+				// nhánh nào: mặt hàng gán riêng cho chi nhánh A vẫn hiện ở B, và ô
+				// "Chi nhánh" trên form hàng hoá thành ra không có tác dụng gì.
+				//
+				// Khách vãng lai không gửi header nào nên middleware trả về ngay —
+				// gian hàng công khai không đổi hành vi.
+				middleware.ChiNhanhDangLam(chiNhanhRepo, nhanSuRepo),
 			)
 		}
 
@@ -459,7 +479,7 @@ func New(
 		//
 		// Đặt sau JWTAuth vì lượt tra chi nhánh chạy bằng ctx đã mang tenant: đó
 		// chính là thứ ngăn một cửa hàng gửi lên id chi nhánh của cửa hàng khác.
-		admin.Use(middleware.ChiNhanhDangLam(chiNhanhRepo))
+		admin.Use(middleware.ChiNhanhDangLam(chiNhanhRepo, nhanSuRepo))
 
 		// manage — khu quản trị. RequireRoles chặn theo LOẠI tài khoản (khách hàng
 		// và vai staff không vào), q.Cua chặn theo CỬA ĐÃ GIAO: chủ tiệm bỏ tích
@@ -585,6 +605,9 @@ func New(
 			q.Dat(manage, http.MethodPut, "/products/:id", "san-pham.sua", h.Product.Update)
 			q.Dat(manage, http.MethodPut, "/products/:id/status", "san-pham.sua", h.Product.UpdateStatus)
 			// Hai mũi tên lên/xuống trên bảng danh sách — chỉ đổi cột sort.
+			// "sap-xep" đứng TRƯỚC ":id" ở dưới không cần thiết (đường này không
+			// trùng dạng), nhưng đặt cạnh /sort cho hai lối đổi thứ tự nằm cùng chỗ.
+			q.Dat(manage, http.MethodPut, "/products/sap-xep", "san-pham.sua", h.Product.SapXepLai)
 			q.Dat(manage, http.MethodPut, "/products/:id/sort", "san-pham.sua", h.Product.DoiChoThuTu)
 			q.Dat(manage, http.MethodDelete, "/products/:id", "san-pham.xoa", h.Product.Delete)
 			// Thẻ hàng hóa — đứng riêng chứ không nằm dưới /products/... vì Gin
@@ -712,6 +735,45 @@ func New(
 			q.Dat(manage, http.MethodPost, "/phieu-mua-hang/:id/huy", "phieu-mua-hang.sua", h.PhieuMuaHang.Cancel)
 			q.Dat(manage, http.MethodPost, "/phieu-mua-hang/:id/thanh-toan", "phieu-mua-hang.sua", h.PhieuMuaHang.Pay)
 			q.Dat(manage, http.MethodDelete, "/phieu-mua-hang/:id", "phieu-mua-hang.xoa", h.PhieuMuaHang.Delete)
+
+			// Trả hàng nhà cung cấp — chiều ngược của phiếu mua.
+			//
+			// "stats", "phieu-mua" và "dong-phieu-mua" đứng TRƯỚC ":id" để gin
+			// không hiểu nhầm chúng là một ID.
+			//
+			// Duyệt đi đường RIÊNG với quyền riêng: đó là lúc duy nhất phiếu trả
+			// chạm vào tồn kho, và là lúc hàng RỜI kho.
+			q.Dat(manage, http.MethodGet, "/tra-hang-nha-cung-cap", "tra-hang-ncc.xem", h.TraHangNCC.List)
+			q.Dat(manage, http.MethodGet, "/tra-hang-nha-cung-cap/stats", "tra-hang-ncc.xem", h.TraHangNCC.Stats)
+			q.Dat(manage, http.MethodGet, "/tra-hang-nha-cung-cap/phieu-mua", "tra-hang-ncc.xem", h.TraHangNCC.PhieuMua)
+			q.Dat(manage, http.MethodGet, "/tra-hang-nha-cung-cap/dong-phieu-mua", "tra-hang-ncc.xem", h.TraHangNCC.DongPhieuMua)
+			q.Dat(manage, http.MethodPost, "/tra-hang-nha-cung-cap", "tra-hang-ncc.them", h.TraHangNCC.Create)
+			q.Dat(manage, http.MethodGet, "/tra-hang-nha-cung-cap/:id", "tra-hang-ncc.xem", h.TraHangNCC.Get)
+			q.Dat(manage, http.MethodPut, "/tra-hang-nha-cung-cap/:id", "tra-hang-ncc.sua", h.TraHangNCC.Update)
+			q.Dat(manage, http.MethodPost, "/tra-hang-nha-cung-cap/:id/duyet", "tra-hang-ncc.duyet", h.TraHangNCC.Approve)
+			q.Dat(manage, http.MethodDelete, "/tra-hang-nha-cung-cap/:id", "tra-hang-ncc.xoa", h.TraHangNCC.Delete)
+
+			// Phiếu điều chuyển — chuyển hàng giữa HAI kho của cùng cửa hàng.
+			//
+			// "stats" đứng TRƯỚC ":id" để gin không hiểu nhầm nó là một ID.
+			//
+			// Duyệt đi đường RIÊNG với quyền riêng, và đây là nút nặng nhất trong ba
+			// loại phiếu: một cú bấm làm đổi số ở HAI kho cùng lúc.
+			q.Dat(manage, http.MethodGet, "/phieu-dieu-chuyen", "phieu-dieu-chuyen.xem", h.DieuChuyen.List)
+			q.Dat(manage, http.MethodGet, "/phieu-dieu-chuyen/stats", "phieu-dieu-chuyen.xem", h.DieuChuyen.Stats)
+			q.Dat(manage, http.MethodPost, "/phieu-dieu-chuyen", "phieu-dieu-chuyen.them", h.DieuChuyen.Create)
+			q.Dat(manage, http.MethodGet, "/phieu-dieu-chuyen/:id", "phieu-dieu-chuyen.xem", h.DieuChuyen.Get)
+			q.Dat(manage, http.MethodPut, "/phieu-dieu-chuyen/:id", "phieu-dieu-chuyen.sua", h.DieuChuyen.Update)
+			q.Dat(manage, http.MethodPost, "/phieu-dieu-chuyen/:id/duyet", "phieu-dieu-chuyen.duyet", h.DieuChuyen.Approve)
+			q.Dat(manage, http.MethodDelete, "/phieu-dieu-chuyen/:id", "phieu-dieu-chuyen.xoa", h.DieuChuyen.Delete)
+
+			// Giá bán riêng theo chi nhánh — gắn vào một BIẾN THỂ.
+			//
+			// Cùng quyền với sửa mặt hàng: đây là một mặt của bảng giá, không phải
+			// một module riêng. Ai sửa được giá gốc thì sửa được giá chi nhánh.
+			q.Dat(manage, http.MethodGet, "/bien-the/:id/gia-chi-nhanh", "san-pham.xem", h.GiaChiNhanh.List)
+			q.Dat(manage, http.MethodPost, "/bien-the/:id/gia-chi-nhanh", "san-pham.sua", h.GiaChiNhanh.Set)
+			q.Dat(manage, http.MethodDelete, "/bien-the/:id/gia-chi-nhanh/:shop_id", "san-pham.sua", h.GiaChiNhanh.Delete)
 
 			// Cấu hình hệ thống — key-value, ghi nhiều khoá một lần.
 			//

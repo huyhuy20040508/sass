@@ -24,13 +24,12 @@ type giaTriTT struct {
 
 // thuocTinh là một dòng trên bảng Thuộc tính, kèm giá trị con.
 type thuocTinh struct {
-	ID          uint       `json:"id"`
-	Code        string     `json:"code"`
-	Name        string     `json:"name"`
-	IsActive    bool       `json:"is_active"`
-	RawMaterial bool       `json:"raw_material"`
-	InUse       bool       `json:"in_use"`
-	Values      []giaTriTT `json:"values"`
+	ID       uint       `json:"id"`
+	Code     string     `json:"code"`
+	Name     string     `json:"name"`
+	IsActive bool       `json:"is_active"`
+	InUse    bool       `json:"in_use"`
+	Values   []giaTriTT `json:"values"`
 }
 
 // giaTriMoi dựng phần `values` cho một lượt gửi: chỉ tên, để server đặt mã hộ.
@@ -140,10 +139,6 @@ func TestThuocTinh_TaoRoiDocLai(t *testing.T) {
 	if !tt.IsActive {
 		t.Fatal("thuộc tính mới phải đang bật — không thì vừa khai xong đã không chọn được")
 	}
-	if tt.RawMaterial {
-		t.Fatal("cờ định lượng nguyên vật liệu phải mặc định TẮT")
-	}
-
 	ds := docThuocTinh(t, h, a.token, "")
 	if len(ds) != 1 {
 		t.Fatalf("danh sách phải có đúng thuộc tính vừa tạo, nhận %+v", ds)
@@ -412,15 +407,12 @@ func TestThuocTinh_CongTacKhongGhiLanSangTen(t *testing.T) {
 	a, _ := haiCuaHang(t, h)
 
 	_, tt := themThuocTinh(t, h, a.token, map[string]any{
-		"code": "SIZE", "name": "Kích cỡ", "raw_material": true, "values": giaTriMoi("Nhỏ"),
+		"code": "SIZE", "name": "Kích cỡ", "values": giaTriMoi("Nhỏ"),
 	})
-	if !tt.RawMaterial {
-		t.Fatal("cờ định lượng gửi lên true mà không lưu")
-	}
 
 	res := h.goi(t, a.token, http.MethodPut,
 		fmt.Sprintf("/api/v1/admin/thuoc-tinh/%d/trang-thai", tt.ID),
-		map[string]any{"is_active": false, "name": "Tên gửi lén", "code": "LEN", "raw_material": false})
+		map[string]any{"is_active": false, "name": "Tên gửi lén", "code": "LEN"})
 	if res.ma != http.StatusOK {
 		t.Fatalf("đổi trạng thái phải trả 200, nhận %d\n%s", res.ma, catBot(res.than))
 	}
@@ -432,7 +424,7 @@ func TestThuocTinh_CongTacKhongGhiLanSangTen(t *testing.T) {
 	if ds[0].IsActive {
 		t.Fatal("công tắc tắt rồi mà thuộc tính vẫn đang bật")
 	}
-	if ds[0].Name != "Kích cỡ" || ds[0].Code != "SIZE" || !ds[0].RawMaterial {
+	if ds[0].Name != "Kích cỡ" || ds[0].Code != "SIZE" {
 		t.Fatalf("lượt gạt công tắc đã ghi lẫn sang trường khác: %+v", ds[0])
 	}
 	if len(ds[0].Values) != 1 {
@@ -440,14 +432,13 @@ func TestThuocTinh_CongTacKhongGhiLanSangTen(t *testing.T) {
 	}
 }
 
-// TestThuocTinh_LocTheoTrangThaiVaDinhLuong — `active=true` là tham số của ô
-// chọn thuộc tính lúc khai mặt hàng, `raw_material=true` là của màn định lượng
-// nguyên liệu.
-func TestThuocTinh_LocTheoTrangThaiVaDinhLuong(t *testing.T) {
+// TestThuocTinh_LocTheoTrangThai — `active=true` là tham số của ô chọn thuộc
+// tính lúc khai mặt hàng; bảng quản lý thì phải thấy cả dòng đã tắt.
+func TestThuocTinh_LocTheoTrangThai(t *testing.T) {
 	h := dungHeThong(t)
 	a, _ := haiCuaHang(t, h)
 
-	themThuocTinh(t, h, a.token, map[string]any{"code": "SIZE", "name": "Kích cỡ", "raw_material": true})
+	themThuocTinh(t, h, a.token, map[string]any{"code": "SIZE", "name": "Kích cỡ"})
 	_, tat := themThuocTinh(t, h, a.token, map[string]any{"code": "MAU", "name": "Màu sắc"})
 
 	res := h.goi(t, a.token, http.MethodPut,
@@ -463,10 +454,6 @@ func TestThuocTinh_LocTheoTrangThaiVaDinhLuong(t *testing.T) {
 
 	if ds := docThuocTinh(t, h, a.token, "active=true"); len(ds) != 1 || ds[0].Code != "SIZE" {
 		t.Fatalf("ô chọn chỉ được thấy thuộc tính đang bật, nhận %+v", ds)
-	}
-
-	if ds := docThuocTinh(t, h, a.token, "raw_material=true"); len(ds) != 1 || ds[0].Code != "SIZE" {
-		t.Fatalf("lọc định lượng chỉ được thấy thuộc tính bật cờ, nhận %+v", ds)
 	}
 }
 

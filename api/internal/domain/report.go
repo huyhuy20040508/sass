@@ -36,6 +36,12 @@ const (
 type ReportPeriod struct {
 	From time.Time
 	To   time.Time
+
+	// ShopID giới hạn báo cáo trong MỘT chi nhánh. 0 = cả cửa hàng.
+	//
+	// Trước khi có trường này, báo cáo không biết chi nhánh là gì: quyền
+	// `bao-cao.xem` cấp cho quản lý một kho là họ thấy doanh thu toàn công ty.
+	ShopID uint
 }
 
 // Days trả số ngày của kỳ (tối thiểu 1).
@@ -50,7 +56,7 @@ func (p ReportPeriod) Days() int {
 // Prev trả kỳ liền trước, CÙNG ĐỘ DÀI, kết thúc ngay trước kỳ này.
 func (p ReportPeriod) Prev() ReportPeriod {
 	n := p.Days()
-	return ReportPeriod{From: p.From.AddDate(0, 0, -n), To: p.From}
+	return ReportPeriod{From: p.From.AddDate(0, 0, -n), To: p.From, ShopID: p.ShopID}
 }
 
 // FromDate / ToDate trả hai đầu kỳ ở dạng YYYY-MM-DD để in ra API.

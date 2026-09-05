@@ -226,6 +226,7 @@ func (h *OrderHandler) List(c *gin.Context) {
 		PaymentStatus: c.Query("payment_status"),
 		PaymentMethod: c.Query("payment_method"),
 		Channel:       c.Query("channel"),
+		ShopID:        chiNhanhLoc(c),
 		FromDate:      c.Query("from_date"),
 		ToDate:        c.Query("to_date"),
 		Sort:          c.Query("sort"),

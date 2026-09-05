@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"sass-api/internal/domain"
 )
@@ -41,6 +42,7 @@ func applyStatus(q *gorm.DB, status string, now time.Time) *gorm.DB {
 func (r *promotionRepository) List(ctx context.Context, f domain.PromotionFilter) ([]domain.Promotion, int64, error) {
 	now := time.Now()
 	q := r.db.WithContext(ctx).Model(&domain.Promotion{})
+	q = locGanChiNhanh(q, ctx, r.db, "promotion_shops", "promotion_id", "promotions")
 
 	if kw := strings.TrimSpace(f.Keyword); kw != "" {
 		like := "%" + kw + "%"
@@ -85,7 +87,11 @@ func (r *promotionRepository) List(ctx context.Context, f domain.PromotionFilter
 	}
 
 	var items []domain.Promotion
-	if err := q.Preload("Targets").Find(&items).Error; err != nil {
+	// Nạp CẢ Shops: màn quản trị nhúng nguyên danh sách này vào JS rồi mở hộp sửa
+	// từ đó. Thiếu preload thì mọi chương trình trả `shop_ids: []`, hộp sửa mở ra
+	// với các ô chi nhánh trống trơn, và lượt lưu tiếp theo gỡ sạch phần gán mà
+	// người dùng không hề bấm gì.
+	if err := q.Preload("Targets").Preload("Shops").Find(&items).Error; err != nil {
 		return nil, 0, err
 	}
 	return items, total, nil
@@ -123,11 +129,26 @@ func (r *promotionRepository) Stats(ctx context.Context) (domain.PromotionStats,
 
 func (r *promotionRepository) FindByID(ctx context.Context, id uint) (*domain.Promotion, error) {
 	var p domain.Promotion
-	err := r.db.WithContext(ctx).Preload("Targets").First(&p, id).Error
+	err := r.db.WithContext(ctx).Preload("Targets").Preload("Shops").First(&p, id).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, domain.ErrNotFound
 	}
-	return &p, err
+	if err != nil {
+		return nil, err
+	}
+	// Chương trình không chạy ở chi nhánh này thì coi như không có — trừ khi nó
+	// không gán chi nhánh nào, nghĩa là chạy khắp nơi.
+	if len(p.Shops) > 0 {
+		ids := make([]uint, 0, len(p.Shops))
+		for _, cn := range p.Shops {
+			ids = append(ids, cn.ID)
+		}
+		if err := chanChungTuKhacChiNhanh(ctx, r.db, ids...); err != nil {
+			return nil, err
+		}
+	}
+
+	return &p, nil
 }
 
 func (r *promotionRepository) Create(ctx context.Context, p *domain.Promotion) error {
@@ -201,13 +222,50 @@ func (r *promotionRepository) Delete(ctx context.Context, id uint) error {
 	})
 }
 
+// Running là đường ÁP DỤNG — nơi khuyến mãi thật sự trừ tiền của khách.
+//
+// Cắt chi nhánh ở đây mới là cái có nghĩa: kho Quận 7 xả hàng cuối mùa thì kho
+// trung tâm không việc gì phải bán rẻ theo.
 func (r *promotionRepository) Running(ctx context.Context, at time.Time) ([]domain.Promotion, error) {
+	q := r.db.WithContext(ctx).
+		Where("is_active = 1 AND start_at <= ? AND end_at >= ?", at, at)
+	q = locGanChiNhanh(q, ctx, r.db, "promotion_shops", "promotion_id", "promotions")
+
 	var items []domain.Promotion
-	err := r.db.WithContext(ctx).
-		Where("is_active = 1 AND start_at <= ? AND end_at >= ?", at, at).
-		Preload("Targets").
-		Find(&items).Error
+	err := q.Preload("Targets").Find(&items).Error
+
 	return items, err
+}
+
+// ReplaceShops đặt lại danh sách chi nhánh của một chương trình.
+//
+// Viết tay chứ không dùng Association().Replace() của GORM: câu chèn many2many
+// của GORM không đi qua plugin đóng dấu cửa hàng, mà bảng nối có tenant_id NOT
+// NULL. Cùng lý do và cùng cách với ProductRepository.ReplaceShops.
+//
+// Danh sách RỖNG là hợp lệ và có nghĩa: chương trình chạy ở mọi chi nhánh.
+func (r *promotionRepository) ReplaceShops(ctx context.Context, promotionID uint, shopIDs []uint) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("promotion_id = ?", promotionID).
+			Delete(&domain.PromotionShop{}).Error; err != nil {
+			return err
+		}
+		if len(shopIDs) == 0 {
+			return nil
+		}
+
+		rows := make([]domain.PromotionShop, 0, len(shopIDs))
+		for _, id := range shopIDs {
+			if id > 0 {
+				rows = append(rows, domain.PromotionShop{PromotionID: promotionID, ShopID: id})
+			}
+		}
+		if len(rows) == 0 {
+			return nil
+		}
+
+		return tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&rows).Error
+	})
 }
 
 func (r *promotionRepository) CountProducts(ctx context.Context, productIDs, categoryIDs []uint) (int64, error) {

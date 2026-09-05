@@ -366,6 +366,36 @@
                             </div>
                         </div>
                     </div>
+
+                    {{-- ---- Chi nhánh áp dụng ----
+                         KHÁC hẳn khối Phạm vi ở trên: bỏ trống ở đây là HỢP LỆ và có
+                         nghĩa "chạy khắp mọi kho". Vì vậy nó đứng riêng, và checkbox
+                         mang class khác (.pmo-shop) — dùng chung .pmo-check là một
+                         lượt tick chi nhánh sẽ bị tính thành đã chọn phạm vi. --}}
+                    <div class="pmo-scope-wrap">
+                        <div class="pmo-scope-title">
+                            Chi nhánh áp dụng
+                            <span class="pmo-scope-sum" id="pmoShopSum">Mọi chi nhánh</span>
+                        </div>
+                        <p class="pmo-hint pmo-scope-note">
+                            Để trống là chạy ở <b>mọi chi nhánh</b>. Chỉ tick khi muốn đợt này
+                            giới hạn trong vài kho — kho Quận 7 xả hàng cuối mùa thì kho trung
+                            tâm không phải bán rẻ theo.
+                        </p>
+
+                        @if(count($chiNhanh) > 1)
+                            <div class="pmo-scope-list" data-list="shop" style="max-height: 160px">
+                                @foreach($chiNhanh as $cn)
+                                    <label class="pmo-pick">
+                                        <input type="checkbox" class="pmo-shop" name="shop_ids[]" value="{{ $cn['id'] ?? 0 }}">
+                                        <span class="pmo-pick-name">{{ $cn['name'] ?? '' }}</span>
+                                    </label>
+                                @endforeach
+                            </div>
+                        @else
+                            <p class="pmo-scope-empty">Cửa hàng chỉ có một chi nhánh — không cần chọn.</p>
+                        @endif
+                    </div>
                 </div>
 
                 <div class="pmo-modal-foot">
@@ -851,6 +881,10 @@
                 };
                 boxes().forEach((cb) => { cb.checked = picked[cb.dataset.kind].has(Number(cb.value)); });
 
+                const shops = new Set((isEdit ? p.shop_ids : []) || []);
+                oShop().forEach((cb) => { cb.checked = shops.has(Number(cb.value)); });
+                syncShop();
+
                 // Dọn ô tìm kiếm của lần mở trước, không thì danh sách vẫn đang bị lọc.
                 form.querySelectorAll('[data-search]').forEach((input) => {
                     input.value = '';
@@ -862,6 +896,24 @@
                 $overlay.style.display = 'flex';
                 setTimeout(() => document.getElementById('pmoName').focus(), 30);
             }
+
+            // Ô chi nhánh: rỗng thì nói thẳng "Mọi chi nhánh", đừng để "Chưa chọn gì"
+            // — hai câu ấy nghe giống nhau nhưng ở đây nghĩa ngược nhau hoàn toàn.
+            const oShop = () => Array.from(form.querySelectorAll('.pmo-shop'));
+
+            function syncShop() {
+                const n = oShop().filter((cb) => cb.checked).length;
+                const $sum = document.getElementById('pmoShopSum');
+                if ($sum) {
+                    $sum.textContent = n === 0 ? 'Mọi chi nhánh' : n + ' chi nhánh';
+                }
+            }
+
+            form.addEventListener('change', (e) => {
+                if (e.target.classList && e.target.classList.contains('pmo-shop')) {
+                    syncShop();
+                }
+            });
 
             document.getElementById('pmoAddBtn').addEventListener('click', () => openForm('add', null));
 

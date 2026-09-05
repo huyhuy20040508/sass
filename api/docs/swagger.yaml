@@ -287,6 +287,28 @@ definitions:
         type: number
       is_active:
         type: boolean
+      is_stock_deducted:
+        description: |-
+          IsStockDeducted dựng cột "Loại hàng hoá" của bảng tồn kho: bán ra có trừ
+          kho không. Tắt = hàng dịch vụ / hàng đặt gia công, dòng tồn của nó luôn
+          đứng yên — nói ra ở ngay trên bảng thì người đếm kho khỏi đi tìm xem vì
+          sao món đó không bao giờ nhúc nhích.
+        type: boolean
+      lots:
+        description: |-
+          Lots là con số Quantity ở trên CHIA NHỎ theo lô — ba cột cuối của bảng
+          tồn kho (số lô, số lượng, hạn dùng), đúng như bản order v2.
+
+          Tổng Quantity của mấy dòng này luôn bằng Quantity ở trên: cả hai đọc từ
+          hai bảng được ghi trong cùng một giao dịch (xem migration 0047). Rỗng chỉ
+          xảy ra với biến thể chưa từng có dòng tồn nào ở chi nhánh đó.
+
+          gorm:"-" vì đây KHÔNG phải quan hệ: danh sách do napLoChoDong nạp bằng một
+          câu riêng cho cả trang. Bỏ thẻ này thì GORM coi nó là quan hệ và câu Scan
+          chết với "define a valid foreign key for relations".
+        items:
+          $ref: '#/definitions/domain.DongTonLo'
+        type: array
       product_id:
         type: integer
       product_name:
@@ -311,6 +333,15 @@ definitions:
         type: integer
       variant_name:
         type: string
+    type: object
+  domain.DongTonLo:
+    properties:
+      expire_date:
+        type: string
+      lot_number:
+        type: string
+      quantity:
+        type: integer
     type: object
   domain.EtaxConnection:
     properties:
@@ -704,8 +735,19 @@ definitions:
         type: string
       short_name:
         type: string
+      still_in_debt:
+        description: |-
+          StillInDebt là phần còn nợ. Trả dư một phiếu không được bù cho phiếu khác
+          nên nó cộng phần còn thiếu của TỪNG phiếu, không phải hiệu hai số trên.
+        type: number
       tax_code:
         type: string
+      total_payment:
+        description: TotalPayment là số đã trả.
+        type: number
+      total_purchases:
+        description: TotalPurchases là tổng tiền hàng đã mua của bên này.
+        type: number
       updated_at:
         type: string
     type: object
@@ -1158,6 +1200,18 @@ definitions:
       total:
         type: integer
     type: object
+  domain.PurchaseLot:
+    properties:
+      expire_date:
+        description: ExpireDate khuôn YYYY-MM-DD; rỗng = lô không có hạn dùng.
+        type: string
+      lot_number:
+        type: string
+      quantity:
+        type: integer
+      unit_cost:
+        type: number
+    type: object
   domain.PurchaseNhomHang:
     properties:
       id:
@@ -1190,6 +1244,16 @@ definitions:
           này. Chỉ có id thì mọi màn hình muốn in tên đều phải tự đi tra một lượt
           nữa, và mỗi nơi lại tra một kiểu.
         type: string
+      debt_contact_name:
+        description: |-
+          Người đại diện bên bán đứng ra nhận nợ, và số gọi khi tới hạn. Không có
+          hai thứ này thì "còn nợ 3.000.000" là con số chết.
+        type: string
+      debt_contact_phone:
+        type: string
+      debt_due_date:
+        description: DebtDueDate là hạn trả nốt phần còn nợ.
+        type: string
       discount_amount:
         type: number
       document_date:
@@ -1200,6 +1264,12 @@ definitions:
         type: integer
       id:
         type: integer
+      is_debt:
+        description: |-
+          IsDebt KHÔNG suy ra từ paid < total: trả thiếu vì mới trả một phần khác
+          hẳn trả thiếu vì hai bên ĐÃ thoả thuận cho nợ tới hạn. Chỉ cái thứ hai
+          mới lên danh sách công nợ phải đòi.
+        type: boolean
       items:
         items:
           $ref: '#/definitions/domain.PurchaseOrderItem'
@@ -1210,6 +1280,17 @@ definitions:
         type: string
       paid_amount:
         type: number
+      payment_attachment:
+        description: |-
+          PaymentAttachment là ảnh uỷ nhiệm chi / biên lai. Tách hẳn khỏi
+          Attachment — cột kia là chứng từ bên bán GIAO HÀNG.
+        type: string
+      payment_method:
+        description: |-
+          ---- Thoả thuận trả tiền, dựng theo bản order v2 ----
+
+          PaymentMethod rỗng = chưa ghi nhận lượt trả nào.
+        type: string
       payment_status:
         type: string
       po_code:
@@ -1326,6 +1407,40 @@ definitions:
       vat_percent:
         type: integer
     type: object
+  domain.PurchasePayment:
+    properties:
+      amount:
+        description: |-
+          Amount là tiền của RIÊNG lượt này, không phải số luỹ kế. ÂM = lượt chữa
+          lại con số đã ghi sai — nhìn vào sổ là biết ngay đây không phải lượt trả.
+        type: number
+      attachment:
+        type: string
+      created_at:
+        type: string
+      created_by:
+        type: integer
+      created_by_name:
+        description: CreatedByName tra kèm khi đọc lên — bảng không có cột này.
+        type: string
+      id:
+        type: integer
+      note:
+        type: string
+      paid_after:
+        description: |-
+          PaidAfter là số luỹ kế SAU lượt này. Thừa về mặt dữ liệu nhưng đọc sổ mà
+          phải tự cộng từ đầu mới biết lúc ấy đã trả tới đâu thì không ai đọc.
+        type: number
+      payment_method:
+        type: string
+      purchase_order_id:
+        type: integer
+      shop_id:
+        description: ShopID chép từ phiếu lúc ghi, để báo cáo theo chi nhánh khỏi
+          nối bảng.
+        type: integer
+    type: object
   domain.PurchaseStats:
     properties:
       approved:
@@ -1366,6 +1481,16 @@ definitions:
           CostPrice là giá vốn đang khai (nil = chưa khai) — gợi ý giá nhập cho
           người lập phiếu.
         type: number
+      lots:
+        description: |-
+          Lots là các lô ĐANG CÒN HÀNG của mặt hàng tại chi nhánh đang làm việc, xếp
+          theo hạn dùng gần nhất. Ô số lô trên lưới hàng đổ danh sách này ra thay vì
+          bắt gõ tay — gõ sai một ký tự là đẻ ra một lô mới mà không ai nhận ra.
+
+          gorm:"-" như Units: dựng từ bảng stock_lots ở napLo, không phải quan hệ.
+        items:
+          $ref: '#/definitions/domain.PurchaseLot'
+        type: array
       product_id:
         type: integer
       product_name:
@@ -1684,6 +1809,261 @@ definitions:
       updated_at:
         type: string
     type: object
+  domain.SupplierReturn:
+    properties:
+      address:
+        type: string
+      address_2:
+        type: string
+      approved_at:
+        type: string
+      branch_name:
+        type: string
+      contact_phone:
+        type: string
+      created_at:
+        type: string
+      created_by:
+        type: integer
+      creator_name:
+        description: |-
+          Ba cột tên dưới đây tra kèm khi đọc lên, bảng không có chúng. Chỉ có id thì
+          mọi màn hình muốn in tên đều phải tự đi tra một lượt nữa.
+        type: string
+      document_date:
+        type: string
+      expired_date:
+        type: string
+      handled_by:
+        type: integer
+      id:
+        type: integer
+      items:
+        items:
+          $ref: '#/definitions/domain.SupplierReturnItem'
+        type: array
+      items_amount:
+        type: number
+      note:
+        type: string
+      purchase_order_code:
+        type: string
+      purchase_order_id:
+        type: integer
+      purchaser_code:
+        type: string
+      purchaser_id:
+        type: integer
+      purchaser_name:
+        type: string
+      receiver_delivery_note:
+        type: string
+      return_code:
+        type: string
+      shop_id:
+        description: ShopID là chi nhánh lập phiếu, cũng là kho hàng sẽ rời đi khi
+          duyệt.
+        type: integer
+      status:
+        type: string
+      supplier_code:
+        description: SupplierCode/Name/địa chỉ/số máy là bản CHỤP hồ sơ bên bán lúc
+          lập phiếu.
+        type: string
+      supplier_id:
+        type: integer
+      supplier_name:
+        type: string
+      supplier_phone:
+        type: string
+      total_amount:
+        type: number
+      updated_at:
+        type: string
+      vat_amount:
+        type: number
+      vat_percent:
+        type: integer
+    type: object
+  domain.SupplierReturnHistory:
+    properties:
+      changed_by:
+        type: integer
+      created_at:
+        type: string
+      from_status:
+        type: string
+      id:
+        type: integer
+      note:
+        type: string
+      supplier_return_id:
+        type: integer
+      to_status:
+        type: string
+    type: object
+  domain.SupplierReturnItem:
+    properties:
+      base_quantity:
+        type: integer
+      created_at:
+        type: string
+      expire_date:
+        type: string
+      id:
+        type: integer
+      line_amount:
+        type: number
+      lot_number:
+        type: string
+      product_id:
+        type: integer
+      product_name:
+        type: string
+      product_variant_id:
+        type: integer
+      purchase_order_item_id:
+        description: PurchaseOrderItemID trỏ dòng phiếu mua gốc — trần số lượng trả
+          tính theo nó.
+        type: integer
+      purchase_quantity:
+        description: |-
+          PurchaseQuantity là số đã MUA của dòng gốc — cột "Số lượng nhập" trên màn.
+          Tra kèm khi đọc phiếu, bảng không có cột này.
+        type: integer
+      quantity:
+        description: |-
+          Quantity là số đơn vị TRẢ; BaseQuantity = Quantity × UnitRatio và ĐÂY là số
+          trừ khỏi kho.
+        type: integer
+      remaining_stock:
+        description: |-
+          RemainingStock là tồn còn lại của mặt hàng tại kho của phiếu, quy về đơn vị
+          trả — màn SỬA phiếu kẹp ô nhập theo tình hình HÔM NAY, không phải lúc lập.
+        type: integer
+      supplier_return_id:
+        type: integer
+      thumbnail:
+        type: string
+      total_cost:
+        type: number
+      unit_cost:
+        type: number
+      unit_id:
+        type: integer
+      unit_name:
+        type: string
+      unit_ratio:
+        type: number
+      updated_at:
+        type: string
+      variant_name:
+        type: string
+      variant_sku:
+        type: string
+      vat_amount:
+        type: number
+      vat_percent:
+        type: integer
+    type: object
+  domain.SupplierReturnLine:
+    properties:
+      expire_date:
+        type: string
+      lot_number:
+        type: string
+      product_id:
+        type: integer
+      product_name:
+        type: string
+      purchase_item_id:
+        type: integer
+      quantity:
+        type: integer
+      returnable:
+        description: |-
+          Returnable = min(Quantity - Returned, Stock), không âm. Đây là con số màn
+          hình kẹp ô nhập, và cũng là con số API kiểm lại lúc lưu.
+        type: integer
+      returned:
+        description: |-
+          Returned là số đã trả ở các phiếu ĐÃ DUYỆT trước đó, tính theo đơn vị của
+          dòng phiếu mua này.
+        type: integer
+      stock:
+        description: Stock là tồn còn lại tại kho của phiếu mua, quy về đơn vị của
+          dòng này.
+        type: integer
+      thumbnail:
+        type: string
+      unit_cost:
+        type: number
+      unit_id:
+        type: integer
+      unit_name:
+        type: string
+      unit_ratio:
+        type: number
+      variant_id:
+        type: integer
+      variant_name:
+        type: string
+      variant_sku:
+        type: string
+      vat_percent:
+        type: integer
+    type: object
+  domain.SupplierReturnPurchase:
+    properties:
+      approved_at:
+        type: string
+      document_date:
+        type: string
+      id:
+        type: integer
+      po_code:
+        type: string
+      total_amount:
+        type: number
+    type: object
+  domain.SupplierReturnPurchaseDetail:
+    properties:
+      document_date:
+        type: string
+      id:
+        type: integer
+      lines:
+        items:
+          $ref: '#/definitions/domain.SupplierReturnLine'
+        type: array
+      po_code:
+        type: string
+      purchaser_id:
+        description: |-
+          PurchaserID là nhân viên mua hàng ghi trên PHIẾU MUA. Màn lập phiếu trả
+          điền sẵn ô "Nhân viên mua hàng" theo người này: trả lô hàng của phiếu nào
+          thì người mua lô ấy là người biết chuyện, bắt chọn lại từ đầu chỉ mời chọn
+          nhầm sang một cái tên không liên quan tới lô hàng.
+        type: integer
+      supplier_id:
+        type: integer
+      vat_mode:
+        type: string
+      vat_percent:
+        type: integer
+    type: object
+  domain.SupplierReturnStats:
+    properties:
+      approved:
+        type: integer
+      draft:
+        type: integer
+      returned_amount:
+        description: ReturnedAmount là tiền hàng đã trả lại thật (chỉ phiếu đã duyệt).
+        type: number
+      total:
+        type: integer
+    type: object
   domain.Tenant:
     properties:
       code:
@@ -1726,11 +2106,6 @@ definitions:
         type: boolean
       name:
         type: string
-      raw_material:
-        description: |-
-          RawMaterial = thuộc tính này được dùng để khai định lượng nguyên vật liệu
-          cho món. Giữ đúng nghĩa cột raw_material_quantification của bản cũ.
-        type: boolean
       updated_at:
         type: string
       values:
@@ -4697,12 +5072,6 @@ definitions:
             0   -> gỡ vị trí, trả mặt hàng về "chưa gán".
             >0  -> gán vào vị trí ấy.
         type: integer
-      meta_description:
-        maxLength: 320
-        type: string
-      meta_title:
-        maxLength: 255
-        type: string
       name:
         maxLength: 200
         type: string
@@ -4721,9 +5090,6 @@ definitions:
         items:
           type: integer
         type: array
-      short_description:
-        maxLength: 500
-        type: string
       sku:
         description: |-
           SKU bỏ trống = sinh theo quy tắc mã hàng hoá; chưa bật quy tắc thì API trả
@@ -5038,6 +5404,23 @@ definitions:
     type: object
   dto.PurchasePaymentRequest:
     properties:
+      debt_contact_name:
+        description: Người đại diện bên bán và số gọi khi tới hạn. Bắt buộc khi IsDebt.
+        maxLength: 150
+        type: string
+      debt_contact_phone:
+        maxLength: 30
+        type: string
+      debt_due_date:
+        description: DebtDueDate khuôn YYYY-MM-DD. Bắt buộc khi IsDebt.
+        example: "2026-10-03"
+        type: string
+      is_debt:
+        description: |-
+          IsDebt = hai bên thoả thuận cho nợ phần còn lại. KHÔNG suy ra từ
+          PaidAmount < TotalAmount: trả thiếu vì mới trả một phần khác hẳn trả
+          thiếu vì đã hẹn ngày trả nốt.
+        type: boolean
       note:
         maxLength: 500
         type: string
@@ -5045,6 +5428,20 @@ definitions:
         example: 500000
         minimum: 0
         type: number
+      payment_attachment:
+        description: PaymentAttachment là đường dẫn ảnh uỷ nhiệm chi / biên lai đã
+          tải lên.
+        maxLength: 255
+        type: string
+      payment_method:
+        description: |-
+          PaymentMethod: cash | transfer. Rỗng khi trả 0 đồng — lượt ấy chỉ chốt
+          thoả thuận nợ chứ chưa có đồng nào đổi chủ.
+        enum:
+        - cash
+        - transfer
+        example: cash
+        type: string
     type: object
   dto.PurchaseUpdateRequest:
     properties:
@@ -5439,6 +5836,16 @@ definitions:
     required:
     - display_name
     type: object
+  dto.SapXepLaiRequest:
+    properties:
+      ids:
+        items:
+          type: integer
+        minItems: 1
+        type: array
+    required:
+    - ids
+    type: object
   dto.SettingField:
     properties:
       default:
@@ -5463,6 +5870,13 @@ definitions:
       max_num:
         example: 1000000
         type: number
+      options:
+        description: |-
+          Options chỉ có ở khoá dạng select — các giá trị hợp lệ kèm nhãn, theo đúng
+          thứ tự form admin nên bày ra. Rỗng với mọi kiểu khác.
+        items:
+          $ref: '#/definitions/dto.SettingOption'
+        type: array
       public:
         description: 'Public = true: khoá này lộ ra ở GET /settings cho storefront
           đọc.'
@@ -5478,8 +5892,17 @@ definitions:
         example: contact
         type: string
       type:
-        description: 'Type: text | number | email | phone | image | url'
+        description: 'Type: text | number | email | phone | image | url | bool | select'
         example: number
+        type: string
+    type: object
+  dto.SettingOption:
+    properties:
+      label:
+        example: FIFO — lô vào kho trước thì ra trước
+        type: string
+      value:
+        example: fifo
         type: string
     type: object
   dto.SettingsResponse:
@@ -5620,6 +6043,100 @@ definitions:
         type: string
     required:
     - email
+    type: object
+  dto.SupplierReturnApproveRequest:
+    properties:
+      note:
+        maxLength: 500
+        type: string
+    type: object
+  dto.SupplierReturnCreateRequest:
+    properties:
+      document_date:
+        example: "2026-08-23"
+        type: string
+      expired_date:
+        example: "2026-09-23"
+        type: string
+      items:
+        items:
+          $ref: '#/definitions/dto.SupplierReturnItemRequest'
+        maxItems: 200
+        minItems: 1
+        type: array
+      note:
+        maxLength: 500
+        type: string
+      purchase_order_id:
+        description: |-
+          PurchaseOrderID BẮT BUỘC: trả được bao nhiêu tính theo số đã mua của đúng
+          phiếu ấy, nên không có phiếu mua thì không có trần nào để kẹp.
+        example: 12
+        minimum: 1
+        type: integer
+      purchaser_id:
+        example: 7
+        type: integer
+      receiver_delivery_note:
+        maxLength: 50
+        type: string
+      supplier_id:
+        example: 4
+        minimum: 1
+        type: integer
+    required:
+    - items
+    - purchase_order_id
+    - supplier_id
+    type: object
+  dto.SupplierReturnItemRequest:
+    properties:
+      purchase_item_id:
+        description: PurchaseItemID là dòng của phiếu mua gốc (purchase_order_items.id).
+        example: 58
+        type: integer
+      quantity:
+        description: |-
+          Quantity là số đơn vị TRẢ, tính theo đúng đơn vị của dòng phiếu mua. Số
+          NGUYÊN: sổ kho đếm nguyên, nhận 0,5 rồi làm tròn lúc ghi kho là mỗi phiếu
+          lệch một ít.
+        example: 2
+        minimum: 1
+        type: integer
+    required:
+    - purchase_item_id
+    - quantity
+    type: object
+  dto.SupplierReturnUpdateRequest:
+    properties:
+      document_date:
+        type: string
+      expired_date:
+        type: string
+      items:
+        items:
+          $ref: '#/definitions/dto.SupplierReturnItemRequest'
+        maxItems: 200
+        minItems: 1
+        type: array
+      note:
+        maxLength: 500
+        type: string
+      purchase_order_id:
+        minimum: 1
+        type: integer
+      purchaser_id:
+        type: integer
+      receiver_delivery_note:
+        maxLength: 50
+        type: string
+      supplier_id:
+        minimum: 1
+        type: integer
+    required:
+    - items
+    - purchase_order_id
+    - supplier_id
     type: object
   dto.TaoChinhThucRequest:
     properties:
@@ -5929,11 +6446,6 @@ definitions:
       name:
         maxLength: 100
         type: string
-      raw_material:
-        description: |-
-          RawMaterial = dùng thuộc tính này để khai định lượng nguyên vật liệu.
-          Bỏ trống = false.
-        type: boolean
       values:
         description: |-
           Bỏ trống hẳn trường này = KHÔNG đụng tới danh sách giá trị (lượt sửa chỉ
@@ -6143,6 +6655,12 @@ definitions:
         type: string
       is_active:
         type: boolean
+      is_default:
+        description: |-
+          Pos là thứ tự bày ra. Bỏ trống thì lấy theo thứ tự gửi lên.
+          IsDefault đánh dấu biến thể mà màn bán hàng chọn sẵn. nil = để máy chủ
+          quyết (hàng đơn thì chính dòng duy nhất là mặc định).
+        type: boolean
       name:
         description: |-
           Name là tên biến thể. Bỏ trống thì server tự ghép từ Attributes bên dưới
@@ -6151,7 +6669,6 @@ definitions:
         maxLength: 255
         type: string
       pos:
-        description: Pos là thứ tự bày ra. Bỏ trống thì lấy theo thứ tự gửi lên.
         type: integer
       price:
         minimum: 0
@@ -6552,7 +7069,9 @@ definitions:
         description: CanEdit = phiếu còn sửa/xoá được (chỉ phiếu lưu tạm).
         type: boolean
       can_pay:
-        description: CanPay = phiếu đã duyệt và còn nợ nhà cung cấp.
+        description: |-
+          CanPay = phiếu đã duyệt và CHƯA trả đồng nào. Trả một phần rồi thì khoản
+          nợ ấy thuộc về màn công nợ, không trả tiếp từ màn phiếu mua nữa.
         type: boolean
       cancel_reason:
         type: string
@@ -6568,6 +7087,16 @@ definitions:
           này. Chỉ có id thì mọi màn hình muốn in tên đều phải tự đi tra một lượt
           nữa, và mỗi nơi lại tra một kiểu.
         type: string
+      debt_contact_name:
+        description: |-
+          Người đại diện bên bán đứng ra nhận nợ, và số gọi khi tới hạn. Không có
+          hai thứ này thì "còn nợ 3.000.000" là con số chết.
+        type: string
+      debt_contact_phone:
+        type: string
+      debt_due_date:
+        description: DebtDueDate là hạn trả nốt phần còn nợ.
+        type: string
       discount_amount:
         type: number
       document_date:
@@ -6582,6 +7111,12 @@ definitions:
         type: array
       id:
         type: integer
+      is_debt:
+        description: |-
+          IsDebt KHÔNG suy ra từ paid < total: trả thiếu vì mới trả một phần khác
+          hẳn trả thiếu vì hai bên ĐÃ thoả thuận cho nợ tới hạn. Chỉ cái thứ hai
+          mới lên danh sách công nợ phải đòi.
+        type: boolean
       items:
         items:
           $ref: '#/definitions/domain.PurchaseOrderItem'
@@ -6592,8 +7127,26 @@ definitions:
         type: string
       paid_amount:
         type: number
+      payment_attachment:
+        description: |-
+          PaymentAttachment là ảnh uỷ nhiệm chi / biên lai. Tách hẳn khỏi
+          Attachment — cột kia là chứng từ bên bán GIAO HÀNG.
+        type: string
+      payment_method:
+        description: |-
+          ---- Thoả thuận trả tiền, dựng theo bản order v2 ----
+
+          PaymentMethod rỗng = chưa ghi nhận lượt trả nào.
+        type: string
       payment_status:
         type: string
+      payments:
+        description: |-
+          Payments là sổ TỪNG LƯỢT trả tiền — `paid_amount` chỉ nói tổng, sổ này nói
+          tổng ấy tới từ mấy lượt, mỗi lượt bao nhiêu và bằng hình thức gì.
+        items:
+          $ref: '#/definitions/domain.PurchasePayment'
+        type: array
       po_code:
         type: string
       purchaser_id:
@@ -6737,6 +7290,94 @@ definitions:
         description: Returnable = false nghĩa là đơn không nằm trong diện trả hàng;
           Reason nói rõ vì sao.
         type: boolean
+    type: object
+  service.TraHangNCCDetail:
+    properties:
+      address:
+        type: string
+      address_2:
+        type: string
+      approved_at:
+        type: string
+      branch_name:
+        type: string
+      can_approve:
+        description: |-
+          CanApprove = phiếu còn duyệt được. Trang quản trị dựng nút từ hai cờ này
+          thay vì chép lại luật vào giao diện rồi lệch với server.
+        type: boolean
+      can_edit:
+        description: CanEdit = phiếu còn sửa/xoá được (chỉ phiếu lưu tạm).
+        type: boolean
+      contact_phone:
+        type: string
+      created_at:
+        type: string
+      created_by:
+        type: integer
+      creator_name:
+        description: |-
+          Ba cột tên dưới đây tra kèm khi đọc lên, bảng không có chúng. Chỉ có id thì
+          mọi màn hình muốn in tên đều phải tự đi tra một lượt nữa.
+        type: string
+      document_date:
+        type: string
+      expired_date:
+        type: string
+      handled_by:
+        type: integer
+      histories:
+        items:
+          $ref: '#/definitions/domain.SupplierReturnHistory'
+        type: array
+      id:
+        type: integer
+      items:
+        items:
+          $ref: '#/definitions/domain.SupplierReturnItem'
+        type: array
+      items_amount:
+        type: number
+      note:
+        type: string
+      purchase_order_code:
+        type: string
+      purchase_order_id:
+        type: integer
+      purchaser_code:
+        type: string
+      purchaser_id:
+        type: integer
+      purchaser_name:
+        type: string
+      receiver_delivery_note:
+        type: string
+      return_code:
+        type: string
+      shop_id:
+        description: ShopID là chi nhánh lập phiếu, cũng là kho hàng sẽ rời đi khi
+          duyệt.
+        type: integer
+      status:
+        type: string
+      supplier_code:
+        description: SupplierCode/Name/địa chỉ/số máy là bản CHỤP hồ sơ bên bán lúc
+          lập phiếu.
+        type: string
+      supplier_id:
+        type: integer
+      supplier_name:
+        type: string
+      supplier_phone:
+        type: string
+      total_amount:
+        type: number
+      updated_at:
+        type: string
+      vat_amount:
+        type: number
+      vat_percent:
+        type: integer
     type: object
 host: localhost:8080
 info:
@@ -11072,10 +11713,15 @@ paths:
         in: query
         name: supplier_id
         type: integer
-      - description: Chỉ phiếu có chứa mặt hàng này
+      - description: Chỉ phiếu có chứa một trong các mặt hàng này (id ngăn bởi dấu
+          phẩy)
         in: query
         name: variant_id
-        type: integer
+        type: string
+      - description: Số lô ghi trên dòng hàng, khớp một phần
+        in: query
+        name: lot_number
+        type: string
       - description: YYYY-MM-DD
         in: query
         name: from_date
@@ -11334,9 +11980,10 @@ paths:
     post:
       consumes:
       - application/json
-      description: '`paid_amount` là số LUỸ KẾ đã trả cho phiếu, không phải số vừa
-        trả thêm. Server so với tổng tiền ĐANG lưu chứ không tin con số client gửi
-        kèm.'
+      description: |-
+        `paid_amount` là số LUỸ KẾ đã trả cho phiếu, không phải số vừa trả thêm. Server so với tổng tiền ĐANG lưu chứ không tin con số client gửi kèm.
+        Bật `is_debt` thì bắt buộc có `debt_due_date`, `debt_contact_name` và `debt_contact_phone`, và số đã trả phải NHỎ HƠN tổng tiền — trả đủ thì không còn gì để nợ.
+        Tắt `is_debt` thì ba trường ấy bị dọn sạch, không để lại hạn nợ của một khoản không còn tồn tại.
       parameters:
       - description: ID phiếu
         in: path
@@ -11838,6 +12485,40 @@ paths:
       security:
       - BearerAuth: []
       summary: Xoá nhiều sản phẩm
+      tags:
+      - Admin - Products
+  /admin/products/sap-xep:
+    put:
+      consumes:
+      - application/json
+      description: |-
+        Nhận NGUYÊN danh sách id theo trình tự đang hiện trên trang (phần tử đầu nằm trên cùng) và phát lại chính những giá trị `sort` mà mấy dòng ấy đang giữ — nên các mặt hàng ở trang khác không bị xê dịch.
+        Trả 404 nếu một id trong danh sách không còn (vừa bị xoá ở nơi khác).
+      parameters:
+      - description: Trình tự mới
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.SapXepLaiRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Body'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.Body'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Ghi lại trình tự hàng hoá sau một lượt kéo thả
       tags:
       - Admin - Products
   /admin/promotions:
@@ -13107,7 +13788,7 @@ paths:
     get:
       description: |-
         Mỗi dòng trả kèm luôn danh sách giá trị (`values`) — thuộc tính không có giá trị nào thì chẳng dùng được vào việc gì, tách thành lượt gọi riêng chỉ tổ khiến màn hình phải gọi hai lần.
-        Đặt `active=true` để chỉ lấy thuộc tính đang bật (ô chọn lúc khai mặt hàng), `raw_material=true` để chỉ lấy thuộc tính dùng định lượng nguyên vật liệu.
+        Đặt `active=true` để chỉ lấy thuộc tính đang bật (ô chọn lúc khai mặt hàng).
         Cố ý KHÔNG phân trang: danh sách thuộc tính của một cửa hàng chỉ vài chục dòng, trang quản trị tự cắt trang.
       parameters:
       - description: Tên hoặc mã thuộc tính
@@ -13117,10 +13798,6 @@ paths:
       - description: true = chỉ thuộc tính đang bật
         in: query
         name: active
-        type: boolean
-      - description: true = chỉ thuộc tính dùng định lượng nguyên vật liệu
-        in: query
-        name: raw_material
         type: boolean
       produces:
       - application/json
@@ -13323,6 +14000,344 @@ paths:
       summary: Bật/tắt một thuộc tính
       tags:
       - Admin - Thuộc tính
+  /admin/tra-hang-nha-cung-cap:
+    get:
+      description: |-
+        Lọc theo từ khoá (mã phiếu / mã hoặc tên bên bán / ghi chú), trạng thái, nhà cung cấp và khoảng ngày lập.
+        `status` nhận nhiều giá trị ngăn bởi dấu phẩy — bộ lọc ngoài bảng là các ô tick.
+      parameters:
+      - description: Mã phiếu, mã/tên bên bán hoặc ghi chú
+        in: query
+        name: keyword
+        type: string
+      - description: draft | approved (ngăn bởi dấu phẩy)
+        in: query
+        name: status
+        type: string
+      - description: Lọc theo nhà cung cấp
+        in: query
+        name: supplier_id
+        type: integer
+      - description: YYYY-MM-DD
+        in: query
+        name: from_date
+        type: string
+      - description: YYYY-MM-DD
+        in: query
+        name: to_date
+        type: string
+      - description: newest | oldest | total_desc | total_asc | document_desc
+        in: query
+        name: sort
+        type: string
+      - description: Trang, mặc định 1
+        in: query
+        name: page
+        type: integer
+      - description: Số dòng mỗi trang, mặc định 20, tối đa 100
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/domain.SupplierReturn'
+                  type: array
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Danh sách phiếu trả hàng nhà cung cấp
+      tags:
+      - Admin - Trả hàng nhà cung cấp
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Phiếu lập ra LUÔN là phiếu lưu tạm, chưa đụng tới kho. Muốn trừ kho thì gọi tiếp POST {id}/duyet.
+        Client chỉ gửi `purchase_item_id` và `quantity`: giá nhập, đơn vị, số lô, thuế suất đều lấy lại từ dòng phiếu mua gốc.
+      parameters:
+      - description: Nội dung phiếu
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.SupplierReturnCreateRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.TraHangNCCDetail'
+              type: object
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Body'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Lập phiếu trả hàng nhà cung cấp
+      tags:
+      - Admin - Trả hàng nhà cung cấp
+  /admin/tra-hang-nha-cung-cap/{id}:
+    delete:
+      description: Chỉ xoá được phiếu lưu tạm. Phiếu đã duyệt nằm lại trong sổ vì
+        kho đã đổi theo nó.
+      parameters:
+      - description: ID phiếu
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Body'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Xoá phiếu trả hàng
+      tags:
+      - Admin - Trả hàng nhà cung cấp
+    get:
+      description: Kèm dòng hàng, lịch sử thao tác và hai cờ `can_edit` / `can_approve`
+        để trang quản trị dựng nút mà không phải chép lại luật.
+      parameters:
+      - description: ID phiếu
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.TraHangNCCDetail'
+              type: object
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Chi tiết phiếu trả hàng
+      tags:
+      - Admin - Trả hàng nhà cung cấp
+    put:
+      consumes:
+      - application/json
+      description: Chỉ phiếu LƯU TẠM sửa được. Phiếu đã duyệt là kho đã trừ theo nó
+        nên khoá lại.
+      parameters:
+      - description: ID phiếu
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Nội dung phiếu
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.SupplierReturnUpdateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.TraHangNCCDetail'
+              type: object
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.Body'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Sửa phiếu trả hàng
+      tags:
+      - Admin - Trả hàng nhà cung cấp
+  /admin/tra-hang-nha-cung-cap/{id}/duyet:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Lúc DUY NHẤT phiếu trả chạm vào tồn kho: trừ hàng khỏi kho của chi nhánh đã lập phiếu và ghi bút toán sổ kho (type='export', reference_type='supplier_return'). Duyệt xong phiếu khoá lại.
+        Trần trả hàng được kiểm LẠI ngay trước khi trừ kho — giữa lúc lập phiếu và lúc bấm duyệt, một phiếu trả khác có thể đã ăn hết phần còn lại.
+      parameters:
+      - description: ID phiếu
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Ghi chú lượt duyệt
+        in: body
+        name: body
+        schema:
+          $ref: '#/definitions/dto.SupplierReturnApproveRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.TraHangNCCDetail'
+              type: object
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.Body'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Duyệt phiếu trả và xuất kho
+      tags:
+      - Admin - Trả hàng nhà cung cấp
+  /admin/tra-hang-nha-cung-cap/dong-phieu-mua:
+    get:
+      description: |-
+        Mỗi dòng trả kèm `returned` (đã trả ở các phiếu ĐÃ DUYỆT), `stock` (tồn còn lại tại kho của phiếu mua, quy về đơn vị của dòng) và `returnable` = min(mua - đã trả, tồn).
+        `returnable` là con số màn hình kẹp ô nhập, và cũng là con số API kiểm lại lúc lưu rồi kiểm lần nữa lúc duyệt.
+      parameters:
+      - description: ID phiếu mua
+        in: query
+        name: purchase_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/domain.SupplierReturnPurchaseDetail'
+              type: object
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Dòng hàng của một phiếu mua, kèm phần còn trả được
+      tags:
+      - Admin - Trả hàng nhà cung cấp
+  /admin/tra-hang-nha-cung-cap/phieu-mua:
+    get:
+      description: 'Chỉ phiếu ĐÃ DUYỆT: phiếu lưu tạm chưa đưa hàng vào kho nên chưa
+        có gì để trả.'
+      parameters:
+      - description: ID nhà cung cấp
+        in: query
+        name: supplier_id
+        required: true
+        type: integer
+      - description: Số phiếu tối đa, mặc định 200
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/domain.SupplierReturnPurchase'
+                  type: array
+              type: object
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Phiếu mua trả hàng được của một nhà cung cấp
+      tags:
+      - Admin - Trả hàng nhà cung cấp
+  /admin/tra-hang-nha-cung-cap/stats:
+    get:
+      description: Đếm phiếu theo trạng thái và tổng tiền đã trả lại. Tiền chỉ cộng
+        trên phiếu ĐÃ DUYỆT.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/domain.SupplierReturnStats'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Con số đầu trang trả hàng nhà cung cấp
+      tags:
+      - Admin - Trả hàng nhà cung cấp
   /admin/users:
     get:
       description: |-
@@ -14888,6 +15903,10 @@ paths:
       - description: true = lấy cả danh mục ẩn
         in: query
         name: all
+        type: boolean
+      - description: true = chỉ nhóm đang có mặt hàng
+        in: query
+        name: has_products
         type: boolean
       produces:
       - application/json

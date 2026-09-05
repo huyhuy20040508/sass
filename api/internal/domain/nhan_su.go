@@ -135,6 +135,8 @@ type NhanVienRepository interface {
 	// uq_employees_tenant_code, nên báo trùng ở đây dễ hiểu hơn là để MySQL ném
 	// lỗi khoá lúc ghi.
 	ExistsByCode(ctx context.Context, code string, excludeID uint) (bool, error)
+	// ExistsByName chặn hai hồ sơ cùng tên trong một cửa hàng.
+	ExistsByName(ctx context.Context, name string, excludeID uint) (bool, error)
 	// ExistsByUser cho biết tài khoản này đã có hồ sơ nhân sự khác nhận chưa —
 	// uq_employees_user chỉ cho một hồ sơ giữ một tài khoản.
 	ExistsByUser(ctx context.Context, userID uint, excludeID uint) (bool, error)
@@ -151,6 +153,14 @@ type NhanVienRepository interface {
 	// Hỏi MỘT lượt cho cả hai thay vì hai hàm: cả hai chỉ dùng đúng ở lượt xoá,
 	// và tách ra thì chỗ gọi phải nhớ hỏi đủ — quên một câu là lỗ hổng im lặng.
 	RangBuocCuaTaiKhoan(ctx context.Context, userID uint) (coCaChuaDong bool, coSoQuy bool, err error)
+
+	// ChiNhanhCuaTaiKhoan trả về chi nhánh mà tài khoản này được phân về.
+	//
+	// nil = KHÔNG bị buộc vào chi nhánh nào: hoặc người này chưa có hồ sơ nhân sự
+	// (chủ tiệm), hoặc hồ sơ chưa khai chi nhánh (tiệm một điểm bán). Cả hai
+	// trường hợp đều được làm ở mọi chi nhánh — đây là chốt CHẶN người đã bị phân
+	// công, không phải chốt cấp quyền cho người chưa.
+	ChiNhanhCuaTaiKhoan(ctx context.Context, userID uint) (*uint, error)
 }
 
 // Lỗi nghiệp vụ của module nhân sự. Ba lỗi riêng chứ không gộp vào ErrConflict:

@@ -32,9 +32,6 @@ func (r *thuocTinhRepository) List(ctx context.Context, f domain.ThuocTinhFilter
 	if f.OnlyActive {
 		q = q.Where("is_active = ?", true)
 	}
-	if f.OnlyRawMaterial {
-		q = q.Where("raw_material = ?", true)
-	}
 	if kw := strings.TrimSpace(f.Keyword); kw != "" {
 		like := "%" + kw + "%"
 		q = q.Where("(name LIKE ? OR code LIKE ?)", like, like)
@@ -223,19 +220,18 @@ func (r *thuocTinhRepository) DangDuocDung(_ context.Context, _ []uint) (map[uin
 	return map[uint]bool{}, nil
 }
 
-// ghiThanThuocTinh ghi đúng bốn cột người dùng sửa được.
+// ghiThanThuocTinh ghi đúng ba cột người dùng sửa được.
 //
 // Updates kèm map chứ không Save(): Save cũng lôi cả association GiaTri đã
 // preload đi ghi lại, và Updates kèm struct thì bỏ qua trường zero-value nên
-// tắt is_active hay bỏ cờ raw_material sẽ không lưu được.
+// tắt is_active sẽ không lưu được.
 func ghiThanThuocTinh(db *gorm.DB, tt *domain.ThuocTinh) error {
 	return db.Model(&domain.ThuocTinh{}).
 		Where("id = ?", tt.ID).
 		Updates(map[string]any{
-			"code":         tt.Code,
-			"name":         tt.Name,
-			"is_active":    tt.IsActive,
-			"raw_material": tt.RawMaterial,
+			"code":      tt.Code,
+			"name":      tt.Name,
+			"is_active": tt.IsActive,
 		}).Error
 }
 

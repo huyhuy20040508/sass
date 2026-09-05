@@ -45,7 +45,8 @@ func NewPhieuMuaHangHandler(svc service.PhieuMuaHangService) *PhieuMuaHangHandle
 //	@Param			status			query		string	false	"draft | approved | cancelled (ngăn bởi dấu phẩy)"
 //	@Param			payment_status	query		string	false	"unpaid | partial | paid (ngăn bởi dấu phẩy)"
 //	@Param			supplier_id		query		int		false	"Lọc theo nhà cung cấp"
-//	@Param			variant_id		query		int		false	"Chỉ phiếu có chứa mặt hàng này"
+//	@Param			variant_id		query		string	false	"Chỉ phiếu có chứa một trong các mặt hàng này (id ngăn bởi dấu phẩy)"
+//	@Param			lot_number		query		string	false	"Số lô ghi trên dòng hàng, khớp một phần"
 //	@Param			from_date		query		string	false	"YYYY-MM-DD"
 //	@Param			to_date			query		string	false	"YYYY-MM-DD"
 //	@Param			sort			query		string	false	"newest | oldest | total_desc | total_asc | document_desc"
@@ -66,14 +67,15 @@ func (h *PhieuMuaHangHandler) List(c *gin.Context) {
 		size = 20
 	}
 	supplierID, _ := strconv.ParseUint(c.Query("supplier_id"), 10, 64)
-	variantID, _ := strconv.ParseUint(c.Query("variant_id"), 10, 64)
 
 	list, tong, err := h.svc.List(c.Request.Context(), domain.PurchaseFilter{
 		Keyword:       c.Query("keyword"),
 		Status:        c.Query("status"),
 		PaymentStatus: c.Query("payment_status"),
 		SupplierID:    uint(supplierID),
-		VariantID:     uint(variantID),
+		ShopID:        chiNhanhLoc(c),
+		VariantIDs:    danhSachUint(c.Query("variant_id")),
+		LotNumber:     c.Query("lot_number"),
 		FromDate:      c.Query("from_date"),
 		ToDate:        c.Query("to_date"),
 		Sort:          c.Query("sort"),
@@ -327,6 +329,8 @@ func (h *PhieuMuaHangHandler) Cancel(c *gin.Context) {
 //
 //	@Summary		Ghi nhận tiền đã trả nhà cung cấp
 //	@Description	`paid_amount` là số LUỸ KẾ đã trả cho phiếu, không phải số vừa trả thêm. Server so với tổng tiền ĐANG lưu chứ không tin con số client gửi kèm.
+//	@Description	Bật `is_debt` thì bắt buộc có `debt_due_date`, `debt_contact_name` và `debt_contact_phone`, và số đã trả phải NHỎ HƠN tổng tiền — trả đủ thì không còn gì để nợ.
+//	@Description	Tắt `is_debt` thì ba trường ấy bị dọn sạch, không để lại hạn nợ của một khoản không còn tồn tại.
 //	@Tags			Admin - Phiếu mua hàng
 //	@Accept			json
 //	@Produce		json

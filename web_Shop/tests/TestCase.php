@@ -41,12 +41,31 @@ abstract class TestCase extends BaseTestCase
      */
     protected bool $choPhepGoiApiThat = false;
 
+    /**
+     * Bài kiểm này có đi qua cổng "chỉ hiện giao diện v2" không.
+     *
+     * Mặc định KHÔNG. Cổng ấy là cơ chế TRIỂN KHAI TỪNG ĐỢT: màn nào chưa dựng
+     * lại theo v2 thì dồn về màn v2 gần nhất, để trong một phiên không thấy hai
+     * giao diện lẫn lộn. Nó không phải nghiệp vụ của màn nào cả.
+     *
+     * Bắt bài kiểm của từng màn đi qua cổng thì chúng đo cái cổng chứ không đo
+     * màn: mọi khẳng định về nội dung trang đều đỏ với cùng một lý do "302", và
+     * lỗi thật của màn ấy chìm nghỉm giữa đám đỏ đó.
+     *
+     * Hành vi của chính cổng được gác riêng ở ChiHienGiaoDienV2Test.
+     */
+    protected bool $quaCongV2 = false;
+
     protected function setUp(): void
     {
         parent::setUp();
 
         if (! $this->choPhepGoiApiThat) {
             Http::preventStrayRequests();
+        }
+
+        if (! $this->quaCongV2) {
+            $this->withoutMiddleware(\App\Http\Middleware\ChiHienGiaoDienV2::class);
         }
     }
 }

@@ -309,6 +309,7 @@ func main() {
 	viTriRepo := repository.NewViTriRepository(db)
 	nhaCungCapRepo := repository.NewNhaCungCapRepository(db)
 	phieuMuaHangRepo := repository.NewPurchaseOrderRepository(db)
+	traHangNCCRepo := repository.NewSupplierReturnRepository(db)
 	thuocTinhRepo := repository.NewThuocTinhRepository(db)
 	productRepo := repository.NewProductRepository(db)
 	orderRepo := repository.NewOrderRepository(db)
@@ -342,7 +343,7 @@ func main() {
 	// nguoiDieuHanhRepo có thể nil (chưa dựng control plane): khi đó đăng nhập
 	// khu điều hành trả 503 nói đúng lý do, chứ KHÔNG rơi về cách cũ là mượn
 	// super_admin của một cửa hàng — cách đó chính là lỗ hổng đã đóng ở 0007.
-	authSvc := service.NewAuthService(userRepo, nguoiDieuHanhRepo, tenantRepo, roleRepo, verifyRepo, mailSender, jwtMgr, cfg.JWT, cfg.Mail, !cfg.App.IsProduction(), settingSvc, fbClient, ggClient)
+	authSvc := service.NewAuthService(userRepo, nguoiDieuHanhRepo, tenantRepo, roleRepo, verifyRepo, mailSender, jwtMgr, cfg.JWT, cfg.Mail, !cfg.App.IsProduction(), settingSvc, fbClient, ggClient, nhanSuRepo)
 	categorySvc := service.NewCategoryService(categoryRepo, quyTacMaRepo)
 	bannerSvc := service.NewBannerService(bannerRepo)
 	// Cửa xét HẠN MỨC HỢP ĐỒNG — chỗ ba con số đã ký (chi nhánh / tài khoản /
@@ -397,6 +398,13 @@ func main() {
 	// Nhà cung cấp — danh mục đầu mối mua vào của khu Kho.
 	nhaCungCapSvc := service.NewNhaCungCapService(nhaCungCapRepo, quyTacMaRepo)
 	phieuMuaHangSvc := service.NewPhieuMuaHangService(phieuMuaHangRepo, nhaCungCapRepo)
+	// Trả hàng NCC — chiều ngược của phiếu mua; nhaCungCapRepo để chụp hồ sơ bên
+	// bán xuống chứng từ.
+	traHangNCCSvc := service.NewTraHangNCCService(traHangNCCRepo, nhaCungCapRepo)
+	// Phiếu điều chuyển — chiNhanhRepo để chốt hai kho có thật, thuộc cửa hàng
+	// này và đang mở trước khi ghi phiếu.
+	dieuChuyenSvc := service.NewPhieuDieuChuyenService(
+		repository.NewPhieuDieuChuyenRepository(db), chiNhanhRepo)
 	// Thuộc tính — cùng khuôn với đơn vị tính, thêm tầng giá trị con.
 	thuocTinhSvc := service.NewThuocTinhService(thuocTinhRepo, quyTacMaRepo)
 	// Chương trình khuyến mãi: vừa là module quản trị, vừa là thứ tính giá sau giảm
@@ -470,20 +478,24 @@ func main() {
 		ViTri:        handler.NewViTriHandler(viTriSvc),
 		NhaCungCap:   handler.NewNhaCungCapHandler(nhaCungCapSvc),
 		PhieuMuaHang: handler.NewPhieuMuaHangHandler(phieuMuaHangSvc),
-		ThuocTinh:    handler.NewThuocTinhHandler(thuocTinhSvc),
-		Ca:           handler.NewCaLamViecHandler(caSvc),
-		Payment:      handler.NewPaymentHandler(paymentSvc),
-		Banner:       handler.NewBannerHandler(bannerSvc),
-		Report:       handler.NewReportHandler(reportSvc),
-		Promo:        handler.NewPromotionHandler(promotionSvc),
-		Voucher:      handler.NewVoucherHandler(voucherSvc),
-		Contact:      handler.NewContactHandler(contactSvc),
-		Plan:         planHandler,
-		KhachHang:    khachHangHandler,
-		DungThu:      dungThuHandler,
-		GoiDichVu:    goiDichVuHandler,
-		CauHinh:      cauHinhHandler,
-		GiaHan:       giaHanHandler,
+		TraHangNCC:   handler.NewTraHangNCCHandler(traHangNCCSvc),
+		DieuChuyen:   handler.NewPhieuDieuChuyenHandler(dieuChuyenSvc),
+		GiaChiNhanh: handler.NewGiaChiNhanhHandler(
+			service.NewGiaChiNhanhService(repository.NewGiaChiNhanhRepository(db), chiNhanhRepo)),
+		ThuocTinh: handler.NewThuocTinhHandler(thuocTinhSvc),
+		Ca:        handler.NewCaLamViecHandler(caSvc),
+		Payment:   handler.NewPaymentHandler(paymentSvc),
+		Banner:    handler.NewBannerHandler(bannerSvc),
+		Report:    handler.NewReportHandler(reportSvc),
+		Promo:     handler.NewPromotionHandler(promotionSvc),
+		Voucher:   handler.NewVoucherHandler(voucherSvc),
+		Contact:   handler.NewContactHandler(contactSvc),
+		Plan:      planHandler,
+		KhachHang: khachHangHandler,
+		DungThu:   dungThuHandler,
+		GoiDichVu: goiDichVuHandler,
+		CauHinh:   cauHinhHandler,
+		GiaHan:    giaHanHandler,
 	}
 
 	// 8. Router + HTTP server
@@ -493,7 +505,7 @@ func main() {
 	// một cửa hàng chỉ chặn được lượt ĐĂNG NHẬP MỚI — ai đang mở phiên vẫn dùng
 	// tiếp cho tới khi access token hết hạn. Xem middleware.JWTAuth.
 	r := router.New(cfg, jwtMgr, tenMienRepo, nguoiDieuHanhRepo,
-		repository.NewPhienRepository(db), chiNhanhRepo,
+		repository.NewPhienRepository(db), chiNhanhRepo, nhanSuRepo,
 		quyenRepo, handlers)
 	srv := &http.Server{
 		Addr:        announcedAddr(cfg.App.Port),

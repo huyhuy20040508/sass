@@ -38,9 +38,6 @@ type ThuocTinh struct {
 	// IsActive = có bày ra ở ô chọn thuộc tính lúc khai mặt hàng không. Tắt chứ
 	// không xoá khi một thuộc tính thôi dùng: mặt hàng cũ vẫn phải tra ra tên.
 	IsActive bool `json:"is_active"`
-	// RawMaterial = thuộc tính này được dùng để khai định lượng nguyên vật liệu
-	// cho món. Giữ đúng nghĩa cột raw_material_quantification của bản cũ.
-	RawMaterial bool `json:"raw_material"`
 	// GiaTri là các giá trị con, luôn trả kèm: một thuộc tính không có giá trị
 	// nào thì chẳng dùng được vào việc gì, nên tách ra thành lượt gọi riêng chỉ
 	// tổ khiến mọi màn hình phải gọi hai lần.
@@ -79,8 +76,6 @@ type ThuocTinhFilter struct {
 	Keyword string // tên hoặc mã
 	// OnlyActive = true: chỉ thuộc tính đang bật (ô chọn lúc khai mặt hàng).
 	OnlyActive bool
-	// OnlyRawMaterial = true: chỉ thuộc tính bật cờ định lượng nguyên vật liệu.
-	OnlyRawMaterial bool
 }
 
 // ThuocTinhRepository — truy cập bảng product_attributes và bảng giá trị con.

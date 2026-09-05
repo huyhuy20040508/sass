@@ -92,6 +92,9 @@ func (s *nhanSuService) Create(ctx context.Context, req *dto.NhanSuRequest, acto
 	if err != nil {
 		return nil, err
 	}
+	if err := s.chanTrungTen(ctx, req.FullName, 0); err != nil {
+		return nil, err
+	}
 
 	shopID, err := s.chotChiNhanh(ctx, req.ShopID)
 	if err != nil {
@@ -137,6 +140,9 @@ func (s *nhanSuService) Update(ctx context.Context, id uint, req *dto.NhanSuRequ
 
 	nv, err := s.repo.FindByID(ctx, id)
 	if err != nil {
+		return nil, err
+	}
+	if err := s.chanTrungTen(ctx, req.FullName, id); err != nil {
 		return nil, err
 	}
 
@@ -620,6 +626,21 @@ func parseNgay(s string) *time.Time {
 		if t, err := time.Parse(layout, s); err == nil {
 			return &t
 		}
+	}
+
+	return nil
+}
+
+// chanTrungTen — hai hồ sơ cùng tên trong một cửa hàng là không cho, dù mã khác.
+// Chấm công và bảng lương đều gọi người theo tên; hai dòng trùng tên thì ghi
+// nhầm ca của ai cũng không ai thấy.
+func (s *nhanSuService) chanTrungTen(ctx context.Context, name string, excludeID uint) error {
+	trung, err := s.repo.ExistsByName(ctx, strings.TrimSpace(name), excludeID)
+	if err != nil {
+		return err
+	}
+	if trung {
+		return domain.ErrNhanVienTrungTen
 	}
 
 	return nil

@@ -1,0 +1,37 @@
+-- =====================================================================
+--  0044_bo-dinh-luong-nvl-2026-08-31.sql
+--  Ngày: 31/08/2026
+-- =====================================================================
+--  KHÔNG viết CREATE DATABASE hay USE ở đây: công cụ đã kết nối sẵn đúng
+--  database của môi trường đang chạy (cục bộ / thử / thật đều khác tên).
+--
+--  MySQL không cho DDL nằm trong transaction, nên tệp chạy dở là dở thật.
+--  Viết sao cho chạy lại được nếu có thể: IF NOT EXISTS, IF EXISTS...
+--
+--  Tệp này đã chạy ở đâu đó rồi thì TUYỆT ĐỐI không sửa nội dung nữa —
+--  công cụ giữ vân tay và sẽ báo lệch. Cần thêm gì thì viết tệp mới.
+-- =====================================================================
+--
+--  BỎ CỜ "ĐỊNH LƯỢNG NGUYÊN VẬT LIỆU" KHỎI THUỘC TÍNH
+--
+--  Cột `product_attributes.raw_material` được chép sang từ
+--  `raw_material_quantification` của bản order v2 (migration 0024) cho
+--  khỏi hụt trường.
+--
+--  Ở v2 nó có việc thật vì đó là phần mềm F&B: thuộc tính "Size" bật cờ
+--  này thì Size L trừ nhiều nguyên liệu hơn Size M theo CÔNG THỨC của
+--  món. Phần mềm bên này là BÁN LẺ — biến thể chỉ là tổ hợp thuộc tính
+--  để phân biệt hàng trên kệ, trừ kho thẳng theo chính biến thể đó,
+--  không có bảng công thức nào đứng giữa.
+--
+--  Rà lại toàn hệ thống trước khi bỏ: không module nào đọc cột này. Nó
+--  chỉ được chính màn Thuộc tính khai rồi tự lọc lại mình. Một cột không
+--  ai đọc mà vẫn nằm trên form là một câu hỏi thừa bắt người dùng phải
+--  trả lời mỗi lần khai thuộc tính mới.
+--
+--  Làm lại sau này thì đây là thứ của module CÔNG THỨC / ĐỊNH MỨC, khai
+--  ở bảng riêng của module đó chứ không phải một cờ bool treo trên
+--  danh mục thuộc tính.
+-- =====================================================================
+
+ALTER TABLE product_attributes DROP COLUMN raw_material;

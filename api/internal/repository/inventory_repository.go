@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -122,6 +123,40 @@ func (r *inventoryRepository) baseQuery(ctx context.Context) *gorm.DB {
 	return q
 }
 
+// locHangCuaChiNhanh giữ lại những mặt hàng CHI NHÁNH NÀY QUẢN — hoặc đang thật
+// sự có hàng ở đây.
+//
+// Thiếu vế đầu thì kho nào cũng liệt kê TOÀN BỘ danh mục của cửa hàng với số 0:
+// chi nhánh mới mở bán ba món phải cuộn qua năm trăm dòng không dính gì tới
+// mình, và bảng ấy thôi dùng để đếm hàng được.
+//
+// Vế cuối là chỗ QUAN TRỌNG HƠN, và nó không đối xứng với vế đầu một cách có
+// chủ ý: mặt hàng vừa bị gán đi chi nhánh khác mà kho này còn ôm hàng thật thì
+// VẪN phải hiện. Giấu nó đi là giấu số hàng đang nằm trong kho — thủ kho đếm
+// tay ra 2 cái mà phần mềm không có dòng nào để đối chiếu, và cũng không còn
+// đường nào chỉnh kho hay lập phiếu chuyển trả nó đi.
+//
+// `quantity <> 0` chứ không phải "có dòng": dòng số 0 là dấu vết của hàng đã
+// hết từ lâu, bày ra chỉ làm nhiễu.
+//
+// CHỈ dùng cho DANH SÁCH và con số đầu trang. KHÔNG dùng ở FindItem: đường đó
+// trả lời một câu hỏi đích danh ("kho này còn bao nhiêu cái X"), và câu trả lời
+// đúng khi kho không quản món ấy là SỐ 0, không phải 404 — máy quét ở quầy và
+// lượt kiểm tồn trước khi ghi phiếu đều đi qua đó.
+func locHangCuaChiNhanh(q *gorm.DB, ctx context.Context) *gorm.DB {
+	shopID, ok := chinhanh.ID(ctx)
+	if !ok {
+		return q
+	}
+
+	return q.Where(fmt.Sprintf(`(
+		EXISTS (SELECT 1 FROM product_shops ps WHERE ps.product_id = p.id AND ps.shop_id = %d)
+		OR NOT EXISTS (SELECT 1 FROM product_shops ps2 WHERE ps2.product_id = p.id)
+		OR EXISTS (SELECT 1 FROM variant_stocks vs2
+			WHERE vs2.product_variant_id = v.id AND vs2.shop_id = %d AND vs2.quantity <> 0)
+	)`, shopID, shopID))
+}
+
 // applyFilter gắn các điều kiện lọc lên một truy vấn đã có sẵn FROM/JOIN.
 func applyInventoryFilter(q *gorm.DB, f domain.InventoryFilter, ton string) *gorm.DB {
 	if kw := strings.TrimSpace(f.Keyword); kw != "" {
@@ -178,7 +213,7 @@ func inventoryOrder(sort, ton string) string {
 func (r *inventoryRepository) List(ctx context.Context, f domain.InventoryFilter) ([]domain.InventoryItem, int64, error) {
 	var total int64
 	ton := tonExpr(ctx)
-	countQ := applyInventoryFilter(r.baseQuery(ctx), f, ton)
+	countQ := applyInventoryFilter(locHangCuaChiNhanh(r.baseQuery(ctx), ctx), f, ton)
 	if err := countQ.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
@@ -186,7 +221,7 @@ func (r *inventoryRepository) List(ctx context.Context, f domain.InventoryFilter
 		return []domain.InventoryItem{}, 0, nil
 	}
 
-	q := applyInventoryFilter(r.baseQuery(ctx), f, ton).
+	q := applyInventoryFilter(locHangCuaChiNhanh(r.baseQuery(ctx), ctx), f, ton).
 		Joins("LEFT JOIN categories c ON c.id = p.category_id").
 		// Đơn vị tính đi kèm để màn kho ghi được "12 Hộp" chứ không phải một con
 		// số trần. LEFT JOIN: mặt hàng chưa khai đơn vị vẫn phải hiện ra.
@@ -215,7 +250,7 @@ func (r *inventoryRepository) List(ctx context.Context, f domain.InventoryFilter
 func (r *inventoryRepository) Stats(ctx context.Context, lowStock int) (domain.InventoryStats, error) {
 	var s domain.InventoryStats
 	ton := tonExpr(ctx)
-	err := r.baseQuery(ctx).
+	err := locHangCuaChiNhanh(r.baseQuery(ctx), ctx).
 		Select(`COUNT(*) AS total_variants,
 			COALESCE(SUM(GREATEST(`+ton+`, 0)), 0) AS total_quantity,
 			COALESCE(SUM(CASE WHEN `+ton+` > ? THEN 1 ELSE 0 END), 0) AS in_stock,
@@ -458,6 +493,8 @@ func (r *inventoryRepository) Adjust(ctx context.Context, items []domain.Invento
 			found[v.ID] = v
 		}
 
+		luat := luatXuatKho(tx)
+
 		for _, k := range order {
 			vid := k.variant
 			v, ok := found[vid]
@@ -486,8 +523,17 @@ func (r *inventoryRepository) Adjust(ctx context.Context, items []domain.Invento
 					return domain.ErrOutOfStock
 				}
 
+				// Kiểm kê KHÔNG khai lô: người dùng đếm được tổng bao nhiêu chứ không
+				// tách theo lô. Đếm THIẾU thì rút theo FIFO/FEFO như một lượt xuất
+				// bình thường; đếm THỪA thì phần dôi ra vào lô "Không xác định" —
+				// không có ai để hỏi đó là hàng của lô nào, và đoán bừa vào một lô có
+				// thật là làm hỏng chính con số mà lần kiểm kê sau phải đối chiếu.
 				change := next - current
-				if _, _, err := ghiTonChiNhanh(tx, shopID, vid, change, false); err != nil {
+				if _, _, err := ghiTonChiNhanhLo(tx, shopID, vid, ChuyenKho{
+					Delta:   change,
+					Luat:    &luat,
+					RefType: domain.KhoRefKiemKe,
+				}); err != nil {
 					return err
 				}
 				if err := tx.Create(&domain.InventoryTransaction{
@@ -584,7 +630,24 @@ func (r *inventoryRepository) TonTheoChiNhanh(ctx context.Context, f domain.TonC
 			Joins("JOIN products p ON p.id = v.product_id AND p.deleted_at IS NULL").
 			Joins("JOIN (" + strings.Join(nhanh, " UNION ALL ") + ") s ON 1 = 1").
 			Joins("LEFT JOIN variant_stocks vs ON vs.product_variant_id = v.id AND vs.shop_id = s.shop_id").
-			Where("v.deleted_at IS NULL")
+			Where("v.deleted_at IS NULL").
+			// Cùng luật với trang Tồn kho một chi nhánh, nhưng xét theo TỪNG Ô của
+			// lưới: mỗi dòng ở đây là một cặp (mặt hàng, chi nhánh), nên phép thử
+			// phải chạy trên `s.shop_id` chứ không phải một chi nhánh cố định.
+			//
+			// Không có vế này thì lưới nhân bản toàn bộ danh mục cho mọi kho: cửa
+			// hàng 500 mặt hàng, 3 chi nhánh ra 1.500 dòng mà 1.400 trong số đó là
+			// số 0 của những món kho ấy không bán.
+			//
+			// Vế cuối giữ lại hàng ĐANG KẸT: mặt hàng vừa bị gán đi nơi khác mà kho
+			// này còn ôm hàng thật thì vẫn phải hiện — giấu đi là giấu số hàng nằm
+			// trong kho. `vs` đã LEFT JOIN sẵn theo đúng s.shop_id nên không cần
+			// thêm truy vấn con nào.
+			Where(`(
+				EXISTS (SELECT 1 FROM product_shops ps WHERE ps.product_id = p.id AND ps.shop_id = s.shop_id)
+				OR NOT EXISTS (SELECT 1 FROM product_shops ps2 WHERE ps2.product_id = p.id)
+				OR (vs.quantity IS NOT NULL AND vs.quantity <> 0)
+			)`)
 	}
 
 	// Dùng lại đúng bộ điều kiện của trang Tồn kho: hai màn cùng nói về một thứ
@@ -654,7 +717,7 @@ func (r *inventoryRepository) TonTheoChiNhanh(ctx context.Context, f domain.TonC
 			p.name AS product_name, COALESCE(v.name, '') AS variant_name,
 			COALESCE(u.name, '') AS unit_name, COALESCE(c.name, '') AS category_name,
 			COALESCE(NULLIF(v.image, ''), NULLIF(p.thumbnail, ''), '') AS thumbnail,
-			` + ton + ` AS quantity, v.is_active,
+			` + ton + ` AS quantity, v.is_active, p.is_stock_deducted,
 			` + effectiveCostExpr + ` AS cost_price,
 			` + stockValueExpr(ton) + ` AS stock_value`).
 		Order("s.shop_id ASC, " + inventoryOrder(f.Sort, ton)).
@@ -670,9 +733,86 @@ func (r *inventoryRepository) TonTheoChiNhanh(ctx context.Context, f domain.TonC
 		dong[i].ShopCode = cn.Code
 		dong[i].ShopName = cn.Name
 	}
+
+	if err := napLoChoDong(r.db.WithContext(ctx), dong); err != nil {
+		return out, err
+	}
 	out.Dong = dong
 
 	return out, nil
+}
+
+// napLoChoDong gắn danh sách lô vào từng dòng tồn đang hiện trên trang.
+//
+// MỘT câu truy vấn cho cả trang, không phải mỗi dòng một câu: 50 dòng × 1 câu là
+// 50 lượt đi về database cho một lần mở trang, và nó chỉ lộ ra khi kho đã lớn.
+//
+// Thứ tự lô: sắp hết hạn lên trước, hàng KHÔNG có hạn xuống cuối. MySQL xếp NULL
+// lên đầu nên phải nói rõ `expire_date IS NULL` — để mặc định thì hàng không hạn
+// (thứ không việc gì phải vội) lại chiếm mấy dòng đầu, đẩy lô sắp hỏng xuống
+// dưới, đúng ngược với thứ người đọc bảng tồn cần thấy.
+func napLoChoDong(db *gorm.DB, dong []domain.DongTonChiNhanh) error {
+	if len(dong) == 0 {
+		return nil
+	}
+
+	// Khoá của một dòng là CẶP (chi nhánh, biến thể) — cùng một biến thể đứng ở
+	// nhiều dòng, mỗi kho một dòng, nên lọc theo mình id biến thể sẽ kéo lô của
+	// kho khác về gắn nhầm.
+	//
+	// Gom biến thể THEO KHO rồi ghép bằng OR, thay vì viết
+	// `(shop_id, product_variant_id) IN ((..),(..))`. Câu row-constructor kia gọn
+	// hơn hẳn nhưng MariaDB (bản đang chạy dưới máy phát triển và trên VPS) KHÔNG
+	// đổi nó thành phép quét theo chỉ mục — nó duyệt cả bảng stock_lots cho mỗi
+	// lần mở trang, và chuyện đó chỉ lộ ra khi kho đã lớn. Dạng dưới đây rơi đúng
+	// vào uq_stock_lots_shop_variant_lot (shop_id, product_variant_id, ...).
+	//
+	// Bảng thường chỉ có MỘT kho (màn đi theo chi nhánh đang làm việc), nên vòng
+	// lặp này gần như luôn sinh ra đúng một mệnh đề.
+	theoKho := make(map[uint][]uint, 4)
+	for _, d := range dong {
+		theoKho[d.ShopID] = append(theoKho[d.ShopID], d.VariantID)
+	}
+
+	dieuKien := db.Session(&gorm.Session{NewDB: true})
+	for shopID, ids := range theoKho {
+		dieuKien = dieuKien.Or(db.Session(&gorm.Session{NewDB: true}).
+			Where("shop_id = ? AND product_variant_id IN ?", shopID, ids))
+	}
+
+	type hang struct {
+		ShopID           uint
+		ProductVariantID uint
+		LotNumber        string
+		ExpireDate       *time.Time
+		Quantity         int
+	}
+
+	var lo []hang
+	err := db.Model(&domain.TonKhoLo{}).
+		Select("shop_id, product_variant_id, lot_number, expire_date, quantity").
+		Where(dieuKien).
+		Order("shop_id ASC, product_variant_id ASC, expire_date IS NULL ASC, expire_date ASC, lot_number ASC").
+		Scan(&lo).Error
+	if err != nil {
+		return err
+	}
+
+	theoCap := make(map[[2]uint][]domain.DongTonLo, len(dong))
+	for _, h := range lo {
+		k := [2]uint{h.ShopID, h.ProductVariantID}
+		theoCap[k] = append(theoCap[k], domain.DongTonLo{
+			LotNumber:  h.LotNumber,
+			ExpireDate: h.ExpireDate,
+			Quantity:   h.Quantity,
+		})
+	}
+
+	for i := range dong {
+		dong[i].Lots = theoCap[[2]uint{dong[i].ShopID, dong[i].VariantID}]
+	}
+
+	return nil
 }
 
 // actorRef đổi id người thực hiện sang con trỏ; 0 nghĩa là không xác định được

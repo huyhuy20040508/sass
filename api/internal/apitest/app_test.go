@@ -328,7 +328,7 @@ func dungHeThongVoi(t *testing.T, banHang, dieuHanh bool) *heThong {
 
 	settingSvc := service.NewSettingService(settingRepo)
 	authSvc := service.NewAuthService(userRepo, nguoiDieuHanhRepo, tenantRepo, roleRepo, verifyRepo, mailSender, jwtMgr,
-		cfg.JWT, cfg.Mail, true, settingSvc, fbClient, ggClient)
+		cfg.JWT, cfg.Mail, true, settingSvc, fbClient, ggClient, repository.NewNhanVienRepository(db))
 	categorySvc := service.NewCategoryService(categoryRepo, quyTacMaRepo)
 	bannerSvc := service.NewBannerService(bannerRepo)
 	// Cửa xét hạn mức hợp đồng chỉ có khi có control plane, y như main.go. Bộ
@@ -360,43 +360,50 @@ func dungHeThongVoi(t *testing.T, banHang, dieuHanh bool) *heThong {
 	contactSvc := service.NewContactService(contactRepo, newsletterRepo)
 	reportSvc := service.NewReportService(reportRepo)
 
-	r := router.New(cfg, jwtMgr, tenMienRepo, nguoiDieuHanhRepo, nil, chiNhanhRepo, repository.NewQuyenRepository(db), router.Handlers{
-		Health:   handler.NewHealthHandler("test"),
-		Auth:     handler.NewAuthHandler(authSvc),
-		Category: handler.NewCategoryHandler(categorySvc),
-		Product:  handler.NewProductHandler(productSvc, promotionSvc),
-		Customer: handler.NewCustomerHandler(customerSvc),
-		Order:    handler.NewOrderHandler(orderSvc),
-		Return:   handler.NewOrderReturnHandler(returnSvc),
-		Notif:    handler.NewNotificationHandler(notifSvc, hub),
-		Stock:    handler.NewInventoryHandler(inventorySvc),
-		Setting:  handler.NewSettingHandler(settingSvc),
-		User:     handler.NewUserHandler(userSvc),
-		ChiNhanh: handler.NewChiNhanhHandler(service.NewChiNhanhService(chiNhanhRepo, hanMucSvc, quyTacMaRepo)),
-		ETax:     handler.NewEtaxHandler(etaxSvc),
-		NhanSu: handler.NewNhanSuHandler(service.NewNhanSuService(
-			repository.NewNhanVienRepository(db), chiNhanhRepo, userSvc,
-			repository.NewQuyenRepository(db), quyTacMaRepo)),
-		NhomQuyen: handler.NewNhomQuyenHandler(
-			service.NewNhomQuyenService(repository.NewQuyenRepository(db), userRepo)),
-		QuyTacMa: handler.NewQuyTacMaHandler(
-			service.NewQuyTacMaService(quyTacMaRepo, chiNhanhRepo)),
-		Thue:         handler.NewThueHandler(service.NewThueService(thueRepo)),
-		DonViTinh:    handler.NewDonViTinhHandler(service.NewDonViTinhService(donViTinhRepo, quyTacMaRepo)),
-		ViTri:        handler.NewViTriHandler(service.NewViTriService(viTriRepo, quyTacMaRepo)),
-		NhaCungCap:   handler.NewNhaCungCapHandler(service.NewNhaCungCapService(nhaCungCapRepo, quyTacMaRepo)),
-		PhieuMuaHang: handler.NewPhieuMuaHangHandler(service.NewPhieuMuaHangService(phieuMuaHangRepo, nhaCungCapRepo)),
-		ThuocTinh:    handler.NewThuocTinhHandler(service.NewThuocTinhService(thuocTinhRepo, quyTacMaRepo)),
-		Ca:           handler.NewCaLamViecHandler(service.NewCaLamViecService(caRepo, userRepo, chiNhanhRepo)),
-		Payment:      handler.NewPaymentHandler(paymentSvc),
-		Banner:       handler.NewBannerHandler(bannerSvc),
-		Report:       handler.NewReportHandler(reportSvc),
-		Promo:        handler.NewPromotionHandler(promotionSvc),
-		Voucher:      handler.NewVoucherHandler(voucherSvc),
-		Contact:      handler.NewContactHandler(contactSvc),
-		Plan:         planHandler,
-		KhachHang:    khachHangHandler,
-	})
+	r := router.New(cfg, jwtMgr, tenMienRepo, nguoiDieuHanhRepo, nil, chiNhanhRepo,
+		repository.NewNhanVienRepository(db), repository.NewQuyenRepository(db), router.Handlers{
+			Health:   handler.NewHealthHandler("test"),
+			Auth:     handler.NewAuthHandler(authSvc),
+			Category: handler.NewCategoryHandler(categorySvc),
+			Product:  handler.NewProductHandler(productSvc, promotionSvc),
+			Customer: handler.NewCustomerHandler(customerSvc),
+			Order:    handler.NewOrderHandler(orderSvc),
+			Return:   handler.NewOrderReturnHandler(returnSvc),
+			Notif:    handler.NewNotificationHandler(notifSvc, hub),
+			Stock:    handler.NewInventoryHandler(inventorySvc),
+			Setting:  handler.NewSettingHandler(settingSvc),
+			User:     handler.NewUserHandler(userSvc),
+			ChiNhanh: handler.NewChiNhanhHandler(service.NewChiNhanhService(chiNhanhRepo, hanMucSvc, quyTacMaRepo)),
+			ETax:     handler.NewEtaxHandler(etaxSvc),
+			NhanSu: handler.NewNhanSuHandler(service.NewNhanSuService(
+				repository.NewNhanVienRepository(db), chiNhanhRepo, userSvc,
+				repository.NewQuyenRepository(db), quyTacMaRepo)),
+			NhomQuyen: handler.NewNhomQuyenHandler(
+				service.NewNhomQuyenService(repository.NewQuyenRepository(db), userRepo)),
+			QuyTacMa: handler.NewQuyTacMaHandler(
+				service.NewQuyTacMaService(quyTacMaRepo, chiNhanhRepo)),
+			Thue:         handler.NewThueHandler(service.NewThueService(thueRepo)),
+			DonViTinh:    handler.NewDonViTinhHandler(service.NewDonViTinhService(donViTinhRepo, quyTacMaRepo)),
+			ViTri:        handler.NewViTriHandler(service.NewViTriService(viTriRepo, quyTacMaRepo)),
+			NhaCungCap:   handler.NewNhaCungCapHandler(service.NewNhaCungCapService(nhaCungCapRepo, quyTacMaRepo)),
+			PhieuMuaHang: handler.NewPhieuMuaHangHandler(service.NewPhieuMuaHangService(phieuMuaHangRepo, nhaCungCapRepo)),
+			TraHangNCC: handler.NewTraHangNCCHandler(service.NewTraHangNCCService(
+				repository.NewSupplierReturnRepository(db), nhaCungCapRepo)),
+			DieuChuyen: handler.NewPhieuDieuChuyenHandler(service.NewPhieuDieuChuyenService(
+				repository.NewPhieuDieuChuyenRepository(db), chiNhanhRepo)),
+			GiaChiNhanh: handler.NewGiaChiNhanhHandler(service.NewGiaChiNhanhService(
+				repository.NewGiaChiNhanhRepository(db), chiNhanhRepo)),
+			ThuocTinh: handler.NewThuocTinhHandler(service.NewThuocTinhService(thuocTinhRepo, quyTacMaRepo)),
+			Ca:        handler.NewCaLamViecHandler(service.NewCaLamViecService(caRepo, userRepo, chiNhanhRepo)),
+			Payment:   handler.NewPaymentHandler(paymentSvc),
+			Banner:    handler.NewBannerHandler(bannerSvc),
+			Report:    handler.NewReportHandler(reportSvc),
+			Promo:     handler.NewPromotionHandler(promotionSvc),
+			Voucher:   handler.NewVoucherHandler(voucherSvc),
+			Contact:   handler.NewContactHandler(contactSvc),
+			Plan:      planHandler,
+			KhachHang: khachHangHandler,
+		})
 
 	return &heThong{r: r, db: db, nenTang: nenTang}
 }

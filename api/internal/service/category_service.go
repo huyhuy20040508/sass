@@ -11,6 +11,8 @@ import (
 // CategoryService định nghĩa nghiệp vụ danh mục.
 type CategoryService interface {
 	List(ctx context.Context, onlyActive bool) ([]domain.Category, error)
+	// ListCoHang — chỉ nhóm đang có mặt hàng, cho các ô lọc nhóm.
+	ListCoHang(ctx context.Context, onlyActive bool) ([]domain.Category, error)
 	Get(ctx context.Context, id uint) (*domain.Category, error)
 	Create(ctx context.Context, req dto.CategoryRequest) (*domain.Category, error)
 	Update(ctx context.Context, id uint, req dto.CategoryRequest) (*domain.Category, error)
@@ -30,6 +32,10 @@ func NewCategoryService(repo domain.CategoryRepository, quyTac domain.QuyTacMaRe
 
 func (s *categoryService) List(ctx context.Context, onlyActive bool) ([]domain.Category, error) {
 	return s.repo.List(ctx, onlyActive)
+}
+
+func (s *categoryService) ListCoHang(ctx context.Context, onlyActive bool) ([]domain.Category, error) {
+	return s.repo.ListCoHang(ctx, onlyActive)
 }
 
 func (s *categoryService) Get(ctx context.Context, id uint) (*domain.Category, error) {
@@ -53,6 +59,9 @@ func (s *categoryService) Create(ctx context.Context, req dto.CategoryRequest) (
 	}
 	if exists {
 		return nil, domain.ErrSlugExists
+	}
+	if err := s.chanTrungTen(ctx, req.Name, 0); err != nil {
+		return nil, err
 	}
 	c := &domain.Category{
 		ParentID:    req.ParentID,
@@ -98,6 +107,9 @@ func (s *categoryService) Update(ctx context.Context, id uint, req dto.CategoryR
 	if exists {
 		return nil, domain.ErrSlugExists
 	}
+	if err := s.chanTrungTen(ctx, req.Name, id); err != nil {
+		return nil, err
+	}
 	c.ParentID = req.ParentID
 	c.Name = req.Name
 	c.Slug = req.Slug
@@ -135,4 +147,21 @@ func intOrDefault(v *int, def int) int {
 		return def
 	}
 	return *v
+}
+
+// chanTrungTen — hai nhóm cùng tên trong một cửa hàng là không cho.
+//
+// Trùng tên gây hại hơn trùng mã: mã còn phân biệt được bằng mắt, còn hai nhóm
+// cùng tên thì trong ô chọn nhìn y hệt nhau, gắn hàng vào nhóm nào cũng không
+// biết. excludeID > 0 là lượt sửa: bỏ qua chính dòng đang sửa.
+func (s *categoryService) chanTrungTen(ctx context.Context, name string, excludeID uint) error {
+	trung, err := s.repo.ExistsByName(ctx, strings.TrimSpace(name), excludeID)
+	if err != nil {
+		return err
+	}
+	if trung {
+		return domain.ErrCategoryTrungTen
+	}
+
+	return nil
 }

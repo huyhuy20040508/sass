@@ -173,6 +173,18 @@ func gieo(t *testing.T, db *gorm.DB, ma string) *cuaHang {
 		ShopID: c.chiNhanh, ProductVariantID: bienThe.ID, Quantity: bienThe.StockQuantity,
 	})
 
+	// Và gieo luôn dòng LÔ tương ứng. Từ migration 0047, bất biến của module kho
+	// là variant_stocks.quantity = SUM(stock_lots.quantity); gieo thiếu dòng này
+	// thì mọi cửa hàng test sinh ra đã lệch sẵn, và bài kiểm nào canh bất biến ấy
+	// cũng đỏ vì một lý do chẳng liên quan gì tới điều nó đang kiểm.
+	//
+	// Lô RỖNG = "Không xác định", đúng như hàng có sẵn trong kho lúc bật tính năng
+	// lô: không ai biết nó thuộc lô nào.
+	tao(t, db, ctx, &domain.TonKhoLo{
+		ShopID: c.chiNhanh, ProductVariantID: bienThe.ID,
+		LotNumber: domain.LoKhongXacDinh, Quantity: bienThe.StockQuantity,
+	})
+
 	// --- đơn hàng ---
 	c.maDonHang = "dh-" + c.vet
 	c.donHang = gieoDon(t, db, ctx, c, c.maDonHang, domain.OrderStatusConfirmed)

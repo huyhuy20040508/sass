@@ -94,6 +94,7 @@ class PromotionController extends Controller
             // biểu mẫu thì khó chịu hơn nhiều so với việc trang nặng thêm chút.
             'categories' => $this->fetchCategories(),
             'products' => $this->fetchProducts(),
+            'chiNhanh' => $this->chiNhanhChoForm(),
         ]);
 
         return $error ? $view->with('error', $error) : $view;
@@ -281,6 +282,8 @@ class PromotionController extends Controller
             'product_ids.*' => ['integer'],
             'category_ids' => ['nullable', 'array'],
             'category_ids.*' => ['integer'],
+            'shop_ids' => ['nullable', 'array'],
+            'shop_ids.*' => ['integer'],
         ], [
             'name.required' => 'Vui lòng nhập tên chương trình.',
             'name.max' => 'Tên chương trình tối đa 150 ký tự.',
@@ -324,7 +327,32 @@ class PromotionController extends Controller
             'is_active' => $request->boolean('is_active'),
             'product_ids' => $ids('product_ids'),
             'category_ids' => $ids('category_ids'),
+            // Bỏ trống = chạy ở MỌI chi nhánh. Đây là quy ước của cả hệ thống
+            // (xem ô "Chi nhánh" của mặt hàng), nên đừng tự điền chi nhánh đang
+            // làm việc vào cho "tiện": làm vậy là mọi chương trình lập từ nay bỗng
+            // chỉ chạy ở một kho, mà không ai bấm gì để chọn thế cả.
+            'shop_ids' => $ids('shop_ids'),
         ];
+    }
+
+    /**
+     * Danh sách chi nhánh cho ô "Chi nhánh" của biểu mẫu.
+     *
+     * Chỉ lấy chi nhánh ĐANG MỞ: gán một chương trình vào kho đã đóng thì nó
+     * không chạy ở đâu cả, mà màn hình lại nói là có chọn.
+     *
+     * Hỏng thì trả mảng rỗng — ô chọn biến mất và chương trình chạy toàn cửa
+     * hàng như trước, chứ không chặn người dùng lưu.
+     */
+    protected function chiNhanhChoForm(): array
+    {
+        try {
+            $res = $this->api->chiNhanh(true);
+
+            return $res->successful() ? ($res->json('data') ?? []) : [];
+        } catch (\Throwable $e) {
+            return [];
+        }
     }
 
     /** Mức giảm dạng chữ, dùng cho file xuất ra. */

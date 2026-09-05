@@ -17,6 +17,8 @@ use Illuminate\Support\Facades\Log;
  */
 class ThueController extends Controller
 {
+    use \App\Http\Controllers\Concerns\TraLoiHopThoai;
+
     public function __construct(protected ApiClient $api) {}
 
     /** Bảng thuế suất. */
@@ -27,16 +29,16 @@ class ThueController extends Controller
         } catch (\Throwable $e) {
             Log::error('Load taxes failed', ['msg' => $e->getMessage()]);
 
-            return view('thue.index', ['taxes' => []])
+            return view('v2::thue.index', ['taxes' => []])
                 ->with('error', 'Không tải được danh sách thuế. Kiểm tra kết nối API.');
         }
 
         if (! $res->successful()) {
-            return view('thue.index', ['taxes' => []])
+            return view('v2::thue.index', ['taxes' => []])
                 ->with('error', $res->json('message') ?: 'Không tải được danh sách thuế.');
         }
 
-        return view('thue.index', ['taxes' => $res->json('data') ?? []]);
+        return view('v2::thue.index', ['taxes' => $res->json('data') ?? []]);
     }
 
     /** Lưu bộ mức của một loại thuế. */
@@ -81,20 +83,20 @@ class ThueController extends Controller
     }
 
     /** Gọi API rồi quay về bảng kèm thông báo. */
-    protected function send(\Closure $call, string $successMsg)
+    protected function send(\Closure $call, string $successMsg, ?Request $request = null)
     {
+        $request ??= request();
+
         try {
             $res = $call();
         } catch (\Throwable $e) {
             Log::error('Tax API call failed', ['msg' => $e->getMessage()]);
 
-            return back()->with('error', 'Không kết nối được máy chủ API.');
+            return $this->traLoiHopThoai($request, false, 'Không kết nối được máy chủ API.');
         }
 
-        if ($res->successful()) {
-            return redirect()->route('admin.thue.index')->with('success', $successMsg);
-        }
-
-        return back()->withInput()->with('error', $res->json('message') ?: 'Thao tác thất bại.');
+        return $res->successful()
+            ? $this->traLoiHopThoai($request, true, $successMsg, fn () => redirect()->route('admin.thue.index'))
+            : $this->traLoiHopThoai($request, false, $this->cauLoiApi($res, 'Thao tác thất bại.'));
     }
 }

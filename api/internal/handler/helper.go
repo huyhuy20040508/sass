@@ -150,6 +150,55 @@ func handleServiceError(c *gin.Context, err error) {
 		response.ValidationError(c, map[string]string{
 			"paid_amount": "Số tiền đã trả không được lớn hơn tổng tiền phiếu",
 		})
+	case errors.Is(err, domain.ErrPurchaseNoThieuHan):
+		response.ValidationError(c, map[string]string{
+			"debt_due_date": "Ghi nợ thì phải hẹn ngày trả nốt",
+		})
+	case errors.Is(err, domain.ErrPurchaseNoThieuNguoi):
+		response.ValidationError(c, map[string]string{
+			"debt_contact_name": "Ghi nợ thì phải có người đại diện bên bán và số điện thoại",
+		})
+	case errors.Is(err, domain.ErrPurchaseNoDaTraDu):
+		response.ValidationError(c, map[string]string{
+			"paid_amount": "Đã trả đủ thì không còn gì để ghi nợ",
+		})
+	// Phiếu điều chuyển — mỗi lỗi một cách chữa khác nhau.
+	case errors.Is(err, domain.ErrDieuChuyenEmpty):
+		response.Error(c, 422, "Phiếu điều chuyển phải có ít nhất một dòng hàng")
+	case errors.Is(err, domain.ErrDieuChuyenLocked):
+		response.Error(c, 409, "Phiếu đã duyệt nên không sửa được. "+
+			"Kho hai đầu đã đổi theo nó — muốn chữa thì lập phiếu điều chuyển ngược lại")
+	case errors.Is(err, domain.ErrDieuChuyenCungKho):
+		response.ValidationError(c, map[string]string{
+			"to_shop_id": "Kho nhập phải khác kho xuất",
+		})
+	// err đã kèm tên hoặc id chi nhánh: in nguyên, vì "chi nhánh không hợp lệ"
+	// thì người lập phiếu không biết mình chọn sai ô nào trong hai ô.
+	case errors.Is(err, domain.ErrDieuChuyenKhoLa):
+		response.Error(c, 422, strings.TrimPrefix(err.Error(), domain.ErrDieuChuyenKhoLa.Error()+": "))
+	// err đã kèm tên mặt hàng và cặp số còn/đang ghi — in nguyên, vì "không đủ
+	// hàng" chung chung thì không biết sửa dòng nào xuống bao nhiêu.
+	case errors.Is(err, domain.ErrDieuChuyenThieuTon):
+		response.Error(c, 422, "Kho xuất không đủ hàng: "+
+			strings.TrimPrefix(err.Error(), domain.ErrDieuChuyenThieuTon.Error()+": "))
+	// Trả hàng nhà cung cấp
+	case errors.Is(err, domain.ErrSupplierReturnEmpty):
+		response.Error(c, 422, "Phiếu trả hàng phải có ít nhất một dòng hàng")
+	case errors.Is(err, domain.ErrSupplierReturnLocked):
+		response.Error(c, 409, "Phiếu trả đã duyệt nên không sửa được. "+
+			"Kho đã trừ theo nó, muốn chữa thì cân đối ở màn Tồn kho")
+	case errors.Is(err, domain.ErrSupplierReturnNoPurchase):
+		response.Error(c, 422, "Phiếu trả phải gắn với một phiếu mua ĐÃ DUYỆT của đúng nhà cung cấp đó")
+	case errors.Is(err, domain.ErrSupplierReturnLineLa):
+		response.Error(c, 422, "Dòng hàng không thuộc phiếu mua đã chọn")
+	case errors.Is(err, domain.ErrSupplierReturnQuaSo):
+		response.Error(c, 422, "Số lượng trả vượt quá phần còn được trả của dòng hàng "+
+			"(đã trừ phần đã trả ở các phiếu trước và phần kho không còn hàng)")
+	case errors.Is(err, domain.ErrSupplierReturnUnitRatio):
+		response.Error(c, 422, "Số lượng quy đổi ra đơn vị tính chính phải là số nguyên")
+	// Kho không đủ hàng cho lượt ghi sổ — lượt duyệt phiếu trả rơi vào đây.
+	case errors.Is(err, domain.ErrOutOfStock):
+		response.Error(c, 409, "Kho không còn đủ hàng cho lượt xuất này — kiểm lại tồn kho rồi thử lại")
 	case errors.Is(err, domain.ErrHuongKhongHopLe):
 		response.ValidationError(c, map[string]string{"huong": "Hướng di chuyển không hợp lệ"})
 	case errors.Is(err, domain.ErrConflict):
@@ -191,6 +240,24 @@ func handleServiceError(c *gin.Context, err error) {
 		response.Error(c, 409, "Gói dịch vụ của cửa hàng đã hết chỗ ("+
 			strings.TrimPrefix(err.Error(), domain.ErrVuotHanMuc.Error()+": ")+
 			"). Xoá bớt hoặc liên hệ nhà cung cấp để nâng gói.")
+	// 409 chứ không phải 422: form không có ô nào sai, người dùng chỉ chưa nói
+	// mình đang đứng ở chi nhánh nào. Câu trả lời phải chỉ vào ô chọn ở thanh
+	// trên cùng, không phải vào một ô nhập trong form.
+	case errors.Is(err, domain.ErrChuaChonChiNhanh):
+		response.Error(c, 409, "Chưa chọn chi nhánh làm việc. Chọn chi nhánh ở thanh trên cùng rồi thao tác lại — cửa hàng có nhiều chi nhánh nên hệ thống không tự đoán được chứng từ này thuộc kho nào.")
+	case errors.Is(err, domain.ErrChiNhanhDaDong):
+		response.Error(c, 403, "Chi nhánh này đã ngừng hoạt động — chọn chi nhánh khác ở thanh trên cùng")
+	case errors.Is(err, domain.ErrKhongThuocChiNhanh):
+		response.Error(c, 403, "Bạn không làm việc tại chi nhánh này")
+	// 409 chứ không 422: đây không phải lỗi người dùng gõ sai ô nào, mà là hai
+	// người cùng sửa một phiếu. Câu trả lời duy nhất đúng là mở lại phiếu.
+	case errors.Is(err, domain.ErrPhieuVuaBiSua):
+		response.Error(c, 409, "Phiếu này vừa được người khác lưu trong lúc bạn đang mở. Đóng và mở lại phiếu để xem bản mới nhất rồi sửa tiếp — lưu đè bây giờ sẽ xoá mất phần họ vừa nhập.")
+	// 422: đây là lỗi của DÒNG HÀNG trong phiếu, sửa được bằng cách bỏ dòng đó ra
+	// hoặc mở mặt hàng lên gán thêm chi nhánh. err đã kèm tên mặt hàng — in
+	// nguyên, vì phiếu có thể dài vài chục dòng.
+	case errors.Is(err, domain.ErrHangKhongThuocChiNhanh):
+		response.Error(c, 422, strings.TrimPrefix(err.Error(), domain.ErrHangKhongThuocChiNhanh.Error()+": "))
 	// Chi nhánh. Năm lỗi, năm cách chữa khác hẳn nhau — nên không gộp làm một.
 	case errors.Is(err, domain.ErrMaChiNhanhDaCo):
 		response.ValidationError(c, map[string]string{
@@ -303,6 +370,34 @@ func handleServiceError(c *gin.Context, err error) {
 	case errors.Is(err, domain.ErrThueTrongRong):
 		response.ValidationError(c, map[string]string{
 			"muc": "Giữ lại ít nhất một mức thuế. Muốn thôi áp thuế thì tắt cả dòng",
+		})
+	// Nhân sự / nhóm quyền — trùng tên.
+	case errors.Is(err, domain.ErrNhanVienTrungTen):
+		response.ValidationError(c, map[string]string{
+			"full_name": "Tên nhân viên này đã có trong cửa hàng",
+		})
+	case errors.Is(err, domain.ErrNhomQuyenTrungTen):
+		response.ValidationError(c, map[string]string{
+			"name": "Tên nhóm quyền này đã có trong cửa hàng",
+		})
+	// Nhà cung cấp / chi nhánh — trùng tên.
+	case errors.Is(err, domain.ErrNhaCungCapTrungTen):
+		response.ValidationError(c, map[string]string{
+			"name": "Tên nhà cung cấp này đã có trong cửa hàng",
+		})
+	case errors.Is(err, domain.ErrTenChiNhanhDaCo):
+		response.ValidationError(c, map[string]string{
+			"name": "Tên chi nhánh này đã có trong cửa hàng",
+		})
+	// Mặt hàng — trùng tên (mã khác cũng không cho).
+	case errors.Is(err, domain.ErrProductTrungTen):
+		response.ValidationError(c, map[string]string{
+			"name": "Tên mặt hàng này đã có trong cửa hàng",
+		})
+	// Nhóm hàng hoá — trùng tên.
+	case errors.Is(err, domain.ErrCategoryTrungTen):
+		response.ValidationError(c, map[string]string{
+			"name": "Tên nhóm hàng hoá này đã có trong cửa hàng",
 		})
 	// Đơn vị tính — trùng mã hay trùng tên, tô đỏ đúng ô người vừa gõ.
 	case errors.Is(err, domain.ErrDonViTinhTrungMa):
@@ -459,4 +554,51 @@ func handleServiceError(c *gin.Context, err error) {
 	default:
 		response.Error(c, 500, "Đã có lỗi xảy ra, vui lòng thử lại")
 	}
+}
+
+// chiNhanhLoc chốt CHI NHÁNH mà một danh sách phải cắt theo.
+//
+// Ba nước, theo đúng thứ tự:
+//
+//   - query `shop_id` có giá trị > 0 → cắt theo đúng chi nhánh đó. Dùng cho ô lọc
+//     "Chi nhánh" mà người dùng chủ động bấm, và cho báo cáo xem chéo.
+//   - query `shop_id=0` → KHÔNG cắt: người dùng cố ý chọn "Tất cả chi nhánh".
+//     Phải khai tường minh, vì đây là câu trả lời hiếm.
+//   - không gửi `shop_id` → cắt theo CHI NHÁNH ĐANG LÀM VIỆC.
+//
+// Nước thứ ba là chỗ vừa phải sửa. Trước đây thiếu nó, nên mọi danh sách chứng
+// từ bày đơn và phiếu của MỌI chi nhánh cho người đang đứng ở đúng một quầy —
+// con số trên đầu trang cũng cộng theo cả cửa hàng. Cửa hàng một chi nhánh thì
+// ctx không mang gì và kết quả vẫn y như cũ.
+func chiNhanhLoc(c *gin.Context) uint {
+	// NGƯỜI BỊ PHÂN CÔNG thì tham số trên URL không có tiếng nói.
+	//
+	// Thiếu vế này thì cả ba nước trên chỉ là gợi ý: nhân viên ghim ở kho 2 gõ
+	// thêm `?shop_id=1` là xem được danh sách đơn của kho 1, và `?shop_id=0` là
+	// xem của cả cửa hàng. Middleware đã chặn HEADER khai sai kho, nhưng tham số
+	// query đi vòng qua nó — hai đường vào cùng một câu hỏi mà chỉ một đường có
+	// người gác.
+	if c.GetBool(middleware.CtxChiNhanhGhim) {
+		return c.GetUint(middleware.CtxChiNhanhID)
+	}
+
+	if s := c.Query("shop_id"); s != "" {
+		v, err := strconv.ParseUint(s, 10, 64)
+		if err != nil {
+			return 0
+		}
+
+		return uint(v)
+	}
+
+	return c.GetUint(middleware.CtxChiNhanhID)
+}
+
+// chiNhanhLocPtr là chiNhanhLoc cho những bộ lọc dùng *uint (nil = không cắt).
+func chiNhanhLocPtr(c *gin.Context) *uint {
+	if id := chiNhanhLoc(c); id > 0 {
+		return &id
+	}
+
+	return nil
 }

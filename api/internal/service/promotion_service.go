@@ -93,6 +93,16 @@ func (s *promotionService) Create(ctx context.Context, req dto.PromotionRequest)
 	if err := s.repo.Create(ctx, p); err != nil {
 		return nil, err
 	}
+	// Danh sách chi nhánh ghi SAU khi có id. Rỗng cũng gọi: đó là cách người dùng
+	// gỡ hết chi nhánh để chương trình chạy lại toàn cửa hàng.
+	if err := s.repo.ReplaceShops(ctx, p.ID, req.ShopIDs); err != nil {
+		return nil, err
+	}
+	// Gắn lại vào bản ghi TRƯỚC khi dựng phản hồi: p vừa qua Create nên quan hệ
+	// Shops còn rỗng, và phản hồi sẽ nói "không chi nhánh nào" — mà ở đây câu ấy
+	// nghĩa là "chạy khắp nơi", tức là ngược hẳn thứ vừa lưu. Hộp sửa đọc đúng
+	// trường này để tick lại ô, nên nó sẽ mở ra với các ô trống trơn.
+	p.Shops = chiNhanhTuIDs(req.ShopIDs)
 	res := s.toResponse(ctx, p)
 	return &res, nil
 }
@@ -109,6 +119,10 @@ func (s *promotionService) Update(ctx context.Context, id uint, req dto.Promotio
 	if err := s.repo.Update(ctx, p); err != nil {
 		return nil, err
 	}
+	if err := s.repo.ReplaceShops(ctx, p.ID, req.ShopIDs); err != nil {
+		return nil, err
+	}
+	p.Shops = chiNhanhTuIDs(req.ShopIDs)
 	res := s.toResponse(ctx, p)
 	return &res, nil
 }
@@ -197,7 +211,12 @@ func (s *promotionService) toResponse(ctx context.Context, p *domain.Promotion) 
 		Status:            promotionStatus(p, time.Now()),
 		ProductIDs:        []uint{},
 		CategoryIDs:       []uint{},
+		ShopIDs:           []uint{},
 		CreatedAt:         p.CreatedAt.Format(time.RFC3339),
+	}
+
+	for _, cn := range p.Shops {
+		res.ShopIDs = append(res.ShopIDs, cn.ID)
 	}
 
 	for _, t := range p.Targets {
@@ -380,6 +399,12 @@ func (m *promoMatcher) decorate(p *domain.Product) {
 	for i := range p.Variants {
 		vb := base
 		if v := p.Variants[i].Price; v != nil && *v > 0 {
+			vb = *v
+		}
+		// Giá riêng của CHI NHÁNH đè lên cả hai mức trên — cùng thứ tự với
+		// loadCheckoutVariants, chỗ thật sự thu tiền. Hai đường tính giá lệch nhau
+		// nghĩa là khách nhìn một con số rồi trả một con số khác.
+		if v := p.Variants[i].ShopPrice; v != nil && *v > 0 {
 			vb = *v
 		}
 		final := vb

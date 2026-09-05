@@ -40,6 +40,34 @@ class ApiClient
      */
     public const KHOA_CHI_NHANH = 'chi_nhanh_dang_lam';
 
+    /**
+     * Chi nhánh do CHÍNH REQUEST NÀY khai (tham số `chi_nhanh`).
+     *
+     * Đứng trước phiên, và chỉ sống trong một lượt xử lý. Đây là thứ làm chi
+     * nhánh thành chuyện của từng TAB thay vì của cả trình duyệt — xem
+     * middleware ChiNhanhTheoTab.
+     *
+     * null = request không khai gì, rơi về phiên như cũ.
+     */
+    protected static ?int $chiNhanhCuaRequest = null;
+
+    /** Ghi chi nhánh của request hiện tại. Chỉ ChiNhanhTheoTab gọi. */
+    public static function datChiNhanhCuaRequest(?int $id): void
+    {
+        self::$chiNhanhCuaRequest = $id !== null && $id > 0 ? $id : null;
+    }
+
+    /**
+     * Chi nhánh đang có hiệu lực: của REQUEST trước, của PHIÊN sau.
+     *
+     * Mọi nơi cần biết "đang đứng ở kho nào" phải hỏi qua đây, đừng đọc thẳng
+     * session — đọc thẳng là bỏ qua phần khai của tab và quay lại đúng lỗi cũ.
+     */
+    public static function chiNhanhDangLam(): int
+    {
+        return self::$chiNhanhCuaRequest ?? (int) session(self::KHOA_CHI_NHANH, 0);
+    }
+
     public function request(string|false|null $token = null): PendingRequest
     {
         $req = Http::baseUrl($this->baseUrl)
@@ -59,11 +87,25 @@ class ApiClient
         // (xem domain.Order.ShopID bên API). Gắn ở đây — chỗ duy nhất mọi request
         // đi qua — thay vì nhớ thêm tham số ở từng controller.
         //
-        // Không có trong phiên thì KHÔNG gửi gì, và API tự rơi về chi nhánh bán
-        // online. Đó là đường đi của cửa hàng một chi nhánh: màn hình không có ô
-        // chọn nào cả.
-        if ($shopID = session(self::KHOA_CHI_NHANH)) {
+        // Ưu tiên chi nhánh do CHÍNH REQUEST khai (tab nào đứng ở kho nấy), rồi
+        // mới tới phiên. Không có cả hai thì KHÔNG gửi gì, và API tự suy ra —
+        // đường đi của cửa hàng một chi nhánh, nơi màn hình không có ô chọn nào.
+        if ($shopID = self::chiNhanhDangLam()) {
             $req = $req->withHeaders(['X-Chi-Nhanh' => (string) $shopID]);
+        }
+
+        // IP THẬT CỦA TRÌNH DUYỆT, chuyển tiếp cho API.
+        //
+        // PHP gọi API từ chính máy chủ (API_BASE_URL trỏ 127.0.0.1), nên nếu không
+        // gửi gì thì với API mọi người dùng của mọi cửa hàng đều là một địa chỉ duy
+        // nhất. Hạn mức đăng nhập "10 lượt / 5 phút" vì thế thành hạn mức CHUNG của
+        // cả nền tảng: ca sáng năm người đăng nhập, ai gõ sai vài lần là cả tiệm
+        // ăn 429.
+        //
+        // API chỉ tin header này khi bên gọi nằm trong TRUSTED_PROXIES (mặc định
+        // 127.0.0.1) — đúng trường hợp này, và không đúng với client ngoài Internet.
+        if ($ip = self::ipNguoiDung()) {
+            $req = $req->withHeaders(['X-Forwarded-For' => $ip]);
         }
 
         return $req;
@@ -103,7 +145,7 @@ class ApiClient
             return $res;
         }
 
-        if ($this->refreshToken()) {
+        if ($this->refreshToken($chet)) {
             $res = $this->dispatch($method, $uri, $payload);
             // Lượt thử lại cũng phải đi qua bộ dò cờ khoá: hợp đồng hết hạn giữa
             // lúc token cũ vừa chết thì tín hiệu 403 nằm ở đúng lượt gọi này.
@@ -112,9 +154,17 @@ class ApiClient
             return $res;
         }
 
-        // Làm mới không được nghĩa là phiên này hết đường cứu: token đã hỏng và
-        // refresh token cũng vậy. Xoá session để lượt vào trang tiếp theo bị
-        // EnsureAdminAuthenticated đẩy về màn hình đăng nhập.
+        // Làm mới hỏng vì lý do TẠM THỜI (mạng chớp, API vừa khởi động lại, 5xx):
+        // giữ nguyên phiên và trả 401 về cho nơi gọi. Xoá phiên ở đây là một cú
+        // nấc mạng nửa giây đá người dùng ra màn hình đăng nhập — và đá luôn cả
+        // những tab khác đang mở dở việc, vì phiên là của cả trình duyệt.
+        if (! $chet) {
+            return $res;
+        }
+
+        // Tới đây thì API đã nói rõ: refresh token cũng không còn giá trị. Xoá
+        // session để lượt vào trang tiếp theo bị EnsureAdminAuthenticated đẩy về
+        // màn hình đăng nhập.
         //
         // Không xoá thì phiên hỏng nằm lại trong session tới lúc hết hạn, và người
         // dùng chỉ thấy mọi trang báo lỗi mà không hiểu phải làm gì — đúng cảnh
@@ -179,12 +229,24 @@ class ApiClient
 
     /**
      * Dùng refresh token lấy cặp token mới, cập nhật lại session.
-     * Trả về true nếu làm mới thành công. Không đính access token cũ để tránh vòng lặp.
+     *
+     * Trả true nếu làm mới thành công. Không đính access token cũ để tránh vòng lặp.
+     *
+     * $chet nói cho nơi gọi biết vì sao HỎNG, và đó là khác biệt quan trọng:
+     * true  = API đã trả lời và từ chối (refresh token hết hạn, tài khoản bị khoá,
+     *         cửa hàng ngừng hoạt động) — phiên này hết đường cứu;
+     * false = chưa hỏi được (mạng chớp, API 5xx hoặc vừa khởi động lại) — phiên
+     *         vẫn còn nguyên giá trị, lượt sau thử lại là xong.
      */
-    protected function refreshToken(): bool
+    protected function refreshToken(?bool &$chet = null): bool
     {
+        $chet = false;
+
         $refresh = session('api.refresh_token');
         if (! $refresh) {
+            // Không có gì để làm mới — phiên này đúng là đã hỏng.
+            $chet = true;
+
             return false;
         }
 
@@ -197,6 +259,10 @@ class ApiClient
         }
 
         if (! $res->successful()) {
+            // 4xx là câu trả lời DỨT KHOÁT của API; 5xx chỉ là bên kia đang trục
+            // trặc, không phải phán quyết về phiên của người dùng.
+            $chet = $res->status() >= 400 && $res->status() < 500;
+
             return false;
         }
 
@@ -219,6 +285,12 @@ class ApiClient
         // không bắt họ đăng xuất rồi đăng nhập lại mới dùng tiếp được.
         session([HanSuDung::KHOA_CO => (bool) data_get($data, 'cua_hang_khoa', false)]);
 
+        // Ghi xuống NGAY, đừng đợi cuối request. Phiên lưu bằng tệp và không khoá
+        // đọc-sửa-ghi, nên một request song song của cùng người dùng (tab khác,
+        // lượt gọi ngầm) kết thúc sau sẽ ghi đè bản nó đọc lúc đầu — tức là chép
+        // token CŨ đè lên token vừa lấy. Ghi sớm thu hẹp khe hở đó.
+        session()->save();
+
         return true;
     }
 
@@ -237,6 +309,23 @@ class ApiClient
             'username' => $username,
             'password' => $password,
         ]);
+    }
+
+    /**
+     * IP của người đang dùng trình duyệt, hoặc null khi không chạy trong request
+     * (lệnh console, hàng đợi).
+     *
+     * Tin được vì bootstrap/app.php chỉ trust proxy nội bộ: nginx đưa thẳng
+     * REMOTE_ADDR qua fastcgi nên Laravel bỏ qua mọi X-Forwarded-For do client tự
+     * khai. Trust '*' như trước thì con số này do chính kẻ dò mật khẩu chọn.
+     */
+    protected static function ipNguoiDung(): ?string
+    {
+        if (! app()->runningInConsole() && ($req = request()) !== null) {
+            return $req->ip();
+        }
+
+        return null;
     }
 
     /** Lấy thông tin tài khoản hiện tại theo access token. */
@@ -318,9 +407,22 @@ class ApiClient
     // ---------- Categories ----------
 
     /** Danh sách danh mục ($all = true để lấy cả danh mục ẩn). */
-    public function categories(bool $all = true): Response
+    /**
+     * Danh sách nhóm hàng hoá.
+     *
+     * $coHang = true thì chỉ trả nhóm ĐANG có mặt hàng — dành cho Ô LỌC đứng
+     * cạnh một bảng hàng hoá. Ô CHỌN NHÓM lúc khai mặt hàng thì để false, nếu
+     * không nhóm vừa lập (chưa có hàng nào) biến mất và không khai được hàng
+     * đầu tiên vào đó.
+     */
+    public function categories(bool $all = true, bool $coHang = false): Response
     {
-        return $this->get('/categories', $all ? ['all' => 'true'] : []);
+        $query = $all ? ['all' => 'true'] : [];
+        if ($coHang) {
+            $query['has_products'] = 'true';
+        }
+
+        return $this->get('/categories', $query);
     }
 
     /** Lấy 1 danh mục theo id. */
@@ -662,6 +764,12 @@ class ApiClient
     public function moveProductSort(int $id, string $huong): Response
     {
         return $this->put("/admin/products/{$id}/sort", ['huong' => $huong]);
+    }
+
+    /** Ghi lại trình tự hàng hoá sau một lượt kéo thả. $ids theo thứ tự hiển thị. */
+    public function sapXepProducts(array $ids): Response
+    {
+        return $this->put('/admin/products/sap-xep', ['ids' => array_values($ids)]);
     }
 
     /** Xoá nhiều sản phẩm trong MỘT lượt gọi (API chạy trong một giao dịch). */
@@ -1086,9 +1194,16 @@ class ApiClient
     }
 
     /** Ghi nhận tiền đã trả NCC. `paid_amount` là số LUỸ KẾ, không phải số vừa trả thêm. */
-    public function traTienPhieuMuaHang(int $id, float $daTra, string $ghiChu = ''): Response
+    /**
+     * Ghi nhận tiền trả nhà cung cấp.
+     *
+     * `$daTra` là số LUỸ KẾ. `$them` mang phần thoả thuận nợ (hình thức trả, hạn
+     * nợ, người đại diện, ảnh chứng từ) — server tự soát, xem
+     * PurchasePaymentRequest bên API.
+     */
+    public function traTienPhieuMuaHang(int $id, float $daTra, string $ghiChu = '', array $them = []): Response
     {
-        return $this->post("/admin/phieu-mua-hang/{$id}/thanh-toan", [
+        return $this->post("/admin/phieu-mua-hang/{$id}/thanh-toan", $them + [
             'paid_amount' => $daTra,
             'note' => $ghiChu,
         ]);
@@ -1097,6 +1212,180 @@ class ApiClient
     public function xoaPhieuMuaHang(int $id): Response
     {
         return $this->delete("/admin/phieu-mua-hang/{$id}");
+    }
+
+    // ---------- Điều chỉnh tồn kho ----------
+    //
+    // Chứng từ nắn lại số tồn. Duyệt là lúc kho đổi số nên đi đường riêng,
+    // giống phiếu mua.
+
+    /**
+     * Danh sách phiếu. $query hỗ trợ: keyword, type, status, warehouse_status,
+     * created_by, from_date, to_date, sort, page, page_size.
+     */
+    public function dieuChinhTonKho(array $query = []): Response
+    {
+        return $this->get('/admin/dieu-chinh-ton-kho', array_filter($query, fn ($v) => $v !== '' && $v !== null));
+    }
+
+    public function dieuChinhTonKhoChiTiet(int $id): Response
+    {
+        return $this->get("/admin/dieu-chinh-ton-kho/{$id}");
+    }
+
+    /** Hàng đang âm chờ cân đối — nguồn của hộp "Cân đối hàng âm". */
+    public function dieuChinhTonKhoHangAm(): Response
+    {
+        return $this->get('/admin/dieu-chinh-ton-kho/hang-am');
+    }
+
+    /** Lập phiếu. `status` nói phiếu dừng ở lưu tạm, gửi duyệt hay duyệt luôn. */
+    public function taoDieuChinhTonKho(array $data): Response
+    {
+        return $this->post('/admin/dieu-chinh-ton-kho', $data);
+    }
+
+    /** Sửa phiếu — API chỉ nhận phiếu lưu tạm. */
+    public function suaDieuChinhTonKho(int $id, array $data): Response
+    {
+        return $this->put("/admin/dieu-chinh-ton-kho/{$id}", $data);
+    }
+
+    public function guiDuyetDieuChinhTonKho(int $id): Response
+    {
+        return $this->post("/admin/dieu-chinh-ton-kho/{$id}/gui-duyet", ['note' => '']);
+    }
+
+    /** Duyệt phiếu: số tồn đổi theo phiếu. Luôn kèm `note` kể cả khi rỗng. */
+    public function duyetDieuChinhTonKho(int $id, string $ghiChu = ''): Response
+    {
+        return $this->post("/admin/dieu-chinh-ton-kho/{$id}/duyet", ['note' => $ghiChu]);
+    }
+
+    /** Từ chối phiếu chờ duyệt — API bắt buộc có lý do. */
+    public function tuChoiDieuChinhTonKho(int $id, string $lyDo): Response
+    {
+        return $this->post("/admin/dieu-chinh-ton-kho/{$id}/tu-choi", ['reject_reason' => $lyDo]);
+    }
+
+    public function xoaDieuChinhTonKho(int $id): Response
+    {
+        return $this->delete("/admin/dieu-chinh-ton-kho/{$id}");
+    }
+
+    // ---------- Trả hàng nhà cung cấp ----------
+    //
+    // Chiều ngược của phiếu mua: hàng đã nhập trả lại bên bán. Duyệt là lúc kho
+    // bị TRỪ nên đi đường riêng, giống phiếu mua.
+
+    /**
+     * Danh sách phiếu trả. $query hỗ trợ: keyword, status, supplier_id,
+     * from_date, to_date, sort, page, page_size.
+     */
+    public function traHangNhaCungCap(array $query = []): Response
+    {
+        return $this->get('/admin/tra-hang-nha-cung-cap', array_filter($query, fn ($v) => $v !== '' && $v !== null));
+    }
+
+    /** Con số đầu trang: đếm phiếu theo trạng thái và tổng tiền đã trả lại. */
+    public function traHangNhaCungCapThongKe(): Response
+    {
+        return $this->get('/admin/tra-hang-nha-cung-cap/stats');
+    }
+
+    public function traHangNhaCungCapChiTiet(int $id): Response
+    {
+        return $this->get("/admin/tra-hang-nha-cung-cap/{$id}");
+    }
+
+    /** Lập phiếu trả. Phiếu mới LUÔN là phiếu lưu tạm, chưa đụng tới kho. */
+    public function taoTraHangNhaCungCap(array $data): Response
+    {
+        return $this->post('/admin/tra-hang-nha-cung-cap', $data);
+    }
+
+    /** Sửa phiếu trả — API chỉ nhận phiếu lưu tạm. */
+    public function suaTraHangNhaCungCap(int $id, array $data): Response
+    {
+        return $this->put("/admin/tra-hang-nha-cung-cap/{$id}", $data);
+    }
+
+    /**
+     * Phiếu mua ĐÃ DUYỆT của một nhà cung cấp — ô "Chọn phiếu mua".
+     *
+     * Đi đường của module trả hàng chứ không mượn /admin/phieu-mua-hang: người
+     * chỉ được giao việc trả hàng thì không nhất thiết có quyền xem phiếu mua.
+     */
+    public function traHangNhaCungCapPhieuMua(int $supplierID): Response
+    {
+        return $this->get('/admin/tra-hang-nha-cung-cap/phieu-mua', ['supplier_id' => $supplierID]);
+    }
+
+    /** Dòng của một phiếu mua, kèm `returned` / `stock` / `returnable`. */
+    public function traHangNhaCungCapDongPhieuMua(int $purchaseID): Response
+    {
+        return $this->get('/admin/tra-hang-nha-cung-cap/dong-phieu-mua', ['purchase_id' => $purchaseID]);
+    }
+
+    /** Duyệt: hàng rời kho. Luôn kèm khoá `note` để Go bind được struct. */
+    public function duyetTraHangNhaCungCap(int $id, array $data = []): Response
+    {
+        return $this->post("/admin/tra-hang-nha-cung-cap/{$id}/duyet", $data + ['note' => '']);
+    }
+
+    public function xoaTraHangNhaCungCap(int $id): Response
+    {
+        return $this->delete("/admin/tra-hang-nha-cung-cap/{$id}");
+    }
+
+    // -----------------------------------------------------------------
+    // Phiếu điều chuyển — chuyển hàng giữa hai kho của cùng cửa hàng
+    // -----------------------------------------------------------------
+
+    /**
+     * Danh sách phiếu điều chuyển.
+     *
+     * API cắt theo chi nhánh đang làm việc và cắt theo CẢ HAI ĐẦU (kho gửi lẫn
+     * kho nhận) — không phải truyền gì thêm, header chi nhánh đã đi kèm mọi lượt
+     * gọi.
+     */
+    public function phieuDieuChuyen(array $query = []): Response
+    {
+        return $this->get('/admin/phieu-dieu-chuyen', array_filter($query, fn ($v) => $v !== '' && $v !== null));
+    }
+
+    /** Con số đầu trang: đếm phiếu theo trạng thái và giá trị hàng đã chuyển. */
+    public function phieuDieuChuyenThongKe(array $query = []): Response
+    {
+        return $this->get('/admin/phieu-dieu-chuyen/stats', array_filter($query, fn ($v) => $v !== '' && $v !== null));
+    }
+
+    public function phieuDieuChuyenChiTiet(int $id): Response
+    {
+        return $this->get("/admin/phieu-dieu-chuyen/{$id}");
+    }
+
+    /** Lập phiếu. Phiếu mới LUÔN là phiếu lưu tạm, chưa đụng tới kho. */
+    public function taoPhieuDieuChuyen(array $data): Response
+    {
+        return $this->post('/admin/phieu-dieu-chuyen', $data);
+    }
+
+    /** Sửa phiếu — API chỉ nhận phiếu lưu tạm. */
+    public function suaPhieuDieuChuyen(int $id, array $data): Response
+    {
+        return $this->put("/admin/phieu-dieu-chuyen/{$id}", $data);
+    }
+
+    /** Duyệt: hàng rời kho gửi và vào kho nhận. Luôn kèm `note` để Go bind được. */
+    public function duyetPhieuDieuChuyen(int $id, array $data = []): Response
+    {
+        return $this->post("/admin/phieu-dieu-chuyen/{$id}/duyet", $data + ['note' => '']);
+    }
+
+    public function xoaPhieuDieuChuyen(int $id): Response
+    {
+        return $this->delete("/admin/phieu-dieu-chuyen/{$id}");
     }
 
     // ---------- Settings (cấu hình hệ thống) ----------
@@ -1117,6 +1406,47 @@ class ApiClient
     public function updateSettings(array $items): Response
     {
         return $this->put('/admin/settings', ['items' => $items]);
+    }
+
+    // ---------- Yêu cầu của khách + Đăng ký nhận tin ----------
+
+    /**
+     * Hộp thư đến từ storefront (form Liên hệ, form Thu mua).
+     * $query hỗ trợ: keyword, type, status, from, to, page, page_size.
+     */
+    public function contactRequests(array $query = []): Response
+    {
+        return $this->get('/admin/contact-requests', $query);
+    }
+
+    /** Đếm yêu cầu theo trạng thái — huy hiệu "chưa xử lý" ở sidebar đọc số này. */
+    public function contactStats(): Response
+    {
+        return $this->get('/admin/contact-requests/stats');
+    }
+
+    /** Đổi trạng thái xử lý một yêu cầu ($payload: status, admin_note). */
+    public function updateContactStatus(int $id, array $payload): Response
+    {
+        return $this->put("/admin/contact-requests/{$id}/status", $payload);
+    }
+
+    /** Xoá một yêu cầu (bên API là xoá mềm, sổ vẫn giữ để còn phục hồi). */
+    public function deleteContactRequest(int $id): Response
+    {
+        return $this->delete("/admin/contact-requests/{$id}");
+    }
+
+    /** Danh sách email đăng ký nhận tin. $query hỗ trợ: keyword, page, page_size. */
+    public function newsletterSubscribers(array $query = []): Response
+    {
+        return $this->get('/admin/newsletter', $query);
+    }
+
+    /** Gỡ một email khỏi danh sách nhận tin. */
+    public function unsubscribeNewsletter(int $id): Response
+    {
+        return $this->put("/admin/newsletter/{$id}/unsubscribe", []);
     }
 
     // ---------- Users & Roles (tài khoản nội bộ) ----------
@@ -1504,7 +1834,28 @@ class ApiClient
     }
 
     /** Khoá cache của bảng giá trị cấu hình (xem settingValues). */
+    /**
+     * Tiền tố khoá cache cài đặt. Khoá THẬT còn kèm mã cửa hàng — xem khoaCacheSettings.
+     *
+     * Một khoá cố định dùng chung cho mọi người là đúng cho tới ngày một bản chạy
+     * phục vụ hai cửa hàng: lúc đó người vào trước nạp cache, và người của cửa
+     * hàng kia đọc nhầm cài đặt ấy suốt 5 phút.
+     */
     public const SETTINGS_CACHE_KEY = 'admin.settings.values';
+
+    /**
+     * Khoá cache cài đặt của CỬA HÀNG đang đăng nhập.
+     *
+     * `api.tenant` do lượt đăng nhập cất vào (xem AuthController) và sống tới lúc
+     * đăng xuất. Chưa đăng nhập thì không có gì để phân biệt — dùng khoá trần,
+     * đằng nào lượt gọi cũng không có token và sẽ hỏng.
+     */
+    public static function khoaCacheSettings(): string
+    {
+        $id = (int) session('api.tenant.id', 0);
+
+        return $id > 0 ? self::SETTINGS_CACHE_KEY.'.'.$id : self::SETTINGS_CACHE_KEY;
+    }
 
     /**
      * Giá trị cấu hình dạng map key → value, cache 5 phút.
@@ -1519,7 +1870,7 @@ class ApiClient
     public function settingValues(): array
     {
         try {
-            $values = Cache::remember(self::SETTINGS_CACHE_KEY, 300, function () {
+            $values = Cache::remember(self::khoaCacheSettings(), 300, function () {
                 $res = $this->settings();
 
                 // Trả null khi hỏng: Cache::remember không giữ null nên lần sau thử lại.
@@ -1545,6 +1896,20 @@ class ApiClient
         $value = trim((string) ($this->settingValues()[$key] ?? ''));
 
         return $value !== '' ? $value : $default;
+    }
+
+    /**
+     * Đọc MỘT khoá cấu hình dạng công tắc.
+     *
+     * API lưu bool thành chuỗi "1"/"0" (bảng settings là key-value thuần), nên chỉ
+     * "1" mới là bật. Khoá chưa có dòng, hay API hỏng, đều rơi về $default — mấy
+     * công tắc này đổi hình dạng cả màn hình, đoán bừa là hại hơn.
+     */
+    public function settingBool(string $key, bool $default = false): bool
+    {
+        $raw = $this->settingValues()[$key] ?? null;
+
+        return $raw === null ? $default : (string) $raw === '1';
     }
 
     /**
