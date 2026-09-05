@@ -23,6 +23,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Giao diện v2 nằm ở web_Shop/v2, NGOÀI resources/views — gọi bằng
+        // namespace: view('v2::nha-cung-cap.index'), @extends('v2::layouts.master').
+        View::addNamespace('v2', base_path('v2'));
+
         // Chia sẻ số đơn "chờ xác nhận" cho sidebar (badge nhắc admin xử lý đơn mới).
         // Cache ngắn 30s để không gọi API mỗi lần chuyển trang; im lặng nếu API lỗi.
         View::composer('partials.sidebar', function ($view) {

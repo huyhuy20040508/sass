@@ -239,3 +239,21 @@ func translateChiNhanhErr(err error) error {
 		return err
 	}
 }
+
+// ExistsByName — trùng TÊN trong cùng cửa hàng, không phân biệt hoa thường.
+// Hai chi nhánh cùng tên thì mọi màn chọn chi nhánh (bán hàng, kho, báo cáo)
+// đều ra hai dòng không phân biệt được.
+//
+// KHÔNG Unscoped: tên không bị khoá duy nhất ở tầng DB, nên xoá xong phải dùng
+// lại tên được.
+func (r *chiNhanhRepository) ExistsByName(ctx context.Context, name string, excludeID uint) (bool, error) {
+	var count int64
+	q := r.db.WithContext(ctx).Model(&domain.ChiNhanh{}).
+		Where("LOWER(name) COLLATE utf8mb4_bin = LOWER(?)", name)
+	if excludeID > 0 {
+		q = q.Where("id <> ?", excludeID)
+	}
+	err := q.Count(&count).Error
+
+	return count > 0, err
+}

@@ -30,9 +30,18 @@ const (
 	CtxUserID   = "ctx_user_id"
 	CtxRole     = "ctx_role"
 	CtxTenantID = "ctx_tenant_id"
-	// CtxChiNhanhID là chi nhánh đang làm việc của request — chỉ có mặt khi
-	// trình duyệt gửi header HeaderChiNhanh và nó tra ra hợp lệ.
+	// CtxChiNhanhID là chi nhánh đang làm việc của request. Có mặt khi trình
+	// duyệt gửi header HeaderChiNhanh và nó tra ra hợp lệ, HOẶC khi người gọi bị
+	// phân công về một chi nhánh (lúc đó gắn luôn dù họ không khai gì).
 	CtxChiNhanhID = "ctx_chi_nhanh_id"
+	// CtxChiNhanhGhim = chi nhánh trên là BẮT BUỘC với người này, không phải một
+	// lựa chọn họ đổi được.
+	//
+	// Cần một cờ riêng vì nhìn vào CtxChiNhanhID không phân biệt được hai trường
+	// hợp: chủ tiệm vừa chọn kho 2 ở thanh trên cùng, và nhân viên bị phân công
+	// về kho 2. Người đầu được xem cả cửa hàng nếu muốn, người sau thì không —
+	// mà chỉ có middleware mới biết ai là ai. Xem chiNhanhLoc.
+	CtxChiNhanhGhim = "ctx_chi_nhanh_ghim"
 	// CtxPlatformRole là vai trò trong KHU ĐIỀU HÀNH (owner | operator |
 	// support), do XacThucNenTang đặt. Khác CtxRole — vai trò trong một cửa hàng.
 	CtxPlatformRole = "ctx_platform_role"
@@ -584,15 +593,28 @@ func extractBearer(c *gin.Context) string {
 // vừa nhận có thuộc cửa hàng đó không. Lượt tra dưới đây chạy bằng ctx đã mang
 // tenant, nên chi nhánh của tiệm khác đơn giản là không tra ra.
 //
-// Header thiếu / rỗng / không tra ra = KHÔNG gắn gì, và request chạy tiếp bình
-// thường: nơi cần chi nhánh sẽ rơi về chi nhánh bán online (xem
-// repository.chiNhanhCuaRequest). Đó là đường đi của mọi cửa hàng một chi nhánh
-// — tức gần như mọi khách hôm nay — nên nó phải êm, không phải một lỗi.
+// Header thiếu / rỗng = KHÔNG gắn gì, và request chạy tiếp bình thường. Cửa
+// hàng MỘT chi nhánh thì nơi cần chi nhánh tự suy ra được (chỉ có một câu trả
+// lời); từ hai chi nhánh trở lên thì đường GHI dừng lại và đòi chọn — xem
+// repository.chiNhanhCuaRequest. Không đoán hộ nữa.
 //
-// TỪ CHỐI khi header trỏ vào chi nhánh KHÔNG thuộc cửa hàng: đó không phải
-// "thiếu thông tin" mà là một yêu cầu sai, và trả 403 ở đây làm lộ ra ngay lỗi
-// lập trình phía giao diện thay vì âm thầm ghi vào kho khác.
-func ChiNhanhDangLam(repo domain.ChiNhanhRepository) gin.HandlerFunc {
+// BA CHỐT khi header CÓ giá trị, và cả ba đều phải nằm ở đây chứ không phải ở
+// giao diện:
+//
+//  1. Chi nhánh phải THUỘC CỬA HÀNG đang đăng nhập. Không đối chiếu thì chủ tiệm
+//     A gõ một id bất kỳ và ghi hàng vào kho của tiệm B — bộ lọc tenant không đỡ
+//     được, vì nó chỉ canh cột `tenant_id` chứ không biết `shop_id` vừa nhận có
+//     thuộc cửa hàng đó không.
+//  2. Chi nhánh phải ĐANG MỞ. Ô chọn trên giao diện chỉ bày chi nhánh đang mở,
+//     nhưng đó là phép lịch sự chứ không phải hàng rào: gửi thẳng header là ghi
+//     hàng vào một kho đã đóng cửa.
+//  3. Người gọi phải ĐƯỢC LÀM ở chi nhánh đó. Nhân viên phân về chi nhánh nào
+//     thì bán và nhập hàng ở đó; đổi header sang nơi khác là ghi chứng từ vào
+//     chỗ mình không đứng. Chủ tiệm và quản lý không bị chốt này chặn.
+//
+// Cả ba trả 403 chứ không im lặng bỏ header: im lặng thì request vẫn chạy nhưng
+// rơi vào chi nhánh khác, và cái sai đó không lộ ra ở đâu.
+func ChiNhanhDangLam(repo domain.ChiNhanhRepository, nhanVien domain.NhanVienRepository) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if repo == nil {
 			c.Next()
@@ -602,6 +624,20 @@ func ChiNhanhDangLam(repo domain.ChiNhanhRepository) gin.HandlerFunc {
 
 		raw := strings.TrimSpace(c.GetHeader(HeaderChiNhanh))
 		if raw == "" {
+			// KHÔNG khai chi nhánh, mà người gọi ĐÃ BỊ PHÂN CÔNG một chi nhánh: gắn
+			// chi nhánh ấy vào ctx.
+			//
+			// Bỏ trống ở đây là để hở đúng cái cửa mà mọi chốt chặn phía sau trông
+			// vào. Quy ước của các lượt ĐỌC là "không rõ chi nhánh thì không cắt",
+			// nên chỉ cần gỡ header đi là nhân viên kho 2 đọc được sổ của kho 1 —
+			// và không tầng nào dưới cứu được, vì chúng tin rằng ctx trống nghĩa là
+			// người này quản cả cửa hàng.
+			if cua := chiNhanhDuocPhan(c, nhanVien); cua != nil && *cua > 0 {
+				c.Set(CtxChiNhanhID, *cua)
+				c.Set(CtxChiNhanhGhim, true)
+				c.Request = c.Request.WithContext(chinhanh.WithID(c.Request.Context(), *cua))
+			}
+
 			c.Next()
 
 			return
@@ -625,8 +661,82 @@ func ChiNhanhDangLam(repo domain.ChiNhanhRepository) gin.HandlerFunc {
 			return
 		}
 
+		if !cn.IsActive {
+			response.Error(c, 403, "Chi nhánh \""+cn.Name+"\" đã ngừng hoạt động — chọn chi nhánh khác ở thanh trên cùng")
+			c.Abort()
+
+			return
+		}
+
+		if !duocLamTaiChiNhanh(c, nhanVien, cn.ID) {
+			response.Error(c, 403, "Bạn không làm việc tại chi nhánh \""+cn.Name+"\"")
+			c.Abort()
+
+			return
+		}
+
 		c.Set(CtxChiNhanhID, cn.ID)
+		// Người BỊ PHÂN CÔNG thì chi nhánh này là bắt buộc, không phải một lựa
+		// chọn — kể cả khi họ tự khai đúng nó. chiNhanhLoc đọc cờ này để không
+		// cho tham số `shop_id` trên URL kéo họ sang kho khác.
+		if cua := chiNhanhDuocPhan(c, nhanVien); cua != nil && *cua > 0 {
+			c.Set(CtxChiNhanhGhim, true)
+		}
 		c.Request = c.Request.WithContext(chinhanh.WithID(c.Request.Context(), cn.ID))
 		c.Next()
 	}
+}
+
+// duocLamTaiChiNhanh cho biết người đang gọi có được làm việc ở chi nhánh này
+// không.
+//
+// Luật: ai KHÔNG bị phân công thì đi đâu cũng được; ai ĐÃ bị phân công thì chỉ ở
+// đúng chỗ mình. Cụ thể là "được" khi:
+//   - không tra được sổ nhân sự (repo nil) — chốt này chưa dựng được thì không
+//     khoá cửa ai cả, sai chiều đó rẻ hơn hẳn chiều kia;
+//   - vai trò KHÔNG phải nhân viên (chủ tiệm, quản lý) — họ quản cả cửa hàng;
+//   - có vai trò nhân viên nhưng hồ sơ chưa khai chi nhánh (tiệm một điểm bán);
+//   - chi nhánh khai trên header đúng bằng chi nhánh được phân.
+//
+// Lỗi khi đọc sổ cũng trả true: một trục trặc database không được phép biến
+// thành "không ai bán hàng được nữa".
+func duocLamTaiChiNhanh(c *gin.Context, nhanVien domain.NhanVienRepository, shopID uint) bool {
+	cua := chiNhanhDuocPhan(c, nhanVien)
+
+	return cua == nil || *cua == shopID
+}
+
+// chiNhanhDuocPhan trả chi nhánh mà người đang gọi BỊ BUỘC vào, hoặc nil khi họ
+// đi đâu cũng được (chủ tiệm, quản lý, nhân viên chưa phân công).
+//
+// Trả nil ở MỌI nhánh "không biết": sổ nhân sự chưa dựng, không đọc được tài
+// khoản, database trục trặc. Một trục trặc không được phép biến thành "không ai
+// bán hàng được nữa" — nhưng cũng vì thế nil KHÔNG phải bằng chứng rằng người
+// này được tự do đi lại, nơi gọi đừng dùng nó để phân quyền.
+func chiNhanhDuocPhan(c *gin.Context, nhanVien domain.NhanVienRepository) *uint {
+	if nhanVien == nil {
+		return nil
+	}
+	if vaiTro, _ := c.Get(CtxRole); vaiTro != domain.RoleStaff {
+		return nil
+	}
+
+	userID, ok := c.Get(CtxUserID)
+	if !ok {
+		return nil
+	}
+	id, ok := userID.(uint)
+	if !ok || id == 0 {
+		return nil
+	}
+
+	cua, err := nhanVien.ChiNhanhCuaTaiKhoan(c.Request.Context(), id)
+	if err != nil {
+		logger.Warn("không đọc được chi nhánh của tài khoản — cho qua lượt này",
+			zap.Uint("user_id", id), zap.Error(err))
+
+		return nil
+	}
+
+	return cua
 }

@@ -1,0 +1,84 @@
+  body {
+      background-size: cover;
+      /* Đảm bảo hình ảnh phủ kín màn hình */
+      background-repeat: no-repeat;
+      /* Không lặp lại hình ảnh */
+      background-position: center;
+      /* Căn giữa hình ảnh */
+      transition: background-image 1s ease-in-out;
+      /* Hiệu ứng chuyển đổi */
+      margin: 0;
+      /* Loại bỏ margin mặc định */
+      padding: 0;
+      /* Loại bỏ padding mặc định */
+      overflow: hidden;
+      /* Ẩn bất kỳ nội dung nào vượt ra ngoài khung */
+      display: flex;
+      /* Đảm bảo nội dung trong body có thể căn giữa nếu cần */
+      height: 100vh;
+      /* Chiều cao toàn màn hình */
+      width: 100vw;
+      /* Chiều rộng toàn màn hình */
+  }
+
+  .container {
+      width: 100%;
+      height: 70vh;
+      min-height: 350px;
+      padding: 0;
+      overflow: hidden;
+  }
+
+  .form-login {
+      padding: 30px;
+      background: #fff;
+      border-radius: 5px;
+      border: 1px solid #ddd;
+  }
+
+  .form-body {
+      width: 30%;
+      min-width: 400px;
+  }
+
+  .title {
+      color: #32C337;
+      font-size: 40px;
+  }
+
+  .eye-icon {
+      font-size: 15px;
+  }
+
+  input#password {
+      padding-right: 30px
+  }
+
+  .btn-login {
+      background-color: #32C337 !important;
+      border: 0;
+      color: white !important;
+      font-weight: bold;
+      font-size: large;
+  }
+
+  .btn-login:hover {
+      background-color: #129b17;
+  }
+
+  .forgot_password {
+      color: #416BBB;
+  }
+
+  @media screen and (max-width: 450px) {
+      .form-body {
+          min-width: 250px;
+      }
+  }
+
+  @media screen and (max-height: 450px) {
+      .container {
+          scale: 70%;
+          min-height: 400px;
+      }
+  }

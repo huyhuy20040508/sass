@@ -22,6 +22,13 @@ type ProductFilter struct {
 	NoLocation bool
 	// UnitID lọc theo đơn vị tính (nil = không lọc).
 	UnitID *uint
+	// ShopID lọc theo chi nhánh QUẢN LÝ mặt hàng (nil = không lọc).
+	//
+	// Mặt hàng CHƯA gán chi nhánh nào nghĩa là "bán ở mọi chi nhánh" chứ không
+	// phải "không chi nhánh nào" (xem bảng product_shops, migration 0032), nên
+	// lọc theo một chi nhánh phải lấy CẢ phần chưa gán — không thì chọn chi
+	// nhánh nào cũng mất sạch hàng dùng chung.
+	ShopID *uint
 	// IsMultiVariant tách hàng nhiều biến thể khỏi hàng đơn (nil = không lọc).
 	IsMultiVariant *bool
 	IsFeatured     *bool
@@ -153,7 +160,12 @@ type OrderFilter struct {
 	PaymentMethod string // all | cod | vnpay | momo | bank_transfer | cash
 	// Channel: all | web | pos — nơi đơn phát sinh. Đây là bộ lọc tách được doanh
 	// thu quầy khỏi doanh thu giao hàng, hai thứ có cách vận hành khác hẳn nhau.
-	Channel  string
+	Channel string
+	// ShopID cắt danh sách theo CHI NHÁNH phát sinh đơn. 0 = không cắt (xem gộp
+	// cả cửa hàng) — chỉ nên dùng ở báo cáo và khi người dùng chủ động chọn.
+	// Handler đặt sẵn theo chi nhánh đang làm việc; không cắt thì người đứng ở
+	// một quầy vẫn thấy đơn của mọi quầy khác.
+	ShopID   uint
 	UserID   *uint  // lọc đơn của một khách hàng
 	FromDate string // YYYY-MM-DD (theo created_at)
 	ToDate   string // YYYY-MM-DD
@@ -581,6 +593,34 @@ type DongTonChiNhanh struct {
 	CostPrice  *float64 `json:"cost_price"`
 	StockValue float64  `json:"stock_value"`
 	IsActive   bool     `json:"is_active"`
+	// IsStockDeducted dựng cột "Loại hàng hoá" của bảng tồn kho: bán ra có trừ
+	// kho không. Tắt = hàng dịch vụ / hàng đặt gia công, dòng tồn của nó luôn
+	// đứng yên — nói ra ở ngay trên bảng thì người đếm kho khỏi đi tìm xem vì
+	// sao món đó không bao giờ nhúc nhích.
+	IsStockDeducted bool `json:"is_stock_deducted"`
+
+	// Lots là con số Quantity ở trên CHIA NHỎ theo lô — ba cột cuối của bảng
+	// tồn kho (số lô, số lượng, hạn dùng), đúng như bản order v2.
+	//
+	// Tổng Quantity của mấy dòng này luôn bằng Quantity ở trên: cả hai đọc từ
+	// hai bảng được ghi trong cùng một giao dịch (xem migration 0047). Rỗng chỉ
+	// xảy ra với biến thể chưa từng có dòng tồn nào ở chi nhánh đó.
+	//
+	// gorm:"-" vì đây KHÔNG phải quan hệ: danh sách do napLoChoDong nạp bằng một
+	// câu riêng cho cả trang. Bỏ thẻ này thì GORM coi nó là quan hệ và câu Scan
+	// chết với "define a valid foreign key for relations".
+	Lots []DongTonLo `json:"lots" gorm:"-"`
+}
+
+// DongTonLo là MỘT lô trong dòng tồn.
+//
+// LotNumber rỗng = domain.LoKhongXacDinh; nhãn hiển thị do tầng giao diện đặt.
+// ExpireDate nil = hàng không có hạn dùng — khác hẳn "chưa ai khai hạn", nên
+// không quy về một ngày mốc nào.
+type DongTonLo struct {
+	LotNumber  string     `json:"lot_number"`
+	ExpireDate *time.Time `json:"expire_date"`
+	Quantity   int        `json:"quantity"`
 }
 
 // TomTatChiNhanh là tổng của MỘT chi nhánh trên TOÀN bộ bộ lọc, không phải chỉ
@@ -860,6 +900,8 @@ type ChiNhanhRepository interface {
 	// uq_shops_tenant_code, nên báo trùng ở đây dễ hiểu hơn là để MySQL ném lỗi
 	// khoá lúc ghi.
 	ExistsByCode(ctx context.Context, code string, excludeID uint) (bool, error)
+	// ExistsByName chặn hai chi nhánh cùng tên trong một cửa hàng.
+	ExistsByName(ctx context.Context, name string, excludeID uint) (bool, error)
 	Create(ctx context.Context, cn *ChiNhanh) error
 	Update(ctx context.Context, cn *ChiNhanh) error
 	// Delete xoá mềm. Nơi gọi phải tự bảo đảm không xoá chi nhánh cuối cùng —
@@ -894,9 +936,18 @@ type ChiNhanhRepository interface {
 // CategoryRepository — truy cập bảng categories.
 type CategoryRepository interface {
 	List(ctx context.Context, onlyActive bool) ([]Category, error)
+	// ListCoHang chỉ trả nhóm ĐANG có mặt hàng — dành cho các ô lọc nhóm ở màn
+	// nhìn theo hàng hoá (tồn kho, danh sách hàng hoá).
+	//
+	// Điều kiện phải khớp với câu truy vấn của bảng đứng cạnh nó: bày ra một
+	// nhóm mà bảng không có dòng nào là mời người dùng bấm vào để nhận một bảng
+	// trắng, đúng thứ ô lọc này sinh ra để tránh.
+	ListCoHang(ctx context.Context, onlyActive bool) ([]Category, error)
 	FindByID(ctx context.Context, id uint) (*Category, error)
 	FindBySlug(ctx context.Context, slug string) (*Category, error)
 	ExistsBySlug(ctx context.Context, slug string, excludeID uint) (bool, error)
+	// ExistsByName chặn hai nhóm cùng tên trong một cửa hàng.
+	ExistsByName(ctx context.Context, name string, excludeID uint) (bool, error)
 	// NextCode là mã nhóm kế tiếp của dải mặc định NH0001 — dùng khi cửa hàng
 	// chưa bật quy tắc mã nhóm hàng hoá.
 	NextCode(ctx context.Context) (string, error)
@@ -914,6 +965,8 @@ type ProductRepository interface {
 	// ExistsBySKU — cặp với ExistsBySlug. Bảng products có UNIQUE trên sku, không
 	// kiểm tra ở đây thì lỗi rơi xuống tận MySQL và trả về một câu vô nghĩa.
 	ExistsBySKU(ctx context.Context, sku string, excludeID uint) (bool, error)
+	// ExistsByName chặn hai mặt hàng cùng tên trong một cửa hàng.
+	ExistsByName(ctx context.Context, name string, excludeID uint) (bool, error)
 	// Count đếm MỌI sản phẩm còn trong sổ của cửa hàng — kể cả đang ẩn, ngừng
 	// bán, chưa gắn danh mục. Cố ý KHÔNG nhận ProductFilter: nó phục vụ hạn mức
 	// hợp đồng (xem LoaiHanMuc), mà hạn mức đếm chỗ đang chiếm chứ không đếm hàng
@@ -925,6 +978,9 @@ type ProductRepository interface {
 	Update(ctx context.Context, p *Product) error
 	// SetStatus cập nhật trạng thái kinh doanh + cờ hiển thị, không đụng biến thể/ảnh.
 	SetStatus(ctx context.Context, id uint, status string) error
+	// DatViTri gán/gỡ kệ cho một mặt hàng TẠI CHI NHÁNH ĐANG LÀM VIỆC.
+	// nil = gỡ ra. Không đứng ở chi nhánh nào thì không làm gì — xem bản dựng.
+	DatViTri(ctx context.Context, productID uint, locationID *uint) error
 	Delete(ctx context.Context, id uint) error
 	// DeleteMany xoá nhiều sản phẩm trong MỘT giao dịch. Trang quản trị cho chọn
 	// hàng loạt rồi xoá; lặp gọi từng cái là N lượt HTTP nối đuôi nhau và hỏng
@@ -941,6 +997,10 @@ type ProductRepository interface {
 	// huong = "up" (lên trên) | "down" (xuống dưới). Đã ở đầu/cuối thì trả
 	// ErrDaODau — tầng trên dịch thành một câu nói rõ, không phải lỗi 500.
 	DoiChoThuTu(ctx context.Context, id uint, huong string) error
+	// SapXepLai gán lại thứ tự cho đúng những mặt hàng trong ids, theo đúng
+	// trình tự ấy (phần tử đầu nằm trên cùng). Dùng cho thao tác kéo thả, nơi
+	// một dòng nhảy thẳng tới chỗ bất kỳ chứ không nhích từng bậc.
+	SapXepLai(ctx context.Context, ids []uint) error
 	// ThuTuKeTiep trả giá trị sort cho mặt hàng mới (lớn hơn mọi giá trị đang
 	// có) để hàng vừa thêm nằm ngay đầu danh sách.
 	ThuTuKeTiep(ctx context.Context) (int, error)
@@ -1020,6 +1080,9 @@ type PromotionRepository interface {
 	Update(ctx context.Context, p *Promotion) error
 	SetActive(ctx context.Context, id uint, active bool) error
 	Delete(ctx context.Context, id uint) error
+	// ReplaceShops đặt lại những chi nhánh chương trình này chạy. RỖNG = mọi chi
+	// nhánh, cùng quy ước với bảng product_shops — xem migration 0053.
+	ReplaceShops(ctx context.Context, promotionID uint, shopIDs []uint) error
 	// Running trả về các chương trình đang chạy tại thời điểm at, kèm phạm vi.
 	// Đây là truy vấn nằm trên đường đi của MỌI lần khách xem hàng nên phải gọn.
 	Running(ctx context.Context, at time.Time) ([]Promotion, error)
@@ -1072,6 +1135,8 @@ type VoucherRepository interface {
 	Update(ctx context.Context, v *Voucher) error
 	SetActive(ctx context.Context, id uint, active bool) error
 	Delete(ctx context.Context, id uint) error
+	// ReplaceShops đặt lại những chi nhánh dùng được mã này. RỖNG = mọi chi nhánh.
+	ReplaceShops(ctx context.Context, voucherID uint, shopIDs []uint) error
 
 	// FindByCode tra mã khách vừa nhập (đã chuẩn hoá chữ hoa). Chỉ đọc, không khoá
 	// — việc chốt lượt nằm trong giao dịch đặt hàng.

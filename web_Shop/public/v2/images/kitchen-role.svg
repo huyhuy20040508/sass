@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200" fill="none">
+    <rect width="200" height="200" rx="12" fill="#FEF5E0"/>
+    <!-- Mũ bếp -->
+    <path d="M100 36c-11 0-20.5 6.4-24.4 15.6C67 52.3 60 59.6 60 68.6c0 8.3 5.9 15.2 13.8 16.8V96c0 2.2 1.8 4 4 4h44.4c2.2 0 4-1.8 4-4V85.4c7.9-1.6 13.8-8.5 13.8-16.8 0-9-7-16.3-15.6-17C122.5 42.4 111 36 100 36z" fill="#FFFFFF" stroke="#D2DAE6" stroke-width="2"/>
+    <rect x="77.8" y="104" width="44.4" height="10" rx="3" fill="#1B2C58"/>
+    <!-- Chảo -->
+    <rect x="46" y="138" width="76" height="16" rx="8" fill="#1B2C58"/>
+    <rect x="122" y="142" width="34" height="8" rx="4" fill="#FF8800"/>
+    <!-- Hơi nóng -->
+    <path d="M70 128c0-4 4-4 4-8" stroke="#F04430" stroke-width="3" stroke-linecap="round" fill="none"/>
+    <path d="M84 128c0-4 4-4 4-8" stroke="#FF8800" stroke-width="3" stroke-linecap="round" fill="none"/>
+    <path d="M98 128c0-4 4-4 4-8" stroke="#F04430" stroke-width="3" stroke-linecap="round" fill="none"/>
+</svg>

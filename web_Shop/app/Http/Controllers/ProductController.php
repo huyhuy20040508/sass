@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\TraLoiHopThoai;
 use App\Services\ApiClient;
+use App\Services\ChiNhanhDangLam;
 use App\Services\ImageStore;
 use App\Support\MucThue;
 use Illuminate\Http\Request;
@@ -41,6 +43,8 @@ use Illuminate\Validation\Rule;
  */
 class ProductController extends Controller
 {
+    use TraLoiHopThoai;
+
     /** Nhãn NGẮN cho thanh điều hướng. */
     public const TITLE = 'Hàng hóa';
 
@@ -58,17 +62,32 @@ class ProductController extends Controller
      * hẳn không nhập nữa.
      */
     public const STATUSES = [
-        'active' => 'Đang bán',
-        'hidden' => 'Tạm ẩn',
-        'discontinued' => 'Ngừng kinh doanh',
+        'active' => 'Hoạt động',
+        'hidden' => 'Không hoạt động',
+    ];
+
+    /**
+     * API vẫn còn mức thứ ba `discontinued` (ngừng kinh doanh) từ thiết kế cũ và
+     * dữ liệu cũ vẫn mang mức ấy. Khu quản trị chỉ bày HAI mức, nên mức thứ ba
+     * được gộp vào "Không hoạt động": lọc thì hỏi API cả hai, hiện thì đọc nhãn
+     * của `hidden`. Bỏ hẳn ánh xạ này là hàng cũ biến mất khỏi bộ lọc.
+     */
+    public const STATUS_GOP = [
+        'active' => ['active'],
+        'hidden' => ['hidden', 'discontinued'],
     ];
 
     /** Câu giải thích từng trạng thái — hiện ngay trong modal để chọn cho đúng. */
     public const STATUS_HINTS = [
         'active' => 'Hiện ngoài cửa hàng, khách mua được.',
-        'hidden' => 'Không hiện ngoài cửa hàng nhưng vẫn nhập hàng, vẫn tính vào kho.',
-        'discontinued' => 'Không hiện, không nhập thêm. Đơn cũ và báo cáo vẫn tra ra được.',
+        'hidden' => 'Không hiện ngoài cửa hàng, khách không mua được. Vẫn nhập hàng, vẫn tính vào kho.',
     ];
+
+    /** Quy một mức bất kỳ (kể cả `discontinued` cũ) về một trong HAI mức đang bày. */
+    public static function mucTrangThai(?string $status): string
+    {
+        return array_key_exists((string) $status, self::STATUSES) ? (string) $status : 'hidden';
+    }
 
     /**
      * Các kiểu sắp xếp hợp lệ.
@@ -157,8 +176,7 @@ class ProductController extends Controller
 
         $messages = [
             'active' => 'Đã cho mặt hàng bán trở lại.',
-            'hidden' => 'Đã tạm ẩn mặt hàng.',
-            'discontinued' => 'Đã chuyển mặt hàng sang ngừng kinh doanh.',
+            'hidden' => 'Đã ngừng bán mặt hàng.',
         ];
 
         return $this->send(
@@ -183,6 +201,41 @@ class ProductController extends Controller
             fn () => $this->api->moveProductSort($id, $huong),
             $huong === 'up' ? 'Đã đưa mặt hàng lên trên.' : 'Đã đưa mặt hàng xuống dưới.',
             $request
+        );
+    }
+
+    /**
+     * Ghi lại trình tự sau một lượt KÉO THẢ trên bảng.
+     *
+     * Gửi nguyên danh sách id đang hiện trên trang chứ không gửi "dòng X về chỗ
+     * thứ n": máy chủ không biết trang đang hiện những ai, mà số thứ tự trên màn
+     * hình lại phụ thuộc đúng vào tập ấy.
+     */
+    public function sapXep(Request $request)
+    {
+        $ids = array_values(array_filter(array_map('intval', (array) $request->input('ids', []))));
+
+        if (count($ids) < 2) {
+            return response()->json(['message' => 'Cần ít nhất hai mặt hàng để xếp lại thứ tự.'], 422);
+        }
+
+        // KHÔNG dùng send(): nó luôn trả chuyển hướng, mà một lượt kéo thả gọi
+        // bằng AJAX thì chuyển hướng đọc y hệt thành công — lưu hỏng cũng im
+        // lặng, người dùng đinh ninh thứ tự đã vào sổ. Trả JSON để trang biết
+        // đường bắn toast và nạp lại bảng cho khớp với máy chủ.
+        try {
+            $res = $this->api->sapXepProducts($ids);
+        } catch (\Throwable $e) {
+            Log::error('Sap xep hang hoa failed', ['msg' => $e->getMessage()]);
+
+            return $this->traLoiHopThoai($request, false, 'Không kết nối được máy chủ API.');
+        }
+
+        return $this->traLoiHopThoai(
+            $request,
+            $res->successful(),
+            $res->successful() ? 'Đã lưu thứ tự mới.' : $this->cauLoiApi($res, 'Không lưu được thứ tự mới.'),
+            fn () => $this->backToList($request)
         );
     }
 
@@ -269,14 +322,14 @@ class ProductController extends Controller
         } catch (\Throwable $e) {
             Log::error('Create product failed', ['msg' => $e->getMessage()]);
 
-            return back()->withInput()->with('error', 'Không kết nối được máy chủ API.');
+            return $this->traLoiHopThoai($request, false, 'Không kết nối được máy chủ API.');
         }
 
         if ($res->successful()) {
-            return redirect()->route('admin.products.index')->with('success', 'Đã thêm mặt hàng.');
+            return $this->traLoiHopThoai($request, true, 'Đã thêm mặt hàng.', fn () => $this->backToList($request));
         }
 
-        return back()->withInput()->with('error', $res->json('message') ?: 'Tạo mặt hàng thất bại.');
+        return $this->traLoiHopThoai($request, false, $this->cauLoiApi($res, 'Tạo mặt hàng thất bại.'));
     }
 
     /** Cập nhật mặt hàng (form modal). */
@@ -284,11 +337,17 @@ class ProductController extends Controller
     {
         $data = $this->productValidated($request);
 
-        return $this->send(
-            fn () => $this->api->updateProduct($id, $data),
-            'Đã cập nhật mặt hàng.',
-            $request
-        );
+        try {
+            $res = $this->api->updateProduct($id, $data);
+        } catch (\Throwable $e) {
+            Log::error('Update product failed', ['id' => $id, 'msg' => $e->getMessage()]);
+
+            return $this->traLoiHopThoai($request, false, 'Không kết nối được máy chủ API.');
+        }
+
+        return $res->successful()
+            ? $this->traLoiHopThoai($request, true, 'Đã cập nhật mặt hàng.', fn () => $this->backToList($request))
+            : $this->traLoiHopThoai($request, false, $this->cauLoiApi($res, 'Cập nhật mặt hàng thất bại.'));
     }
 
     /**
@@ -357,10 +416,16 @@ class ProductController extends Controller
         return response()->streamDownload(function () use ($all, $statuses) {
             $out = fopen('php://output', 'w');
             fwrite($out, "\xEF\xBB\xBF"); // BOM để Excel đọc đúng tiếng Việt
+            // Cột "Tồn kho" là tồn của CHI NHÁNH ĐANG LÀM VIỆC, không phải bản
+            // cộng cả cửa hàng — API cắt theo chi nhánh trên header. Ghi tên kho
+            // vào tiêu đề cột: người cầm tệp đi soạn hàng phải biết con số này
+            // nói về kho nào, mà tệp thì rời khỏi màn hình rồi.
+            $tenKho = ChiNhanhDangLam::ten();
             fputcsv($out, [
                 'Mã SP', 'Mã hàng', 'Tên hàng hóa', 'Nhóm hàng hóa', 'ĐVT', 'Vị trí',
                 'VAT', 'Giá bán', 'Giá vốn',
-                'Tồn kho', 'Chi nhánh', 'Thẻ', 'Số biến thể', 'Trạng thái',
+                $tenKho !== null ? 'Tồn kho ('.$tenKho.')' : 'Tồn kho',
+                'Chi nhánh', 'Thẻ', 'Số biến thể', 'Trạng thái',
             ]);
             foreach ($all as $p) {
                 $variants = array_values($p['variants'] ?? []);
@@ -386,7 +451,7 @@ class ProductController extends Controller
                     // Hàng đơn có đúng một dòng mặc định — đếm ra 1 thì ghi 0 cho khỏi
                     // hiểu nhầm là "có một biến thể".
                     empty($p['is_multi_variant']) ? 0 : count($variants),
-                    $statuses[$p['status'] ?? ''] ?? (! empty($p['is_active']) ? 'Đang bán' : 'Tạm ẩn'),
+                    $statuses[self::mucTrangThai($p['status'] ?? (! empty($p['is_active']) ? 'active' : 'hidden'))],
                 ]);
             }
             fclose($out);
@@ -522,9 +587,9 @@ class ProductController extends Controller
                 'name' => $name,
                 'slug' => $this->slugify($name),
                 'sku' => $sku,
-                'short_description' => '', 'description' => '',
+                'description' => '',
                 // Bỏ trống cột thuế = lấy mức mặc định của nhóm hàng (API tự điền).
-            'vat' => $vatRaw !== '' ? (int) $num($vatRaw) : null,
+                'vat' => $vatRaw !== '' ? (int) $num($vatRaw) : null,
                 'base_price' => $num($get($row, 'base_price')),
                 'cost_price' => $cost !== '' ? $num($cost) : null,
                 // Thẻ khai bằng TÊN, cách nhau dấu phẩy. Không gửi khoá shop_ids:
@@ -532,7 +597,6 @@ class ProductController extends Controller
                 'tags' => array_values(array_filter(array_map('trim', preg_split('/[,;]+/', $get($row, 'the'))))),
                 'thumbnail' => '', 'status' => 'hidden',
                 'is_multi_variant' => ! empty($variants),
-                'meta_title' => '', 'meta_description' => '',
                 'variants' => $variants,
             ];
 
@@ -598,7 +662,6 @@ class ProductController extends Controller
             'unit_conversions.*.unit_id' => ['required', 'integer', 'min:1'],
             'unit_conversions.*.quantity' => ['required', 'numeric', 'gt:0'],
             'slug' => ['nullable', 'string', 'max:191'],
-            'short_description' => ['nullable', 'string', 'max:500'],
             'description' => ['nullable', 'string'],
             'status' => ['nullable', Rule::in(array_keys(self::STATUSES))],
             // Bốn công tắc ở cột trái hộp thoại.
@@ -619,8 +682,6 @@ class ProductController extends Controller
             'tags' => ['nullable', 'array'],
             'tags.*' => ['string', 'max:50'],
             'thumbnail' => ['nullable', 'string', 'max:255'],
-            'meta_title' => ['nullable', 'string', 'max:255'],
-            'meta_description' => ['nullable', 'string', 'max:320'],
             'variants' => ['nullable', 'array'],
             'variants.*.id' => ['nullable', 'integer'],
             'variants.*.sku' => ['nullable', 'string', 'max:64'],
@@ -628,6 +689,7 @@ class ProductController extends Controller
             'variants.*.name' => ['nullable', 'string', 'max:255'],
             'variants.*.price' => ['nullable', 'numeric', 'min:0'],
             'variants.*.cost_price' => ['nullable', 'numeric', 'min:0'],
+            'variants.*.is_default' => ['nullable', 'boolean'],
             'variants.*.attributes' => ['nullable', 'array'],
             'variants.*.attributes.*.attribute_id' => ['required', 'integer', 'min:1'],
             'variants.*.attributes.*.value_id' => ['required', 'integer', 'min:1'],
@@ -680,7 +742,6 @@ class ProductController extends Controller
             'name' => $v['name'],
             'slug' => filled($v['slug'] ?? null) ? $this->slugify($v['slug']) : $this->slugify($v['name']),
             'sku' => $sku,
-            'short_description' => $v['short_description'] ?? '',
             'description' => $v['description'] ?? '',
             'vat' => filled($v['vat'] ?? null) ? (int) $v['vat'] : null,
             'base_price' => (float) $v['base_price'],
@@ -701,8 +762,6 @@ class ProductController extends Controller
             'print_label' => $request->boolean('print_label'),
             'is_stock_deducted' => $request->boolean('is_stock_deducted'),
             'is_serial' => $request->boolean('is_serial'),
-            'meta_title' => $v['meta_title'] ?? '',
-            'meta_description' => $v['meta_description'] ?? '',
         ];
 
         // KHÔNG gửi is_featured: bản cũ không có ô này và màn hàng hoá cũng đã bỏ.
@@ -790,7 +849,7 @@ class ProductController extends Controller
 
         $out = [];
         $pos = 0;
-        foreach ($rows as $r) {
+        foreach ($rows as $i => $r) {
             $ten = trim((string) ($r['name'] ?? ''));
             $barcode = trim((string) ($r['barcode'] ?? ''));
 
@@ -824,6 +883,8 @@ class ProductController extends Controller
                 'barcode' => $barcode,
                 'name' => $ten,
                 'attributes' => $tohop,
+                // Biến thể được tick "Mặc định" — màn bán hàng chọn sẵn dòng này.
+                'is_default' => $request->boolean("variants.{$i}.is_default"),
                 'pos' => $pos++,
                 'price' => filled($price) ? (float) $price : null,
                 // null = theo giá vốn của mặt hàng cha, cùng quy ước với `price`.
@@ -925,11 +986,16 @@ class ProductController extends Controller
         if (is_string($statuses)) {
             $statuses = array_filter(explode(',', $statuses));
         }
-        $statuses = array_values(array_intersect((array) $statuses, array_keys(self::STATUSES)));
+        // Đường dẫn cũ mang thẳng `discontinued` — quy về "Không hoạt động" chứ
+        // đừng loại bỏ, không thì bấm vào link cũ ra bảng trống.
+        $statuses = array_values(array_unique(array_map(
+            fn ($s) => self::mucTrangThai((string) $s),
+            array_filter((array) $statuses, fn ($s) => in_array((string) $s, ['active', 'hidden', 'discontinued'], true))
+        )));
 
         // Đường dẫn cũ dùng ?status=hidden — vẫn đọc được.
         $status = (string) $request->query('status', '');
-        if ($status === 'inactive') {
+        if (in_array($status, ['inactive', 'discontinued'], true)) {
             $status = 'hidden';
         }
         if ($statuses === [] && array_key_exists($status, self::STATUSES)) {
@@ -941,7 +1007,8 @@ class ProductController extends Controller
             $sort = 'newest';
         }
 
-        $perPage = (int) $request->query('per_page', 20);
+        // Mặc định 10 dòng, cùng mức với các màn khác của khu v2.
+        $perPage = (int) $request->query('per_page', 10);
         if (! in_array($perPage, self::PER_PAGE_OPTIONS, true)) {
             $perPage = 20;
         }
@@ -969,6 +1036,18 @@ class ProductController extends Controller
         return [
             'keyword' => trim((string) $request->query('keyword', '')),
             'category_ids' => $cats,
+            // MẶC ĐỊNH LÀ CHI NHÁNH ĐANG LÀM VIỆC, không phải "tất cả".
+            //
+            // Cột Tồn kho và mặt hàng được bày ra đều đổi nghĩa theo chi nhánh, nên
+            // mở trang ra mà thấy hàng của mọi kho là nói dối người đang đứng ở một
+            // quầy. Muốn xem cả cửa hàng thì chọn "Tất cả chi nhánh" — lúc đó URL
+            // mang shop_id=0 và API hiểu là không cắt.
+            //
+            // `has()` chứ không phải giá trị: gửi `shop_id=0` là người dùng CỐ Ý
+            // chọn tất cả, khác hẳn với không gửi gì.
+            'shop_id' => $request->has('shop_id')
+                ? max(0, (int) $request->query('shop_id'))
+                : ApiClient::chiNhanhDangLam(),
             'location_id' => $location,
             'unit_id' => (int) $request->query('unit_id', 0),
             'statuses' => $statuses,
@@ -1000,6 +1079,12 @@ class ProductController extends Controller
         if ($f['unit_id'] > 0) {
             $q['unit_id'] = $f['unit_id'];
         }
+        // LUÔN gửi, kể cả số 0. Với API, `shop_id=0` nghĩa là KHÔNG cắt theo chi
+        // nhánh nào, còn THIẾU khoá này nghĩa là "chưa nói gì" và nó tự cắt theo
+        // chi nhánh đang làm việc. Trang này để mặc định "Tất cả chi nhánh" —
+        // hai mũi tên đổi thứ tự bày hàng cần nhìn thấy trọn danh sách — nên bỏ
+        // khoá đi là ô lọc ghi "Tất cả" mà bảng chỉ có hàng của một kho.
+        $q['shop_id'] = $f['shop_id'];
         if ($f['multi_variant'] !== '') {
             $q['multi_variant'] = $f['multi_variant'] === '1' ? 'true' : 'false';
         }
@@ -1008,7 +1093,11 @@ class ProductController extends Controller
         // và lọc "tạm ẩn" sẽ luôn ra rỗng.
         $q['all'] = 'true';
         if (! empty($f['statuses'])) {
-            $q['statuses'] = implode(',', $f['statuses']);
+            // Bung mức gộp trước khi hỏi API: chọn "Không hoạt động" phải kéo về cả
+            // hàng còn mang mức `discontinued` cũ.
+            $q['statuses'] = implode(',', array_unique(array_merge(
+                ...array_map(fn ($s) => self::STATUS_GOP[$s] ?? [$s], $f['statuses'])
+            )));
         }
 
         return $q;
@@ -1017,22 +1106,39 @@ class ProductController extends Controller
     /** Nạp các danh mục cho bộ lọc + hộp thoại rồi trả về view. */
     protected function render(array $products, array $meta, array $filters)
     {
-        return view('products.index', [
+        $categories = $this->loadCategories();
+        $locations = $this->loadLocations();
+        $units = $this->loadUnits();
+        $attributes = $this->loadAttributes();
+        $branches = $this->loadBranches();
+        $tags = $this->loadTags();
+
+        // Màn đã chuyển sang khu v2; view cũ ở resources/views/products giữ lại
+        // phòng khi cần đối chiếu (và vẫn là nơi đặt style/script dùng chung).
+        return view('v2::hang-hoa.index', [
             'products' => json_decode(json_encode($products), true) ?? [],
             'meta' => $meta,
             'filters' => $filters,
-            'categories' => $this->loadCategories(),
-            'locations' => $this->loadLocations(),
-            'units' => $this->loadUnits(),
-            'attributes' => $this->loadAttributes(),
-            'branches' => $this->loadBranches(),
-            'tags' => $this->loadTags(),
+            'categories' => $categories,
+            // Ô lọc nhóm chỉ bày nhóm ĐANG CÓ HÀNG — dùng lại đúng đường mà hộp
+            // lập phiếu mua đang dùng, khỏi thêm một đường API nữa.
+            'nhomCoHang' => $this->loadNhomCoHang(),
+            'locations' => $locations,
+            'units' => $units,
+            'attributes' => $attributes,
+            'branches' => $branches,
+            'tags' => $tags,
             'vatRates' => MucThue::boMuc($this->api),
+            // Ô thuế trong hộp thoại chia đôi: chọn LOẠI trước, ô "% VAT" chỉ bày
+            // mức của loại ấy — đúng hàng 4-2-2-4 của bản v2 cũ.
+            'loaiThue' => MucThue::loaiThue($this->api),
             'statuses' => self::STATUSES,
             'statusHints' => self::STATUS_HINTS,
             'sorts' => self::SORTS,
             'perPageOptions' => self::PER_PAGE_OPTIONS,
             'maTuSinh' => $this->maTuSinh(),
+            // Ô chọn nào rỗng thì kèm lý do, đừng để trắng trơn (xem napChoHop).
+            'napLoi' => $this->napLoi,
         ]);
     }
 
@@ -1064,19 +1170,84 @@ class ProductController extends Controller
         return false;
     }
 
-    /** Nhóm hàng hóa (phẳng) cho dropdown lọc — im lặng nếu API lỗi. */
-    protected function loadCategories(): array
+    /**
+     * Nhóm hàng CÓ ít nhất một mặt hàng, kèm số lượng.
+     *
+     * Nhóm rỗng bày ra ô lọc chỉ tổ để người dùng chọn vào rồi nhận một bảng
+     * trắng — đúng thứ ô lọc sinh ra để tránh.
+     */
+    protected function loadNhomCoHang(): array
     {
         try {
-            $res = $this->api->categories(all: true);
+            $res = $this->api->phieuMuaHangNhomHang();
             if ($res->successful()) {
                 return $res->json('data') ?? [];
             }
         } catch (\Throwable $e) {
-            Log::warning('Load categories for product filter failed', ['msg' => $e->getMessage()]);
+            Log::warning('Load nhom co hang failed', ['msg' => $e->getMessage()]);
         }
 
         return [];
+    }
+
+    /**
+     * Lý do vì sao một ô chọn trong hộp thoại rỗng, khoá theo tên ô.
+     *
+     * Trước đây mọi hàm nạp đều nuốt lỗi rồi trả mảng rỗng: ô chọn trắng trơn,
+     * người dùng không biết là "cửa hàng chưa khai gì" hay "máy chủ từ chối".
+     * Hai việc phải làm khác hẳn nhau, mà màn hình lại nói y như nhau.
+     *
+     * @var array<string, string>
+     */
+    protected array $napLoi = [];
+
+    /**
+     * Gọi API cho một ô chọn phụ, và GIỮ LẠI lý do nếu không lấy được.
+     *
+     * Vẫn trả mảng rỗng để trang mở ra được — khai hàng còn nhiều ô khác — nhưng
+     * ô rỗng ấy sẽ kèm một câu nói rõ vì sao.
+     */
+    protected function napChoHop(string $khoa, string $ten, \Closure $goi): array
+    {
+        try {
+            $res = $goi();
+            if ($res->successful()) {
+                return $res->json('data') ?? [];
+            }
+
+            // Ghi lại ĐƯỜNG GỌI + mã + câu trả lời của API. Một ô chọn rỗng nhìn
+            // từ trình duyệt thì ca nào cũng như ca nào; dòng log này là thứ duy
+            // nhất phân biệt được "thiếu quyền" với "sai chi nhánh" với "gọi
+            // nhầm đường".
+            Log::warning('O chon trong hop hang hoa rong', [
+                'khoa' => $khoa,
+                'url' => (string) $res->effectiveUri(),
+                'status' => $res->status(),
+                'body' => mb_substr((string) $res->body(), 0, 300),
+            ]);
+
+            // 403 là ca hay gặp nhất và cũng khó đoán nhất: tài khoản đăng nhập
+            // được, mở trang được, nhưng vai trò chưa được giao quyền xem mục ấy
+            // nên đúng cái ô chọn đó rỗng còn cả trang thì vẫn bình thường.
+            // Chép nguyên câu của API ra màn hình: nó nói rõ hơn hẳn mọi câu tự
+            // đặt ("Bạn không được giao việc này" / "Chi nhánh không thuộc cửa
+            // hàng này" là hai việc phải sửa khác hẳn nhau).
+            $cau = trim((string) $res->json('message'));
+            $this->napLoi[$khoa] = $res->status() === 403
+                ? 'Không đọc được '.$ten.': '.($cau !== '' ? $cau : 'máy chủ từ chối').' (403).'
+                : 'Không đọc được '.$ten.' — máy chủ trả '.$res->status().($cau !== '' ? ': '.$cau : '').'.';
+        } catch (\Throwable $e) {
+            Log::warning('Load '.$khoa.' for product form failed', ['msg' => $e->getMessage()]);
+            $this->napLoi[$khoa] = 'Không kết nối được máy chủ API để đọc '.$ten.'.';
+        }
+
+        return [];
+    }
+
+    /** Nhóm hàng hóa (phẳng) cho dropdown lọc và ô chọn nhóm trong hộp thoại. */
+    protected function loadCategories(): array
+    {
+        return $this->napChoHop('categories', 'nhóm hàng hoá', fn () => $this->api->categories(all: true));
     }
 
     /**
@@ -1088,31 +1259,13 @@ class ProductController extends Controller
      */
     protected function loadLocations(): array
     {
-        try {
-            $res = $this->api->viTri(onlyActive: true);
-            if ($res->successful()) {
-                return $res->json('data') ?? [];
-            }
-        } catch (\Throwable $e) {
-            Log::warning('Load locations for product form failed', ['msg' => $e->getMessage()]);
-        }
-
-        return [];
+        return $this->napChoHop('locations', 'vị trí', fn () => $this->api->viTri(onlyActive: true));
     }
 
     /** Đơn vị tính ĐANG BẬT — cùng quy ước với vị trí. */
     protected function loadUnits(): array
     {
-        try {
-            $res = $this->api->donViTinh(onlyActive: true);
-            if ($res->successful()) {
-                return $res->json('data') ?? [];
-            }
-        } catch (\Throwable $e) {
-            Log::warning('Load units for product form failed', ['msg' => $e->getMessage()]);
-        }
-
-        return [];
+        return $this->napChoHop('units', 'đơn vị tính', fn () => $this->api->donViTinh(onlyActive: true));
     }
 
     /**
@@ -1123,31 +1276,13 @@ class ProductController extends Controller
      */
     protected function loadBranches(): array
     {
-        try {
-            $res = $this->api->chiNhanh(onlyActive: true);
-            if ($res->successful()) {
-                return $res->json('data') ?? [];
-            }
-        } catch (\Throwable $e) {
-            Log::warning('Load branches for product form failed', ['msg' => $e->getMessage()]);
-        }
-
-        return [];
+        return $this->napChoHop('branches', 'chi nhánh', fn () => $this->api->chiNhanh(onlyActive: true));
     }
 
     /** Thẻ hàng hóa đang có — gợi ý cho ô "Thẻ" (gõ tên mới vẫn được). */
     protected function loadTags(): array
     {
-        try {
-            $res = $this->api->theHangHoa();
-            if ($res->successful()) {
-                return $res->json('data') ?? [];
-            }
-        } catch (\Throwable $e) {
-            Log::warning('Load product tags failed', ['msg' => $e->getMessage()]);
-        }
-
-        return [];
+        return $this->napChoHop('tags', 'thẻ hàng hoá', fn () => $this->api->theHangHoa());
     }
 
     /**
@@ -1158,16 +1293,7 @@ class ProductController extends Controller
      */
     protected function loadAttributes(): array
     {
-        try {
-            $res = $this->api->thuocTinh(onlyActive: true);
-            if ($res->successful()) {
-                return $res->json('data') ?? [];
-            }
-        } catch (\Throwable $e) {
-            Log::warning('Load attributes for product form failed', ['msg' => $e->getMessage()]);
-        }
-
-        return [];
+        return $this->napChoHop('attributes', 'thuộc tính', fn () => $this->api->thuocTinh(onlyActive: true));
     }
 
     /**

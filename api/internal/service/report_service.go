@@ -33,6 +33,9 @@ type ReportQuery struct {
 	GroupBy string // day | week | month
 	Sort    string // chỉ báo cáo sản phẩm dùng
 	Limit   int
+
+	// ShopID giới hạn báo cáo trong một chi nhánh. 0 = cả cửa hàng.
+	ShopID uint
 }
 
 // Ràng buộc khoảng xem. Trên 731 ngày (2 năm) thì biểu đồ theo ngày có hơn 700
@@ -83,7 +86,7 @@ func (s *reportService) normalize(q ReportQuery) (domain.ReportPeriod, string, i
 	}
 	// To của ReportPeriod là mốc MỞ: 00:00 của ngày sau ngày cuối kỳ, để đơn đặt
 	// lúc 23:59 ngày cuối vẫn được tính.
-	p := domain.ReportPeriod{From: from, To: to.AddDate(0, 0, 1)}
+	p := domain.ReportPeriod{From: from, To: to.AddDate(0, 0, 1), ShopID: q.ShopID}
 	if p.Days() > reportMaxDays {
 		p.From = p.To.AddDate(0, 0, -reportMaxDays)
 	}

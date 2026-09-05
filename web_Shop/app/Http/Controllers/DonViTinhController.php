@@ -29,6 +29,8 @@ use Illuminate\Support\Facades\Log;
  */
 class DonViTinhController extends Controller
 {
+    use \App\Http\Controllers\Concerns\TraLoiHopThoai;
+
     /** Nhãn NGẮN cho thanh điều hướng. */
     public const TITLE = 'Đơn vị tính';
 
@@ -37,7 +39,7 @@ class DonViTinhController extends Controller
 
     public const EMPTY_TEXT = 'Chưa có đơn vị tính nào. Bấm "Thêm đơn vị" để khai đơn vị đầu tiên.';
 
-    public const SO_DONG_MOI_TRANG = 20;
+    public const SO_DONG_MOI_TRANG = 10;
 
     public const MUC_SO_DONG = [10, 20, 30, 40, 50];
 
@@ -86,7 +88,7 @@ class DonViTinhController extends Controller
         $soTrang = max(1, (int) ceil(count($list) / $soDong));
         $trang = min(max(1, (int) $request->query('page', 1)), $soTrang);
 
-        $view = view('don-vi-tinh.index', [
+        $view = view('v2::don-vi-tinh.index', [
             'list' => array_slice($list, ($trang - 1) * $soDong, $soDong),
             'tong' => $tong,
             'dangDung' => $dangDung,
@@ -110,7 +112,8 @@ class DonViTinhController extends Controller
 
         return $this->send(
             fn () => $this->api->taoDonViTinh($data),
-            'Đã thêm đơn vị "'.$data['name'].'".'
+            'Đã thêm đơn vị "'.$data['name'].'".',
+            $request
         );
     }
 
@@ -121,7 +124,8 @@ class DonViTinhController extends Controller
 
         return $this->send(
             fn () => $this->api->suaDonViTinh($id, $data),
-            'Đã cập nhật đơn vị "'.$data['name'].'".'
+            'Đã cập nhật đơn vị "'.$data['name'].'".',
+            $request
         );
     }
 
@@ -140,16 +144,18 @@ class DonViTinhController extends Controller
             fn () => $this->api->doiTrangThaiDonViTinh($id, $bat),
             $bat
                 ? 'Đã bật lại đơn vị này.'
-                : 'Đã tắt đơn vị này — ô chọn đơn vị lúc khai mặt hàng sẽ thôi bày nó ra.'
+                : 'Đã tắt đơn vị này — ô chọn đơn vị lúc khai mặt hàng sẽ thôi bày nó ra.',
+            $request
         );
     }
 
     /** Xoá một đơn vị. */
-    public function destroy(int $id)
+    public function destroy(Request $request, int $id)
     {
         return $this->send(
             fn () => $this->api->xoaDonViTinh($id),
-            'Đã xoá đơn vị tính.'
+            'Đã xoá đơn vị tính.',
+            $request
         );
     }
 
@@ -182,7 +188,7 @@ class DonViTinhController extends Controller
             }
         }
 
-        $ve = redirect()->route('admin.don-vi-tinh.index');
+        $ve = $this->veDanhSach($request);
 
         return $hong > 0
             ? $ve->with('error', "Đã xoá {$ok} đơn vị; {$hong} đơn vị xoá không thành công.")
@@ -237,27 +243,37 @@ class DonViTinhController extends Controller
     }
 
     /** Gọi API rồi quay về bảng kèm thông báo. */
-    protected function send(callable $call, string $success)
+    protected function send(callable $call, string $success, ?Request $request = null)
     {
         try {
             $res = $call();
         } catch (\Throwable $e) {
             Log::error('Don vi tinh API call failed', ['msg' => $e->getMessage()]);
 
-            return back()->withInput()->with('error', 'Không kết nối được API. Vui lòng thử lại.');
+            return $this->traLoiHopThoai($request, false, 'Không kết nối được API. Vui lòng thử lại.');
         }
 
-        if ($res->successful()) {
-            return redirect()->route('admin.don-vi-tinh.index')->with('success', $success);
-        }
+        return $res->successful()
+            ? $this->traLoiHopThoai($request, true, $success, fn () => $this->veDanhSach($request))
+            : $this->traLoiHopThoai($request, false, $this->cauLoiApi($res, 'Thao tác không thành công.'));
+    }
 
-        // 422 trả lỗi theo từng ô; gom thành một câu vì hộp thoại đã đóng sau khi
-        // trang tải lại.
-        $loi = $res->json('errors');
-        $message = is_array($loi) && $loi
-            ? implode(' ', $loi)
-            : ($res->json('message') ?: 'Thao tác không thành công.');
+    /**
+     * Về đúng trang danh sách người dùng đang đứng.
+     *
+     * Hộp thoại gửi kèm `return` = đường dẫn hiện tại (kể cả bộ lọc và số trang).
+     * Không có nó thì lưu xong là văng về trang 1 không lọc gì — người đang sửa
+     * dở dòng thứ 40 phải lọc lại từ đầu sau mỗi lượt lưu.
+     *
+     * Chỉ nhận đường dẫn TƯƠNG ĐỐI (bắt đầu bằng '/'): nhận cả URL tuyệt đối là
+     * mở đường cho người ngoài dựng link đẩy người dùng sang trang khác.
+     */
+    protected function veDanhSach(?Request $request)
+    {
+        $ve = trim((string) ($request?->input('return') ?? ''));
 
-        return back()->withInput()->with('error', $message);
+        return $ve !== '' && str_starts_with($ve, '/')
+            ? redirect($ve)
+            : redirect()->route('admin.don-vi-tinh.index');
     }
 }

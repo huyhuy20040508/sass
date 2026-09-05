@@ -1,0 +1,436 @@
+/*
+   CSS CỦA KHU V2 — tách ra khỏi header.blade.php.
+
+   Bản gốc v2 để hai khối <style> này ngay trong thân trang. Để nguyên thì
+   trình duyệt vẽ thanh header bằng CSS nền trước (nền sáng), đọc tới giữa
+   <body> mới gặp mấy luật này rồi tô đen lại — ra đúng cái nháy khó chịu
+   lúc chuyển trang. Nằm ở đây thì nó được nạp trong <head>, header đen ngay
+   từ nét vẽ đầu tiên.
+
+   Khối 1: markup thật của header (dãy ô module, hàng tab, chuông…).
+   Khối 2: màu nền theo cửa hàng (layouts/css-overlay của v2).
+*/
+.header_content .branch select {
+        width: 300px;
+        border-radius: 30px;
+        border: 0;
+    }
+
+    .header-menu .navbar {
+        background-color: #486a7f;
+    }
+
+    .header-menu .dropdown-menu {
+        border: 0;
+        border-radius: 3px;
+        box-shadow: rgba(0, 0, 0, 0.24) 0px 3px 8px;
+        width: auto;
+    }
+
+    .header-menu .dropdown-menu li {
+        position: relative;
+    }
+
+    .header-menu .dropdown-menu .dropdown-item {
+        position: relative;
+        padding: 6px 10px;
+        font-size: 15px;
+        color: #444;
+    }
+
+    .header-menu .dropdown-menu .dropdown-item:hover {
+        background-color: #f1f1f1;
+    }
+
+    .header-menu .dropdown-menu .dropdown-item .fa-chevron-right {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        color: #b1b1b1;
+        font-size: 10px;
+    }
+
+    .header-menu .navbar-nav>.nav-item>.nav-link {
+        height: 100%;
+        display: flex;
+        align-items: center;
+        font-size: 15px;
+        color: #fff;
+        text-decoration: none;
+        text-transform: uppercase;
+        padding: 9px 15px;
+        border-radius: 4px;
+        white-space: nowrap;
+    }
+
+    .header-menu li a.show {
+        color: #1A2B58 !important;
+    }
+
+    .header-menu .dropdown-menu .submenu {
+        display: none;
+        position: absolute;
+        left: 100%;
+        top: -7px;
+        width: 250px;
+    }
+
+    .header-menu .dropdown-menu .submenu-left {
+        right: 100%;
+        left: auto;
+    }
+
+    .header-menu .dropdown-menu>li:hover {
+        background-color: #f1f1f1
+    }
+
+    .header-menu .dropdown-menu>li:hover>.submenu {
+        display: block;
+    }
+
+    .header-menu .dropdown-menu.show {
+        display: block !important;
+    }
+
+    #myDropdown.show {
+        display: block !important;
+    }
+
+    .list_report {
+        padding: 10px;
+        max-height: 400px;
+    }
+
+    .list_report .notification {
+        border: 1px solid #e0e0e0;
+        padding: 10px;
+        margin-bottom: 10px;
+        border-radius: 5px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        transition: all 0.2s ease;
+    }
+
+    .list_report .notification:hover {
+        border: 1px solid #d3d3d3;
+        background: #fff8ec;
+    }
+
+    .noti_delete {
+        cursor: pointer;
+    }
+
+    .noti_delete i {
+        color: rgb(148, 0, 0) !important;
+        font-size: 14px !important;
+    }
+
+    .noti_delete i:hover {
+        color: rgb(168, 21, 21) !important;
+    }
+
+    .list_report .content-noti {
+        flex-grow: 1;
+        cursor: pointer;
+    }
+
+    .list_report .content-noti p {
+        margin: 5px 0;
+        font-size: 13px;
+        line-height: 1.4;
+    }
+
+    .list_report .content-noti .time {
+        color: gray;
+        margin-bottom: 0;
+        font-size: 12px;
+        border: 0;
+    }
+
+    .list_report .notification .status {
+        width: 5px;
+        height: 40px;
+        margin-right: 10px;
+    }
+
+    .scroll-container {
+        overflow-y: auto;
+    }
+
+    .scroll-container::-webkit-scrollbar {
+        width: 6px;
+    }
+
+    .scroll-container::-webkit-scrollbar-track {
+        background: #f1f1f1;
+    }
+
+    .scroll-container::-webkit-scrollbar-thumb {
+        background: #888;
+        border-radius: 3px;
+    }
+
+    .scroll-container::-webkit-scrollbar-thumb:hover {
+        background: #555;
+    }
+
+    #form_btn button {
+        color: #333;
+        font-size: 12px;
+    }
+
+    #form_btn button:hover {
+        background-color: #f5f5f5;
+        border-radius: 4px;
+    }
+
+    .nav-employee,
+    .nav-cashier,
+    .nav-kitchen {
+        gap: 10px;
+    }
+
+    .nav-employee img,
+    .nav-cashier img,
+    .nav-kitchen img {
+        height: 25px;
+    }
+
+    .border_right {
+        border-right: 1px solid #67889C;
+    }
+
+    .border_left {
+        border-left: 1px solid #2D3C45;
+    }
+
+    .navbar-custom {
+        width: 420px;
+    }
+
+    /* Logo v2 là ảnh 139×43 nên không CSS nào ghìm cỡ; logo mình là SVG
+       1452×470, không kẹp chiều cao là nó phủ kín cả thanh.
+
+       52px: tệp SVG chừa sẵn ~14% lề trên dưới nên phần mực thật chỉ cao ~45px,
+       ngang tầm dãy ô module bên cạnh (~54px). Đặt 40px như trước thì chữ Sellio
+       chỉ còn ~23px — bé hơn hẳn mọi thứ khác trên thanh. */
+    .header_content .logo {
+        display: flex;
+        align-items: center;
+    }
+
+    .header_content .logo img {
+        height: 52px;
+        width: auto;
+        display: block;
+    }
+
+    .main-menu-container .main-menu-inner {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .main-menu-inner .icon-item {
+        border: 2px solid #284697 !important;
+        border-radius: 8px;
+        background-color: transparent !important;
+        ;
+        transition: border-color 0.3s ease, background-color 0.3s ease;
+        text-align: center;
+        min-width: 90px;
+        display: flex;
+    }
+
+    .main-menu-inner .icon-item a {
+        text-decoration: none;
+        width: 100%;
+        padding-top: 3px;
+    }
+
+    .main-menu-inner .icon-item .text-detail {
+        color: #ffffff !important;
+        font-size: 13px;
+        margin-top: 1px;
+        margin-bottom: 1px;
+        text-transform: uppercase;
+        white-space: nowrap;
+    }
+
+    /* Gốc để 30px cho bộ icon phẳng của v2. Bộ icon mình nhiều chi tiết hơn
+       (màn hình có biểu đồ, nhà kho, quầy nhân sự) nên 30px là bết lại —
+       nới lên 34px, ô module chỉ cao thêm 4px. */
+    .main-menu-inner .icon-item img {
+        width: 34px;
+        height: 34px;
+        object-fit: contain;
+    }
+
+    .main-menu-inner .icon-item:hover {
+        border-color: #F29220 !important;
+    }
+
+    .main-menu-inner .icon-item.active {
+        background-color: transparent !important;
+        border-color: #F29220 !important;
+    }
+
+    /* Sub menu dưới breadcrumb */
+    .sub-nav-wrapper {
+        padding: 6px 0 0;
+    }
+
+    .main-breadcrumb-container .menu_center {
+        /* background-color: #152D45; */
+    }
+
+    .sub-nav-inner {
+        display: flex;
+        max-width: 100%;
+        overflow-x: auto;
+        overflow-y: hidden;
+    }
+
+    .sub-nav-inner>* {
+        margin-right: 8px;
+        flex-shrink: 0;
+    }
+
+    .sub-nav-btn {
+        border-radius: 6px 6px 0 0;
+        padding: 8px;
+        font-size: 15px;
+        border: none;
+        background-color: #004DB9;
+        color: #ffffff;
+        text-decoration: none;
+        white-space: nowrap;
+        /* transition: all 0.2s ease; */
+        min-width: fit-content;
+        text-align: center;
+    }
+
+    .sub-nav-btn:hover {
+        filter: brightness(1.05);
+        color: #ffffff;
+        transition: filter 0.15s ease;
+    }
+
+    .sub-nav-btn.active {
+        background-color: #ffffff !important;
+        color: #000000;
+    }
+
+    @media (max-width: 991.98px) {
+        .main-menu-container {
+            display: none !important;
+        }
+    }
+
+
+    @media (max-width: 1735px) {
+        .sub-nav-inner {
+            overflow-x: auto !important;
+        }
+    }
+
+    @media (max-width: 1280px) {
+        .main-menu-container {
+            position: fixed;
+            top: 0;
+            left: -150px;
+            width: 150px;
+            height: 100vh;
+            background: #000000;
+            z-index: 9999;
+            transition: left 0.3s ease;
+            box-shadow: 2px 0 10px rgba(0, 0, 0, 0.15);
+            overflow-y: auto;
+        }
+
+        .main-menu-container .main-menu-inner {
+            width: 150px;
+        }
+
+        .main-menu-container.active {
+            left: 0;
+        }
+
+        .main-menu-inner {
+            flex-direction: column;
+            padding: 15px;
+        }
+
+        .sidebar-item {
+            margin-bottom: 12px;
+        }
+    }
+
+    @media (min-width: 1281px) {
+
+        #showMenu,
+        #closeMenu {
+            display: none;
+        }
+    }
+
+    @media (max-width: 991px) {
+
+        #showMenu,
+        #closeMenu {
+            display: none;
+        }
+    }
+
+.main-head-container, .main-menu-container, #closeMenu {
+        background-color: #000000;
+    }
+    .main-breadcrumb-container{
+        background-color: #000000;
+    }
+    .main-menu-inner .icon-item .text-detail{
+        color: #ffffff !important;
+    }
+    .main-menu-inner .icon-item:hover .text-detail,
+    .main-menu-inner .icon-item.active .text-detail{
+        color: #ffffff !important;
+    }
+    .action .profile{
+        color: #ffffff !important;
+    }
+    .main-breadcrumb-container .sub-nav-btn{
+        background-color: #0151B4;
+    }
+    .wrapper > .wrapper-container-fluid{
+        background: linear-gradient(to bottom, #000000, #0056BD, #0151B4);
+    }
+
+    /*
+       Gỡ mảng trắng mờ sau hàng tab — CHỈ phần nền, giữ nguyên viền.
+
+       style.css của v2 phủ rgba(255,255,255,.1) lên div.menu_center và .content,
+       cộng viền đen rgba(0,0,0,.5) 5px, thành một khung kính bao cả hàng tab lẫn
+       thân trang. Trên nền gradient xanh của v2 thì đẹp; nền của mình ở đoạn trên
+       là ĐEN nên 10% trắng ra vệt xám bệch (#1a1a1a) quanh tab.
+
+       Bỏ nền, GIỮ viền: đường kẻ đen bao quanh vẫn còn đúng như bản cũ.
+    */
+    div.menu_center,
+    .wrapper > .wrapper-container-fluid .content {
+        background-color: transparent !important;
+    }
+
+/*
+   Giữ chỗ cho ô chọn nhiều trước khi select2 tráo hình.
+
+   Ô "Người tạo" khai là <select multiple>, nên lúc trang vừa vẽ xong nó là một
+   hộp danh sách cao ~90px; select2 chạy sau mới thu về hộp 38px, kéo cả cột lọc
+   tụt lên một nhịp — đúng cái giật lúc vào trang. Ghìm sẵn đúng chiều cao mà
+   select2 sẽ dựng, và không vẽ gì trong lúc chờ (visibility: hidden vẫn chiếm
+   chỗ, khác display:none).
+*/
+select.select2:not(.select2-hidden-accessible) {
+    height: 32px;
+    visibility: hidden;
+}

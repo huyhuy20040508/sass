@@ -25,6 +25,12 @@ class EnsureAdminAuthenticated
 
     public function handle(Request $request, Closure $next): Response
     {
+        // Khu quản trị luôn tiếng Việt (lang/vi/message.php bê từ bản v2). Đặt ở
+        // đây chứ không setLocale trong Blade: Blade dựng section của trang TRƯỚC
+        // layout, nên lệnh nằm trong layout luôn chạy muộn một nhịp và chữ trong
+        // phần nội dung sẽ hiện ra khoá `message.xxx`.
+        app()->setLocale('vi');
+
         $token = session('api.access_token');
         $user = session('api.user');
         $role = $user ? data_get($user, 'role.name') : null;

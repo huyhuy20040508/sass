@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\TraLoiHopThoai;
 use App\Services\ApiClient;
 use App\Services\ImageStore;
+use Illuminate\Http\Client\Response;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
@@ -14,16 +16,17 @@ use Illuminate\Validation\Rule;
  * "Cửa hàng" trong cả dự án là một khách đã mua phần mềm; "chi nhánh" là điểm
  * bán nằm TRONG cửa hàng đó (bảng `shops` bên API).
  *
- * Bộ cột và chức năng lấy của màn Quản lý chi nhánh bản cũ v2 (hồ sơ đầy đủ, ẩn
- * /hiện cột, xuất file, công tắc trạng thái); chỗ lưu của chúng ở migration
- * 0033. Bố cục thì theo khuôn trang danh sách hiện tại, không chép bộ lọc dọc
- * của v2. Cột "Sử dụng HĐĐT" chưa nối được: hoá đơn điện tử cần bảng riêng và
- * tích hợp nhà cung cấp.
+ * Màn dựng theo khuôn v2 (system/branch) — view ở v2/chi-nhanh, xem chú thích
+ * đầu tệp đó. Bộ cột và chức năng cũng lấy của v2: hồ sơ đầy đủ, ẩn/hiện cột,
+ * xuất file, công tắc trạng thái, hoá đơn điện tử; chỗ lưu của chúng ở
+ * migration 0033.
  *
  * Nhóm route `admin.manage` — nhân viên không vào. Ngoại lệ là `dangLam`.
  */
 class ChiNhanhController extends Controller
 {
+    use TraLoiHopThoai;
+
     /** Nhãn NGẮN cho thanh điều hướng. */
     public const TITLE = 'Quản lý chi nhánh';
 
@@ -110,7 +113,7 @@ class ChiNhanhController extends Controller
         $soTrang = max(1, (int) ceil(count($list) / $soDong));
         $trang = min(max(1, (int) $request->query('page', 1)), $soTrang);
 
-        $view = view('chi-nhanh.index', [
+        $view = view('v2::chi-nhanh.index', [
             'list' => array_slice($list, ($trang - 1) * $soDong, $soDong),
             'tatCa' => $tatCa,
             'tong' => $tong,
@@ -124,7 +127,7 @@ class ChiNhanhController extends Controller
             ],
             'filters' => $filters,
             // Chi nhánh đang đứng — bảng đánh dấu và khoá công tắc của nó.
-            'dangLamId' => (int) session(ApiClient::KHOA_CHI_NHANH, 0),
+            'dangLamId' => ApiClient::chiNhanhDangLam(),
         ]);
 
         return $error ? $view->with('error', $error) : $view;
@@ -175,11 +178,11 @@ class ChiNhanhController extends Controller
         } catch (\Throwable $e) {
             Log::error('Load chi nhanh detail failed', ['id' => $id, 'msg' => $e->getMessage()]);
 
-            return back()->with('error', 'Không kết nối được API. Vui lòng thử lại.');
+            return $this->traLoiHopThoai($request, false, 'Không kết nối được API. Vui lòng thử lại.');
         }
 
         if (! $res->successful()) {
-            return back()->with('error', $res->json('message') ?: 'Không đọc được chi nhánh này.');
+            return $this->traLoiHopThoai($request, false, $res->json('message') ?: 'Không đọc được chi nhánh này.');
         }
 
         $cn = $res->json('data') ?? [];
@@ -202,15 +205,15 @@ class ChiNhanhController extends Controller
      */
     public function dangLam(Request $request)
     {
-        $du = $request->validate(['id' => ['required', 'integer', 'min:0']]);
+        $du = $request->validate(['id' => ['required', 'integer', 'min:1']]);
 
-        // 0 = xem gộp mọi chi nhánh: bỏ hẳn khoá khỏi phiên để ApiClient không
-        // gửi header nào cả.
-        if ((int) $du['id'] === 0) {
-            session()->forget(ApiClient::KHOA_CHI_NHANH);
-        } else {
-            session([ApiClient::KHOA_CHI_NHANH => (int) $du['id']]);
-        }
+        // KHÔNG còn nhận id = 0 ("xem gộp mọi chi nhánh"). Trạng thái ấy nghe thì
+        // vô hại nhưng hai nửa hệ thống hiểu nó ngược nhau: màn kho cộng gộp cả
+        // cửa hàng, còn lượt GHI thì rơi vào một chi nhánh do API đoán — nhập
+        // hàng cho chi nhánh mới mà hàng chui vào chi nhánh cũ. Muốn xem số liệu
+        // của cả cửa hàng thì dùng ô lọc "Chi nhánh" ngay trong từng màn, chỗ đó
+        // chỉ ảnh hưởng tới lượt ĐỌC.
+        session([ApiClient::KHOA_CHI_NHANH => (int) $du['id']]);
 
         return back();
     }
@@ -489,40 +492,60 @@ class ChiNhanhController extends Controller
     }
 
     /**
-     * Gọi API rồi quay lại trang danh sách kèm một câu.
+     * Gọi API rồi trả lời theo kiểu người gọi.
      *
-     * In `message` của API nguyên văn khi hỏng: trùng mã, toạ độ sai khuôn, chi
-     * nhánh cuối cùng — mỗi câu chỉ ra một việc phải làm khác nhau.
+     * Hộp thoại của màn v2 gọi bằng AJAX kèm `Accept: application/json` nên
+     * nhận {success, message} và tự quyết định đóng hay giữ lại; lượt gửi form
+     * thường vẫn quay về danh sách kèm toast như cũ.
      */
     protected function send(callable $call, string $success)
     {
+        $request = request();
+
         try {
             $res = $call();
         } catch (\Throwable $e) {
             Log::error('Chi nhanh API call failed', ['msg' => $e->getMessage()]);
 
-            return back()->withInput()->with('error', 'Không kết nối được API. Vui lòng thử lại.');
+            return $this->traLoiHopThoai($request, false, 'Không kết nối được API. Vui lòng thử lại.');
         }
 
-        if ($res->successful()) {
-            return redirect()->route('admin.chi-nhanh.index')->with('success', $success);
-        }
+        return $res->successful()
+            ? $this->traLoiHopThoai($request, true, $success, fn () => $this->veDanhSach($request))
+            : $this->traLoiHopThoai($request, false, $this->cauLoi($res));
+    }
 
-        // 422 trả lỗi theo từng ô; gom thành một câu vì hộp thoại đã đóng sau
-        // khi trang tải lại, không còn ô nào để gắn lỗi vào.
-        //
-        // Bỏ khoá `ma` trước khi gom: 403 của API kèm theo một MÃ MÁY ĐỌC
-        // (THIEU_QUYEN, CUA_HANG_KHOA) nằm trong `errors`, còn câu cho người đọc
-        // thì ở `message`. Gom cả `ma` vào thì toast in ra đúng chữ
-        // "THIEU_QUYEN" — đã gặp thật khi chạy thử.
+    /** Về đúng URL cũ nếu lượt gửi có kèm `return`. */
+    protected function veDanhSach(Request $request)
+    {
+        $ve = trim((string) $request->input('return', ''));
+
+        return $ve !== '' && str_starts_with($ve, '/')
+            ? redirect($ve)
+            : redirect()->route('admin.chi-nhanh.index');
+    }
+
+    /**
+     * Câu lỗi đọc được từ phản hồi API.
+     *
+     * 422 trả lỗi theo từng ô; gom thành một câu vì chỉ bắn được một dòng toast.
+     * In `message` nguyên văn khi không có: trùng mã, toạ độ sai khuôn, chi
+     * nhánh cuối cùng — mỗi câu chỉ ra một việc phải làm khác nhau.
+     *
+     * Bỏ khoá `ma` trước khi gom: 403 của API kèm theo một MÃ MÁY ĐỌC
+     * (THIEU_QUYEN, CUA_HANG_KHOA) nằm trong `errors`, còn câu cho người đọc thì
+     * ở `message`. Gom cả `ma` vào thì toast in ra đúng chữ "THIEU_QUYEN" — đã
+     * gặp thật khi chạy thử.
+     */
+    protected function cauLoi(Response $res): string
+    {
         $loi = $res->json('errors');
         if (is_array($loi)) {
             unset($loi['ma']);
         }
-        $message = is_array($loi) && $loi
+
+        return is_array($loi) && $loi
             ? implode(' ', $loi)
             : ($res->json('message') ?: 'Thao tác không thành công.');
-
-        return back()->withInput()->with('error', $message);
     }
 }

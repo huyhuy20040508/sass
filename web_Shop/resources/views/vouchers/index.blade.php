@@ -369,6 +369,27 @@
                             </p>
                         </div>
                     </div>
+
+                    {{-- ---- Chi nhánh áp dụng ----
+                         Bỏ trống là HỢP LỆ và có nghĩa "dùng được ở mọi kho" — cùng
+                         quy ước với ô "Chi nhánh" của mặt hàng. --}}
+                    @if(count($chiNhanh) > 1)
+                        <div style="margin-top: 16px">
+                            <label class="vch-field-label">
+                                Chi nhánh áp dụng
+                                <span class="vch-hint" id="vchShopSum" style="margin-left: 6px">Mọi chi nhánh</span>
+                            </label>
+                            <div style="display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 6px">
+                                @foreach($chiNhanh as $cn)
+                                    <label style="display: inline-flex; align-items: center; gap: 6px; cursor: pointer">
+                                        <input type="checkbox" class="vch-shop" name="shop_ids[]" value="{{ $cn['id'] ?? 0 }}">
+                                        <span>{{ $cn['name'] ?? '' }}</span>
+                                    </label>
+                                @endforeach
+                            </div>
+                            <p class="vch-hint">Để trống là mã dùng được ở <b>mọi chi nhánh</b>.</p>
+                        </div>
+                    @endif
                 </div>
 
                 <div class="vch-modal-foot">
@@ -841,6 +862,10 @@
                 $public.value = isEdit ? (v.is_public ? '1' : '0') : '0';
                 syncPublic();
 
+                const shops = new Set((isEdit ? v.shop_ids : []) || []);
+                oShop().forEach((cb) => { cb.checked = shops.has(Number(cb.value)); });
+                syncShop();
+
                 // Hai mốc thời gian được phép bỏ trống, nên KHÔNG đổ sẵn giá trị mặc định
                 // cho voucher mới: mã dùng được ngay và không hết hạn là lựa chọn đúng
                 // trong đa số trường hợp, còn đổ sẵn là bắt người dùng đi xoá.
@@ -865,6 +890,24 @@
                 $overlay.style.display = 'flex';
                 setTimeout(() => $code.focus(), 30);
             }
+
+            // Rỗng thì nói thẳng "Mọi chi nhánh": ở ô này "chưa chọn gì" nghĩa là
+            // dùng được khắp nơi, ngược hẳn với cảm giác thường gặp.
+            const oShop = () => Array.from(form.querySelectorAll('.vch-shop'));
+
+            function syncShop() {
+                const n = oShop().filter((cb) => cb.checked).length;
+                const $sum = document.getElementById('vchShopSum');
+                if ($sum) {
+                    $sum.textContent = n === 0 ? 'Mọi chi nhánh' : n + ' chi nhánh';
+                }
+            }
+
+            form.addEventListener('change', (e) => {
+                if (e.target.classList && e.target.classList.contains('vch-shop')) {
+                    syncShop();
+                }
+            });
 
             document.getElementById('vchAddBtn').addEventListener('click', () => openForm('add', null));
 

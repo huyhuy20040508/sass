@@ -92,6 +92,7 @@ class SettingController extends Controller
         'bank_account_name' => 'Gõ đúng như trên app ngân hàng (thường là chữ IN HOA không dấu) để khách đối chiếu trước khi bấm chuyển.',
         'bank_qr_image' => 'Ảnh QR chụp từ app ngân hàng, hiện ngay cạnh số tài khoản ở trang đặt hàng thành công. Bỏ trống thì khách nhập tay số tài khoản.',
         'bank_transfer_note' => 'Một câu dặn thêm hiện dưới khối chuyển khoản, VD "Chuyển xong nhắn Zalo giúp shop để xác nhận nhanh". Nội dung chuyển khoản thì hệ thống tự điền mã đơn, không cần dặn.',
+        'tax_direct' => 'Bật khi cửa hàng là hộ kinh doanh nộp thuế theo phương pháp TRỰC TIẾP — không có đường VAT đầu vào. Bật lên thì màn Phiếu mua hàng bỏ hẳn ô thuế của phiếu, ba cột % VAT / Tiền VAT / Tổng sau VAT trên lưới hàng và hai dòng thuế ở khối tiền; phiếu lập sau đó luôn ghi thuế 0. Phiếu đã lưu trước đó giữ nguyên con số cũ.',
     ];
 
     /**
@@ -107,6 +108,7 @@ class SettingController extends Controller
         'social' => 'Mạng xã hội',
         'methods' => 'Hình thức nhận tiền',
         'bank' => 'Tài khoản nhận chuyển khoản',
+        'tax' => 'Chế độ thuế',
     ];
 
     /**
@@ -260,7 +262,7 @@ class SettingController extends Controller
         if ($res->successful()) {
             // Các trang khác (Tồn kho, Tổng quan) đọc cấu hình qua bản cache 5 phút.
             // Xoá ngay để người vừa bấm Lưu không phải chờ mới thấy hiệu lực.
-            Cache::forget(ApiClient::SETTINGS_CACHE_KEY);
+            Cache::forget(ApiClient::khoaCacheSettings());
 
             return redirect()->route('admin.settings.page', $group)
                 ->with('success', 'Đã lưu '.mb_strtolower(self::GROUPS[$group]['title']).'.');
@@ -316,7 +318,12 @@ class SettingController extends Controller
             $f['hint'] = self::HINTS[$key] ?? '';
             $f['unit'] = self::UNITS[$key] ?? '';
             $f['is_money'] = in_array($key, self::MONEY_KEYS, true);
-            $f['options'] = $this->options($key);
+            // Khoá dạng select mang sẵn danh sách hợp lệ từ registry bên API —
+            // giữ nguyên chứ không chép lại ở đây: chép là hai bên trôi khỏi nhau
+            // rồi người dùng chọn một dòng mà API từ chối.
+            $f['options'] = ($f['type'] ?? '') === 'select'
+                ? array_values((array) ($f['options'] ?? []))
+                : $this->options($key);
 
             $code = (string) ($f['section'] ?? '');
             $sections[$code]['fields'][] = $f;

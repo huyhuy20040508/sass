@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200" fill="none">
+    <rect width="200" height="200" rx="12" fill="#EAF3FB"/>
+    <!-- Màn hình -->
+    <rect x="40" y="42" width="120" height="82" rx="8" fill="#FFFFFF" stroke="#D2DAE6" stroke-width="2"/>
+    <rect x="40" y="42" width="120" height="14" rx="7" fill="#1B2C58"/>
+    <!-- Biểu đồ cột -->
+    <rect x="56" y="94" width="14" height="20" rx="2" fill="#2D9CDB"/>
+    <rect x="76" y="82" width="14" height="32" rx="2" fill="#27AE60"/>
+    <rect x="96" y="72" width="14" height="42" rx="2" fill="#FF8800"/>
+    <!-- Đường tăng trưởng -->
+    <path d="M120 100l12-12 8 6 12-16" stroke="#F04430" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    <circle cx="152" cy="78" r="3.5" fill="#F04430"/>
+    <!-- Chân màn hình -->
+    <rect x="92" y="124" width="16" height="12" fill="#D2DAE6"/>
+    <rect x="72" y="136" width="56" height="10" rx="5" fill="#1B2C58"/>
+    <!-- Bánh răng -->
+    <g transform="translate(146 128)">
+        <circle cx="0" cy="0" r="13" fill="#2D9CDB"/>
+        <circle cx="0" cy="0" r="5" fill="#EAF3FB"/>
+        <g fill="#2D9CDB">
+            <rect x="-2.5" y="-19" width="5" height="7" rx="1.5"/>
+            <rect x="-2.5" y="12" width="5" height="7" rx="1.5"/>
+            <rect x="12" y="-2.5" width="7" height="5" rx="1.5"/>
+            <rect x="-19" y="-2.5" width="7" height="5" rx="1.5"/>
+            <rect x="8" y="-15" width="5" height="7" rx="1.5" transform="rotate(45 10.5 -11.5)"/>
+            <rect x="-13" y="8" width="5" height="7" rx="1.5" transform="rotate(45 -10.5 11.5)"/>
+            <rect x="8" y="8" width="5" height="7" rx="1.5" transform="rotate(-45 10.5 11.5)"/>
+            <rect x="-13" y="-15" width="5" height="7" rx="1.5" transform="rotate(-45 -10.5 -11.5)"/>
+        </g>
+    </g>
+</svg>

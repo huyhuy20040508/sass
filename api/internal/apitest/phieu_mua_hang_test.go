@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 )
 
@@ -27,10 +28,23 @@ type phieuMua struct {
 	TotalAmount   float64 `json:"total_amount"`
 	PaidAmount    float64 `json:"paid_amount"`
 	PaymentStatus string  `json:"payment_status"`
+	PaymentMethod string  `json:"payment_method"`
+	IsDebt        bool    `json:"is_debt"`
+	DebtDueDate   *string `json:"debt_due_date"`
+	DebtName      string  `json:"debt_contact_name"`
+	DebtPhone     string  `json:"debt_contact_phone"`
+	PayAttachment string  `json:"payment_attachment"`
 	SupplierName  string  `json:"supplier_name"`
 	CanEdit       bool    `json:"can_edit"`
 	CanApprove    bool    `json:"can_approve"`
-	Items         []struct {
+	CanPay        bool    `json:"can_pay"`
+	Payments      []struct {
+		Amount        float64 `json:"amount"`
+		PaidAfter     float64 `json:"paid_after"`
+		PaymentMethod string  `json:"payment_method"`
+		Note          string  `json:"note"`
+	} `json:"payments"`
+	Items []struct {
 		Quantity     int     `json:"quantity"`
 		BaseQuantity int     `json:"base_quantity"`
 		UnitRatio    float64 `json:"unit_ratio"`
@@ -48,6 +62,26 @@ func lapPhieu(t *testing.T, h *heThong, token string, than map[string]any) (int,
 	t.Helper()
 
 	res := h.goi(t, token, http.MethodPost, duongPhieuMua, than)
+
+	return doPhieu(res)
+}
+
+// lapPhieuTaiChiNhanh lập phiếu KÈM header chi nhánh đang làm việc.
+//
+// Cần từ lúc đường ghi thôi tự đoán chi nhánh: cửa hàng có từ hai chi nhánh trở
+// lên mà không khai mình đứng ở đâu thì API trả 409 chứ không lặng lẽ ghi vào
+// chi nhánh id nhỏ nhất nữa (xem repository.chiNhanhCuaRequest).
+func lapPhieuTaiChiNhanh(
+	t *testing.T, h *heThong, token string, shopID uint, than map[string]any,
+) (int, phieuMua) {
+	t.Helper()
+
+	res := h.goiChiNhanh(t, token, shopID, http.MethodPost, duongPhieuMua, than)
+
+	return doPhieu(res)
+}
+
+func doPhieu(res traLoi) (int, phieuMua) {
 
 	var body struct {
 		Data phieuMua `json:"data"`
@@ -256,9 +290,18 @@ func TestPhieuMua_ThanhToanVaCongNo(t *testing.T) {
 
 	duong := fmt.Sprintf("%s/%d/thanh-toan", duongPhieuMua, p.ID)
 
+	if got := docPhieu(t, h, a.token, p.ID); !got.CanPay {
+		t.Fatalf("phiếu đã duyệt chưa trả đồng nào phải cho trả tiền")
+	}
+
 	res := h.goi(t, a.token, http.MethodPost, duong, map[string]any{"paid_amount": 40000})
 	if res.ma != http.StatusOK {
 		t.Fatalf("ghi nhận thanh toán trả %d\n%s", res.ma, catBot(res.than))
+	}
+	// Trả một phần rồi thì khoản nợ ấy thuộc về màn CÔNG NỢ — màn phiếu mua
+	// không bày nút trả tiếp nữa, không thì hai chỗ cùng sửa một khoản nợ.
+	if got := docPhieu(t, h, a.token, p.ID); got.CanPay {
+		t.Fatalf("phiếu đã trả một phần KHÔNG được bày nút thanh toán nữa")
 	}
 	if got := docPhieu(t, h, a.token, p.ID); got.PaymentStatus != "partial" || got.PaidAmount != 40000 {
 		t.Fatalf("trả 40.000/100.000 phải là partial, nhận %q với %v", got.PaymentStatus, got.PaidAmount)
@@ -275,6 +318,188 @@ func TestPhieuMua_ThanhToanVaCongNo(t *testing.T) {
 	res = h.goi(t, a.token, http.MethodPost, duong, map[string]any{"paid_amount": 999999})
 	if res.ma != http.StatusUnprocessableEntity {
 		t.Fatalf("trả quá tổng tiền phải trả 422, nhận %d\n%s", res.ma, catBot(res.than))
+	}
+}
+
+// TestPhieuMua_SoTraTien — sổ từng lượt trả tiền, bảng `purchase_payments`.
+//
+// `paid_amount` chỉ nói TỔNG. Sổ này nói tổng ấy tới từ mấy lượt, mỗi lượt bao
+// nhiêu và bằng hình thức gì. Bất biến phải giữ: SUM(amount) = paid_amount.
+func TestPhieuMua_SoTraTien(t *testing.T) {
+	h := dungHeThong(t)
+	a, _ := haiCuaHang(t, h)
+
+	_, p := lapPhieu(t, h, a.token, map[string]any{
+		"supplier_name": "Cong ty " + a.vet,
+		"items":         []any{dongHang(a.bienThe, 10, 10000)},
+	})
+	duyet(t, h, a, p.ID)
+
+	duong := fmt.Sprintf("%s/%d/thanh-toan", duongPhieuMua, p.ID)
+
+	if got := docPhieu(t, h, a.token, p.ID); len(got.Payments) != 0 {
+		t.Fatalf("phiếu chưa trả đồng nào thì sổ phải rỗng, nhận %d dòng", len(got.Payments))
+	}
+
+	// Lượt một: trả 40.000 bằng tiền mặt.
+	res := h.goi(t, a.token, http.MethodPost, duong, map[string]any{
+		"paid_amount": 40000, "payment_method": "cash", "note": "dot 1",
+		"is_debt": true, "debt_due_date": "2026-12-31",
+		"debt_contact_name": "Anh Ba", "debt_contact_phone": "0900000000",
+	})
+	if res.ma != http.StatusOK {
+		t.Fatalf("lượt trả một trả %d\n%s", res.ma, catBot(res.than))
+	}
+
+	// Lượt hai: sửa mỗi hạn nợ, KHÔNG đụng tới tiền — sổ không được đẻ thêm dòng.
+	res = h.goi(t, a.token, http.MethodPost, duong, map[string]any{
+		"paid_amount": 40000, "payment_method": "cash",
+		"is_debt": true, "debt_due_date": "2027-01-31",
+		"debt_contact_name": "Anh Ba", "debt_contact_phone": "0911111111",
+	})
+	if res.ma != http.StatusOK {
+		t.Fatalf("sửa hạn nợ trả %d\n%s", res.ma, catBot(res.than))
+	}
+
+	got := docPhieu(t, h, a.token, p.ID)
+	if len(got.Payments) != 1 {
+		t.Fatalf("sửa hạn nợ KHÔNG được đẻ dòng sổ mới; nhận %d dòng", len(got.Payments))
+	}
+
+	// Lượt ba: trả nốt bằng chuyển khoản.
+	res = h.goi(t, a.token, http.MethodPost, duong, map[string]any{
+		"paid_amount": 100000, "payment_method": "transfer", "note": "dot 2",
+	})
+	if res.ma != http.StatusOK {
+		t.Fatalf("trả nốt trả %d\n%s", res.ma, catBot(res.than))
+	}
+
+	got = docPhieu(t, h, a.token, p.ID)
+	if len(got.Payments) != 2 {
+		t.Fatalf("sổ phải có đúng hai lượt trả, nhận %d", len(got.Payments))
+	}
+
+	// Cũ -> mới, mỗi dòng mang số CHÊNH và số luỹ kế sau lượt ấy.
+	if got.Payments[0].Amount != 40000 || got.Payments[0].PaidAfter != 40000 {
+		t.Fatalf("lượt một phải là 40.000 / còn 40.000, nhận %v / %v",
+			got.Payments[0].Amount, got.Payments[0].PaidAfter)
+	}
+	if got.Payments[1].Amount != 60000 || got.Payments[1].PaidAfter != 100000 {
+		t.Fatalf("lượt hai phải là CHÊNH 60.000 / luỹ kế 100.000, nhận %v / %v",
+			got.Payments[1].Amount, got.Payments[1].PaidAfter)
+	}
+	if got.Payments[0].PaymentMethod != "cash" || got.Payments[1].PaymentMethod != "transfer" {
+		t.Fatalf("hình thức từng lượt phải giữ riêng, nhận %q / %q",
+			got.Payments[0].PaymentMethod, got.Payments[1].PaymentMethod)
+	}
+	if got.Payments[0].Note != "dot 1" || got.Payments[1].Note != "dot 2" {
+		t.Fatalf("ghi chú từng lượt phải giữ riêng, nhận %q / %q",
+			got.Payments[0].Note, got.Payments[1].Note)
+	}
+
+	// Bất biến: cộng cả sổ đúng bằng số luỹ kế trên phiếu.
+	var cong float64
+	for _, x := range got.Payments {
+		cong += x.Amount
+	}
+	if cong != got.PaidAmount {
+		t.Fatalf("SUM(amount)=%v phải bằng paid_amount=%v", cong, got.PaidAmount)
+	}
+
+	// Lượt CHỮA lại con số ghi sai phải ra số ÂM, không phải một lượt trả mới.
+	res = h.goi(t, a.token, http.MethodPost, duong, map[string]any{"paid_amount": 70000})
+	if res.ma != http.StatusOK {
+		t.Fatalf("chữa lại số đã trả trả %d\n%s", res.ma, catBot(res.than))
+	}
+
+	got = docPhieu(t, h, a.token, p.ID)
+	if len(got.Payments) != 3 || got.Payments[2].Amount != -30000 {
+		t.Fatalf("lượt chữa phải ghi -30.000, nhận %d dòng với %v",
+			len(got.Payments), got.Payments[len(got.Payments)-1].Amount)
+	}
+}
+
+// TestPhieuMua_GhiNo — thoả thuận cho nợ, dựng theo hộp thanh toán của bản v2.
+//
+// Bên v2 mọi luật dưới đây chỉ nằm trong JS của hộp thoại, nên gọi thẳng đường
+// API là ghi được một khoản nợ không hạn và không biết đòi ai. Bài này canh cho
+// server tự giữ lấy luật của nó.
+func TestPhieuMua_GhiNo(t *testing.T) {
+	h := dungHeThong(t)
+	a, _ := haiCuaHang(t, h)
+
+	_, p := lapPhieu(t, h, a.token, map[string]any{
+		"supplier_name": "Cong ty " + a.vet,
+		"items":         []any{dongHang(a.bienThe, 10, 10000)},
+	})
+	duyet(t, h, a, p.ID)
+
+	duong := fmt.Sprintf("%s/%d/thanh-toan", duongPhieuMua, p.ID)
+
+	// Thiếu hạn nợ.
+	res := h.goi(t, a.token, http.MethodPost, duong, map[string]any{
+		"paid_amount": 40000, "is_debt": true,
+		"debt_contact_name": "Anh Ba", "debt_contact_phone": "0900000000",
+	})
+	if res.ma != http.StatusUnprocessableEntity {
+		t.Fatalf("ghi nợ không hẹn ngày phải trả 422, nhận %d\n%s", res.ma, catBot(res.than))
+	}
+
+	// Thiếu người đại diện.
+	res = h.goi(t, a.token, http.MethodPost, duong, map[string]any{
+		"paid_amount": 40000, "is_debt": true, "debt_due_date": "2026-12-31",
+	})
+	if res.ma != http.StatusUnprocessableEntity {
+		t.Fatalf("ghi nợ không có người đòi phải trả 422, nhận %d\n%s", res.ma, catBot(res.than))
+	}
+
+	// Trả đủ mà vẫn bật ghi nợ — hai việc chỏi nhau, không còn đồng nào để nợ.
+	res = h.goi(t, a.token, http.MethodPost, duong, map[string]any{
+		"paid_amount": 100000, "is_debt": true, "debt_due_date": "2026-12-31",
+		"debt_contact_name": "Anh Ba", "debt_contact_phone": "0900000000",
+	})
+	if res.ma != http.StatusUnprocessableEntity {
+		t.Fatalf("trả đủ mà ghi nợ phải trả 422, nhận %d\n%s", res.ma, catBot(res.than))
+	}
+
+	// Đủ cả thì nhận, và giữ đúng từng trường.
+	res = h.goi(t, a.token, http.MethodPost, duong, map[string]any{
+		"paid_amount": 40000, "is_debt": true, "debt_due_date": "2026-12-31",
+		"debt_contact_name": "Anh Ba", "debt_contact_phone": "0900000000",
+		"payment_method": "transfer", "payment_attachment": "uploads/uy-nhiem-chi.jpg",
+	})
+	if res.ma != http.StatusOK {
+		t.Fatalf("ghi nợ đủ giấy tờ trả %d\n%s", res.ma, catBot(res.than))
+	}
+
+	got := docPhieu(t, h, a.token, p.ID)
+	if !got.IsDebt || got.DebtDueDate == nil || !strings.HasPrefix(*got.DebtDueDate, "2026-12-31") {
+		t.Fatalf("hạn nợ phải là 2026-12-31, nhận %v (is_debt=%v)", got.DebtDueDate, got.IsDebt)
+	}
+	if got.DebtName != "Anh Ba" || got.DebtPhone != "0900000000" {
+		t.Fatalf("người đại diện phải giữ nguyên, nhận %q / %q", got.DebtName, got.DebtPhone)
+	}
+	if got.PaymentMethod != "transfer" || got.PayAttachment != "uploads/uy-nhiem-chi.jpg" {
+		t.Fatalf("hình thức trả và ảnh chứng từ phải giữ nguyên, nhận %q / %q",
+			got.PaymentMethod, got.PayAttachment)
+	}
+
+	// Trả nốt và TẮT ghi nợ: ba trường đi kèm phải được dọn sạch, không để lại
+	// hạn nợ và người đòi của một khoản nợ không còn tồn tại.
+	res = h.goi(t, a.token, http.MethodPost, duong, map[string]any{
+		"paid_amount": 100000, "payment_method": "cash",
+	})
+	if res.ma != http.StatusOK {
+		t.Fatalf("trả nốt trả %d\n%s", res.ma, catBot(res.than))
+	}
+
+	got = docPhieu(t, h, a.token, p.ID)
+	if got.IsDebt || got.DebtDueDate != nil || got.DebtName != "" || got.DebtPhone != "" {
+		t.Fatalf("tắt ghi nợ phải dọn sạch hạn và người đòi, nhận %v / %v / %q / %q",
+			got.IsDebt, got.DebtDueDate, got.DebtName, got.DebtPhone)
+	}
+	if got.PaymentStatus != "paid" {
+		t.Fatalf("trả đủ phải là paid, nhận %q", got.PaymentStatus)
 	}
 }
 

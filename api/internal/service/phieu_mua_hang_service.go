@@ -15,12 +15,16 @@ import (
 type PhieuMuaHangDetail struct {
 	*domain.PurchaseOrder
 	Histories []domain.PurchaseOrderHistory `json:"histories"`
+	// Payments là sổ TỪNG LƯỢT trả tiền — `paid_amount` chỉ nói tổng, sổ này nói
+	// tổng ấy tới từ mấy lượt, mỗi lượt bao nhiêu và bằng hình thức gì.
+	Payments []domain.PurchasePayment `json:"payments"`
 	// CanEdit = phiếu còn sửa/xoá được (chỉ phiếu lưu tạm).
 	CanEdit bool `json:"can_edit"`
 	// CanApprove = phiếu còn duyệt được. Trang quản trị dựng nút từ hai cờ này
 	// thay vì chép lại luật vào giao diện rồi lệch với server.
 	CanApprove bool `json:"can_approve"`
-	// CanPay = phiếu đã duyệt và còn nợ nhà cung cấp.
+	// CanPay = phiếu đã duyệt và CHƯA trả đồng nào. Trả một phần rồi thì khoản
+	// nợ ấy thuộc về màn công nợ, không trả tiếp từ màn phiếu mua nữa.
 	CanPay bool `json:"can_pay"`
 }
 
@@ -101,15 +105,28 @@ func (s *phieuMuaHangService) detail(ctx context.Context, po *domain.PurchaseOrd
 	if err != nil {
 		return nil, err
 	}
+	tra, err := s.repo.Payments(ctx, po.ID)
+	if err != nil {
+		return nil, err
+	}
 
 	nhap := po.Status == domain.PurchaseStatusDraft
 
 	return &PhieuMuaHangDetail{
 		PurchaseOrder: po,
 		Histories:     his,
+		Payments:      tra,
 		CanEdit:       nhap,
 		CanApprove:    nhap && len(po.Items) > 0,
-		CanPay:        po.Status == domain.PurchaseStatusApproved && po.PaidAmount+1 < po.TotalAmount,
+		// Trả tiền ĐÚNG MỘT LƯỢT từ màn này, và chỉ khi phiếu chưa trả đồng nào.
+		//
+		// Phiếu đã trả một phần tức là hai bên đã chốt một khoản nợ có hạn và có
+		// người đứng tên. Lượt trả tiếp theo là việc của màn CÔNG NỢ — ở đó mới
+		// thấy được cả bức tranh nợ của nhà cung cấp, mới ghi được sổ thu chi và
+		// mới đối chiếu được nhiều phiếu một lượt. Mở đường trả tiếp ở đây thì
+		// hai chỗ cùng sửa một khoản nợ mà không chỗ nào biết chỗ kia.
+		CanPay: po.Status == domain.PurchaseStatusApproved &&
+			po.PaymentStatus == domain.PurchasePaymentUnpaid,
 	}, nil
 }
 
@@ -443,6 +460,12 @@ func (s *phieuMuaHangService) Update(ctx context.Context, id uint, req *dto.Purc
 		if po.Status != domain.PurchaseStatusDraft {
 			return nil, nil, domain.ErrPurchaseLocked
 		}
+		// Kiểm TRONG khoá dòng, cạnh lượt kiểm trạng thái: hai câu hỏi khác nhau
+		// ("phiếu còn sửa được không" và "bản mình đang xem còn mới không") nhưng
+		// cùng đòi đọc bản ghi mới nhất.
+		if err := kiemBanDangSua(req.UpdatedAt, po.UpdatedAt); err != nil {
+			return nil, nil, err
+		}
 
 		po.SupplierID = conTro(req.SupplierID)
 		po.SupplierName = ten
@@ -513,11 +536,11 @@ func (s *phieuMuaHangService) Approve(ctx context.Context, id uint, req *dto.Pur
 }
 
 func (s *phieuMuaHangService) Cancel(ctx context.Context, id uint, req *dto.PurchaseCancelRequest, actorID uint) (*PhieuMuaHangDetail, error) {
-	po, err := s.repo.LockAndUpdate(ctx, id, func(po *domain.PurchaseOrder) (*domain.PurchaseOrderHistory, []string, error) {
+	po, err := s.repo.LockAndUpdate(ctx, id, func(po *domain.PurchaseOrder) (*domain.PurchaseOrderHistory, *domain.PurchasePayment, []string, error) {
 		// Chỉ huỷ được phiếu lưu tạm. Phiếu đã duyệt là hàng đã vào kho: muốn trả
 		// lại bên bán thì đó là một chứng từ khác, không phải xoá dấu vết phiếu này.
 		if po.Status != domain.PurchaseStatusDraft {
-			return nil, nil, domain.ErrPurchaseLocked
+			return nil, nil, nil, domain.ErrPurchaseLocked
 		}
 
 		now := time.Now()
@@ -539,7 +562,8 @@ func (s *phieuMuaHangService) Cancel(ctx context.Context, id uint, req *dto.Purc
 			ChangedBy:       conTro(actorID),
 		}
 
-		return his, cols, nil
+		// Huỷ phiếu không đụng tới tiền, nên sổ trả tiền không có dòng nào.
+		return his, nil, cols, nil
 	})
 	if err != nil {
 		return nil, err
@@ -549,21 +573,58 @@ func (s *phieuMuaHangService) Cancel(ctx context.Context, id uint, req *dto.Purc
 }
 
 func (s *phieuMuaHangService) Pay(ctx context.Context, id uint, req *dto.PurchasePaymentRequest, actorID uint) (*PhieuMuaHangDetail, error) {
-	po, err := s.repo.LockAndUpdate(ctx, id, func(po *domain.PurchaseOrder) (*domain.PurchaseOrderHistory, []string, error) {
+	po, err := s.repo.LockAndUpdate(ctx, id, func(po *domain.PurchaseOrder) (*domain.PurchaseOrderHistory, *domain.PurchasePayment, []string, error) {
 		if po.Status == domain.PurchaseStatusCancelled {
-			return nil, nil, domain.ErrPurchaseLocked
+			return nil, nil, nil, domain.ErrPurchaseLocked
 		}
 		// Kiểm TRONG khoá dòng và so với tổng ĐANG lưu, không phải tổng client
 		// gửi kèm: bản v2 tin con số client gửi nên sửa vài ô trên trình duyệt là
 		// ghi được một phiếu đã trả đủ mà chưa trả đồng nào.
 		if req.PaidAmount > po.TotalAmount+1 {
-			return nil, nil, domain.ErrPurchasePaidQuaTong
+			return nil, nil, nil, domain.ErrPurchasePaidQuaTong
+		}
+
+		// ---- Thoả thuận nợ, soát y như hộp thanh toán của bản v2 ----
+		//
+		// Soát Ở ĐÂY chứ không chỉ ở trình duyệt: bên v2 mọi luật này nằm trong
+		// JS của hộp thoại, nên gọi thẳng đường API là ghi được một khoản nợ
+		// không hạn, không người đòi.
+		if req.IsDebt {
+			if req.PaidAmount+1 >= po.TotalAmount {
+				return nil, nil, nil, domain.ErrPurchaseNoDaTraDu
+			}
+			if req.DebtDueDate == "" {
+				return nil, nil, nil, domain.ErrPurchaseNoThieuHan
+			}
+			if strings.TrimSpace(req.DebtContactName) == "" || strings.TrimSpace(req.DebtContactPhone) == "" {
+				return nil, nil, nil, domain.ErrPurchaseNoThieuNguoi
+			}
 		}
 
 		truoc := po.PaidAmount
 		po.PaidAmount = req.PaidAmount
 		po.PaymentStatus = trangThaiTra(po.PaidAmount, po.TotalAmount)
-		cols := []string{"PaidAmount", "PaymentStatus"}
+		po.PaymentMethod = req.PaymentMethod
+		po.PaymentAttachment = strings.TrimSpace(req.PaymentAttachment)
+
+		// Tắt ghi nợ thì DỌN luôn ba trường đi kèm. Để lại thì phiếu mang một
+		// hạn nợ và một người đòi cho khoản nợ không còn tồn tại — mọi báo cáo
+		// đọc theo hạn sẽ vớ phải nó.
+		po.IsDebt = req.IsDebt
+		if req.IsDebt {
+			po.DebtDueDate = ngayChungTu(req.DebtDueDate)
+			po.DebtContactName = strings.TrimSpace(req.DebtContactName)
+			po.DebtContactPhone = strings.TrimSpace(req.DebtContactPhone)
+		} else {
+			po.DebtDueDate = nil
+			po.DebtContactName = ""
+			po.DebtContactPhone = ""
+		}
+
+		cols := []string{
+			"PaidAmount", "PaymentStatus", "PaymentMethod", "PaymentAttachment",
+			"IsDebt", "DebtDueDate", "DebtContactName", "DebtContactPhone",
+		}
 		if actorID > 0 {
 			actor := actorID
 			po.HandledBy = &actor
@@ -584,7 +645,25 @@ func (s *phieuMuaHangService) Pay(ctx context.Context, id uint, req *dto.Purchas
 			ChangedBy:       conTro(actorID),
 		}
 
-		return his, cols, nil
+		// SỔ TRẢ TIỀN — chỉ ghi khi tiền THỰC SỰ đổi.
+		//
+		// Sửa mỗi hạn nợ hay số điện thoại thì không đẻ ra một dòng "trả 0 đồng";
+		// chuyện ấy đã có purchase_order_history ghi lại. `Amount` là phần CHÊNH
+		// nên cộng cả sổ đúng bằng paid_amount, và một lượt chữa lại con số ghi
+		// sai sẽ ra số ÂM — nhìn vào sổ là biết ngay đó không phải lượt trả.
+		var tra *domain.PurchasePayment
+		if chenh := po.PaidAmount - truoc; chenh != 0 {
+			tra = &domain.PurchasePayment{
+				Amount:        chenh,
+				PaidAfter:     po.PaidAmount,
+				PaymentMethod: po.PaymentMethod,
+				Note:          strings.TrimSpace(req.Note),
+				Attachment:    po.PaymentAttachment,
+				CreatedBy:     conTro(actorID),
+			}
+		}
+
+		return his, tra, cols, nil
 	})
 	if err != nil {
 		return nil, err

@@ -73,6 +73,9 @@ func (s *chiNhanhService) Create(ctx context.Context, req *dto.ChiNhanhRequest, 
 	if err != nil {
 		return nil, err
 	}
+	if err := s.chanTrungTen(ctx, req.Name, 0); err != nil {
+		return nil, err
+	}
 
 	// Hạn mức xét SAU cùng, ngay trước lượt ghi — cùng thứ tự với sản phẩm và tài
 	// khoản: người dùng phải biết mã của mình sai chỗ nào trước đã, rồi mới tới
@@ -119,6 +122,10 @@ func (s *chiNhanhService) Update(ctx context.Context, id uint, req *dto.ChiNhanh
 			return nil, err
 		}
 		cn.Code = ma
+	}
+
+	if err := s.chanTrungTen(ctx, req.Name, id); err != nil {
+		return nil, err
 	}
 
 	cn.Name = strings.TrimSpace(req.Name)
@@ -372,4 +379,19 @@ func docToaDo(s string, tran float64) (string, error) {
 	}
 
 	return s, nil
+}
+
+// chanTrungTen — hai chi nhánh cùng tên trong một cửa hàng là không cho, dù mã
+// khác. Mọi màn chọn chi nhánh (bán hàng, kho, báo cáo) đều ra hai dòng không
+// phân biệt được, mà số liệu thì tách đôi.
+func (s *chiNhanhService) chanTrungTen(ctx context.Context, name string, excludeID uint) error {
+	trung, err := s.repo.ExistsByName(ctx, strings.TrimSpace(name), excludeID)
+	if err != nil {
+		return err
+	}
+	if trung {
+		return domain.ErrTenChiNhanhDaCo
+	}
+
+	return nil
 }

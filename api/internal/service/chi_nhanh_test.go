@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"sass-api/internal/domain"
@@ -55,6 +56,16 @@ func (f *fakeChiNhanhRepo) FindByID(_ context.Context, id uint) (*domain.ChiNhan
 func (f *fakeChiNhanhRepo) ExistsByCode(_ context.Context, code string, excludeID uint) (bool, error) {
 	for _, r := range f.rows {
 		if r.Code == code && r.ID != excludeID {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+func (f *fakeChiNhanhRepo) ExistsByName(_ context.Context, name string, excludeID uint) (bool, error) {
+	for _, r := range f.rows {
+		if strings.EqualFold(r.Name, name) && r.ID != excludeID {
 			return true, nil
 		}
 	}

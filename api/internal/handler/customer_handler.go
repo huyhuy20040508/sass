@@ -279,6 +279,10 @@ func customerID(c *gin.Context) (uint, error) {
 
 // respondCustomerError ánh xạ lỗi nghiệp vụ sang mã HTTP tương ứng.
 func respondCustomerError(c *gin.Context, err error, fallback string) {
+	if loiChiNhanh(c, err) {
+		return
+	}
+
 	switch {
 	case errors.Is(err, domain.ErrNotFound):
 		response.Error(c, http.StatusNotFound, "Không tìm thấy khách hàng")

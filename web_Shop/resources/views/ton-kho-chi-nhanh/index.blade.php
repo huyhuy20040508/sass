@@ -29,7 +29,7 @@
         $TX_SOURCES = $C::TX_SOURCES;
         $STOCK_TONES = $C::STOCK_TONES;
         $SORTS = $C::SORTS;
-        $PAGE_SIZES = $C::PAGE_SIZES;
+        $PAGE_SIZES = $C::MUC_SO_DONG;
         $TITLE = $C::TITLE_PAGE;
         $EMPTY_TEXT = $C::EMPTY_TEXT;
 

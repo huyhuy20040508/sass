@@ -9,19 +9,23 @@ use Illuminate\Support\Facades\Log;
 /**
  * Tồn kho chi nhánh — Quản lý kho → Tồn kho chi nhánh.
  *
- * Dựng theo màn "Báo cáo tồn kho hiện tại" của bản cũ v2: bảng gom thành từng
- * nhóm chi nhánh, mỗi nhóm gập/mở được, đầu nhóm ghi tên kho kèm số dòng.
+ * Dựng theo màn "Tồn kho chi nhánh hiện tại" (warehouse.index) của bản cũ v2.
  *
- * VÌ SAO TÁCH RA KHỎI TRANG TỒN KHO thay vì thêm một cột: trang Tồn kho trả lời
- * "cả cửa hàng còn bao nhiêu" và mỗi biến thể đúng MỘT dòng — cả bộ lọc, phép
- * sắp xếp lẫn ô tổng đều dựng trên giả định đó. Màn này hỏi câu khác: "số hàng
- * ấy đang nằm ở đâu", nên một biến thể thành nhiều dòng. Nhét hai cách đọc vào
- * một bảng thì mọi con số tổng ở đầu trang phải kèm một câu giải thích.
+ * KHO ĐANG XEM = chi nhánh đang làm việc trên thanh trên cùng, và màn này KHÔNG
+ * có ô lọc chi nhánh riêng: người dùng vừa chọn kho ở thanh trên xong, hỏi lại
+ * câu đó lần nữa trong bảng thì khi hai chỗ lệch nhau không ai biết con số đang
+ * là của kho nào. Bản v2 cũng vậy — ô chi nhánh trong mã nguồn của nó đang bị
+ * chú thích lại.
  *
- * Chi nhánh ĐANG LÀM VIỆC trên thanh trên cùng KHÔNG cắt màn này: người mở nó ra
- * là người muốn nhìn nhiều kho cùng lúc. Ô lọc chi nhánh ở đây mới là thứ quyết
- * định, và mặc định nó chọn sẵn chi nhánh đang làm việc để lần mở đầu tiên vẫn
- * ăn khớp với chỗ người dùng đang đứng.
+ * Thanh trên cùng cho phép KHÔNG chọn kho nào = xem gộp cả cửa hàng. Chỉ ở
+ * trạng thái đó bảng mới có nhiều kho, và chỉ khi ấy mới bật dòng tiêu đề nhóm
+ * chi nhánh — cùng một mã hàng hiện mấy lần mà không nói rõ của kho nào thì đọc
+ * thành dữ liệu trùng.
+ *
+ * Đơn vị của một dòng là MỘT BIẾN THỂ TẠI MỘT CHI NHÁNH: từ migration 0005 hàng
+ * nằm ở từng kho, nên câu "còn bao nhiêu" không trả lời được gì nếu không nói
+ * rõ ở đâu. Trang "Tồn kho" cũ (một biến thể một dòng, tồn là bản cộng cả cửa
+ * hàng) đã bỏ hẳn, màn này thay nó.
  */
 class TonKhoChiNhanhController extends Controller
 {
@@ -30,7 +34,7 @@ class TonKhoChiNhanhController extends Controller
 
     public const TITLE_PAGE = 'Tồn kho chi nhánh';
 
-    public const EMPTY_TEXT = 'Chưa có dòng tồn nào khớp bộ lọc. Thử bỏ bớt điều kiện hoặc chọn thêm chi nhánh.';
+    public const EMPTY_TEXT = 'Chưa có dòng tồn nào khớp bộ lọc. Thử bỏ bớt điều kiện, hoặc đổi chi nhánh ở thanh trên cùng.';
 
     /** Nhóm mức tồn — dùng chung tên gọi với trang Tồn kho. */
     public const STOCK_STATES = [
@@ -57,13 +61,17 @@ class TonKhoChiNhanhController extends Controller
     public const LOW_STOCK = 5;
 
     /**
-     * Số dòng mỗi trang. Cao hơn trang Tồn kho vì một biến thể ở đây sinh ra
-     * nhiều dòng: chọn 3 chi nhánh mà vẫn để 20 dòng thì một trang chỉ xem được
-     * bảy mặt hàng, và tiêu đề nhóm chiếm gần hết màn hình.
+     * Số dòng mỗi trang — CÙNG một bộ với mọi màn khác của khu v2.
+     *
+     * Trước đây màn này để riêng [20, 50, 100, 200] vì bảng gộp nhiều chi nhánh
+     * thì một biến thể sinh ra nhiều dòng. Bảng nay bám theo chi nhánh đang làm
+     * việc nên lý do đó không còn, mà ô "Hiển thị N" thì lệch hẳn với các màn
+     * đứng cạnh: mở Điều chỉnh tồn kho thấy 10 dòng, sang đây thành 50 mà không
+     * ai đổi gì.
      */
-    public const PAGE_SIZES = [20, 50, 100, 200];
+    public const MUC_SO_DONG = [10, 20, 30, 40, 50];
 
-    public const PAGE_SIZE = 50;
+    public const SO_DONG_MOI_TRANG = 10;
 
     /** Số bút toán mỗi lượt nạp trong hộp thoại sổ kho. */
     public const LEDGER_PAGE_SIZE = 20;
@@ -123,7 +131,7 @@ class TonKhoChiNhanhController extends Controller
             $error = 'Không tải được tồn kho theo chi nhánh. Kiểm tra kết nối API.';
         }
 
-        $view = view('ton-kho-chi-nhanh.index', compact('rows', 'groups', 'filters', 'meta', 'chiNhanh'))
+        $view = view('v2::ton-kho-chi-nhanh.index', compact('rows', 'groups', 'filters', 'meta', 'chiNhanh'))
             ->with('categories', $this->danhMuc());
 
         return $error ? $view->with('error', $error) : $view;
@@ -147,25 +155,44 @@ class TonKhoChiNhanhController extends Controller
         return response()->streamDownload(function () use ($rows, $low) {
             $out = fopen('php://output', 'w');
             fwrite($out, "\xEF\xBB\xBF");
-            fputcsv($out, ['Mã chi nhánh', 'Chi nhánh', 'Mã hàng', 'Tên hàng hóa', 'Biến thể', 'ĐVT', 'Nhóm hàng', 'Tồn kho', 'Mức tồn', 'Giá vốn', 'Giá trị vốn tồn kho', 'Trạng thái']);
+            fputcsv($out, ['Mã chi nhánh', 'Chi nhánh', 'Mã hàng', 'Tên hàng hóa', 'Biến thể', 'ĐVT', 'Loại hàng', 'Nhóm hàng', 'Tồn kho', 'Mức tồn', 'Số lô', 'Số lượng lô', 'Hạn dùng', 'Giá vốn', 'Giá trị vốn tồn kho', 'Trạng thái']);
             foreach ($rows as $r) {
                 $qty = (int) ($r['quantity'] ?? 0);
-                fputcsv($out, [
-                    $r['shop_code'] ?? '',
-                    $r['shop_name'] ?? '',
-                    $r['sku'] ?? '',
-                    $r['product_name'] ?? '',
-                    $r['variant_name'] ?? '',
-                    $r['unit_name'] ?? '',
-                    $r['category_name'] ?? '',
-                    $qty,
-                    self::STOCK_STATES[self::mucTon($qty, $low)] ?? '',
-                    // Ô trống = chưa khai giá vốn. Điền 0 là dựng ra một con số sai
-                    // mà người nhận file không có cách nào biết là sai.
-                    isset($r['cost_price']) && $r['cost_price'] !== null ? (float) $r['cost_price'] : '',
-                    (float) ($r['stock_value'] ?? 0),
-                    ! empty($r['is_active']) ? 'Đang bán' : 'Ngừng bán',
-                ]);
+
+                // MỘT DÒNG CHO MỖI LÔ, và mấy cột của mặt hàng LẶP LẠI ở từng dòng
+                // chứ không để trống như bản v2. Bản v2 để trống vì file của nó bắt
+                // chước cách gộp ô trên màn hình; file này thì còn được lọc lại bằng
+                // Excel, mà lọc xong thì mấy ô trống mất luôn mặt hàng của chúng.
+                $lo = $r['lots'] ?? [];
+                if ($lo === []) {
+                    $lo = [null];
+                }
+
+                foreach ($lo as $l) {
+                    $han = $l['expire_date'] ?? null;
+
+                    fputcsv($out, [
+                        $r['shop_code'] ?? '',
+                        $r['shop_name'] ?? '',
+                        $r['sku'] ?? '',
+                        $r['product_name'] ?? '',
+                        $r['variant_name'] ?? '',
+                        $r['unit_name'] ?? '',
+                        empty($r['is_stock_deducted']) ? 'Hàng không quản kho' : 'Hàng bán',
+                        $r['category_name'] ?? '',
+                        $qty,
+                        self::STOCK_STATES[self::mucTon($qty, $low)] ?? '',
+                        // Lô rỗng dưới database = chưa xác định; nhãn đặt ở đây.
+                        $l === null ? '' : (trim((string) ($l['lot_number'] ?? '')) ?: 'Không xác định'),
+                        $l === null ? '' : (int) ($l['quantity'] ?? 0),
+                        $han ? date('d-m-Y', strtotime($han)) : '',
+                        // Ô trống = chưa khai giá vốn. Điền 0 là dựng ra một con số sai
+                        // mà người nhận file không có cách nào biết là sai.
+                        isset($r['cost_price']) && $r['cost_price'] !== null ? (float) $r['cost_price'] : '',
+                        (float) ($r['stock_value'] ?? 0),
+                        ! empty($r['is_active']) ? 'Đang bán' : 'Ngừng bán',
+                    ]);
+                }
             }
             fclose($out);
         }, $fileName, ['Content-Type' => 'text/csv; charset=UTF-8']);
@@ -849,11 +876,17 @@ class TonKhoChiNhanhController extends Controller
         return [];
     }
 
-    /** Nhóm hàng hoá cho ô lọc. */
+    /**
+     * Nhóm hàng hoá cho ô lọc — CHỈ nhóm đang có mặt hàng.
+     *
+     * Bày cả nhóm rỗng ra đây là mời người dùng bấm vào để nhận một bảng trắng;
+     * ô lọc sinh ra để tránh đúng chuyện đó. Vẫn lấy cả nhóm đang ẩn (`all`) vì
+     * nhóm ẩn mà còn hàng trong kho thì hàng đó vẫn nằm trên bảng.
+     */
     protected function danhMuc(): array
     {
         try {
-            $res = $this->api->categories(true);
+            $res = $this->api->categories(true, coHang: true);
             if ($res->successful()) {
                 return $res->json('data') ?? [];
             }
@@ -873,26 +906,21 @@ class TonKhoChiNhanhController extends Controller
     {
         $stock = (string) $request->query('stock', 'all');
         $sort = (string) $request->query('sort', 'stock_asc');
-        $psize = (int) $request->query('page_size', self::PAGE_SIZE);
+        $psize = (int) $request->query('page_size', self::SO_DONG_MOI_TRANG);
 
-        // Chỉ nhận id CÓ THẬT trong danh sách chi nhánh của cửa hàng này. Không
-        // phải để chặn (API đã lọc theo tenant rồi) mà để ô lọc không hiện "1 chi
-        // nhánh" trong khi bảng trống trơn vì id đó không tồn tại.
+        // KHO ĐANG XEM = chi nhánh đang làm việc trên thanh trên cùng. Màn này
+        // KHÔNG có ô lọc chi nhánh riêng: người dùng vừa chọn kho ở thanh trên
+        // xong, bày thêm một ô nữa trong bảng là hỏi lại đúng câu vừa trả lời —
+        // và khi hai chỗ lệch nhau thì không biết con số đang là của kho nào.
+        //
+        // Không chọn kho nào ở thanh trên = đang XEM GỘP: để trống, API trả mọi
+        // chi nhánh và bảng tự gom nhóm lại.
+        //
+        // Vẫn đối chiếu với danh sách chi nhánh thật (API đã lọc theo tenant rồi,
+        // đây là để bắt trường hợp kho vừa bị đóng mà phiên còn giữ id cũ).
         $hopLe = array_map(fn ($c) => (int) $c['id'], $chiNhanh);
-        $chon = array_values(array_filter(
-            array_map('intval', (array) $request->query('shops', [])),
-            fn ($id) => in_array($id, $hopLe, true)
-        ));
-
-        // Lần đầu vào trang (URL chưa có tham số nào) thì chọn sẵn chi nhánh đang
-        // làm việc: người dùng vừa chọn nó trên thanh trên cùng, mở màn kho ra mà
-        // thấy kho khác là một bước hụt.
-        if ($chon === [] && ! $request->has('shops') && ! $request->hasAny(['keyword', 'stock', 'category_id', 'sort', 'page'])) {
-            $dangLam = (int) session(ApiClient::KHOA_CHI_NHANH, 0);
-            if ($dangLam > 0 && in_array($dangLam, $hopLe, true)) {
-                $chon = [$dangLam];
-            }
-        }
+        $dangLam = ApiClient::chiNhanhDangLam();
+        $chon = ($dangLam > 0 && in_array($dangLam, $hopLe, true)) ? [$dangLam] : [];
 
         $default = $this->lowStock();
         $low = (int) $request->query('low_stock', $default);
@@ -905,7 +933,7 @@ class TonKhoChiNhanhController extends Controller
             'low_stock' => $low > 0 ? $low : $default,
             'sort' => isset(self::SORTS[$sort]) ? $sort : 'stock_asc',
             'page' => max(1, (int) $request->query('page', 1)),
-            'page_size' => in_array($psize, self::PAGE_SIZES, true) ? $psize : self::PAGE_SIZE,
+            'page_size' => in_array($psize, self::MUC_SO_DONG, true) ? $psize : self::SO_DONG_MOI_TRANG,
         ];
     }
 

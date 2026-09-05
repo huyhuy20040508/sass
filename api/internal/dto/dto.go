@@ -171,6 +171,13 @@ type AuthResponse struct {
 	// từ lượt đăng nhập. Shop Admin đọc cờ này để đưa người dùng thẳng tới trang
 	// gói dịch vụ thay vì để họ bấm quanh và nhận lỗi ở từng trang.
 	CuaHangKhoa bool `json:"cua_hang_khoa,omitempty"`
+	// ChiNhanhID là chi nhánh người này được phân về (hồ sơ nhân sự). null =
+	// không bị buộc vào chi nhánh nào — chủ tiệm, hoặc nhân viên chưa phân công.
+	//
+	// Shop Admin ghim luôn con số này vào phiên ngay sau khi đăng nhập. Thiếu nó
+	// thì phiên mở ra ở trạng thái "chưa chọn chi nhánh", và mọi lượt ghi kho
+	// sau đó hoặc bị từ chối, hoặc (trước đây) rơi vào một kho do máy đoán.
+	ChiNhanhID *uint `json:"chi_nhanh_id,omitempty"`
 }
 
 // PlatformAuthResponse — kết quả đăng nhập / làm mới token của KHU ĐIỀU HÀNH.
@@ -246,6 +253,9 @@ type PromotionRequest struct {
 	// không phạm vi thì không giảm cho ai, tạo ra chỉ để nằm đó gây hiểu nhầm.
 	ProductIDs  []uint `json:"product_ids"`
 	CategoryIDs []uint `json:"category_ids"`
+	// ShopIDs là những chi nhánh chương trình này chạy. BỎ TRỐNG = chạy ở MỌI chi
+	// nhánh — cùng quy ước với ô "Chi nhánh" của mặt hàng, xem migration 0053.
+	ShopIDs []uint `json:"shop_ids"`
 }
 
 // PromotionStatusRequest bật/tắt một chương trình mà không đụng tới ngày chạy.
@@ -270,6 +280,9 @@ type PromotionResponse struct {
 	Status      string `json:"status"`
 	ProductIDs  []uint `json:"product_ids"`
 	CategoryIDs []uint `json:"category_ids"`
+	// ShopIDs là chi nhánh chương trình chạy. RỖNG = mọi chi nhánh, và giao diện
+	// phải nói đúng như vậy chứ không hiển thị "chưa chọn chi nhánh nào".
+	ShopIDs []uint `json:"shop_ids"`
 	// ProductCount là số sản phẩm đang bán mà chương trình phủ tới (đã tính cả
 	// danh mục con).
 	ProductCount int64  `json:"product_count"`
@@ -307,6 +320,8 @@ type VoucherRequest struct {
 	// IsPublic = true thì mã hiện thẳng ở ô nhập mã lúc thanh toán cho MỌI khách.
 	// Mặc định false — mã gửi tay cho một người mà khoe ra là ai cũng dùng được.
 	IsPublic *bool `json:"is_public"`
+	// ShopIDs là những chi nhánh dùng được mã này. BỎ TRỐNG = mọi chi nhánh.
+	ShopIDs []uint `json:"shop_ids"`
 }
 
 // VoucherCheckRequest — khách gõ mã ở giỏ hàng để xem trước số tiền được giảm.
@@ -387,7 +402,9 @@ type VoucherResponse struct {
 	// Status: running | scheduled | ended | used_up | paused — tính từ ngày giờ +
 	// lượt đã dùng + is_active ở MỘT chỗ duy nhất, để trang quản trị và storefront
 	// không tự suy mỗi nơi một kiểu.
-	Status    string `json:"status"`
+	Status string `json:"status"`
+	// ShopIDs là chi nhánh dùng được mã. RỖNG = mọi chi nhánh.
+	ShopIDs   []uint `json:"shop_ids"`
 	CreatedAt string `json:"created_at"`
 }
 
@@ -404,9 +421,8 @@ type ProductRequest struct {
 	Slug       string `json:"slug" binding:"required,max=191"`
 	// SKU bỏ trống = sinh theo quy tắc mã hàng hoá; chưa bật quy tắc thì API trả
 	// 422 đòi nhập tay. Lúc SỬA, bỏ trống là giữ mã cũ.
-	SKU              string `json:"sku" binding:"omitempty,max=64"`
-	ShortDescription string `json:"short_description" binding:"omitempty,max=500"`
-	Description      string `json:"description"`
+	SKU         string `json:"sku" binding:"omitempty,max=64"`
+	Description string `json:"description"`
 	// UnitID là đơn vị tính. Cùng quy ước con trỏ như LocationID:
 	//   nil -> không đụng tới (giữ nguyên cái đang có khi SỬA)
 	//   0   -> gỡ đơn vị, trả mặt hàng về "chưa khai"
@@ -445,10 +461,8 @@ type ProductRequest struct {
 	Status string `json:"status" binding:"omitempty,oneof=active hidden discontinued"`
 	// IsActive giữ lại cho tương thích ngược (bản quản trị cũ chỉ biết cờ bật/tắt).
 	// Khi cả hai cùng gửi, Status thắng.
-	IsActive        *bool  `json:"is_active"`
-	IsFeatured      *bool  `json:"is_featured"`
-	MetaTitle       string `json:"meta_title" binding:"omitempty,max=255"`
-	MetaDescription string `json:"meta_description" binding:"omitempty,max=320"`
+	IsActive   *bool `json:"is_active"`
+	IsFeatured *bool `json:"is_featured"`
 
 	// Biến thể (tổ hợp thuộc tính). Con trỏ để phân biệt:
 	//   nil     -> không đụng tới biến thể (vd: chỉ bật/tắt trạng thái).
@@ -488,8 +502,11 @@ type VariantRequest struct {
 	// mặt hàng không có biến thể.
 	Attributes []VariantAttributeRequest `json:"attributes" binding:"omitempty,dive"`
 	// Pos là thứ tự bày ra. Bỏ trống thì lấy theo thứ tự gửi lên.
-	Pos   *int     `json:"pos"`
-	Price *float64 `json:"price" binding:"omitempty,gte=0"`
+	// IsDefault đánh dấu biến thể mà màn bán hàng chọn sẵn. nil = để máy chủ
+	// quyết (hàng đơn thì chính dòng duy nhất là mặc định).
+	IsDefault *bool    `json:"is_default"`
+	Pos       *int     `json:"pos"`
+	Price     *float64 `json:"price" binding:"omitempty,gte=0"`
 	// CostPrice bỏ trống = lấy giá vốn của sản phẩm cha.
 	CostPrice  *float64 `json:"cost_price" binding:"omitempty,gte=0"`
 	WeightGram int      `json:"weight_gram" binding:"gte=0"`
@@ -512,6 +529,15 @@ type VariantAttributeRequest struct {
 // DoiChoThuTuRequest — bấm mũi tên lên/xuống trên bảng danh sách hàng hoá.
 type DoiChoThuTuRequest struct {
 	Huong string `json:"huong" binding:"required,oneof=up down"`
+}
+
+// SapXepLaiRequest — kéo thả một dòng tới chỗ khác trên bảng danh sách.
+//
+// Gửi NGUYÊN trình tự đang hiện trên trang chứ không gửi "dòng X về vị trí thứ
+// n": vị trí thứ n chỉ có nghĩa trong đúng cái trang mà người dùng đang nhìn,
+// còn máy chủ thì không biết trang ấy đang hiện những ai.
+type SapXepLaiRequest struct {
+	IDs []uint `json:"ids" binding:"required,min=1,dive,gt=0"`
 }
 
 // ProductStatusRequest chỉ dùng để đổi trạng thái kinh doanh của sản phẩm —
@@ -1504,6 +1530,12 @@ type InventoryBulkAdjustRequest struct {
 
 // ---------- Cấu hình hệ thống ----------
 
+// SettingOption là MỘT lựa chọn của khoá cấu hình dạng select.
+type SettingOption struct {
+	Value string `json:"value" example:"fifo"`
+	Label string `json:"label" example:"FIFO — lô vào kho trước thì ra trước"`
+}
+
 // SettingField mô tả MỘT khoá cấu hình theo registry của service: nhóm, kiểu dữ
 // liệu, giá trị mặc định, có công khai cho storefront hay không.
 //
@@ -1515,11 +1547,14 @@ type SettingField struct {
 	// Section chia một trang cấu hình thành các khối (nhận diện / liên hệ / mạng
 	// xã hội). Rỗng = trang đó không chia khối.
 	Section string `json:"section" example:"contact"`
-	// Type: text | number | email | phone | image | url
+	// Type: text | number | email | phone | image | url | bool | select
 	Type     string `json:"type" example:"number"`
 	Label    string `json:"label" example:"Phí vận chuyển mặc định"`
 	Default  string `json:"default" example:"30000"`
 	Required bool   `json:"required" example:"true"`
+	// Options chỉ có ở khoá dạng select — các giá trị hợp lệ kèm nhãn, theo đúng
+	// thứ tự form admin nên bày ra. Rỗng với mọi kiểu khác.
+	Options []SettingOption `json:"options,omitempty"`
 	// Public = true: khoá này lộ ra ở GET /settings cho storefront đọc.
 	Public bool `json:"public" example:"true"`
 	// MaxLen / MaxNum là giới hạn server sẽ áp khi lưu (0 = không chặn). Trả ra đây
@@ -2560,9 +2595,6 @@ type ThuocTinhRequest struct {
 	Name string `json:"name" binding:"required,max=100"`
 	// IsActive bỏ trống = true (thuộc tính mới mặc định đang dùng).
 	IsActive *bool `json:"is_active"`
-	// RawMaterial = dùng thuộc tính này để khai định lượng nguyên vật liệu.
-	// Bỏ trống = false.
-	RawMaterial *bool `json:"raw_material"`
 	// Bỏ trống hẳn trường này = KHÔNG đụng tới danh sách giá trị (lượt sửa chỉ
 	// đổi tên chẳng hạn). Gửi mảng rỗng mới là "xoá hết giá trị".
 	Values *[]ThuocTinhGiaTriItem `json:"values" binding:"omitempty,max=100,dive"`
@@ -2638,6 +2670,13 @@ type PurchaseCreateRequest struct {
 // Không có Status: đổi trạng thái đi đường riêng (duyệt / huỷ) vì mỗi đường có
 // luật và có mốc lịch sử riêng.
 type PurchaseUpdateRequest struct {
+	// UpdatedAt là mốc sửa của BẢN mà người dùng đang xem, client đọc được lúc mở
+	// phiếu rồi gửi lại nguyên văn. Lệch với mốc trong database nghĩa là có người
+	// khác vừa lưu — xem domain.ErrPhieuVuaBiSua.
+	//
+	// Bỏ trống thì KHÔNG kiểm: giao diện bản cũ chưa gửi trường này, và chặn
+	// chúng lại là khoá luôn đường sửa phiếu của những màn chưa kịp cập nhật.
+	UpdatedAt    string `json:"updated_at"`
 	SupplierID   uint   `json:"supplier_id" example:"4"`
 	SupplierName string `json:"supplier_name" binding:"omitempty,max=150"`
 
@@ -2679,7 +2718,176 @@ type PurchaseCancelRequest struct {
 //
 // PaidAmount là số LUỸ KẾ đã trả cho phiếu, không phải số vừa trả thêm: màn hình
 // hiện số đã trả và người dùng sửa đúng con số đó, nên gửi lên cũng là con số ấy.
+//
+// Các trường còn lại dựng theo hộp thanh toán của bản order v2 (xem
+// PurchaseOrderController::payment bên đó).
 type PurchasePaymentRequest struct {
 	PaidAmount float64 `json:"paid_amount" binding:"min=0" example:"500000"`
 	Note       string  `json:"note" binding:"omitempty,max=500"`
+
+	// PaymentMethod: cash | transfer. Rỗng khi trả 0 đồng — lượt ấy chỉ chốt
+	// thoả thuận nợ chứ chưa có đồng nào đổi chủ.
+	PaymentMethod string `json:"payment_method" binding:"omitempty,oneof=cash transfer" example:"cash"`
+
+	// IsDebt = hai bên thoả thuận cho nợ phần còn lại. KHÔNG suy ra từ
+	// PaidAmount < TotalAmount: trả thiếu vì mới trả một phần khác hẳn trả
+	// thiếu vì đã hẹn ngày trả nốt.
+	IsDebt bool `json:"is_debt"`
+	// DebtDueDate khuôn YYYY-MM-DD. Bắt buộc khi IsDebt.
+	DebtDueDate string `json:"debt_due_date" binding:"omitempty,datetime=2006-01-02" example:"2026-10-03"`
+	// Người đại diện bên bán và số gọi khi tới hạn. Bắt buộc khi IsDebt.
+	DebtContactName  string `json:"debt_contact_name" binding:"omitempty,max=150"`
+	DebtContactPhone string `json:"debt_contact_phone" binding:"omitempty,max=30"`
+
+	// PaymentAttachment là đường dẫn ảnh uỷ nhiệm chi / biên lai đã tải lên.
+	PaymentAttachment string `json:"payment_attachment" binding:"omitempty,max=255"`
+}
+
+// ---------- Trả hàng nhà cung cấp ----------
+
+// SupplierReturnItemRequest — một dòng hàng trả.
+//
+// Client chỉ nói HAI thứ: trả dòng nào của phiếu mua, và trả bao nhiêu. Tên
+// hàng, đơn vị, hệ số quy đổi, giá nhập, số lô, hạn dùng và thuế suất đều lấy
+// lại từ chính dòng phiếu mua ấy — phiếu trả là chiều ngược của đúng lô hàng
+// đó, nhận giá khác từ trình duyệt là ghi sổ kho một con số không có gốc.
+type SupplierReturnItemRequest struct {
+	// PurchaseItemID là dòng của phiếu mua gốc (purchase_order_items.id).
+	PurchaseItemID uint `json:"purchase_item_id" binding:"required" example:"58"`
+	// Quantity là số đơn vị TRẢ, tính theo đúng đơn vị của dòng phiếu mua. Số
+	// NGUYÊN: sổ kho đếm nguyên, nhận 0,5 rồi làm tròn lúc ghi kho là mỗi phiếu
+	// lệch một ít.
+	Quantity int `json:"quantity" binding:"required,min=1" example:"2"`
+}
+
+// SupplierReturnCreateRequest — payload lập phiếu trả hàng nhà cung cấp.
+//
+// Phiếu lập ra LUÔN ở trạng thái lưu tạm, chưa đụng tới kho. Muốn duyệt luôn thì
+// gọi tiếp POST {id}/duyet — đường riêng vì duyệt là lúc hàng rời kho thật và có
+// quyền riêng canh.
+type SupplierReturnCreateRequest struct {
+	SupplierID uint `json:"supplier_id" binding:"required,min=1" example:"4"`
+	// PurchaseOrderID BẮT BUỘC: trả được bao nhiêu tính theo số đã mua của đúng
+	// phiếu ấy, nên không có phiếu mua thì không có trần nào để kẹp.
+	PurchaseOrderID uint `json:"purchase_order_id" binding:"required,min=1" example:"12"`
+
+	DocumentDate string `json:"document_date" binding:"omitempty,datetime=2006-01-02" example:"2026-08-23"`
+	ExpiredDate  string `json:"expired_date" binding:"omitempty,datetime=2006-01-02" example:"2026-09-23"`
+
+	PurchaserID          uint   `json:"purchaser_id" example:"7"`
+	ReceiverDeliveryNote string `json:"receiver_delivery_note" binding:"omitempty,max=50"`
+
+	Note string `json:"note" binding:"omitempty,max=500"`
+
+	Items []SupplierReturnItemRequest `json:"items" binding:"required,min=1,max=200,dive"`
+}
+
+// SupplierReturnUpdateRequest — sửa phiếu. Chỉ phiếu LƯU TẠM sửa được.
+//
+// Không có Status: duyệt đi đường riêng vì đó là lúc kho bị trừ.
+type SupplierReturnUpdateRequest struct {
+	// UpdatedAt là mốc sửa của BẢN mà người dùng đang xem, client đọc được lúc mở
+	// phiếu rồi gửi lại nguyên văn. Lệch với mốc trong database nghĩa là có người
+	// khác vừa lưu — xem domain.ErrPhieuVuaBiSua.
+	//
+	// Bỏ trống thì KHÔNG kiểm: giao diện bản cũ chưa gửi trường này, và chặn
+	// chúng lại là khoá luôn đường sửa phiếu của những màn chưa kịp cập nhật.
+	UpdatedAt       string `json:"updated_at"`
+	SupplierID      uint   `json:"supplier_id" binding:"required,min=1"`
+	PurchaseOrderID uint   `json:"purchase_order_id" binding:"required,min=1"`
+
+	DocumentDate string `json:"document_date" binding:"omitempty,datetime=2006-01-02"`
+	ExpiredDate  string `json:"expired_date" binding:"omitempty,datetime=2006-01-02"`
+
+	PurchaserID          uint   `json:"purchaser_id"`
+	ReceiverDeliveryNote string `json:"receiver_delivery_note" binding:"omitempty,max=50"`
+
+	Note string `json:"note" binding:"omitempty,max=500"`
+
+	Items []SupplierReturnItemRequest `json:"items" binding:"required,min=1,max=200,dive"`
+}
+
+// SupplierReturnApproveRequest — duyệt phiếu và trừ hàng khỏi kho.
+type SupplierReturnApproveRequest struct {
+	Note string `json:"note" binding:"omitempty,max=500"`
+}
+
+// ---------------------------------------------------------------------
+//  Phiếu điều chuyển — chuyển hàng giữa hai kho của cùng một cửa hàng
+// ---------------------------------------------------------------------
+
+// DieuChuyenItemRequest — một dòng hàng chuyển.
+//
+// Client nói BA thứ: chuyển mặt hàng nào, bao nhiêu, và (nếu muốn chỉ định) lô
+// nào. Tên hàng, mã, đơn vị, giá vốn và hạn dùng đều tra lại ở danh mục và ở sổ
+// lô — nhận chúng từ trình duyệt là ghi vào chứng từ một con số không có gốc.
+type DieuChuyenItemRequest struct {
+	VariantID uint `json:"variant_id" binding:"required,min=1" example:"58"`
+	// Quantity tính theo ĐƠN VỊ TÍNH CHÍNH. Số NGUYÊN: sổ kho đếm nguyên, nhận
+	// 0,5 rồi làm tròn lúc ghi kho là mỗi phiếu lệch một ít.
+	Quantity int `json:"quantity" binding:"required,min=1" example:"5"`
+	// LotNumber để trống = không chỉ định lô: kho gửi rút theo luật kho của cửa
+	// hàng, kho nhận vào lô không xác định.
+	LotNumber string `json:"lot_number" binding:"omitempty,max=50" example:"LO-2026-01"`
+}
+
+// DieuChuyenCreateRequest — payload lập phiếu điều chuyển.
+//
+// Phiếu lập ra LUÔN ở trạng thái lưu tạm, chưa đụng tới kho. Muốn duyệt luôn thì
+// gọi tiếp POST {id}/duyet — đường riêng vì duyệt là lúc hàng đổi kho thật.
+type DieuChuyenCreateRequest struct {
+	// FromShopID / ToShopID BẮT BUỘC và phải khác nhau. Không lấy kho xuất từ
+	// chi nhánh đang làm việc: thủ kho ở Quận 1 lập giúp một phiếu Quận 7 →
+	// Quận 3 là chuyện thường, và đoán hộ thì phiếu ghi sai cả hai đầu.
+	FromShopID uint `json:"from_shop_id" binding:"required,min=1" example:"1"`
+	ToShopID   uint `json:"to_shop_id" binding:"required,min=1" example:"2"`
+
+	// ReceiverID là nhân viên ở kho nhận, người ký nhận hàng.
+	ReceiverID uint `json:"receiver_id" example:"7"`
+
+	Note string `json:"note" binding:"omitempty,max=500"`
+
+	Items []DieuChuyenItemRequest `json:"items" binding:"required,min=1,max=200,dive"`
+}
+
+// DieuChuyenUpdateRequest — sửa phiếu. Chỉ phiếu LƯU TẠM sửa được.
+//
+// Không có Status: duyệt đi đường riêng vì đó là lúc kho hai đầu đổi số.
+type DieuChuyenUpdateRequest struct {
+	// UpdatedAt là mốc sửa của BẢN mà người dùng đang xem, client đọc được lúc mở
+	// phiếu rồi gửi lại nguyên văn. Lệch với mốc trong database nghĩa là có người
+	// khác vừa lưu — xem domain.ErrPhieuVuaBiSua.
+	//
+	// Bỏ trống thì KHÔNG kiểm: giao diện bản cũ chưa gửi trường này, và chặn
+	// chúng lại là khoá luôn đường sửa phiếu của những màn chưa kịp cập nhật.
+	UpdatedAt  string `json:"updated_at"`
+	FromShopID uint   `json:"from_shop_id" binding:"required,min=1"`
+	ToShopID   uint   `json:"to_shop_id" binding:"required,min=1"`
+
+	ReceiverID uint `json:"receiver_id"`
+
+	Note string `json:"note" binding:"omitempty,max=500"`
+
+	Items []DieuChuyenItemRequest `json:"items" binding:"required,min=1,max=200,dive"`
+}
+
+// DieuChuyenApproveRequest — duyệt phiếu: hàng rời kho gửi và vào kho nhận.
+type DieuChuyenApproveRequest struct {
+	Note string `json:"note" binding:"omitempty,max=500"`
+}
+
+// ---------------------------------------------------------------------
+//  Giá bán theo chi nhánh
+// ---------------------------------------------------------------------
+
+// GiaChiNhanhRequest — khai giá riêng của MỘT chi nhánh cho một biến thể.
+//
+// Muốn chi nhánh trở lại dùng giá gốc thì XOÁ (DELETE), đừng gửi giá bằng giá
+// gốc: chép lại một con số là để nó lệch đi vào ngày sửa giá gốc.
+type GiaChiNhanhRequest struct {
+	ShopID uint `json:"shop_id" binding:"required,min=1" example:"2"`
+	// Price phải > 0. Bán giá 0 là chuyện có thật (hàng tặng kèm) nhưng nó được
+	// khai bằng khuyến mãi, không phải bằng bảng giá — ở đây số 0 gần như luôn
+	// là ô để trống rồi bấm Lưu.
+	Price float64 `json:"price" binding:"required,gt=0" example:"25000"`
 }

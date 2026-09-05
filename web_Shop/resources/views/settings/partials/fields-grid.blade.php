@@ -80,6 +80,18 @@
                             </button>
                         </div>
                     </div>
+                @elseif($f['type'] === 'select')
+                    {{-- Ô chọn ĐÓNG: khoá loại này chỉ nhận đúng mấy giá trị
+                         registry khai, API từ chối thứ khác. Khác hẳn ô chọn có
+                         tìm kiếm bên dưới — cái đó cho gõ tên ngoài danh sách. --}}
+                    <select name="{{ $name }}" id="{{ $id }}"
+                            class="set-input {{ $invalid ? 'is-invalid' : '' }}">
+                        @foreach($options as $opt)
+                            <option value="{{ $opt['value'] }}" @selected($val === $opt['value'])>
+                                {{ $opt['label'] }}
+                            </option>
+                        @endforeach
+                    </select>
                 @elseif($options !== [])
                     {{-- Ô chọn có tìm kiếm. Vẫn là <input type="text"> chứ
                          không phải <select>: danh sách ngân hàng dài mấy chục

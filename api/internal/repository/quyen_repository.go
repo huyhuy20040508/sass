@@ -115,6 +115,20 @@ func (r *quyenRepository) ExistsByCode(ctx context.Context, code string, exclude
 	return count > 0, err
 }
 
+// ExistsByName — hai nhóm quyền cùng tên thì lúc gán cho nhân viên, ô chọn ra
+// hai dòng y hệt nhau mà bộ quyền bên trong khác nhau.
+func (r *quyenRepository) ExistsByName(ctx context.Context, name string, excludeID uint) (bool, error) {
+	var count int64
+	q := r.db.WithContext(ctx).Model(&domain.NhomQuyen{}).
+		Where("LOWER(name) COLLATE utf8mb4_bin = LOWER(?)", name)
+	if excludeID > 0 {
+		q = q.Where("id <> ?", excludeID)
+	}
+	err := q.Count(&count).Error
+
+	return count > 0, err
+}
+
 func (r *quyenRepository) Create(ctx context.Context, nq *domain.NhomQuyen) error {
 	return translateQuyenErr(r.db.WithContext(ctx).Create(nq).Error)
 }

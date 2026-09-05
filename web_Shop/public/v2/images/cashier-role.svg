@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200" fill="none">
+    <rect width="200" height="200" rx="12" fill="#E9F7EF"/>
+    <!-- Màn hình -->
+    <rect x="55" y="34" width="90" height="48" rx="6" fill="#2D9CDB"/>
+    <rect x="65" y="44" width="70" height="28" rx="4" fill="#FFFFFF" opacity="0.9"/>
+    <rect x="70" y="50" width="34" height="5" rx="2.5" fill="#2D9CDB"/>
+    <rect x="70" y="60" width="26" height="5" rx="2.5" fill="#D2DAE6"/>
+    <!-- Cổ màn hình -->
+    <rect x="92" y="82" width="16" height="12" fill="#D2DAE6"/>
+    <!-- Thân máy -->
+    <rect x="40" y="94" width="120" height="52" rx="8" fill="#FFFFFF" stroke="#D2DAE6" stroke-width="2"/>
+    <!-- Phím -->
+    <circle cx="62" cy="112" r="6" fill="#1B2C58"/>
+    <circle cx="82" cy="112" r="6" fill="#1B2C58"/>
+    <circle cx="62" cy="130" r="6" fill="#1B2C58"/>
+    <circle cx="82" cy="130" r="6" fill="#1B2C58"/>
+    <!-- Hóa đơn -->
+    <rect x="108" y="104" width="34" height="34" rx="4" fill="#27AE60"/>
+    <rect x="115" y="112" width="20" height="4" rx="2" fill="#FFFFFF"/>
+    <rect x="115" y="120" width="14" height="4" rx="2" fill="#FFFFFF"/>
+    <rect x="115" y="128" width="17" height="4" rx="2" fill="#FFFFFF"/>
+    <!-- Khay tiền -->
+    <rect x="34" y="146" width="132" height="18" rx="7" fill="#D2DAE6"/>
+    <circle cx="100" cy="155" r="4" fill="#1B2C58"/>
+</svg>

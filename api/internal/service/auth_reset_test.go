@@ -133,7 +133,7 @@ func dungAuthServiceCoCuaHang(users *fakeUserRepo, tenants *fakeTenantRepo, veri
 		nil, // jwt.Manager: chỉ cần khi phát token, các test dưới đây không đụng tới
 		config.JWTConfig{},
 		config.MailConfig{CodeTTL: 10 * time.Minute, ResendAfter: 60 * time.Second, FromName: "Cửa hàng"},
-		false, nil, nil, nil,
+		false, nil, nil, nil, nil,
 	)
 }
 

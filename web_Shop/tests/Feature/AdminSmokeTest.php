@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Services\ApiClient;
+use App\Services\CuaVao;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Route;
 use Tests\TestCase;
@@ -53,9 +55,26 @@ class AdminSmokeTest extends TestCase
      */
     protected const REDIRECT_ROUTES = [
         'admin.' => '/admin/dashboard',
+        // Trang chủ đang đỗ trong đợt chuyển sang khu v2: chưa dựng lại thì dồn
+        // về màn v2 đầu tiên thay vì mở bản cũ.
+        'admin.dashboard' => '/admin/suppliers',
         'admin.reports.index' => '/admin/reports/revenue',
         'admin.settings.index' => '/admin/settings/general',
+        // Thông số chung là một cụm tab; đường trần nhảy vào tab đầu.
+        'admin.thong-so-chung.index' => '/admin/parameters/numbering-rules',
         'thu-ngan.' => '/cashier/sales',
+        // Bốn đường /admin cũ của khu quầy — máy ở quầy còn đặt sẵn chúng làm
+        // trang chủ trình duyệt, nên chúng phải nhảy đúng sang URL mới.
+        'admin.cu.ban-tai-quay' => '/cashier/sales',
+        'admin.cu.ban-tai-quay.phieu' => '/cashier/sales/{id}/receipt',
+        'admin.cu.ca-lam-viec' => '/cashier/shifts',
+        'admin.cu.ca-lam-viec.show' => '/cashier/shifts/{id}',
+    ];
+
+    /** Id thật để dựng đường chuyển hướng có tham số: đường-lấy#tên-cột. */
+    protected const ID_TRUNG_CHUYEN = [
+        'admin.cu.ban-tai-quay.phieu' => '/admin/orders#id',
+        'admin.cu.ca-lam-viec.show' => '/admin/ca-lam-viec#id',
     ];
 
     /**
@@ -73,8 +92,24 @@ class AdminSmokeTest extends TestCase
      * Chúng đòi tham số trên query và trả 4xx khi thiếu (đúng thiết kế), nên gọi
      * trần trong lượt quét trang là bắt lỗi một thứ không hỏng.
      */
+    /**
+     * Query bắt buộc của vài trang CHI TIẾT: khoá#đường-lấy#tên-cột.
+     *
+     * Sổ kho nhìn nhiều kho cùng lúc nên nó bắt nói rõ xem kho nào; thiếu là 422
+     * đúng thiết kế. Gọi trần rồi kêu trang hỏng là bắt nhầm, mà bỏ trang khỏi
+     * lượt quét thì mất luôn chỗ canh.
+     */
+    protected const QUERY_CHI_TIET = [
+        'admin.ton-kho-chi-nhanh.history' => 'shop_id#/admin/chi-nhanh#id',
+    ];
+
     protected const KHONG_PHAI_TRANG = [
         'thu-ngan.ban-hang.scan',
+        // Hai đường của màn Điều chỉnh tồn kho: ô tìm hàng và ô chọn nhóm gọi
+        // bằng fetch, thiếu tham số thì trả 422 kèm câu giải thích — đúng thiết
+        // kế, không phải trang hỏng.
+        'admin.dieu-chinh-ton-kho.hangAm',
+        'admin.dieu-chinh-ton-kho.matHangTheoNhom',
     ];
 
     // ---------------------------------------------------------------- helpers
@@ -90,43 +125,173 @@ class AdminSmokeTest extends TestCase
             $this->markTestSkipped(static::$skipReason);
         }
 
-        $email = env('SMOKE_ADMIN_EMAIL', 'smoke.test@local.invalid');
-        $password = env('SMOKE_ADMIN_PASSWORD', 'SmokeTest@123');
+        // Shop Admin đăng nhập bằng MÃ CỬA HÀNG + tên đăng nhập, không phải
+        // email: /auth/login là đường của khách mua sắm và nó đòi biết cửa hàng
+        // từ tên miền, nên gọi vào đó luôn nhận "Chưa xác định được cửa hàng".
+        // Bài này vì thế đã im lặng bỏ qua suốt từ lúc API tách hai đường — mà
+        // bỏ qua thì trông y hệt "không có gì hỏng".
+        $shop = (string) env('SMOKE_SHOP_CODE', '');
+        $user = (string) env('SMOKE_ADMIN_USERNAME', '');
+        $password = (string) env('SMOKE_ADMIN_PASSWORD', '');
+
+        if ($shop === '' || $user === '' || $password === '') {
+            static::$skipReason = 'Chưa khai SMOKE_SHOP_CODE / SMOKE_ADMIN_USERNAME / '
+                .'SMOKE_ADMIN_PASSWORD trong .env nên không đăng nhập được để chạy bài khói.';
+            $this->markTestSkipped(static::$skipReason);
+        }
 
         try {
             $res = Http::baseUrl(config('api.base_url'))
                 ->timeout(10)->acceptJson()->asJson()
-                ->post('/auth/login', ['email' => $email, 'password' => $password]);
+                ->post('/auth/shop-login', [
+                    'shop_code' => $shop,
+                    'username' => $user,
+                    'password' => $password,
+                ]);
         } catch (\Throwable $e) {
             static::$skipReason = 'Không gọi được API ('.config('api.base_url').'): '.$e->getMessage();
             $this->markTestSkipped(static::$skipReason);
         }
 
         if (! $res->successful()) {
-            static::$skipReason = 'API từ chối đăng nhập tài khoản kiểm thử ('.$email.'): '.$res->body();
+            static::$skipReason = 'API từ chối đăng nhập tài khoản kiểm thử ('.$shop.'/'.$user.'): '.$res->body();
             $this->markTestSkipped(static::$skipReason);
         }
 
-        return static::$adminSession = [
+        // KHÔNG cần nhét sẵn bản chụp "cửa vào": CuaVao tự suy ra từ
+        // `api.user.access_areas` khi phiên chưa có bản chụp nào.
+        static::$adminSession = [
             'api.access_token' => $res->json('data.access_token'),
             'api.refresh_token' => $res->json('data.refresh_token'),
             'api.user' => $res->json('data.user'),
         ];
+
+        // GHIM chi nhánh vào phiên ngay từ đây — xem chiNhanhLamViec().
+        if ($cn = $this->chiNhanhLamViec()) {
+            static::$adminSession[ApiClient::KHOA_CHI_NHANH] = $cn;
+        }
+
+        return static::$adminSession;
+    }
+
+    /**
+     * Chi nhánh mà CẢ BÀI KIỂM đứng — ghim một lần, không để trôi.
+     *
+     * Không ghim thì hai nửa của bài đứng ở hai chỗ khác nhau: id mẫu lấy từ API
+     * đi "trần" nên thấy chứng từ của MỌI chi nhánh, còn trang thì chạy dưới chi
+     * nhánh mà thanh trên cùng tự chọn giúp (chi nhánh đang mở đầu tiên). Ghép
+     * hai thứ đó ra một URL không tồn tại với ai cả — trang đỏ vì một cảnh không
+     * có thật, mà cửa hàng một chi nhánh lại không bao giờ thấy nó.
+     *
+     * Trong các chi nhánh ĐANG MỞ, chọn chi nhánh CÓ CHỨNG TỪ. Chọn bừa cái đầu
+     * tiên (đường ChiNhanhDangLam đi cho phiên chưa chọn gì) thì trên máy có
+     * nhiều chi nhánh, bài kiểm dễ đứng đúng vào kho rỗng: mọi trang chi tiết bị
+     * bỏ qua vì "chưa có dữ liệu" và bài vẫn xanh — xanh mà không quét gì cả.
+     */
+    protected function chiNhanhLamViec(): ?int
+    {
+        if (array_key_exists('chi-nhanh-lam-viec', static::$ids)) {
+            return static::$ids['chi-nhanh-lam-viec'];
+        }
+
+        // Gọi thẳng, KHÔNG qua apiList: apiList lại hỏi ngược chi nhánh này.
+        $goi = function (string $uri, array $query = [], ?int $chiNhanh = null) {
+            $req = Http::baseUrl(config('api.base_url'))->timeout(10)->acceptJson()
+                ->withToken(static::$adminSession['api.access_token']);
+
+            return ($chiNhanh ? $req->withHeaders(['X-Chi-Nhanh' => (string) $chiNhanh]) : $req)
+                ->get($uri, $query);
+        };
+
+        try {
+            $res = $goi('/admin/chi-nhanh', ['active' => 'true']);
+            $ds = $res->successful() ? (array) ($res->json('data') ?: []) : [];
+
+            $dauTien = null;
+            foreach ($ds as $cn) {
+                $id = (int) data_get($cn, 'id');
+                if ($id <= 0) {
+                    continue;
+                }
+                $dauTien ??= $id;
+
+                // Đơn hàng và phiếu mua — hai sổ chính; kho nào có một trong hai
+                // là kho đang được dùng thật.
+                foreach (['/admin/orders', '/admin/phieu-mua-hang'] as $so) {
+                    $r = $goi($so, ['limit' => 1], $id);
+                    if ($r->successful() && ($r->json('data') ?: []) !== []) {
+                        return static::$ids['chi-nhanh-lam-viec'] = $id;
+                    }
+                }
+            }
+
+            return static::$ids['chi-nhanh-lam-viec'] = $dauTien;
+        } catch (\Throwable $e) {
+            return static::$ids['chi-nhanh-lam-viec'] = null;
+        }
+    }
+
+    /** Lượt gọi API bằng token quản trị, ĐỨNG ĐÚNG chi nhánh của bài kiểm. */
+    protected function goiApi(string $uri, array $query = [])
+    {
+        $req = Http::baseUrl(config('api.base_url'))->timeout(10)->acceptJson()
+            ->withToken($this->adminSession()['api.access_token']);
+
+        if ($cn = $this->chiNhanhLamViec()) {
+            $req = $req->withHeaders(['X-Chi-Nhanh' => (string) $cn]);
+        }
+
+        return $req->get($uri, $query);
     }
 
     /** Gọi API bằng token quản trị, trả về mảng data (rỗng nếu lỗi). */
     protected function apiList(string $uri, array $query = ['limit' => 1]): array
     {
-        $token = $this->adminSession()['api.access_token'];
-
         try {
-            $res = Http::baseUrl(config('api.base_url'))->timeout(10)
-                ->acceptJson()->withToken($token)->get($uri, $query);
+            $res = $this->goiApi($uri, $query);
         } catch (\Throwable $e) {
             return [];
         }
 
         return $res->successful() ? (array) ($res->json('data') ?: []) : [];
+    }
+
+    /**
+     * Id của đơn ĐÃ phát hành hoá đơn điện tử — null nếu sổ chưa có đơn nào.
+     *
+     * Hai trang tải PDF/XML chỉ tồn tại với đơn đã xuất hoá đơn; gọi chúng bằng
+     * một đơn bất kỳ thì 404 là ĐÚNG, và bắt lỗi ở đó là bắt nhầm. Nhưng bỏ hẳn
+     * hai trang khỏi lượt quét thì lúc cửa hàng có hoá đơn thật cũng không ai
+     * canh nữa — nên dò đúng một đơn có hoá đơn, không có thì bỏ qua có ghi chú.
+     */
+    protected function donDaCoHoaDon(): ?string
+    {
+        $cacheKey = 'don-co-hoa-don';
+        if (array_key_exists($cacheKey, static::$ids)) {
+            return static::$ids[$cacheKey];
+        }
+
+        $found = null;
+
+        foreach ($this->apiList('/admin/orders', ['limit' => 50]) as $don) {
+            $id = data_get($don, 'id');
+            if ($id === null) {
+                continue;
+            }
+
+            try {
+                $res = $this->goiApi('/admin/orders/'.$id.'/etax');
+            } catch (\Throwable $e) {
+                break;
+            }
+
+            if ($res->successful()) {
+                $found = (string) $id;
+                break;
+            }
+        }
+
+        return static::$ids[$cacheKey] = $found;
     }
 
     /** Lấy giá trị khoá đầu tiên trong danh sách (id/code) để ghép vào URL. */
@@ -291,6 +456,24 @@ class AdminSmokeTest extends TestCase
             'admin.returns.detail' => ['id' => $this->firstValue('/admin/returns', 'id')],
             'admin.returns.returnable' => ['orderId' => $this->firstValue('/admin/orders', 'id')],
             'admin.settings.page' => ['group' => 'general'],
+            // Mấy màn dựng sau khi bài này viết ra. Thiếu khai ở đây là chúng
+            // KHÔNG được quét — và bài vẫn xanh, nên phải đỏ để nhắc khai.
+            'admin.chi-nhanh.etax' => ['id' => $this->firstValue('/admin/chi-nhanh', 'id')],
+            'admin.dieu-chinh-ton-kho.show' => ['id' => $this->firstValue('/admin/dieu-chinh-ton-kho', 'id')],
+            'admin.nha-cung-cap.phieuMua' => ['id' => $this->firstValue('/admin/nha-cung-cap', 'id')],
+            'admin.phieu-mua-hang.show' => ['id' => $this->firstValue('/admin/phieu-mua-hang', 'id')],
+            'admin.phieu-mua-hang.exportOne' => ['id' => $this->firstValue('/admin/phieu-mua-hang', 'id')],
+            'admin.tra-hang-nha-cung-cap.show' => ['id' => $this->firstValue('/admin/tra-hang-nha-cung-cap', 'id')],
+            'admin.phieu-dieu-chuyen.show' => ['id' => $this->firstValue('/admin/stock-transfers', 'id')],
+            'admin.ton-kho-chi-nhanh.history' => ['id' => $this->firstValue('/admin/inventory', 'variant_id')],
+            // Hoá đơn điện tử: chỉ có với đơn ĐÃ phát hành. Lấy đúng một đơn
+            // như thế; sổ chưa có đơn nào thì nhánh "thiếu dữ liệu" lo.
+            'admin.orders.pdfHoaDon' => ['id' => $this->donDaCoHoaDon()],
+            'admin.orders.xmlHoaDon' => ['id' => $this->donDaCoHoaDon()],
+            // Gói dịch vụ: hai trang này thuộc sổ nền tảng (control plane), cửa
+            // hàng thường chưa có đơn gia hạn nào nên thường bị bỏ qua.
+            'admin.goi-dich-vu.don' => ['id' => $this->firstValue('/admin/goi-dich-vu/don', 'id')],
+            'admin.goi-dich-vu.thanh-toan' => ['id' => $this->firstValue('/admin/goi-dich-vu/don', 'id')],
             'thu-ngan.ban-hang.phieu' => ['id' => $this->firstValue('/admin/orders', 'id')],
             'thu-ngan.ca-lam-viec.show' => ['id' => $this->firstValue('/admin/ca-lam-viec', 'id')],
         ];
@@ -315,6 +498,20 @@ class AdminSmokeTest extends TestCase
                 $target = str_replace('{'.$key.'}', rawurlencode($value), $target);
             }
 
+            // Vài đường chi tiết còn đòi thêm query (sổ kho phải nói xem kho nào).
+            if (isset(self::QUERY_CHI_TIET[$name])) {
+                [$khoa, $endpoint, $lay] = explode('#', self::QUERY_CHI_TIET[$name]);
+                $giaTri = $this->firstValue($endpoint, $lay);
+
+                if ($giaTri === null) {
+                    $skipped[] = $name;
+
+                    continue;
+                }
+
+                $target .= '?'.$khoa.'='.rawurlencode($giaTri);
+            }
+
             $urls[$name] = '/'.ltrim($target, '/');
         }
 
@@ -335,10 +532,21 @@ class AdminSmokeTest extends TestCase
     public function test_nhan_vien_bi_chan_khoi_trang_quan_ly(): void
     {
         $session = $this->adminSession();
+        // Đổi vai trò thôi CHƯA đủ: từ migration 0015, cửa vào đọc từ
+        // `access_areas` (chủ tiệm tích cửa nào thì vào cửa ấy), nên một phiên
+        // mang vai "staff" mà vẫn còn cửa `quan_ly` thì đi qua được — đúng
+        // thiết kế. Phải dựng đúng phiên của một người CHỈ có cửa quầy.
         $session['api.user'] = array_replace(
             (array) $session['api.user'],
-            ['role' => ['name' => 'staff', 'display_name' => 'Nhân viên']]
+            [
+                'role' => ['name' => 'staff', 'display_name' => 'Nhân viên'],
+                'access_areas' => 'thu_ngan',
+                'quyen' => ['thu_ngan'],
+            ]
         );
+        // Bản chụp cửa vào trong phiên cũng phải theo, không thì nó thắng.
+        $session[CuaVao::KHOA_CUA] = ['thu_ngan'];
+        $session[CuaVao::KHOA_LUC] = time();
 
         $cam = [
             // Người & cấu hình — đã đóng từ trước.
@@ -351,6 +559,9 @@ class AdminSmokeTest extends TestCase
             '/admin/contacts', '/admin/newsletter',
             // Trả hàng và kho.
             '/admin/returns', '/admin/inventory',
+            // Cả ba trang này trước đây mở cho thu ngân; nay cửa đặt trên cả
+            // nhóm /admin nên chúng cũng đóng.
+            '/admin/dashboard', '/admin/orders', '/admin/profile',
         ];
 
         foreach ($cam as $uri) {
@@ -368,10 +579,13 @@ class AdminSmokeTest extends TestCase
         //
         // Cụm quầy nay nằm ở module Thu ngân (/thu-ngan) — nhân viên phải vào
         // được TRỌN module đó, còn trong khu quản trị thì đúng ba trang dưới đây.
-        $mo = [
-            '/admin/dashboard', '/admin/orders', '/admin/profile',
-            '/cashier/sales', '/cashier/shifts', '/cashier/orders',
-        ];
+        // Người chỉ đứng quầy KHÔNG mở được trang nào trong khu quản trị nữa,
+        // kể cả Tổng quan và hồ sơ của chính mình: cửa `admin.cua:quan_ly` đặt
+        // trên CẢ nhóm /admin (xem routes/web.php). Trước đây họ vào được vài
+        // trang và gặp một thanh trái gần như trống rỗng.
+        //
+        // Nên chiều "phải mở được" giờ chỉ còn trọn module Thu ngân.
+        $mo = ['/cashier/sales', '/cashier/shifts', '/cashier/orders'];
 
         foreach ($mo as $uri) {
             $res = $this->withSession($session)->get($uri);
@@ -390,6 +604,19 @@ class AdminSmokeTest extends TestCase
 
         foreach (self::REDIRECT_ROUTES as $name => $dich) {
             $uri = '/'.ltrim(Route::getRoutes()->getByName($name)->uri(), '/');
+
+            // Đường cũ có {id}: lấy id thật, sổ chưa có dữ liệu thì bỏ qua.
+            if (isset(self::ID_TRUNG_CHUYEN[$name])) {
+                [$endpoint, $lay] = explode('#', self::ID_TRUNG_CHUYEN[$name]);
+                $id = $this->firstValue($endpoint, $lay);
+
+                if ($id === null) {
+                    continue;
+                }
+
+                $uri = str_replace('{id}', rawurlencode($id), $uri);
+                $dich = str_replace('{id}', rawurlencode($id), $dich);
+            }
 
             $this->withSession($session)->get($uri)->assertRedirect($dich);
         }
@@ -415,7 +642,17 @@ class AdminSmokeTest extends TestCase
                 continue;
             }
 
-            $so = preg_match_all('/<h1[\s>]/i', $res->getContent());
+            // Đếm bằng bộ PHÂN TÍCH HTML, không phải biểu thức chính quy.
+            //
+            // Trang nào dựng HTML bằng JS — bản in, hàng của bảng nạp lại bằng
+            // AJAX — đều có thẻ nằm trong chuỗi kịch bản. Đó không phải thẻ của
+            // tài liệu này: nó chỉ thành thẻ khi kịch bản chạy, mà bài kiểm thì
+            // không chạy JS. Đếm cả vào là báo đỏ một chuyện không có thật.
+            //
+            // Đã thử cắt <script> bằng preg_replace và KHÔNG ăn: chỉ cần một
+            // kịch bản mang chuỗi thoát của thẻ đóng là biểu thức lệch nhịp từ
+            // đó trở đi. DOMDocument đọc theo đúng luật của HTML nên không vướng.
+            $so = $this->demThe($res->getContent(), 'h1');
             if ($so !== 1) {
                 $loi[] = "$uri có $so thẻ h1";
             }
@@ -424,6 +661,20 @@ class AdminSmokeTest extends TestCase
         $this->assertSame([], $loi,
             "Mỗi trang phải có đúng MỘT thẻ h1 — trình đọc màn hình lấy đó làm mốc tiêu đề cấp 1.\n"
             .implode("\n", $loi));
+    }
+
+    /** Đếm thẻ trong TÀI LIỆU; thẻ nằm trong chuỗi của <script> không tính. */
+    protected function demThe(string $html, string $the): int
+    {
+        $truoc = libxml_use_internal_errors(true);
+        $doc = new \DOMDocument;
+        // HTML của trang không phải XHTML hợp lệ (thẻ tự đóng, thuộc tính không
+        // nháy) — DOMDocument vẫn đọc được nhưng kêu ầm lên, nên tắt tiếng.
+        $doc->loadHTML('<?xml encoding="UTF-8">'.$html);
+        libxml_clear_errors();
+        libxml_use_internal_errors($truoc);
+
+        return $doc->getElementsByTagName($the)->length;
     }
 
     public function test_in_hang_loat_noi_ro_ly_do_khi_khong_in_duoc(): void

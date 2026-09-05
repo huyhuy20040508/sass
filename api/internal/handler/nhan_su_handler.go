@@ -1,8 +1,6 @@
 package handler
 
 import (
-	"strconv"
-
 	"github.com/gin-gonic/gin"
 
 	"sass-api/internal/domain"
@@ -41,7 +39,8 @@ func NewNhanSuHandler(svc service.NhanSuService) *NhanSuHandler {
 //	@Failure		403				{object}	response.Body
 //	@Router			/admin/nhan-su [get]
 func (h *NhanSuHandler) List(c *gin.Context) {
-	shopID, _ := strconv.ParseUint(c.Query("shop_id"), 10, 64)
+	// Mặc định cắt theo chi nhánh đang làm việc; `shop_id=0` để xem cả cửa hàng.
+	shopID := chiNhanhLoc(c)
 
 	list, err := h.svc.List(c.Request.Context(), domain.NhanSuFilter{
 		Keyword:      c.Query("keyword"),
@@ -49,7 +48,7 @@ func (h *NhanSuHandler) List(c *gin.Context) {
 		Position:     c.Query("position"),
 		WorkShift:    c.Query("work_shift"),
 		ContractType: c.Query("contract_type"),
-		ShopID:       uint(shopID),
+		ShopID:       shopID,
 	})
 	if err != nil {
 		handleServiceError(c, err)

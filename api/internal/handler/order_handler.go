@@ -226,6 +226,7 @@ func (h *OrderHandler) List(c *gin.Context) {
 		PaymentStatus: c.Query("payment_status"),
 		PaymentMethod: c.Query("payment_method"),
 		Channel:       c.Query("channel"),
+		ShopID:        chiNhanhLoc(c),
 		FromDate:      c.Query("from_date"),
 		ToDate:        c.Query("to_date"),
 		Sort:          c.Query("sort"),
@@ -679,6 +680,10 @@ func orderID(c *gin.Context) (uint, error) {
 }
 
 func respondOrderError(c *gin.Context, err error, fallback string) {
+	if loiChiNhanh(c, err) {
+		return
+	}
+
 	// Mã giảm giá khách nhập: dùng chung câu chữ với ô kiểm mã ở giỏ hàng.
 	if voucherUseError(c, err) {
 		return

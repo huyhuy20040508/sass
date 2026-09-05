@@ -79,6 +79,11 @@ type authService struct {
 	cfg      config.JWTConfig
 	mailCfg  config.MailConfig
 	devMode  bool
+	// nhanVien để biết người vừa đăng nhập được phân về CHI NHÁNH nào — Shop
+	// Admin đọc con số đó rồi ghim luôn vào phiên, thay vì để phiên mở ra ở
+	// trạng thái "chưa chọn chi nhánh" mà mọi lượt ghi kho phải tự đoán.
+	// Có thể nil (bản dựng không cần): khi đó trả về nil, không ai bị khoá.
+	nhanVien domain.NhanVienRepository
 	// settings cung cấp tên cửa hàng + hotline in trong email mã xác thực.
 	// Có thể nil: settingText rơi về mặc định của registry.
 	settings SettingService
@@ -104,6 +109,7 @@ func NewAuthService(
 	settings SettingService,
 	fb *facebook.Client,
 	gg *google.Client,
+	nhanVien domain.NhanVienRepository,
 ) AuthService {
 	return &authService{
 		users: users, nenTang: nenTang, tenants: tenants, roles: roles, verifies: verifies, mail: mail,
@@ -114,6 +120,7 @@ func NewAuthService(
 		// dù trang Cài đặt đã khai đủ.
 		settings: settings,
 		fb:       fb, gg: gg,
+		nhanVien: nhanVien,
 	}
 }
 
@@ -596,6 +603,7 @@ func (s *authService) LoginShop(ctx context.Context, req dto.ShopLoginRequest) (
 	}
 	res.Tenant = shop
 	res.CuaHangKhoa = khoa
+	res.ChiNhanhID = s.chiNhanhCuaNguoi(ctx, user.ID)
 
 	return res, nil
 }
@@ -968,8 +976,26 @@ func (s *authService) Refresh(ctx context.Context, refreshToken string) (*dto.Au
 		return nil, err
 	}
 	res.CuaHangKhoa = khoa
+	res.ChiNhanhID = s.chiNhanhCuaNguoi(ctx, user.ID)
 
 	return res, nil
+}
+
+// chiNhanhCuaNguoi tra chi nhánh mà tài khoản này được phân về. nil = không bị
+// buộc vào chi nhánh nào (chủ tiệm, hoặc nhân viên chưa phân công).
+//
+// Lỗi đọc sổ trả nil chứ không chặn lượt đăng nhập: một trục trặc database
+// không được phép biến thành "không ai vào được phần mềm".
+func (s *authService) chiNhanhCuaNguoi(ctx context.Context, userID uint) *uint {
+	if s.nhanVien == nil || userID == 0 {
+		return nil
+	}
+	id, err := s.nhanVien.ChiNhanhCuaTaiKhoan(ctx, userID)
+	if err != nil {
+		return nil
+	}
+
+	return id
 }
 
 func (s *authService) Me(ctx context.Context, userID uint) (*domain.User, error) {

@@ -35,6 +35,10 @@ func (h *ViTriHandler) List(c *gin.Context) {
 	list, err := h.svc.List(c.Request.Context(), domain.ViTriFilter{
 		Keyword:    c.Query("keyword"),
 		OnlyActive: c.Query("active") == "true",
+		// Mặc định chỉ bày kệ của CHI NHÁNH ĐANG LÀM VIỆC; `shop_id=0` để xem
+		// hết. Kệ là chỗ vật lý của một mặt bằng — trộn kệ của mọi quận vào một ô
+		// chọn là mời người soạn hàng đi tới một cái kho ở quận khác.
+		ShopID: chiNhanhLoc(c),
 	})
 	if err != nil {
 		handleServiceError(c, err)

@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96" fill="none">
+    <!-- Nhà băng trái -->
+    <g fill="#9FA8DA">
+        <path d="M6 26L24 16l18 10v4H6v-4z"/>
+        <rect x="9" y="32" width="5" height="16" rx="1"/>
+        <rect x="17" y="32" width="5" height="16" rx="1"/>
+        <rect x="25" y="32" width="5" height="16" rx="1"/>
+        <rect x="33" y="32" width="5" height="16" rx="1"/>
+        <rect x="6" y="50" width="36" height="5" rx="1.5"/>
+    </g>
+    <!-- Nhà băng phải -->
+    <g fill="#7986CB">
+        <path d="M54 52l18-10 18 10v4H54v-4z"/>
+        <rect x="57" y="58" width="5" height="16" rx="1"/>
+        <rect x="65" y="58" width="5" height="16" rx="1"/>
+        <rect x="73" y="58" width="5" height="16" rx="1"/>
+        <rect x="81" y="58" width="5" height="16" rx="1"/>
+        <rect x="54" y="76" width="36" height="5" rx="1.5"/>
+    </g>
+    <!-- Đồng xu vàng giữa -->
+    <circle cx="48" cy="48" r="13" fill="#F6C445"/>
+    <circle cx="48" cy="48" r="9.5" fill="none" stroke="#FFFFFF" stroke-width="1.6" opacity="0.8"/>
+    <text x="48" y="54" text-anchor="middle" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="#FFFFFF">$</text>
+    <!-- 2 mũi tên trao đổi -->
+    <path d="M62 24c8 2 14 7 17 14" stroke="#1B2C58" stroke-width="4" stroke-linecap="round" fill="none"/>
+    <path d="M83 32l-3.4 8.4-7.2-6.2 10.6-2.2z" fill="#1B2C58"/>
+    <path d="M34 72c-8-2-14-7-17-14" stroke="#1B2C58" stroke-width="4" stroke-linecap="round" fill="none"/>
+    <path d="M13 64l3.4-8.4 7.2 6.2L13 64z" fill="#1B2C58"/>
+</svg>

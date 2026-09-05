@@ -177,7 +177,9 @@
              mã thì chưa có hiệu lực, in số của nó lên bill là nói với khách một
              điều chưa đúng. Mã tra cứu là thứ khách gõ vào trang của nhà cung
              cấp để tự xem hoá đơn của mình. --}}
-        @php($hd = $o['etax'] ?? null)
+        {{-- Dạng @php(...) một dòng bị ghép nhầm với @endphp của khối phía dưới,
+             nuốt cả đoạn ở giữa thành PHP thô. Dùng khối đầy đủ cho chắc. --}}
+        @php $hd = $o['etax'] ?? null; @endphp
         @if($hd && !empty($hd['tax_auth_code']))
             <p class="inv-status inv-etax">
                 Hoá đơn điện tử: <b>{{ $hd['symbol'] ?? '' }}@if(!empty($hd['invoice_no'])) số {{ $hd['invoice_no'] }}@endif</b>
@@ -219,7 +221,8 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @forelse($items as $i => $it)
+                    @if(count($items))
+                    @foreach($items as $i => $it)
                         @php
                             $qty = (int) ($it['quantity'] ?? 0);
                             $price = (float) ($it['unit_price'] ?? 0);
@@ -242,9 +245,10 @@
                             <td class="r">{{ $money($price) }}</td>
                             <td class="r">{{ $money($line) }}</td>
                         </tr>
-                    @empty
+                    @endforeach
+                    @else
                         <tr><td colspan="5" class="c">Đơn hàng không có sản phẩm.</td></tr>
-                    @endforelse
+                    @endif
                 </tbody>
             </table>
 

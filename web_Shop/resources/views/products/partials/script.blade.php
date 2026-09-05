@@ -1,0 +1,1682 @@
+    <script>
+        (function () {
+            const CSRF = @json(csrf_token());
+            // Cửa hàng đã bật quy tắc mã hàng hoá (Cài đặt → Thông số chung):
+            // ô SKU khoá lại, mã do máy chủ đặt lúc lưu.
+            const MA_TU_SINH = @json($maTuSinh ?? false);
+
+        // Trần phía trình duyệt, khớp với ImageStore::MAX_UPLOAD_KB bên PHP. Chặn ở
+        // đây chỉ để khỏi tải một file khổng lồ lên rồi mới bị từ chối; ảnh vẫn được
+        // máy chủ thu nhỏ lại sau khi nhận.
+        const MAX_IMG_BYTES = 10 * 1024 * 1024;
+            const URL_BULK = @json(route('admin.products.bulkDestroy'));
+            const URL_STORE = @json(route('admin.products.store'));
+            const URL_UPLOAD = @json(route('admin.products.uploadImage'));
+            const URL_BASE = @json(url('admin/products'));
+const RETURN_URL = @json(route('admin.products.index', request()->query()));
+            // Dữ liệu sản phẩm (thô) để dựng payload khi đổi trạng thái mà không mất trường nào.
+            const PRODUCTS = @json(json_decode(json_encode($products)) ?? []);
+            const BY_ID = new Map(PRODUCTS.map((p) => [p.id, p]));
+            // Dữ liệu cho modal thêm/sửa.
+            const CATEGORIES = @json($orderedCats);            // [{id, name, level}] đã xếp theo cây
+            const LOCATIONS = @json($locations);               // [{id, code, name}] — chỉ vị trí đang bật
+            const UNITS = @json($units);                       // [{id, code, name}] — chỉ đơn vị đang bật
+            // Thuộc tính + giá trị con: nguồn của bảng tổ hợp biến thể.
+            const ATTRIBUTES = @json($attributes);             // [{id, code, name, values:[{id, code, name}]}]
+            // Bộ mức thuế đang bật ở màn Thuế (loại "mac-dinh"). Hai mã âm là KCT/KKKNT.
+            const VAT_RATES = @json($vatRates);                // [0, 8, 10, ...]
+            const VAT_LABELS = @json(\App\Http\Controllers\ProductController::VAT_LABELS);
+            const STATUSES = @json($statuses);                 // { active: 'Đang bán', ... }
+            const BRANCHES = @json($branches);                 // chi nhánh đang hoạt động
+            const TAGS = @json($tags);                         // thẻ hàng hóa đang có
+            // Địa chỉ lấy chi tiết một sản phẩm. Modal sửa nạp lại từ đây thay vì
+            // dùng bản nhúng sẵn trong trang — bản đó là ảnh chụp lúc mở danh sách,
+            // người khác vừa sửa hoặc kho vừa đổi tồn là nó đã cũ.
+            const URL_SHOW = (id) => `${@json(url('admin/products'))}/${id}`;
+
+            const $filter = document.getElementById('prdFilter');
+            const $bulkMount = document.getElementById('prdBulkMount');
+
+            // ---------- Bộ lọc: tự submit ----------
+            // Đổi select -> submit ngay; gõ tìm kiếm -> debounce 400ms.
+            $filter.querySelectorAll('select').forEach((sel) => {
+                sel.addEventListener('change', () => $filter.submit());
+            });
+
+            // Ô lọc chọn nhiều: bấm nút xổ danh sách, tick xong là lọc ngay.
+            // Không đóng danh sách sau mỗi lần tick — người dùng thường tick liền
+            // mấy ô, đóng lại sau mỗi ô thì phải mở đi mở lại.
+            $filter.querySelectorAll('[data-multi]').forEach((box) => {
+                const btn = box.querySelector('.prd-multi-btn');
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    $filter.querySelectorAll('[data-multi]').forEach((k) => { if (k !== box) k.classList.remove('open'); });
+                    box.classList.toggle('open');
+                });
+                box.addEventListener('change', () => $filter.submit());
+            });
+            document.addEventListener('click', (e) => {
+                $filter.querySelectorAll('[data-multi]').forEach((box) => {
+                    if (!box.contains(e.target)) box.classList.remove('open');
+                });
+            });
+
+            // Nút "Nâng cao": ẩn/hiện hàng bộ lọc phụ (nhớ trạng thái qua localStorage).
+            (function () {
+                const btn = document.getElementById('prdAdvToggle');
+                const row = document.getElementById('prdAdvRow');
+                if (!btn || !row) return;
+                const setOpen = (open) => {
+                    row.classList.toggle('is-open', open);
+                    btn.classList.toggle('is-open', open);
+                    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+                };
+                // Server đã mở sẵn nếu có bộ lọc phụ đang bật; ngoài ra khôi phục lựa chọn của người dùng.
+                if (!row.classList.contains('is-open') && localStorage.getItem('prd-adv-open') === '1') setOpen(true);
+                btn.addEventListener('click', () => {
+                    const open = !row.classList.contains('is-open');
+                    setOpen(open);
+                    localStorage.setItem('prd-adv-open', open ? '1' : '0');
+                });
+            })();
+            const search = $filter.querySelector('input[name="keyword"]');
+            let searchTimer = null;
+            search.addEventListener('input', () => {
+                clearTimeout(searchTimer);
+                searchTimer = setTimeout(() => $filter.submit(), 400);
+            });
+
+            // ---------- Form POST động (mutation) ----------
+            function postForm(action, method, fields) {
+                const f = document.createElement('form');
+                f.method = 'POST';
+                f.action = action;
+                f.style.display = 'none';
+                const add = (name, val) => {
+                    const i = document.createElement('input');
+                    i.type = 'hidden';
+                    i.name = name;
+                    i.value = typeof val === 'boolean' ? (val ? 1 : 0) : (val == null ? '' : val);
+                    f.appendChild(i);
+                };
+                add('_token', CSRF);
+                if (method && method !== 'POST') add('_method', method);
+                add('return', RETURN_URL);
+                for (const [k, v] of Object.entries(fields)) add(k, v);
+                document.body.appendChild(f);
+                f.submit();
+            }
+
+            // Đổi trạng thái: gửi DUY NHẤT cờ bật/tắt tới endpoint chuyên biệt. Không
+            // gửi lại toàn bộ mặt hàng — API ghi cả dòng khi PUT, thiếu một trường là
+            // bấm công tắc một cái mất luôn dữ liệu đó.
+            //
+            // Gửi CỜ chứ không gửi status vì công tắc chỉ có hai nấc mà trạng thái có
+            // ba mức: mặt hàng đang "ngừng kinh doanh" phải giữ nguyên mức ấy khi tắt,
+            // không bị hạ xuống "tạm ẩn" (xem resolveProductStatus bên API).
+            function setActive(id, active) {
+                postForm(`${URL_BASE}/${id}/toggle-status`, 'PUT', { is_active: active ? 1 : 0 });
+            }
+
+            function removeProduct(p) {
+                sysDelete({
+                    title: 'Xác nhận xoá hàng hóa',
+                    message: `Bạn có chắc chắn muốn xoá mặt hàng "${p.name}"? Hành động này không thể hoàn tác.`,
+                    highlightText: p.name
+                }).then((confirmed) => {
+                    if (confirmed) {
+                        postForm(`${URL_BASE}/${p.id}`, 'DELETE', {});
+                    }
+                });
+            }
+
+            // ---------- Sự kiện bảng ----------
+            const tbody = document.querySelector('.prd-table tbody');
+            tbody.addEventListener('click', (e) => {
+                const sw = e.target.closest('[data-status]');
+                if (sw) {
+                    const bat = !sw.classList.contains('on');
+                    sw.classList.toggle('on', bat);   // lật ngay cho đỡ khựng, trang tự tải lại sau
+                    setActive(Number(sw.getAttribute('data-status')), bat);
+                    return;
+                }
+                const mv = e.target.closest('[data-move]');
+                if (mv) {
+                    if (mv.classList.contains('is-off')) {
+                        toastErr('Đang lọc hoặc đang sắp theo cột nên không đổi được thứ tự. Xoá lọc rồi thử lại.');
+                        return;
+                    }
+                    postForm(`${URL_BASE}/${mv.getAttribute('data-id')}/sort`, 'PUT', { huong: mv.getAttribute('data-move') });
+                    return;
+                }
+                const rm = e.target.closest('[data-remove]');
+                if (rm) { const p = BY_ID.get(Number(rm.getAttribute('data-remove'))); if (p) removeProduct(p); return; }
+                const ed = e.target.closest('[data-edit]');
+                if (ed) { openModalById('edit', Number(ed.getAttribute('data-edit'))); return; }
+                const vw = e.target.closest('[data-view]');
+                if (vw) { openModalById('view', Number(vw.getAttribute('data-view'))); return; }
+            });
+
+            // ---------- Chọn dòng + bulk ----------
+            const selected = new Set();
+            const checkAll = document.getElementById('prdCheckAll');
+            const rowChecks = () => Array.from(document.querySelectorAll('.prd-row-check'));
+
+            function syncRow(cb) {
+                const tr = cb.closest('tr');
+                if (cb.checked) { selected.add(Number(cb.value)); tr.classList.add('is-selected'); }
+                else { selected.delete(Number(cb.value)); tr.classList.remove('is-selected'); }
+            }
+            function syncHeader() {
+                const all = rowChecks();
+                const on = all.filter((c) => c.checked).length;
+                checkAll.checked = on > 0 && on === all.length;
+                checkAll.indeterminate = on > 0 && on < all.length;
+            }
+            function renderBulk() {
+                const n = selected.size;
+                if (n === 0) { $bulkMount.innerHTML = ''; return; }
+                $bulkMount.innerHTML = `
+                    <div class="prd-bulk">
+                        <span class="prd-bulk-text">Đã chọn <b>${n}</b> mặt hàng</span>
+                        <button type="button" class="prd-bulk-clear" id="prdBulkClear">Bỏ chọn</button>
+                        <button type="button" class="prd-bulk-del" id="prdBulkDel">
+                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+                            Xoá (${n})
+                        </button>
+                    </div>`;
+            }
+
+            rowChecks().forEach((cb) => cb.addEventListener('change', () => { syncRow(cb); syncHeader(); renderBulk(); }));
+            if (checkAll) {
+                checkAll.addEventListener('change', () => {
+                    rowChecks().forEach((cb) => { cb.checked = checkAll.checked; syncRow(cb); });
+                    syncHeader(); renderBulk();
+                });
+            }
+
+            $bulkMount.addEventListener('click', (e) => {
+                if (e.target.closest('#prdBulkClear')) {
+                    selected.clear();
+                    rowChecks().forEach((cb) => { cb.checked = false; cb.closest('tr').classList.remove('is-selected'); });
+                    syncHeader(); renderBulk();
+                } else if (e.target.closest('#prdBulkDel')) {
+                    const ids = [...selected];
+                    if (!ids.length) return;
+                    sysDelete({
+                        title: 'Xác nhận xoá hàng loạt',
+                        message: `Bạn có chắc chắn muốn xoá ${ids.length} mặt hàng đã chọn? Hành động này không thể hoàn tác.`,
+                        highlightText: `Số lượng: ${ids.length} mặt hàng`
+                    }).then((confirmed) => {
+                        if (confirmed) {
+                            const fields = {};
+                            ids.forEach((id, i) => { fields[`ids[${i}]`] = id; });
+                            postForm(URL_BULK, 'POST', fields);
+                        }
+                    });
+                }
+            });
+
+            // ---------- Toast lỗi (client-side validate) ----------
+            function toastErr(msg) {
+                const cont = document.querySelector('.toast-container');
+                if (!cont || typeof bootstrap === 'undefined') { alert(msg); return; }
+                const el = document.createElement('div');
+                el.className = 'toast align-items-center text-bg-danger border-0';
+                el.setAttribute('role', 'alert');
+                el.innerHTML = `<div class="d-flex"><div class="toast-body"><i class="bi bi-exclamation-circle-fill me-2"></i>${esc(msg)}</div>`
+                    + '<button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button></div>';
+                cont.appendChild(el);
+                const t = new bootstrap.Toast(el, { delay: 4000 });
+                el.addEventListener('hidden.bs.toast', () => el.remove());
+                t.show();
+            }
+            const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (m) => (
+                { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]
+            ));
+
+            // ---------- Modal thêm/sửa ----------
+            const $modalMount = document.getElementById('prdModalMount');
+
+            // Mã sản phẩm hiển thị tự sinh từ id: SP000001, SP000002, ... (chỉ để hiển thị, không lưu).
+            const fmtProdCode = (id) => 'SP' + String(id).padStart(6, '0');
+
+            // Tiền tệ VN: chỉ giữ chữ số; hiển thị 850000 -> "850.000" (dấu chấm phân cách nghìn).
+            const digitsOnly = (s) => String(s == null ? '' : s).replace(/\D/g, '');
+            const fmtVnd = (n) => { const d = digitsOnly(n); return d ? Number(d).toLocaleString('vi-VN') : ''; };
+            // Số lượng (tồn kho): luôn hiện số, kể cả 0 — khác fmtVnd trả rỗng khi trống.
+            const fmtInt = (n) => Number(n || 0).toLocaleString('vi-VN');
+
+            // Bỏ dấu tiếng Việt -> ASCII (để dựng mã hàng).
+            const deaccent = (s) => String(s == null ? '' : s)
+                .normalize('NFD').replace(/[̀-ͯ]/g, '')
+                .replace(/đ/g, 'd').replace(/Đ/g, 'D');
+
+            /**
+             * Tự sinh mã hàng từ TÊN: chữ cái đầu của các từ + 4 số.
+             * VD "iPhone 15 Pro Max" -> "IPM-4821".
+             *
+             * Có đuôi số vì tên hàng bán lẻ trùng nhau rất dễ ("Ốp lưng", "Cáp sạc")
+             * mà mã hàng thì duy nhất — không có đuôi là lượt Lưu thứ hai ăn lỗi
+             * trùng mã. Khớp với ProductController::productSku() bên PHP.
+             *
+             * Bật quy tắc đánh số thì hàm này không được gọi: mã do máy chủ đặt.
+             */
+            function genSku() {
+                const name = document.getElementById('mName').value.trim();
+                // Thay dấu câu bằng space trước khi tách — xử lý đúng O'NEILLS, M.C., 1.FC
+                const normalized = deaccent(name).toUpperCase().replace(/[^A-Z0-9\s]+/g, ' ');
+                const words = normalized.split(/\s+/).filter(Boolean);
+                let dau = '';
+                if (words.length >= 2) dau = words.slice(0, 4).map((w) => w[0]).join('');
+                else dau = (words[0] || '').slice(0, 4);
+                if (!dau) return 'SP-' + Date.now().toString(36).toUpperCase();
+                return dau + '-' + String(Math.floor(Math.random() * 10000)).padStart(4, '0');
+            }
+
+            /** Nhãn đọc được của một mức thuế: "10%", "KCT", "KKKNT". */
+            function vatText(v) {
+                const n = Number(v);
+                if (n === -1) return 'KCT';
+                if (n === -2) return 'KKKNT';
+                return n + '%';
+            }
+
+            /** Khoá định danh của một tổ hợp thuộc tính — dùng để so hai biến thể. */
+            function attrKey(attrs) {
+                return (attrs || []).slice()
+                    .sort((a, b) => a.attribute_id - b.attribute_id)
+                    .map((a) => a.attribute_id + ':' + a.value_id)
+                    .join('|');
+            }
+
+            /**
+             * Mở modal cho một sản phẩm trong bảng — NẠP LẠI từ máy chủ trước.
+             *
+             * Bản nhúng sẵn trong trang là ảnh chụp lúc mở danh sách: người khác vừa
+             * sửa giá, kho vừa nhập hàng, hay ai đó vừa đổi trạng thái thì nó đã cũ.
+             * Sửa trên bản cũ rồi bấm Lưu là ghi đè công của người ta.
+             *
+             * Gọi hỏng thì vẫn mở bằng bản đang có, kèm một câu nói rõ đây là dữ
+             * liệu cũ — thà cho làm việc tiếp còn hơn chặn cứng.
+             */
+            async function openModalById(mode, id) {
+                const cached = BY_ID.get(id);
+                const row = document.querySelector(`tr[data-id="${id}"]`);
+                if (row) row.classList.add('is-loading');
+
+                let fresh = null;
+                try {
+                    const res = await fetch(URL_SHOW(id), { headers: { Accept: 'application/json' } });
+                    const data = await res.json().catch(() => ({}));
+                    if (res.ok && data.data) {
+                        fresh = data.data;
+                        BY_ID.set(id, fresh);
+                    } else if (res.status === 404) {
+                        if (row) row.classList.remove('is-loading');
+                        toastErr('Mặt hàng này không còn tồn tại — có thể vừa bị xoá. Hãy tải lại trang.');
+                        return;
+                    }
+                } catch (err) {
+                    // Rơi xuống dùng bản cũ ngay dưới.
+                }
+                if (row) row.classList.remove('is-loading');
+
+                if (!fresh) {
+                    if (!cached) { toastErr('Không tải được mặt hàng. Kiểm tra kết nối API.'); return; }
+                    toastErr('Không tải được dữ liệu mới nhất — đang mở bản đã tải lúc vào trang.');
+                }
+                openModal(mode, fresh || cached);
+            }
+
+            // Trạng thái của hộp thoại đang mở — saveModal() nằm ngoài openModal()
+            // nên giá trị này phải ở scope chung, không được khai bằng const bên trong.
+            let variantsKnown = true;
+
+            function openModal(mode, p) {
+                const isEdit = mode === 'edit';
+                const isView = mode === 'view';
+                const g = (k, d = '') => ((isEdit || isView) && p && p[k] != null ? p[k] : d);
+
+                // Quy tắc bản cũ v2: chỉ NHÓM LÁ dưới nhánh "Hàng bán" mới gắn hàng
+                // được. Nhóm cha vẫn bày ra nhưng khoá lại — bỏ hẳn thì người dùng
+                // mất luôn đường nhìn ra món này nằm nhánh nào.
+                //
+                // Mặt hàng cũ đang nằm ở một nhóm ngoài tập ấy (nhánh khác, hoặc
+                // nhóm vừa được thêm con nên hết là lá) thì vẫn phải chọn được chính
+                // nó, nếu không lượt Lưu sau âm thầm đổi nhóm của người ta.
+                const catNow = (isEdit || isView) && p && p.category_id != null ? Number(p.category_id) : 0;
+                const catOpts = ['<option value="">Chọn nhóm hàng hóa</option>'].concat(
+                    CATEGORIES.filter((c) => c.sellable || Number(c.id) === catNow).map((c) => {
+                        const chonDuoc = (c.leaf && c.sellable) || Number(c.id) === catNow;
+                        const sel = catNow === Number(c.id) ? 'selected' : '';
+                        const pad = '&nbsp;&nbsp;'.repeat(Math.max(0, c.level)) + (c.level > 0 ? '└ ' : '');
+                        return `<option value="${c.id}" data-vat="${c.vat}" ${sel} ${chonDuoc ? '' : 'disabled'}>${pad}${esc(c.name)}</option>`;
+                    })
+                ).join('');
+
+                // Ô chọn vị trí. LOCATIONS chỉ chứa vị trí ĐANG BẬT, nên sản phẩm đang
+                // để ở một vị trí vừa bị tắt sẽ không tìm thấy dòng của nó — và lượt
+                // Lưu tiếp theo âm thầm gỡ mất vị trí ấy. Chèn lại dòng đó vào đầu
+                // danh sách, ghi rõ là đã tắt.
+                const locId = (isEdit || isView) && p && p.location_id != null ? Number(p.location_id) : 0;
+                const locList = LOCATIONS.slice();
+                if (locId > 0 && !locList.some((l) => Number(l.id) === locId)) {
+                    const cu = p && p.location ? p.location : null;
+                    locList.unshift({ id: locId, code: (cu && cu.code) || '', name: ((cu && cu.name) || 'Vị trí không còn bày ra') + ' (đã tắt)' });
+                }
+                const locOpts = ['<option value="0">Chưa gán vị trí</option>'].concat(
+                    locList.map((l) => {
+                        const sel = locId === Number(l.id) ? 'selected' : '';
+                        const nhan = l.code ? `${esc(l.code)} · ${esc(l.name)}` : esc(l.name);
+                        return `<option value="${l.id}" ${sel}>${nhan}</option>`;
+                    })
+                ).join('');
+
+                // Ô chọn đơn vị tính. Cùng cách chèn lại dòng "đã tắt" như vị trí:
+                // đơn vị vừa bị tắt mà mặt hàng đang dùng thì phải còn trong danh
+                // sách, không thì lượt Lưu sau âm thầm gỡ mất đơn vị ấy.
+                const unitId = (isEdit || isView) && p && p.unit_id != null ? Number(p.unit_id) : 0;
+                const unitList = UNITS.slice();
+                if (unitId > 0 && !unitList.some((u) => Number(u.id) === unitId)) {
+                    const cu = p && p.unit ? p.unit : null;
+                    unitList.unshift({ id: unitId, code: (cu && cu.code) || '', name: ((cu && cu.name) || 'Đơn vị không còn bày ra') + ' (đã tắt)' });
+                }
+                const unitOpts = ['<option value="0">Chưa khai</option>'].concat(
+                    unitList.map((u) => {
+                        const sel = unitId === Number(u.id) ? 'selected' : '';
+                        const nhan = u.code ? `${esc(u.code)} · ${esc(u.name)}` : esc(u.name);
+                        return `<option value="${u.id}" ${sel}>${nhan}</option>`;
+                    })
+                ).join('');
+
+                // Mức thuế: bộ mức lấy từ màn Thuế. Mặt hàng cũ mang một mức đã bị
+                // bỏ tick ở đó thì vẫn phải hiện ra, không thì lưu lại là đổi thuế.
+                const vatNow = (isEdit || isView) && p && p.vat != null ? Number(p.vat) : 0;
+                const vatList = VAT_RATES.slice();
+                if (!vatList.includes(vatNow)) vatList.unshift(vatNow);
+                const vatOpts = vatList.map((v) => {
+                    const sel = v === vatNow ? 'selected' : '';
+                    return `<option value="${v}" ${sel}>${esc(VAT_LABELS[v] || vatText(v))}</option>`;
+                }).join('');
+
+                // Trạng thái kinh doanh. Mặt hàng mới mở sẵn công tắc "đang bán" như
+                // bản cũ; muốn khai xong giá, ảnh rồi mới bán thì tắt công tắc đi.
+                const status = (isEdit || isView) && p
+                    ? (STATUSES[p.status] ? p.status : (p.is_active ? 'active' : 'hidden'))
+                    : 'active';
+
+                const thumb = g('thumbnail', '');
+
+                // Biến thể hiện có (khi sửa/xem) — lấy từ dữ liệu sản phẩm đã preload.
+                const existingVariants = ((isEdit || isView) && p && Array.isArray(p.variants)) ? p.variants : [];
+                const varRowsHtml = existingVariants.map((v) => variantRowHtml(v, isView)).join('');
+
+                // Hộp thoại có THẬT SỰ nắm được biến thể của mặt hàng này không?
+                //
+                // Lúc lưu, mảng rỗng gửi lên nghĩa là "xoá sạch" — API xoá cứng mọi
+                // biến thể không nằm trong danh sách. Nên nếu dữ liệu về thiếu (API
+                // chưa chạy nên rơi về bản đã tải sẵn), hộp thoại PHẢI im lặng bỏ
+                // qua phần này thay vì gửi mảng rỗng và xoá sạch của người ta.
+                //
+                // Thêm mặt hàng mới thì đương nhiên là nắm được: chưa có gì để mất.
+                variantsKnown = !isEdit || !!(p && Array.isArray(p.variants));
+
+                // Hàng nhiều biến thể hay hàng đơn? Bảng biến thể và ô Mã vạch ở
+                // tab Chi tiết bật/tắt theo đúng câu trả lời này.
+                const coToHop = existingVariants.some((v) => Array.isArray(v.attributes) && v.attributes.length > 0);
+                // Hàng đơn chỉ có một dòng biến thể mặc định; mã vạch của nó chính là
+                // mã vạch của mặt hàng, nên bày thẳng ở tab Chi tiết như v2.
+                const donMacDinh = coToHop ? null : (existingVariants[0] || null);
+                const barcodeDon = donMacDinh && donMacDinh.barcode ? donMacDinh.barcode : '';
+
+                // Bốn công tắc. Mặt hàng mới lấy mặc định của bản cũ: đang bán, in
+                // tem và trừ kho bật sẵn, seri tắt.
+                const dangBan = (isEdit || isView) && p ? status === 'active' : true;
+                const coInTem = (isEdit || isView) && p ? !!p.print_label : true;
+                const coTruKho = (isEdit || isView) && p ? !!p.is_stock_deducted : true;
+                const coSeri = (isEdit || isView) && p ? !!p.is_serial : false;
+
+                // Quy đổi đơn vị đang khai của mặt hàng.
+                const quyDoi = ((isEdit || isView) && p && Array.isArray(p.unit_conversions)) ? p.unit_conversions : [];
+
+                const modalTitle = isView ? 'Chi tiết hàng hóa' : (isEdit ? 'Sửa hàng hóa' : 'Thêm mới');
+
+                // Tổng tồn kho để in lên đầu modal — người sửa giá cần thấy ngay còn
+                // bao nhiêu hàng, khỏi phải đóng modal ra tra lại bảng.
+                const totalStock = existingVariants.reduce((s, v) => s + Math.max(0, Number(v.stock_quantity || 0)), 0);
+
+                $modalMount.innerHTML = `
+                    <div class="prd-overlay">
+                        <div class="prd-dialog" id="prdDialog">
+                            <div class="prd-modal-head">
+                                <div class="prd-modal-headmain">
+                                    <h4 class="prd-modal-title">${modalTitle}</h4>
+                                    ${(isEdit || isView) && p ? `<div class="prd-modal-sub">
+                                        <span class="prd-code">${fmtProdCode(p.id)}</span>
+                                        <span class="prd-modal-sep">·</span>
+                                        <span class="prd-status prd-status-${status} is-static">
+                                            <span class="prd-status-dot"></span>${esc(STATUSES[status] || '')}
+                                        </span>
+                                        <span class="prd-modal-sep">·</span>
+                                        <span>Tồn kho ${fmtInt(totalStock)}</span>
+                                    </div>` : '<div class="prd-modal-sub">Mã hàng được cấp sau khi lưu</div>'}
+                                </div>
+                                <button type="button" class="prd-modal-x" id="prdModalX">
+                                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                                </button>
+                            </div>
+
+                            {{-- Hai tab đúng như bản cũ v2. Lỗi nằm ở tab đang đóng thì
+                                 tab đó sáng đỏ và tự mở ra. --}}
+                            <div class="prd-tabs" role="tablist">
+                                <button type="button" class="prd-tab is-active" data-tab="info" role="tab">Chi tiết</button>
+                                <button type="button" class="prd-tab" data-tab="attr" role="tab">Thuộc tính</button>
+                            </div>
+
+                            <div class="prd-modal-body">
+                            {{-- ===== Tab 1: Chi tiết ===== --}}
+                            <section class="prd-panel is-active" data-panel="info">
+                                <div class="prd-two">
+                                    {{-- Cột trái: nhãn "Hình ảnh", ô ảnh, nút Tải lên, rồi
+                                         khung có viền chứa các công tắc — xếp đúng như bản cũ. --}}
+                                    <div class="prd-side">
+                                        <p class="prd-side-title">Hình ảnh</p>
+                                        <div class="prd-img-preview" id="mImgPreview"></div>
+                                        ${isView ? '' : `<button type="button" class="prd-upload-btn" id="mImgPick">Tải lên</button>
+                                        <input type="file" id="mImgInput" accept="image/*" hidden>`}
+
+                                        {{-- Bốn công tắc, đúng thứ tự bản cũ. --}}
+                                        <div class="prd-side-box">
+                                            <div class="prd-side-row">
+                                                <span class="prd-switch-label">Trạng thái</span>
+                                                <button type="button" class="prd-switch ${dangBan ? 'on' : ''}" id="mActive" data-on="${dangBan ? 1 : 0}"><span class="prd-switch-knob"></span></button>
+                                            </div>
+                                            <div class="prd-side-row">
+                                                <span class="prd-switch-label">In tem</span>
+                                                <button type="button" class="prd-switch ${coInTem ? 'on' : ''}" id="mPrintLabel" data-on="${coInTem ? 1 : 0}"><span class="prd-switch-knob"></span></button>
+                                            </div>
+                                            <div class="prd-side-row">
+                                                <span class="prd-switch-label">Trừ kho</span>
+                                                <button type="button" class="prd-switch ${coTruKho ? 'on' : ''}" id="mStockDeducted" data-on="${coTruKho ? 1 : 0}"><span class="prd-switch-knob"></span></button>
+                                            </div>
+                                            <div class="prd-side-row">
+                                                <span class="prd-switch-label">Số seri/IMEI</span>
+                                                <button type="button" class="prd-switch ${coSeri ? 'on' : ''}" id="mSerial" data-on="${coSeri ? 1 : 0}"><span class="prd-switch-knob"></span></button>
+                                            </div>
+                                        </div>
+                                        {{-- Mặt hàng đang NGỪNG KINH DOANH: công tắc chỉ có hai nấc nên
+                                             không diễn tả được mức thứ ba. Nói thẳng ra đây, và lượt Lưu
+                                             gửi cờ bật/tắt để máy chủ giữ nguyên mức ấy (xem
+                                             resolveProductStatus) thay vì hạ xuống "tạm ẩn". --}}
+                                        ${status === 'discontinued' ? '<p class="prd-hint">Mặt hàng đang <b>ngừng kinh doanh</b>. Bật công tắc để bán lại; để tắt thì giữ nguyên mức này.</p>' : ''}
+                                        ${isView ? '' : `<button type="button" class="prd-btn-ghost prd-img-remove" id="mImgRemove">Xoá ảnh</button>`}
+                                    </div>
+
+                                    {{-- Cột phải: lưới BỐN ô mỗi hàng, đúng như bản cũ. --}}
+                                    <div class="prd-body">
+                                        <div class="prd-grid4">
+                                            <div>
+                                                <label class="prd-field-label" for="mSku">Mã hàng hóa ${MA_TU_SINH ? '' : '<span class="prd-req">*</span>'}</label>
+                                                <input type="text" id="mSku" class="prd-input" value="${esc(g('sku'))}"
+                                                       placeholder="${MA_TU_SINH ? 'Mã tăng tự động' : 'Mã hàng hóa'}"
+                                                       ${MA_TU_SINH && !isEdit ? 'readonly' : ''}>
+                                                <p class="prd-err" data-err="mSku"></p>
+                                            </div>
+                                            <div>
+                                                <label class="prd-field-label" for="mName">Tên hàng hóa <span class="prd-req">*</span></label>
+                                                <input type="text" id="mName" class="prd-input" placeholder="Tên hàng hóa" value="${esc(g('name'))}">
+                                                <p class="prd-err" data-err="mName"></p>
+                                            </div>
+                                            <div>
+                                                <label class="prd-field-label" for="mBarcode">Bar/Qr Code</label>
+                                                <input type="text" id="mBarcode" class="prd-input" value="${esc(barcodeDon)}" placeholder="Mã vạch">
+                                                {{-- Hàng nhiều biến thể thì mỗi biến thể một mã vạch
+                                                     riêng, khai ở tab Thuộc tính — ô này khoá lại. --}}
+                                                <p class="prd-hint" id="mBarcodeHint"></p>
+                                            </div>
+                                            <div>
+                                                <label class="prd-field-label" for="mCategory">Nhóm hàng hóa <span class="prd-req">*</span></label>
+                                                <select id="mCategory" class="prd-msel">${catOpts}</select>
+                                                <p class="prd-err" data-err="mCategory"></p>
+                                            </div>
+                                        </div>
+
+                                        <div class="prd-grid4">
+                                            <div>
+                                                <label class="prd-field-label" for="mBasePrice">Giá bán <span class="prd-req">*</span></label>
+                                                <div class="prd-input-prefix">
+                                                    <input type="text" inputmode="numeric" id="mBasePrice" class="prd-input" placeholder="Giá bán" value="${(isEdit || isView) && p && p.base_price != null ? fmtVnd(p.base_price) : ''}">
+                                                    <span class="prd-input-suffix">₫</span>
+                                                </div>
+                                                <p class="prd-err" data-err="mBasePrice"></p>
+                                            </div>
+                                            <div>
+                                                <label class="prd-field-label" for="mCostPrice">Giá vốn</label>
+                                                <div class="prd-input-prefix">
+                                                    <input type="text" inputmode="numeric" id="mCostPrice" class="prd-input" placeholder="Giá vốn" value="${p && p.cost_price != null ? fmtVnd(p.cost_price) : ''}">
+                                                    <span class="prd-input-suffix">₫</span>
+                                                </div>
+                                                <p class="prd-err" data-err="mCostPrice"></p>
+                                            </div>
+                                            <div>
+                                                <label class="prd-field-label" for="mUnit">Đơn vị tính</label>
+                                                <select id="mUnit" class="prd-msel">${unitOpts}</select>
+                                            </div>
+                                            <div>
+                                                {{-- Thẻ hàng hóa: nhãn người bán tự dán, thu ngân sẽ bày
+                                                     thành dãy phím lọc. Tick thẻ có sẵn hoặc gõ thẻ mới. --}}
+                                                <label class="prd-field-label">Thẻ hàng hóa</label>
+                                                <div class="prd-pick" data-pick="tags">
+                                                    <button type="button" class="prd-pick-btn" ${isView ? 'disabled' : ''}>
+                                                        <span class="prd-pick-text">Chưa dán thẻ</span>
+                                                        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                                                    </button>
+                                                    <div class="prd-pick-pop">
+                                                        <div class="prd-pick-list"></div>
+                                                        <div class="prd-pick-new">
+                                                            <input type="text" class="prd-input prd-input-sm" maxlength="50" placeholder="Thẻ mới rồi Enter">
+                                                            <button type="button" class="prd-btn-primary prd-btn-xs">Thêm</button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="prd-grid4">
+                                            <div>
+                                                <label class="prd-field-label" for="mVat">% VAT</label>
+                                                <select id="mVat" class="prd-msel">${vatOpts}</select>
+                                            </div>
+                                            <div>
+                                                {{-- Giá bán và giá sau thuế tự tính cho nhau theo %VAT
+                                                     đang chọn, y như bản cũ. Chỉ giá bán được lưu. --}}
+                                                <label class="prd-field-label" for="mPriceAfterTax">Giá sau thuế</label>
+                                                <div class="prd-input-prefix">
+                                                    <input type="text" inputmode="numeric" id="mPriceAfterTax" class="prd-input" placeholder="Tự tính">
+                                                    <span class="prd-input-suffix">₫</span>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <label class="prd-field-label" for="mLocation">Vị trí</label>
+                                                <select id="mLocation" class="prd-msel">${locOpts}</select>
+                                            </div>
+                                            <div>
+                                                {{-- Chi nhánh QUẢN LÝ mặt hàng. Không tick gì = mọi chi
+                                                     nhánh — cửa hàng một chi nhánh không phải đụng tới. --}}
+                                                <label class="prd-field-label">Chi nhánh</label>
+                                                <div class="prd-pick" data-pick="shops">
+                                                    <button type="button" class="prd-pick-btn" ${isView ? 'disabled' : ''}>
+                                                        <span class="prd-pick-text">Mọi chi nhánh</span>
+                                                        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                                                    </button>
+                                                    <div class="prd-pick-pop">
+                                                        <div class="prd-pick-list"></div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {{-- KHÔNG có ô "Giá khuyến mãi": giảm giá là việc của màn
+                                             Khuyến mãi, nơi khai được thời gian chạy và điều kiện áp
+                                             dụng. Một ô giá nằm ở đây thì không ai biết nó hết hạn
+                                             lúc nào. --}}
+                                        <div class="prd-grid4">
+                                            <div class="prd-col-4">
+                                                <label class="prd-field-label" for="mShortDesc">Mô tả ngắn</label>
+                                                <input type="text" id="mShortDesc" class="prd-input" maxlength="500" placeholder="Một hai câu giới thiệu" value="${esc(g('short_description'))}">
+                                            </div>
+                                        </div>
+
+                                        <div class="prd-price-preview" id="mPricePreview"></div>
+
+                                        {{-- Quy đổi đơn vị hàng hoá — đúng chỗ và đúng dạng bản cũ:
+                                             khối xếp gọn ở chân cột phải, có nút Thêm và nút xoá hết. --}}
+                                        <details class="prd-acc" ${quyDoi.length ? 'open' : ''}>
+                                            <summary>
+                                                Quy đổi đơn vị hàng hóa
+                                                ${isView ? '' : `<span class="prd-acc-tools">
+                                                    <button type="button" class="prd-btn-primary prd-btn-xs" id="mConvAdd">Thêm</button>
+                                                    <button type="button" class="prd-btn-x" id="mConvClear" title="Xoá hết dòng quy đổi">&times;</button>
+                                                </span>`}
+                                            </summary>
+                                            <div class="prd-acc-body">
+                                                <div class="prd-conv-head">
+                                                    <span>SL quy đổi</span>
+                                                    <span>ĐV quy đổi</span>
+                                                    <span class="prd-conv-eq">=</span>
+                                                    <span>Số lượng</span>
+                                                    <span>ĐVT chính</span>
+                                                    <span></span>
+                                                </div>
+                                                <div id="mConvRows">${quyDoi.map((c) => convRowHtml(c, isView)).join('')}</div>
+                                                <p class="prd-conv-empty" id="mConvEmpty" ${quyDoi.length ? 'hidden' : ''}>Chưa khai quy đổi nào.</p>
+                                                <p class="prd-err" data-err="mConvRows"></p>
+                                            </div>
+                                        </details>
+
+                                        <details class="prd-acc">
+                                            <summary>Mô tả chi tiết &amp; SEO</summary>
+                                            <div class="prd-acc-body">
+                                                <div>
+                                                    <label class="prd-field-label" for="mDesc">Mô tả chi tiết</label>
+                                                    <textarea id="mDesc" class="prd-textarea" placeholder="Thông số, chất liệu, bảo hành...">${esc(g('description'))}</textarea>
+                                                </div>
+                                                <div class="prd-grid2" style="margin-top:12px">
+                                                    <div>
+                                                        <label class="prd-field-label" for="mMetaTitle">Meta title</label>
+                                                        <input type="text" id="mMetaTitle" class="prd-input" maxlength="255" placeholder="Bỏ trống = dùng tên hàng hóa" value="${esc(g('meta_title'))}">
+                                                    </div>
+                                                    <div>
+                                                        <label class="prd-field-label" for="mMetaDesc">Meta description</label>
+                                                        <input type="text" id="mMetaDesc" class="prd-input" maxlength="320" placeholder="Bỏ trống = tự lấy từ mô tả ngắn" value="${esc(g('meta_description'))}">
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </details>
+                                    </div>
+                                </div>
+                            </section>
+
+                            {{-- ===== Tab 2: Thuộc tính ===== --}}
+                            <section class="prd-panel" data-panel="attr">
+                                <div class="prd-var">
+                                    ${isView ? '' : `<div class="prd-attrs" id="mAttrs">${attrPickerHtml(existingVariants)}</div>`}
+
+                                    {{-- Bảng biến thể chỉ hiện khi có tổ hợp. Hàng đơn thì mã
+                                         vạch và giá khai ở tab Chi tiết, bày thêm một bảng một
+                                         dòng ở đây chỉ tổ hai chỗ nhập cho cùng một thứ. --}}
+                                    <div id="mVarWrap" ${coToHop ? '' : 'hidden'}>
+                                        <div class="prd-var-head">
+                                            <span>Tên biến thể</span>
+                                            <span>Mã hàng</span>
+                                            <span>Mã vạch</span>
+                                            <span>Giá riêng</span>
+                                            <span>Giá vốn riêng</span>
+                                            <span style="text-align:right">Tồn kho</span>
+                                            <span></span>
+                                        </div>
+                                        <div id="mVariants">${varRowsHtml}</div>
+                                    </div>
+                                    <p class="prd-err" data-err="mVariants"></p>
+                                    ${isView ? '' : `<p class="prd-hint">Giá riêng của biến thể đè giá khuyến mãi của mặt hàng. Tồn kho chỉ xem — đổi ở <a href="{{ route('admin.ton-kho-chi-nhanh.index') }}" target="_blank">Kho</a>.</p>`}
+                                </div>
+                            </section>
+                            </div>
+
+                            <div class="prd-modal-foot">
+                                {{-- Câu tóm tắt lỗi nằm ngay cạnh nút Lưu: người dùng bấm Lưu
+                                     là mắt đang ở đây, báo lỗi tận trên đầu trang thì không thấy. --}}
+                                <p class="prd-foot-msg" id="prdModalMsg"></p>
+                                <div class="prd-foot-btns">
+                                    <button type="button" class="prd-btn-ghost" id="prdModalClose">Đóng</button>
+                                    ${isView
+                                        ? `<button type="button" class="prd-btn-primary" id="prdModalToEdit">Chuyển sang sửa</button>`
+                                        : `<button type="button" class="prd-btn-primary" id="prdModalSave">Xác nhận</button>`
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    </div>`;
+
+                const dialog = document.getElementById('prdDialog');
+                dialog.dataset.mode = mode;
+                dialog.dataset.id = (isEdit || isView) && p ? p.id : '';
+                dialog.dataset.slug = (isEdit || isView) && p ? (p.slug || '') : '';
+                dialog.dataset.thumbnail = thumb || '';
+
+                // Đóng modal
+                document.getElementById('prdModalX').addEventListener('click', closeModal);
+                document.getElementById('prdModalClose').addEventListener('click', closeModal);
+
+                // Chuyển tab. Cuộn lên đầu mỗi lần đổi — không thì sang tab ngắn hơn
+                // là màn hình đứng ở chỗ trống.
+                const body = dialog.querySelector('.prd-modal-body');
+                dialog.querySelectorAll('.prd-tab').forEach((tab) => {
+                    tab.addEventListener('click', () => showTab(dialog, tab.dataset.tab, body));
+                });
+
+                // Chi nhánh quản lý mặt hàng. Chi nhánh đã ngừng hoạt động không
+                // nằm trong danh sách chọn nữa, nhưng mặt hàng đang gắn nó thì phải
+                // thấy — không thì lượt Lưu sau lặng lẽ gỡ mất.
+                const chiNhanhDaGan = ((p && p.shops) || []).map((c) => ({ id: c.id, name: c.name }));
+                const nguonChiNhanh = [...BRANCHES.map((c) => ({ id: c.id, name: c.name }))];
+                chiNhanhDaGan.forEach((c) => {
+                    if (!nguonChiNhanh.some((x) => x.id === c.id)) nguonChiNhanh.push(c);
+                });
+                dungOChon(dialog, 'shops', {
+                    nguon: nguonChiNhanh,
+                    dangChon: chiNhanhDaGan.map((c) => String(c.id)),
+                    chuaChon: 'Mọi chi nhánh',
+                    khongCo: 'Cửa hàng chưa mở chi nhánh nào.',
+                    chiDoc: isView,
+                });
+
+                // Thẻ đi theo TÊN chứ không theo id: ô này cho gõ thẻ mới tại chỗ.
+                const theDaDan = ((p && p.tags) || []).map((t) => t.name);
+                const nguonThe = [...TAGS.map((t) => t.name)];
+                theDaDan.forEach((ten) => {
+                    if (!nguonThe.some((x) => x.toLowerCase() === ten.toLowerCase())) nguonThe.push(ten);
+                });
+                dungOChon(dialog, 'tags', {
+                    nguon: nguonThe.map((ten) => ({ id: ten, name: ten })),
+                    dangChon: theDaDan,
+                    chuaChon: 'Chưa dán thẻ',
+                    khongCo: 'Chưa có thẻ nào — gõ tên bên dưới để mở thẻ mới.',
+                    chiDoc: isView,
+                });
+
+                // Bốn công tắc: bấm là lật, giá trị nằm ở data-on.
+                if (!isView) {
+                    ['mActive', 'mPrintLabel', 'mStockDeducted', 'mSerial'].forEach((id) => {
+                        const btn = document.getElementById(id);
+                        if (!btn) return;
+                        btn.addEventListener('click', () => {
+                            const on = btn.dataset.on === '1';
+                            btn.dataset.on = on ? '0' : '1';
+                            btn.classList.toggle('on', !on);
+                        });
+                    });
+                }
+
+                if (isView) {
+                    const dialogEl = document.getElementById('prdDialog');
+                    dialogEl.querySelectorAll('input, select, textarea').forEach(el => {
+                        el.disabled = true;
+                    });
+                    const toEditBtn = document.getElementById('prdModalToEdit');
+                    if (toEditBtn) {
+                        toEditBtn.addEventListener('click', () => {
+                            openModal('edit', p);
+                        });
+                    }
+                } else {
+                    // Ô giá — định dạng tiền VN ngay khi gõ (1.000.000)
+                    wireMoney('mBasePrice');
+                    wireMoney('mCostPrice');
+                    ['mBasePrice', 'mCostPrice'].forEach((id) => {
+                        const el = document.getElementById(id);
+                        if (el) el.addEventListener('input', renderPricePreview);
+                    });
+                    renderPricePreview();
+
+                    wireMoney('mPriceAfterTax');
+
+                    // Giá bán <-> giá sau thuế tự tính cho nhau theo %VAT đang chọn,
+                    // đúng như v2. KCT (-1) / KKKNT (-2) coi như 0%. Chỉ giá bán được
+                    // lưu; ô giá sau thuế chỉ để người khai đối chiếu với bảng giá.
+                    const vatEl2 = document.getElementById('mVat');
+                    const baseEl = document.getElementById('mBasePrice');
+                    const afterEl = document.getElementById('mPriceAfterTax');
+                    let dangDongBoGia = false;
+                    const mucVat = () => {
+                        const v = Number(vatEl2.value);
+                        return (isNaN(v) || v < 0) ? 0 : v;
+                    };
+                    const tinhSauThue = () => {
+                        if (dangDongBoGia) return;
+                        dangDongBoGia = true;
+                        const gia = Number(digitsOnly(baseEl.value) || 0);
+                        afterEl.value = gia > 0 ? fmtVnd(Math.round(gia * (1 + mucVat() / 100))) : '';
+                        dangDongBoGia = false;
+                    };
+                    const tinhGiaBan = () => {
+                        if (dangDongBoGia) return;
+                        dangDongBoGia = true;
+                        const sau = Number(digitsOnly(afterEl.value) || 0);
+                        baseEl.value = sau > 0 ? fmtVnd(Math.round(sau / (1 + mucVat() / 100))) : '';
+                        dangDongBoGia = false;
+                        renderPricePreview();
+                    };
+                    baseEl.addEventListener('input', tinhSauThue);
+                    afterEl.addEventListener('input', tinhGiaBan);
+                    vatEl2.addEventListener('change', tinhSauThue);
+                    tinhSauThue();
+
+                    // Quy đổi đơn vị: thêm dòng, xoá dòng, xoá hết.
+                    const convRows = document.getElementById('mConvRows');
+                    const convEmpty = document.getElementById('mConvEmpty');
+                    const syncConvEmpty = () => { convEmpty.hidden = !!convRows.querySelector('.prd-conv-row'); };
+                    // Tên đơn vị tính chính hiện ở cột cuối mỗi dòng cho đọc thành câu:
+                    // "1 Thùng = 24 Cái". Đổi ĐVT chính thì mọi dòng đổi theo.
+                    const syncConvMain = () => {
+                        const el = document.getElementById('mUnit');
+                        const ten = el && el.selectedOptions[0] && Number(el.value) > 0
+                            ? el.selectedOptions[0].textContent.split('·').pop().trim()
+                            : '—';
+                        convRows.querySelectorAll('.prd-conv-main').forEach((n) => { n.textContent = ten; });
+                    };
+                    // Hai nút nằm TRONG <summary> nên bấm là trình duyệt gập/mở khối
+                    // — chặn lại, và mở sẵn khối khi vừa thêm dòng.
+                    document.getElementById('mConvAdd').addEventListener('click', (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        convRows.closest('details').open = true;
+                        convRows.insertAdjacentHTML('beforeend', convRowHtml(null, false));
+                        syncConvEmpty();
+                        syncConvMain();
+                    });
+                    document.getElementById('mConvClear').addEventListener('click', (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        convRows.innerHTML = '';
+                        syncConvEmpty();
+                    });
+                    convRows.addEventListener('click', (e) => {
+                        const del = e.target.closest('.prd-conv-del');
+                        if (del) { del.closest('.prd-conv-row').remove(); syncConvEmpty(); }
+                    });
+                    document.getElementById('mUnit').addEventListener('change', syncConvMain);
+                    syncConvMain();
+
+                    // Ô Mã vạch ở tab Chi tiết chỉ dùng cho HÀNG ĐƠN. Hàng nhiều biến
+                    // thể thì mỗi biến thể một mã riêng, khai ở bảng bên tab Thuộc tính.
+                    const barcodeEl = document.getElementById('mBarcode');
+                    const barcodeHint = document.getElementById('mBarcodeHint');
+                    window.prdSyncBarcode = (nhieuBienThe) => {
+                        barcodeEl.disabled = !!nhieuBienThe;
+                        barcodeHint.textContent = nhieuBienThe
+                            ? 'Hàng nhiều biến thể: mã vạch khai ở tab Thuộc tính.'
+                            : '';
+                    };
+                    prdSyncBarcode(coToHop);
+
+                    // Tick / bỏ tick một giá trị thuộc tính là dựng lại bảng tổ hợp.
+                    //
+                    // Dựng lại chứ không thêm dồn: tổ hợp là TÍCH của các chiều đang
+                    // chọn, thêm một màu là mọi dung lượng đều sinh thêm một dòng.
+                    // Dòng cũ khớp đúng tổ hợp thì GIỮ NGUYÊN id, mã, mã vạch và giá —
+                    // đổi một chiều mà mất hết mã vạch đã dán là không chấp nhận được.
+                    const attrsBox = document.getElementById('mAttrs');
+                    if (attrsBox) {
+                        attrsBox.addEventListener('change', (e) => {
+                            const cb = e.target.closest('input[type="checkbox"]');
+                            if (!cb) return;
+                            cb.closest('.prd-attr-val').classList.toggle('is-on', cb.checked);
+                            regenVariants();
+                        });
+                    }
+
+                    // Mặt hàng MỚI chưa có dòng biến thể nào, mà mọi mặt hàng đều
+                    // phải có ít nhất DÒNG MẶC ĐỊNH — không thì lượt Lưu không gửi
+                    // biến thể nào và bị chặn ngay tại chỗ ("Bảng biến thể đang
+                    // trống"), tức là không thêm được mặt hàng nào cả.
+                    //
+                    // Dựng bằng chính regenVariants: chưa tick chiều nào thì nó sinh
+                    // đúng một dòng mặc định và giấu bảng tổ hợp đi — hàng đơn.
+                    if (!varRowsHtml) regenVariants();
+
+                    // Chọn nhóm hàng hóa thì ô thuế tự điền theo mức của nhóm — quy tắc
+                    // bản cũ v2 (odr_menu_groups.id_tax). Vẫn sửa đè được sau đó.
+                    //
+                    // Mức của nhóm có thể không nằm trong bộ mức đang bật ở màn Thuế
+                    // (vừa bị bỏ tick), nên chèn thêm dòng thay vì bỏ qua trong im lặng.
+                    const catEl = document.getElementById('mCategory');
+                    const vatEl = document.getElementById('mVat');
+                    if (catEl && vatEl) {
+                        catEl.addEventListener('change', () => {
+                            const opt = catEl.selectedOptions[0];
+                            if (!opt || !opt.dataset.vat) return;
+                            const v = opt.dataset.vat;
+                            if (!vatEl.querySelector(`option[value="${v}"]`)) {
+                                vatEl.insertAdjacentHTML('afterbegin',
+                                    `<option value="${v}">${esc(VAT_LABELS[v] || vatText(v))}</option>`);
+                            }
+                            vatEl.value = v;
+                        });
+                    }
+
+                    // Mã hàng tự ghép từ TÊN (vẫn sửa tay được).
+                    // Quy tắc đánh số đang bật thì mã do máy chủ đặt — trình duyệt
+                    // không ghép mã nữa, nếu không người dùng thấy một mã rồi lưu ra mã khác.
+                    let skuDirty = isEdit || MA_TU_SINH;
+                    const skuEl = document.getElementById('mSku');
+                    if (skuEl) skuEl.addEventListener('input', () => { skuDirty = true; });
+                    const refreshSku = () => { if (!skuDirty && skuEl) skuEl.value = genSku(); };
+                    const nameEl2 = document.getElementById('mName');
+                    if (nameEl2) nameEl2.addEventListener('input', refreshSku);
+                    if (!isEdit) refreshSku();
+                }
+
+                const varsBox = document.getElementById('mVariants');
+                if (!isView && varsBox) {
+                    // Xoá một dòng = bỏ tổ hợp đó. Bỏ tick ở khối thuộc tính cũng ra
+                    // cùng kết quả; giữ nút xoá ở đây cho trường hợp chỉ muốn bỏ đúng
+                    // một tổ hợp (VD "256GB · Vàng" không nhập nữa) mà vẫn giữ cả hai
+                    // chiều — tích đầy đủ thì bỏ tick không làm được việc ấy.
+                    varsBox.addEventListener('click', (e) => {
+                        const del = e.target.closest('.prd-var-del');
+                        if (del) del.closest('.prd-var-row').remove();
+                    });
+                    varsBox.addEventListener('input', (e) => {
+                        if (e.target.classList.contains('prd-var-price')
+                            || e.target.classList.contains('prd-var-cost')) formatMoneyEl(e.target);
+                    });
+                }
+
+                // Ảnh đại diện
+                const imgInput = document.getElementById('mImgInput');
+                const imgPreview = document.getElementById('mImgPreview');
+                const imgRemove = document.getElementById('mImgRemove');
+                const phSvg = `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>`;
+                const renderImg = (url) => {
+                    dialog.dataset.thumbnail = url || '';
+                    if (imgPreview) imgPreview.innerHTML = url ? `<img src="${esc(url)}" alt="">` : phSvg;
+                    if (imgRemove) imgRemove.style.display = (!isView && url) ? '' : 'none';
+                };
+                renderImg(thumb);
+
+                if (!isView) {
+                    const mImgPickBtn = document.getElementById('mImgPick');
+                    if (mImgPickBtn) mImgPickBtn.addEventListener('click', () => imgInput.click());
+                    if (imgRemove) imgRemove.addEventListener('click', () => { renderImg(''); imgInput.value = ''; });
+                    if (imgInput) {
+                        imgInput.addEventListener('change', async () => {
+                            const file = imgInput.files && imgInput.files[0];
+                            if (!file) return;
+                            if (!file.type.startsWith('image/')) { toastErr('File tải lên không phải ảnh.'); imgInput.value = ''; return; }
+                            if (file.size > MAX_IMG_BYTES) { toastErr('Ảnh vượt quá 10MB.'); imgInput.value = ''; return; }
+                            imgPreview.classList.add('is-loading');
+                            try {
+                                const fd = new FormData();
+                                fd.append('image', file);
+                                const res = await fetch(URL_UPLOAD, { method: 'POST', body: fd, headers: { 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' } });
+                                const data = await res.json().catch(() => ({}));
+                                if (!res.ok) { toastErr(data.message || 'Tải ảnh thất bại, vui lòng thử lại.'); return; }
+                                renderImg(data.url);
+                            } catch (err) {
+                                toastErr('Không kết nối được máy chủ để tải ảnh.');
+                            } finally {
+                                imgPreview.classList.remove('is-loading');
+                                imgInput.value = '';
+                            }
+                        });
+                    }
+
+                    const saveBtn = document.getElementById('prdModalSave');
+                    if (saveBtn) saveBtn.addEventListener('click', saveModal);
+                }
+                setTimeout(() => {
+                    const nameEl = document.getElementById('mName');
+                    if (nameEl && !isView) nameEl.focus();
+                }, 0);
+            }
+
+            /** Hiện một tab của modal, ẩn các tab còn lại. */
+            function showTab(dialog, key, body) {
+                dialog.querySelectorAll('.prd-tab').forEach((t) => t.classList.toggle('is-active', t.dataset.tab === key));
+                dialog.querySelectorAll('.prd-panel').forEach((s) => s.classList.toggle('is-active', s.dataset.panel === key));
+                if (body) body.scrollTop = 0;
+            }
+
+            /** Tab chứa một ô nhập — dùng để nhảy tới đúng chỗ khi ô đó báo lỗi. */
+            function tabOfField(id) {
+                const el = document.getElementById(id) || document.querySelector(`[data-err="${id}"]`);
+                const panel = el ? el.closest('.prd-panel') : null;
+                return panel ? panel.dataset.panel : 'info';
+            }
+
+            /** Xoá hết dấu lỗi đang hiện trong modal. */
+            function clearErrors(dialog) {
+                dialog.querySelectorAll('.prd-err').forEach((el) => { el.textContent = ''; });
+                dialog.querySelectorAll('.prd-input.is-err, .prd-msel.is-err').forEach((el) => el.classList.remove('is-err'));
+                dialog.querySelectorAll('.prd-tab.has-err').forEach((el) => el.classList.remove('has-err'));
+                const msg = document.getElementById('prdModalMsg');
+                if (msg) { msg.textContent = ''; msg.classList.remove('is-err'); }
+            }
+
+            /**
+             * Báo lỗi ngay tại ô sai: tô viền đỏ, in câu lỗi dưới ô, đánh dấu tab
+             * chứa nó rồi mở tab đó và đưa con trỏ vào.
+             *
+             * Trước đây mọi lỗi đều đổ ra một toast góc màn hình — người dùng đọc
+             * xong vẫn phải tự dò xem ô nào sai giữa mấy chục ô.
+             */
+            function showFieldError(dialog, fieldId, message) {
+                const body = dialog.querySelector('.prd-modal-body');
+                const slot = dialog.querySelector(`[data-err="${fieldId}"]`);
+                const input = document.getElementById(fieldId);
+                const key = tabOfField(fieldId);
+
+                if (slot) slot.textContent = message;
+                if (input) input.classList.add('is-err');
+                const tab = dialog.querySelector(`.prd-tab[data-tab="${key}"]`);
+                if (tab) tab.classList.add('has-err');
+
+                showTab(dialog, key, body);
+
+                const msg = document.getElementById('prdModalMsg');
+                if (msg) { msg.textContent = message; msg.classList.add('is-err'); }
+
+                if (input) {
+                    input.focus();
+                    input.scrollIntoView({ block: 'center', behavior: 'smooth' });
+                } else if (slot) {
+                    slot.scrollIntoView({ block: 'center', behavior: 'smooth' });
+                }
+            }
+
+            /**
+             * Dựng một ô CHỌN NHIỀU trong hộp thoại (chi nhánh, thẻ).
+             *
+             * Giá trị nằm ngay trên các ô tick chứ không giữ trong một biến riêng:
+             * lượt Lưu đọc thẳng từ DOM, nên không có đường nào để cái đang hiện và
+             * cái sắp gửi lệch nhau.
+             */
+            function dungOChon(dialog, ten, o) {
+                const boc = dialog.querySelector(`[data-pick="${ten}"]`);
+                if (!boc) return;
+                const nut = boc.querySelector('.prd-pick-btn');
+                const chu = boc.querySelector('.prd-pick-text');
+                const ds = boc.querySelector('.prd-pick-list');
+                const oMoi = boc.querySelector('.prd-pick-new input');
+                const nutMoi = boc.querySelector('.prd-pick-new button');
+
+                const dangChon = new Set(o.dangChon.map(String));
+
+                function ve() {
+                    ds.innerHTML = o.nguon.length
+                        ? o.nguon.map((m) => `
+                            <label class="prd-pick-item">
+                                <input type="checkbox" value="${esc(String(m.id))}" ${dangChon.has(String(m.id)) ? 'checked' : ''} ${o.chiDoc ? 'disabled' : ''}>
+                                <span>${esc(m.name)}</span>
+                            </label>`).join('')
+                        : `<p class="prd-pick-empty">${esc(o.khongCo)}</p>`;
+                    capNhatChu();
+                }
+
+                function capNhatChu() {
+                    const ten = o.nguon.filter((m) => dangChon.has(String(m.id))).map((m) => m.name);
+                    chu.textContent = ten.length ? ten.join(', ') : o.chuaChon;
+                    chu.title = ten.join(', ');
+                    boc.classList.toggle('is-empty', ten.length === 0);
+                }
+
+                ds.addEventListener('change', (e) => {
+                    const ô = e.target.closest('input[type=checkbox]');
+                    if (!ô) return;
+                    if (ô.checked) dangChon.add(ô.value); else dangChon.delete(ô.value);
+                    capNhatChu();
+                });
+
+                if (!o.chiDoc) {
+                    nut.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        boc.classList.toggle('open');
+                    });
+                    boc.addEventListener('click', (e) => e.stopPropagation());
+                    dialog.addEventListener('click', () => boc.classList.remove('open'));
+                }
+
+                // Ô "thẻ mới": tên chưa có thì thêm vào danh sách và tick sẵn.
+                if (oMoi && nutMoi) {
+                    const themThe = () => {
+                        const ten = oMoi.value.trim().replace(/\s+/g, ' ');
+                        if (!ten) return;
+                        const trung = o.nguon.find((m) => String(m.name).toLowerCase() === ten.toLowerCase());
+                        const khoa = trung ? String(trung.id) : ten;
+                        if (!trung) o.nguon.push({ id: ten, name: ten });
+                        dangChon.add(khoa);
+                        oMoi.value = '';
+                        ve();
+                    };
+                    nutMoi.addEventListener('click', themThe);
+                    oMoi.addEventListener('keydown', (e) => {
+                        if (e.key !== 'Enter') return;
+                        e.preventDefault();     // Enter trong hộp thoại vốn là Lưu
+                        themThe();
+                    });
+                }
+
+                ve();
+            }
+
+            /**
+             * Xem trước lãi gộp trên một cái.
+             *
+             * Giá bán và giá vốn nằm cách nhau một ô trong hộp thoại, và người khai
+             * hiếm khi trừ nhẩm — in thẳng con số ra đây thì bán dưới giá vốn lộ ra
+             * ngay lúc gõ, không đợi tới cuối tháng xem báo cáo.
+             *
+             * KHÔNG còn nhánh giá khuyến mãi: giảm giá do màn Khuyến mãi quyết, mà
+             * chương trình nào đang chạy thì hộp thoại này không biết.
+             */
+            function renderPricePreview() {
+                const box = document.getElementById('mPricePreview');
+                if (!box) return;
+                const base = Number(digitsOnly(document.getElementById('mBasePrice').value) || 0);
+                const cost = Number(digitsOnly(document.getElementById('mCostPrice').value) || 0);
+
+                if (base <= 0) { box.innerHTML = ''; return; }
+
+                const now = base;
+                const margin = cost > 0 ? now - cost : null;
+
+                box.innerHTML = `
+                    <span class="prd-pp-item">
+                        <small>Khách trả</small>
+                        <b>${fmtVnd(now)}₫</b>
+                    </span>
+                    ${margin !== null ? `<span class="prd-pp-item">
+                        <small>Lãi gộp mỗi cái</small>
+                        <b class="${margin < 0 ? 'prd-pp-loss' : ''}">${margin < 0 ? '−' : ''}${fmtVnd(Math.abs(margin))}₫</b>
+                    </span>` : ''}
+                    ${margin !== null && margin < 0 ? '<span class="prd-pp-note">Đang bán dưới giá vốn.</span>' : ''}`;
+            }
+
+            // Định dạng tiền VN cho 1 ô, giữ nguyên vị trí con trỏ khi chèn dấu chấm.
+            function formatMoneyEl(el) {
+                const before = el.value;
+                const caretFromEnd = before.length - el.selectionStart;
+                el.value = fmtVnd(before);
+                const pos = Math.max(0, el.value.length - caretFromEnd);
+                el.setSelectionRange(pos, pos);
+            }
+            function wireMoney(id) {
+                const el = document.getElementById(id);
+                if (el) el.addEventListener('input', () => formatMoneyEl(el));
+            }
+
+            /**
+             * HTML một dòng biến thể.
+             *
+             * v = { id, sku, barcode, name, price, cost_price, stock_quantity,
+             *       attributes: [{attribute_id, value_id}] }.
+             * v = null hoặc attributes rỗng -> dòng MẶC ĐỊNH của hàng đơn.
+             *
+             * Tồn kho hiển thị để đối chiếu nhưng KHÔNG phải ô nhập: cột này chỉ đổi
+             * qua nghiệp vụ kho nên mọi biến động đều có vết trong sổ kho.
+             */
+            function variantRowHtml(v, isView = false) {
+                const vid = v && v.id ? v.id : 0;
+                const attrs = (v && Array.isArray(v.attributes)) ? v.attributes.map((a) => ({
+                    attribute_id: Number(a.attribute_id), value_id: Number(a.value_id),
+                })) : [];
+                const ten = v ? String(v.name || '') : '';
+                const sku = v ? esc(v.sku || '') : '';
+                const barcode = v ? esc(v.barcode || '') : '';
+                const price = v && v.price != null ? fmtVnd(v.price) : '';
+                const cost = v && v.cost_price != null ? fmtVnd(v.cost_price) : '';
+                const stock = v && v.stock_quantity != null ? Number(v.stock_quantity) : 0;
+                const stockTitle = vid
+                    ? 'Tồn kho hiện tại — đổi ở trang Kho'
+                    : 'Biến thể mới luôn bắt đầu ở 0, phải nhập kho mới có hàng';
+                const nhan = ten || 'Hàng đơn (không biến thể)';
+                return `
+                    <div class="prd-var-row" data-vid="${vid}" data-attrs='${esc(JSON.stringify(attrs))}'>
+                        <span class="prd-var-name ${ten ? '' : 'is-plain'}" title="${esc(nhan)}">${esc(nhan)}</span>
+                        <input type="text" class="prd-input prd-var-sku" placeholder="Tự sinh" value="${sku}">
+                        <input type="text" class="prd-input prd-var-barcode" placeholder="Quét hoặc gõ"
+                               title="Mã vạch in trên hàng — quầy quét mã này để bán. Để trống nếu chưa dán tem."
+                               value="${barcode}">
+                        <div class="prd-input-prefix">
+                            <input type="text" inputmode="numeric" class="prd-input prd-var-price" placeholder="Theo giá hàng" value="${price}">
+                            <span class="prd-input-suffix">₫</span>
+                        </div>
+                        <div class="prd-input-prefix">
+                            <input type="text" inputmode="numeric" class="prd-input prd-var-cost" placeholder="Theo giá vốn hàng" value="${cost}">
+                            <span class="prd-input-suffix">₫</span>
+                        </div>
+                        <span class="prd-var-stock ${stock === 0 ? 'is-zero' : ''}" title="${stockTitle}">${fmtInt(stock)}</span>
+                        ${(isView || attrs.length === 0) ? '<span></span>' : '<button type="button" class="prd-var-del" title="Bỏ tổ hợp này">×</button>'}
+                    </div>`;
+            }
+
+            /**
+             * Một dòng quy đổi: 1 <đơn vị quy đổi> = <số lượng> <đơn vị tính chính>.
+             *
+             * Ô "SL quy đổi" khoá ở 1 như bản cũ — quy đổi luôn tính từ MỘT đơn vị,
+             * cho nhập số khác thì cùng một tỉ lệ có hai cách khai và báo cáo lệch.
+             */
+            function convRowHtml(c, isView = false) {
+                const unitId = c && c.unit_id ? Number(c.unit_id) : 0;
+                const qty = c && c.quantity != null ? c.quantity : '';
+                const opts = UNITS.map((u) => `<option value="${u.id}" ${unitId === Number(u.id) ? 'selected' : ''}>${esc(u.name)}</option>`).join('');
+                return `
+                    <div class="prd-conv-row">
+                        <input type="text" class="prd-input" value="1" disabled>
+                        <select class="prd-msel prd-conv-unit">${opts}</select>
+                        <span class="prd-conv-eq">=</span>
+                        <input type="text" inputmode="decimal" class="prd-input prd-conv-qty" placeholder="0" value="${esc(qty)}">
+                        <span class="prd-conv-main" id="">—</span>
+                        ${isView ? '<span></span>' : '<button type="button" class="prd-conv-del" title="Xoá dòng">×</button>'}
+                    </div>`;
+            }
+
+            /**
+             * Khối chọn thuộc tính: mỗi thuộc tính một hàng, giá trị là các chip tick được.
+             *
+             * Giá trị nào đang được một biến thể của mặt hàng dùng thì tick sẵn — mở
+             * hộp thoại sửa ra là thấy đúng bộ chiều đang bán, không phải tự nhớ.
+             */
+            function attrPickerHtml(variants) {
+                if (!ATTRIBUTES.length) {
+                    return '<p class="prd-attrs-empty">Chưa khai thuộc tính nào — mặt hàng sẽ là hàng đơn. '
+                        + 'Khai ở <a href="{{ route('admin.thuoc-tinh.index') }}" target="_blank">Hàng hóa → Thuộc tính</a>.</p>';
+                }
+
+                const dangDung = new Set();
+                (variants || []).forEach((v) => {
+                    (v.attributes || []).forEach((a) => dangDung.add(Number(a.value_id)));
+                });
+
+                return ATTRIBUTES.map((tt) => {
+                    const vals = (tt.values || []).map((gt) => {
+                        const on = dangDung.has(Number(gt.id));
+                        return `<label class="prd-attr-val ${on ? 'is-on' : ''}">
+                            <input type="checkbox" data-attr="${tt.id}" data-value="${gt.id}" data-name="${esc(gt.name)}" ${on ? 'checked' : ''}>
+                            <span>${esc(gt.name)}</span>
+                        </label>`;
+                    }).join('');
+                    if (!vals) return '';
+                    return `<div class="prd-attr-row">
+                        <span class="prd-attr-name" title="${esc(tt.name)}">${esc(tt.name)}</span>
+                        <span class="prd-attr-vals">${vals}</span>
+                    </div>`;
+                }).join('')
+                    + '<div class="prd-attrs-foot"><p class="prd-attrs-empty">'
+                    + 'Không tick gì = hàng đơn.</p></div>';
+            }
+
+            /** Tích Descartes của các chiều đang tick -> danh sách tổ hợp. */
+            function comboList() {
+                const box = document.getElementById('mAttrs');
+                if (!box) return [];
+                const theoThuocTinh = new Map();
+                box.querySelectorAll('input[type="checkbox"]:checked').forEach((cb) => {
+                    const aid = Number(cb.getAttribute('data-attr'));
+                    if (!theoThuocTinh.has(aid)) theoThuocTinh.set(aid, []);
+                    theoThuocTinh.get(aid).push({
+                        attribute_id: aid,
+                        value_id: Number(cb.getAttribute('data-value')),
+                        name: cb.getAttribute('data-name') || '',
+                    });
+                });
+                if (!theoThuocTinh.size) return [];
+
+                // Giữ đúng thứ tự thuộc tính như ATTRIBUTES bày ra: tên biến thể ghép
+                // theo thứ tự ấy, và người khai đọc lại thấy quen mắt.
+                const chieu = ATTRIBUTES
+                    .map((tt) => theoThuocTinh.get(Number(tt.id)))
+                    .filter(Boolean);
+
+                let out = [[]];
+                chieu.forEach((vals) => {
+                    const tiep = [];
+                    out.forEach((tohop) => vals.forEach((v) => tiep.push(tohop.concat([v]))));
+                    out = tiep;
+                });
+                return out;
+            }
+
+            /** Dựng lại bảng biến thể từ các chiều đang tick, giữ dữ liệu dòng cũ. */
+            function regenVariants() {
+                const box = document.getElementById('mVariants');
+                if (!box) return;
+
+                // Chụp lại dòng đang có theo khoá tổ hợp để không mất mã vạch / giá.
+                const cu = new Map();
+                [...box.querySelectorAll('.prd-var-row')].forEach((row) => {
+                    let attrs = [];
+                    try { attrs = JSON.parse(row.dataset.attrs || '[]'); } catch (e) { attrs = []; }
+                    cu.set(attrKey(attrs), {
+                        id: Number(row.dataset.vid || 0),
+                        sku: row.querySelector('.prd-var-sku').value,
+                        barcode: row.querySelector('.prd-var-barcode').value,
+                        price: digitsOnly(row.querySelector('.prd-var-price').value) || null,
+                        cost_price: digitsOnly(row.querySelector('.prd-var-cost').value) || null,
+                        stock_quantity: Number(digitsOnly(row.querySelector('.prd-var-stock').textContent) || 0),
+                    });
+                });
+
+                const combos = comboList();
+                // Hàng đơn thì giấu cả bảng đi và trả ô Mã vạch ở tab Chi tiết về
+                // dùng được — xem prdSyncBarcode.
+                const wrap = document.getElementById('mVarWrap');
+                if (wrap) wrap.hidden = combos.length === 0;
+                if (typeof prdSyncBarcode === 'function') prdSyncBarcode(combos.length > 0);
+
+                const dsach = combos.length
+                    ? combos.map((tohop) => ({
+                        attributes: tohop.map((v) => ({ attribute_id: v.attribute_id, value_id: v.value_id })),
+                        name: tohop.map((v) => v.name).join(' · '),
+                    }))
+                    : [{ attributes: [], name: '' }];
+
+                box.innerHTML = dsach.map((moi) => {
+                    const goc = cu.get(attrKey(moi.attributes)) || {};
+                    return variantRowHtml({
+                        id: goc.id || 0,
+                        sku: goc.sku || '',
+                        barcode: goc.barcode || '',
+                        name: moi.name,
+                        price: goc.price != null ? goc.price : null,
+                        cost_price: goc.cost_price != null ? goc.cost_price : null,
+                        stock_quantity: goc.stock_quantity || 0,
+                        attributes: moi.attributes,
+                    }, false);
+                }).join('');
+            }
+
+            function closeModal() { $modalMount.innerHTML = ''; }
+
+            function saveModal() {
+                const dialog = document.getElementById('prdDialog');
+                const val = (id) => document.getElementById(id).value.trim();
+                clearErrors(dialog);
+
+                const name = val('mName');
+                if (!name) { showFieldError(dialog, 'mName', 'Vui lòng nhập tên hàng hóa.'); return; }
+                const sku = val('mSku');
+                if (!sku && !MA_TU_SINH) { showFieldError(dialog, 'mSku', 'Vui lòng nhập mã hàng.'); return; }
+                const categoryId = document.getElementById('mCategory').value;
+                if (!categoryId) { showFieldError(dialog, 'mCategory', 'Vui lòng chọn nhóm hàng.'); return; }
+                const basePrice = digitsOnly(document.getElementById('mBasePrice').value);
+                if (basePrice === '' || Number(basePrice) < 0) { showFieldError(dialog, 'mBasePrice', 'Vui lòng nhập giá bán.'); return; }
+                // Giá vốn cao hơn giá bán chỉ cảnh báo chứ không chặn: hàng thanh lý bán
+                // dưới giá vốn là chuyện có thật, chặn ở đây là chặn nghiệp vụ đúng.
+                const costPrice = digitsOnly(document.getElementById('mCostPrice').value);
+
+                const fields = {
+                    name,
+                    sku,
+                    category_id: categoryId,
+                    // Luôn gửi, kể cả 0 ("chưa gán"): hai ô này có mặt ở mọi lượt sửa
+                    // nên để trống là ý muốn thật, không phải màn hình dựng hụt.
+                    location_id: Number(document.getElementById('mLocation').value || 0),
+                    unit_id: Number(document.getElementById('mUnit').value || 0),
+                    slug: dialog.dataset.slug || '',
+                    vat: document.getElementById('mVat').value,
+                    base_price: basePrice,
+                    // KHÔNG gửi sale_price: hộp thoại không còn ô ấy, mà gửi rỗng là
+                    // gỡ mất giá khuyến mãi đang chạy của màn Khuyến mãi.
+                    cost_price: costPrice,
+                    thumbnail: dialog.dataset.thumbnail || '',
+                    short_description: document.getElementById('mShortDesc').value.trim(),
+                    description: document.getElementById('mDesc').value.trim(),
+                    meta_title: val('mMetaTitle'),
+                    meta_description: val('mMetaDesc'),
+                    // Gửi CỜ BẬT/TẮT chứ không gửi status: công tắc chỉ có hai nấc,
+                    // mà trạng thái có ba mức. Máy chủ nhận cờ thì giữ nguyên mức
+                    // "ngừng kinh doanh" thay vì hạ xuống "tạm ẩn" — xem
+                    // resolveProductStatus bên API.
+                    is_active: document.getElementById('mActive').dataset.on === '1',
+                    print_label: document.getElementById('mPrintLabel').dataset.on === '1',
+                    is_stock_deducted: document.getElementById('mStockDeducted').dataset.on === '1',
+                    is_serial: document.getElementById('mSerial').dataset.on === '1',
+                };
+
+                // Chi nhánh và thẻ: gửi kèm cờ *_loaded để máy chủ phân biệt "gỡ hết"
+                // với "màn hình không dựng được ô ấy" — cùng quy ước với ảnh, biến thể
+                // và quy đổi đơn vị.
+                fields['shops_loaded'] = 1;
+                let si = 0;
+                dialog.querySelectorAll('[data-pick="shops"] input[type=checkbox]:checked').forEach((ô) => {
+                    fields[`shop_ids[${si}]`] = ô.value;
+                    si++;
+                });
+                fields['tags_loaded'] = 1;
+                let ti = 0;
+                dialog.querySelectorAll('[data-pick="tags"] input[type=checkbox]:checked').forEach((ô) => {
+                    fields[`tags[${ti}]`] = ô.value;
+                    ti++;
+                });
+
+                const barcodeChiTiet = (document.getElementById('mBarcode').value || '').trim();
+
+                // Quy đổi đơn vị: chặn trùng đơn vị và trùng chính ĐVT của mặt hàng
+                // ngay tại đây — để API từ chối thì người dùng mất nguyên lượt Lưu.
+                const donViChinh = Number(document.getElementById('mUnit').value || 0);
+                const daCoDonVi = new Set();
+                let convErr = null;
+                let ci = 0;
+                fields['conversions_loaded'] = 1;
+                [...document.querySelectorAll('#mConvRows .prd-conv-row')].forEach((row) => {
+                    const uid = Number(row.querySelector('.prd-conv-unit').value || 0);
+                    const qty = (row.querySelector('.prd-conv-qty').value || '').replace(',', '.').trim();
+                    if (!uid && qty === '') return;   // dòng trống hoàn toàn
+                    if (!uid || Number(qty) <= 0) {
+                        convErr = convErr || 'Mỗi dòng quy đổi phải chọn đơn vị và nhập số lượng lớn hơn 0.';
+                        return;
+                    }
+                    if (donViChinh > 0 && uid === donViChinh) {
+                        convErr = convErr || 'Không khai quy đổi cho chính đơn vị tính của mặt hàng.';
+                        return;
+                    }
+                    if (daCoDonVi.has(uid)) {
+                        convErr = convErr || 'Mỗi đơn vị chỉ được khai quy đổi một lần.';
+                        return;
+                    }
+                    daCoDonVi.add(uid);
+                    fields[`unit_conversions[${ci}][unit_id]`] = uid;
+                    fields[`unit_conversions[${ci}][quantity]`] = qty;
+                    ci++;
+                });
+                if (convErr) { showFieldError(dialog, 'mConvRows', convErr); return; }
+
+                // Gom biến thể theo TỔ HỢP thuộc tính. Không gửi tồn kho — cột đó chỉ
+                // đổi qua nghiệp vụ kho.
+                const seen = new Set();
+                let vi = 0;
+                let variantErr = null;
+                [...document.querySelectorAll('#mVariants .prd-var-row')].forEach((row) => {
+                    let attrs = [];
+                    try { attrs = JSON.parse(row.dataset.attrs || '[]'); } catch (e) { attrs = []; }
+                    const ten = row.querySelector('.prd-var-name').textContent.trim();
+                    const skuBt = row.querySelector('.prd-var-sku').value.trim();
+                    const barcode = row.querySelector('.prd-var-barcode').value.trim();
+                    const price = digitsOnly(row.querySelector('.prd-var-price').value);
+                    const cost = digitsOnly(row.querySelector('.prd-var-cost').value);
+
+                    const key = attrKey(attrs);
+                    if (seen.has(key)) {
+                        variantErr = variantErr || `Tổ hợp bị trùng: ${ten || 'hàng đơn'}.`;
+                        return;
+                    }
+                    seen.add(key);
+
+                    fields[`variants[${vi}][id]`] = row.dataset.vid || '0';
+                    // Tên chỉ gửi khi có tổ hợp; hàng đơn để trống cho máy chủ hiểu
+                    // đây là dòng mặc định.
+                    fields[`variants[${vi}][name]`] = attrs.length ? ten : '';
+                    fields[`variants[${vi}][sku]`] = skuBt;             // '' = máy chủ tự ghép
+                    // Hàng đơn: mã vạch lấy từ ô ở tab Chi tiết, không phải từ bảng
+                    // (bảng đang bị giấu nên ô trong đó luôn rỗng).
+                    fields[`variants[${vi}][barcode]`] = attrs.length ? barcode : barcodeChiTiet;
+                    fields[`variants[${vi}][price]`] = price;           // '' nếu theo giá mặt hàng
+                    fields[`variants[${vi}][cost_price]`] = cost;       // '' nếu theo giá vốn mặt hàng
+                    attrs.forEach((a, ai) => {
+                        fields[`variants[${vi}][attributes][${ai}][attribute_id]`] = a.attribute_id;
+                        fields[`variants[${vi}][attributes][${ai}][value_id]`] = a.value_id;
+                    });
+                    vi++;
+                });
+                if (variantErr) { showFieldError(dialog, 'mVariants', variantErr); return; }
+                // Không đọc được biến thể thì báo đúng lý do, đừng bảo người ta
+                // "phải có ít nhất 1 dòng" trong khi mặt hàng vốn đang có đủ.
+                if (vi === 0 && !variantsKnown) {
+                    showFieldError(dialog, 'mVariants', 'Chưa đọc được danh sách biến thể của mặt hàng này. '
+                        + 'Hãy tải lại trang rồi mở lại — biến thể đang có vẫn nguyên vẹn.');
+                    return;
+                }
+                if (vi === 0) {
+                    showFieldError(dialog, 'mVariants', 'Bảng biến thể đang trống. Bỏ hết tick ở khối Thuộc tính để quay về hàng đơn.');
+                    return;
+                }
+
+                // Biến thể chỉ được gửi khi hộp thoại nắm được chúng.
+                if (!variantsKnown) {
+                    Object.keys(fields).forEach((k) => { if (k.startsWith('variants[')) delete fields[k]; });
+                } else {
+                    fields['variants_loaded'] = 1;
+                }
+
+                // KHÔNG gửi khoá `images`: mặt hàng chỉ có MỘT ảnh (ô Ảnh đại diện
+                // ở trên, đi theo trường `thumbnail`) — đúng như bản cũ v2. Gửi mảng
+                // rỗng ở đây nghĩa là "xoá sạch thư viện ảnh", mà hộp thoại này
+                // không còn quản lý thư viện ảnh nữa nên nó không có quyền nói câu đó.
+
+                if (dialog.dataset.mode === 'add') {
+                    postForm(URL_STORE, 'POST', fields);
+                } else {
+                    postForm(`${URL_BASE}/${dialog.dataset.id}`, 'PUT', fields);
+                }
+            }
+
+            // Đóng modal bằng phím Esc (modal nhỏ ưu tiên trước).
+            document.addEventListener('keydown', (e) => {
+                if (e.key !== 'Escape') return;
+                if ($modalMount.innerHTML) closeModal();
+            });
+
+            document.getElementById('prdAddBtn').addEventListener('click', () => openModal('add', null));
+
+            // Dropdown "Nâng cao" và "Cột": mở/đóng, mở cái này thì đóng cái kia,
+            // bấm ra ngoài đóng hết.
+            (function () {
+                const drops = [['prdUtil', 'prdUtilBtn'], ['prdCols', 'prdColsBtn']]
+                    .map(([boxId, btnId]) => ({
+                        box: document.getElementById(boxId),
+                        btn: document.getElementById(btnId),
+                    }))
+                    .filter((d) => d.box && d.btn);
+
+                const closeAll = (except) => drops.forEach((d) => {
+                    if (d.box === except) return;
+                    d.box.classList.remove('open');
+                    d.btn.setAttribute('aria-expanded', 'false');
+                });
+
+                drops.forEach((d) => {
+                    d.btn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        closeAll(d.box);
+                        const open = d.box.classList.toggle('open');
+                        d.btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+                    });
+                });
+
+                document.addEventListener('click', (e) => {
+                    drops.forEach((d) => { if (!d.box.contains(e.target)) d.box.classList.remove('open'); });
+                });
+                document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeAll(null); });
+            })();
+
+            // Bật/tắt cột của bảng. Ẩn bằng CSS (class trên <table>) thay vì gỡ ô ra
+            // khỏi DOM: dữ liệu vẫn còn nguyên nên bật lại là hiện ngay, và các thao
+            // tác đọc từ ô (tồn kho, trạng thái) không bị hụt phần tử.
+            (function () {
+                const STORE_KEY = 'prd_cols_hidden_v1';
+                // Không cho tắt: ô chọn, tên sản phẩm và cột thao tác — tắt đi thì
+                // bảng không còn nhận ra dòng nào là dòng nào.
+                // Đúng bộ cột tắt được của bản cũ v2: tám cột dữ liệu. Ô tick, STT
+                // và cột Thao tác không tắt được — tắt đi thì bảng không còn nhận
+                // ra dòng nào là dòng nào.
+                const COLS = [
+                    { key: 'sku', label: 'Mã hàng' },
+                    { key: 'name', label: 'Tên hàng hóa' },
+                    { key: 'cat', label: 'Nhóm hàng hóa' },
+                    { key: 'vat', label: 'VAT' },
+                    { key: 'unit', label: 'ĐVT' },
+                    { key: 'price', label: 'Giá bán' },
+                    { key: 'branch', label: 'Chi nhánh' },
+                    { key: 'status', label: 'Trạng thái' },
+                ];
+                const TOTAL_COLS = 11; // gồm cả 3 cột không tắt được
+
+                const table = document.querySelector('.prd-table');
+                const list = document.getElementById('prdColsList');
+                const badge = document.getElementById('prdColsCount');
+                const resetBtn = document.getElementById('prdColsReset');
+                if (!table || !list) return;
+
+                const valid = new Set(COLS.map((c) => c.key));
+
+                function load() {
+                    try {
+                        const raw = JSON.parse(localStorage.getItem(STORE_KEY));
+                        // Lọc theo danh sách cột hiện có: bản cũ lưu key đã bỏ thì kệ nó,
+                        // không để một key rác khoá luôn nút "Hiện tất cả".
+                        return Array.isArray(raw) ? raw.filter((k) => valid.has(k)) : [];
+                    } catch (e) { return []; }
+                }
+
+                function save(hidden) {
+                    try { localStorage.setItem(STORE_KEY, JSON.stringify(hidden)); } catch (e) { /* hết quota thì thôi */ }
+                }
+
+                function apply(hidden) {
+                    COLS.forEach((c) => table.classList.toggle('hide-' + c.key, hidden.includes(c.key)));
+
+                    // Dòng "chưa có sản phẩm" phải co theo số cột còn hiện, không thì
+                    // ô trống kéo dài quá khổ bảng.
+                    const empty = table.querySelector('.prd-empty');
+                    if (empty) empty.setAttribute('colspan', String(TOTAL_COLS - hidden.length));
+
+                    if (badge) {
+                        badge.hidden = hidden.length === 0;
+                        badge.textContent = String(hidden.length);
+                        badge.title = hidden.length ? ('Đang ẩn ' + hidden.length + ' cột') : '';
+                    }
+                    if (resetBtn) resetBtn.disabled = hidden.length === 0;
+                }
+
+                let hidden = load();
+
+                // Dòng "Tất cả" đứng đầu như v2: tick là hiện hết, bỏ tick là ẩn hết.
+                const veDanhSach = () => {
+                    const hetCa = hidden.length === 0;
+                    list.innerHTML = `
+                        <label class="prd-cols-item">
+                            <input type="checkbox" data-all ${hetCa ? 'checked' : ''}>
+                            <span><b>Tất cả</b></span>
+                        </label>`
+                        + COLS.map((c) => `
+                            <label class="prd-cols-item">
+                                <input type="checkbox" value="${c.key}" ${hidden.includes(c.key) ? '' : 'checked'}>
+                                <span>${c.label}</span>
+                            </label>`).join('');
+                };
+                veDanhSach();
+
+                list.addEventListener('change', (e) => {
+                    const cb = e.target.closest('input[type="checkbox"]');
+                    if (!cb) return;
+                    if (cb.hasAttribute('data-all')) {
+                        hidden = cb.checked ? [] : COLS.map((c) => c.key);
+                    } else {
+                        hidden = cb.checked ? hidden.filter((k) => k !== cb.value) : hidden.concat(cb.value);
+                    }
+                    save(hidden);
+                    veDanhSach();
+                    apply(hidden);
+                });
+
+                if (resetBtn) {
+                    resetBtn.addEventListener('click', () => {
+                        hidden = [];
+                        save(hidden);
+                        veDanhSach();
+                        apply(hidden);
+                    });
+                }
+
+                apply(hidden);
+            })();
+
+            // Modal Import file: mở/đóng.
+            (function () {
+                const overlay = document.getElementById('prdImportOverlay');
+                const openBtn = document.getElementById('prdImportBtn');
+                if (!overlay || !openBtn) return;
+                const close = () => { overlay.style.display = 'none'; };
+                openBtn.addEventListener('click', () => {
+                    overlay.style.display = 'flex';
+                    const u = document.getElementById('prdUtil');
+                    if (u) u.classList.remove('open');
+                });
+                document.getElementById('prdImportX').addEventListener('click', close);
+                document.getElementById('prdImportCancel').addEventListener('click', close);
+            })();
+        })();
+    </script>

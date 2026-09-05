@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200" fill="none">
+    <rect width="200" height="200" rx="12" fill="#FDECEC"/>
+    <!-- Tablet order -->
+    <rect x="55" y="38" width="90" height="124" rx="10" fill="#1B2C58"/>
+    <rect x="62" y="48" width="76" height="98" rx="4" fill="#FFFFFF"/>
+    <circle cx="100" cy="154" r="4" fill="#FFFFFF"/>
+    <!-- Dòng món + tick -->
+    <circle cx="73" cy="62" r="5" fill="#27AE60"/>
+    <path d="M70.6 62l1.8 1.8 3-3.4" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="83" y="59" width="48" height="6" rx="3" fill="#D2DAE6"/>
+    <circle cx="73" cy="82" r="5" fill="#27AE60"/>
+    <path d="M70.6 82l1.8 1.8 3-3.4" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="83" y="79" width="40" height="6" rx="3" fill="#D2DAE6"/>
+    <circle cx="73" cy="102" r="5" fill="#2D9CDB"/>
+    <rect x="83" y="99" width="44" height="6" rx="3" fill="#D2DAE6"/>
+    <!-- Nút gửi bếp -->
+    <rect x="62" y="118" width="76" height="18" rx="6" fill="#EE4D4D"/>
+    <rect x="86" y="125" width="28" height="4" rx="2" fill="#FFFFFF"/>
+    <!-- Bút -->
+    <g transform="rotate(38 152 84)">
+        <rect x="148" y="52" width="9" height="52" rx="2.5" fill="#FF8800"/>
+        <path d="M148 104h9l-4.5 10z" fill="#1B2C58"/>
+    </g>
+</svg>

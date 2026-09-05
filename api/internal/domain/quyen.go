@@ -186,6 +186,24 @@ var DanhMucQuyen = []KhuQuyen{
 							{Ma: "duyet", Ten: "Duyệt phiếu và nhập kho"},
 						},
 					},
+					{
+						Prefix: "tra-hang-ncc", Ten: "Trả hàng nhà cung cấp",
+						Viec: []string{QuyenXem, QuyenThem, QuyenSua, QuyenXoa},
+						Le: []QuyenLe{
+							// Cùng lý do với phiếu mua, chỉ ngược chiều: duyệt là lúc
+							// hàng RỜI kho thật.
+							{Ma: "duyet", Ten: "Duyệt phiếu trả và xuất kho"},
+						},
+					},
+					{
+						Prefix: "phieu-dieu-chuyen", Ten: "Phiếu điều chuyển",
+						Viec: []string{QuyenXem, QuyenThem, QuyenSua, QuyenXoa},
+						Le: []QuyenLe{
+							// Duyệt tách riêng như hai phiếu trên, nhưng nặng hơn cả
+							// hai: một cú bấm làm ĐỔI SỐ Ở HAI KHO cùng lúc.
+							{Ma: "duyet", Ten: "Duyệt phiếu và chuyển hàng giữa hai kho"},
+						},
+					},
 				},
 			},
 			{

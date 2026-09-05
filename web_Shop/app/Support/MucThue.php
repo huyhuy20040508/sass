@@ -55,6 +55,48 @@ class MucThue
         return self::MAC_DINH;
     }
 
+    /**
+     * CÁC LOẠI THUẾ đang bật, mỗi loại kèm bộ mức của nó.
+     *
+     * Hộp thoại khai hàng chia ô thuế làm hai: chọn LOẠI trước, rồi ô "% VAT"
+     * chỉ bày mức thuộc loại ấy. Bản v2 cũ cũng chia đúng như vậy (hàng 4-2-2-4:
+     * ĐVT | Thuế | %VAT | Giá sau thuế).
+     *
+     * Bốn loại khai cứng bên API (domain.DanhMucLoaiThue) nên danh sách này
+     * ngắn và ổn định; cửa hàng chỉ tắt/bật và tick mức nào cho hiện.
+     *
+     * @return array<int, array{loai: string, ten: string, muc: array<int, int>}>
+     */
+    public static function loaiThue(ApiClient $api): array
+    {
+        try {
+            $res = $api->taxes();
+            if ($res->successful()) {
+                $ds = [];
+                foreach ($res->json('data') ?? [] as $t) {
+                    // Loại đã tắt thì thôi bày ra: tắt nghĩa là màn nghiệp vụ
+                    // không dùng loại ấy nữa.
+                    if (empty($t['is_active']) || empty($t['muc'])) {
+                        continue;
+                    }
+                    $ds[] = [
+                        'loai' => (string) ($t['loai'] ?? ''),
+                        'ten' => (string) ($t['ten'] ?? ''),
+                        'muc' => array_map('intval', $t['muc']),
+                    ];
+                }
+                if ($ds !== []) {
+                    return $ds;
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Load tax types failed', ['msg' => $e->getMessage()]);
+        }
+
+        // API lỗi thì vẫn khai hàng được bằng bộ mức mặc định — chỉ mất ô chọn loại.
+        return [['loai' => 'mac-dinh', 'ten' => 'Thuế mặc định', 'muc' => self::MAC_DINH]];
+    }
+
     /** Nhãn đọc được của một mức: "10%", "KCT", "KKKNT". */
     public static function chu($muc): string
     {

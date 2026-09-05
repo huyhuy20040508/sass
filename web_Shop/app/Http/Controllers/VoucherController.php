@@ -94,6 +94,7 @@ class VoucherController extends Controller
             'filters' => $filters,
             'stats' => $stats,
             'meta' => $meta,
+            'chiNhanh' => $this->chiNhanhChoForm(),
         ]);
 
         return $error ? $view->with('error', $error) : $view;
@@ -304,6 +305,8 @@ class VoucherController extends Controller
             ])),
             'is_active' => ['nullable'],
             'is_public' => ['nullable'],
+            'shop_ids' => ['nullable', 'array'],
+            'shop_ids.*' => ['integer'],
         ], [
             'code.required' => 'Vui lòng nhập mã voucher.',
             'code.max' => 'Mã voucher tối đa 50 ký tự.',
@@ -354,7 +357,31 @@ class VoucherController extends Controller
             'end_at' => (string) ($validated['end_at'] ?? ''),
             'is_active' => $request->boolean('is_active'),
             'is_public' => $request->boolean('is_public'),
+            // Bỏ trống = dùng được ở MỌI chi nhánh — quy ước chung, đừng tự điền
+            // chi nhánh đang làm việc vào.
+            'shop_ids' => collect($validated['shop_ids'] ?? [])
+                ->map(fn ($v) => (int) $v)->filter()->unique()->values()->all(),
         ];
+    }
+
+    /**
+     * Danh sách chi nhánh cho ô "Chi nhánh" của biểu mẫu.
+     *
+     * Chỉ lấy chi nhánh ĐANG MỞ: gán một chương trình vào kho đã đóng thì nó
+     * không chạy ở đâu cả, mà màn hình lại nói là có chọn.
+     *
+     * Hỏng thì trả mảng rỗng — ô chọn biến mất và chương trình chạy toàn cửa
+     * hàng như trước, chứ không chặn người dùng lưu.
+     */
+    protected function chiNhanhChoForm(): array
+    {
+        try {
+            $res = $this->api->chiNhanh(true);
+
+            return $res->successful() ? ($res->json('data') ?? []) : [];
+        } catch (\Throwable $e) {
+            return [];
+        }
     }
 
     /** Mức giảm dạng chữ, dùng cho file xuất ra. */

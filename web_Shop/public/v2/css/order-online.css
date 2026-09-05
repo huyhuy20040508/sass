@@ -1,0 +1,334 @@
+html, body {
+    scroll-behavior: smooth;
+}
+.container-cus-90{
+    width: 89%;
+    margin: 0 auto;
+}
+.search-bar {
+    border-radius: 50px;
+    border: 1px solid #ddd;
+    padding: 6px 15px;
+    display: flex;
+    align-items: center;
+    width: 100%;
+    max-width: 600px;
+    background-color: #fff;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+.search-bar input {
+    border: none;
+    outline: none;
+    flex-grow: 1;
+    font-size: 16px;
+}
+.search-bar .fas {
+    color: #00bfa5;
+}
+.search-bar div {
+    flex-grow: 1;
+}
+.search-bar strong {
+    font-size: 16px;
+}
+.search-bar small {
+    font-size: 12px;
+    color: #888;
+    width: 100%;
+}
+.btn-link {
+    padding: 0;
+}
+.search-bar strong{
+    font-size: 13px;
+    width: 100% !important;
+}
+.btn-search{
+    background-color: #277799;
+    color: white;
+}
+.menu-group-list a.list-group-item{
+    font-weight: 500;
+}
+.group-menu:not(:first-child){
+    margin-top: 20px;
+}
+.group-menu{
+    background-color: #F6F8FE;
+    padding: 15px 25px;
+}
+.group-menu .title-group{
+    font-weight: bold;
+    font-size: 20px;
+}
+.icon-paginate a{
+    display: flex;
+    justify-content: center;
+    text-decoration: none;
+    align-items: center;
+    background-color: #00BABA;
+    color: white;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+}
+.icon-paginate{
+    display: flex;
+    gap:5px;
+}
+.group-menu .price-menu{
+    color: #1586FF;
+    font-weight: 500;
+}
+.group-menu .info-sold{
+    font-weight: 500;
+    width: 100%;
+    float: left;
+}
+.list-menu .div-menu{
+    cursor: pointer;
+}
+
+.modal-content {
+    border-radius: 8px;
+    border: 1px solid #ddd;
+}
+#orderModal .modal-body{
+    padding: 20px;
+}
+.modal-header {
+    border-bottom: none;
+}
+.modal-body {
+    padding: 0;
+}
+.form-check-label {
+    margin-left: 10px;
+}
+.form-check-input {
+    margin-left: 10px;
+}
+.price {
+    font-size: 24px;
+    font-weight: bold;
+}
+.orderModal .total-price {
+    color: red;
+    font-size: 18px;
+    font-weight: bold;
+}
+.quantity-control {
+    display: flex;
+    align-items: center;
+}
+.quantity-control button {
+    background-color: #007bff;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+}
+.quantity-control input {
+    width: 20px;
+    text-align: center;
+    border: none;
+}
+.add-to-cart-btn {
+    background-color: #ffc107;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 4px;
+    font-size: 16px;
+    font-weight: bold;
+}
+.group-inc-dev{
+    display: flex;
+    border: 1px solid #9F9B9B;
+    border-radius: 25px;
+}
+.popup-view-cart{
+    width: 30vw;
+    z-index: 9999;
+    position: absolute;
+    top: 20px;
+    right: 0vw;
+    display: none;
+    box-shadow: 0px 4px 4px 0px rgba(0, 0, 0, 0.25);
+    background-color: white;
+}
+.popup-view-cart table tbody .box-quantity button{
+    width: 25px;
+    height: 25px;
+    border-radius: 50%;
+    padding: 0px !important;
+}
+.cart-header {
+    background-color: #e0e0e0;
+    padding: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.cart-header a {
+    text-decoration: none;
+    color: black;
+}
+.cart-header .close-btn {
+    color: red;
+    font-size: 24px;
+}
+.cart-item {
+    padding: 10px;
+    margin-bottom: 10px;
+}
+.cart-item .item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.cart-item .item-header .item-title {
+    font-weight: bold;
+}
+.cart-item .item-header .item-price {
+    font-weight: bold;
+}
+.cart-item .item-options {
+    margin-top: 5px;
+    font-size: 12px;
+    margin-left: 15px;
+    color: #717171;
+}
+.cart-item .note-menu {
+    font-size: 12px;
+    color: #717171;
+}
+.cart-item .item-options .option {
+    display: flex;
+    align-items: center;
+}
+.cart-item .item-options .option i {
+    margin-right: 5px;
+}
+.total {
+    font-weight: bold;
+    font-size: 18px;
+}
+.popup-view-cart .total-price {
+    color: red;
+    font-size: 24px;
+}
+.note {
+    margin-top: 20px;
+}
+.note textarea {
+    width: 100%;
+    height: 100px;
+    padding-inline:4px;
+    border: 1px solid #ccc;
+}
+.order-btn {
+    background-color: #f0c040;
+    color: black;
+    font-weight: bold;
+    padding: 10px;
+    width: 100%;
+    border: none;
+    margin-top: 20px;
+    display: block;
+    text-align: center;
+    text-decoration: none;
+}
+.menu-group-list .list-group-item-action.active{
+    background-color: white;
+    border: 1px solid #FFCD01;
+    color: black;
+}
+.list-menu img{
+    width: 100%;
+    aspect-ratio: 4/3;
+}
+.list-menu .card-title{
+ font-size: 18px !important;
+ margin-bottom: 0px !important;
+}
+.col-menu{
+    /* height: 82vh;
+    overflow-y: auto; */
+}
+#orderModal .list-setmenu{
+    display: grid;
+    grid-template-columns: repeat(2, 1fr); 
+    gap: 10px;
+    margin-bottom: 15px;
+}
+#quantity {
+    max-width: 50px;
+    text-align: center;
+    font-weight: bold;
+}
+.btn-dec-inc-quantity button{
+    width: 35px;
+}
+.circle-container {
+    position: fixed;
+    top: 30%;
+    right: 0px;
+    width: 100px;
+    height: 100px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+.outer-circle {
+    cursor: pointer;
+    width: 80px;
+    height: 80px;
+    background-color: orange;
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+.inner-circle {
+    cursor: pointer;
+    width: 60px;
+    height: 60px;
+    background-color: #3498db;
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: white;
+    font-size: 13px;
+    text-align: center;
+}
+.col-delete-all .action-delete-all{
+    padding: 10px;
+    color: red;
+    border: 1px solid red;
+    cursor: pointer;
+}
+.popup-view-cart .cart-content table tbody {
+    max-height: 450px; 
+    overflow-y: auto; 
+    display: block;
+}
+.popup-view-cart .cart-content table tbody tr {
+  display: table;
+  width: 100%;
+}
+table {
+    width: 100%;
+}
+.table th {
+    border: 1px solid #8a8a8a !important;
+    text-align: center;
+    vertical-align: middle;
+}
+
+.required {
+    color: red!important;
+}

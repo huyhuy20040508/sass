@@ -107,6 +107,13 @@ func (s *voucherService) Create(ctx context.Context, req dto.VoucherRequest) (*d
 	if err := s.repo.Create(ctx, v); err != nil {
 		return nil, err
 	}
+	// Ghi SAU khi có id. Rỗng cũng gọi: đó là cách gỡ hết chi nhánh để mã dùng
+	// được ở mọi nơi trở lại.
+	if err := s.repo.ReplaceShops(ctx, v.ID, req.ShopIDs); err != nil {
+		return nil, err
+	}
+	// Gắn lại trước khi dựng phản hồi — xem ghi chú cùng chỗ ở promotion_service.
+	v.Shops = chiNhanhTuIDs(req.ShopIDs)
 	res := toVoucherResponse(v, time.Now())
 	return &res, nil
 }
@@ -123,6 +130,10 @@ func (s *voucherService) Update(ctx context.Context, id uint, req dto.VoucherReq
 	if err := s.repo.Update(ctx, v); err != nil {
 		return nil, err
 	}
+	if err := s.repo.ReplaceShops(ctx, v.ID, req.ShopIDs); err != nil {
+		return nil, err
+	}
+	v.Shops = chiNhanhTuIDs(req.ShopIDs)
 	res := toVoucherResponse(v, time.Now())
 	return &res, nil
 }
@@ -334,7 +345,13 @@ func parseVoucherTime(s string) (*time.Time, error) {
 }
 
 func toVoucherResponse(v *domain.Voucher, now time.Time) dto.VoucherResponse {
+	shops := make([]uint, 0, len(v.Shops))
+	for _, cn := range v.Shops {
+		shops = append(shops, cn.ID)
+	}
+
 	res := dto.VoucherResponse{
+		ShopIDs:           shops,
 		ID:                v.ID,
 		Code:              v.Code,
 		Description:       v.Description,

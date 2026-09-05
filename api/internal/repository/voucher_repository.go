@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"sass-api/internal/domain"
 )
@@ -58,6 +59,7 @@ func applyVoucherStatus(q *gorm.DB, status string, now time.Time) *gorm.DB {
 func (r *voucherRepository) List(ctx context.Context, f domain.VoucherFilter) ([]domain.Voucher, int64, error) {
 	now := time.Now()
 	q := r.db.WithContext(ctx).Model(&domain.Voucher{})
+	q = locGanChiNhanh(q, ctx, r.db, "voucher_shops", "voucher_id", "vouchers")
 
 	if kw := strings.TrimSpace(f.Keyword); kw != "" {
 		like := "%" + kw + "%"
@@ -107,7 +109,8 @@ func (r *voucherRepository) List(ctx context.Context, f domain.VoucherFilter) ([
 	}
 
 	var items []domain.Voucher
-	if err := q.Find(&items).Error; err != nil {
+	// Nạp CẢ Shops — xem ghi chú cùng chỗ ở PromotionRepository.List.
+	if err := q.Preload("Shops").Find(&items).Error; err != nil {
 		return nil, 0, err
 	}
 	return items, total, nil
@@ -147,11 +150,51 @@ func (r *voucherRepository) Stats(ctx context.Context) (domain.VoucherStats, err
 
 func (r *voucherRepository) FindByID(ctx context.Context, id uint) (*domain.Voucher, error) {
 	var v domain.Voucher
-	err := r.db.WithContext(ctx).First(&v, id).Error
+	err := r.db.WithContext(ctx).Preload("Shops").First(&v, id).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, domain.ErrNotFound
 	}
-	return &v, err
+	if err != nil {
+		return nil, err
+	}
+	// Gán rỗng = dùng được mọi nơi, nên chỉ chặn khi có gán mà không có mình.
+	if len(v.Shops) > 0 {
+		ids := make([]uint, 0, len(v.Shops))
+		for _, cn := range v.Shops {
+			ids = append(ids, cn.ID)
+		}
+		if err := chanChungTuKhacChiNhanh(ctx, r.db, ids...); err != nil {
+			return nil, err
+		}
+	}
+
+	return &v, nil
+}
+
+// ReplaceShops đặt lại danh sách chi nhánh dùng được mã này. Xem
+// PromotionRepository.ReplaceShops — cùng lý do phải viết tay.
+func (r *voucherRepository) ReplaceShops(ctx context.Context, voucherID uint, shopIDs []uint) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("voucher_id = ?", voucherID).
+			Delete(&domain.VoucherShop{}).Error; err != nil {
+			return err
+		}
+		if len(shopIDs) == 0 {
+			return nil
+		}
+
+		rows := make([]domain.VoucherShop, 0, len(shopIDs))
+		for _, id := range shopIDs {
+			if id > 0 {
+				rows = append(rows, domain.VoucherShop{VoucherID: voucherID, ShopID: id})
+			}
+		}
+		if len(rows) == 0 {
+			return nil
+		}
+
+		return tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&rows).Error
+	})
 }
 
 func (r *voucherRepository) CodeTaken(ctx context.Context, code string, exceptID uint) (bool, error) {
@@ -209,12 +252,21 @@ func (r *voucherRepository) SetActive(ctx context.Context, id uint, active bool)
 	return nil
 }
 
+// FindByCode là đường ÁP DỤNG — nơi mã thật sự trừ tiền của đơn.
+//
+// Cắt chi nhánh ở đây, và trả đúng ErrVoucherNotFound khi mã không dùng được ở
+// kho này: với người gõ mã thì "mã này không dùng ở đây" và "không có mã này" là
+// cùng một kết quả, mà câu sau không hé lộ rằng mã ấy có thật ở kho khác.
 func (r *voucherRepository) FindByCode(ctx context.Context, code string) (*domain.Voucher, error) {
+	q := r.db.WithContext(ctx).Where("code = ?", code)
+	q = locGanChiNhanh(q, ctx, r.db, "voucher_shops", "voucher_id", "vouchers")
+
 	var v domain.Voucher
-	err := r.db.WithContext(ctx).Where("code = ?", code).First(&v).Error
+	err := q.First(&v).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, domain.ErrVoucherNotFound
 	}
+
 	return &v, err
 }
 
@@ -267,12 +319,16 @@ func (r *voucherRepository) CountUsageByUser(ctx context.Context, voucherID, use
 }
 
 func (r *voucherRepository) ListPublic(ctx context.Context, at time.Time, limit int) ([]domain.Voucher, error) {
-	var items []domain.Voucher
-	err := r.db.WithContext(ctx).
+	q := r.db.WithContext(ctx).
 		Where("is_public = 1 AND is_active = 1").
 		Where(vNotEnded, at).
 		Where(vStarted, at).
-		Where(vNotUsedUp).
+		Where(vNotUsedUp)
+	// Không khoe mã của kho khác ra ô nhập mã: gõ vào cũng bị FindByCode từ chối.
+	q = locGanChiNhanh(q, ctx, r.db, "voucher_shops", "voucher_id", "vouchers")
+
+	var items []domain.Voucher
+	err := q.
 		// Mã sắp hết hạn lên trước: đó là mã khách nên dùng ngay kẻo lỡ. Mã vô thời
 		// hạn xuống cuối vì lúc nào dùng cũng được.
 		Order("end_at IS NULL ASC, end_at ASC, id DESC").

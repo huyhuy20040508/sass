@@ -10,10 +10,12 @@ use App\Http\Controllers\ChonCuaVaoController;
 use App\Http\Controllers\ContactController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DieuChinhTonKhoController;
 use App\Http\Controllers\DonViTinhController;
 use App\Http\Controllers\GoiDichVuController;
 use App\Http\Controllers\TonKhoChiNhanhController;
 use App\Http\Controllers\NhaCungCapController;
+use App\Http\Controllers\PhieuDieuChuyenController;
 use App\Http\Controllers\PhieuMuaHangController;
 use App\Http\Controllers\NhanSuController;
 use App\Http\Controllers\NotificationController;
@@ -29,6 +31,7 @@ use App\Http\Controllers\ThongSoChungController;
 use App\Http\Controllers\ThueController;
 use App\Http\Controllers\ThuNganController;
 use App\Http\Controllers\ThuocTinhController;
+use App\Http\Controllers\TraHangNhaCungCapController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\ViTriController;
 use App\Http\Controllers\VoucherController;
@@ -87,13 +90,19 @@ Route::middleware(['admin.auth', 'admin.khoa'])->prefix('admin')->name('admin.')
     // trực quầy mới là người gõ đúng mấy đường này. Để trong cửa thì họ bị đá về
     // trang bán hàng — đúng module, nhưng SAI TRANG, và cái phiếu họ định in lại
     // hay ca họ định mở ra xem thì mất dấu.
-    Route::get('/ban-tai-quay', fn () => redirect()->route('thu-ngan.ban-hang.index'));
+    //
+    // Mỗi đường phải có TÊN RIÊNG. Bỏ trống thì cả bốn cùng đội tên nhóm
+    // `admin.`, `route('admin.')` trỏ vào đường nào là tuỳ đường nào khai sau —
+    // và mọi chỗ tra route theo tên (kể cả bài kiểm khói) đo nhầm đường.
+    Route::get('/ban-tai-quay', fn () => redirect()->route('thu-ngan.ban-hang.index'))
+        ->name('cu.ban-tai-quay');
     Route::get('/ban-tai-quay/{id}/phieu', fn (int $id) => redirect()->route(
         'thu-ngan.ban-hang.phieu', ['id' => $id, 'kho' => request()->query('kho')]
-    ))->whereNumber('id');
-    Route::get('/ca-lam-viec', fn () => redirect()->route('thu-ngan.ca-lam-viec.index'));
+    ))->whereNumber('id')->name('cu.ban-tai-quay.phieu');
+    Route::get('/ca-lam-viec', fn () => redirect()->route('thu-ngan.ca-lam-viec.index'))
+        ->name('cu.ca-lam-viec');
     Route::get('/ca-lam-viec/{id}', fn (int $id) => redirect()->route('thu-ngan.ca-lam-viec.show', $id))
-        ->whereNumber('id');
+        ->whereNumber('id')->name('cu.ca-lam-viec.show');
 });
 
 // --- KHU QUẢN TRỊ (đăng nhập + cửa `quan_ly`) ---
@@ -107,9 +116,15 @@ Route::middleware(['admin.auth', 'admin.khoa'])->prefix('admin')->name('admin.')
 // trước đây họ vào được và gặp một thanh trái gần như trống rỗng, còn nút đổi
 // module thì vẫn mời họ sang. Cửa đặt ở đúng một chỗ này thay vì rải `admin.cua`
 // lên từng nhóm con — thêm một trang mới là nó nằm trong cửa sẵn, không phải nhớ.
-Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:quan_ly'])->prefix('admin')->name('admin.')->group(function () {
+Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:quan_ly', 'chi.v2'])->prefix('admin')->name('admin.')->group(function () {
     Route::get('/', fn () => redirect()->route('admin.dashboard'));
-    Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    // ĐANG CHUYỂN SANG GIAO DIỆN V2.
+    //
+    // Màn nào đã dựng lại trong resources/views/v2 thì route trỏ thẳng vào đó.
+    // Màn chưa dựng thì KHÔNG mở ra giao diện cũ nữa — dồn hết về Nhà cung cấp,
+    // là màn v2 duy nhất chạy được lúc này. Dựng xong màn nào thì bỏ nó ra khỏi
+    // danh sách chuyển hướng bên dưới.
+    Route::get('/dashboard', fn () => redirect()->route('admin.nha-cung-cap.index'))->name('dashboard');
 
     // Tài khoản của tôi — hồ sơ + mật khẩu của chính người đang đăng nhập.
     //
@@ -203,6 +218,8 @@ Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:quan_ly'])->prefix('ad
         Route::post('/products', [ProductController::class, 'store'])->name('products.store');
         Route::post('/products/{id}/duplicate', [ProductController::class, 'duplicate'])->name('products.duplicate');
         Route::put('/products/{id}/toggle-status', [ProductController::class, 'toggleStatus'])->name('products.toggleStatus');
+        // Đặt TRƯỚC đường có {id}: để sau thì "sap-xep" bị đọc thành một id.
+        Route::put('/products/sap-xep', [ProductController::class, 'sapXep'])->name('products.sapXep');
         Route::put('/products/{id}/sort', [ProductController::class, 'moveSort'])->name('products.moveSort');
         Route::put('/products/{id}', [ProductController::class, 'update'])->name('products.update');
         Route::delete('/products/{id}', [ProductController::class, 'destroy'])->name('products.destroy');
@@ -312,6 +329,23 @@ Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:quan_ly'])->prefix('ad
             ->whereNumber('id')->name('ton-kho-chi-nhanh.history');
         Route::put('/inventory/{id}', [TonKhoChiNhanhController::class, 'adjust'])
             ->whereNumber('id')->name('ton-kho-chi-nhanh.adjust');
+        // Phiếu điều chỉnh tồn kho — chứng từ có duyệt, khác hẳn ô sửa nhanh ở
+        // màn tồn kho. Đường tĩnh đứng trước /{id} như trên.
+        Route::get('/inventory-adjustments', [DieuChinhTonKhoController::class, 'index'])->name('dieu-chinh-ton-kho.index');
+        Route::get('/inventory-adjustments/export', [DieuChinhTonKhoController::class, 'export'])->name('dieu-chinh-ton-kho.export');
+        Route::get('/inventory-adjustments/products', [DieuChinhTonKhoController::class, 'matHang'])->name('dieu-chinh-ton-kho.matHang');
+        Route::get('/inventory-adjustments/category-products', [DieuChinhTonKhoController::class, 'matHangTheoNhom'])->name('dieu-chinh-ton-kho.matHangTheoNhom');
+        Route::get('/inventory-adjustments/negative-stock', [DieuChinhTonKhoController::class, 'hangAm'])->name('dieu-chinh-ton-kho.hangAm');
+        Route::post('/inventory-adjustments/photo', [DieuChinhTonKhoController::class, 'uploadAnh'])->name('dieu-chinh-ton-kho.anh');
+        Route::post('/inventory-adjustments/bulk-approve', [DieuChinhTonKhoController::class, 'bulkApprove'])->name('dieu-chinh-ton-kho.bulkApprove');
+        Route::post('/inventory-adjustments/bulk-delete', [DieuChinhTonKhoController::class, 'bulkDestroy'])->name('dieu-chinh-ton-kho.bulkDestroy');
+        Route::post('/inventory-adjustments', [DieuChinhTonKhoController::class, 'store'])->name('dieu-chinh-ton-kho.store');
+        Route::get('/inventory-adjustments/{id}', [DieuChinhTonKhoController::class, 'show'])->whereNumber('id')->name('dieu-chinh-ton-kho.show');
+        Route::put('/inventory-adjustments/{id}', [DieuChinhTonKhoController::class, 'update'])->whereNumber('id')->name('dieu-chinh-ton-kho.update');
+        Route::post('/inventory-adjustments/{id}/submit', [DieuChinhTonKhoController::class, 'submit'])->whereNumber('id')->name('dieu-chinh-ton-kho.submit');
+        Route::post('/inventory-adjustments/{id}/approve', [DieuChinhTonKhoController::class, 'approve'])->whereNumber('id')->name('dieu-chinh-ton-kho.approve');
+        Route::post('/inventory-adjustments/{id}/reject', [DieuChinhTonKhoController::class, 'reject'])->whereNumber('id')->name('dieu-chinh-ton-kho.reject');
+        Route::delete('/inventory-adjustments/{id}', [DieuChinhTonKhoController::class, 'destroy'])->whereNumber('id')->name('dieu-chinh-ton-kho.destroy');
         // Yêu cầu của khách — hộp thư đến từ form Liên hệ và form Thu mua trên
         // storefront. Trước đây hai form đó chỉ hiện hộp thoại "cảm ơn" rồi vứt sạch
         // dữ liệu, nên đây là chỗ đầu tiên trong cửa hàng nhìn thấy khách đã nhắn gì.
@@ -349,6 +383,9 @@ Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:quan_ly'])->prefix('ad
         // tên của bản order v2). Đường tĩnh đứng TRƯỚC '/{id}'.
         Route::get('/purchase-orders', [PhieuMuaHangController::class, 'index'])->name('phieu-mua-hang.index');
         Route::get('/purchase-orders/export', [PhieuMuaHangController::class, 'export'])->name('phieu-mua-hang.export');
+        // Xuất MỘT phiếu ra .xlsx. Đặt trước đường {id} vì `export` cũng khớp {id}
+        // — whereNumber ở dưới chặn được, nhưng để đây thì đọc thứ tự là hiểu ngay.
+        Route::get('/purchase-orders/{id}/export', [PhieuMuaHangController::class, 'exportOne'])->whereNumber('id')->name('phieu-mua-hang.exportOne');
         Route::get('/purchase-orders/products', [PhieuMuaHangController::class, 'matHang'])->name('phieu-mua-hang.matHang');
         Route::post('/purchase-orders/photo', [PhieuMuaHangController::class, 'uploadAnh'])->name('phieu-mua-hang.anh');
         Route::post('/purchase-orders/quick-supplier', [PhieuMuaHangController::class, 'themNhanhNhaCungCap'])->name('phieu-mua-hang.themNhanhNCC');
@@ -361,6 +398,30 @@ Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:quan_ly'])->prefix('ad
         Route::post('/purchase-orders/{id}/cancel', [PhieuMuaHangController::class, 'cancel'])->whereNumber('id')->name('phieu-mua-hang.cancel');
         Route::post('/purchase-orders/{id}/payment', [PhieuMuaHangController::class, 'pay'])->whereNumber('id')->name('phieu-mua-hang.pay');
         Route::delete('/purchase-orders/{id}', [PhieuMuaHangController::class, 'destroy'])->whereNumber('id')->name('phieu-mua-hang.destroy');
+
+        // Trả hàng nhà cung cấp — chiều ngược của phiếu mua, dựng theo màn cùng
+        // tên của bản order v2. Đường tĩnh đứng TRƯỚC '/{id}'.
+        Route::get('/supplier-returns', [TraHangNhaCungCapController::class, 'index'])->name('tra-hang-nha-cung-cap.index');
+        Route::get('/supplier-returns/export', [TraHangNhaCungCapController::class, 'export'])->name('tra-hang-nha-cung-cap.export');
+        Route::get('/supplier-returns/purchase-orders', [TraHangNhaCungCapController::class, 'phieuMua'])->name('tra-hang-nha-cung-cap.phieuMua');
+        Route::get('/supplier-returns/purchase-order-lines', [TraHangNhaCungCapController::class, 'dongPhieuMua'])->name('tra-hang-nha-cung-cap.dongPhieuMua');
+        Route::post('/supplier-returns/bulk-delete', [TraHangNhaCungCapController::class, 'bulkDestroy'])->name('tra-hang-nha-cung-cap.bulkDestroy');
+        Route::post('/supplier-returns', [TraHangNhaCungCapController::class, 'store'])->name('tra-hang-nha-cung-cap.store');
+        Route::get('/supplier-returns/{id}', [TraHangNhaCungCapController::class, 'show'])->whereNumber('id')->name('tra-hang-nha-cung-cap.show');
+        Route::put('/supplier-returns/{id}', [TraHangNhaCungCapController::class, 'update'])->whereNumber('id')->name('tra-hang-nha-cung-cap.update');
+        Route::post('/supplier-returns/{id}/approve', [TraHangNhaCungCapController::class, 'approve'])->whereNumber('id')->name('tra-hang-nha-cung-cap.approve');
+        Route::delete('/supplier-returns/{id}', [TraHangNhaCungCapController::class, 'destroy'])->whereNumber('id')->name('tra-hang-nha-cung-cap.destroy');
+
+        // Phiếu điều chuyển — chuyển hàng giữa hai kho, dựng theo màn cùng tên
+        // của bản order v2. Duyệt đi đường RIÊNG vì đó là lúc kho HAI ĐẦU đổi số,
+        // và bên API nó là một quyền riêng.
+        Route::get('/stock-transfers', [PhieuDieuChuyenController::class, 'index'])->name('phieu-dieu-chuyen.index');
+        Route::get('/stock-transfers/products', [PhieuDieuChuyenController::class, 'matHang'])->name('phieu-dieu-chuyen.matHang');
+        Route::post('/stock-transfers', [PhieuDieuChuyenController::class, 'store'])->name('phieu-dieu-chuyen.store');
+        Route::get('/stock-transfers/{id}', [PhieuDieuChuyenController::class, 'show'])->whereNumber('id')->name('phieu-dieu-chuyen.show');
+        Route::put('/stock-transfers/{id}', [PhieuDieuChuyenController::class, 'update'])->whereNumber('id')->name('phieu-dieu-chuyen.update');
+        Route::post('/stock-transfers/{id}/approve', [PhieuDieuChuyenController::class, 'approve'])->whereNumber('id')->name('phieu-dieu-chuyen.approve');
+        Route::delete('/stock-transfers/{id}', [PhieuDieuChuyenController::class, 'destroy'])->whereNumber('id')->name('phieu-dieu-chuyen.destroy');
 
     });
 
@@ -561,3 +622,4 @@ Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:thu_ngan'])->prefix('c
     // còn đơn quầy thì xong ngay lúc tạo.
     Route::get('/orders', [ThuNganController::class, 'donHang'])->name('don-hang.index');
 });
+

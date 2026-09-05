@@ -40,8 +40,12 @@ func (r *nhanVienRepository) List(ctx context.Context, f domain.NhanSuFilter) ([
 	if f.ContractType != "" {
 		q = q.Where("contract_type = ?", f.ContractType)
 	}
+	// Lọc theo chi nhánh KÈM người CHƯA phân công (`shop_id` NULL) — cùng quy ước
+	// với hàng hoá: chưa gán chi nhánh nào nghĩa là dùng chung, không phải
+	// "không thuộc chi nhánh nào". Bỏ vế NULL thì tiệm nào lỡ chưa khai chi nhánh
+	// cho nhân viên sẽ thấy sổ nhân sự rỗng trơn.
 	if f.ShopID > 0 {
-		q = q.Where("shop_id = ?", f.ShopID)
+		q = q.Where("shop_id = ? OR shop_id IS NULL", f.ShopID)
 	}
 
 	var list []domain.NhanVien
@@ -71,6 +75,21 @@ func (r *nhanVienRepository) FindByID(ctx context.Context, id uint) (*domain.Nha
 func (r *nhanVienRepository) ExistsByCode(ctx context.Context, code string, excludeID uint) (bool, error) {
 	var count int64
 	q := r.db.WithContext(ctx).Unscoped().Model(&domain.NhanVien{}).Where("code = ?", code)
+	if excludeID > 0 {
+		q = q.Where("id <> ?", excludeID)
+	}
+	err := q.Count(&count).Error
+
+	return count > 0, err
+}
+
+// ExistsByName — trùng TÊN nhân viên trong cùng cửa hàng, không phân biệt hoa
+// thường. KHÔNG Unscoped: tên không bị khoá duy nhất ở tầng DB nên xoá hồ sơ
+// xong phải khai lại tên ấy được.
+func (r *nhanVienRepository) ExistsByName(ctx context.Context, name string, excludeID uint) (bool, error) {
+	var count int64
+	q := r.db.WithContext(ctx).Model(&domain.NhanVien{}).
+		Where("LOWER(full_name) COLLATE utf8mb4_bin = LOWER(?)", name)
 	if excludeID > 0 {
 		q = q.Where("id <> ?", excludeID)
 	}
@@ -171,4 +190,25 @@ func (r *nhanVienRepository) RangBuocCuaTaiKhoan(ctx context.Context, userID uin
 	}
 
 	return caID > 0, soQuyID > 0, nil
+}
+
+// ChiNhanhCuaTaiKhoan — xem docblock ở NhanVienRepository.
+//
+// Không có hồ sơ, hoặc có mà `shop_id` NULL, đều trả nil: hai chuyện khác nhau
+// (chủ tiệm / nhân viên chưa phân công) nhưng dẫn tới cùng một kết luận là
+// "không bị buộc vào chi nhánh nào", nên nơi gọi không cần phân biệt.
+func (r *nhanVienRepository) ChiNhanhCuaTaiKhoan(ctx context.Context, userID uint) (*uint, error) {
+	var nv domain.NhanVien
+	err := r.db.WithContext(ctx).
+		Select("shop_id").
+		Where("user_id = ?", userID).
+		Take(&nv).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return nv.ShopID, nil
 }

@@ -23,6 +23,10 @@
 @endsection
 
 @section('content')
+    {{-- Tiêu đề cấp 1 cho trình đọc màn hình. Màn quầy chiếm trọn màn hình
+         nên không có chỗ bày tiêu đề nhìn thấy được, nhưng thiếu h1 thì
+         người dùng trình đọc mất mốc để biết mình đang ở màn nào. --}}
+    <h1 class="tn-tieu-de-doc">Bán tại quầy</h1>
     {{--
         Màn hình thu ngân — giai đoạn 2.
 
@@ -345,6 +349,22 @@
     <style>
         /* Hai khu của trang dùng khuôn .tnk-* của layout (xem layouts/thu-ngan).
            Dưới đây chỉ còn ruột của từng khu. */
+
+        /* Tiêu đề chỉ dành cho trình đọc màn hình. Viết ruột tại đây chứ không
+           mượn .visually-hidden của Bootstrap: mỗi trang trong dự án tự nạp
+           style của chính nó, mượn class ngoài là ngày nào bỏ CDN thì dòng chữ
+           này rơi đè lên màn quầy. */
+        .tn-tieu-de-doc {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
 
         /* ---------- Khu trái: tìm / quét hàng ---------- */
         /* Thanh này CAO 40px, và con số đó là cố ý giữ thấp: nó chỉ là lối vào phụ

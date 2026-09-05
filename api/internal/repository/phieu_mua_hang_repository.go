@@ -41,9 +41,20 @@ func applyPurchaseFilter(q *gorm.DB, f domain.PurchaseFilter) *gorm.DB {
 	if f.SupplierID > 0 {
 		q = q.Where("supplier_id = ?", f.SupplierID)
 	}
-	if f.VariantID > 0 {
+	// Cắt theo chi nhánh phát sinh chứng từ. Bỏ qua khi = 0 (xem gộp cả cửa
+	// hàng) — chỉ có ở báo cáo và khi người dùng chủ động chọn "tất cả".
+	if f.ShopID > 0 {
+		q = q.Where("shop_id = ?", f.ShopID)
+	}
+	if len(f.VariantIDs) > 0 {
 		q = q.Where("EXISTS (SELECT 1 FROM purchase_order_items i"+
-			" WHERE i.purchase_order_id = purchase_orders.id AND i.product_variant_id = ?)", f.VariantID)
+			" WHERE i.purchase_order_id = purchase_orders.id AND i.product_variant_id IN ?)", f.VariantIDs)
+	}
+
+	// Số lô khớp MỘT PHẦN: người dùng nhớ "L2026" chứ hiếm khi nhớ đủ cả chuỗi.
+	if lo := strings.TrimSpace(f.LotNumber); lo != "" {
+		q = q.Where("EXISTS (SELECT 1 FROM purchase_order_items i"+
+			" WHERE i.purchase_order_id = purchase_orders.id AND i.lot_number LIKE ?)", "%"+lo+"%")
 	}
 
 	// Ngày rỗng thì KHÔNG lọc. Bản v2 nhét thẳng chuỗi rỗng vào whereDate và
@@ -175,6 +186,11 @@ func (r *purchaseOrderRepository) FindByID(ctx context.Context, id uint) (*domai
 	if err != nil {
 		return nil, err
 	}
+	// Phiếu của chi nhánh khác thì coi như không có: id chạy tuần tự nên không
+	// chặn ở đây là mở toang sổ mua hàng của mọi kho cho bất kỳ ai đăng nhập.
+	if err := chanChungTuKhacChiNhanh(ctx, r.db, po.ShopID); err != nil {
+		return nil, err
+	}
 
 	mot := []domain.PurchaseOrder{po}
 	if err := r.napTenNguoiLap(ctx, mot); err != nil {
@@ -211,6 +227,51 @@ func (r *purchaseOrderRepository) Histories(ctx context.Context, purchaseID uint
 		Order("id ASC").Find(&out).Error
 
 	return out, err
+}
+
+// Payments trả sổ từng lượt trả tiền của phiếu, cũ -> mới, kèm tên người ghi.
+func (r *purchaseOrderRepository) Payments(ctx context.Context, purchaseID uint) ([]domain.PurchasePayment, error) {
+	var out []domain.PurchasePayment
+	if err := r.db.WithContext(ctx).
+		Where("purchase_order_id = ?", purchaseID).
+		Order("id ASC").Find(&out).Error; err != nil {
+		return nil, err
+	}
+
+	ids := make([]uint, 0, len(out))
+	for _, t := range out {
+		if t.CreatedBy != nil {
+			ids = append(ids, *t.CreatedBy)
+		}
+	}
+	if len(ids) == 0 {
+		return out, nil
+	}
+
+	type dong struct {
+		ID       uint
+		FullName string
+	}
+	var nguoi []dong
+	// Unscoped: người ghi sổ có thể đã nghỉ và bị xoá mềm, dòng sổ cũ vẫn phải
+	// đọc ra được tên họ.
+	if err := r.db.WithContext(ctx).Unscoped().Table("users").
+		Select("id, COALESCE(full_name, '') AS full_name").
+		Where("id IN ?", ids).Scan(&nguoi).Error; err != nil {
+		return nil, err
+	}
+
+	ten := make(map[uint]string, len(nguoi))
+	for _, n := range nguoi {
+		ten[n.ID] = n.FullName
+	}
+	for i := range out {
+		if out[i].CreatedBy != nil {
+			out[i].CreatedByName = ten[*out[i].CreatedBy]
+		}
+	}
+
+	return out, nil
 }
 
 // ---------- Tra mặt hàng ----------
@@ -290,7 +351,53 @@ func (r *purchaseOrderRepository) SearchVariants(ctx context.Context, keyword st
 		return nil, err
 	}
 
-	return out, r.napDonVi(ctx, out)
+	if err := r.napDonVi(ctx, out); err != nil {
+		return nil, err
+	}
+
+	return out, r.napLo(ctx, out)
+}
+
+// napLo gắn danh sách lô đang còn hàng vào từng mặt hàng của ô tìm hàng.
+//
+// Hỏng thì bỏ qua chứ không chặn cả lượt tìm: thiếu danh sách lô thì người dùng
+// gõ tay số lô như trước, còn chặn lượt tìm là không lập được phiếu nào.
+func (r *purchaseOrderRepository) napLo(ctx context.Context, ds []domain.PurchaseVariant) error {
+	if len(ds) == 0 {
+		return nil
+	}
+
+	shopID, err := chiNhanhCuaRequest(ctx, r.db)
+	if err != nil {
+		return nil
+	}
+
+	ids := make([]uint, 0, len(ds))
+	for _, v := range ds {
+		ids = append(ids, v.VariantID)
+	}
+
+	theoBienThe, err := loCuaBienThe(r.db.WithContext(ctx), shopID, ids)
+	if err != nil {
+		return nil
+	}
+
+	for i := range ds {
+		for _, l := range theoBienThe[ds[i].VariantID] {
+			han := ""
+			if l.ExpireDate != nil {
+				han = l.ExpireDate.Format("2006-01-02")
+			}
+			ds[i].Lots = append(ds[i].Lots, domain.PurchaseLot{
+				LotNumber:  l.LotNumber,
+				ExpireDate: han,
+				Quantity:   l.Quantity,
+				UnitCost:   l.UnitCost,
+			})
+		}
+	}
+
+	return nil
 }
 
 // NhomHangCoHang liệt kê nhóm hàng đang có hàng mua được.
@@ -458,6 +565,10 @@ func (r *purchaseOrderRepository) Create(ctx context.Context, po *domain.Purchas
 	}
 	po.ShopID = shopID
 
+	if err := chanHangKhacChiNhanh(ctx, r.db, shopID, bienTheCuaPhieu(po.Items)); err != nil {
+		return err
+	}
+
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		items := po.Items
 		po.Items = nil
@@ -522,11 +633,21 @@ func (r *purchaseOrderRepository) Update(
 		if err != nil {
 			return err
 		}
+		if err := chanChungTuKhacChiNhanh(ctx, tx, po.ShopID); err != nil {
+			return err
+		}
 
 		// Điều kiện sửa được kiểm TRONG khoá dòng: kiểm trước khi gọi thì một lượt
 		// duyệt chen vào giữa sẽ bị danh sách hàng mới xoá đè lên.
 		cols, items, err := mutate(&po)
 		if err != nil {
+			return err
+		}
+
+		// Sửa phiếu ĐỔI ĐƯỢC danh sách hàng, nên phải chặn lại y như lúc lập: kiểm
+		// theo chi nhánh ĐÃ CHỐT trên phiếu, không phải chi nhánh người đang sửa
+		// đứng — hàng sẽ về kho của phiếu.
+		if err := chanHangKhacChiNhanh(ctx, tx, po.ShopID, bienTheCuaPhieu(items)); err != nil {
 			return err
 		}
 
@@ -567,7 +688,7 @@ func (r *purchaseOrderRepository) Update(
 func (r *purchaseOrderRepository) LockAndUpdate(
 	ctx context.Context,
 	id uint,
-	apply func(po *domain.PurchaseOrder) (*domain.PurchaseOrderHistory, []string, error),
+	apply func(po *domain.PurchaseOrder) (*domain.PurchaseOrderHistory, *domain.PurchasePayment, []string, error),
 ) (*domain.PurchaseOrder, error) {
 	var result *domain.PurchaseOrder
 
@@ -583,7 +704,7 @@ func (r *purchaseOrderRepository) LockAndUpdate(
 			return err
 		}
 
-		history, cols, err := apply(&po)
+		history, tra, cols, err := apply(&po)
 		if err != nil {
 			return err
 		}
@@ -595,6 +716,16 @@ func (r *purchaseOrderRepository) LockAndUpdate(
 		}
 		if history != nil {
 			if err := tx.Create(history).Error; err != nil {
+				return err
+			}
+		}
+		if tra != nil {
+			// Chép tenant và chi nhánh từ chính phiếu: dòng sổ này thuộc về đúng
+			// nơi đã chi tiền, không phải nơi người bấm đang đứng.
+			tra.TenantID = po.TenantID
+			tra.ShopID = po.ShopID
+			tra.PurchaseOrderID = po.ID
+			if err := tx.Create(tra).Error; err != nil {
 				return err
 			}
 		}
@@ -624,6 +755,10 @@ func (r *purchaseOrderRepository) Approve(ctx context.Context, id uint, a domain
 			return domain.ErrNotFound
 		}
 		if err != nil {
+			return err
+		}
+
+		if err := chanChungTuKhacChiNhanh(ctx, tx, po.ShopID); err != nil {
 			return err
 		}
 
@@ -692,6 +827,9 @@ func congVaoKho(tx *gorm.DB, po *domain.PurchaseOrder, a domain.PurchaseApproval
 	theoBienThe := make(map[uint]int, len(po.Items))
 	tienTheoBienThe := make(map[uint]float64, len(po.Items))
 	lo := make(map[uint][]string, len(po.Items))
+	// Hàng vào kho theo TỪNG LÔ: một phiếu mua cùng một mặt hàng có thể chia hai
+	// lô hai hạn dùng, và từ migration 0047 mỗi lô là một dòng tồn riêng.
+	loTheoBienThe := make(map[uint][]domain.LoNhapSo, len(po.Items))
 	ids := make([]uint, 0, len(po.Items))
 
 	for _, it := range po.Items {
@@ -706,6 +844,21 @@ func congVaoKho(tx *gorm.DB, po *domain.PurchaseOrder, a domain.PurchaseApproval
 		if so := strings.TrimSpace(it.LotNumber); so != "" && !slices.Contains(lo[vid], so) {
 			lo[vid] = append(lo[vid], so)
 		}
+
+		// Giá của LÔ là giá một đơn vị chính, cùng cách quy đổi với giá vốn bên
+		// dưới: mua 1 thùng 24 cái giá 240.000 thì lô ấy ghi 10.000 một cái.
+		giaLo := it.UnitCost
+		if it.UnitRatio > 0 {
+			giaLo = it.UnitCost / it.UnitRatio
+		}
+		loTheoBienThe[vid] = append(loTheoBienThe[vid], domain.LoNhapSo{
+			LoNhap: domain.LoNhap{
+				LotNumber:  strings.TrimSpace(it.LotNumber),
+				ExpireDate: it.ExpireDate,
+				UnitCost:   giaLo,
+			},
+			Quantity: it.BaseQuantity,
+		})
 
 		// Giá vốn ghi lại là giá MỘT ĐƠN VỊ TÍNH CHÍNH, không phải giá một thùng.
 		// Mua 1 thùng 24 cái giá 240.000 thì giá vốn một cái là 10.000 — ghi thẳng
@@ -759,7 +912,13 @@ func congVaoKho(tx *gorm.DB, po *domain.PurchaseOrder, a domain.PurchaseApproval
 			continue
 		}
 
-		truoc, sau, err := ghiTonChiNhanh(tx, shopID, vid, theoBienThe[vid], true)
+		truoc, sau, err := ghiTonChiNhanhLo(tx, shopID, vid, ChuyenKho{
+			Delta:     theoBienThe[vid],
+			ChoPhepAm: true,
+			Lo:        loTheoBienThe[vid],
+			RefType:   domain.KhoRefPhieuMua,
+			RefID:     poID,
+		})
 		if err != nil {
 			return err
 		}
@@ -825,6 +984,20 @@ func ghiChuNhapKho(poCode, note string, lots []string) string {
 // Delete xoá mềm phiếu. Tầng service chỉ cho gọi với phiếu lưu tạm — phiếu đã
 // duyệt phải nằm lại trong sổ vì kho đã đổi theo nó.
 func (r *purchaseOrderRepository) Delete(ctx context.Context, id uint) error {
+	// Đọc phiếu TRƯỚC khi xoá, chỉ để biết nó thuộc kho nào. Xoá thẳng theo id là
+	// đường ngắn nhất để một người ở kho 2 dọn sạch sổ mua hàng của kho 1.
+	var po domain.PurchaseOrder
+	err := r.db.WithContext(ctx).Select("id", "shop_id").Where("id = ?", id).Take(&po).Error
+	if err == gorm.ErrRecordNotFound {
+		return domain.ErrNotFound
+	}
+	if err != nil {
+		return err
+	}
+	if err := chanChungTuKhacChiNhanh(ctx, r.db, po.ShopID); err != nil {
+		return err
+	}
+
 	res := r.db.WithContext(ctx).Delete(&domain.PurchaseOrder{}, id)
 	if res.Error != nil {
 		return res.Error

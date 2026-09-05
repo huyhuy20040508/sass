@@ -39,6 +39,40 @@ func (r *nhaCungCapRepository) List(ctx context.Context, f domain.NhaCungCapFilt
 	return list, nil
 }
 
+// TienTheoNCC — một câu gộp cho cả danh mục, khoá là supplier_id.
+//
+// GREATEST(...,0) chứ không phải hiệu của hai tổng: một phiếu trả dư không được
+// bù cho phiếu còn thiếu, hai chuyện đó là hai khoản riêng với bên bán.
+//
+// Phiếu vãng lai (supplier_id NULL) không thuộc bên nào nên loại ra ngay ở đây.
+func (r *nhaCungCapRepository) TienTheoNCC(ctx context.Context) (map[uint]domain.TienNCC, error) {
+	type dong struct {
+		SupplierID uint
+		domain.TienNCC
+	}
+
+	var rows []dong
+	err := r.db.WithContext(ctx).Model(&domain.PurchaseOrder{}).
+		Select(`supplier_id,
+		        SUM(total_amount) AS total_purchases,
+		        SUM(paid_amount) AS total_payment,
+		        SUM(GREATEST(total_amount - paid_amount, 0)) AS still_in_debt`).
+		Where("status = ?", domain.PurchaseStatusApproved).
+		Where("supplier_id IS NOT NULL").
+		Group("supplier_id").
+		Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+
+	tien := make(map[uint]domain.TienNCC, len(rows))
+	for _, d := range rows {
+		tien[d.SupplierID] = d.TienNCC
+	}
+
+	return tien, nil
+}
+
 func (r *nhaCungCapRepository) FindByID(ctx context.Context, id uint) (*domain.NhaCungCap, error) {
 	var ncc domain.NhaCungCap
 	err := r.db.WithContext(ctx).First(&ncc, id).Error
@@ -112,4 +146,22 @@ func translateNhaCungCapErr(err error) error {
 	default:
 		return err
 	}
+}
+
+// ExistsByName — trùng TÊN trong cùng cửa hàng, không phân biệt hoa thường.
+// Hai bên cùng tên thì lúc lập phiếu mua nhìn ô chọn ra hai dòng y hệt nhau,
+// chọn nhầm bên nào cũng không biết, mà công nợ thì tách đôi.
+//
+// KHÔNG Unscoped: tên không bị khoá duy nhất ở tầng DB, nên xoá xong phải dùng
+// lại tên được.
+func (r *nhaCungCapRepository) ExistsByName(ctx context.Context, name string, excludeID uint) (bool, error) {
+	var count int64
+	q := r.db.WithContext(ctx).Model(&domain.NhaCungCap{}).
+		Where("LOWER(name) COLLATE utf8mb4_bin = LOWER(?)", name)
+	if excludeID > 0 {
+		q = q.Where("id <> ?", excludeID)
+	}
+	err := q.Count(&count).Error
+
+	return count > 0, err
 }

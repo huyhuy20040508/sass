@@ -29,6 +29,10 @@ const (
 	// SettingTypeBool nhận đúng "1" hoặc "0" — giao diện dựng công tắc bật/tắt.
 	// Lưu chuỗi chứ không thêm cột kiểu bool vì bảng settings là key-value thuần.
 	SettingTypeBool = "bool"
+	// SettingTypeSelect nhận một trong các giá trị khai ở settingDef.Options —
+	// giao diện dựng ô chọn. Khác Bool ở chỗ hai lựa chọn có TÊN RIÊNG, không
+	// phải bật/tắt một câu: "FIFO" và "FEFO" không cái nào là "tắt cái kia".
+	SettingTypeSelect = "select"
 )
 
 // Khối trong một trang cấu hình. Nhóm quyết định trang nào, khối quyết định phần
@@ -40,6 +44,7 @@ const (
 	SettingSectionSocial  = "social"
 	SettingSectionMethods = "methods"
 	SettingSectionBank    = "bank"
+	SettingSectionTax     = "tax"
 )
 
 // Nhóm cấu hình — mỗi nhóm là MỘT trang bên trang quản trị, và là giá trị của bộ
@@ -88,7 +93,24 @@ const (
 	SettingBankAccountName       = "bank_account_name"
 	SettingBankTransferNote      = "bank_transfer_note"
 	SettingBankQRImage           = "bank_qr_image"
+	SettingTaxDirect             = "tax_direct"
+	SettingLotIssueMethod        = "lot_issue_method"
+	SettingBlockExpiredStock     = "block_expired_stock"
 )
+
+// Thứ tự rút lô khi xuất kho — bản v2 gọi là thông số `inventory_valuation`.
+const (
+	// LotIssueFIFO: lô nào vào kho trước thì ra trước.
+	LotIssueFIFO = "fifo"
+	// LotIssueFEFO: lô nào hết hạn sớm thì ra trước. Hàng không có hạn xuống cuối.
+	LotIssueFEFO = "fefo"
+)
+
+// settingOption là MỘT lựa chọn của khoá dạng select.
+type settingOption struct {
+	Value string `json:"value"`
+	Label string `json:"label"`
+}
 
 // settingDef khai báo MỘT khoá được phép tồn tại.
 //
@@ -105,6 +127,9 @@ type settingDef struct {
 	Required bool // rỗng là không hợp lệ
 	Public   bool // lộ ra ở GET /settings cho storefront
 	Max      int  // độ dài tối đa (chỉ áp cho khoá dạng chữ)
+	// Options là các giá trị hợp lệ của khoá dạng select, kèm nhãn hiển thị.
+	// Thứ tự khai cũng là thứ tự trong ô chọn; phần tử đầu nên là mặc định.
+	Options []settingOption
 	// MaxNum là trần của khoá dạng số (0 = không chặn trần).
 	//
 	// Có trần vì mấy khoá này là tiền: gõ thừa một chữ số vào phí vận chuyển là mọi
@@ -191,6 +216,22 @@ var settingRegistry = []settingDef{
 		Public: true, Max: 255,
 	},
 
+	// ----- Chế độ thuế -----
+	//
+	// Bản v2 gọi khoá này là `admin('tax_type')` với hai giá trị 'direct' và
+	// không-direct. Ở đây nó là một CÔNG TẮC vì hai giá trị ấy là có/không, mà
+	// registry đã sẵn kiểu bool kèm ô gạt — dựng thêm kiểu "chọn một trong hai"
+	// chỉ để mã hoá cùng một câu hỏi là thừa.
+	//
+	// Mặc định TẮT: phần lớn cửa hàng là doanh nghiệp khấu trừ, và bật nhầm thì
+	// mọi phiếu mua lập sau đó mất sạch phần thuế mà không có gì báo.
+	//
+	// KHÔNG Public: đây là chuyện kế toán nội bộ, storefront không cần biết.
+	{
+		Key: SettingTaxDirect, Group: SettingGroupGeneral, Section: SettingSectionTax,
+		Type: SettingTypeBool, Label: "Hộ kinh doanh nộp thuế trực tiếp", Default: "0",
+	},
+
 	{
 		Key: SettingDefaultShippingFee, Group: SettingGroupShipping, Type: SettingTypeNumber,
 		Label: "Phí vận chuyển mặc định", Default: "30000",
@@ -267,6 +308,23 @@ var settingRegistry = []settingDef{
 		Label: "Ngưỡng cảnh báo sắp hết hàng", Default: "5",
 		// Chỉ dùng trong trang tồn kho của admin — không lộ ra storefront.
 		Required: true, MaxNum: 10_000,
+	},
+	// ----- Xuất kho theo lô -----
+	//
+	// Mặc định FIFO và KHÔNG chặn hàng hết hạn: đó đúng là hành vi trước khi có
+	// hai khoá này (rút theo thứ tự vào kho, không ai soi hạn dùng), nên bản cài
+	// sẵn không tự đổi cách trừ kho của cửa hàng đang chạy.
+	{
+		Key: SettingLotIssueMethod, Group: SettingGroupInventory, Type: SettingTypeSelect,
+		Label: "Thứ tự xuất kho theo lô", Default: LotIssueFIFO, Required: true,
+		Options: []settingOption{
+			{Value: LotIssueFIFO, Label: "FIFO — lô vào kho trước thì ra trước"},
+			{Value: LotIssueFEFO, Label: "FEFO — lô hết hạn sớm thì ra trước"},
+		},
+	},
+	{
+		Key: SettingBlockExpiredStock, Group: SettingGroupInventory, Type: SettingTypeBool,
+		Label: "Không cho bán hàng đã quá hạn dùng", Default: "0",
 	},
 
 	// ----- Quầy bán hàng -----
@@ -620,6 +678,22 @@ func validatePaymentSetup(items map[string]string, current func(string) string, 
 // nhận chữ số cùng vài ký tự phân cách thường gặp.
 var phonePattern = regexp.MustCompile(`^[0-9+][0-9 .()-]{7,19}$`)
 
+// luaChon đổi các lựa chọn của registry sang khuôn DTO. Khoá không phải select
+// trả nil để `omitempty` giữ JSON gọn — form admin đọc "có options" là biết dựng
+// ô chọn, không phải đoán theo kiểu.
+func luaChon(d settingDef) []dto.SettingOption {
+	if len(d.Options) == 0 {
+		return nil
+	}
+
+	out := make([]dto.SettingOption, 0, len(d.Options))
+	for _, o := range d.Options {
+		out = append(out, dto.SettingOption{Value: o.Value, Label: o.Label})
+	}
+
+	return out
+}
+
 func validateSettingValue(d settingDef, value string) string {
 	if value == "" {
 		if d.Required {
@@ -636,6 +710,16 @@ func validateSettingValue(d settingDef, value string) string {
 		if value != "0" && value != "1" {
 			return "Giá trị chỉ nhận 0 hoặc 1"
 		}
+	case SettingTypeSelect:
+		hopLe := make([]string, 0, len(d.Options))
+		for _, o := range d.Options {
+			if o.Value == value {
+				return ""
+			}
+			hopLe = append(hopLe, o.Value)
+		}
+
+		return "Giá trị chỉ nhận: " + strings.Join(hopLe, ", ")
 	case SettingTypeNumber:
 		n, err := strconv.ParseFloat(value, 64)
 		if err != nil {
@@ -847,6 +931,7 @@ func buildSettingsResponse(group string, valueOf func(settingDef) string) dto.Se
 			Label:    d.Label,
 			Default:  d.Default,
 			Required: d.Required,
+			Options:  luaChon(d),
 			Public:   d.Public,
 			MaxLen:   d.Max,
 			MaxNum:   d.MaxNum,

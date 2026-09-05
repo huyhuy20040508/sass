@@ -17,6 +17,8 @@ use Illuminate\Support\Facades\Log;
  */
 class CategoryController extends Controller
 {
+    use \App\Http\Controllers\Concerns\TraLoiHopThoai;
+
     /**
      * Hai nhóm gốc cố định (slug => tên) — khóa: không sửa/xóa/đổi trạng thái.
      * Đóng vai "loại lớn" như odr_menu_group_parents của bản v2, nhưng ở đây là
@@ -46,7 +48,7 @@ class CategoryController extends Controller
         } catch (\Throwable $e) {
             Log::error('Load categories failed', ['msg' => $e->getMessage()]);
 
-            return view('categories.index', ['categories' => [], 'vatRates' => MucThue::boMuc($this->api)])
+            return view('v2::nhom-hang-hoa.index', ['categories' => [], 'vatRates' => MucThue::boMuc($this->api)])
                 ->with('error', 'Không tải được danh sách nhóm hàng hóa. Kiểm tra kết nối API.');
         }
 
@@ -57,7 +59,9 @@ class CategoryController extends Controller
             return $c;
         })->all();
 
-        return view('categories.index', [
+        // Màn đã chuyển sang khu v2; view cũ ở resources/views/categories giữ lại
+        // phòng khi cần đối chiếu, không còn route nào trỏ vào.
+        return view('v2::nhom-hang-hoa.index', [
             'categories' => $categories,
             'vatRates' => MucThue::boMuc($this->api),
         ]);
@@ -76,25 +80,23 @@ class CategoryController extends Controller
         } catch (\Throwable $e) {
             Log::error('Create category failed', ['msg' => $e->getMessage()]);
 
-            return back()->withInput()->with('error', 'Không kết nối được máy chủ API.');
+            return $this->traLoiHopThoai($request, false, 'Không kết nối được máy chủ API.');
         }
 
         if (! $res->successful()) {
-            return back()->withInput()->with('error', $this->apiError($res, 'Tạo nhóm hàng hóa thất bại.'));
+            return $this->traLoiHopThoai($request, false, $this->apiError($res, 'Tạo nhóm hàng hóa thất bại.'));
         }
 
         $newId = (int) data_get($res->json('data'), 'id');
         $child = $this->saveChildren($request, $newId);
+        $ve = fn () => redirect()->route('admin.categories.index')->with('focus_parent', $data['parent_id']);
 
         if ($child['fail'] > 0) {
-            return redirect()->route('admin.categories.index')
-                ->with('focus_parent', $data['parent_id'])
-                ->with('error', "Đã thêm nhóm nhưng {$child['fail']} nhóm con lưu không thành công.");
+            return $this->traLoiHopThoai($request, false,
+                "Đã thêm nhóm nhưng {$child['fail']} nhóm con lưu không thành công.", $ve);
         }
 
-        return redirect()->route('admin.categories.index')
-            ->with('focus_parent', $data['parent_id'])
-            ->with('success', 'Đã thêm nhóm hàng hóa.');
+        return $this->traLoiHopThoai($request, true, 'Đã thêm nhóm hàng hóa.', $ve);
     }
 
     /** Cập nhật nhóm hàng hóa + upsert các nhóm con trong modal. */
@@ -103,7 +105,7 @@ class CategoryController extends Controller
         $current = $this->fetch($id);
 
         if ($current !== null && in_array($current['slug'] ?? '', self::PROTECTED_SLUGS, true)) {
-            return back()->with('error', 'Đây là nhóm gốc cố định, không thể chỉnh sửa.');
+            return $this->traLoiHopThoai($request, false, 'Đây là nhóm gốc cố định, không thể chỉnh sửa.');
         }
 
         $data = $this->validated($request);
@@ -116,24 +118,22 @@ class CategoryController extends Controller
         } catch (\Throwable $e) {
             Log::error('Update category failed', ['msg' => $e->getMessage()]);
 
-            return back()->withInput()->with('error', 'Không kết nối được máy chủ API.');
+            return $this->traLoiHopThoai($request, false, 'Không kết nối được máy chủ API.');
         }
 
         if (! $res->successful()) {
-            return back()->withInput()->with('error', $this->apiError($res, 'Cập nhật nhóm hàng hóa thất bại.'));
+            return $this->traLoiHopThoai($request, false, $this->apiError($res, 'Cập nhật nhóm hàng hóa thất bại.'));
         }
 
         $child = $this->saveChildren($request, $id);
+        $ve = fn () => redirect()->route('admin.categories.index')->with('focus_parent', $data['parent_id']);
 
         if ($child['fail'] > 0) {
-            return redirect()->route('admin.categories.index')
-                ->with('focus_parent', $data['parent_id'])
-                ->with('error', "Đã cập nhật nhóm nhưng {$child['fail']} nhóm con lưu không thành công.");
+            return $this->traLoiHopThoai($request, false,
+                "Đã cập nhật nhóm nhưng {$child['fail']} nhóm con lưu không thành công.", $ve);
         }
 
-        return redirect()->route('admin.categories.index')
-            ->with('focus_parent', $data['parent_id'])
-            ->with('success', 'Đã cập nhật nhóm hàng hóa.');
+        return $this->traLoiHopThoai($request, true, 'Đã cập nhật nhóm hàng hóa.', $ve);
     }
 
     /** Xóa một nhóm hàng hóa. */
@@ -301,7 +301,10 @@ class CategoryController extends Controller
             return 'Mã nhóm bị trùng do có người vừa thêm cùng lúc. Vui lòng bấm Lưu lại.';
         }
 
-        return $res->json('message') ?: $fallback;
+        // Qua cauLoiApi để lấy lỗi theo TỪNG Ô. Đọc mỗi `message` thì 422 của API
+        // chỉ ra "Dữ liệu không hợp lệ" — người dùng không biết sai ô nào, trong
+        // khi `errors.name` đã nói sẵn "Tên nhóm hàng hoá này đã có trong cửa hàng".
+        return $this->cauLoiApi($res, $fallback);
     }
 
     // Mã nhóm KHÔNG sinh ở đây nữa: API đặt mã (theo quy tắc đánh số của cửa

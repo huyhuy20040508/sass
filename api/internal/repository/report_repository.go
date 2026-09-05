@@ -58,9 +58,19 @@ func (r *reportRepository) orders(ctx context.Context, p domain.ReportPeriod) *g
 // allOrders lọc MỌI đơn trong kỳ, kể cả huỷ và hoàn — chỉ báo cáo đơn hàng dùng
 // tới, để tính được tỷ lệ huỷ trên tổng đơn đã đặt.
 func (r *reportRepository) allOrders(ctx context.Context, p domain.ReportPeriod) *gorm.DB {
-	return r.db.WithContext(ctx).Table("orders o").
+	q := r.db.WithContext(ctx).Table("orders o").
 		Where("o.deleted_at IS NULL").
 		Where("o.created_at >= ? AND o.created_at < ?", p.From, p.To)
+
+	// ĐIỂM CẮT CHI NHÁNH DUY NHẤT của cả tệp này. Mọi câu báo cáo dựa trên đơn —
+	// doanh thu, mốc thời gian, cơ cấu thanh toán, hàng bán chạy, khách quen —
+	// đều đi qua đây, nên cắt một chỗ là cắt hết. Ba câu KHÔNG qua đây (đếm khách
+	// mới, sản phẩm chưa bán, đăng ký mới) tự lo phần của mình, xem tại chỗ.
+	if p.ShopID > 0 {
+		q = q.Where("o.shop_id = ?", p.ShopID)
+	}
+
+	return q
 }
 
 // items nối đơn còn hiệu lực với từng dòng hàng + biến thể + sản phẩm.
@@ -622,11 +632,23 @@ func (r *reportRepository) UnsoldProducts(ctx context.Context, p domain.ReportPe
 		Where("o.status NOT IN ?", deadStatuses).
 		Where("oi.product_id IS NOT NULL")
 
+	q := r.db.WithContext(ctx).Table("products p").
+		Where("p.deleted_at IS NULL AND p.is_active = 1")
+
+	// Hai vế đều phải cắt, không chỉ vế "đã bán": đếm hàng ế của kho 2 mà mẫu số
+	// là toàn bộ danh mục cửa hàng thì con số nào cũng thảm hại. Quy ước
+	// `product_shops` như mọi nơi khác — không có dòng nào = bán ở mọi chi nhánh.
+	if p.ShopID > 0 {
+		sold = sold.Where("o.shop_id = ?", p.ShopID)
+		q = q.Where(`(
+			EXISTS (SELECT 1 FROM product_shops ps WHERE ps.product_id = p.id AND ps.shop_id = ?)
+			OR NOT EXISTS (SELECT 1 FROM product_shops ps2 WHERE ps2.product_id = p.id)
+		)`, p.ShopID)
+	}
+
 	var total int64
-	err := r.db.WithContext(ctx).Table("products p").
-		Where("p.deleted_at IS NULL AND p.is_active = 1").
-		Where("p.id NOT IN (?)", sold).
-		Count(&total).Error
+	err := q.Where("p.id NOT IN (?)", sold).Count(&total).Error
+
 	return total, err
 }
 
@@ -690,18 +712,27 @@ func (r *reportRepository) CustomerTotals(ctx context.Context, p domain.ReportPe
 //
 // Không giới hạn theo kỳ: phải nhìn hết lịch sử mới biết khách mua trong kỳ là
 // người mới hay người đã từng mua từ trước.
-func (r *reportRepository) firstOrders(ctx context.Context) *gorm.DB {
-	return r.db.WithContext(ctx).Table("orders o").
+// firstOrders chụp lần mua ĐẦU TIÊN của từng khách.
+//
+// Có chi nhánh thì mốc "lần đầu" tính TRONG chi nhánh đó: câu hỏi của quản lý
+// một kho là "tháng này kho tôi có bao nhiêu khách mới", chứ không phải khách ấy
+// đã từng mua ở kho bên kia hay chưa.
+func (r *reportRepository) firstOrders(ctx context.Context, shopID uint) *gorm.DB {
+	q := r.db.WithContext(ctx).Table("orders o").
 		Select("o.user_id AS user_id, MIN(o.created_at) AS first_at").
 		Where("o.deleted_at IS NULL").
 		Where("o.status NOT IN ?", deadStatuses).
-		Where("o.user_id IS NOT NULL").
-		Group("o.user_id")
+		Where("o.user_id IS NOT NULL")
+	if shopID > 0 {
+		q = q.Where("o.shop_id = ?", shopID)
+	}
+
+	return q.Group("o.user_id")
 }
 
 func (r *reportRepository) newBuyers(ctx context.Context, p domain.ReportPeriod) (int64, error) {
 	var total int64
-	err := r.db.WithContext(ctx).Table("(?) AS f", r.firstOrders(ctx)).
+	err := r.db.WithContext(ctx).Table("(?) AS f", r.firstOrders(ctx, p.ShopID)).
 		Where("f.first_at >= ? AND f.first_at < ?", p.From, p.To).
 		Count(&total).Error
 	return total, err
@@ -709,6 +740,10 @@ func (r *reportRepository) newBuyers(ctx context.Context, p domain.ReportPeriod)
 
 // Registrations đếm tài khoản KHÁCH HÀNG đăng ký mới trong kỳ (kể cả người chưa
 // mua gì) — tài khoản nội bộ không nằm trong báo cáo này.
+//
+// KHÔNG cắt theo chi nhánh, và đó là chủ ý: khách đăng ký với CỬA HÀNG chứ không
+// với một kho, `users` cũng không có cột chi nhánh nào để cắt. Con số này giống
+// nhau ở mọi chi nhánh.
 func (r *reportRepository) Registrations(ctx context.Context, p domain.ReportPeriod) (int64, error) {
 	var total int64
 	err := r.db.WithContext(ctx).Table("users u").
@@ -737,7 +772,7 @@ func (r *reportRepository) TopCustomers(ctx context.Context, p domain.ReportPeri
 	err := r.orders(ctx, p).
 		Joins("JOIN users u ON u.id = o.user_id").
 		Where("o.user_id IS NOT NULL").
-		Joins("LEFT JOIN (?) AS f ON f.user_id = o.user_id", r.firstOrders(ctx)).
+		Joins("LEFT JOIN (?) AS f ON f.user_id = o.user_id", r.firstOrders(ctx, p.ShopID)).
 		Select(`u.id AS user_id,
 			u.full_name AS name,
 			u.email AS email,
@@ -832,7 +867,7 @@ func (r *reportRepository) CustomerBuckets(ctx context.Context, p domain.ReportP
 		Label string
 		Total int64
 	}
-	err = r.db.WithContext(ctx).Table("(?) AS f", r.firstOrders(ctx)).
+	err = r.db.WithContext(ctx).Table("(?) AS f", r.firstOrders(ctx, p.ShopID)).
 		Where("f.first_at >= ? AND f.first_at < ?", p.From, p.To).
 		Select(groupExprOn("f.first_at", groupBy) + " AS label, COUNT(*) AS total").
 		Group("label").

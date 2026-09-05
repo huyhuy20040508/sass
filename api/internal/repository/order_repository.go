@@ -159,6 +159,10 @@ func syncOrderStock(tx *gorm.DB, o *domain.Order, desired map[uint]int, txType, 
 		}
 	}
 
+	// Một lượt đọc cấu hình cho cả đơn, không phải mỗi dòng một lượt — và để cả
+	// đơn cùng theo một luật, kể cả khi có người đổi cấu hình đúng lúc này.
+	luat := luatXuatKho(tx)
+
 	for _, v := range variants {
 		delta := deltas[v.ID]
 		// Nhưng không cho LẤY THÊM hàng từ biến thể đã ngừng bán.
@@ -171,7 +175,14 @@ func syncOrderStock(tx *gorm.DB, o *domain.Order, desired map[uint]int, txType, 
 			continue
 		}
 
-		before, after, err := ghiTonChiNhanh(tx, shopID, v.ID, delta, false)
+		// Bán hàng KHÔNG chọn lô: hệ thống tự rút theo FIFO/FEFO, và ghi lại đã rút
+		// lô nào để lượt huỷ/hoàn sau đảo về đúng chỗ (xem hoanTheoSo).
+		before, after, err := ghiTonChiNhanhLo(tx, shopID, v.ID, ChuyenKho{
+			Delta:   delta,
+			Luat:    &luat,
+			RefType: domain.KhoRefDonHang,
+			RefID:   o.ID,
+		})
 		if err != nil {
 			if errors.Is(err, domain.ErrOutOfStock) {
 				name, lerr := variantLabel(tx, v)
@@ -312,6 +323,11 @@ func (r *orderRepository) List(ctx context.Context, f domain.OrderFilter) ([]dom
 	if f.Channel != "" && f.Channel != "all" {
 		q = q.Where("channel = ?", f.Channel)
 	}
+	// Cắt theo chi nhánh phát sinh chứng từ. Bỏ qua khi = 0 (xem gộp cả cửa
+	// hàng) — chỉ có ở báo cáo và khi người dùng chủ động chọn "tất cả".
+	if f.ShopID > 0 {
+		q = q.Where("shop_id = ?", f.ShopID)
+	}
 	if f.UserID != nil {
 		q = q.Where("user_id = ?", *f.UserID)
 	}
@@ -360,7 +376,17 @@ func (r *orderRepository) FindByID(ctx context.Context, id uint) (*domain.Order,
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, domain.ErrNotFound
 	}
-	return &o, err
+	if err != nil {
+		return nil, err
+	}
+	// Đơn của chi nhánh khác thì coi như không có — xem chanChungTuKhacChiNhanh.
+	// (FindByCode ngay dưới KHÔNG chặn: đó là đường tra cứu công khai của khách
+	// mua hàng, họ không đứng ở chi nhánh nào cả.)
+	if err := chanChungTuKhacChiNhanh(ctx, r.db, o.ShopID); err != nil {
+		return nil, err
+	}
+
+	return &o, nil
 }
 
 func (r *orderRepository) FindByCode(ctx context.Context, code string) (*domain.Order, error) {
@@ -394,6 +420,10 @@ func (r *orderRepository) Create(ctx context.Context, o *domain.Order) error {
 		return err
 	}
 	o.ShopID = shopID
+
+	if err := chanHangKhacChiNhanh(ctx, r.db, shopID, bienTheCuaDon(o.Items)); err != nil {
+		return err
+	}
 
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		o.OrderCode = fmt.Sprintf("TMP%d", time.Now().UnixNano())
@@ -492,6 +522,14 @@ func loadCheckoutVariants(tx *gorm.DB, lines []domain.CheckoutLine, lock bool) (
 		return nil, err
 	}
 
+	// GIÁ RIÊNG CỦA CHI NHÁNH ĐANG BÁN, đọc cùng chỗ và cùng lúc với tồn — và
+	// cùng một lý do: con số thu tiền phải là con số của ĐÚNG cái quầy đang bán.
+	// Thiếu dòng thì rơi về giá gốc, xem migration 0051.
+	giaChiNhanh, err := giaTheoChiNhanh(tx, shopID, ids)
+	if err != nil {
+		return nil, err
+	}
+
 	// Ghép thêm thông tin sản phẩm để snapshot vào đơn / hiển thị cho khách
 	type prodRow struct {
 		ID         uint
@@ -534,6 +572,11 @@ func loadCheckoutVariants(tx *gorm.DB, lines []domain.CheckoutLine, lock bool) (
 		}
 		if v.Price != nil && *v.Price > 0 {
 			price = *v.Price
+		}
+		// Giá của chi nhánh đè lên TẤT CẢ những mức trên: nó là mức cụ thể nhất —
+		// người khai nó đã biết mặt hàng này, biến thể này, ở đúng quầy này.
+		if g, co := giaChiNhanh[v.ID]; co {
+			price = g
 		}
 
 		// Giá VỐN đi cùng đường với giá bán: biến thể khai riêng thì lấy của nó,

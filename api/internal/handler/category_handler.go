@@ -21,11 +21,28 @@ func NewCategoryHandler(svc service.CategoryService) *CategoryHandler {
 //	@Summary	Danh sách danh mục
 //	@Tags		Categories
 //	@Produce	json
-//	@Param		all	query		bool	false	"true = lấy cả danh mục ẩn"
-//	@Success	200	{object}	response.Body
+//	@Param		all				query		bool	false	"true = lấy cả danh mục ẩn"
+//	@Param		has_products	query		bool	false	"true = chỉ nhóm đang có mặt hàng"
+//	@Success	200				{object}	response.Body
 //	@Router		/categories [get]
 func (h *CategoryHandler) List(c *gin.Context) {
 	onlyActive := c.Query("all") != "true"
+
+	// has_products dành cho các Ô LỌC nhóm: chúng đứng cạnh một bảng hàng hoá,
+	// bày ra nhóm rỗng là mời người dùng bấm vào để nhận bảng trắng. Danh sách
+	// dùng để CHỌN NHÓM lúc khai mặt hàng thì không truyền tham số này — nhóm
+	// mới lập chưa có hàng nào mà biến mất khỏi ô chọn là không khai được hàng.
+	if c.Query("has_products") == "true" {
+		cats, err := h.svc.ListCoHang(c.Request.Context(), onlyActive)
+		if err != nil {
+			handleServiceError(c, err)
+			return
+		}
+		response.OK(c, cats)
+
+		return
+	}
+
 	cats, err := h.svc.List(c.Request.Context(), onlyActive)
 	if err != nil {
 		handleServiceError(c, err)

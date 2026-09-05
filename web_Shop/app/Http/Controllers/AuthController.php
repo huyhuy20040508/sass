@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\ApiClient;
+use App\Services\ChiNhanhDangLam;
 use App\Services\HanSuDung;
 use App\Services\ModuleLamViec;
 use Illuminate\Http\Request;
@@ -130,6 +131,14 @@ class AuthController extends Controller
             return redirect()->route('admin.goi-dich-vu.index');
         }
 
+        // GHIM CHI NHÁNH LÀM VIỆC NGAY TỪ ĐÂY. Trước đây phiên mở ra không có
+        // chi nhánh nào cho tới khi người dùng tự bấm ô chọn ở thanh trên cùng,
+        // và trong khoảng đó mọi lượt ghi kho rơi vào một chi nhánh do API đoán.
+        // `chi_nhanh_id` là chi nhánh hồ sơ nhân sự của người này được phân về.
+        ChiNhanhDangLam::datLucDangNhap(
+            ($cn = data_get($data, 'chi_nhanh_id')) === null ? null : (int) $cn
+        );
+
         // ĐI ĐÂU TIẾP: hỏi ModuleLamViec, đừng đoán ở đây.
         //
         // Người được giao CẢ HAI khu dừng ở màn chọn cửa vào — họ đăng nhập lúc 7h
@@ -166,4 +175,3 @@ class AuthController extends Controller
         return redirect()->route('login')->with('success', 'Đã đăng xuất.');
     }
 }
-

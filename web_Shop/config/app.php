@@ -78,7 +78,10 @@ return [
     |
     */
 
-    'locale' => env('APP_LOCALE', 'en'),
+    // Mặc định tiếng Việt: toàn bộ khu quản trị dùng lang/vi/message.php (bê từ
+    // bản v2). Đặt ở đây chứ không setLocale trong view, vì Blade dựng section
+    // của trang TRƯỚC layout nên lệnh trong layout luôn chạy muộn một nhịp.
+    'locale' => env('APP_LOCALE', 'vi'),
 
     'fallback_locale' => env('APP_FALLBACK_LOCALE', 'en'),
 

@@ -119,9 +119,10 @@ func (h *CaLamViecHandler) List(c *gin.Context) {
 		Page:     page,
 		PageSize: pageSize,
 	}
-	if id, err := strconv.ParseUint(c.Query("shop_id"), 10, 64); err == nil && id > 0 {
-		f.ShopID = uint(id)
-	}
+	// Mặc định là CHI NHÁNH ĐANG LÀM VIỆC, không phải "tất cả". Trước đây chỉ cắt
+	// khi client tự gửi shop_id, nên không gửi là thấy ca và tiền két của mọi quầy.
+	// chiNhanhLoc vẫn cho chủ tiệm xem cả cửa hàng bằng shop_id=0.
+	f.ShopID = chiNhanhLoc(c)
 
 	list, total, err := h.svc.List(c.Request.Context(), f)
 	if err != nil {
@@ -185,6 +186,10 @@ func (h *CaLamViecHandler) GhiSoQuy(c *gin.Context) {
 }
 
 func respondCaError(c *gin.Context, err error, fallback string) {
+	if loiChiNhanh(c, err) {
+		return
+	}
+
 	switch {
 	case errors.Is(err, domain.ErrCaDangMo):
 		response.Error(c, http.StatusConflict,

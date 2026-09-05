@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Middleware\ChiHienGiaoDienV2;
+use App\Http\Middleware\ChiNhanhTheoTab;
 use App\Http\Middleware\EnsureAdminAuthenticated;
 use App\Http\Middleware\EnsureCuaVao;
 use App\Http\Middleware\EnsureManagerRole;
@@ -23,13 +25,27 @@ return Application::configure(basePath: dirname(__DIR__))
         // trang https:// và trình duyệt chặn hết CSS/JS vì mixed content — kể cả
         // URL ảnh sản phẩm mà trang này ghi vào API lúc tải ảnh lên.
         // Nginx đứng cùng máy nên tin toàn bộ header X-Forwarded-* là an toàn.
-        $middleware->trustProxies(at: '*');
+        // CHỈ tin proxy nội bộ, không tin '*'.
+        //
+        // nginx đưa thẳng REMOTE_ADDR qua fastcgi (unix socket), nên Laravel vốn
+        // đã thấy đúng IP trình duyệt. Trust '*' bảo Symfony ưu tiên header
+        // X-Forwarded-For do CHÍNH CLIENT gửi lên — tức là ai cũng tự khai được
+        // mình là ai, và mọi hạn mức tính theo IP thành vô nghĩa. Con số này giờ
+        // còn được chuyển tiếp sang API (ApiClient::ipNguoiDung) nên nó phải đúng.
+        //
+        // Đặt CDN hay cân bằng tải trước nginx thì thêm dải của chúng vào đây,
+        // không quay lại '*'.
+        $middleware->trustProxies(at: ['127.0.0.1', '::1']);
 
         // Lượt gọi nền (chuông thông báo) không được ăn mất lời nhắn dành cho
         // trang đang tải — xem GiuLoiNhanKhiGoiNen. Gắn vào cả nhóm `web` chứ
         // không vài route: nó phải phủ luôn những lượt gọi nền viết sau này.
         $middleware->web(append: [
             GiuLoiNhanKhiGoiNen::class,
+            // Chi nhánh đang làm việc là chuyện của TỪNG TAB, không phải của cả
+            // trình duyệt — xem ChiNhanhTheoTab. Gắn vào cả nhóm `web` vì nó phải
+            // phủ mọi đường: trang, lượt gọi ngầm, và mọi lượt ghi viết sau này.
+            ChiNhanhTheoTab::class,
         ]);
 
         $middleware->alias([
@@ -40,6 +56,8 @@ return Application::configure(basePath: dirname(__DIR__))
             'admin.khoa' => KhoaKhiHetHan::class,
             // Chặn theo CỬA đã tích trong mục Nhân sự: admin.cua:thu_ngan | :quan_ly.
             'admin.cua' => EnsureCuaVao::class,
+            // Đợt chuyển sang giao diện v2: màn chưa dựng lại thì không mở bản cũ.
+            'chi.v2' => ChiHienGiaoDienV2::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

@@ -110,6 +110,13 @@ func (r *orderReturnRepository) Returnable(ctx context.Context, orderID uint) (*
 func (r *orderReturnRepository) List(ctx context.Context, f domain.ReturnFilter) ([]domain.OrderReturn, int64, error) {
 	q := r.db.WithContext(ctx).Model(&domain.OrderReturn{})
 
+	// Cắt theo chi nhánh đang làm việc. Đường GHI ở Create đã cẩn thận đúng
+	// (chiNhanhCuaRequest, từ chối khi mơ hồ) nhưng đường ĐỌC thì không ai hỏi —
+	// nên phiếu trả của mọi kho đổ chung vào một danh sách.
+	if shopID := chiNhanhDoc(ctx, r.db); shopID > 0 {
+		q = q.Where("order_returns.shop_id = ?", shopID)
+	}
+
 	if f.Keyword != "" {
 		kw := "%" + f.Keyword + "%"
 		// Tìm cả theo dữ liệu của đơn gốc (mã đơn, người nhận) nên phải join sang
@@ -184,7 +191,14 @@ func (r *orderReturnRepository) FindByID(ctx context.Context, id uint) (*domain.
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, domain.ErrNotFound
 	}
-	return &rt, err
+	if err != nil {
+		return nil, err
+	}
+	if err := chanChungTuKhacChiNhanh(ctx, r.db, rt.ShopID); err != nil {
+		return nil, err
+	}
+
+	return &rt, nil
 }
 
 func (r *orderReturnRepository) Stats(ctx context.Context) (domain.ReturnStats, error) {
@@ -194,8 +208,14 @@ func (r *orderReturnRepository) Stats(ctx context.Context) (domain.ReturnStats, 
 		Status string
 		Total  int64
 	}
-	err := r.db.WithContext(ctx).Model(&domain.OrderReturn{}).
-		Select("status, COUNT(*) AS total").
+	q := r.db.WithContext(ctx).Model(&domain.OrderReturn{})
+	// Cùng lát cắt với List: con số trên thẻ đếm mà rộng hơn danh sách bên dưới
+	// thì người dùng đếm tay lại và thấy lệch.
+	if shopID := chiNhanhDoc(ctx, r.db); shopID > 0 {
+		q = q.Where("shop_id = ?", shopID)
+	}
+
+	err := q.Select("status, COUNT(*) AS total").
 		Group("status").
 		Scan(&rows).Error
 	if err != nil {
@@ -476,7 +496,15 @@ func restockReturn(tx *gorm.DB, rt *domain.OrderReturn) error {
 		// choPhepAm = true: đây là lượt hàng VÀO (qty > 0) nên không chạm mốc 0,
 		// nhưng kho đang âm sẵn từ dữ liệu cũ thì lượt trả hàng vẫn phải chạy —
 		// chặn nó lại là giữ hàng thật ngoài sổ.
-		before, after, err := ghiTonChiNhanh(tx, shopID, vid, qty[vid], true)
+		// Hoàn về đúng những lô ĐƠN GỐC đã rút, nên tra sổ theo `order` chứ không
+		// theo phiếu trả này: phiếu trả chưa từng rút lô nào, tra theo nó là không
+		// thấy gì và hàng dồn hết vào lô "Không xác định".
+		before, after, err := ghiTonChiNhanhLo(tx, shopID, vid, ChuyenKho{
+			Delta:     qty[vid],
+			ChoPhepAm: true,
+			RefType:   domain.KhoRefDonHang,
+			RefID:     rt.OrderID,
+		})
 		if err != nil {
 			return err
 		}

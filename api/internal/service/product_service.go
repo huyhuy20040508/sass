@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"sass-api/internal/chinhanh"
 	"sass-api/internal/domain"
 	"sass-api/internal/dto"
 )
@@ -22,6 +23,8 @@ type ProductService interface {
 	SetActive(ctx context.Context, id uint, active bool) (*domain.Product, error)
 	// DoiChoThuTu đưa mặt hàng lên trên hoặc xuống dưới một bậc trong danh sách.
 	DoiChoThuTu(ctx context.Context, id uint, huong string) error
+	// SapXepLai nhận nguyên một trình tự mới (kéo thả cả dòng tới chỗ khác).
+	SapXepLai(ctx context.Context, ids []uint) error
 	Duplicate(ctx context.Context, id uint) (*domain.Product, error)
 	Delete(ctx context.Context, id uint) error
 	// DeleteMany xoá nhiều sản phẩm trong một giao dịch, trả về số dòng đã xoá.
@@ -220,6 +223,16 @@ func (s *productService) ghiChiNhanhVaThe(ctx context.Context, productID uint, r
 			return err
 		}
 	}
+	// Vị trí đi cùng nhóm này vì cùng một lý do: nó là dòng ở bảng nối, không
+	// phải cột của mặt hàng (migration 0052). Quy ước con trỏ giữ nguyên như cũ
+	// — vắng mặt = không đụng tới, 0 = gỡ kệ, >0 = xếp vào kệ ấy — chỉ khác chỗ
+	// ghi: bảng nối theo CHI NHÁNH ĐANG LÀM VIỆC.
+	if req.LocationID != nil {
+		if err := s.repo.DatViTri(ctx, productID, req.LocationID); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -287,6 +300,27 @@ func (s *productService) DoiChoThuTu(ctx context.Context, id uint, huong string)
 	return s.repo.DoiChoThuTu(ctx, id, huong)
 }
 
+// SapXepLai ghi lại trình tự sau một lượt kéo thả.
+//
+// Lọc trùng ngay tại đây: id lặp làm tầng dưới phát một số thứ tự hai lần, và
+// mặt hàng cuối danh sách mất chỗ.
+func (s *productService) SapXepLai(ctx context.Context, ids []uint) error {
+	daCo := make(map[uint]bool, len(ids))
+	sach := make([]uint, 0, len(ids))
+	for _, id := range ids {
+		if id == 0 || daCo[id] {
+			continue
+		}
+		daCo[id] = true
+		sach = append(sach, id)
+	}
+	if len(sach) < 2 {
+		// Một dòng thì không có gì để xếp lại — và cũng không đáng ghi vào sổ.
+		return nil
+	}
+	return s.repo.SapXepLai(ctx, sach)
+}
+
 // SetStatus đổi trạng thái kinh doanh của sản phẩm — chỉ ghi status + is_active,
 // không đụng tới biến thể, ảnh hay giá.
 func (s *productService) SetStatus(ctx context.Context, id uint, status string) (*domain.Product, error) {
@@ -345,7 +379,19 @@ func (s *productService) DeleteMany(ctx context.Context, ids []uint) (int64, err
 // nhảy vào nhánh mặc định của handler và người dùng nhận về "Đã có lỗi xảy ra,
 // vui lòng thử lại" — không nói được là trùng cái gì, cũng không sửa được.
 func (s *productService) checkUnique(ctx context.Context, req dto.ProductRequest, excludeID uint) error {
-	exists, err := s.repo.ExistsBySlug(ctx, req.Slug, excludeID)
+	// TÊN xét TRƯỚC slug, dù cả hai đều hỏng cùng lúc: slug sinh ra TỪ tên, nên
+	// đặt trùng tên thì bao giờ cũng vấp cả hai. Báo "trùng slug" trước là nói
+	// về một thứ người dùng không nhìn thấy và không gõ, còn "trùng tên" thì
+	// chỉ thẳng vào ô họ vừa điền.
+	exists, err := s.repo.ExistsByName(ctx, strings.TrimSpace(req.Name), excludeID)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return domain.ErrProductTrungTen
+	}
+
+	exists, err = s.repo.ExistsBySlug(ctx, req.Slug, excludeID)
 	if err != nil {
 		return err
 	}
@@ -360,6 +406,7 @@ func (s *productService) checkUnique(ctx context.Context, req dto.ProductRequest
 	if exists {
 		return domain.ErrSKUExists
 	}
+
 	return nil
 }
 
@@ -520,10 +567,11 @@ func buildVariants(reqs []dto.VariantRequest, skuCha string, tenGiaTri map[uint]
 			// thứ hai chưa dán mã đụng ràng buộc với biến thể thứ nhất.
 			Barcode: chuoiHoacNil(v.Barcode),
 			Name:    ten,
-			// Không có chiều thuộc tính nào = dòng MẶC ĐỊNH của mặt hàng không
-			// biến thể. Đây là chỗ giữ bất biến "mọi mặt hàng luôn có ít nhất một
-			// dòng biến thể" — xem domain.ProductVariant.IsDefault.
-			IsDefault:  len(tohop) == 0,
+			// Hàng đơn: dòng DUY NHẤT (không chiều thuộc tính nào) luôn là mặc
+			// định — bất biến "mọi mặt hàng luôn có ít nhất một dòng biến thể".
+			// Hàng nhiều biến thể thì nghe theo cờ người khai tick; không tick
+			// dòng nào thì không dòng nào mặc định, và màn bán hàng bắt chọn.
+			IsDefault:  len(tohop) == 0 || boolOrDefault(v.IsDefault, false),
 			Pos:        pos,
 			Attributes: tohop,
 			Price:      v.Price,
@@ -555,32 +603,28 @@ func (s *productService) Duplicate(ctx context.Context, id uint) (*domain.Produc
 
 	newProduct := &domain.Product{
 		CategoryID: orig.CategoryID,
-		// Bản sao để cùng chỗ với bản gốc: nhân bản là để khai nhanh một món
-		// tương tự, mà món tương tự thì gần như luôn nằm cùng kệ.
-		LocationID:       orig.LocationID,
-		Name:             newName,
-		Slug:             newSlug,
-		SKU:              newSKU,
-		ShortDescription: orig.ShortDescription,
-		Description:      orig.Description,
-		UnitID:           orig.UnitID,
-		UnitConversions:  orig.UnitConversions,
-		VAT:              orig.VAT,
-		BasePrice:        orig.BasePrice,
-		SalePrice:        orig.SalePrice,
-		CostPrice:        orig.CostPrice,
-		Thumbnail:        orig.Thumbnail,
-		IsMultiVariant:   orig.IsMultiVariant,
-		PrintLabel:       orig.PrintLabel,
-		IsStockDeducted:  orig.IsStockDeducted,
-		IsSerial:         orig.IsSerial,
+		// Vị trí chép riêng SAU khi tạo (xem cuối hàm): nó là dòng ở bảng nối,
+		// không phải một cột của mặt hàng.
+		Name:            newName,
+		Slug:            newSlug,
+		SKU:             newSKU,
+		Description:     orig.Description,
+		UnitID:          orig.UnitID,
+		UnitConversions: orig.UnitConversions,
+		VAT:             orig.VAT,
+		BasePrice:       orig.BasePrice,
+		SalePrice:       orig.SalePrice,
+		CostPrice:       orig.CostPrice,
+		Thumbnail:       orig.Thumbnail,
+		IsMultiVariant:  orig.IsMultiVariant,
+		PrintLabel:      orig.PrintLabel,
+		IsStockDeducted: orig.IsStockDeducted,
+		IsSerial:        orig.IsSerial,
 		// Bản sao luôn ở tạm ẩn: nó còn thiếu ảnh riêng, tên riêng, giá riêng —
 		// bày ra ngay là khách thấy hai sản phẩm trùng tên nhau.
-		Status:          domain.ProductStatusHidden,
-		IsActive:        false,
-		IsFeatured:      orig.IsFeatured,
-		MetaTitle:       orig.MetaTitle,
-		MetaDescription: orig.MetaDescription,
+		Status:     domain.ProductStatusHidden,
+		IsActive:   false,
+		IsFeatured: orig.IsFeatured,
 	}
 
 	if err := s.repo.Create(ctx, newProduct); err != nil {
@@ -605,6 +649,15 @@ func (s *productService) Duplicate(ctx context.Context, id uint) (*domain.Produc
 			ten = append(ten, t.Name)
 		}
 		if err := s.repo.ReplaceTags(ctx, newProduct.ID, ten); err != nil {
+			return nil, err
+		}
+	}
+
+	// Kệ chép sang cùng lý do: món tương tự thì gần như luôn nằm cùng chỗ.
+	// `orig.LocationID` là kệ TẠI CHI NHÁNH ĐANG LÀM VIỆC (repo điền lúc đọc),
+	// và DatViTri cũng ghi vào đúng chi nhánh ấy — hai đầu khớp nhau.
+	if orig.LocationID != nil {
+		if err := s.repo.DatViTri(ctx, newProduct.ID, orig.LocationID); err != nil {
 			return nil, err
 		}
 	}
@@ -673,8 +726,20 @@ func (s *productService) validateRefs(ctx context.Context, req dto.ProductReques
 	// tra — và tra qua repo có bộ lọc tenant, nên id của cửa hàng khác rơi vào
 	// ErrNotFound chứ không gán trộm được.
 	if req.LocationID != nil && *req.LocationID > 0 {
-		if _, err := s.viTri.FindByID(ctx, *req.LocationID); err != nil {
+		ke, err := s.viTri.FindByID(ctx, *req.LocationID)
+		if err != nil {
 			return err
+		}
+		// Kệ phải thuộc CHI NHÁNH ĐANG LÀM VIỆC. Kệ của quận khác là một chỗ vật
+		// lý người đứng đây không với tới được — xếp hàng vào đó thì lượt soạn
+		// hàng nào cũng dẫn tới một cái kho sai.
+		//
+		// Không đứng ở chi nhánh nào thì bỏ qua: lúc ấy DatViTri cũng không ghi
+		// gì cả, nên không có gì để kiểm.
+		if shopID, ok := chinhanh.ID(ctx); ok && ke.ShopID != shopID {
+			return &LoiTheoO{Fields: map[string]string{
+				"location_id": "Vị trí này thuộc chi nhánh khác — chọn một vị trí của chi nhánh đang làm việc",
+			}}
 		}
 	}
 
@@ -790,17 +855,11 @@ func bienTheGuiLen(reqs []dto.VariantRequest) []dto.VariantRequest {
 // isCreate=true chỉ khi tạo mới (đặt mặc định cho các cờ boolean khi nil).
 func applyProductRequest(p *domain.Product, req dto.ProductRequest, isCreate bool) {
 	p.CategoryID = req.CategoryID
-	// Vị trí theo quy ước con trỏ: vắng mặt = giữ nguyên, 0 = gỡ ra, >0 = gán.
-	// Không gộp hai nghĩa sau lại: modal sửa nào không dựng được ô Vị trí mà vẫn
-	// gửi 0 thì mọi lượt Lưu là một lượt gỡ vị trí trong im lặng.
-	if req.LocationID != nil {
-		if *req.LocationID == 0 {
-			p.LocationID = nil
-		} else {
-			id := *req.LocationID
-			p.LocationID = &id
-		}
-	}
+	// VỊ TRÍ KHÔNG GÁN Ở ĐÂY NỮA. Từ migration 0052 nó nằm ở bảng nối
+	// `product_shop_locations` (mỗi chi nhánh một kệ), nên `p.LocationID` chỉ là
+	// một trường CHỈ ĐỌC do truy vấn con điền vào. Ghi vào nó ở đây thì lượt Lưu
+	// im lặng không đổi gì — đường ghi thật là repo.DatViTri, gọi ngay sau lượt
+	// ghi mặt hàng.
 	// Đơn vị tính cùng quy ước con trỏ với vị trí: vắng mặt = giữ nguyên,
 	// 0 = gỡ ra, >0 = gán.
 	if req.UnitID != nil {
@@ -814,7 +873,6 @@ func applyProductRequest(p *domain.Product, req dto.ProductRequest, isCreate boo
 	p.Name = req.Name
 	p.Slug = req.Slug
 	p.SKU = req.SKU
-	p.ShortDescription = req.ShortDescription
 	p.Description = req.Description
 	if req.VAT != nil {
 		p.VAT = *req.VAT
@@ -846,8 +904,6 @@ func applyProductRequest(p *domain.Product, req dto.ProductRequest, isCreate boo
 			}
 		}
 	}
-	p.MetaTitle = req.MetaTitle
-	p.MetaDescription = req.MetaDescription
 
 	if isCreate {
 		p.IsFeatured = boolOrDefault(req.IsFeatured, false)

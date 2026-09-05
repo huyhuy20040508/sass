@@ -22,22 +22,20 @@ func NewThuocTinhHandler(svc service.ThuocTinhService) *ThuocTinhHandler {
 //
 //	@Summary		Danh sách thuộc tính
 //	@Description	Mỗi dòng trả kèm luôn danh sách giá trị (`values`) — thuộc tính không có giá trị nào thì chẳng dùng được vào việc gì, tách thành lượt gọi riêng chỉ tổ khiến màn hình phải gọi hai lần.
-//	@Description	Đặt `active=true` để chỉ lấy thuộc tính đang bật (ô chọn lúc khai mặt hàng), `raw_material=true` để chỉ lấy thuộc tính dùng định lượng nguyên vật liệu.
+//	@Description	Đặt `active=true` để chỉ lấy thuộc tính đang bật (ô chọn lúc khai mặt hàng).
 //	@Description	Cố ý KHÔNG phân trang: danh sách thuộc tính của một cửa hàng chỉ vài chục dòng, trang quản trị tự cắt trang.
 //	@Tags			Admin - Thuộc tính
 //	@Produce		json
 //	@Security		BearerAuth
 //	@Param			keyword			query		string	false	"Tên hoặc mã thuộc tính"
 //	@Param			active			query		bool	false	"true = chỉ thuộc tính đang bật"
-//	@Param			raw_material	query		bool	false	"true = chỉ thuộc tính dùng định lượng nguyên vật liệu"
 //	@Success		200				{object}	response.Body{data=[]domain.ThuocTinh}
 //	@Failure		401				{object}	response.Body
 //	@Router			/admin/thuoc-tinh [get]
 func (h *ThuocTinhHandler) List(c *gin.Context) {
 	list, err := h.svc.List(c.Request.Context(), domain.ThuocTinhFilter{
-		Keyword:         c.Query("keyword"),
-		OnlyActive:      c.Query("active") == "true",
-		OnlyRawMaterial: c.Query("raw_material") == "true",
+		Keyword:    c.Query("keyword"),
+		OnlyActive: c.Query("active") == "true",
 	})
 	if err != nil {
 		handleServiceError(c, err)

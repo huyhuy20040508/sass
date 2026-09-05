@@ -28,8 +28,26 @@ func NewNhaCungCapService(repo domain.NhaCungCapRepository, quyTac domain.QuyTac
 	return &nhaCungCapService{repo: repo, quyTac: quyTac}
 }
 
+// List kèm ba số tiền của mỗi bên — trang danh sách bày chúng thành ba cột.
+//
+// Gộp tiền hỏng thì danh sách VẪN trả về, chỉ là ba cột kia bằng 0: không đọc
+// được tiền không phải là lý do để người dùng mất luôn danh mục.
 func (s *nhaCungCapService) List(ctx context.Context, f domain.NhaCungCapFilter) ([]domain.NhaCungCap, error) {
-	return s.repo.List(ctx, f)
+	list, err := s.repo.List(ctx, f)
+	if err != nil {
+		return nil, err
+	}
+
+	tien, err := s.repo.TienTheoNCC(ctx)
+	if err != nil {
+		return list, nil //nolint:nilerr // xem chú thích trên
+	}
+
+	for i := range list {
+		list[i].TienNCC = tien[list[i].ID]
+	}
+
+	return list, nil
 }
 
 func (s *nhaCungCapService) GetByID(ctx context.Context, id uint) (*domain.NhaCungCap, error) {
@@ -39,6 +57,9 @@ func (s *nhaCungCapService) GetByID(ctx context.Context, id uint) (*domain.NhaCu
 func (s *nhaCungCapService) Create(ctx context.Context, req *dto.NhaCungCapRequest) (*domain.NhaCungCap, error) {
 	code, err := s.chotMa(ctx, strings.ToUpper(strings.TrimSpace(req.Code)), 0)
 	if err != nil {
+		return nil, err
+	}
+	if err := s.chanTrungTen(ctx, req.Name, 0); err != nil {
 		return nil, err
 	}
 
@@ -55,6 +76,9 @@ func (s *nhaCungCapService) Create(ctx context.Context, req *dto.NhaCungCapReque
 func (s *nhaCungCapService) Update(ctx context.Context, id uint, req *dto.NhaCungCapRequest) (*domain.NhaCungCap, error) {
 	ncc, err := s.repo.FindByID(ctx, id)
 	if err != nil {
+		return nil, err
+	}
+	if err := s.chanTrungTen(ctx, req.Name, id); err != nil {
 		return nil, err
 	}
 
@@ -137,6 +161,21 @@ func (s *nhaCungCapService) chotMa(ctx context.Context, code string, excludeID u
 	}
 
 	return code, nil
+}
+
+// chanTrungTen — hai bên bán cùng tên trong một cửa hàng là không cho, dù mã
+// khác. Lúc lập phiếu mua, ô chọn ra hai dòng y hệt nhau: chọn nhầm bên nào
+// cũng không biết, mà công nợ thì tách đôi.
+func (s *nhaCungCapService) chanTrungTen(ctx context.Context, name string, excludeID uint) error {
+	trung, err := s.repo.ExistsByName(ctx, strings.TrimSpace(name), excludeID)
+	if err != nil {
+		return err
+	}
+	if trung {
+		return domain.ErrNhaCungCapTrungTen
+	}
+
+	return nil
 }
 
 // dienTruong chép các ô người dùng gõ, đã cắt khoảng trắng thừa.

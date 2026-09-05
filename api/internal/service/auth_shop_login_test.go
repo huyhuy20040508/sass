@@ -51,7 +51,7 @@ func dungAuthServiceDangNhapVoi(users *fakeUserRepo, tenants *fakeTenantRepo, ne
 		jwt.NewManager("bi-mat-test", 15*time.Minute, 24*time.Hour),
 		config.JWTConfig{AccessTTL: 15 * time.Minute},
 		config.MailConfig{},
-		false, nil, nil, nil,
+		false, nil, nil, nil, nil,
 	)
 }
 

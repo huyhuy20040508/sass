@@ -1,0 +1,3608 @@
+/* =============================================================
+   BOOKING MODULE — shared stylesheet
+   Loaded globally via head.php
+   ============================================================= */
+
+/* ============================================================
+   SHARED — SIDEBAR
+   ============================================================ */
+.booking-sidebar {
+    background: #fff;
+    border-right: 1px solid #dde0e5;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    height: 100%;
+    z-index: 10;
+}
+.pro_table thead,
+.pro_table tbody tr {
+    display: table;
+    width: 100%;
+    /* table-layout: fixed; */
+}
+.divthanhtien {
+    width: 30%;
+    float: left;
+    padding-top: 5px;
+    text-align: center
+}
+
+.divdongia {
+    width: 25%;
+    float: left;
+    padding-top: 5px;
+    text-align: center
+}
+
+.divquantily {
+    width: 35%;
+    float: left;
+}
+#cart_content .fa {
+    font-size: 18px;
+}
+
+#bklist-page .fa,
+#booking-page .fa,
+#bkm-page .fa,
+#bkw-page .fa {
+    font-size: 18px;
+}
+
+#booking-page .booking-block .b-eye .fa,
+#bkw-page .booking-block .b-eye .fa,
+#bkm-page .bkm-block .bk-eye .fa {
+    font-size: 12px;
+}
+
+.bf-grid .form-group i {
+    position: unset;
+}
+
+/* Mini calendar (index / list) */
+.mini-calendar {
+    padding: 8px 6px;
+    border-bottom: 1px solid #eee;
+}
+
+.mini-cal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+}
+
+.mini-cal-header .cal-title {
+    font-weight: 600;
+    font-size: 12px;
+    color: #333;
+}
+
+.mini-cal-nav {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #555;
+    padding: 2px 5px;
+    font-size: 13px;
+    line-height: 1;
+}
+
+.mini-cal-nav:hover {
+    color: #0d6efd;
+}
+
+.mini-cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 1px;
+}
+
+.mini-cal-grid .day-name {
+    text-align: center;
+    font-size: 10px;
+    color: #888;
+    padding: 2px 0;
+    font-weight: 600;
+}
+
+.mini-cal-grid .cal-day {
+    text-align: center;
+    font-size: 11px;
+    padding: 3px 1px;
+    cursor: pointer;
+    border-radius: 50%;
+    line-height: 1.6;
+    color: #333;
+}
+
+.mini-cal-grid .cal-day:hover {
+    background: #e8f0fe;
+    color: #0d6efd;
+}
+
+.mini-cal-grid .cal-day.today {
+    background: #ff6b35;
+    color: #fff;
+    font-weight: 700;
+}
+
+.mini-cal-grid .cal-day.selected {
+    background: #0d6efd;
+    color: #fff;
+    font-weight: 700;
+}
+
+.mini-cal-grid .cal-day.other-month {
+    color: #ccc;
+}
+
+.mini-cal-grid .cal-day.empty {
+    cursor: default;
+}
+
+/* Sidebar search */
+.sidebar-search {
+    padding: 6px 8px;
+    border-bottom: 1px solid #eee;
+}
+
+.sidebar-search .search-wrap {
+    display: flex;
+    align-items: center;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 7px 8px;
+    background: #fafafa;
+}
+
+.sidebar-search input {
+    border: none;
+    background: none;
+    outline: none;
+    flex: 1;
+    font-size: 13px;
+    color: #333;
+}
+
+.sidebar-search .search-icon {
+    color: #888;
+    font-size: 12px;
+}
+
+/* Sidebar filter sections */
+.sidebar-section {
+    padding: 6px 8px;
+    border-bottom: 1px solid #eee;
+}
+
+.sidebar-section label {
+    font-size: 11px;
+    color: #555;
+    font-weight: 600;
+    display: block;
+    margin-bottom: 4px;
+}
+
+.sidebar-section select {
+    width: 100%;
+    font-size: 13px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 7px 8px;
+    background: #fafafa;
+    color: #333;
+    outline: none;
+}
+
+/* Select2 trong sidebar: cao tương đương select thường sau khi nâng */
+.sidebar-section .select2-container--default .select2-selection--single {
+    height: 34px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background: #fafafa;
+}
+
+.sidebar-section .select2-container--default .select2-selection--single .select2-selection__rendered {
+    line-height: 32px;
+    font-size: 13px;
+    color: #333;
+}
+
+.sidebar-section .select2-container--default .select2-selection--single .select2-selection__arrow {
+    height: 32px;
+}
+
+.sidebar-section .tag-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 4px;
+}
+
+.desk-tag {
+    display: inline-flex;
+    align-items: center;
+    background: #e8f0fe;
+    color: #0d6efd;
+    border-radius: 10px;
+    padding: 3px 9px;
+    font-size: 13px;
+    gap: 4px;
+    cursor: default;
+}
+
+.desk-tag .remove-tag {
+    cursor: pointer;
+    color: #0d6efd;
+    font-weight: 700;
+    font-size: 15px;
+    line-height: 1;
+}
+
+.desk-tag .remove-tag:hover {
+    color: #c00;
+}
+
+/* Unscheduled list */
+.sidebar-unscheduled {
+    padding: 6px 8px;
+    flex: 1;
+    overflow-y: auto;
+}
+
+.sidebar-unscheduled .sec-title {
+    font-size: 11px;
+    color: #555;
+    font-weight: 600;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.unscheduled-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 0;
+    border-bottom: 1px solid #f0f0f0;
+    font-size: 11px;
+}
+
+.unscheduled-item .u-time {
+    color: #e74c3c;
+    font-weight: 600;
+}
+
+.unscheduled-item .u-name {
+    color: #333;
+    flex: 1;
+    margin-left: 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.unscheduled-item .u-add {
+    color: #0d6efd;
+    cursor: pointer;
+    font-size: 14px;
+    padding: 0 2px;
+}
+
+/* ============================================================
+   SHARED — STATUS DOTS & BUTTONS
+   ============================================================ */
+.status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+    display: inline-block;
+    vertical-align: middle;
+}
+
+.s0 {
+    color: #3498db;
+}
+
+.s1 {
+    color: #27ae60;
+}
+
+.s2 {
+    color: #1abc9c;
+}
+
+.s3 {
+    color: #f39c12;
+}
+
+.s4 {
+    color: #e74c3c;
+}
+
+.s5 {
+    color: #7c3aed;
+}
+.s-unscheduled {
+    color: #1A2B58
+}
+
+.btn-add-booking,
+.bklist-btn-add {
+    background: #ff6b35;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    padding: 6px 16px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.btn-add-booking:hover,
+.bklist-btn-add:hover {
+    background: #e55a25;
+}
+
+/* Icon + trong nút Đặt bàn: trắng, căn giữa dọc với chữ */
+.btn-add-booking i,
+.bklist-btn-add i {
+    color: #fff !important;
+    font-size: 12px;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    vertical-align: middle;
+}
+
+/* ============================================================
+   SHARED — BOOKING FORM MODAL
+   ============================================================ */
+.booking-modal .modal-header {
+    border-bottom: 1px solid #dee2e6;
+    padding: 12px 16px;
+}
+
+.booking-modal .modal-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: #444;
+}
+
+.booking-modal .modal-body {
+    padding: 16px;
+}
+
+.booking-modal .form-group {
+    margin-bottom: 12px;
+}
+
+.booking-modal .form-group label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #444;
+    margin-bottom: 3px;
+    display: block;
+}
+
+.booking-modal .form-control {
+    font-size: 13px;
+}
+
+.booking-modal .form-row {
+    display: flex;
+    gap: 10px;
+}
+
+.booking-modal .form-row .form-group {
+    flex: 1;
+}
+
+.modal-footer .btn {
+    font-size: 13px;
+    font-weight: 600;
+}
+
+/* 3-col booking form grid */
+.bf-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 0 16px;
+}
+
+.bf-col {
+    display: flex;
+    flex-direction: column;
+}
+
+.bf-col .form-group {
+    margin-bottom: 10px;
+}
+
+.bf-input-group {
+    display: flex;
+    gap: 5px;
+}
+
+.bf-input-group .form-control {
+    min-width: 0;
+}
+
+/* Desk tags */
+.bf-desk-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    min-height: 34px;
+    padding: 4px 6px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    background: #f8f9fa;
+    margin-bottom: 4px;
+}
+
+.bf-desk-tag {
+    background: #0d6efd;
+    color: #fff;
+    border-radius: 12px;
+    padding: 2px 8px;
+    font-size: 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+}
+
+.bf-desk-tag .rm {
+    cursor: pointer;
+    font-weight: 800;
+}
+
+.bf-desk-tag .rm:hover {
+    opacity: 0.7;
+}
+
+/* Pre-order list trong form Thêm/Sửa */
+.bf-preorder-panel {
+    border: 1px solid #ced4da;
+    border-radius: 8px;
+    background: #fff;
+    overflow: hidden;
+}
+.bf-preorder-panel.is-empty .dp-preorder-cols,
+.bf-preorder-panel.is-empty .bf-preorder-list-scroll,
+.bf-preorder-panel.is-empty .dp-preorder-total-row {
+    display: none;
+}
+.bf-preorder-panel.is-empty .bf-preorder-list {
+    display: none;
+}
+.bf-preorder-panel.is-empty {
+    min-height: 42px;
+    background: #f8f9fa;
+}
+.bf-preorder-label { font-weight: 600; }
+.bf-preorder-count {
+    font-size: 12px;
+    font-weight: 600;
+    color: #64748b;
+    margin-left: 4px;
+}
+.bf-preorder-panel .bf-preorder-list-scroll {
+    max-height: 200px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    scrollbar-gutter: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+}
+.bf-preorder-panel .bf-preorder-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+.bf-preorder-panel .dp-preorder-cols {
+    border-radius: 0;
+}
+.bf-preorder-rm {
+    border: 0;
+    background: #fee2e2;
+    color: #dc2626;
+    width: 18px;
+    height: 18px;
+    min-width: 18px;
+    min-height: 18px;
+    border-radius: 3px;
+    font-size: 16px;
+    line-height: 1;
+    padding: 0;
+    margin: 0;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    justify-self: end;
+    align-self: start;
+}
+.bf-preorder-panel .bf-preorder-col-rm {
+    width: 18px;
+    min-width: 18px;
+    padding: 0;
+}
+.bf-preorder-rm:hover {
+    background: #fecaca;
+}
+
+/* ============================================================
+   SHARED — DETAIL POPUP COMMON PARTS
+   ============================================================ */
+.dp-btn-confirm {
+    background: #0d6efd;
+    color: #fff;
+}
+
+.dp-btn-cancel {
+    background: #e74c3c;
+    color: #fff;
+}
+
+.dp-btn-edit {
+    background: #f59e0b;
+    color: #fff;
+}
+
+.dp-btn-payment {
+    background: #183556;
+    color: #fff;
+}
+
+/* ============================================================
+   INDEX (THEO NGÀY — timeline view)
+   ============================================================ */
+#booking-page {
+    height: calc(100vh - 50px);
+    font-family: 'Roboto', sans-serif;
+    font-size: 13px;
+    overflow: hidden;
+    padding-left: 15px;
+    padding-right: 15px;
+}
+
+#booking-sidebar {
+    border-radius: 4px;
+    padding: 15px 5px !important;
+}
+
+#booking-content {
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    padding: 0 16px;
+}
+
+.booking-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    /* background: #fff; */
+    border-bottom: 1px solid #dde0e5;
+    /* padding: 6px 14px;  */
+    flex-shrink: 0;
+    border-radius: 4px 4px 0 0;
+}
+
+.booking-topics {
+    display: flex;
+    gap: 4px;
+}
+
+.view-tabs {
+    display: flex;
+    gap: 4px;
+}
+
+.view-tab {
+    background: none;
+    border: 1px solid #dde0e5;
+    border-radius: 4px;
+    padding: 4px 14px;
+    font-size: 12px;
+    cursor: pointer;
+    color: #555;
+    font-weight: 600;
+}
+
+.view-tab.active {
+    background: #0d6efd;
+    color: #fff;
+    border-color: #0d6efd;
+}
+
+.view-tab:hover:not(.active) {
+    background: #f0f4ff;
+}
+
+/* Status filter bar */
+.status-filter-bar {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    padding: 6px 14px;
+    background: #fff;
+    border-bottom: 1px solid #eee;
+    flex-shrink: 0;
+}
+
+.status-filter-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+    font-size: 12px;
+    color: #444;
+    user-select: none;
+    margin: 0px;
+}
+
+.status-filter-item input[type=checkbox] {
+    cursor: pointer;
+    accent-color: #0d6efd;
+}
+
+/* Timeline */
+.timeline-outer {
+    flex: 1;
+    overflow: auto;
+    position: relative;
+}
+
+.timeline-container {
+    display: flex;
+    width: fit-content;
+    min-width: max-content;
+}
+
+.tl-names-col {
+    width: 160px;
+    min-width: 160px;
+    flex-shrink: 0;
+    border-right: 1px solid #dde0e5;
+    background: #fff;
+    position: sticky;
+    left: 0;
+    z-index: 5;
+}
+
+.tl-grid-col {
+    flex: 0 0 auto;
+    position: relative;
+}
+
+.tl-header-names {
+    background: #f7f9fc;
+    border-bottom: 2px solid #dde0e5;
+    font-weight: 700;
+    font-size: 12px;
+    color: #555;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    padding-left: 10px;
+    position: sticky;
+    top: 0;
+    z-index: 4;
+    border-right: 1px solid #dde0e5;
+}
+
+.tl-header-times {
+    height: 36px;
+    background: #f7f9fc;
+    border-bottom: 2px solid #dde0e5;
+    position: sticky;
+    top: 0;
+    z-index: 4;
+    display: flex;
+    align-items: stretch;
+}
+
+.tl-hour-label {
+    flex: 0 0 auto;
+    border-left: 1px solid #e0e4ea;
+    display: flex;
+    align-items: center;
+    padding-left: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #666;
+    box-sizing: border-box;
+}
+
+.tl-header-overflow,
+.tl-overflow-pad {
+    background: #f8f9fb;
+    border-left: 1px dashed #d0d5de;
+    box-sizing: border-box;
+}
+
+.booking-block-continuation {
+    border-left: 3px solid rgba(255, 255, 255, .75);
+    opacity: .92;
+}
+
+.tl-area-names,
+.tl-area-grid {
+    background: #e8edf5;
+    font-size: 11px;
+    font-weight: 700;
+    color: #444;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    border-bottom: 1px solid #c8d0df;
+}
+
+.tl-area-names {
+    padding-left: 10px;
+    border-right: 1px solid #dde0e5;
+}
+
+.tl-area-grid {
+    position: relative;
+}
+
+.tl-area-grid .tl-hour-cell {
+    border-left: 1px solid #d0d5de;
+}
+
+.tl-desk-name {
+    height: 36px;
+    display: flex;
+    align-items: center;
+    padding-left: 16px;
+    font-size: 12px;
+    color: #333;
+    border-bottom: 1px solid #eef0f3;
+    border-right: 1px solid #dde0e5;
+    background: #fff;
+    overflow: hidden;
+    white-space: normal;
+    word-wrap: break-word;
+}
+
+.tl-desk-name:hover {
+    background: #f5f8ff;
+}
+
+.tl-desk-grid {
+    height: 36px;
+    display: flex;
+    align-items: stretch;
+    border-bottom: 1px solid #eef0f3;
+    position: relative;
+    background: #fff;
+}
+
+.tl-desk-grid:hover {
+    background: #f9fbff;
+}
+
+.tl-hour-cell {
+    flex: 1;
+    min-width: 80px;
+    border-left: 1px solid #eef0f3;
+    position: relative;
+}
+
+.tl-hour-cell.half {
+    border-left: 1px dashed #e0e4ea;
+}
+
+.current-time-line {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: #e74c3c;
+    z-index: 3;
+    pointer-events: none;
+}
+
+.current-time-line::before {
+    content: '';
+    position: absolute;
+    top: -3px;
+    left: -4px;
+    width: 10px;
+    height: 10px;
+    background: #e74c3c;
+    border-radius: 50%;
+}
+
+/* Booking blocks (timeline) */
+.booking-block {
+    position: absolute;
+    top: 4px;
+    bottom: 4px;
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 11px;
+    color: #fff;
+    font-weight: 600;
+    cursor: pointer;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    z-index: 2;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    transition: opacity 0.15s;
+    container-type: inline-size;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.booking-block .b-main,
+.bkm-block .b-main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+}
+
+.booking-block .b-lead,
+.bkm-block .b-lead {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.booking-block .b-guests,
+.bkm-block .b-guests {
+    flex-shrink: 0;
+}
+
+.booking-block .b-eye,
+.bkm-block .bk-eye {
+    flex-shrink: 0;
+    margin-left: auto;
+}
+
+@container (max-width: 88px) {
+    .booking-block .b-guests,
+    .bkm-block .b-guests {
+        display: none;
+    }
+}
+
+.booking-block:hover {
+    opacity: 0.85;
+    filter: brightness(1.05);
+}
+
+.booking-block.s0 {
+    background: #3498db;
+}
+
+.booking-block.s1 {
+    background: #27ae60;
+}
+
+.booking-block.s2 {
+    background: #1abc9c;
+}
+
+.booking-block.s3 {
+    background: #f39c12;
+}
+
+.booking-block.s4 {
+    background: #e74c3c;
+    opacity: 0.6;
+}
+
+.booking-block .b-eye {
+    font-size: 12px;
+}
+
+.booking-block .fa {
+    font-size: 18px;
+    color: #fff;
+}
+
+.booking-block.hidden-block {
+    display: none;
+}
+
+/* Index detail popup */
+#booking-detail-popup {
+    position: fixed;
+    z-index: 1060;
+    background: #fff;
+    border: 1px solid #dde0e5;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.18);
+    padding: 14px 16px;
+    min-width: 400px;
+    max-width: 480px;
+    display: none;
+    font-size: 12px;
+}
+
+#booking-detail-popup .dp-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #eee;
+}
+
+#booking-detail-popup .dp-title-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+#booking-detail-popup .dp-title {
+    font-weight: 700;
+    font-size: 14px;
+    color: #222;
+}
+
+#booking-detail-popup .dp-title-edit {
+    cursor: pointer;
+    color: #0d6efd;
+    font-size: 18px;
+    line-height: 1;
+    text-decoration: none;
+}
+
+#booking-detail-popup .dp-title-edit:hover {
+    color: #0a58ca;
+}
+
+#booking-detail-popup .dp-close {
+    cursor: pointer;
+    color: #888;
+    font-size: 32px;
+    line-height: 1;
+}
+
+#booking-detail-popup .dp-close:hover {
+    color: #333;
+}
+
+#booking-detail-popup .dp-2col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2px 8px;
+    margin-bottom: 6px;
+}
+
+#booking-detail-popup .dp-row {
+    margin-bottom: 4px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 2px 6px;
+    min-width: 0;
+}
+
+#booking-detail-popup .dp-label {
+    color: #888;
+    white-space: nowrap;
+    font-weight: 500;
+    flex: 0 0 auto;
+}
+
+#booking-detail-popup .dp-val {
+    color: #333;
+    font-weight: 600;
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 100%;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+}
+
+/* Món đặt trước: danh sách cuộn thay vì chuỗi dài */
+#booking-detail-popup .dp-row-preorder {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    min-width: 0;
+    width: 100%;
+}
+#booking-detail-popup .dp-preorder-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+#booking-detail-popup .dp-preorder-head .fa {
+    color: #0d6efd;
+    font-size: 14px;
+}
+#booking-detail-popup .dp-preorder-title {
+    font-size: 13px;
+    font-weight: 800;
+    color: #1f2b45;
+}
+#booking-detail-popup .dp-preorder-count {
+    font-size: 12px;
+    font-weight: 600;
+    color: #64748b;
+}
+#booking-detail-popup .dp-preorder-table {
+    width: 100%;
+    border: 1px solid #e2e8f4;
+    border-radius: 8px;
+    background: #fff;
+    overflow: hidden;
+    box-sizing: border-box;
+}
+#booking-detail-popup .dp-preorder-list-scroll {
+    max-height: 220px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    scrollbar-gutter: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+}
+#booking-detail-popup .dp-preorder-list-scroll .dp-preorder-item {
+    padding: 4px 8px;
+}
+#booking-detail-popup .dp-preorder-total-row,
+.bf-preorder-panel .dp-preorder-total-row {
+    display: grid;
+    gap: 4px;
+    align-items: center;
+    width: 100%;
+    box-sizing: border-box;
+    border-top: 1px solid #dce5f5;
+    background: #f4f8ff;
+    padding: 6px 8px;
+    flex-shrink: 0;
+}
+#booking-detail-popup .dp-preorder-total-row {
+    grid-template-columns: minmax(0, 1fr) 28px 118px;
+}
+.bf-preorder-panel .dp-preorder-total-row {
+    grid-template-columns: minmax(0, 1fr) 28px minmax(88px, 100px) 18px;
+    min-width: 0;
+}
+#booking-detail-popup .dp-preorder-total-label,
+.bf-preorder-panel .dp-preorder-total-label {
+    grid-column: 1;
+    text-align: left;
+    font-size: 13px;
+    font-weight: 800;
+    color: #1f2b45;
+    min-width: 0;
+}
+#booking-detail-popup .dp-preorder-total-val,
+.bf-preorder-panel .dp-preorder-total-val {
+    grid-column: 3;
+    text-align: right;
+    font-size: 12px;
+    line-height: 1.25;
+    font-weight: 700;
+    color: #0d6efd;
+    white-space: nowrap;
+    padding-right: 0;
+    box-sizing: border-box;
+}
+#booking-detail-popup .dp-preorder-cols,
+#booking-detail-popup .dp-preorder-item-main {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 28px 118px;
+    gap: 4px;
+    align-items: center;
+    width: 100%;
+    box-sizing: border-box;
+}
+/* Form Thêm/Sửa: 4 cột — tên (co) | SL | thành tiền | xóa */
+.bf-preorder-panel .dp-preorder-cols,
+.bf-preorder-panel .bf-preorder-item-main {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 28px minmax(88px, 100px) 18px;
+    gap: 4px;
+    min-width: 0;
+}
+.bf-preorder-panel .dp-preorder-cols {
+    align-items: center;
+}
+#booking-detail-popup .dp-preorder-cols,
+.bf-preorder-panel .dp-preorder-cols {
+    z-index: 1;
+    padding: 4px 10px;
+    background: #eef4ff;
+    border-bottom: 1px solid #dce5f5;
+    font-size: 10px;
+    font-weight: 700;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: .02em;
+    line-height: 1.2;
+}
+/* Pad mặc định (mobile / màn hẹp) */
+#booking-detail-popup .dp-preorder-cols {
+    padding: 4px 8px;
+}
+.bf-preorder-panel .dp-preorder-cols {
+    position: sticky;
+    top: 0;
+    padding: 4px 8px;
+}
+#booking-detail-popup .dp-preorder-col-qty,
+#booking-detail-popup .dp-preorder-item-qty,
+.bf-preorder-panel .dp-preorder-col-qty,
+.bf-preorder-panel .dp-preorder-item-qty {
+    text-align: center;
+}
+#booking-detail-popup .dp-preorder-col-qty,
+.bf-preorder-panel .dp-preorder-col-qty {
+    white-space: nowrap;
+}
+/* Popup có món: cột SL đủ rộng cho tiêu đề một dòng */
+#booking-detail-popup.dp-has-preorder .dp-preorder-cols,
+#booking-detail-popup.dp-has-preorder .dp-preorder-item-main,
+#booking-detail-popup.dp-has-preorder .dp-preorder-total-row {
+    grid-template-columns: minmax(0, 1fr) 72px 118px;
+}
+#booking-detail-popup .dp-preorder-col-name,
+.bf-preorder-panel .dp-preorder-col-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+#booking-detail-popup .dp-preorder-col-price,
+#booking-detail-popup .dp-preorder-item-price,
+.bf-preorder-panel .dp-preorder-col-price,
+.bf-preorder-panel .dp-preorder-item-price {
+    text-align: right;
+    white-space: nowrap;
+}
+@media (min-width: 992px) {
+    #booking-detail-popup .dp-preorder-cols,
+    #booking-detail-popup .dp-preorder-item-main {
+        grid-template-columns: minmax(0, 1fr) 72px 118px;
+    }
+    #booking-detail-popup .dp-preorder-cols {
+        padding: 4px 16px 4px 12px;
+    }
+    #booking-detail-popup .dp-preorder-list-scroll .dp-preorder-item {
+        padding: 4px 16px 4px 12px;
+    }
+    #booking-detail-popup .dp-preorder-col-price,
+    #booking-detail-popup .dp-preorder-item-price,
+    #booking-detail-popup .dp-preorder-total-val {
+        padding-right: 0;
+    }
+    #booking-detail-popup .dp-preorder-total-row {
+        grid-template-columns: minmax(0, 1fr) 72px 118px;
+        padding: 6px 16px 6px 12px;
+    }
+    .bf-preorder-panel .dp-preorder-total-row {
+        grid-template-columns: minmax(0, 1fr) 72px 118px 18px;
+    }
+    .bf-preorder-panel .dp-preorder-cols,
+    .bf-preorder-panel .bf-preorder-item-main {
+        grid-template-columns: minmax(0, 1fr) 72px 118px 18px;
+    }
+    .bf-preorder-panel .dp-preorder-cols {
+        padding: 4px 12px 4px 10px;
+    }
+    .bf-preorder-panel .dp-preorder-item {
+        padding: 3px 12px 3px 10px;
+    }
+}
+#booking-detail-popup .dp-preorder-list,
+.bf-preorder-panel .dp-preorder-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+}
+#booking-detail-popup .dp-preorder-item,
+.bf-preorder-panel .dp-preorder-item {
+    border-bottom: 1px solid #f0f2f6;
+}
+.bf-preorder-panel .dp-preorder-item {
+    padding: 3px 8px;
+}
+#booking-detail-popup .dp-preorder-item:last-child,
+.bf-preorder-panel .dp-preorder-item:last-child {
+    border-bottom: none;
+}
+#booking-detail-popup .dp-preorder-item-main,
+.bf-preorder-panel .bf-preorder-item-main {
+    align-items: start;
+}
+#booking-detail-popup .dp-preorder-item-name,
+.bf-preorder-panel .dp-preorder-item-name {
+    min-width: 0;
+    font-size: 12px;
+    line-height: 18px;
+    min-height: 18px;
+    font-weight: 700;
+    color: #1f2b45;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    white-space: normal;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    align-self: start;
+}
+#booking-detail-popup .dp-preorder-item-qty,
+.bf-preorder-panel .dp-preorder-item-qty {
+    font-size: 12px;
+    line-height: 18px;
+    height: 18px;
+    font-weight: 700;
+    color: #475569;
+    align-self: start;
+}
+#booking-detail-popup .dp-preorder-item-price,
+.bf-preorder-panel .dp-preorder-item-price {
+    font-size: 12px;
+    line-height: 18px;
+    height: 18px;
+    font-weight: 700;
+    color: #0d6efd;
+    white-space: nowrap;
+    align-self: start;
+}
+#booking-detail-popup .dp-preorder-item-sub,
+#booking-detail-popup .dp-preorder-item-note,
+.bf-preorder-panel .dp-preorder-item-sub,
+.bf-preorder-panel .dp-preorder-item-note {
+    margin-top: 2px;
+    padding-left: 2px;
+    font-size: 10px;
+    line-height: 1.25;
+    color: #94a3b8;
+    word-break: break-word;
+}
+#booking-detail-popup .dp-preorder-item-note,
+.bf-preorder-panel .dp-preorder-item-note {
+    color: #b45309;
+    font-style: italic;
+}
+
+#booking-detail-popup .dp-divider {
+    border: none;
+    border-top: 1px solid #eee;
+    margin: 6px 0;
+}
+
+#booking-detail-popup .dp-actions {
+    margin-top: 12px;
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+#booking-detail-popup .dp-actions button {
+    font-size: 12px;
+    font-weight: 700;
+    border: none;
+    border-radius: 4px;
+    padding: 7px 20px;
+    cursor: pointer;
+}
+
+#booking-cancel-modal.modal {
+    z-index: 100010 !important;
+}
+
+#booking-cancel-modal .is-invalid {
+    border-color: #dc3545;
+}
+
+#booking-cancel-modal #bk-cancel-reason-error {
+    font-size: 12px;
+}
+
+@media (max-width: 768px) {
+    #booking-sidebar {
+        height: auto;
+        max-height: 300px;
+    }
+
+    .tl-names-col {
+        width: 100px;
+        min-width: 100px;
+    }
+}
+
+/* ============================================================
+   LIST (THEO DANH SÁCH)
+   ============================================================ */
+#bklist-page {
+    font-family: 'Roboto', sans-serif;
+    font-size: 13px;
+    height: calc(100vh - 50px);
+    display: flex;
+    flex-direction: row;
+    overflow: hidden;
+}
+
+#bkl-content {
+    flex: 1;
+    /* Ép chiều cao = đúng #bklist-page (626px) thay vì để align-stretch cho nó
+       phình theo nội dung bảng. Nhờ vậy .bklist-table-wrap (flex:1 + min-height:0)
+       mới co vừa chỗ trống & cuộn được, giữ thanh phân trang trong khung. */
+    height: 100%;
+    min-height: 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 0px 16px;
+}
+
+.bklist-topbar {
+    flex-shrink: 0;
+    /* margin-bottom: 8px; */
+}
+
+.bklist-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #fff;
+    border: 1px solid #dde0e5;
+    border-radius: 4px 4px 0 0;
+    padding: 8px 14px;
+    flex-shrink: 0;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.bklist-toolbar-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.bklist-toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.bklist-date-nav {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.bklist-date-nav button {
+    background: none;
+    border: 1px solid #dde0e5;
+    border-radius: 4px;
+    width: 28px;
+    height: 28px;
+    cursor: pointer;
+    font-size: 13px;
+    color: #555;
+    line-height: 1;
+}
+
+.bklist-date-nav button:hover {
+    background: #f0f4ff;
+    color: #0d6efd;
+}
+
+.bklist-date-nav #bkl-date-label {
+    font-weight: 700;
+    font-size: 13px;
+    color: #333;
+    min-width: 105px;
+    text-align: center;
+}
+
+.bklist-date-input {
+    border: 1px solid #dde0e5;
+    border-radius: 4px;
+    padding: 3px 8px;
+    font-size: 12px;
+    color: #333;
+    outline: none;
+    cursor: pointer;
+}
+
+.bklist-search {
+    display: flex;
+    align-items: center;
+    border: 1px solid #dde0e5;
+    border-radius: 4px;
+    padding: 3px 8px;
+    background: #fafafa;
+    gap: 5px;
+}
+
+.bklist-search input {
+    border: none;
+    background: none;
+    outline: none;
+    font-size: 12px;
+    color: #333;
+    width: 160px;
+}
+
+.bklist-search .si {
+    color: #888;
+    font-size: 12px;
+}
+
+.bklist-filter-select {
+    border: 1px solid #dde0e5;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 12px;
+    color: #333;
+    outline: none;
+    background: #fafafa;
+}
+
+/* Status tabs */
+.bklist-status-bar {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    background: #fff;
+    border-left: 1px solid #dde0e5;
+    border-right: 1px solid #dde0e5;
+    border-bottom: 1px solid #dde0e5;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+}
+
+.bklist-status-tab {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 16px;
+    font-size: 12px;
+    color: #555;
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    border-right: 1px solid #eee;
+    user-select: none;
+    transition: border-color .15s;
+    white-space: nowrap;
+}
+
+.bklist-status-tab:hover {
+    background: #f5f8ff;
+}
+
+.bklist-status-tab.active {
+    border-bottom-color: #0d6efd;
+    color: #0d6efd;
+    font-weight: 700;
+    background: #f5f8ff;
+}
+
+.bklist-status-tab .stab-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 2px;
+    display: inline-block;
+}
+
+.stab-dot.all {
+    background: #888;
+}
+
+.stab-dot.s0 {
+    background: #3498db;
+}
+
+.stab-dot.s1 {
+    background: #27ae60;
+}
+
+.stab-dot.s2 {
+    background: #f39c12;
+}
+
+.stab-dot.s3 {
+    background: #e67e22;
+}
+
+.stab-dot.s4 {
+    background: #e74c3c;
+}
+
+.bklist-status-tab .stab-cnt {
+    background: #e8edf5;
+    color: #555;
+    border-radius: 10px;
+    padding: 1px 7px;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.bklist-status-tab.active .stab-cnt {
+    background: #0d6efd;
+    color: #fff;
+}
+
+/* Table */
+.bklist-table-wrap {
+    flex: 1;
+    /* min-height:0 BẮT BUỘC: nếu không, min-height:auto của flex item ép vùng
+       bảng cao bằng nội dung → tràn xuống, cắt mất dòng + đẩy thanh phân trang
+       ra ngoài. Có min-height:0 thì vùng bảng co vừa chỗ trống và tự cuộn dọc. */
+    min-height: 0;
+    overflow: auto;
+    border: 1px solid #dde0e5;
+    border-top: none;
+    border-radius: 0 0 4px 4px;
+    background: #fff;
+}
+
+.bklist-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    min-width: 900px;
+}
+
+.bklist-table th {
+    background: #f7f9fc;
+    border-bottom: 2px solid #dde0e5;
+    padding: 9px 12px;
+    font-weight: 700;
+    color: #555;
+    white-space: nowrap;
+    text-align: left;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+}
+
+.bklist-table th.center,
+.bklist-table td.center {
+    text-align: center;
+}
+
+.bklist-table td {
+    padding: 8px 12px;
+    border-bottom: 1px solid #eef0f3;
+    color: #333;
+    vertical-align: middle;
+}
+
+.bklist-table tbody tr:hover td {
+    background: #f5f8ff;
+    cursor: pointer;
+}
+
+.bklist-table tbody tr.row-cancelled td {
+    opacity: 0.55;
+}
+
+.bklist-empty {
+    text-align: center;
+    padding: 40px;
+    color: #aaa;
+    font-size: 13px;
+}
+
+/* Status badge */
+.bk-status {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.bk-status.s0 {
+    color: #1d4ed8;
+}
+
+.bk-status.s1 {
+    color: #15803d;
+}
+
+.bk-status.s2 {
+    color: #a16207;
+}
+
+.bk-status.s3 {
+    color: #c2410c;
+}
+
+.bk-status.s4 {
+    color: #b91c1c;
+}
+.bk-status.s-unscheduled {
+    color: #1A2B58;
+}
+
+
+/* Deposit */
+.bk-deposit {
+    font-weight: 600;
+    color: #0d6efd;
+}
+
+.bk-deposit.zero {
+    color: #aaa;
+    font-weight: 400;
+}
+
+/* Row action buttons */
+.bk-row-actions {
+    display: flex;
+    gap: 5px;
+    justify-content: center;
+}
+
+.bk-row-actions button {
+    border: none;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.bk-btn-confirm {
+    background: #0d6efd;
+    color: #fff;
+}
+
+.bk-btn-confirm:hover {
+    background: #0a58ca;
+}
+
+.bk-btn-edit {
+    background: #6c757d;
+    color: #fff;
+}
+
+.bk-btn-edit:hover {
+    background: #565e64;
+}
+
+.bk-btn-cancel {
+    background: #e74c3c;
+    color: #fff;
+}
+
+.bk-btn-cancel:hover {
+    background: #c0392b;
+}
+
+.bk-btn-complete {
+    background: #7c3aed;
+    color: #fff;
+}
+
+.bk-btn-complete:hover {
+    background: #6d28d9;
+}
+
+/* Pagination */
+.bklist-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 14px;
+    font-size: 12px;
+    color: #555;
+    flex-shrink: 0;
+    background: #fff;
+    border: 1px solid #dde0e5;
+    border-top: none;
+    border-radius: 0 0 4px 4px;
+}
+
+.bklist-pagination .pag-info {
+    color: #888;
+}
+
+.bklist-pagination .pag-pages {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+
+.pag-btn {
+    border: 1px solid #dde0e5;
+    background: #fff;
+    border-radius: 4px;
+    padding: 3px 9px;
+    font-size: 12px;
+    cursor: pointer;
+    color: #333;
+}
+
+.pag-btn:hover:not(:disabled) {
+    background: #f0f4ff;
+    color: #0d6efd;
+}
+
+.pag-btn.active {
+    background: #0d6efd;
+    color: #fff;
+    border-color: #0d6efd;
+}
+
+.pag-btn:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+/* List detail popup */
+#bkl-detail-popup {
+    position: fixed;
+    z-index: 1060;
+    background: #fff;
+    border: 1px solid #dde0e5;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.18);
+    padding: 14px 16px;
+    min-width: 400px;
+    max-width: 480px;
+    display: none;
+    font-size: 12px;
+}
+
+#bkl-detail-popup .dp-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #eee;
+}
+
+#bkl-detail-popup .dp-title-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+#bkl-detail-popup .dp-title {
+    font-weight: 700;
+    font-size: 14px;
+    color: #222;
+}
+
+#bkl-detail-popup .dp-title-edit {
+    cursor: pointer;
+    color: #0d6efd;
+    font-size: 13px;
+    line-height: 1;
+    text-decoration: none;
+}
+
+#bkl-detail-popup .dp-title-edit:hover {
+    color: #0a58ca;
+}
+
+#bkl-detail-popup .dp-close {
+    cursor: pointer;
+    color: #888;
+    font-size: 18px;
+    line-height: 1;
+}
+
+#bkl-detail-popup .dp-close:hover {
+    color: #333;
+}
+
+#bkl-detail-popup .dp-2col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2px 8px;
+    margin-bottom: 6px;
+}
+
+#bkl-detail-popup .dp-row {
+    margin-bottom: 4px;
+    display: flex;
+    gap: 4px;
+    align-items: flex-start;
+}
+
+#bkl-detail-popup .dp-label {
+    color: #888;
+    white-space: nowrap;
+    font-weight: 500;
+}
+
+#bkl-detail-popup .dp-val {
+    color: #333;
+    font-weight: 600;
+    flex: 1;
+    word-break: break-word;
+}
+
+#bkl-detail-popup .dp-divider {
+    border: none;
+    border-top: 1px solid #eee;
+    margin: 6px 0;
+}
+
+#bkl-detail-popup .dp-actions {
+    margin-top: 12px;
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+#bkl-detail-popup .dp-actions button {
+    font-size: 12px;
+    font-weight: 700;
+    border: none;
+    border-radius: 4px;
+    padding: 7px 20px;
+    cursor: pointer;
+}
+
+/* ============================================================
+   MONTH (THEO THÁNG)
+   ============================================================ */
+#bkm-page {
+    font-family: 'Roboto', sans-serif;
+    font-size: 13px;
+    height: calc(100vh - 50px);
+    display: flex;
+    flex-direction: row;
+    overflow: hidden;
+}
+
+/* Month sidebar — year/month nav */
+.bkm-year-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 10px;
+    border-bottom: 1px solid #eee;
+}
+
+.bkm-year-label {
+    font-weight: 700;
+    font-size: 13px;
+    color: #222;
+}
+
+.bkm-year-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #555;
+    font-size: 14px;
+    padding: 2px 6px;
+    line-height: 1;
+}
+
+.bkm-year-btn:hover {
+    color: #0d6efd;
+}
+
+.bkm-month-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 2px;
+    padding: 6px 8px;
+    border-bottom: 1px solid #eee;
+}
+
+.bkm-month-btn {
+    text-align: center;
+    padding: 5px 2px;
+    font-size: 11px;
+    color: #444;
+    cursor: pointer;
+    border-radius: 4px;
+    border: 1px solid transparent;
+    user-select: none;
+}
+
+.bkm-month-btn:hover {
+    background: #e8f0fe;
+    color: #0d6efd;
+}
+
+.bkm-month-btn.active {
+    background: #0d6efd;
+    color: #fff;
+    font-weight: 700;
+}
+
+.bkm-month-btn.current-month {
+    border-color: #ff6b35;
+    color: #ff6b35;
+    font-weight: 600;
+}
+
+.bkm-month-btn.active.current-month {
+    background: #ff6b35;
+    border-color: #ff6b35;
+    color: #fff;
+}
+
+/* Month main area */
+#bkm-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 0 16px;
+}
+
+.bkm-topbar {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid #dde0e5;
+}
+
+.bkm-filter-bar {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    padding: 5px 14px;
+    background: #fff;
+    border-bottom: 1px solid #eee;
+    flex-shrink: 0;
+}
+
+.bkm-filter-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+    font-size: 12px;
+    color: #444;
+    user-select: none;
+}
+
+.bkm-filter-item input[type=checkbox] {
+    cursor: pointer;
+    accent-color: #0d6efd;
+}
+
+/* ============================================================
+   WEEK (THEO TUẦN — weekly timeline view)
+   ============================================================ */
+#bkw-page {
+    font-family: 'Roboto', sans-serif;
+    height: calc(100vh - 50px);
+    overflow: hidden;
+    padding-left: 15px;
+    padding-right: 15px;
+}
+
+#bkw-content {
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    padding: 0 16px;
+}
+
+/* Week navigator bar */
+.bkw-week-nav {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 14px;
+    background: #fff;
+    border-bottom: 1px solid #eee;
+    flex-shrink: 0;
+    font-size: 13px;
+    font-weight: 700;
+    color: #333;
+}
+
+.bkw-week-nav button {
+    background: none;
+    border: 1px solid #dde0e5;
+    border-radius: 4px;
+    padding: 2px 10px;
+    font-size: 16px;
+    cursor: pointer;
+    color: #555;
+    line-height: 1.2;
+}
+
+.bkw-week-nav button:hover {
+    background: #f0f4ff;
+    color: #0d6efd;
+}
+
+/* Outer scroll container */
+.bkw-outer {
+    flex: 1;
+    overflow: auto;
+    position: relative;
+}
+
+.bkw-inner {
+    display: flex;
+    min-width: max-content;
+}
+
+/* ---- Sticky names column ---- */
+.bkw-names-col {
+    width: 160px;
+    min-width: 160px;
+    flex-shrink: 0;
+    position: sticky;
+    left: 0;
+    z-index: 10;
+    background: #fff;
+    border-right: 1px solid #dde0e5;
+}
+
+.bkw-corner {
+    background: #f7f9fc;
+    border-bottom: 2px solid #dde0e5;
+    border-right: 1px solid #dde0e5;
+    position: sticky;
+    top: 0;
+    z-index: 12;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    color: #555;
+}
+
+.bkw-area-name {
+    display: flex;
+    align-items: center;
+    padding-left: 10px;
+    background: #e8edf5;
+    font-size: 11px;
+    font-weight: 700;
+    color: #444;
+    border-bottom: 1px solid #c8d0df;
+    border-right: 1px solid #dde0e5;
+}
+
+.bkw-desk-name {
+    display: flex;
+    align-items: center;
+    padding-left: 16px;
+    font-size: 12px;
+    color: #333;
+    background: #fff;
+    border-bottom: 1px solid #eef0f3;
+    border-right: 1px solid #dde0e5;
+    overflow: hidden;
+    white-space: normal;
+    word-wrap: break-word;
+    cursor: default;
+}
+
+.bkw-desk-name:hover {
+    background: #f5f8ff;
+}
+
+/* ---- 7-day grid ---- */
+.bkw-days-block {
+    display: flex;
+    flex-shrink: 0;
+}
+
+.bkw-day-col {
+    flex-shrink: 0;
+    position: relative;
+    border-right: 2px solid #b8c4d8;
+}
+
+.bkw-today-col {
+    background: #fffdf5;
+}
+
+/* Day header (sticky top:0) */
+.bkw-day-header {
+    display: flex;
+    align-items: center;
+    padding-left: 10px;
+    background: #f7f9fc;
+    border-bottom: 1px solid #c8d0df;
+    font-size: 11px;
+    font-weight: 700;
+    color: #444;
+    position: sticky;
+    top: 0;
+    z-index: 4;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.bkw-day-header.today {
+    background: #fff3e0;
+    color: #c0392b;
+}
+
+/* Time labels bar (sticky below day header) */
+.bkw-time-bar {
+    display: flex;
+    align-items: stretch;
+    background: #f7f9fc;
+    border-bottom: 2px solid #dde0e5;
+    position: sticky;
+    z-index: 4;
+}
+
+.bkw-hour-label {
+    flex: 0 0 auto;
+    border-left: 1px solid #e0e4ea;
+    display: flex;
+    align-items: center;
+    padding-left: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #666;
+    box-sizing: border-box;
+}
+
+/* Area separator row */
+.bkw-area-row {
+    background: #e8edf5;
+    border-bottom: 1px solid #c8d0df;
+    position: relative;
+}
+
+/* Desk row */
+.bkw-desk-row {
+    position: relative;
+    background: #fff;
+    border-bottom: 1px solid #eef0f3;
+    cursor: pointer;
+}
+
+.bkw-desk-row:hover {
+    background: #f9fbff;
+}
+
+/* Ô ngày (hiển thị theo 7 ngày) — booking xếp chồng dọc */
+.bkw-day-cell {
+    position: relative;
+    background: #fff;
+    border-bottom: 1px solid #eef0f3;
+    border-right: 1px solid #eef0f3;
+    cursor: pointer;
+    box-sizing: border-box;
+}
+
+.bkw-day-cell:hover {
+    background: #f9fbff;
+}
+
+/* Hàng "Phòng/bàn không xác định" (chung cho trang ngày & tuần) */
+.tl-undef-name,
+.tl-desk-name.tl-undef-row,
+.bkw-undef-name {
+    font-weight: 700;
+    color: #1A2B58;
+    background: #eef2fb !important;
+}
+
+.tl-desk-grid.tl-undef-row,
+.bkw-day-cell[data-desk-id="0"] {
+    background: #f6f8fd;
+}
+
+/* Hour grid cells (just lines) */
+.bkw-hour-cell {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    border-left: 1px solid #eef0f3;
+    pointer-events: none;
+    box-sizing: border-box;
+}
+
+/* Current time vertical line */
+.bkw-current-time-line {
+    position: absolute;
+    width: 2px;
+    background: #e74c3c;
+    z-index: 5;
+    pointer-events: none;
+}
+
+.bkw-current-time-line::before {
+    content: '';
+    position: absolute;
+    top: -4px;
+    left: -4px;
+    width: 10px;
+    height: 10px;
+    background: #e74c3c;
+    border-radius: 50%;
+}
+
+/* Week highlight in mini calendar */
+.mini-cal-grid .cal-day.in-week {
+    background: #dbeaff;
+    color: #1565c0;
+    border-radius: 0;
+}
+
+.mini-cal-grid .cal-day.in-week:first-child,
+.mini-cal-grid .cal-day.in-week+ :not(.in-week)~.in-week:first-of-type {
+    border-radius: 4px 0 0 4px;
+}
+
+.mini-cal-grid .cal-day.week-selected {
+    background: #0d6efd;
+    color: #fff;
+    font-weight: 700;
+    border-radius: 4px 0 0 4px;
+}
+
+/* Detail popup for week view */
+#bkw-detail-popup {
+    position: fixed;
+    z-index: 1060;
+    background: #fff;
+    border: 1px solid #dde0e5;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.18);
+    padding: 14px 16px;
+    min-width: 400px;
+    max-width: 480px;
+    display: none;
+    font-size: 12px;
+}
+
+#bkw-detail-popup .dp-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #eee;
+}
+
+#bkw-detail-popup .dp-title-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+#bkw-detail-popup .dp-title {
+    font-weight: 700;
+    font-size: 14px;
+    color: #222;
+}
+
+#bkw-detail-popup .dp-title-edit {
+    cursor: pointer;
+    color: #0d6efd;
+    font-size: 13px;
+    text-decoration: none;
+}
+
+#bkw-detail-popup .dp-title-edit:hover {
+    color: #0a58ca;
+}
+
+#bkw-detail-popup .dp-close {
+    cursor: pointer;
+    color: #888;
+    font-size: 18px;
+    line-height: 1;
+}
+
+#bkw-detail-popup .dp-close:hover {
+    color: #333;
+}
+
+#bkw-detail-popup .dp-2col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2px 8px;
+    margin-bottom: 6px;
+}
+
+#bkw-detail-popup .dp-row {
+    margin-bottom: 4px;
+    display: flex;
+    gap: 4px;
+    align-items: flex-start;
+}
+
+#bkw-detail-popup .dp-label {
+    color: #888;
+    white-space: nowrap;
+    font-weight: 500;
+}
+
+#bkw-detail-popup .dp-val {
+    color: #333;
+    font-weight: 600;
+    flex: 1;
+    word-break: break-word;
+}
+
+#bkw-detail-popup .dp-divider {
+    border: none;
+    border-top: 1px solid #eee;
+    margin: 6px 0;
+}
+
+#bkw-detail-popup .dp-actions {
+    margin-top: 12px;
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+#bkw-detail-popup .dp-actions button {
+    font-size: 12px;
+    font-weight: 700;
+    border: none;
+    border-radius: 4px;
+    padding: 7px 20px;
+    cursor: pointer;
+}
+
+.bkm-cal-outer {
+    flex: 1;
+    overflow: auto;
+    background: #f0f2f5;
+}
+
+.bkm-cal-title {
+    text-align: center;
+    font-weight: 700;
+    font-size: 13px;
+    color: #333;
+    padding: 6px 14px;
+    background: #fff;
+    border-bottom: 1px solid #dde0e5;
+    flex-shrink: 0;
+}
+
+/* DOW header */
+.bkm-dow-header {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    background: #f7f9fc;
+    border-bottom: 2px solid #dde0e5;
+    border-left: 1px solid #dde0e5;
+    position: sticky;
+    top: 0;
+    z-index: 3;
+}
+
+.bkm-dow-header .bkm-dow {
+    text-align: center;
+    padding: 7px 4px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #555;
+    border-right: 1px solid #dde0e5;
+}
+
+.bkm-dow-header .bkm-dow.sun {
+    color: #e74c3c;
+}
+
+.bkm-dow-header .bkm-dow.sat {
+    color: #e74c3c;
+}
+
+/* Calendar grid */
+.bkm-cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    border-top: 1px solid #dde0e5;
+    border-left: 1px solid #dde0e5;
+}
+
+.bkm-cell {
+    min-height: 100px;
+    border-right: 1px solid #dde0e5;
+    border-bottom: 1px solid #dde0e5;
+    background: #fff;
+    padding: 0;
+    overflow: hidden;
+    vertical-align: top;
+    position: relative;
+}
+
+.bkm-cell.other-month {
+    background: #f9f9f9;
+}
+
+.bkm-cell.today {
+    background: #fffbf0;
+}
+
+.bkm-cell.today .bkm-cell-day {
+    background: #ff6b35;
+    color: #fff;
+    border-radius: 50%;
+}
+
+.bkm-cell-day {
+    display: inline-block;
+    width: 24px;
+    height: 24px;
+    line-height: 24px;
+    text-align: center;
+    font-size: 12px;
+    font-weight: 700;
+    margin: 4px 4px 2px;
+    color: #333;
+}
+
+.bkm-cell.other-month .bkm-cell-day {
+    color: #bbb;
+}
+
+.bkm-cell.sun .bkm-cell-day {
+    color: #e74c3c;
+}
+
+.bkm-cell.sat .bkm-cell-day {
+    color: #e74c3c;
+}
+
+.bkm-cell.today .bkm-cell-day {
+    color: #fff;
+}
+
+.bkm-bookings {
+    padding: 0 3px 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+/* Booking blocks (month) */
+.bkm-block {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 11px;
+    color: #fff;
+    font-weight: 600;
+    cursor: pointer;
+    overflow: hidden;
+    transition: opacity .15s;
+    container-type: inline-size;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.bkm-block:hover {
+    opacity: 0.82;
+}
+
+.bkm-block.s0 {
+    background: #3498db;
+}
+
+.bkm-block.s1 {
+    background: #27ae60;
+}
+
+.bkm-block.s2 {
+    background: #1abc9c;
+}
+
+.bkm-block.s3 {
+    background: #f39c12;
+}
+
+.bkm-block.s4 {
+    background: #e74c3c;
+    opacity: 0.6;
+}
+
+.bkm-block.hidden-block {
+    display: none;
+}
+
+.bkm-block .bk-eye {
+    font-size: 11px;
+}
+.bkm-block .fa {
+    font-size: 18px;
+    color: #fff;
+}
+
+.bkm-more {
+    font-size: 10px;
+    color: #0d6efd;
+    cursor: pointer;
+    padding: 0 6px 2px;
+    font-weight: 600;
+}
+
+.bkm-more:hover {
+    text-decoration: underline;
+}
+
+/* Month detail popup */
+#bkm-detail-popup {
+    position: fixed;
+    z-index: 1060;
+    background: #fff;
+    border: 1px solid #dde0e5;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.18);
+    padding: 14px 16px;
+    min-width: 360px;
+    max-width: 460px;
+    display: none;
+    font-size: 12px;
+}
+
+#bkm-detail-popup .dp-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #eee;
+}
+
+#bkm-detail-popup .dp-title {
+    font-weight: 700;
+    font-size: 14px;
+    color: #222;
+}
+
+#bkm-detail-popup .dp-title-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+#bkm-detail-popup .dp-title-edit {
+    cursor: pointer;
+    color: #0d6efd;
+    font-size: 13px;
+    text-decoration: none;
+}
+
+#bkm-detail-popup .dp-close {
+    cursor: pointer;
+    color: #888;
+    font-size: 18px;
+    line-height: 1;
+}
+
+#bkm-detail-popup .dp-close:hover {
+    color: #333;
+}
+
+#bkm-detail-popup .dp-2col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2px 8px;
+    margin-bottom: 6px;
+}
+
+#bkm-detail-popup .dp-row {
+    margin-bottom: 4px;
+    display: flex;
+    gap: 4px;
+    align-items: flex-start;
+}
+
+#bkm-detail-popup .dp-label {
+    color: #888;
+    white-space: nowrap;
+    font-weight: 500;
+}
+
+#bkm-detail-popup .dp-val {
+    color: #333;
+    font-weight: 600;
+    flex: 1;
+    word-break: break-word;
+}
+
+#bkm-detail-popup .dp-divider {
+    border: none;
+    border-top: 1px solid #eee;
+    margin: 6px 0;
+}
+
+#bkm-detail-popup .dp-actions {
+    margin-top: 10px;
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+#bkm-detail-popup .dp-actions button {
+    font-size: 12px;
+    font-weight: 700;
+    border: none;
+    border-radius: 4px;
+    padding: 6px 18px;
+    cursor: pointer;
+}
+/* ===== Preorder pick modal (ported from booking_modal.php inline style) ===== */
+#callproduct-preorder #ulcategory { list-style:none; padding:0; margin:0; }
+#callproduct-preorder #ulcategory li { padding:7px 10px; cursor:pointer; font-size:13px; }
+#callproduct-preorder #ulcategory li:hover,
+#callproduct-preorder #ulcategory li.actives { background:#e67e22; color:#fff; }
+#callproduct-preorder .addproductcartcallproduct {
+    cursor: pointer;
+    background-color: #fff;
+    box-shadow: 1px 1px 3px rgb(0, 0, 0, .2);
+    border-radius: 4px;
+    text-align: center;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: auto;
+}
+#callproduct-preorder #list_product .card-body {
+    min-height: 60px;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    text-overflow: ellipsis;
+}
+#callproduct-preorder #cart_content {
+    height: 540px;
+    display: block;
+    overflow-y: auto;
+    width: 100%;
+}
+#callproduct-preorder .addproductcartcallproduct:hover { border-color:#e67e22; }
+#callproduct-preorder .addproductcartcallproduct img {
+    width: 60%;
+    display: block;
+    margin: auto;
+    height: 100px;
+    object-fit: contain;
+}
+#callproduct-preorder .divquantily { display:flex; align-items:center; gap:4px; float:left; width:35%; }
+#callproduct-preorder .btn_mp { cursor:pointer; color:#e67e22; font-size:13px; }
+#callproduct-preorder .input_quantily { width:36px; text-align:center; }
+#callproduct-preorder #list_product { display:grid; gap:8px; }
+#callproduct-preorder #list_product.bf-cols-2 { grid-template-columns:repeat(2,minmax(0,1fr)); }
+#callproduct-preorder #list_product.bf-cols-3 { grid-template-columns:repeat(3,minmax(0,1fr)); }
+#callproduct-preorder .bf-pick-qty-input { width:40px; text-align:center; }
+
+/* ===== Customer autocomplete (name + phone) — infinite scroll ===== */
+#bf-name-suggest, #bf-phone-suggest {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-top: none;
+    border-radius: 0 0 4px 4px;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    max-height: 260px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    z-index: 9999;
+    display: none;
+    box-shadow: 0 4px 8px rgba(0,0,0,.15);
+}
+#bf-name-suggest li, #bf-phone-suggest li {
+    padding: 7px 12px;
+    cursor: pointer;
+    font-size: 13px;
+    border-bottom: 1px solid #f3f3f3;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+#bf-name-suggest li:last-child, #bf-phone-suggest li:last-child { border-bottom: none; }
+#bf-name-suggest li:hover, #bf-phone-suggest li:hover { background: #fff3e8; }
+#bf-name-suggest li .sug-phone, #bf-phone-suggest li .sug-name { color: #999; font-size: 11px; }
+#bf-name-suggest li.sug-loading,
+#bf-phone-suggest li.sug-loading {
+    justify-content: center;
+    color: #999;
+    cursor: default;
+    font-size: 12px;
+    border-bottom: none;
+}
+#bf-name-suggest li.sug-loading:hover,
+#bf-phone-suggest li.sug-loading:hover { background: transparent; }
+
+/* Booking modal needs visible overflow so autocomplete dropdowns escape the field */
+#booking-form-modal .bf-col .form-group { position: relative; }
+
+/* =============================================================
+   UI POLISH LAYER — modern refinement (CSS-only, no markup change)
+   ============================================================= */
+
+/* Floating card container for every booking view */
+#booking-page, #bkw-page, #bkm-page, #bklist-page {
+    background: #ffffff;
+    border-radius: 14px;
+    box-shadow: 0 8px 30px rgba(23, 43, 77, 0.12);
+    margin: 6px 8px;
+    padding: 0;
+    height: calc(100vh - 62px);
+    overflow: hidden;
+}
+.booking-sidebar {
+    background: linear-gradient(180deg, #ffffff 0%, #f7f9fc 100%);
+    border-right: 1px solid #eaeef4;
+    padding: 15px 5px !important;
+}
+
+/* Top bar + segmented tabs */
+.booking-topbar { padding: 10px 14px 8px; border-bottom: 1px solid #eef1f6; }
+.view-tabs { background: #eef2f8; border-radius: 10px; padding: 4px; gap: 2px; }
+.view-tabs a { text-decoration: none; }
+.view-tab {
+    border: none !important;
+    background: transparent;
+    border-radius: 8px;
+    padding: 7px 18px;
+    font-size: 12px; font-weight: 700; letter-spacing: .3px;
+    color: #6b7689;
+    transition: all .18s ease;
+}
+.view-tab:hover:not(.active) { background: rgba(13, 110, 253, .08); color: #0d6efd; }
+.view-tab.active { background: #ffffff; color: #0d6efd; box-shadow: 0 2px 8px rgba(13, 110, 253, .18); }
+
+/* Status filter chips with colored dots */
+.status-filter-bar { gap: 10px; padding: 10px 14px; background: #fff; border-bottom: 1px solid #eef1f6; }
+.status-filter-item {
+    background: #f5f7fb;
+    border: 1px solid #e6eaf1;
+    border-radius: 20px;
+    padding: 5px 12px 5px 10px;
+    gap: 7px;
+    transition: all .15s ease;
+}
+.status-filter-item:hover { background: #eef3fc; border-color: #d3deef; }
+.status-filter-item span[class^="s"] { display: inline-flex; align-items: center; font-weight: 600; }
+.sc-count { font-weight: 700; }   /* số đếm thường, cùng màu nhãn — nằm trong ngoặc ( ) của label */
+
+/* Add button */
+.btn-add-booking {
+    background: linear-gradient(135deg, #ff8a4c 0%, #ff5d1f 100%);
+    border-radius: 9px; padding: 8px 18px; letter-spacing: .3px;
+    box-shadow: 0 4px 12px rgba(255, 93, 31, .35);
+    transition: all .18s ease;
+}
+.btn-add-booking:hover { background: linear-gradient(135deg, #ff7a3a 0%, #f24e10 100%); transform: translateY(-1px); box-shadow: 0 6px 16px rgba(255, 93, 31, .45); }
+.btn-add-booking:active { transform: translateY(0); }
+
+/* Timeline headers + grid */
+.tl-header-names, .tl-header-times { background: linear-gradient(180deg, #fbfcfe 0%, #eef2f8 100%); border-bottom: 1px solid #dfe5ee; }
+.tl-area-names, .tl-area-grid { background: linear-gradient(180deg, #eaf0fa, #e1e9f6); border-bottom: 1px solid #cdd8ea; }
+.tl-area-names { border-left: 3px solid #0d6efd; font-weight: 700; color: #2b3a55; letter-spacing: .2px; }
+.tl-desk-name, .tl-desk-grid { transition: background .12s ease; }
+.tl-desk-name:hover, .tl-desk-grid:hover { background: #f3f8ff; }
+.tl-hour-cell { border-left: 1px solid #eef1f7; }
+
+/* Current-time line — glowing */
+.current-time-line { background: #ff4d4f; box-shadow: 0 0 6px rgba(255, 77, 79, .6); width: 2px; }
+.current-time-line::before { width: 11px; height: 11px; top: -4px; left: -4.5px; background: #ff4d4f; box-shadow: 0 0 0 4px rgba(255, 77, 79, .2); }
+
+/* Booking blocks — gradient + depth */
+.booking-block {
+    border-radius: 7px; border: none; padding: 3px 8px; font-weight: 600;
+    box-shadow: 0 2px 6px rgba(23, 43, 77, .18);
+    transition: transform .12s ease, box-shadow .12s ease, filter .12s ease;
+}
+.booking-block:hover { transform: translateY(-1px); box-shadow: 0 5px 14px rgba(23, 43, 77, .28); filter: none; opacity: 1; }
+.booking-block.s0 { background: linear-gradient(135deg, #4aa6ee, #2f84d8); }
+.booking-block.s1 { background: linear-gradient(135deg, #34c77b, #1e9e5a); }
+.booking-block.s2 { background: linear-gradient(135deg, #26d0bd, #13a594); }
+.booking-block.s3 { background: linear-gradient(135deg, #ffb13c, #f59415); }
+.booking-block.s4 { background: linear-gradient(135deg, #9aa3b2, #7c8696); opacity: .8; }
+.booking-block .b-eye { opacity: .85; }
+/* .booking-block .b-eye .fa { font-size: 12px; } */
+
+/* Mini calendar */
+.mini-cal-grid .cal-day { border-radius: 9px; transition: all .12s ease; font-weight: 500; }
+.mini-cal-grid .cal-day:hover { background: #e8f0fe; color: #0d6efd; }
+.mini-cal-grid .cal-day.today { background: linear-gradient(135deg, #ff8a4c, #ff5d1f); color: #fff; box-shadow: 0 2px 7px rgba(255, 93, 31, .4); }
+.mini-cal-grid .cal-day.selected { background: linear-gradient(135deg, #3f8df0, #0d6efd); color: #fff; box-shadow: 0 2px 7px rgba(13, 110, 253, .4); }
+.mini-cal-header .cal-title { font-size: 13px; font-weight: 700; color: #2b3a55; }
+
+/* Sidebar inputs + tags */
+.sidebar-search .search-wrap { border-radius: 8px; background: #fff; transition: all .15s ease; }
+.sidebar-search .search-wrap:focus-within { border-color: #0d6efd; box-shadow: 0 0 0 3px rgba(13, 110, 253, .12); }
+.sidebar-section label, .sidebar-unscheduled .sec-title { text-transform: uppercase; letter-spacing: .3px; font-size: 10px; color: #8590a3; }
+.sidebar-section select { border-radius: 8px; cursor: pointer; transition: all .15s ease; }
+.sidebar-section select:focus { border-color: #0d6efd; box-shadow: 0 0 0 3px rgba(13, 110, 253, .12); }
+.desk-tag { background: linear-gradient(135deg, #e9f1fe, #dbe7fd); border: 1px solid #cfe0fb; border-radius: 14px; font-weight: 600; }
+.unscheduled-item { border-radius: 6px; padding: 5px 6px; transition: background .12s; }
+.unscheduled-item:hover { background: #f5f8ff; }
+
+/* Detail popup */
+#booking-detail-popup { border-radius: 14px; border: none; padding: 0; overflow: hidden; box-shadow: 0 16px 48px rgba(23, 43, 77, .25); flex-direction: column; max-height: min(82vh, 640px); min-width: 400px; width: 400px; max-width: 480px; box-sizing: border-box; }
+/* Có món đặt trước: popup rộng cố định để cột Thành tiền không bị cắt */
+#booking-detail-popup.dp-has-preorder { min-width: 500px; width: 500px; max-width: 500px; }
+#booking-detail-popup .dp-header { flex: 0 0 auto; margin: 0; padding: 12px 16px; background: linear-gradient(135deg, #f4f8ff, #eaf1fc); border-bottom: 1px solid #e6edf7; }
+#booking-detail-popup .dp-title { font-size: 15px; }
+#booking-detail-popup .dp-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 12px 16px; }
+#booking-detail-popup .dp-2col { padding: 0; }
+#booking-detail-popup .dp-body > .dp-row, #booking-detail-popup .dp-divider { padding-left: 0; padding-right: 0; }
+#booking-detail-popup .dp-actions { flex: 0 0 auto; margin-top: 0; padding: 12px 16px; background: #fafbfd; border-top: 1px solid #eef1f6; }
+#booking-detail-popup .dp-actions button { border-radius: 8px; padding: 8px 18px; transition: all .15s ease; }
+#booking-detail-popup .dp-actions button:hover { transform: translateY(-1px); filter: brightness(1.05); }
+.dp-btn-confirm { background: linear-gradient(135deg, #3f8df0, #0d6efd) !important; box-shadow: 0 3px 9px rgba(13, 110, 253, .3); }
+.dp-btn-cancel { background: linear-gradient(135deg, #ff6b6b, #e74c3c) !important; box-shadow: 0 3px 9px rgba(231, 76, 60, .3); }
+
+/* Add/Edit modal */
+.booking-modal .modal-content { border-radius: 16px; border: none; overflow: hidden; box-shadow: 0 24px 70px rgba(23, 43, 77, .32); }
+.booking-modal .modal-header { background: linear-gradient(135deg, #f5f8ff, #eaf1fc); border-bottom: 1px solid #e6edf7; padding: 14px 18px; }
+.booking-modal .modal-title, #booking-form-title { color: #1f2b45; }
+.booking-modal .form-control, .booking-modal select.form-control { border-radius: 8px; transition: all .15s ease; }
+.booking-modal .form-control:focus { border-color: #0d6efd; box-shadow: 0 0 0 3px rgba(13, 110, 253, .12); }
+.booking-modal .modal-footer { background: #fafbfd; }
+#btn-save-booking { background: linear-gradient(135deg, #3f8df0, #0d6efd); border: none; border-radius: 8px; padding: 8px 22px; box-shadow: 0 3px 10px rgba(13, 110, 253, .3); }
+#btn-save-booking:hover { filter: brightness(1.05); }
+#booking-form-modal .select2-container--default .select2-selection--multiple {
+    border-radius: 8px !important;
+    min-height: 38px;
+    max-height: none !important;
+}
+#booking-form-modal .select2-container--default .select2-selection__choice { background: #e9f1fe !important; border: 1px solid #cfe0fb !important; border-radius: 12px !important; color: #0d6efd; }
+
+/* Week view (THEO TUẦN): fill full width, day columns divide evenly */
+.bkw-inner { min-width: 100%; }
+.bkw-days-block { flex: 1; min-width: 0; }
+.bkw-day-col { flex: 1 1 0; min-width: 0; }
+
+/* =============================================================
+   FIT-VIEWPORT (no main-area scroll) + FONT-SIZE consistency
+   (appended last so it overrides earlier rules)
+   ============================================================= */
+
+/* Card height = viewport minus the fixed app chrome above it (~header 105 + gap) */
+#booking-page, #bkw-page, #bkm-page, #bklist-page { height: calc(100vh - 134px); }
+
+/* Font sizes aligned with the rest of the app (body 14px, inputs 13px) */
+#booking-page, #bkw-page, #bkm-page, #bklist-page { font-size: 14px; }
+.status-filter-item, .status-filter-item span[class^="s"] { font-size: 13px; }
+.view-tab { font-size: 13px; }
+.tl-header-names, .bkw-corner { font-size: 13px; }
+.tl-area-names, .tl-desk-name, .bkw-area-name, .bkw-desk-name { font-size: 13px; }
+.tl-hour-label, .bkw-day-header { font-size: 12px; }
+.booking-block, .bkm-block { font-size: 12px; }
+.mini-cal-header .cal-title { font-size: 14px; }
+.mini-cal-grid .cal-day { font-size: 12px; }
+.mini-cal-grid .day-name { font-size: 11px; }
+.sidebar-section label, .sidebar-unscheduled .sec-title { font-size: 11px; }
+.sidebar-search input, .sidebar-section select { font-size: 13px; }
+.unscheduled-item { font-size: 12px; }
+#booking-detail-popup { font-size: 13px; }
+#booking-detail-popup .dp-title { font-size: 15px; }
+.booking-modal .form-control, .booking-modal select.form-control,
+.booking-modal label { font-size: 13px; }
+.booking-modal .modal-title, #booking-form-title { font-size: 16px; }
+.bklist-table th, .bklist-table td { font-size: 13px; }
+
+/* =============================================================
+   STATUS COLORS — unified across day / week / month / list
+   (appended last → wins). One palette per status everywhere.
+   s0 đã sắp bàn=blue, s1 đã nhận bàn=green, s2 sắp đến giờ=teal,
+   s3 quá giờ=orange, s4 đã hủy=grey.
+   ============================================================= */
+:root {
+    --bk-s0a:#4aa6ee; --bk-s0b:#2f84d8;
+    --bk-s1a:#34c77b; --bk-s1b:#1e9e5a;
+    --bk-s2a:#26d0bd; --bk-s2b:#13a594;
+    --bk-s3a:#ffb13c; --bk-s3b:#f59415;
+    --bk-s4a:#9aa3b2; --bk-s4b:#7c8696;
+    --bk-s5a:#a78bfa; --bk-s5b:#7c3aed;
+}
+
+/* Timeline blocks (day/week) + month calendar chips — identical gradients */
+.booking-block.s0, .bkm-block.s0 { background: linear-gradient(135deg, var(--bk-s0a), var(--bk-s0b)); }
+.booking-block.s1, .bkm-block.s1 { background: linear-gradient(135deg, var(--bk-s1a), var(--bk-s1b)); }
+.booking-block.s2, .bkm-block.s2 { background: linear-gradient(135deg, var(--bk-s2a), var(--bk-s2b)); }
+.booking-block.s3, .bkm-block.s3 { background: linear-gradient(135deg, var(--bk-s3a), var(--bk-s3b)); }
+.booking-block.s4, .bkm-block.s4 { background: linear-gradient(135deg, var(--bk-s4a), var(--bk-s4b)); opacity: .85; }
+.booking-block.s5, .bkm-block.s5 { background: linear-gradient(135deg, var(--bk-s5a), var(--bk-s5b)); }
+.bkm-block { color:#fff; border:none; border-radius:6px; box-shadow:0 1px 3px rgba(23,43,77,.18); }
+
+/* Quá giờ/không nhận bàn — nhấp nháy khi bật highlight_display_flash_and_when_customer_cancel_table */
+@keyframes bk-flash-overdue {
+    0%, 100% {
+        box-shadow: 0 0 0 2px #f39320, 0 0 10px rgba(243, 147, 32, .55);
+        filter: brightness(1.05);
+    }
+    50% {
+        box-shadow: 0 0 0 3px #ff6b00, 0 0 16px rgba(255, 107, 0, .85);
+        filter: brightness(1.2);
+    }
+}
+
+.booking-block.bk-flash-overdue,
+.bkm-block.bk-flash-overdue {
+    animation: bk-flash-overdue 1s ease-in-out infinite;
+    z-index: 6;
+}
+
+.booking-block.bk-flash-overdue:hover,
+.bkm-block.bk-flash-overdue:hover {
+    animation: bk-flash-overdue 1s ease-in-out infinite;
+    filter: none;
+}
+
+/* Status filter legend dots + labels */
+.status-filter-item .s0 { color: var(--bk-s0b); }
+.status-filter-item .s1 { color: var(--bk-s1b); }
+.status-filter-item .s2 { color: var(--bk-s2b); }
+.status-filter-item .s3 { color: var(--bk-s3b); }
+.status-filter-item .s4 { color: var(--bk-s4b); }
+.status-filter-item .s5 { color: var(--bk-s5b); }
+
+/* List view status pills — filled gradient to match the blocks */
+.bk-status { color:#fff !important; border-radius:12px; padding:3px 12px; font-weight:600; border:none; }
+.bk-status.s0 { background: linear-gradient(135deg, var(--bk-s0a), var(--bk-s0b)); }
+.bk-status.s1 { background: linear-gradient(135deg, var(--bk-s1a), var(--bk-s1b)); }
+.bk-status.s2 { background: linear-gradient(135deg, var(--bk-s2a), var(--bk-s2b)); }
+.bk-status.s3 { background: linear-gradient(135deg, var(--bk-s3a), var(--bk-s3b)); }
+.bk-status.s4 { background: linear-gradient(135deg, var(--bk-s4a), var(--bk-s4b)); }
+.bk-status.s5 { background: linear-gradient(135deg, var(--bk-s5a), var(--bk-s5b)); }
+.bk-status.s-unscheduled { background: linear-gradient(135deg, #aab4c4, #8590a3); }
+
+/* =============================================================
+   BOOKING MODAL — refreshed (cards + section titles + inputs)
+   ============================================================= */
+.booking-modal .modal-body { padding: 18px 20px; min-width: 0; }
+#booking-form-modal .modal-dialog {
+    max-width: calc(100vw - 2rem);
+    margin-left: auto;
+    margin-right: auto;
+}
+#booking-form-modal .modal-content,
+#booking-form-modal .bf-grid,
+#booking-form-modal .bf-col {
+    min-width: 0;
+}
+/* Màn hẹp: 3 cột -> 1 cột, modal co theo viewport */
+@media (max-width: 991.98px) {
+    #booking-form-modal .modal-dialog {
+        width: auto;
+        max-width: calc(100vw - 1rem);
+        margin: 0.5rem auto;
+    }
+    #booking-form-modal .bf-grid {
+        grid-template-columns: 1fr;
+        gap: 14px 0;
+    }
+}
+/* Màn rộng: modal tối đa 1320px, luôn vừa viewport */
+@media (min-width: 992px) {
+    #booking-form-modal .modal-dialog {
+        width: min(1320px, calc(100vw - 2rem));
+        max-width: 1320px;
+    }
+    #booking-form-modal .bf-grid {
+        grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.05fr) minmax(0, 1.5fr);
+        gap: 0 18px;
+    }
+}
+.bf-grid { gap: 0 14px; align-items: stretch; }
+.bf-col { background:#fafbfd; border:1px solid #eef1f6; border-radius:12px; padding:12px 14px; display:flex; flex-direction:column; }
+.bf-col-title { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; color:#0d6efd; padding-bottom:8px; margin-bottom:10px; border-bottom:1px solid #e6ecf5; display:flex; align-items:center; gap:7px; }
+.bf-col-title i { font-size:13px; }
+.booking-modal .bf-col .form-group { margin-bottom:11px; }
+.booking-modal .bf-col label { font-size:12px; font-weight:600; color:#46546e; margin-bottom:5px; display:block; }
+.ired { color:#e74c3c; font-style:normal; font-weight:700; }
+.booking-modal .form-control { height:38px; border-radius:8px; border:1px solid #d8dfea; font-size:13px; background:#fff; }
+.booking-modal textarea.form-control { height:auto; }
+.booking-modal .form-control:focus { border-color:#0d6efd; box-shadow:0 0 0 3px rgba(13,110,253,.12); }
+#bf-code { background:#eef1f6; color:#7a8699; cursor:not-allowed; }
+.bf-input-group { gap:7px; }
+.bf-note-group { flex:1; }
+.bf-note-group textarea { min-height:104px; height:100%; resize:none; }
+.bf-note-counter { display:block; text-align:right; font-size:11px; color:#8590a3; margin-top:4px; }
+.bf-label-row { display:flex; justify-content:space-between; align-items:center; }
+.bf-add-preorder-btn { color:#fff !important; background:linear-gradient(135deg,#ff8a4c,#ff5d1f); padding:3px 11px; border-radius:14px; font-size:11px; font-weight:700; text-decoration:none; display:inline-flex; align-items:center; gap:5px; box-shadow:0 2px 6px rgba(255,93,31,.3); }
+.bf-add-preorder-btn:hover { filter:brightness(1.06); color:#fff; }
+.bf-preorder-panel { min-height: 42px; border-radius: 8px; }
+.bf-unscheduled-badge { padding:8px 12px; background:#fff8e6; border:1px solid #f0c97f; border-radius:8px; color:#b8860b; font-weight:600; font-size:13px; display:flex; align-items:center; gap:6px; }
+.booking-modal .modal-footer { padding:12px 18px; gap:10px; }
+.booking-modal .modal-footer .btn { display:inline-flex; align-items:center; gap:6px; }
+.bf-btn-cancel { background:#eef1f6; color:#5b6678; border:1px solid #dfe4ec; border-radius:8px; padding:8px 18px; font-weight:600; }
+.bf-btn-cancel:hover { background:#e2e7ef; color:#3a4256; }
+#booking-form-modal .modal-footer .btn,
+#bf-option-modal .modal-footer .btn,
+#callproduct-preorder #confirm-call-product {
+    width: 120px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+}
+#booking-form-modal .select2-container--default .select2-selection--multiple {
+    min-height: 38px;
+    max-height: none !important;
+    height: auto !important;
+    border-radius: 8px !important;
+    border: 1px solid #d8dfea !important;
+    align-items: flex-start !important;
+    flex-wrap: wrap;
+    padding: 4px 28px 4px 4px !important;
+}
+#booking-form-modal .select2-container--default .select2-selection--multiple .select2-selection__rendered {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    width: 100%;
+    white-space: normal;
+    padding: 0;
+    margin: 0;
+}
+#booking-form-modal .select2-container--default .select2-selection--multiple .select2-search--inline {
+    flex: 1 1 80px;
+    min-width: 80px;
+}
+
+/* =============================================================
+   PREORDER PICKER (#callproduct-preorder) — refreshed look
+   ============================================================= */
+#callproduct-preorder .modal-dialog { max-width: 1020px; }
+#callproduct-preorder .modal-content { border-radius:16px; border:none; overflow:hidden; box-shadow:0 24px 70px rgba(23,43,77,.32); }
+#callproduct-preorder .modal-header { background:linear-gradient(135deg,#fff3e9,#ffe3cf); border-bottom:1px solid #f4d9c4; padding:13px 18px; }
+#callproduct-preorder .modal-title { color:#e0701c; font-weight:700; font-size:16px; }
+#callproduct-preorder .modal-body { background:#f6f8fb !important; padding:16px 14px 12px !important; }
+#callproduct-preorder .modal-footer { padding:11px 18px; background:#fff; }
+
+/* hide leftover overlays — dùng #bf-prod-loading */
+#callproduct-preorder .div_load_alert_selling,
+#callproduct-preorder .div_load_alert_selling1 { display:none !important; }
+
+/* toolbar: cột + phân trang */
+#callproduct-preorder .bf-prod-toolbar { margin-left: auto; }
+#callproduct-preorder .bf-col-select {
+    width: auto;
+    min-width: 88px;
+    height: 30px;
+    padding: 2px 8px;
+    font-size: 12px;
+    border-radius: 8px;
+    border: 1px solid #d8dfea;
+}
+#callproduct-preorder .bf-prod-pagination {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #2b3a55;
+}
+#callproduct-preorder .bf-prod-pagination a {
+    color: #e0701c;
+    text-decoration: none;
+    padding: 2px 6px;
+}
+#callproduct-preorder .bf-prod-pagination a:hover { color: #ff5d1f; }
+#callproduct-preorder .bf-page-label { white-space: nowrap; }
+
+#callproduct-preorder .bf-prod-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    min-height: 100px;
+    color: #8590a3;
+    font-size: 13px;
+    font-weight: 600;
+}
+#callproduct-preorder .bf-prod-empty {
+    width: 100%;
+    min-height: 220px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 28px 16px;
+    text-align: center;
+}
+#callproduct-preorder .bf-prod-empty-img {
+    width: 120px;
+    max-width: 40%;
+    height: auto;
+    object-fit: contain;
+    opacity: .92;
+}
+#callproduct-preorder .bf-prod-empty-text {
+    color: #8590a3;
+    font-size: 14px;
+    font-weight: 600;
+}
+#callproduct-preorder .bf-prod-spinner {
+    width: 18px;
+    height: 18px;
+    border: 2px solid #e8edf5;
+    border-top-color: #ff5d1f;
+    border-radius: 50%;
+    animation: bfProdSpin .8s linear infinite;
+}
+@keyframes bfProdSpin { to { transform: rotate(360deg); } }
+
+/* pane section titles */
+#callproduct-preorder .h4title { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; color:#46546e; margin:0 0 10px; }
+#callproduct-preorder .list-menu-title span { font-size:11px; font-weight:700; text-transform:uppercase; color:#8590a3; letter-spacing:.3px; }
+
+/* cart pane + catalog pane as cards */
+#callproduct-preorder .col-md-4 > .card-middle { background:#fff; border:1px solid #eef1f6; border-radius:12px; padding:10px; }
+#callproduct-preorder .midd-line { background:#fff; border:1px solid #eef1f6; border-radius:12px; padding:10px; }
+
+/* category list */
+#callproduct-preorder #ulcategory { list-style:none; padding:0; margin:6px 0 0; }
+#callproduct-preorder #ulcategory li { padding:8px 12px; margin-bottom:5px; cursor:pointer; font-size:13px; font-weight:600; color:#46546e; border-radius:9px; transition:all .14s; border:1px solid transparent; }
+#callproduct-preorder #ulcategory li:hover { background:#fff3e8; color:#e0701c; }
+#callproduct-preorder #ulcategory li.actives { background:linear-gradient(135deg,#ff8a4c,#ff5d1f); color:#fff; box-shadow:0 3px 8px rgba(255,93,31,.32); }
+
+/* search */
+#callproduct-preorder .search-product { align-items:stretch; }
+#callproduct-preorder .search-product .form-control { border-radius:8px 0 0 8px; border:1px solid #d8dfea; height:38px; font-size:13px; }
+#callproduct-preorder .search-product .form-control:focus { border-color:#ff7a3a; box-shadow:0 0 0 3px rgba(255,93,31,.12); }
+#callproduct-preorder #findProduct { border-radius:0 8px 8px 0; background:linear-gradient(135deg,#ff8a4c,#ff5d1f); border:none; height:38px; min-height:38px; padding:0 14px; display:flex; align-items:center; justify-content:center; line-height:1; }
+#callproduct-preorder #findProduct i { color:#fff !important; font-size:14px; }
+
+/* product tiles */
+#callproduct-preorder #list_product { display:grid; gap:10px; }
+#callproduct-preorder #list_product.bf-cols-2 { grid-template-columns:repeat(2,minmax(0,1fr)); }
+#callproduct-preorder #list_product.bf-cols-3 { grid-template-columns:repeat(3,minmax(0,1fr)); }
+#callproduct-preorder .addproductcartcallproduct { background:#fff; border:1px solid #eaeef4; border-radius:12px; box-shadow:0 1px 4px rgba(23,43,77,.08); cursor:pointer; transition:all .14s; overflow:hidden; padding:0; height:auto; position:relative; display:block; }
+#callproduct-preorder .addproductcartcallproduct:hover { border-color:#ff7a3a; box-shadow:0 6px 16px rgba(255,93,31,.2); transform:translateY(-2px); }
+#callproduct-preorder .addproductcartcallproduct .card-body { padding:8px !important; min-height:auto !important; max-height:none !important; display:flex; flex-direction:column; align-items:center; gap:6px; }
+#callproduct-preorder .addproductcartcallproduct img { width:100% !important; height:78px !important; object-fit:cover !important; border-radius:8px; margin:0 !important; display:block; }
+#callproduct-preorder .addproductcartcallproduct .card-title { font-size:12px; font-weight:600; color:#2b3a55; margin:0; height:auto !important; line-height:1.3; text-align:center; width:100%; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#callproduct-preorder .addproductcartcallproduct::after { content:'+'; position:absolute; top:6px; right:6px; width:22px; height:22px; line-height:21px; text-align:center; border-radius:50%; background:rgba(255,93,31,.95); color:#fff; font-size:16px; font-weight:700; opacity:0; transition:opacity .14s; }
+#callproduct-preorder .addproductcartcallproduct:hover::after { opacity:1; }
+
+/* cart table + qty stepper */
+#callproduct-preorder #cart_content { display:block; max-height:500px; overflow-y:auto; }
+#callproduct-preorder .pop_header th { font-size:11px; text-transform:uppercase; color:#8590a3; border:none; padding-bottom:6px; }
+#callproduct-preorder #cart_content td { border-top:1px solid #f0f3f8; }
+#callproduct-preorder .btn_mp { width:24px; height:24px; line-height:24px; text-align:center; border-radius:6px; background:#fff3e8; color:#e0701c !important; cursor:pointer; font-size:11px; display:inline-flex; align-items:center; justify-content:center; }
+#callproduct-preorder .btn_mp:hover { background:#ff5d1f; color:#fff !important; }
+#callproduct-preorder .input_quantily, #callproduct-preorder .bf-pick-qty-input { width:42px; text-align:center; border:1px solid #d8dfea; border-radius:6px; height:26px; font-size:13px; }
+#callproduct-preorder .divthanhtien, #callproduct-preorder .divdongia { font-size:13px; color:#2b3a55; font-weight:600; }
+#callproduct-preorder .bf-pick-rm { cursor:pointer; }
+#callproduct-preorder #cart_total { font-size:14px; }
+#callproduct-preorder #total_call_product { color:#ff5d1f; font-weight:800; }
+#callproduct-preorder .text-note-label { cursor:pointer; color:#8590a3; font-size:11px; }
+
+/* footer confirm */
+#callproduct-preorder #confirm-call-product { background:linear-gradient(135deg,#3f8df0,#0d6efd); border:none; border-radius:8px; padding:8px 24px; box-shadow:0 3px 10px rgba(13,110,253,.3); }
+#callproduct-preorder #confirm-call-product:hover { filter:brightness(1.05); }
+
+/* =============================================================
+   PREORDER CART (giỏ món) — clean card rows
+   ============================================================= */
+#callproduct-preorder .pro_table thead { display:none !important; }   /* hide misaligned column header */
+#callproduct-preorder #cart_content, #callproduct-preorder #cart_total { display:block; width:100%; }
+#callproduct-preorder #cart_content tr, #callproduct-preorder #cart_total tr { display:block; width:100%; }
+#callproduct-preorder #cart_content td, #callproduct-preorder #cart_total td { display:block; border:none !important; padding:0 !important; }
+
+#callproduct-preorder .bf-cart-item {
+    background:#fff; border:1px solid #eef1f6; border-radius:10px;
+    padding:8px 10px; margin-bottom:8px; box-shadow:0 1px 3px rgba(23,43,77,.06);
+    text-align:left; /* tên + thuộc tính/ghi chú canh trái (đè center của theme) */
+}
+#callproduct-preorder .bf-ci-name {
+    font-size:13px; font-weight:600; color:#2b3a55; margin-bottom:2px;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    text-align:left;
+}
+#callproduct-preorder .bf-ci-row { display:flex; align-items:center; gap:8px; margin-top:7px; }
+#callproduct-preorder .bf-qty { display:inline-flex; align-items:center; border:1px solid #e2e8f2; border-radius:8px; overflow:hidden; background:#fff; flex:0 0 auto; }
+#callproduct-preorder .bf-qty.bf-qty-locked { background:#f5f7fb; }
+#callproduct-preorder .bf-qty.bf-qty-locked .bf-qinput { border:none; color:#8590a3; background:transparent; cursor:default; }
+#callproduct-preorder .bf-qbtn {
+    width:26px; height:26px; border:none; background:#fff3e8; color:#e0701c;
+    cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:10px; padding:0;
+}
+#callproduct-preorder .bf-qbtn:hover { background:#ff5d1f; color:#fff; }
+#callproduct-preorder .bf-qinput {
+    width:40px; height:26px; border:none; border-left:1px solid #e2e8f2; border-right:1px solid #e2e8f2;
+    text-align:center; font-size:13px; font-weight:600; color:#2b3a55; outline:none; padding:0;
+}
+#callproduct-preorder .bf-ci-prices { margin-left:auto; text-align:right; line-height:1.25; }
+#callproduct-preorder .bf-ci-unit { display:block; font-size:11px; color:#8590a3; }
+#callproduct-preorder .bf-ci-total { display:block; font-size:13px; font-weight:700; color:#2b3a55; }
+#callproduct-preorder .bf-ci-del { border:none; background:transparent; color:#e0566b; cursor:pointer; padding:4px 2px; font-size:13px; line-height:1; flex:0 0 auto; }
+#callproduct-preorder .bf-ci-del:hover { color:#c0392b; }
+#callproduct-preorder .bf-ci-edit { border:none; background:transparent; color:#2d67e1; cursor:pointer; padding:4px 2px; font-size:13px; line-height:1; flex:0 0 auto; }
+#callproduct-preorder .bf-ci-edit:hover { color:#1b4bb8; }
+.bf-ci-opt.bf-ci-set { color:#8590a3; }
+#callproduct-preorder #cart_content:has(.bf-cart-empty) {
+    display:flex !important;
+    flex-direction:column;
+    justify-content:center;
+    align-items:stretch;
+    min-height:320px;
+}
+#callproduct-preorder #cart_content:has(.bf-cart-empty) tr {
+    flex:1;
+    display:flex !important;
+    align-items:center;
+    justify-content:center;
+}
+#callproduct-preorder .bf-cart-empty {
+    text-align:center !important; color:#aab2c0; padding:20px 10px !important;
+    display:flex !important; flex-direction:column; align-items:center; justify-content:center;
+    gap:8px; font-size:13px; width:100%;
+}
+#callproduct-preorder .bf-cart-empty i { font-size:26px; opacity:.5; }
+#callproduct-preorder #cart_total td { padding:10px 4px 2px !important; border-top:2px solid #eef1f6 !important; text-align:right; }
+#callproduct-preorder #total_call_product { color:#ff5d1f; font-weight:800; font-size:16px; }
+
+/* =============================================================
+   PREORDER MODAL — balance 2 panes (cart vs catalog)
+   ============================================================= */
+#callproduct-preorder .modal-body > .row { align-items: stretch; }
+#callproduct-preorder .col-md-4, #callproduct-preorder .col-md-8 { display:flex; flex-direction:column; }
+#callproduct-preorder .col-md-4 > .card-middle { flex:1 1 auto; min-height:0; display:flex; flex-direction:column; }
+#callproduct-preorder .col-md-8 > .midd-line { flex:1 1 auto; min-height:0; }
+/* cart internals: items list scrolls (fills), total pinned at bottom */
+#callproduct-preorder .card-middle .table-responsive,
+#callproduct-preorder .card-middle .dataTables_wrapper,
+#callproduct-preorder .card-middle .pro_table { display:flex; flex-direction:column; flex:1 1 auto; min-height:0; width:100%; }
+#callproduct-preorder #cart_content { flex:1 1 auto; min-height:0; max-height:none !important; overflow-y:auto; }
+#callproduct-preorder #cart_total { flex:0 0 auto; }
+
+/* ===================== PREORDER OPTION MODAL (topping/combo/thuộc tính) ===================== */
+#bf-option-modal .modal-dialog { max-width: 460px; }
+#bf-option-modal .modal-content { border-radius: 14px; overflow: hidden; border: none; }
+#bf-option-modal .modal-header { background: #fff7ef; border-bottom: 1px solid #f0e3d6; padding: 13px 18px; }
+#bf-option-modal .modal-title { font-weight: 700; color: #243869; }
+#bf-option-modal .modal-body { padding: 16px 18px; max-height: 70vh; overflow-y: auto; }
+
+/* Hàng đầu: tên món + số lượng + giá gốc */
+#bf-option-modal .more_name { font-weight: 700; font-size: 15px; color: #1a1c1c; }
+#bf-option-modal .more_price { color: #1e9e5a; font-weight: 700; white-space: nowrap; }
+#bf-option-modal .input-group-number { display: inline-flex; align-items: center; }
+#bf-option-modal .input-group-number .btn { padding: 3px 9px; border-color: #d1d5db; color: #374151; }
+#bf-option-modal .input-group-number .form-control { max-width: 44px; padding: 4px 0; font-weight: 600; border-color: #d1d5db; }
+
+/* Tiêu đề nhóm (Size / Món thêm / nhóm combo) */
+#bf-option-modal .list-add-option h6 {
+    font-weight: 700; font-size: 12.5px; color: #374151; text-transform: uppercase;
+    letter-spacing: .3px; margin: 16px 0 9px; padding-bottom: 5px; border-bottom: 1px solid #eef0f3;
+}
+#bf-option-modal .list-add-option > div:first-child h6,
+#bf-option-modal .list-add-option .row:first-child h6 { margin-top: 4px; }
+
+/* Mỗi lựa chọn (radio thuộc tính / checkbox topping) = thẻ bấm được */
+#bf-option-modal .form-check {
+    display: flex; align-items: center; gap: 11px; width: 100%;
+    padding: 10px 13px; margin: 0 0 8px; border: 1px solid #e5e7eb; border-radius: 11px;
+    cursor: pointer; transition: border-color .15s, background .15s, box-shadow .15s; background: #fff;
+}
+#bf-option-modal .form-check:hover { border-color: #c9d3e8; background: #f8fafc; }
+#bf-option-modal .form-check:has(input:checked) { border-color: #1d2d5b; background: #eef2fb; box-shadow: inset 0 0 0 1px #1d2d5b; }
+#bf-option-modal .form-check .form-check-input { margin: 0; flex: 0 0 auto; width: 19px; height: 19px; }
+#bf-option-modal .form-check-input:checked { background-color: #1d2d5b; border-color: #1d2d5b; }
+#bf-option-modal .custom_form {
+    flex: 1; display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; margin: 0; cursor: pointer; font-weight: 500; color: #1c1b1b; text-transform: none;
+}
+#bf-option-modal .custom_form.position-relative {
+    align-items: center;
+    min-height: 36px;
+    padding-right: 170px;
+}
+#bf-option-modal .bf-topping-name {
+    text-transform: none;
+    padding-right: 10px;
+    word-break: break-word;
+}
+#bf-option-modal .bf-topping-quantity-control {
+    position: absolute;
+    width: 90px;
+    right: 90px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+#bf-option-modal .bf-topping-quantity-control input {
+    width: 25px !important;
+    height: 25px !important;
+    border: 0;
+    padding: 0;
+}
+#bf-option-modal .bf-topping-quantity-control .btn {
+    width: 25px;
+    height: 25px;
+    border-radius: 4px !important;
+    font-size: 10px;
+    padding: 0 !important;
+}
+#bf-option-modal .form-check .topping-price {
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+}
+#bf-option-modal .custom_form > div:first-child { text-transform: none; }
+#bf-option-modal .custom_form > div:last-child:not(.d-none),
+#bf-option-modal .topping-price { color: #f59415; font-weight: 600; white-space: nowrap; }
+#bf-option-modal .topping-group-container { margin-bottom: 12px; }
+
+/* Hàng combo (col-1 / col-7 / col-4) — chỉ áp card cho hàng có input-combo,
+   KHÔNG áp cho hàng tiêu đề (tên + qty + giá). */
+#bf-option-modal .list-add-option .row:has(.input-combo) {
+    align-items: center; margin: 0 0 8px; padding: 9px 6px; border: 1px solid #e5e7eb; border-radius: 11px; cursor: pointer;
+}
+#bf-option-modal .list-add-option .row:has(.input-combo):hover { border-color: #c9d3e8; background: #f8fafc; }
+#bf-option-modal .list-add-option .row:has(.input-combo:checked) { border-color: #1d2d5b; background: #eef2fb; }
+#bf-option-modal .input-combo { width: 19px; height: 19px; }
+#bf-option-modal .list-add-option .row .more_name { font-weight: 500; font-size: 14px; margin: 0; cursor: pointer; }
+
+#bf-option-modal .note_option { border: 1px solid #d1d5db; border-radius: 8px; resize: vertical; }
+#bf-option-modal .modal-footer { border-top: 1px solid #eef0f3; padding: 12px 18px; }
+#bf-option-modal .bf-opt-save { background: #1d2d5b; border-color: #1d2d5b; font-weight: 600; padding: 7px 24px; }
+#bf-option-modal .bf-opt-save:hover { background: #16224a; }
+
+/* tóm tắt option trong dòng giỏ picker */
+.bf-ci-opt { font-size: 11px; line-height: 1.3; color: #13a594; margin: 2px 0 0; }
+.bf-ci-opt.bf-ci-note { color: #6b7280; font-style: italic; }
+
+/* ===================== Month "+N nữa" → popup danh sách lịch trong ngày ===================== */
+#bkm-day-list-popup {
+    position: fixed; z-index: 100050; min-width: 450px; max-width: 580px;
+    background: #fff; border: 1px solid #e5e7eb; border-radius: 10px;
+    box-shadow: 0 8px 28px rgba(0,0,0,.18); overflow: hidden; display: none;
+}
+#bkm-day-list-popup .bkm-dl-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 9px 12px; background: #f7f9fc; border-bottom: 1px solid #eef0f3;
+    font-weight: 700; font-size: 13px; color: #243869;
+}
+#bkm-day-list-popup .bkm-dl-close { cursor: pointer; font-size: 19px; line-height: 1; color: #9aa3b2; padding: 0 2px; }
+#bkm-day-list-popup .bkm-dl-close:hover { color: #ef4444; }
+#bkm-day-list-popup .bkm-dl-body { max-height: 288px; overflow-y: auto; padding: 4px; }
+#bkm-day-list-popup .bkm-dl-item {
+    display: flex; align-items: center; gap: 8px; padding: 7px 9px;
+    border-radius: 7px; cursor: pointer; transition: background .12s;
+}
+#bkm-day-list-popup .bkm-dl-item:hover { background: #eef2fb; }
+#bkm-day-list-popup .bkm-dl-dot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; background: #9aa3b2; }
+#bkm-day-list-popup .bkm-dl-dot.s0 { background: var(--bk-s0b, #2f84d8); }
+#bkm-day-list-popup .bkm-dl-dot.s1 { background: var(--bk-s1b, #1e9e5a); }
+#bkm-day-list-popup .bkm-dl-dot.s2 { background: var(--bk-s2b, #13a594); }
+#bkm-day-list-popup .bkm-dl-dot.s3 { background: var(--bk-s3b, #f59415); }
+#bkm-day-list-popup .bkm-dl-dot.s4 { background: var(--bk-s4b, #7c8696); }
+#bkm-day-list-popup .bkm-dl-dot.s5 { background: var(--bk-s5b, #7c3aed); }
+#bkm-day-list-popup .bkm-dl-time { font-weight: 600; color: #374151; font-size: 12px; flex: 0 0 auto; }
+#bkm-day-list-popup .bkm-dl-main { display: flex; flex-direction: row; align-items: center; gap: 8px; min-width: 0; }
+#bkm-day-list-popup .bkm-dl-name { color: #1c1b1b; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1 1 auto; min-width: 0; }
+#bkm-day-list-popup .bkm-dl-phone { color: #6b7280; font-size: 12px; white-space: nowrap; flex: 0 0 auto; margin-left: auto; }
+
+/* Preorder picker — hết món / không khả dụng (giống thu ngân) */
+#callproduct-preorder .bf-product-wrap { position: relative; }
+#callproduct-preorder .addproductcartcallproduct.bf-stock-blocked {
+    cursor: not-allowed;
+    pointer-events: none;
+}
+#callproduct-preorder .addproductcartcallproduct.bf-stock-blocked .card-body {
+    opacity: .25;
+}
+#callproduct-preorder .addproductcartcallproduct.bf-stock-blocked:hover {
+    border-color: #eaeef4;
+    box-shadow: 0 1px 4px rgba(23,43,77,.08);
+    transform: none;
+}
+#callproduct-preorder .addproductcartcallproduct.bf-stock-blocked::after { display: none; }
+#callproduct-preorder .bf-stock-overlay {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 2;
+    background: aqua;
+    border-radius: 4px;
+    padding: 6px 10px;
+    font-weight: 700;
+    color: #000;
+    white-space: nowrap;
+    pointer-events: none;
+}
+#callproduct-preorder .bf-stock-overlay span { text-align: center; display: block; }
+
+/* ============================================================
+   MODAL CẢNH BÁO ĐẶT TRÙNG BÀN (spa) — clean, professional
+   ============================================================ */
+#booking-duplicate-modal .modal-dialog {
+    max-width: 440px;
+}
+
+#booking-duplicate-modal .bk-dup-content {
+    border: none;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 24px 60px rgba(15, 23, 42, .28);
+}
+
+#booking-duplicate-modal .bk-dup-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 18px 20px;
+    background: linear-gradient(135deg, #f59e0b, #f97316);
+    color: #fff;
+}
+
+#booking-duplicate-modal .bk-dup-icon {
+    flex: 0 0 auto;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    background: rgba(255, 255, 255, .22);
+}
+
+#booking-duplicate-modal .bk-dup-title {
+    flex: 1 1 auto;
+    margin: 0;
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 1.3;
+}
+
+#booking-duplicate-modal .bk-dup-x {
+    flex: 0 0 auto;
+    border: none;
+    background: transparent;
+    color: #fff;
+    font-size: 24px;
+    line-height: 1;
+    opacity: .85;
+    cursor: pointer;
+    padding: 0 2px;
+    transition: opacity .15s ease;
+}
+#booking-duplicate-modal .bk-dup-x:hover { opacity: 1; }
+
+#booking-duplicate-modal .bk-dup-body {
+    padding: 20px;
+}
+
+#booking-duplicate-modal .bk-dup-lead {
+    margin: 0 0 14px;
+    font-size: 14px;
+    line-height: 1.5;
+    color: #475569;
+}
+
+#booking-duplicate-modal .bk-dup-card {
+    border: 1px solid #eef1f6;
+    border-radius: 12px;
+    background: #f8fafc;
+    padding: 4px 14px;
+}
+
+#booking-duplicate-modal .bk-dup-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px dashed #e2e8f0;
+}
+#booking-duplicate-modal .bk-dup-row:last-child { border-bottom: none; }
+
+#booking-duplicate-modal .bk-dup-label {
+    flex: 0 0 auto;
+    font-size: 13px;
+    font-weight: 500;
+    color: #64748b;
+}
+
+#booking-duplicate-modal .bk-dup-value {
+    flex: 1 1 auto;
+    text-align: right;
+    font-size: 14px;
+    font-weight: 600;
+    color: #1e293b;
+    word-break: break-word;
+}
+
+#booking-duplicate-modal .bk-dup-row-time .bk-dup-value {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+#booking-duplicate-modal .bk-dup-time-chip {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 8px;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    font-size: 13px;
+    font-weight: 600;
+    color: #0f172a;
+    white-space: nowrap;
+}
+
+#booking-duplicate-modal .bk-dup-arrow {
+    color: #f59e0b;
+    font-size: 13px;
+}
+
+#booking-duplicate-modal .bk-dup-duration {
+    color: #b45309;
+    font-weight: 700;
+}
+
+#booking-duplicate-modal .bk-dup-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 14px 20px 18px;
+}
+
+#booking-duplicate-modal .bk-dup-btn {
+    border: none;
+    border-radius: 9px;
+    padding: 9px 20px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all .15s ease;
+}
+#booking-duplicate-modal .bk-dup-btn:hover { transform: translateY(-1px); }
+
+#booking-duplicate-modal .bk-dup-btn-cancel {
+    background: #eef2f7;
+    color: #475569;
+}
+#booking-duplicate-modal .bk-dup-btn-cancel:hover { background: #e2e8f0; }
+
+#booking-duplicate-modal .bk-dup-btn-confirm {
+    background: linear-gradient(135deg, #f97316, #ea580c);
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(234, 88, 12, .32);
+}
