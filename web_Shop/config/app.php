@@ -65,7 +65,10 @@ return [
     |
     */
 
-    'timezone' => 'UTC',
+    // Giờ Việt Nam, cùng múi với VPS (Asia/Bangkok, +07:00). Để UTC thì mọi
+    // `date()` phía PHP — tên tệp xuất, bộ lọc "tháng này", "hôm nay" — lệch 7
+    // tiếng so với người dùng: 0h–7h sáng vẫn tính là hôm qua.
+    'timezone' => 'Asia/Ho_Chi_Minh',
 
     /*
     |--------------------------------------------------------------------------
