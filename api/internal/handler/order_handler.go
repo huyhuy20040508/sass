@@ -680,6 +680,10 @@ func orderID(c *gin.Context) (uint, error) {
 }
 
 func respondOrderError(c *gin.Context, err error, fallback string) {
+	if loiChiNhanh(c, err) {
+		return
+	}
+
 	// Mã giảm giá khách nhập: dùng chung câu chữ với ô kiểm mã ở giỏ hàng.
 	if voucherUseError(c, err) {
 		return

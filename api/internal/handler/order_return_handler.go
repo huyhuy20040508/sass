@@ -457,6 +457,10 @@ func respondReturnList(c *gin.Context, list []domain.OrderReturn, total int64, p
 }
 
 func respondReturnError(c *gin.Context, err error, fallback string) {
+	if loiChiNhanh(c, err) {
+		return
+	}
+
 	switch {
 	case errors.Is(err, domain.ErrNotFound):
 		response.Error(c, http.StatusNotFound, "Không tìm thấy phiếu trả hàng hoặc đơn hàng")

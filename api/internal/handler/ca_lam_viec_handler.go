@@ -186,6 +186,10 @@ func (h *CaLamViecHandler) GhiSoQuy(c *gin.Context) {
 }
 
 func respondCaError(c *gin.Context, err error, fallback string) {
+	if loiChiNhanh(c, err) {
+		return
+	}
+
 	switch {
 	case errors.Is(err, domain.ErrCaDangMo):
 		response.Error(c, http.StatusConflict,

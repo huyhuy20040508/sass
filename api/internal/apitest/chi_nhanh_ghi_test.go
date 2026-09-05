@@ -161,3 +161,32 @@ func TestChiNhanh_HeaderTroVaoChiNhanhDaDongThiTuChoi(t *testing.T) {
 		t.Fatalf("câu trả lời phải nói rõ chi nhánh đã ngừng hoạt động, nhận: %s", catBot(res2.than))
 	}
 }
+
+// ĐỨNG Ở KHO KHÁC MÀ MỞ CHỨNG TỪ: câu trả lời phải NÓI RA lý do, không phải 500.
+//
+// Chốt chặn đã có sẵn (repository trả ErrKhongThuocChiNhanh), nhưng mỗi handler
+// lại có bảng ánh xạ lỗi riêng và cả năm bảng đều quên lỗi này — nó rơi xuống
+// nhánh mặc định thành 500 "Lỗi truy vấn đơn hàng". Người dùng đọc lên tưởng
+// API hỏng và đi báo lỗi, trong khi việc phải làm chỉ là đổi chi nhánh ở thanh
+// trên cùng.
+func TestChiNhanh_MoChungTuKhoKhacNoiRoLyDo(t *testing.T) {
+	h := dungHeThong(t)
+	a, _ := haiCuaHang(t, h)
+	kho2 := moChiNhanhThuHai(t, h, a, "Kho hai")
+
+	res := h.goiChiNhanh(t, a.token, kho2, http.MethodGet,
+		fmt.Sprintf("/api/v1/admin/orders/%d", a.donHang), nil)
+	if res.ma != http.StatusForbidden {
+		t.Fatalf("mở đơn của chi nhánh khác phải trả 403, nhận %d\n%s", res.ma, catBot(res.than))
+	}
+	if !strings.Contains(res.than, "chi nhánh") {
+		t.Fatalf("câu trả lời phải nói rõ chuyện chi nhánh:\n%s", catBot(res.than))
+	}
+
+	// Đứng đúng kho của nó thì mở được như thường.
+	ok := h.goiChiNhanh(t, a.token, a.chiNhanh, http.MethodGet,
+		fmt.Sprintf("/api/v1/admin/orders/%d", a.donHang), nil)
+	if ok.ma != http.StatusOK {
+		t.Fatalf("mở đơn ở đúng chi nhánh của nó phải được, nhận %d\n%s", ok.ma, catBot(ok.than))
+	}
+}

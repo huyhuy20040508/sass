@@ -355,6 +355,10 @@ func inventoryFilterFrom(c *gin.Context, defaultSize, maxSize int) (domain.Inven
 }
 
 func respondInventoryError(c *gin.Context, err error, fallback string) {
+	if loiChiNhanh(c, err) {
+		return
+	}
+
 	switch {
 	case errors.Is(err, domain.ErrNotFound):
 		response.Error(c, http.StatusNotFound, "Không tìm thấy biến thể sản phẩm này")

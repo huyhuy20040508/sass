@@ -101,6 +101,28 @@ func voucherUseError(c *gin.Context, err error) bool {
 	return true
 }
 
+// loiChiNhanh trả lời ba lỗi chi nhánh bằng đúng câu chữ của handleServiceError.
+//
+// Mỗi handler có mapper lỗi riêng (respondOrderError, respondInventoryError…),
+// và cả năm cái đều quên ba lỗi này: chúng rơi xuống nhánh mặc định và thành
+// 500 kèm câu chung chung. Mở một đơn của chi nhánh khác nhận về "Lỗi truy vấn
+// đơn hàng" — đọc lên tưởng API hỏng, trong khi câu trả lời đúng là "bạn không
+// làm việc tại chi nhánh này" và người dùng chỉ cần đổi chi nhánh ở thanh trên.
+//
+// Gọi ở ĐẦU mỗi mapper, cùng lối với voucherUseError.
+func loiChiNhanh(c *gin.Context, err error) bool {
+	switch {
+	case errors.Is(err, domain.ErrChuaChonChiNhanh),
+		errors.Is(err, domain.ErrChiNhanhDaDong),
+		errors.Is(err, domain.ErrKhongThuocChiNhanh):
+		handleServiceError(c, err)
+
+		return true
+	}
+
+	return false
+}
+
 // handleServiceError ánh xạ lỗi nghiệp vụ sang mã HTTP phù hợp.
 func handleServiceError(c *gin.Context, err error) {
 	// Lỗi theo TỪNG Ô đứng trước mọi nhánh khác: nó mang sẵn tên ô và câu chữ,

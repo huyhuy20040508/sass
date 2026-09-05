@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Services\ApiClient;
 use App\Services\CuaVao;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Route;
@@ -159,21 +160,95 @@ class AdminSmokeTest extends TestCase
 
         // KHÔNG cần nhét sẵn bản chụp "cửa vào": CuaVao tự suy ra từ
         // `api.user.access_areas` khi phiên chưa có bản chụp nào.
-        return static::$adminSession = [
+        static::$adminSession = [
             'api.access_token' => $res->json('data.access_token'),
             'api.refresh_token' => $res->json('data.refresh_token'),
             'api.user' => $res->json('data.user'),
         ];
+
+        // GHIM chi nhánh vào phiên ngay từ đây — xem chiNhanhLamViec().
+        if ($cn = $this->chiNhanhLamViec()) {
+            static::$adminSession[ApiClient::KHOA_CHI_NHANH] = $cn;
+        }
+
+        return static::$adminSession;
+    }
+
+    /**
+     * Chi nhánh mà CẢ BÀI KIỂM đứng — ghim một lần, không để trôi.
+     *
+     * Không ghim thì hai nửa của bài đứng ở hai chỗ khác nhau: id mẫu lấy từ API
+     * đi "trần" nên thấy chứng từ của MỌI chi nhánh, còn trang thì chạy dưới chi
+     * nhánh mà thanh trên cùng tự chọn giúp (chi nhánh đang mở đầu tiên). Ghép
+     * hai thứ đó ra một URL không tồn tại với ai cả — trang đỏ vì một cảnh không
+     * có thật, mà cửa hàng một chi nhánh lại không bao giờ thấy nó.
+     *
+     * Trong các chi nhánh ĐANG MỞ, chọn chi nhánh CÓ CHỨNG TỪ. Chọn bừa cái đầu
+     * tiên (đường ChiNhanhDangLam đi cho phiên chưa chọn gì) thì trên máy có
+     * nhiều chi nhánh, bài kiểm dễ đứng đúng vào kho rỗng: mọi trang chi tiết bị
+     * bỏ qua vì "chưa có dữ liệu" và bài vẫn xanh — xanh mà không quét gì cả.
+     */
+    protected function chiNhanhLamViec(): ?int
+    {
+        if (array_key_exists('chi-nhanh-lam-viec', static::$ids)) {
+            return static::$ids['chi-nhanh-lam-viec'];
+        }
+
+        // Gọi thẳng, KHÔNG qua apiList: apiList lại hỏi ngược chi nhánh này.
+        $goi = function (string $uri, array $query = [], ?int $chiNhanh = null) {
+            $req = Http::baseUrl(config('api.base_url'))->timeout(10)->acceptJson()
+                ->withToken(static::$adminSession['api.access_token']);
+
+            return ($chiNhanh ? $req->withHeaders(['X-Chi-Nhanh' => (string) $chiNhanh]) : $req)
+                ->get($uri, $query);
+        };
+
+        try {
+            $res = $goi('/admin/chi-nhanh', ['active' => 'true']);
+            $ds = $res->successful() ? (array) ($res->json('data') ?: []) : [];
+
+            $dauTien = null;
+            foreach ($ds as $cn) {
+                $id = (int) data_get($cn, 'id');
+                if ($id <= 0) {
+                    continue;
+                }
+                $dauTien ??= $id;
+
+                // Đơn hàng và phiếu mua — hai sổ chính; kho nào có một trong hai
+                // là kho đang được dùng thật.
+                foreach (['/admin/orders', '/admin/phieu-mua-hang'] as $so) {
+                    $r = $goi($so, ['limit' => 1], $id);
+                    if ($r->successful() && ($r->json('data') ?: []) !== []) {
+                        return static::$ids['chi-nhanh-lam-viec'] = $id;
+                    }
+                }
+            }
+
+            return static::$ids['chi-nhanh-lam-viec'] = $dauTien;
+        } catch (\Throwable $e) {
+            return static::$ids['chi-nhanh-lam-viec'] = null;
+        }
+    }
+
+    /** Lượt gọi API bằng token quản trị, ĐỨNG ĐÚNG chi nhánh của bài kiểm. */
+    protected function goiApi(string $uri, array $query = [])
+    {
+        $req = Http::baseUrl(config('api.base_url'))->timeout(10)->acceptJson()
+            ->withToken($this->adminSession()['api.access_token']);
+
+        if ($cn = $this->chiNhanhLamViec()) {
+            $req = $req->withHeaders(['X-Chi-Nhanh' => (string) $cn]);
+        }
+
+        return $req->get($uri, $query);
     }
 
     /** Gọi API bằng token quản trị, trả về mảng data (rỗng nếu lỗi). */
     protected function apiList(string $uri, array $query = ['limit' => 1]): array
     {
-        $token = $this->adminSession()['api.access_token'];
-
         try {
-            $res = Http::baseUrl(config('api.base_url'))->timeout(10)
-                ->acceptJson()->withToken($token)->get($uri, $query);
+            $res = $this->goiApi($uri, $query);
         } catch (\Throwable $e) {
             return [];
         }
@@ -196,7 +271,6 @@ class AdminSmokeTest extends TestCase
             return static::$ids[$cacheKey];
         }
 
-        $token = $this->adminSession()['api.access_token'];
         $found = null;
 
         foreach ($this->apiList('/admin/orders', ['limit' => 50]) as $don) {
@@ -206,8 +280,7 @@ class AdminSmokeTest extends TestCase
             }
 
             try {
-                $res = Http::baseUrl(config('api.base_url'))->timeout(10)
-                    ->acceptJson()->withToken($token)->get('/admin/orders/'.$id.'/etax');
+                $res = $this->goiApi('/admin/orders/'.$id.'/etax');
             } catch (\Throwable $e) {
                 break;
             }
