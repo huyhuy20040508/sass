@@ -762,8 +762,10 @@
                 placeholder: '{{ __('message.goods') }}',
                 width: '100%',
                 minimumInputLength: 0,
+                language: { errorLoading: V2.loiTimHang },
                 ajax: {
                     url: URL_MAT_HANG,
+                    transport: V2.ajaxTimHang,
                     dataType: 'json',
                     delay: 300,
                     data: (params) => ({
@@ -805,7 +807,7 @@
                     ds.forEach((mh) => themDong(mh, null, true));
                     veLuoi();
                 })
-                .fail(() => toastr.error('Không đọc được nhóm hàng.'))
+                .fail((x) => toastr.error(((x.responseJSON || {}).message) || 'Không đọc được nhóm hàng.'))
                 .always(() => $nut.prop('disabled', false));
         });
 

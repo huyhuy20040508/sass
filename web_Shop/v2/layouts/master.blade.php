@@ -285,6 +285,22 @@
         V2.lichVN = function (them) {
             return Object.assign({}, V2.LICH_VN, them || {});
         };
+
+        {{-- Ô tìm hàng (select2) ở các hộp lập phiếu: lỗi của máy chủ phải hiện NGAY
+             TRONG ô thả xuống, đúng chỗ người dùng đang nhìn. Mặc định select2 chỉ nói
+             "The results could not be loaded." — mà 409 "Chưa chọn chi nhánh làm việc"
+             thì câu ấy là thứ duy nhất giúp người ta biết phải làm gì. --}}
+        V2.loiTimHangCuoi = '';
+        V2.ajaxTimHang = function (params, success, failure) {
+            var $r = $.ajax(params);
+            $r.then(success);
+            $r.fail(function (x) {
+                V2.loiTimHangCuoi = (x.responseJSON && x.responseJSON.message) || '';
+                failure();
+            });
+            return $r;
+        };
+        V2.loiTimHang = function () { return V2.loiTimHangCuoi || 'Không tải được danh sách hàng. Thử lại sau.'; };
     </script>
 
     <script>

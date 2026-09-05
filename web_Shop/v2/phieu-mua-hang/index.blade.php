@@ -2183,8 +2183,10 @@ table.table-purchase.none_mobile th, table.table-purchase.none_mobile td { paddi
                 placeholder: '{{ __('message.goods') }}',
                 width: '100%',
                 minimumInputLength: 0,
+                language: { errorLoading: V2.loiTimHang },
                 ajax: {
                     url: URL_MAT_HANG,
+                    transport: V2.ajaxTimHang,
                     dataType: 'json',
                     delay: 300,
                     data: (params) => ({
@@ -2336,11 +2338,15 @@ table.table-purchase.none_mobile th, table.table-purchase.none_mobile td { paddi
             }
             if (loi.length) { baoLoiNhap(loi.slice(0, 8).join(' ')); return; }
 
+            // Máy chủ từ chối (409 chưa chọn kho, 5xx…) thì báo đúng câu của nó,
+            // đừng đổi thành "không tìm thấy mã" — hai việc phải làm khác hẳn nhau.
+            let loiTim = '';
             const timThay = await Promise.all(them.map((t) =>
                 fetch(URL_MAT_HANG + '?keyword=' + encodeURIComponent(t.ma), { headers: { Accept: 'application/json' } })
-                    .then((r) => r.json())
+                    .then((r) => r.ok ? r.json() : r.json().then((j) => { throw new Error(j.message || 'Không tìm được mặt hàng.'); }))
                     .then((j) => (j.data || []).find((m) => String(m.sku).toLowerCase() === t.ma.toLowerCase()))
-                    .catch(() => null)));
+                    .catch((e) => { loiTim = (e && e.message) || loiTim || 'Không tìm được mặt hàng.'; return null; })));
+            if (loiTim) { baoLoiNhap(loiTim); return; }
 
             const khong = [];
             them.forEach((t, i) => {
@@ -2580,9 +2586,9 @@ table.table-purchase.none_mobile th, table.table-purchase.none_mobile td { paddi
             try {
                 const ds = await Promise.all(sku.map((s) =>
                     fetch(URL_MAT_HANG + '?keyword=' + encodeURIComponent(s), { headers: { Accept: 'application/json' } })
-                        .then((r) => r.json())
+                        .then((r) => r.ok ? r.json() : r.json().then((j) => { throw new Error(j.message || ''); }))
                         .then((j) => j.data || [])
-                        .catch(() => [])));
+                        .catch((e) => { if (e && e.message) toastr.warning(e.message); return []; })));
 
                 const theoBienThe = new Map();
                 ds.flat().forEach((mh) => theoBienThe.set(Number(mh.variant_id), mh));

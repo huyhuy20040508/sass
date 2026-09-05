@@ -132,7 +132,17 @@ class DieuChinhTonKhoController extends Controller
                 'limit' => 30,
             ]);
 
-            return response()->json(['data' => $res->successful() ? ($res->json('data') ?? []) : []]);
+            // Lỗi của API phải TỚI được người dùng, không đổi thành danh sách rỗng: 409
+            // "Chưa chọn chi nhánh làm việc" mà thành "không có hàng nào" thì người ta
+            // gõ mãi không hiểu vì sao, trong khi việc phải làm là chọn kho ở thanh trên.
+            if (! $res->successful()) {
+                return response()->json(
+                    ['data' => [], 'message' => $res->json('message') ?: 'Không tìm được mặt hàng.'],
+                    $res->status() >= 400 ? $res->status() : 502,
+                );
+            }
+
+            return response()->json(['data' => $res->json('data') ?? []]);
         } catch (\Throwable $e) {
             Log::error('Tim mat hang cho phieu dieu chinh failed', ['msg' => $e->getMessage()]);
 
@@ -151,7 +161,17 @@ class DieuChinhTonKhoController extends Controller
         try {
             $res = $this->api->phieuMuaHangMatHang(['category_id' => $nhom, 'limit' => 500]);
 
-            return response()->json(['data' => $res->successful() ? ($res->json('data') ?? []) : []]);
+            // Lỗi của API phải TỚI được người dùng, không đổi thành danh sách rỗng: 409
+            // "Chưa chọn chi nhánh làm việc" mà thành "không có hàng nào" thì người ta
+            // gõ mãi không hiểu vì sao, trong khi việc phải làm là chọn kho ở thanh trên.
+            if (! $res->successful()) {
+                return response()->json(
+                    ['data' => [], 'message' => $res->json('message') ?: 'Không tìm được mặt hàng.'],
+                    $res->status() >= 400 ? $res->status() : 502,
+                );
+            }
+
+            return response()->json(['data' => $res->json('data') ?? []]);
         } catch (\Throwable $e) {
             Log::error('Lay nhom hang cho phieu dieu chinh failed', ['msg' => $e->getMessage()]);
 

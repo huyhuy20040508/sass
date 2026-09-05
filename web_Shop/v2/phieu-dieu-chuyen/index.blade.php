@@ -810,8 +810,10 @@
                 width: '100%',
                 allowClear: true,
                 placeholder: @json(__('message.all')),
+                language: { errorLoading: V2.loiTimHang },
                 ajax: {
                     url: URL_MAT_HANG,
+                    transport: V2.ajaxTimHang,
                     dataType: 'json',
                     delay: 300,
                     data: (params) => ({ keyword: params.term || '' }),
@@ -1067,8 +1069,10 @@
                 placeholder: @json(__('message.chose').' '.Str::lower(__('message.product'))),
                 width: '100%',
                 minimumInputLength: 0,
+                language: { errorLoading: V2.loiTimHang },
                 ajax: {
                     url: URL_MAT_HANG,
+                    transport: V2.ajaxTimHang,
                     dataType: 'json',
                     delay: 300,
                     data: (params) => ({ keyword: params.term || '' }),
