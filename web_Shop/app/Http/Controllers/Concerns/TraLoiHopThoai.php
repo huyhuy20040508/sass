@@ -25,15 +25,27 @@ trait TraLoiHopThoai
      * @param  string  $cau  câu để bắn toast
      * @param  \Closure|null  $veDanhSach  đường quay về cho lượt gọi thường;
      *                                     bỏ trống thì dùng back()
+     * @param  int|null  $ma  mã HTTP cho lượt HỎNG; bỏ trống = 422
      */
-    protected function traLoiHopThoai(Request $request, bool $xong, string $cau, ?\Closure $veDanhSach = null)
-    {
+    protected function traLoiHopThoai(
+        Request $request,
+        bool $xong,
+        string $cau,
+        ?\Closure $veDanhSach = null,
+        ?int $ma = null,
+    ) {
         if ($request->expectsJson()) {
-            // 422 chứ không phải 500: đây là "dữ liệu bạn gõ chưa được", một
-            // lỗi người dùng sửa được — khác hẳn lỗi máy chủ.
+            // Mặc định 422: "dữ liệu bạn gõ chưa được", một lỗi người dùng sửa
+            // được — khác hẳn lỗi máy chủ.
+            //
+            // Nhưng khi lượt hỏng là do API TỪ CHỐI thì mã của API mới là câu trả
+            // lời đúng, và người gọi truyền nó vào đây. Quy hết về 422 thì sửa
+            // hay xoá một id không tồn tại nhận 422 kèm câu "Không tìm thấy dữ
+            // liệu" — mã nói một đằng, câu nói một nẻo, và mọi thứ đọc mã (nhật
+            // ký, giám sát, người viết bài kiểm) đều bị dẫn sai.
             return response()->json(
                 ['success' => $xong, 'message' => $cau],
-                $xong ? 200 : 422
+                $xong ? 200 : ($ma ?: 422)
             );
         }
 
