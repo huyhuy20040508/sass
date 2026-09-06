@@ -265,6 +265,13 @@ var (
 	// không chỉ lúc lập: giữa hai thời điểm ấy hàng có thể đã bán đi.
 	ErrDieuChinhThieuTon = errors.New("kho không đủ hàng để bớt")
 
+	// ErrDieuChinhLoKhongCo — dòng phiếu trỏ vào một số lô mà kho chưa có cho mặt
+	// hàng đó. Phiếu điều chỉnh chỉ NẮN số của lô đã có; lô mới vào kho bằng phiếu
+	// nhập (chủ tiệm chốt). Trước đây API lặng lẽ nhận lô lạ với tồn 0 — trong khi
+	// màn hình không có mục "lô mới", nên đường ấy chỉ đi được bằng tay, giống hệt
+	// việc gửi variant lạ mà lại không bị 404. err được bọc kèm tên hàng + số lô.
+	ErrDieuChinhLoKhongCo = errors.New("lô không có trong kho")
+
 	// ErrDieuChinhTrungLo — cùng mặt hàng chọn trùng lô trong một phiếu.
 	ErrDieuChinhTrungLo = errors.New("cùng mặt hàng không được chọn trùng lô trong một phiếu")
 

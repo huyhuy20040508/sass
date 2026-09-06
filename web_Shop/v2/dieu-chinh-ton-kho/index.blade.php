@@ -1022,9 +1022,7 @@
 
         var startOfMonth = moment().startOf('month');
         var today = moment().endOf('day');
-        let list_new_lot = []; // lô mới khai trong phiếu đang mở: {variant_id, lot_number, expire_date}
-        const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) =>
-            ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        let list_new_lot = [];
         let sentMenuIds = [];
         let PHIEU = null;        // phiếu đang mở trong hộp (null = lập mới)
         let lotUndefined = [];
@@ -1300,11 +1298,9 @@
             }
             var innerHtml = `<select name="lot_number" class="form-control form-select lot_number_select">
                               <option value="">{{__('message.select_batch')}}</option>`;
-            // Lô mới đã khai trong phiếu này cho CÙNG mặt hàng: bày lại để dòng sau
-            // chọn được, tồn 0 vì kho chưa có.
-            list_new_lot.filter((l) => String(l.variant_id) === String(mh.variant_id)).forEach(function (l) {
-                innerHtml += `<option value="${esc(l.lot_number)}" data-expire-date="${esc(l.expire_date)}" data-lot-quantity="0">${esc(l.lot_number)} (SL: 0)</option>`;
-            });
+            // CHỈ lô đang có trong kho. Không có mục "lô mới": chủ tiệm chốt phiếu điều
+            // chỉnh chỉ nắn số của lô đã có, lô mới vào kho bằng phiếu nhập — API cũng
+            // từ chối lô lạ.
             lots.forEach(function (lot) {
                 let lotQty = (lot.quantity != null && lot.quantity !== '') ? parseFloat(lot.quantity) : null;
                 innerHtml += `<option
@@ -1313,10 +1309,6 @@
                                 data-lot-quantity="${lotQty ?? ''}"
                             >${lot.lot_number == LO_KHONG_XAC_DINH ? "{{__('message.unknown')}}" : (lot.lot_number ?? '')} (SL: ${lotQty ?? 0})</option>`;
             });
-            // "Lô mới…": kiểm kê thấy hàng của một lô sổ chưa ghi thì khai ngay tại
-            // đây — API vốn nhận (tồn 0, hạn dùng theo người khai), chỉ thiếu cửa
-            // trên màn hình nên trước đây đường này chỉ đi được bằng tay.
-            innerHtml += `<option value="new" class="lot-new-id">+ Lô mới…</option>`;
             innerHtml += `</select>`;
             item.find('.lot_number').html(innerHtml);
 
@@ -1378,69 +1370,12 @@
         }
 
         // ---------- Ô số lô ----------
-        /** Ô khai lô mới ngay dưới ô chọn: số lô, hạn dùng, ✓ / ✕. */
-        function moOLoMoi($sel) {
-            const $o = $sel.closest('.lot_number');
-            $o.find('.lo-moi').remove();
-            $o.append(`
-                <div class="lo-moi d-flex gap-1 mt-1">
-                    <input type="text" class="form-control form-control-sm lo-moi-so" placeholder="Số lô" maxlength="50">
-                    <input type="text" class="form-control form-control-sm lo-moi-han" placeholder="HSD dd-mm-yyyy" autocomplete="off" style="max-width: 120px">
-                    <button type="button" class="btn btn-sm btn-primary lo-moi-ok" title="Dùng lô này"><i class="fa fa-check"></i></button>
-                    <button type="button" class="btn btn-sm btn-light lo-moi-huy" title="Bỏ"><i class="fa fa-times"></i></button>
-                </div>`);
-            $o.find('.lo-moi-han').daterangepicker({
-                singleDatePicker: true, showDropdowns: true, autoUpdateInput: false, autoApply: true,
-                locale: V2.lichVN(), parentEl: '#modalCreate',
-            }, function (start) { $(this.element).val(start.format('DD-MM-YYYY')); });
-            $o.find('.lo-moi-so').trigger('focus');
-        }
-
-        $(document).on('click', '.lo-moi-huy', function () {
-            const $o = $(this).closest('.lot_number');
-            $o.find('.lo-moi').remove();
-            $o.find('.lot_number_select').val('').trigger('change');
-        });
-
-        $(document).on('click', '.lo-moi-ok', function () {
-            const $o = $(this).closest('.lot_number');
-            const tr = $(this).closest('tr');
-            const $sel = $o.find('.lot_number_select');
-            const so = ($o.find('.lo-moi-so').val() || '').trim();
-            const han = ($o.find('.lo-moi-han').val() || '').trim();
-
-            if (!so) { toastr.warning('{{ __('message.please_enter_batch_number') }}'); return; }
-            if (so === LO_KHONG_XAC_DINH || so.toLowerCase() === 'new') { toastr.warning('Số lô này không dùng được.'); return; }
-            if ($sel.find('option').filter((i, op) => op.value === so).length) {
-                toastr.warning('{{ __('message.batch_already_exists') }}');
-                return;
-            }
-            if (han && !/^\d{2}-\d{2}-\d{4}$/.test(han)) { toastr.warning('Hạn dùng ghi theo dd-mm-yyyy.'); return; }
-
-            $(`<option data-lot-quantity="0"></option>`).attr('value', so).attr('data-expire-date', han)
-                .text(so + ' (SL: 0)').insertBefore($sel.find('option[value="new"]'));
-            list_new_lot.push({ variant_id: tr.attr('data-id'), lot_number: so, expire_date: han });
-            $o.find('.lo-moi').remove();
-            $sel.val(so).trigger('change');
-        });
-
         $(document).on('change', '.lot_number_select', function() {
             const selectedOption = $(this).find('option:selected');
             const item = $(this).closest('tr');
 
             let id_menu = item.data('id');
             let val = $(this).val();
-
-            if (val === 'new') {
-                item.find('.expire_date').text('');
-                item.find('.quantity').text('0');
-                item.attr('data-lot-quantity', 0);
-                item.find('.quantity-adjust').val(0);
-                item.find('.stock_after_adjust').text('');
-                moOLoMoi($(this));
-                return;
-            }
-            $(this).closest('.lot_number').find('.lo-moi').remove();
             let arr_lot = [];
             $('.list-menu .menu-item[data-id="' + id_menu + '"]').not(item).each(function() {
                 let lotVal = $(this).find('.lot_number_select').val();
@@ -1747,7 +1682,6 @@
             PHIEU = null;
             list_new_lot = [];
             sentMenuIds = [];
-            list_new_lot = [];
             moHop(document.getElementById('tplCreate').innerHTML);
         })
 
@@ -1882,10 +1816,6 @@
             // Soát như validator store() của v2: phải có dòng, dòng nào cũng phải có lô.
             if (!details.length) {
                 handleMessage({ success: false, message: '{{ __('message.product_list_required') }}' });
-                return;
-            }
-            if (details.some(function(d) { return d.lot_number === 'new'; })) {
-                handleMessage({ success: false, message: 'Có dòng đang khai lô mới chưa bấm ✓ — nhập số lô rồi bấm ✓, hoặc chọn lô có sẵn.' });
                 return;
             }
             if (details.some(function(d) { return !d.lot_number; })) {
