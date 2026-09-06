@@ -140,8 +140,22 @@ class LoaiThuChiController extends Controller
             return $this->traLoiHopThoai($request, false, 'Không kết nối được API. Vui lòng thử lại.');
         }
 
-        return $res->successful()
-            ? $this->traLoiHopThoai($request, true, $success, fn () => redirect()->route('admin.loai-thu-chi.index'))
-            : $this->traLoiHopThoai($request, false, $this->cauLoiApi($res, 'Thao tác không thành công.'));
+        if ($res->successful()) {
+            return $this->traLoiHopThoai($request, true, $success, fn () => redirect()->route('admin.loai-thu-chi.index'));
+        }
+
+        // Trả về ĐÚNG mã API vừa nói: 404 khi id không có, 409 khi loại hệ thống
+        // không cho đụng vào. Quy hết về 422 là mã và câu chữ nói hai chuyện khác
+        // nhau. Chỉ nhận mã 4xx — lỗi 5xx của API không phải lỗi người dùng gõ,
+        // để nó rơi về 422 như cũ thì hộp thoại vẫn giữ lại cho họ thử lại.
+        $ma = $res->status();
+
+        return $this->traLoiHopThoai(
+            $request,
+            false,
+            $this->cauLoiApi($res, 'Thao tác không thành công.'),
+            null,
+            $ma >= 400 && $ma < 500 ? $ma : null,
+        );
     }
 }

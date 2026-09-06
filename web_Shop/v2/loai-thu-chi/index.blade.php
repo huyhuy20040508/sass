@@ -29,6 +29,15 @@
         .index-income-expense-type-page th.cot-ten { width: 68%; }
         .index-income-expense-type-page th.cot-hanh-dong { width: 20%; }
         .index-income-expense-type-page td.item-name { white-space: normal; word-break: break-word; }
+
+        /* Hộp Thêm / Sửa: ĐÚNG MỘT ô tên, nên bó lại cho vừa. Bootstrap mặc định
+           500px, mà bản cũ còn ép min-width 30% — trên màn 1920 thành 576px, một
+           hộp rộng gần bằng cái bảng chỉ để gõ một dòng chữ. Chọn 380px: đủ cho
+           tên dài mà không thành cái khung rỗng.
+           Hộp nằm NGOÀI .index-income-expense-type-page nên phải gọi theo id. */
+        #addTypeIncomeExpense .modal-dialog { max-width: 380px; }
+        #addTypeIncomeExpense .modal-body { padding: 12px 16px 4px; }
+        #addTypeIncomeExpense .modal_center { padding: 0 !important; }
     </style>
 @endpush
 
@@ -104,6 +113,40 @@
                                 </tbody>
                             </table>
                         </div>
+
+                        {{-- BẢN THẺ CHO ĐIỆN THOẠI.
+                             Dưới 992px v2 giấu hẳn .table-list-container (responsive-manager.css),
+                             nên không có khối này thì cả bảng biến mất, chỉ còn tiêu đề với ô tìm.
+
+                             Dựng SẴN Ở MÁY CHỦ bằng .none_desktop, giống mọi màn đang chạy được
+                             (nhà cung cấp, phiếu mua hàng, điều chỉnh tồn kho). KHÔNG dùng cặp
+                             .table-list-container-mobile của v2: khối đó do public/v2/js/script.js
+                             đổ dữ liệu vào, mà vỏ v2 ở đây không nạp tệp ấy — ba màn đang khai nó
+                             (đơn vị tính, thuế, thuộc tính) chỉ hiện một hộp trống.
+
+                             Cùng class .item và cùng bộ data-* với dòng bảng, nên lọc, sửa, xoá
+                             dùng chung một đoạn JS. --}}
+                        <div class="none_desktop">
+                            @forelse ($danhSach as $item)
+                                @php
+                                    $id = (int) ($item['id'] ?? 0);
+                                    $heThong = (bool) ($item['is_default'] ?? false);
+                                @endphp
+                                <div class="item" data-id="{{ $id }}" data-loai="{{ $loai }}"
+                                    data-name="{{ $item['name'] ?? '' }}">
+                                    <span class="item-name">{{ $item['name'] ?? '' }}</span>
+                                    <span class="action d-flex gap-2 flex-shrink-0">
+                                        @unless ($heThong)
+                                            <a class="edit_bt edit-item" type="button" title="{{ __('message.edit') }}"><i class="fa fa-edit"></i></a>
+                                            <a class="dele_bt delete-item" type="button" title="{{ __('message.delete') }}"><i class="fa fa-times"></i></a>
+                                        @endunless
+                                    </span>
+                                </div>
+                            @empty
+                                <div class="text-center py-4">{{ $laThu ? $C::EMPTY_THU : $C::EMPTY_CHI }}</div>
+                            @endforelse
+                            <div class="dong-khong-khop d-none text-center py-4">Không có phân loại nào khớp từ đang tìm.</div>
+                        </div>
                     </div>
                 </div>
             @endforeach
@@ -113,7 +156,7 @@
     {{-- ===================== Hộp Thêm / Sửa =====================
          v2 đặt id #addTypeIncomeExpense, một ô tên duy nhất — giữ nguyên. --}}
     <div class="modal" id="addTypeIncomeExpense" data-mode="">
-        <div class="modal-dialog modal-dialog-centered mx-auto" style="min-width: 30%;">
+        <div class="modal-dialog modal-dialog-centered mx-auto">
             <div class="modal-content">
                 <div class="modal-header">
                     <h4 class="modal-title">{{ __('message.add_income_category') }}</h4>
@@ -189,12 +232,21 @@
         function locBang(loai) {
             const $bang = $('.bang-loai[data-loai="' + loai + '"]');
             const q = (tuKhoa[loai] || '').trim().toLowerCase();
+            const khop = ($el) => !q || String($el.attr('data-name') || '').toLowerCase().includes(q);
+
+            // Dòng bảng: ẩn/hiện rồi đánh lại số thứ tự cho phần còn thấy.
             let thay = 0;
             $bang.find('tr.item').each(function () {
-                const khop = !q || String($(this).attr('data-name') || '').toLowerCase().includes(q);
-                $(this).toggleClass('d-none', !khop);
-                if (khop) $(this).find('.stt').text(++thay);
+                const co = khop($(this));
+                $(this).toggleClass('d-none', !co);
+                if (co) $(this).find('.stt').text(++thay);
             });
+
+            // Thẻ điện thoại: cùng một bộ dữ liệu, chỉ không có cột số thứ tự.
+            $bang.find('.none_desktop > .item').each(function () {
+                $(this).toggleClass('d-none', !khop($(this)));
+            });
+
             const coDong = $bang.find('tr.item').length > 0;
             $bang.find('.dong-khong-khop').toggleClass('d-none', !(coDong && thay === 0));
         }
@@ -232,8 +284,10 @@
         $hop.on('shown.bs.modal', () => $hop.find('.name').trigger('focus'));
 
         $(document).on('click', '.add-item', function () { moHop('add', $(this).data('loai'), null); });
+        // `.item` chứ không `tr.item`: nút này còn nằm trên thẻ điện thoại, và thẻ
+        // mang đúng bộ data-* như dòng bảng.
         $(document).on('click', '.edit-item', function () {
-            const $tr = $(this).closest('tr.item');
+            const $tr = $(this).closest('.item');
             moHop('edit', $tr.data('loai'), $tr);
         });
 
@@ -256,7 +310,7 @@
 
         // ---------- Xoá ----------
         $(document).on('click', '.delete-item', function () {
-            $('#deleteValue').val($(this).closest('tr.item').data('id'));
+            $('#deleteValue').val($(this).closest('.item').data('id'));
             $('#deleteItem').modal('show');
         });
 
