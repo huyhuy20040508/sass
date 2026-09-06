@@ -226,6 +226,17 @@ var DanhMucQuyen = []KhuQuyen{
 				},
 			},
 			{
+				Ten: "Thu chi",
+				Mucs: []MucQuyen{
+					{
+						// Khung phân loại của phiếu thu chi — cùng tầng với danh mục
+						// hàng hoá: việc của chủ tiệm, không phải của người đứng quầy.
+						Prefix: "loai-thu-chi", Ten: "Loại thu chi",
+						Viec: []string{QuyenXem, QuyenThem, QuyenSua, QuyenXoa},
+					},
+				},
+			},
+			{
 				Ten: "Hệ thống",
 				Mucs: []MucQuyen{
 					{

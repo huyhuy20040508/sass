@@ -144,6 +144,29 @@ func (chiNhanhRow) TableName() string { return "shops" }
 // một chuỗi được.
 const maChiNhanhMacDinh = "mac-dinh"
 
+// loaiThuChiKhoiDiem — danh sách phân loại thu chi gieo sẵn cho cửa hàng mới.
+//
+// Cùng bộ với migration 0057 đã gieo cho các cửa hàng đang có, để cửa hàng dựng
+// trước và dựng sau nhìn thấy một danh sách. Sửa ở đây thì phải viết thêm một
+// migration cho cửa hàng cũ, không thì hai đường vào lệch nhau.
+//
+// Gieo với IsDefault = false: đây là gợi ý mở màn chứ không phải loại hệ thống
+// bám vào phiếu tự sinh. Tiệm không dùng "Khấu hao tài sản cố định" thì xoá đi.
+var loaiThuChiKhoiDiem = []domain.LoaiThuChi{
+	{Type: domain.LoaiThu, Name: "Các khoản thu khác"},
+	{Type: domain.LoaiChi, Name: "Lương, thưởng, phụ cấp, bảo hiểm cho người lao động"},
+	{Type: domain.LoaiChi, Name: "Thuê mặt bằng, thuê kho, thuê quầy, thuê thiết bị"},
+	{Type: domain.LoaiChi, Name: "Điện, nước, Internet, điện thoại, viễn thông"},
+	{Type: domain.LoaiChi, Name: "Phí thanh toán, phí ngân hàng, phí cổng thanh toán"},
+	{Type: domain.LoaiChi, Name: "Marketing, quảng cáo, khuyến mại, chăm sóc khách hàng"},
+	{Type: domain.LoaiChi, Name: "Sửa chữa, bảo dưỡng"},
+	{Type: domain.LoaiChi, Name: "Phần mềm, dịch vụ thuê ngoài, tư vấn, quản trị"},
+	{Type: domain.LoaiChi, Name: "Khấu hao tài sản cố định, công cụ dụng cụ"},
+	{Type: domain.LoaiChi, Name: "Công tác phí, hội nghị, đào tạo"},
+	{Type: domain.LoaiChi, Name: "Thuế, phí, lệ phí được phép tính vào chi phí"},
+	{Type: domain.LoaiChi, Name: "Vận chuyển, giao hàng, phí đối tác giao hàng"},
+}
+
 // CoMa cho biết mã cửa hàng đã có người dùng chưa.
 //
 // `tenants` là bảng toàn cục (xem globalTables) nên câu này không cần tenant
@@ -296,6 +319,15 @@ func (r *cuaHangMoiRepository) Tao(ctx context.Context, moi domain.CuaHangMoi) (
 			Status:          "active",
 			EmailVerifiedAt: &bayGio,
 		}
+		// Danh sách phân loại thu chi mở màn. Gieo ngay ở đây chứ không để màn
+		// Loại thu chi tự gieo lúc mở lần đầu: gieo theo lượt ĐỌC thì hai người
+		// mở cùng lúc là gieo hai lần, mà bảng cố ý không có khoá duy nhất để bắt.
+		khoiDiem := make([]domain.LoaiThuChi, len(loaiThuChiKhoiDiem))
+		copy(khoiDiem, loaiThuChiKhoiDiem)
+		if err := tx.WithContext(ctxMoi).Create(&khoiDiem).Error; err != nil {
+			return err
+		}
+
 		if err := tx.WithContext(ctxMoi).Create(&ad).Error; err != nil {
 			if errors.Is(err, gorm.ErrDuplicatedKey) {
 				// Khoá duy nhất của users tính theo (tenant_id, …) mà tenant thì vừa

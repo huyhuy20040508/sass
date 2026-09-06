@@ -321,6 +321,7 @@ func dungHeThongVoi(t *testing.T, banHang, dieuHanh bool) *heThong {
 	quyTacMaRepo := repository.NewQuyTacMaRepository(db)
 	thueRepo := repository.NewThueRepository(db)
 	donViTinhRepo := repository.NewDonViTinhRepository(db)
+	loaiThuChiRepo := repository.NewLoaiThuChiRepository(db)
 	viTriRepo := repository.NewViTriRepository(db)
 	nhaCungCapRepo := repository.NewNhaCungCapRepository(db)
 	phieuMuaHangRepo := repository.NewPurchaseOrderRepository(db)
@@ -384,6 +385,7 @@ func dungHeThongVoi(t *testing.T, banHang, dieuHanh bool) *heThong {
 				service.NewQuyTacMaService(quyTacMaRepo, chiNhanhRepo)),
 			Thue:         handler.NewThueHandler(service.NewThueService(thueRepo)),
 			DonViTinh:    handler.NewDonViTinhHandler(service.NewDonViTinhService(donViTinhRepo, quyTacMaRepo)),
+			LoaiThuChi:   handler.NewLoaiThuChiHandler(service.NewLoaiThuChiService(loaiThuChiRepo)),
 			ViTri:        handler.NewViTriHandler(service.NewViTriService(viTriRepo, quyTacMaRepo)),
 			NhaCungCap:   handler.NewNhaCungCapHandler(service.NewNhaCungCapService(nhaCungCapRepo, quyTacMaRepo)),
 			PhieuMuaHang: handler.NewPhieuMuaHangHandler(service.NewPhieuMuaHangService(phieuMuaHangRepo, nhaCungCapRepo)),
