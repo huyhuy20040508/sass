@@ -242,18 +242,14 @@ class PhieuMuaHangController extends Controller
      */
     public function export(Request $request)
     {
-        $filters = $this->filters($request);
-        $query = $this->query($filters);
-        $query['page'] = 1;
-        $query['page_size'] = 1000;
+        $query = $this->query($this->filters($request));
 
         try {
-            $res = $this->api->phieuMuaHang($query);
-            $list = $res->successful() ? ($res->json('data') ?? []) : [];
+            $list = $this->docHetTrang(fn (array $q) => $this->api->phieuMuaHang($q), $query);
         } catch (\Throwable $e) {
             Log::error('Export phieu mua hang failed', ['msg' => $e->getMessage()]);
 
-            return back()->with('error', 'Không kết nối được API để xuất tệp.');
+            return back()->with('error', $e instanceof \RuntimeException ? $e->getMessage() : 'Không kết nối được API để xuất tệp.');
         }
 
         $hang = [[
@@ -381,15 +377,6 @@ class PhieuMuaHangController extends Controller
         }
 
         return $this->taiXlsx($hang, 'phieu-mua-hang-'.$ma, 'Phieu '.$ma);
-    }
-
-    /** Đẩy một bảng ra .xlsx cho trình duyệt tải về. */
-    protected function taiXlsx(array $hang, string $ten, string $tenSheet)
-    {
-        return response(XlsxDon::noiDung($hang, $tenSheet), 200, [
-            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            'Content-Disposition' => 'attachment; filename="'.$ten.'.xlsx"',
-        ]);
     }
 
     // ---------------------------------------------------------------------
@@ -987,23 +974,6 @@ class PhieuMuaHangController extends Controller
 
             return [];
         }
-    }
-
-    /** Lấy câu lỗi API nói ra, kể cả lỗi theo từng ô. */
-    protected function loi($res, string $macDinh): string
-    {
-        if ($cau = $res->json('message')) {
-            return $cau;
-        }
-        $o = $res->json('errors');
-        if (is_array($o)) {
-            $dau = reset($o);
-            if (is_string($dau) && $dau !== '') {
-                return $dau;
-            }
-        }
-
-        return $macDinh;
     }
 
     /** Gọi API rồi quay lại danh sách, in nguyên văn lời API khi hỏng. */

@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Services\ApiClient;
 use App\Services\ImageStore;
-use App\Support\XlsxDon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
@@ -159,10 +158,7 @@ class NhaCungCapController extends Controller
             ];
         }
 
-        return response(XlsxDon::noiDung($hang, 'Nha cung cap'), 200, [
-            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            'Content-Disposition' => 'attachment; filename="nha-cung-cap-'.date('Ymd-His').'.xlsx"',
-        ]);
+        return $this->taiXlsx($hang, 'nha-cung-cap-'.date('Ymd-His'), 'Nha cung cap');
     }
 
     /** File mẫu — giữ đúng thứ tự cột, vì lượt nhập có thể đọc theo vị trí. */
@@ -448,26 +444,15 @@ class NhaCungCapController extends Controller
     public function phieuMuaExport(Request $request, int $id)
     {
         $loc = $this->locPhieu($request);
-        $loc['page_size'] = 100;
-        $list = [];
 
         try {
-            for ($trang = 1; $trang <= 20; $trang++) {
-                $loc['page'] = $trang;
-                $res = $this->api->phieuMuaHang($this->queryPhieu($id, $loc));
-                if (! $res->successful()) {
-                    return back()->with('error', $res->json('message') ?: 'Không đọc được phiếu mua để xuất tệp.');
-                }
-                $list = array_merge($list, $res->json('data') ?? []);
-                if ($trang >= (int) ($res->json('meta.total_pages') ?? 1)) {
-                    break;
-                }
-            }
-            $list = $this->kemTenChiNhanh($list);
+            $list = $this->kemTenChiNhanh(
+                $this->docHetTrang(fn (array $q) => $this->api->phieuMuaHang($q), $this->queryPhieu($id, $loc))
+            );
         } catch (\Throwable $e) {
             Log::error('Export phieu mua cua NCC failed', ['id' => $id, 'msg' => $e->getMessage()]);
 
-            return back()->with('error', 'Không kết nối được API để xuất tệp.');
+            return back()->with('error', $e instanceof \RuntimeException ? $e->getMessage() : 'Không kết nối được API để xuất tệp.');
         }
 
         $congNo = $loc['tab'] === 'cong-no';
@@ -495,12 +480,8 @@ class NhaCungCapController extends Controller
                     (string) ($p['note'] ?? '')];
         }
 
-        $ten = 'ncc-'.$id.'-'.($congNo ? 'cong-no' : 'lich-su-giao-dich').'-'.date('Ymd-His');
-
-        return response(XlsxDon::noiDung($hang, $congNo ? 'Cong no' : 'Lich su giao dich'), 200, [
-            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            'Content-Disposition' => 'attachment; filename="'.$ten.'.xlsx"',
-        ]);
+        return $this->taiXlsx($hang, 'ncc-'.$id.'-'.($congNo ? 'cong-no' : 'lich-su-giao-dich').'-'.date('Ymd-His'),
+            $congNo ? 'Cong no' : 'Lich su giao dich');
     }
 
     /** Bộ lọc của hai tab, đọc từ query. */

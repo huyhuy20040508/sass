@@ -8,7 +8,9 @@
 
 @php
     $C = \App\Http\Controllers\DieuChinhTonKhoController::class;
-    $hasFilter = collect($filters)->only(['keyword', 'type', 'status', 'warehouse_status', 'created_by'])
+    // Đang lọc mà bảng rỗng thì nói "không khớp bộ lọc", đừng nói "chưa có". Khoảng
+    // ngày cũng là một bộ lọc — thiếu nó thì lọc tháng trống vẫn bảo "chưa có phiếu".
+    $hasFilter = collect($filters)->only(['keyword', 'type', 'status', 'warehouse_status', 'created_by', 'from_date', 'to_date'])
         ->contains(fn ($v) => $v !== '' && $v !== null && $v !== 0 && $v !== [] && $v !== 'all');
     $stt = ($meta['page'] - 1) * $meta['page_size'];
     $trangThaiChon = array_filter(explode(',', $filters['status']));
@@ -373,8 +375,10 @@
                                         <div class="fw-bold" style="flex: 1">
                                             {{ __('message.adjustment_code') }}
                                         </div>
+                                        {{-- Thẻ in trạng thái PHIẾU (Lưu tạm / Chờ duyệt / Đã duyệt / Từ chối),
+                                             không phải trạng thái kho — tiêu đề phải nói đúng cái nó in. --}}
                                         <div class="fw-bold">
-                                            {{ __('message.warehouse_status') }}
+                                            {{ __('message.status') }}
                                         </div>
                                     </div>
                                     @foreach ($list as $key => $item)
@@ -1018,7 +1022,9 @@
 
         var startOfMonth = moment().startOf('month');
         var today = moment().endOf('day');
-        let list_new_lot = [];
+        let list_new_lot = []; // lô mới khai trong phiếu đang mở: {variant_id, lot_number, expire_date}
+        const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) =>
+            ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
         let sentMenuIds = [];
         let PHIEU = null;        // phiếu đang mở trong hộp (null = lập mới)
         let lotUndefined = [];
@@ -1126,9 +1132,18 @@
         // =================================================================
         //  Hộp lập / sửa phiếu
         // =================================================================
+        /**
+         * Nhận CHUỖI html (khuôn trống) hoặc PHẦN TỬ jQuery (khuôn đã đổ dữ liệu).
+         *
+         * Khuôn đã đổ thì phải đưa nguyên nút DOM vào, không được .html() rồi
+         * chép chuỗi: .val() chỉ đặt PROPERTY của input/select/textarea, không
+         * đặt attribute, nên serialize ra chuỗi là rơi hết — hộp Sửa/Xem mở lên
+         * trống gần hết ô đầu phiếu, Người lập rơi về option đầu.
+         */
         function moHop(html, $dich) {
             $HOP = $dich && $dich.length ? $dich : $('#content_create');
-            $HOP.html(html);
+            if (html && html.jquery) $HOP.empty().append(html);
+            else $HOP.html(html);
             if ($HOP.is('#content_create')) $('#modalCreate').modal('show');
             khoiTaoHop();
         }
@@ -1285,11 +1300,11 @@
             }
             var innerHtml = `<select name="lot_number" class="form-control form-select lot_number_select">
                               <option value="">{{__('message.select_batch')}}</option>`;
-            if (list_new_lot.length > 0) {
-                list_new_lot.forEach(function (lot) {
-                    innerHtml += `<option value="${lot}">${lot}</option>`;
-                });
-            }
+            // Lô mới đã khai trong phiếu này cho CÙNG mặt hàng: bày lại để dòng sau
+            // chọn được, tồn 0 vì kho chưa có.
+            list_new_lot.filter((l) => String(l.variant_id) === String(mh.variant_id)).forEach(function (l) {
+                innerHtml += `<option value="${esc(l.lot_number)}" data-expire-date="${esc(l.expire_date)}" data-lot-quantity="0">${esc(l.lot_number)} (SL: 0)</option>`;
+            });
             lots.forEach(function (lot) {
                 let lotQty = (lot.quantity != null && lot.quantity !== '') ? parseFloat(lot.quantity) : null;
                 innerHtml += `<option
@@ -1298,6 +1313,10 @@
                                 data-lot-quantity="${lotQty ?? ''}"
                             >${lot.lot_number == LO_KHONG_XAC_DINH ? "{{__('message.unknown')}}" : (lot.lot_number ?? '')} (SL: ${lotQty ?? 0})</option>`;
             });
+            // "Lô mới…": kiểm kê thấy hàng của một lô sổ chưa ghi thì khai ngay tại
+            // đây — API vốn nhận (tồn 0, hạn dùng theo người khai), chỉ thiếu cửa
+            // trên màn hình nên trước đây đường này chỉ đi được bằng tay.
+            innerHtml += `<option value="new" class="lot-new-id">+ Lô mới…</option>`;
             innerHtml += `</select>`;
             item.find('.lot_number').html(innerHtml);
 
@@ -1359,12 +1378,69 @@
         }
 
         // ---------- Ô số lô ----------
+        /** Ô khai lô mới ngay dưới ô chọn: số lô, hạn dùng, ✓ / ✕. */
+        function moOLoMoi($sel) {
+            const $o = $sel.closest('.lot_number');
+            $o.find('.lo-moi').remove();
+            $o.append(`
+                <div class="lo-moi d-flex gap-1 mt-1">
+                    <input type="text" class="form-control form-control-sm lo-moi-so" placeholder="Số lô" maxlength="50">
+                    <input type="text" class="form-control form-control-sm lo-moi-han" placeholder="HSD dd-mm-yyyy" autocomplete="off" style="max-width: 120px">
+                    <button type="button" class="btn btn-sm btn-primary lo-moi-ok" title="Dùng lô này"><i class="fa fa-check"></i></button>
+                    <button type="button" class="btn btn-sm btn-light lo-moi-huy" title="Bỏ"><i class="fa fa-times"></i></button>
+                </div>`);
+            $o.find('.lo-moi-han').daterangepicker({
+                singleDatePicker: true, showDropdowns: true, autoUpdateInput: false, autoApply: true,
+                locale: V2.lichVN(), parentEl: '#modalCreate',
+            }, function (start) { $(this.element).val(start.format('DD-MM-YYYY')); });
+            $o.find('.lo-moi-so').trigger('focus');
+        }
+
+        $(document).on('click', '.lo-moi-huy', function () {
+            const $o = $(this).closest('.lot_number');
+            $o.find('.lo-moi').remove();
+            $o.find('.lot_number_select').val('').trigger('change');
+        });
+
+        $(document).on('click', '.lo-moi-ok', function () {
+            const $o = $(this).closest('.lot_number');
+            const tr = $(this).closest('tr');
+            const $sel = $o.find('.lot_number_select');
+            const so = ($o.find('.lo-moi-so').val() || '').trim();
+            const han = ($o.find('.lo-moi-han').val() || '').trim();
+
+            if (!so) { toastr.warning('{{ __('message.please_enter_batch_number') }}'); return; }
+            if (so === LO_KHONG_XAC_DINH || so.toLowerCase() === 'new') { toastr.warning('Số lô này không dùng được.'); return; }
+            if ($sel.find('option').filter((i, op) => op.value === so).length) {
+                toastr.warning('{{ __('message.batch_already_exists') }}');
+                return;
+            }
+            if (han && !/^\d{2}-\d{2}-\d{4}$/.test(han)) { toastr.warning('Hạn dùng ghi theo dd-mm-yyyy.'); return; }
+
+            $(`<option data-lot-quantity="0"></option>`).attr('value', so).attr('data-expire-date', han)
+                .text(so + ' (SL: 0)').insertBefore($sel.find('option[value="new"]'));
+            list_new_lot.push({ variant_id: tr.attr('data-id'), lot_number: so, expire_date: han });
+            $o.find('.lo-moi').remove();
+            $sel.val(so).trigger('change');
+        });
+
         $(document).on('change', '.lot_number_select', function() {
             const selectedOption = $(this).find('option:selected');
             const item = $(this).closest('tr');
 
             let id_menu = item.data('id');
             let val = $(this).val();
+
+            if (val === 'new') {
+                item.find('.expire_date').text('');
+                item.find('.quantity').text('0');
+                item.attr('data-lot-quantity', 0);
+                item.find('.quantity-adjust').val(0);
+                item.find('.stock_after_adjust').text('');
+                moOLoMoi($(this));
+                return;
+            }
+            $(this).closest('.lot_number').find('.lo-moi').remove();
             let arr_lot = [];
             $('.list-menu .menu-item[data-id="' + id_menu + '"]').not(item).each(function() {
                 let lotVal = $(this).find('.lot_number_select').val();
@@ -1415,7 +1491,10 @@
         });
 
         // ---------- Ô điều chỉnh: nút − / + ----------
-        const ALLOW_DECIMAL_ADJUST = true;
+        // KHÔNG cho số lẻ: sổ kho đếm nguyên (API từ chối "phải là số nguyên"), mà
+        // cho gõ 1.5 rồi lưu mới báo là bắt người ta làm lại từ đầu. Cờ giữ lại vì
+        // khối lọc ký tự phía dưới đọc nó — bật lên là cho gõ ba số thập phân.
+        const ALLOW_DECIMAL_ADJUST = false;
 
         $(document).on('click', '.btn-minus', function () {
             const $item = $(this).closest('.menu-item');
@@ -1668,6 +1747,7 @@
             PHIEU = null;
             list_new_lot = [];
             sentMenuIds = [];
+            list_new_lot = [];
             moHop(document.getElementById('tplCreate').innerHTML);
         })
 
@@ -1726,7 +1806,8 @@
                 $html.find('textarea.note, .select-categories, .select-menus, .default-to-zero').prop('disabled', true);
             }
 
-            moHop($html.html(), $dich);
+            // Đưa NÚT DOM sang hộp (xem moHop), không đưa chuỗi.
+            moHop($html.children(), $dich);
 
             (p.items || []).forEach(function(it) {
                 themDongHang({
@@ -1803,6 +1884,10 @@
                 handleMessage({ success: false, message: '{{ __('message.product_list_required') }}' });
                 return;
             }
+            if (details.some(function(d) { return d.lot_number === 'new'; })) {
+                handleMessage({ success: false, message: 'Có dòng đang khai lô mới chưa bấm ✓ — nhập số lô rồi bấm ✓, hoặc chọn lô có sẵn.' });
+                return;
+            }
             if (details.some(function(d) { return !d.lot_number; })) {
                 handleMessage({ success: false, message: '{{ __('message.please_enter_complete_lot_number') }}' });
                 return;
@@ -1836,6 +1921,9 @@
 
         $(document).on('click', '.save-order', function() {
             let status = $(this).attr('data-status');
+            // Toast của lần bấm trước (vd "Vui lòng nhập lý do") không được đứng cạnh
+            // toast kết quả của lần này.
+            if (window.toastr) toastr.clear();
             if (status == 3 && !$('#modalReasonCancel .reject_reason').val().trim()) {
                 handleMessage({ success: false, message: '{{ __('message.enter_reject_reason') }}' });
                 return;
