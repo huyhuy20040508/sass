@@ -446,6 +446,152 @@
                 }
             }
         },
+        "/admin/bien-the/{id}/gia-chi-nhanh": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Chỉ liệt kê chi nhánh ĐÃ khai giá riêng. Chi nhánh không có trong danh sách là chi nhánh đang dùng giá gốc.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Giá theo chi nhánh"
+                ],
+                "summary": "Giá riêng theo chi nhánh của một biến thể",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID biến thể",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/domain.GiaChiNhanh"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Khai lại chi nhánh đã có thì ghi đè. Muốn trở lại giá gốc thì XOÁ, đừng khai bằng đúng giá gốc.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Giá theo chi nhánh"
+                ],
+                "summary": "Khai giá riêng cho một chi nhánh",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID biến thể",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Chi nhánh và giá",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.GiaChiNhanhRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/bien-the/{id}/gia-chi-nhanh/{shop_id}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Chi nhánh trở lại dùng giá gốc. Gỡ một thứ vốn không có cũng trả 200 — đó là kết quả người dùng muốn.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Giá theo chi nhánh"
+                ],
+                "summary": "Gỡ giá riêng của một chi nhánh",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID biến thể",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "ID chi nhánh",
+                        "name": "shop_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/ca-lam-viec": {
             "get": {
                 "security": [
@@ -2435,6 +2581,620 @@
                     },
                     "422": {
                         "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/dieu-chinh-ton-kho": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Lọc theo từ khoá (mã phiếu / ghi chú), loại, trạng thái phiếu, trạng thái kho, người lập và khoảng ngày lập.\n`status` và `created_by` nhận nhiều giá trị ngăn bởi dấu phẩy. Không gửi `shop_id` thì cắt theo chi nhánh đang làm việc.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Điều chỉnh tồn kho"
+                ],
+                "summary": "Danh sách phiếu điều chỉnh tồn kho",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Mã phiếu hoặc ghi chú",
+                        "name": "keyword",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "adjust | balance",
+                        "name": "type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "draft | pending | approved | rejected (ngăn bởi dấu phẩy)",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "pending | done | rejected",
+                        "name": "warehouse_status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "id người lập, ngăn bởi dấu phẩy",
+                        "name": "created_by",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Chi nhánh; 0 = mọi chi nhánh",
+                        "name": "shop_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "YYYY-MM-DD",
+                        "name": "from_date",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "YYYY-MM-DD",
+                        "name": "to_date",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "newest | oldest | code_asc | code_desc",
+                        "name": "sort",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Trang, mặc định 1",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Số dòng mỗi trang, mặc định 20",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/domain.PhieuDieuChinh"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "`status` nói nút nào được bấm: draft (lưu tạm), pending (gửi duyệt), approved (duyệt luôn — kho đổi ngay).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Điều chỉnh tồn kho"
+                ],
+                "summary": "Lập phiếu điều chỉnh tồn kho",
+                "parameters": [
+                    {
+                        "description": "Phiếu",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.DieuChinhCreateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/domain.PhieuDieuChinh"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/dieu-chinh-ton-kho/hang-am": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Các lô có tồn âm tại kho của request, đã trừ phần các phiếu cân đối chưa duyệt. Kho không có lô âm nào → 404.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Điều chỉnh tồn kho"
+                ],
+                "summary": "Lô đang âm chờ cân đối",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Chi nhánh; bỏ trống = chi nhánh đang làm việc",
+                        "name": "shop_id",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/domain.HangAm"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/dieu-chinh-ton-kho/mat-hang": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Màn lập phiếu gọi sau khi chọn hàng (vai `getMenu` của v2). Trả cả lô \"Không xác định\" (lot_number rỗng) và lô đang âm.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Điều chỉnh tồn kho"
+                ],
+                "summary": "Hồ sơ + tồn + mọi lô của các mặt hàng tại kho",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "id biến thể, ngăn bởi dấu phẩy",
+                        "name": "ids",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Chi nhánh; bỏ trống = chi nhánh đang làm việc",
+                        "name": "shop_id",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/domain.DieuChinhHang"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/dieu-chinh-ton-kho/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Điều chỉnh tồn kho"
+                ],
+                "summary": "Chi tiết một phiếu điều chỉnh",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID phiếu",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/domain.PhieuDieuChinh"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Chỉ phiếu LƯU TẠM sửa được. `status` pending / approved = lưu xong thì gửi duyệt / duyệt luôn.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Điều chỉnh tồn kho"
+                ],
+                "summary": "Sửa phiếu điều chỉnh",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID phiếu",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Phiếu",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.DieuChinhUpdateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/domain.PhieuDieuChinh"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Chỉ phiếu LƯU TẠM xoá được.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Điều chỉnh tồn kho"
+                ],
+                "summary": "Xoá phiếu điều chỉnh",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID phiếu",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/dieu-chinh-ton-kho/{id}/duyet": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Số tồn của kho đổi theo từng dòng phiếu, trong một transaction. Sau bước này phiếu khoá lại.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Điều chỉnh tồn kho"
+                ],
+                "summary": "Duyệt phiếu điều chỉnh",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID phiếu",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Ghi chú",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/dto.DieuChinhApproveRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/domain.PhieuDieuChinh"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/dieu-chinh-ton-kho/{id}/gui-duyet": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Lưu tạm → chờ duyệt. Chưa đụng tới kho.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Điều chỉnh tồn kho"
+                ],
+                "summary": "Gửi duyệt phiếu điều chỉnh",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID phiếu",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/domain.PhieuDieuChinh"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/dieu-chinh-ton-kho/{id}/tu-choi": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Lưu tạm / chờ duyệt → từ chối, lý do bắt buộc. Không đụng tới kho.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Điều chỉnh tồn kho"
+                ],
+                "summary": "Từ chối phiếu điều chỉnh",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID phiếu",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Lý do",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.DieuChinhRejectRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/domain.PhieuDieuChinh"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
@@ -6789,6 +7549,420 @@
                     },
                     "422": {
                         "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/phieu-dieu-chuyen": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Lọc theo từ khoá (mã phiếu / ghi chú), trạng thái, mặt hàng và khoảng ngày lập.\n`status` nhận nhiều giá trị ngăn bởi dấu phẩy — bộ lọc ngoài bảng là các ô tick.\nKhông gửi `shop_id` thì cắt theo chi nhánh đang làm việc, và cắt theo CẢ HAI ĐẦU: phiếu chi nhánh đó gửi đi lẫn phiếu nó nhận về.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Phiếu điều chuyển"
+                ],
+                "summary": "Danh sách phiếu điều chuyển",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Mã phiếu hoặc ghi chú",
+                        "name": "keyword",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "draft | approved (ngăn bởi dấu phẩy)",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Chi nhánh; 0 = mọi chi nhánh",
+                        "name": "shop_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Lọc phiếu có chứa mặt hàng này",
+                        "name": "variant_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "YYYY-MM-DD",
+                        "name": "from_date",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "YYYY-MM-DD",
+                        "name": "to_date",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "newest | oldest",
+                        "name": "sort",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Trang, mặc định 1",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Số dòng mỗi trang, mặc định 20, tối đa 100",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/domain.PhieuDieuChuyen"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Phiếu lập ra LUÔN ở trạng thái lưu tạm, chưa đụng tới kho. Duyệt đi đường riêng.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Phiếu điều chuyển"
+                ],
+                "summary": "Lập phiếu điều chuyển",
+                "parameters": [
+                    {
+                        "description": "Phiếu",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.DieuChuyenCreateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.DieuChuyenDetail"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/phieu-dieu-chuyen/stats": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Đếm theo CÙNG bộ lọc với danh sách, chỉ bỏ `status` — bốn con số phải nói về cùng một tập phiếu.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Phiếu điều chuyển"
+                ],
+                "summary": "Con số đầu trang phiếu điều chuyển",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/domain.DieuChuyenStats"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/phieu-dieu-chuyen/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Phiếu điều chuyển"
+                ],
+                "summary": "Chi tiết một phiếu điều chuyển",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID phiếu",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.DieuChuyenDetail"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Chỉ phiếu LƯU TẠM sửa được — phiếu đã duyệt khoá lại vì kho hai đầu đã đổi theo nó.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Phiếu điều chuyển"
+                ],
+                "summary": "Sửa phiếu điều chuyển",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID phiếu",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Phiếu",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.DieuChuyenUpdateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.DieuChuyenDetail"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Chỉ phiếu LƯU TẠM xoá được. Phiếu đã duyệt nằm lại trong sổ vì kho hai đầu đã đổi theo nó.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Phiếu điều chuyển"
+                ],
+                "summary": "Xoá phiếu điều chuyển",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID phiếu",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/phieu-dieu-chuyen/{id}/duyet": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Hàng RỜI kho xuất và VÀO kho nhập, cả hai trong cùng một transaction. Sau bước này phiếu khoá lại.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Phiếu điều chuyển"
+                ],
+                "summary": "Duyệt phiếu điều chuyển",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID phiếu",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Ghi chú",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/dto.DieuChuyenApproveRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.DieuChuyenDetail"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
@@ -16799,6 +17973,61 @@
                 }
             }
         },
+        "domain.DieuChinhHang": {
+            "type": "object",
+            "properties": {
+                "cost_price": {
+                    "type": "number"
+                },
+                "lots": {
+                    "description": "Lots là MỌI lô đang có dòng tại kho, kể cả lô \"\" và lô đang âm — khác\nloCuaBienThe (chỉ lô dương có số): phiếu điều chỉnh chính là chỗ chữa\nnhững lô âm ấy.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.TonKhoLo"
+                    }
+                },
+                "product_id": {
+                    "type": "integer"
+                },
+                "product_name": {
+                    "type": "string"
+                },
+                "sku": {
+                    "type": "string"
+                },
+                "stock": {
+                    "description": "Stock là tổng tồn của mặt hàng tại kho.",
+                    "type": "integer"
+                },
+                "unit_name": {
+                    "type": "string"
+                },
+                "variant_id": {
+                    "type": "integer"
+                },
+                "variant_name": {
+                    "type": "string"
+                }
+            }
+        },
+        "domain.DieuChuyenStats": {
+            "type": "object",
+            "properties": {
+                "approved": {
+                    "type": "integer"
+                },
+                "draft": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                },
+                "transferred_amount": {
+                    "description": "TransferredAmount là giá trị hàng đã chuyển thật (chỉ phiếu đã duyệt).",
+                    "type": "number"
+                }
+            }
+        },
         "domain.DonViTinh": {
             "type": "object",
             "properties": {
@@ -17058,6 +18287,77 @@
                     "type": "string"
                 },
                 "template_symbol": {
+                    "type": "string"
+                }
+            }
+        },
+        "domain.GiaChiNhanh": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "price": {
+                    "description": "Price NOT NULL: dòng tồn tại nghĩa là \"chi nhánh này có giá riêng\", nên nó\nphải có số. Muốn trả về giá gốc thì XOÁ dòng, đừng ghi NULL.",
+                    "type": "number"
+                },
+                "product_variant_id": {
+                    "type": "integer"
+                },
+                "shop_id": {
+                    "type": "integer"
+                },
+                "shop_name": {
+                    "description": "ShopName tra kèm khi đọc, bảng không có cột này — màn khai giá bày tên chi\nnhánh chứ không bày id.",
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "domain.HangAm": {
+            "type": "object",
+            "properties": {
+                "expire_date": {
+                    "type": "string"
+                },
+                "future_quantity": {
+                    "type": "integer"
+                },
+                "lot_number": {
+                    "type": "string"
+                },
+                "pending_adjust_quantity": {
+                    "description": "PendingAdjust là tổng số lệch của các phiếu cân đối CHƯA duyệt đang nhắm\nvào lô này; FutureQuantity = Quantity + PendingAdjust. Chỉ liệt kê lô mà\nFutureQuantity vẫn âm — lô đã có phiếu chờ duyệt bù đủ thì không bày ra\nđể lập thêm một phiếu trùng.",
+                    "type": "integer"
+                },
+                "product_id": {
+                    "type": "integer"
+                },
+                "product_name": {
+                    "type": "string"
+                },
+                "quantity": {
+                    "description": "Quantity là số đang âm trong sổ.",
+                    "type": "integer"
+                },
+                "sku": {
+                    "type": "string"
+                },
+                "unit_id": {
+                    "type": "integer"
+                },
+                "unit_name": {
+                    "type": "string"
+                },
+                "variant_id": {
+                    "type": "integer"
+                },
+                "variant_name": {
                     "type": "string"
                 }
             }
@@ -17853,6 +19153,258 @@
                     "type": "integer"
                 },
                 "to_status": {
+                    "type": "string"
+                }
+            }
+        },
+        "domain.PhieuDieuChinh": {
+            "type": "object",
+            "properties": {
+                "approval_date": {
+                    "type": "string"
+                },
+                "approver_name": {
+                    "description": "ApproverName chỉ có khi phiếu ĐÃ DUYỆT — người từ chối không phải người duyệt.",
+                    "type": "string"
+                },
+                "code": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "integer"
+                },
+                "created_by_name": {
+                    "type": "string"
+                },
+                "handled_by": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.PhieuDieuChinhItem"
+                    }
+                },
+                "note": {
+                    "type": "string"
+                },
+                "reject_reason": {
+                    "type": "string"
+                },
+                "shop_id": {
+                    "description": "ShopID là kho bị nắn số, chốt lúc lập phiếu. Lượt duyệt ghi kho theo con số\nnày, KHÔNG theo chi nhánh của người bấm duyệt.",
+                    "type": "integer"
+                },
+                "shop_name": {
+                    "description": "Ba cột dưới đây tra kèm khi đọc lên, bảng không có chúng.",
+                    "type": "string"
+                },
+                "status": {
+                    "description": "draft | pending | approved | rejected",
+                    "type": "string"
+                },
+                "type": {
+                    "description": "adjust | balance",
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "warehouse_status": {
+                    "description": "WarehouseStatus là cột \"Trạng thái kho\" của bảng danh sách v2: rỗng khi kho\nchưa đổi, `done` khi đã duyệt, `rejected` khi từ chối. Suy từ Status.",
+                    "type": "string"
+                }
+            }
+        },
+        "domain.PhieuDieuChinhItem": {
+            "type": "object",
+            "properties": {
+                "adjust_price": {
+                    "type": "number"
+                },
+                "adjust_quantity": {
+                    "type": "integer"
+                },
+                "attachment": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "expire_date": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "inventory_status": {
+                    "description": "InventoryStatus là trạng thái nhập kho của dòng (cột \"Trạng thái tồn\" v2):\n`pending` khi phiếu chưa duyệt, `stocked` khi kho đã đổi. Suy từ phiếu.",
+                    "type": "string"
+                },
+                "lot_number": {
+                    "description": "LotNumber rỗng = LoKhongXacDinh (cùng quy ước với stock_lots).",
+                    "type": "string"
+                },
+                "lots": {
+                    "description": "Lots là các lô đang có của mặt hàng TẠI KHO của phiếu, tra kèm khi đọc một\nphiếu — ô chọn lô của màn sửa đổ danh sách này ra.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.TonKhoLo"
+                    }
+                },
+                "product_id": {
+                    "type": "integer"
+                },
+                "product_name": {
+                    "type": "string"
+                },
+                "quantity": {
+                    "type": "integer"
+                },
+                "sku": {
+                    "type": "string"
+                },
+                "stock_adjustment_id": {
+                    "type": "integer"
+                },
+                "unit_name": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "variant_id": {
+                    "type": "integer"
+                },
+                "variant_name": {
+                    "type": "string"
+                }
+            }
+        },
+        "domain.PhieuDieuChuyen": {
+            "type": "object",
+            "properties": {
+                "approved_at": {
+                    "description": "ApprovedAt là mốc hàng đổi kho — cột \"Ngày nhập kho\" của bảng danh sách.",
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "integer"
+                },
+                "creator_name": {
+                    "type": "string"
+                },
+                "from_shop_id": {
+                    "description": "FromShopID / ToShopID chốt lúc lập phiếu và không đổi nữa. Lượt duyệt ghi\nkho theo hai con số này, KHÔNG theo chi nhánh của người bấm duyệt: thủ kho\nở Quận 1 duyệt giúp một phiếu Quận 7 → Quận 3 là chuyện thường.",
+                    "type": "integer"
+                },
+                "from_shop_name": {
+                    "description": "Bốn cột tên dưới đây tra kèm khi đọc lên, bảng không có chúng. Chỉ có id thì\nmọi màn hình muốn in tên đều phải tự đi tra một lượt nữa.",
+                    "type": "string"
+                },
+                "handled_by": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.PhieuDieuChuyenItem"
+                    }
+                },
+                "items_amount": {
+                    "description": "ItemsAmount là tổng giá trị hàng chuyển theo giá vốn — con số để đối chiếu,\nkhông phải tiền phải trả: hàng vẫn nằm trong cùng một cửa hàng.",
+                    "type": "number"
+                },
+                "note": {
+                    "type": "string"
+                },
+                "receiver_id": {
+                    "description": "ReceiverID là nhân viên ở kho NHẬN, người ký nhận hàng.",
+                    "type": "integer"
+                },
+                "receiver_name": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "to_shop_id": {
+                    "type": "integer"
+                },
+                "to_shop_name": {
+                    "type": "string"
+                },
+                "transfer_code": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "domain.PhieuDieuChuyenItem": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "expire_date": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "line_amount": {
+                    "type": "number"
+                },
+                "lot_number": {
+                    "description": "LotNumber rỗng = không chỉ định lô: lượt xuất rút theo luật kho của cửa\nhàng, lượt nhập vào lô không xác định. Có số lô thì HAI ĐẦU dùng chung\nđúng số ấy — hàng qua kho khác nhưng vẫn là lô đó, hạn đó.",
+                    "type": "string"
+                },
+                "product_id": {
+                    "type": "integer"
+                },
+                "product_name": {
+                    "type": "string"
+                },
+                "product_variant_id": {
+                    "type": "integer"
+                },
+                "quantity": {
+                    "type": "integer"
+                },
+                "remaining_stock": {
+                    "description": "RemainingStock là tồn còn lại của mặt hàng TẠI KHO XUẤT, tra kèm khi đọc\nphiếu — màn sửa kẹp ô nhập theo tình hình HÔM NAY, không phải lúc lập.",
+                    "type": "integer"
+                },
+                "stock_transfer_id": {
+                    "type": "integer"
+                },
+                "unit_cost": {
+                    "type": "number"
+                },
+                "unit_name": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "variant_name": {
+                    "type": "string"
+                },
+                "variant_sku": {
                     "type": "string"
                 }
             }
@@ -19277,6 +20829,41 @@
                 }
             }
         },
+        "domain.TonKhoLo": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "expire_date": {
+                    "description": "ExpireDate là hạn dùng của LÔ. NULL = hàng không có hạn, và FEFO xếp những\nlô ấy xuống cuối chứ không lên đầu như MySQL vẫn xếp NULL.",
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "lot_number": {
+                    "description": "LotNumber rỗng = LoKhongXacDinh.",
+                    "type": "string"
+                },
+                "product_variant_id": {
+                    "type": "integer"
+                },
+                "quantity": {
+                    "type": "integer"
+                },
+                "shop_id": {
+                    "type": "integer"
+                },
+                "unit_cost": {
+                    "description": "UnitCost là giá nhập một đơn vị chính của lô — để TRA CỨU và gợi ý giá cho\nlượt nhập sau. Giá vốn dùng cho báo cáo lãi gộp vẫn là bình quân gia quyền\ntrên ProductVariant.CostPrice; bảng này không đổi cách tính đó.",
+                    "type": "number"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
         "domain.User": {
             "type": "object",
             "properties": {
@@ -19339,7 +20926,7 @@
             "type": "object",
             "properties": {
                 "code": {
-                    "description": "Code là mã ngắn người dùng tự đặt (KEA1, KHOLANH…), luôn viết hoa.",
+                    "description": "Code là mã ngắn người dùng tự đặt (KEA1, KHOLANH…), luôn viết hoa.\n\nDuy nhất TRONG MỘT CHI NHÁNH, không phải trong cả cửa hàng: hai chi nhánh\ncùng đặt \"KEA1\" cho kệ A của mình là chuyện bình thường.",
                     "type": "string"
                 },
                 "created_at": {
@@ -19358,6 +20945,10 @@
                 },
                 "name": {
                     "type": "string"
+                },
+                "shop_id": {
+                    "description": "ShopID là CHI NHÁNH SỞ HỮU cái kệ này (migration 0052).\n\nKệ là một chỗ VẬT LÝ: \"Kệ A\" của Quận 1 và \"Kệ A\" của Quận 7 là hai chỗ\nkhác nhau, ở hai mặt bằng khác nhau. Trước 0052 bảng này để chung cho cả\ncửa hàng, nên ô chọn vị trí trộn kệ của mọi chi nhánh và người soạn hàng ở\nquận này đọc thấy tên kho của quận khác.",
+                    "type": "integer"
                 },
                 "updated_at": {
                     "type": "string"
@@ -19433,6 +21024,10 @@
             "properties": {
                 "access_token": {
                     "type": "string"
+                },
+                "chi_nhanh_id": {
+                    "description": "ChiNhanhID là chi nhánh người này được phân về (hồ sơ nhân sự). null =\nkhông bị buộc vào chi nhánh nào — chủ tiệm, hoặc nhân viên chưa phân công.\n\nShop Admin ghim luôn con số này vào phiên ngay sau khi đăng nhập. Thiếu nó\nthì phiên mở ra ở trạng thái \"chưa chọn chi nhánh\", và mọi lượt ghi kho\nsau đó hoặc bị từ chối, hoặc (trước đây) rơi vào một kho do máy đoán.",
+                    "type": "integer"
                 },
                 "cua_hang_khoa": {
                     "description": "CuaHangKhoa = true: cửa hàng đã HẾT HẠN HỢP ĐỒNG. Phiên vừa cấp vẫn dùng\nđược, nhưng chỉ cho ĐÚNG một đường đọc (gói dịch vụ) — mọi đường khác trả\n403 kèm mã CUA_HANG_KHOA.\n\nChỉ vai trò quản lý mới nhận được phiên như vậy; nhân viên bị từ chối ngay\ntừ lượt đăng nhập. Shop Admin đọc cờ này để đưa người dùng thẳng tới trang\ngói dịch vụ thay vì để họ bấm quanh và nhận lỗi ở từng trang.",
@@ -20489,6 +22084,242 @@
                 }
             }
         },
+        "dto.DieuChinhApproveRequest": {
+            "type": "object",
+            "properties": {
+                "note": {
+                    "type": "string",
+                    "maxLength": 500
+                }
+            }
+        },
+        "dto.DieuChinhCreateRequest": {
+            "type": "object",
+            "required": [
+                "items"
+            ],
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "maxItems": 1000,
+                    "minItems": 1,
+                    "items": {
+                        "$ref": "#/definitions/dto.DieuChinhItemRequest"
+                    }
+                },
+                "note": {
+                    "type": "string",
+                    "maxLength": 500
+                },
+                "shop_id": {
+                    "description": "ShopID = 0 nghĩa là chi nhánh đang làm việc.",
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "draft",
+                        "pending",
+                        "approved"
+                    ]
+                },
+                "type": {
+                    "type": "string",
+                    "enum": [
+                        "adjust",
+                        "balance"
+                    ]
+                }
+            }
+        },
+        "dto.DieuChinhItemRequest": {
+            "type": "object",
+            "required": [
+                "variant_id"
+            ],
+            "properties": {
+                "adjust_quantity": {
+                    "description": "AdjustQuantity là số lệch: dương = cộng vào kho, âm = bớt đi. Dòng bằng 0\nbị bỏ qua.",
+                    "type": "number",
+                    "example": -2
+                },
+                "attachment": {
+                    "description": "Attachment là đường dẫn ảnh chứng từ của dòng, đã tải lên trước.",
+                    "type": "string",
+                    "maxLength": 500
+                },
+                "expire_date": {
+                    "description": "ExpireDate cho lô MỚI (chưa có trong kho), khuôn YYYY-MM-DD hoặc DD-MM-YYYY.\nLô đã có thì bỏ qua — hạn dùng lấy từ sổ lô.",
+                    "type": "string",
+                    "maxLength": 10
+                },
+                "lot_number": {
+                    "description": "LotNumber để trống hoặc \"Không xác định\" = lô không xác định.",
+                    "type": "string",
+                    "maxLength": 50,
+                    "example": "LO-2026-01"
+                },
+                "variant_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "example": 58
+                }
+            }
+        },
+        "dto.DieuChinhRejectRequest": {
+            "type": "object",
+            "required": [
+                "reject_reason"
+            ],
+            "properties": {
+                "reject_reason": {
+                    "type": "string",
+                    "maxLength": 500
+                }
+            }
+        },
+        "dto.DieuChinhUpdateRequest": {
+            "type": "object",
+            "required": [
+                "items"
+            ],
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "maxItems": 1000,
+                    "minItems": 1,
+                    "items": {
+                        "$ref": "#/definitions/dto.DieuChinhItemRequest"
+                    }
+                },
+                "note": {
+                    "type": "string",
+                    "maxLength": 500
+                },
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "draft",
+                        "pending",
+                        "approved"
+                    ]
+                },
+                "updated_at": {
+                    "description": "UpdatedAt là mốc sửa của bản người dùng đang xem — xem DieuChuyenUpdateRequest.",
+                    "type": "string"
+                }
+            }
+        },
+        "dto.DieuChuyenApproveRequest": {
+            "type": "object",
+            "properties": {
+                "note": {
+                    "type": "string",
+                    "maxLength": 500
+                }
+            }
+        },
+        "dto.DieuChuyenCreateRequest": {
+            "type": "object",
+            "required": [
+                "from_shop_id",
+                "items",
+                "to_shop_id"
+            ],
+            "properties": {
+                "from_shop_id": {
+                    "description": "FromShopID / ToShopID BẮT BUỘC và phải khác nhau. Không lấy kho xuất từ\nchi nhánh đang làm việc: thủ kho ở Quận 1 lập giúp một phiếu Quận 7 →\nQuận 3 là chuyện thường, và đoán hộ thì phiếu ghi sai cả hai đầu.",
+                    "type": "integer",
+                    "minimum": 1,
+                    "example": 1
+                },
+                "items": {
+                    "type": "array",
+                    "maxItems": 200,
+                    "minItems": 1,
+                    "items": {
+                        "$ref": "#/definitions/dto.DieuChuyenItemRequest"
+                    }
+                },
+                "note": {
+                    "type": "string",
+                    "maxLength": 500
+                },
+                "receiver_id": {
+                    "description": "ReceiverID là nhân viên ở kho nhận, người ký nhận hàng.",
+                    "type": "integer",
+                    "example": 7
+                },
+                "to_shop_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "example": 2
+                }
+            }
+        },
+        "dto.DieuChuyenItemRequest": {
+            "type": "object",
+            "required": [
+                "quantity",
+                "variant_id"
+            ],
+            "properties": {
+                "lot_number": {
+                    "description": "LotNumber để trống = không chỉ định lô: kho gửi rút theo luật kho của cửa\nhàng, kho nhận vào lô không xác định.",
+                    "type": "string",
+                    "maxLength": 50,
+                    "example": "LO-2026-01"
+                },
+                "quantity": {
+                    "description": "Quantity tính theo ĐƠN VỊ TÍNH CHÍNH. Số NGUYÊN: sổ kho đếm nguyên, nhận\n0,5 rồi làm tròn lúc ghi kho là mỗi phiếu lệch một ít.",
+                    "type": "integer",
+                    "minimum": 1,
+                    "example": 5
+                },
+                "variant_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "example": 58
+                }
+            }
+        },
+        "dto.DieuChuyenUpdateRequest": {
+            "type": "object",
+            "required": [
+                "from_shop_id",
+                "items",
+                "to_shop_id"
+            ],
+            "properties": {
+                "from_shop_id": {
+                    "type": "integer",
+                    "minimum": 1
+                },
+                "items": {
+                    "type": "array",
+                    "maxItems": 200,
+                    "minItems": 1,
+                    "items": {
+                        "$ref": "#/definitions/dto.DieuChuyenItemRequest"
+                    }
+                },
+                "note": {
+                    "type": "string",
+                    "maxLength": 500
+                },
+                "receiver_id": {
+                    "type": "integer"
+                },
+                "to_shop_id": {
+                    "type": "integer",
+                    "minimum": 1
+                },
+                "updated_at": {
+                    "description": "UpdatedAt là mốc sửa của BẢN mà người dùng đang xem, client đọc được lúc mở\nphiếu rồi gửi lại nguyên văn. Lệch với mốc trong database nghĩa là có người\nkhác vừa lưu — xem domain.ErrPhieuVuaBiSua.\n\nBỏ trống thì KHÔNG kiểm: giao diện bản cũ chưa gửi trường này, và chặn\nchúng lại là khoá luôn đường sửa phiếu của những màn chưa kịp cập nhật.",
+                    "type": "string"
+                }
+            }
+        },
         "dto.DoanhThuItem": {
             "type": "object",
             "properties": {
@@ -21002,6 +22833,25 @@
                     "description": "Reason bắt buộc: một khoản tiền ra khỏi két mà không có lý do thì đúng bằng\nmất tiền, chỉ khác là có ghi lại.",
                     "type": "string",
                     "maxLength": 255
+                }
+            }
+        },
+        "dto.GiaChiNhanhRequest": {
+            "type": "object",
+            "required": [
+                "price",
+                "shop_id"
+            ],
+            "properties": {
+                "price": {
+                    "description": "Price phải \u003e 0. Bán giá 0 là chuyện có thật (hàng tặng kèm) nhưng nó được\nkhai bằng khuyến mãi, không phải bằng bảng giá — ở đây số 0 gần như luôn\nlà ô để trống rồi bấm Lưu.",
+                    "type": "number",
+                    "example": 25000
+                },
+                "shop_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "example": 2
                 }
             }
         },
@@ -22971,6 +24821,13 @@
                         "type": "integer"
                     }
                 },
+                "shop_ids": {
+                    "description": "ShopIDs là những chi nhánh chương trình này chạy. BỎ TRỐNG = chạy ở MỌI chi\nnhánh — cùng quy ước với ô \"Chi nhánh\" của mặt hàng, xem migration 0053.",
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
                 "start_at": {
                     "type": "string",
                     "example": "2026-08-10T08:00"
@@ -23019,6 +24876,13 @@
                     "type": "integer"
                 },
                 "product_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "shop_ids": {
+                    "description": "ShopIDs là chi nhánh chương trình chạy. RỖNG = mọi chi nhánh, và giao diện\nphải nói đúng như vậy chứ không hiển thị \"chưa chọn chi nhánh nào\".",
                     "type": "array",
                     "items": {
                         "type": "integer"
@@ -23286,6 +25150,10 @@
                 "supplier_name": {
                     "type": "string",
                     "maxLength": 150
+                },
+                "updated_at": {
+                    "description": "UpdatedAt là mốc sửa của BẢN mà người dùng đang xem, client đọc được lúc mở\nphiếu rồi gửi lại nguyên văn. Lệch với mốc trong database nghĩa là có người\nkhác vừa lưu — xem domain.ErrPhieuVuaBiSua.\n\nBỏ trống thì KHÔNG kiểm: giao diện bản cũ chưa gửi trường này, và chặn\nchúng lại là khoá luôn đường sửa phiếu của những màn chưa kịp cập nhật.",
+                    "type": "string"
                 },
                 "vat_mode": {
                     "type": "string",
@@ -24119,6 +25987,10 @@
                 "supplier_id": {
                     "type": "integer",
                     "minimum": 1
+                },
+                "updated_at": {
+                    "description": "UpdatedAt là mốc sửa của BẢN mà người dùng đang xem, client đọc được lúc mở\nphiếu rồi gửi lại nguyên văn. Lệch với mốc trong database nghĩa là có người\nkhác vừa lưu — xem domain.ErrPhieuVuaBiSua.\n\nBỏ trống thì KHÔNG kiểm: giao diện bản cũ chưa gửi trường này, và chặn\nchúng lại là khoá luôn đường sửa phiếu của những màn chưa kịp cập nhật.",
+                    "type": "string"
                 }
             }
         },
@@ -24940,6 +26812,13 @@
                     "type": "number",
                     "minimum": 0
                 },
+                "shop_ids": {
+                    "description": "ShopIDs là những chi nhánh dùng được mã này. BỎ TRỐNG = mọi chi nhánh.",
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
                 "start_at": {
                     "type": "string",
                     "example": "2026-08-10T08:00"
@@ -24993,6 +26872,13 @@
                 "remaining": {
                     "description": "Remaining là số lượt còn lại, null khi không giới hạn tổng lượt.",
                     "type": "integer"
+                },
+                "shop_ids": {
+                    "description": "ShopIDs là chi nhánh dùng được mã. RỖNG = mọi chi nhánh.",
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
                 },
                 "start_at": {
                     "type": "string",
@@ -25072,6 +26958,81 @@
                 },
                 "total_pages": {
                     "type": "integer"
+                }
+            }
+        },
+        "service.DieuChuyenDetail": {
+            "type": "object",
+            "properties": {
+                "approved_at": {
+                    "description": "ApprovedAt là mốc hàng đổi kho — cột \"Ngày nhập kho\" của bảng danh sách.",
+                    "type": "string"
+                },
+                "can_approve": {
+                    "description": "CanApprove = phiếu còn duyệt được. Trang quản trị dựng nút từ hai cờ này\nthay vì chép lại luật vào giao diện rồi lệch với server.",
+                    "type": "boolean"
+                },
+                "can_edit": {
+                    "description": "CanEdit = phiếu còn sửa/xoá được (chỉ phiếu lưu tạm).",
+                    "type": "boolean"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "integer"
+                },
+                "creator_name": {
+                    "type": "string"
+                },
+                "from_shop_id": {
+                    "description": "FromShopID / ToShopID chốt lúc lập phiếu và không đổi nữa. Lượt duyệt ghi\nkho theo hai con số này, KHÔNG theo chi nhánh của người bấm duyệt: thủ kho\nở Quận 1 duyệt giúp một phiếu Quận 7 → Quận 3 là chuyện thường.",
+                    "type": "integer"
+                },
+                "from_shop_name": {
+                    "description": "Bốn cột tên dưới đây tra kèm khi đọc lên, bảng không có chúng. Chỉ có id thì\nmọi màn hình muốn in tên đều phải tự đi tra một lượt nữa.",
+                    "type": "string"
+                },
+                "handled_by": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.PhieuDieuChuyenItem"
+                    }
+                },
+                "items_amount": {
+                    "description": "ItemsAmount là tổng giá trị hàng chuyển theo giá vốn — con số để đối chiếu,\nkhông phải tiền phải trả: hàng vẫn nằm trong cùng một cửa hàng.",
+                    "type": "number"
+                },
+                "note": {
+                    "type": "string"
+                },
+                "receiver_id": {
+                    "description": "ReceiverID là nhân viên ở kho NHẬN, người ký nhận hàng.",
+                    "type": "integer"
+                },
+                "receiver_name": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "to_shop_id": {
+                    "type": "integer"
+                },
+                "to_shop_name": {
+                    "type": "string"
+                },
+                "transfer_code": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
                 }
             }
         },

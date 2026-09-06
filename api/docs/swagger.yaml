@@ -256,6 +256,47 @@ definitions:
       total:
         type: integer
     type: object
+  domain.DieuChinhHang:
+    properties:
+      cost_price:
+        type: number
+      lots:
+        description: |-
+          Lots là MỌI lô đang có dòng tại kho, kể cả lô "" và lô đang âm — khác
+          loCuaBienThe (chỉ lô dương có số): phiếu điều chỉnh chính là chỗ chữa
+          những lô âm ấy.
+        items:
+          $ref: '#/definitions/domain.TonKhoLo'
+        type: array
+      product_id:
+        type: integer
+      product_name:
+        type: string
+      sku:
+        type: string
+      stock:
+        description: Stock là tổng tồn của mặt hàng tại kho.
+        type: integer
+      unit_name:
+        type: string
+      variant_id:
+        type: integer
+      variant_name:
+        type: string
+    type: object
+  domain.DieuChuyenStats:
+    properties:
+      approved:
+        type: integer
+      draft:
+        type: integer
+      total:
+        type: integer
+      transferred_amount:
+        description: TransferredAmount là giá trị hàng đã chuyển thật (chỉ phiếu đã
+          duyệt).
+        type: number
+    type: object
   domain.DonViTinh:
     properties:
       code:
@@ -458,6 +499,62 @@ definitions:
       tax_code:
         type: string
       template_symbol:
+        type: string
+    type: object
+  domain.GiaChiNhanh:
+    properties:
+      created_at:
+        type: string
+      id:
+        type: integer
+      price:
+        description: |-
+          Price NOT NULL: dòng tồn tại nghĩa là "chi nhánh này có giá riêng", nên nó
+          phải có số. Muốn trả về giá gốc thì XOÁ dòng, đừng ghi NULL.
+        type: number
+      product_variant_id:
+        type: integer
+      shop_id:
+        type: integer
+      shop_name:
+        description: |-
+          ShopName tra kèm khi đọc, bảng không có cột này — màn khai giá bày tên chi
+          nhánh chứ không bày id.
+        type: string
+      updated_at:
+        type: string
+    type: object
+  domain.HangAm:
+    properties:
+      expire_date:
+        type: string
+      future_quantity:
+        type: integer
+      lot_number:
+        type: string
+      pending_adjust_quantity:
+        description: |-
+          PendingAdjust là tổng số lệch của các phiếu cân đối CHƯA duyệt đang nhắm
+          vào lô này; FutureQuantity = Quantity + PendingAdjust. Chỉ liệt kê lô mà
+          FutureQuantity vẫn âm — lô đã có phiếu chờ duyệt bù đủ thì không bày ra
+          để lập thêm một phiếu trùng.
+        type: integer
+      product_id:
+        type: integer
+      product_name:
+        type: string
+      quantity:
+        description: Quantity là số đang âm trong sổ.
+        type: integer
+      sku:
+        type: string
+      unit_id:
+        type: integer
+      unit_name:
+        type: string
+      variant_id:
+        type: integer
+      variant_name:
         type: string
     type: object
   domain.InternalUserStats:
@@ -1077,6 +1174,200 @@ definitions:
       order_id:
         type: integer
       to_status:
+        type: string
+    type: object
+  domain.PhieuDieuChinh:
+    properties:
+      approval_date:
+        type: string
+      approver_name:
+        description: ApproverName chỉ có khi phiếu ĐÃ DUYỆT — người từ chối không
+          phải người duyệt.
+        type: string
+      code:
+        type: string
+      created_at:
+        type: string
+      created_by:
+        type: integer
+      created_by_name:
+        type: string
+      handled_by:
+        type: integer
+      id:
+        type: integer
+      items:
+        items:
+          $ref: '#/definitions/domain.PhieuDieuChinhItem'
+        type: array
+      note:
+        type: string
+      reject_reason:
+        type: string
+      shop_id:
+        description: |-
+          ShopID là kho bị nắn số, chốt lúc lập phiếu. Lượt duyệt ghi kho theo con số
+          này, KHÔNG theo chi nhánh của người bấm duyệt.
+        type: integer
+      shop_name:
+        description: Ba cột dưới đây tra kèm khi đọc lên, bảng không có chúng.
+        type: string
+      status:
+        description: draft | pending | approved | rejected
+        type: string
+      type:
+        description: adjust | balance
+        type: string
+      updated_at:
+        type: string
+      warehouse_status:
+        description: |-
+          WarehouseStatus là cột "Trạng thái kho" của bảng danh sách v2: rỗng khi kho
+          chưa đổi, `done` khi đã duyệt, `rejected` khi từ chối. Suy từ Status.
+        type: string
+    type: object
+  domain.PhieuDieuChinhItem:
+    properties:
+      adjust_price:
+        type: number
+      adjust_quantity:
+        type: integer
+      attachment:
+        type: string
+      created_at:
+        type: string
+      expire_date:
+        type: string
+      id:
+        type: integer
+      inventory_status:
+        description: |-
+          InventoryStatus là trạng thái nhập kho của dòng (cột "Trạng thái tồn" v2):
+          `pending` khi phiếu chưa duyệt, `stocked` khi kho đã đổi. Suy từ phiếu.
+        type: string
+      lot_number:
+        description: LotNumber rỗng = LoKhongXacDinh (cùng quy ước với stock_lots).
+        type: string
+      lots:
+        description: |-
+          Lots là các lô đang có của mặt hàng TẠI KHO của phiếu, tra kèm khi đọc một
+          phiếu — ô chọn lô của màn sửa đổ danh sách này ra.
+        items:
+          $ref: '#/definitions/domain.TonKhoLo'
+        type: array
+      product_id:
+        type: integer
+      product_name:
+        type: string
+      quantity:
+        type: integer
+      sku:
+        type: string
+      stock_adjustment_id:
+        type: integer
+      unit_name:
+        type: string
+      updated_at:
+        type: string
+      variant_id:
+        type: integer
+      variant_name:
+        type: string
+    type: object
+  domain.PhieuDieuChuyen:
+    properties:
+      approved_at:
+        description: ApprovedAt là mốc hàng đổi kho — cột "Ngày nhập kho" của bảng
+          danh sách.
+        type: string
+      created_at:
+        type: string
+      created_by:
+        type: integer
+      creator_name:
+        type: string
+      from_shop_id:
+        description: |-
+          FromShopID / ToShopID chốt lúc lập phiếu và không đổi nữa. Lượt duyệt ghi
+          kho theo hai con số này, KHÔNG theo chi nhánh của người bấm duyệt: thủ kho
+          ở Quận 1 duyệt giúp một phiếu Quận 7 → Quận 3 là chuyện thường.
+        type: integer
+      from_shop_name:
+        description: |-
+          Bốn cột tên dưới đây tra kèm khi đọc lên, bảng không có chúng. Chỉ có id thì
+          mọi màn hình muốn in tên đều phải tự đi tra một lượt nữa.
+        type: string
+      handled_by:
+        type: integer
+      id:
+        type: integer
+      items:
+        items:
+          $ref: '#/definitions/domain.PhieuDieuChuyenItem'
+        type: array
+      items_amount:
+        description: |-
+          ItemsAmount là tổng giá trị hàng chuyển theo giá vốn — con số để đối chiếu,
+          không phải tiền phải trả: hàng vẫn nằm trong cùng một cửa hàng.
+        type: number
+      note:
+        type: string
+      receiver_id:
+        description: ReceiverID là nhân viên ở kho NHẬN, người ký nhận hàng.
+        type: integer
+      receiver_name:
+        type: string
+      status:
+        type: string
+      to_shop_id:
+        type: integer
+      to_shop_name:
+        type: string
+      transfer_code:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  domain.PhieuDieuChuyenItem:
+    properties:
+      created_at:
+        type: string
+      expire_date:
+        type: string
+      id:
+        type: integer
+      line_amount:
+        type: number
+      lot_number:
+        description: |-
+          LotNumber rỗng = không chỉ định lô: lượt xuất rút theo luật kho của cửa
+          hàng, lượt nhập vào lô không xác định. Có số lô thì HAI ĐẦU dùng chung
+          đúng số ấy — hàng qua kho khác nhưng vẫn là lô đó, hạn đó.
+        type: string
+      product_id:
+        type: integer
+      product_name:
+        type: string
+      product_variant_id:
+        type: integer
+      quantity:
+        type: integer
+      remaining_stock:
+        description: |-
+          RemainingStock là tồn còn lại của mặt hàng TẠI KHO XUẤT, tra kèm khi đọc
+          phiếu — màn sửa kẹp ô nhập theo tình hình HÔM NAY, không phải lúc lập.
+        type: integer
+      stock_transfer_id:
+        type: integer
+      unit_cost:
+        type: number
+      unit_name:
+        type: string
+      updated_at:
+        type: string
+      variant_name:
+        type: string
+      variant_sku:
         type: string
     type: object
   domain.PlatformUser:
@@ -2147,6 +2438,35 @@ definitions:
       tong_ton:
         type: integer
     type: object
+  domain.TonKhoLo:
+    properties:
+      created_at:
+        type: string
+      expire_date:
+        description: |-
+          ExpireDate là hạn dùng của LÔ. NULL = hàng không có hạn, và FEFO xếp những
+          lô ấy xuống cuối chứ không lên đầu như MySQL vẫn xếp NULL.
+        type: string
+      id:
+        type: integer
+      lot_number:
+        description: LotNumber rỗng = LoKhongXacDinh.
+        type: string
+      product_variant_id:
+        type: integer
+      quantity:
+        type: integer
+      shop_id:
+        type: integer
+      unit_cost:
+        description: |-
+          UnitCost là giá nhập một đơn vị chính của lô — để TRA CỨU và gợi ý giá cho
+          lượt nhập sau. Giá vốn dùng cho báo cáo lãi gộp vẫn là bình quân gia quyền
+          trên ProductVariant.CostPrice; bảng này không đổi cách tính đó.
+        type: number
+      updated_at:
+        type: string
+    type: object
   domain.User:
     properties:
       access_areas:
@@ -2200,8 +2520,11 @@ definitions:
   domain.ViTri:
     properties:
       code:
-        description: Code là mã ngắn người dùng tự đặt (KEA1, KHOLANH…), luôn viết
-          hoa.
+        description: |-
+          Code là mã ngắn người dùng tự đặt (KEA1, KHOLANH…), luôn viết hoa.
+
+          Duy nhất TRONG MỘT CHI NHÁNH, không phải trong cả cửa hàng: hai chi nhánh
+          cùng đặt "KEA1" cho kệ A của mình là chuyện bình thường.
         type: string
       created_at:
         type: string
@@ -2219,6 +2542,15 @@ definitions:
         type: boolean
       name:
         type: string
+      shop_id:
+        description: |-
+          ShopID là CHI NHÁNH SỞ HỮU cái kệ này (migration 0052).
+
+          Kệ là một chỗ VẬT LÝ: "Kệ A" của Quận 1 và "Kệ A" của Quận 7 là hai chỗ
+          khác nhau, ở hai mặt bằng khác nhau. Trước 0052 bảng này để chung cho cả
+          cửa hàng, nên ô chọn vị trí trộn kệ của mọi chi nhánh và người soạn hàng ở
+          quận này đọc thấy tên kho của quận khác.
+        type: integer
       updated_at:
         type: string
     type: object
@@ -2270,6 +2602,15 @@ definitions:
     properties:
       access_token:
         type: string
+      chi_nhanh_id:
+        description: |-
+          ChiNhanhID là chi nhánh người này được phân về (hồ sơ nhân sự). null =
+          không bị buộc vào chi nhánh nào — chủ tiệm, hoặc nhân viên chưa phân công.
+
+          Shop Admin ghim luôn con số này vào phiên ngay sau khi đăng nhập. Thiếu nó
+          thì phiên mở ra ở trạng thái "chưa chọn chi nhánh", và mọi lượt ghi kho
+          sau đó hoặc bị từ chối, hoặc (trước đây) rơi vào một kho do máy đoán.
+        type: integer
       cua_hang_khoa:
         description: |-
           CuaHangKhoa = true: cửa hàng đã HẾT HẠN HỢP ĐỒNG. Phiên vừa cấp vẫn dùng
@@ -3114,6 +3455,196 @@ definitions:
     - plan_id
     - so_thang
     type: object
+  dto.DieuChinhApproveRequest:
+    properties:
+      note:
+        maxLength: 500
+        type: string
+    type: object
+  dto.DieuChinhCreateRequest:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/dto.DieuChinhItemRequest'
+        maxItems: 1000
+        minItems: 1
+        type: array
+      note:
+        maxLength: 500
+        type: string
+      shop_id:
+        description: ShopID = 0 nghĩa là chi nhánh đang làm việc.
+        type: integer
+      status:
+        enum:
+        - draft
+        - pending
+        - approved
+        type: string
+      type:
+        enum:
+        - adjust
+        - balance
+        type: string
+    required:
+    - items
+    type: object
+  dto.DieuChinhItemRequest:
+    properties:
+      adjust_quantity:
+        description: |-
+          AdjustQuantity là số lệch: dương = cộng vào kho, âm = bớt đi. Dòng bằng 0
+          bị bỏ qua.
+        example: -2
+        type: number
+      attachment:
+        description: Attachment là đường dẫn ảnh chứng từ của dòng, đã tải lên trước.
+        maxLength: 500
+        type: string
+      expire_date:
+        description: |-
+          ExpireDate cho lô MỚI (chưa có trong kho), khuôn YYYY-MM-DD hoặc DD-MM-YYYY.
+          Lô đã có thì bỏ qua — hạn dùng lấy từ sổ lô.
+        maxLength: 10
+        type: string
+      lot_number:
+        description: LotNumber để trống hoặc "Không xác định" = lô không xác định.
+        example: LO-2026-01
+        maxLength: 50
+        type: string
+      variant_id:
+        example: 58
+        minimum: 1
+        type: integer
+    required:
+    - variant_id
+    type: object
+  dto.DieuChinhRejectRequest:
+    properties:
+      reject_reason:
+        maxLength: 500
+        type: string
+    required:
+    - reject_reason
+    type: object
+  dto.DieuChinhUpdateRequest:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/dto.DieuChinhItemRequest'
+        maxItems: 1000
+        minItems: 1
+        type: array
+      note:
+        maxLength: 500
+        type: string
+      status:
+        enum:
+        - draft
+        - pending
+        - approved
+        type: string
+      updated_at:
+        description: UpdatedAt là mốc sửa của bản người dùng đang xem — xem DieuChuyenUpdateRequest.
+        type: string
+    required:
+    - items
+    type: object
+  dto.DieuChuyenApproveRequest:
+    properties:
+      note:
+        maxLength: 500
+        type: string
+    type: object
+  dto.DieuChuyenCreateRequest:
+    properties:
+      from_shop_id:
+        description: |-
+          FromShopID / ToShopID BẮT BUỘC và phải khác nhau. Không lấy kho xuất từ
+          chi nhánh đang làm việc: thủ kho ở Quận 1 lập giúp một phiếu Quận 7 →
+          Quận 3 là chuyện thường, và đoán hộ thì phiếu ghi sai cả hai đầu.
+        example: 1
+        minimum: 1
+        type: integer
+      items:
+        items:
+          $ref: '#/definitions/dto.DieuChuyenItemRequest'
+        maxItems: 200
+        minItems: 1
+        type: array
+      note:
+        maxLength: 500
+        type: string
+      receiver_id:
+        description: ReceiverID là nhân viên ở kho nhận, người ký nhận hàng.
+        example: 7
+        type: integer
+      to_shop_id:
+        example: 2
+        minimum: 1
+        type: integer
+    required:
+    - from_shop_id
+    - items
+    - to_shop_id
+    type: object
+  dto.DieuChuyenItemRequest:
+    properties:
+      lot_number:
+        description: |-
+          LotNumber để trống = không chỉ định lô: kho gửi rút theo luật kho của cửa
+          hàng, kho nhận vào lô không xác định.
+        example: LO-2026-01
+        maxLength: 50
+        type: string
+      quantity:
+        description: |-
+          Quantity tính theo ĐƠN VỊ TÍNH CHÍNH. Số NGUYÊN: sổ kho đếm nguyên, nhận
+          0,5 rồi làm tròn lúc ghi kho là mỗi phiếu lệch một ít.
+        example: 5
+        minimum: 1
+        type: integer
+      variant_id:
+        example: 58
+        minimum: 1
+        type: integer
+    required:
+    - quantity
+    - variant_id
+    type: object
+  dto.DieuChuyenUpdateRequest:
+    properties:
+      from_shop_id:
+        minimum: 1
+        type: integer
+      items:
+        items:
+          $ref: '#/definitions/dto.DieuChuyenItemRequest'
+        maxItems: 200
+        minItems: 1
+        type: array
+      note:
+        maxLength: 500
+        type: string
+      receiver_id:
+        type: integer
+      to_shop_id:
+        minimum: 1
+        type: integer
+      updated_at:
+        description: |-
+          UpdatedAt là mốc sửa của BẢN mà người dùng đang xem, client đọc được lúc mở
+          phiếu rồi gửi lại nguyên văn. Lệch với mốc trong database nghĩa là có người
+          khác vừa lưu — xem domain.ErrPhieuVuaBiSua.
+
+          Bỏ trống thì KHÔNG kiểm: giao diện bản cũ chưa gửi trường này, và chặn
+          chúng lại là khoá luôn đường sửa phiếu của những màn chưa kịp cập nhật.
+        type: string
+    required:
+    - from_shop_id
+    - items
+    - to_shop_id
+    type: object
   dto.DoanhThuItem:
     properties:
       lan_cuoi:
@@ -3539,6 +4070,23 @@ definitions:
     - amount
     - direction
     - reason
+    type: object
+  dto.GiaChiNhanhRequest:
+    properties:
+      price:
+        description: |-
+          Price phải > 0. Bán giá 0 là chuyện có thật (hàng tặng kèm) nhưng nó được
+          khai bằng khuyến mãi, không phải bằng bảng giá — ở đây số 0 gần như luôn
+          là ô để trống rồi bấm Lưu.
+        example: 25000
+        type: number
+      shop_id:
+        example: 2
+        minimum: 1
+        type: integer
+    required:
+    - price
+    - shop_id
     type: object
   dto.GiaHanRequest:
     properties:
@@ -5218,6 +5766,13 @@ definitions:
         items:
           type: integer
         type: array
+      shop_ids:
+        description: |-
+          ShopIDs là những chi nhánh chương trình này chạy. BỎ TRỐNG = chạy ở MỌI chi
+          nhánh — cùng quy ước với ô "Chi nhánh" của mặt hàng, xem migration 0053.
+        items:
+          type: integer
+        type: array
       start_at:
         example: 2026-08-10T08:00
         type: string
@@ -5259,6 +5814,13 @@ definitions:
           danh mục con).
         type: integer
       product_ids:
+        items:
+          type: integer
+        type: array
+      shop_ids:
+        description: |-
+          ShopIDs là chi nhánh chương trình chạy. RỖNG = mọi chi nhánh, và giao diện
+          phải nói đúng như vậy chứ không hiển thị "chưa chọn chi nhánh nào".
         items:
           type: integer
         type: array
@@ -5477,6 +6039,15 @@ definitions:
         type: integer
       supplier_name:
         maxLength: 150
+        type: string
+      updated_at:
+        description: |-
+          UpdatedAt là mốc sửa của BẢN mà người dùng đang xem, client đọc được lúc mở
+          phiếu rồi gửi lại nguyên văn. Lệch với mốc trong database nghĩa là có người
+          khác vừa lưu — xem domain.ErrPhieuVuaBiSua.
+
+          Bỏ trống thì KHÔNG kiểm: giao diện bản cũ chưa gửi trường này, và chặn
+          chúng lại là khoá luôn đường sửa phiếu của những màn chưa kịp cập nhật.
         type: string
       vat_mode:
         enum:
@@ -6133,6 +6704,15 @@ definitions:
       supplier_id:
         minimum: 1
         type: integer
+      updated_at:
+        description: |-
+          UpdatedAt là mốc sửa của BẢN mà người dùng đang xem, client đọc được lúc mở
+          phiếu rồi gửi lại nguyên văn. Lệch với mốc trong database nghĩa là có người
+          khác vừa lưu — xem domain.ErrPhieuVuaBiSua.
+
+          Bỏ trống thì KHÔNG kiểm: giao diện bản cũ chưa gửi trường này, và chặn
+          chúng lại là khoá luôn đường sửa phiếu của những màn chưa kịp cập nhật.
+        type: string
     required:
     - items
     - purchase_order_id
@@ -6831,6 +7411,12 @@ definitions:
           = không yêu cầu).
         minimum: 0
         type: number
+      shop_ids:
+        description: ShopIDs là những chi nhánh dùng được mã này. BỎ TRỐNG = mọi chi
+          nhánh.
+        items:
+          type: integer
+        type: array
       start_at:
         example: 2026-08-10T08:00
         type: string
@@ -6874,6 +7460,11 @@ definitions:
       remaining:
         description: Remaining là số lượt còn lại, null khi không giới hạn tổng lượt.
         type: integer
+      shop_ids:
+        description: ShopIDs là chi nhánh dùng được mã. RỖNG = mọi chi nhánh.
+        items:
+          type: integer
+        type: array
       start_at:
         example: 2026-08-10T08:00
         type: string
@@ -6930,6 +7521,68 @@ definitions:
         type: integer
       total_pages:
         type: integer
+    type: object
+  service.DieuChuyenDetail:
+    properties:
+      approved_at:
+        description: ApprovedAt là mốc hàng đổi kho — cột "Ngày nhập kho" của bảng
+          danh sách.
+        type: string
+      can_approve:
+        description: |-
+          CanApprove = phiếu còn duyệt được. Trang quản trị dựng nút từ hai cờ này
+          thay vì chép lại luật vào giao diện rồi lệch với server.
+        type: boolean
+      can_edit:
+        description: CanEdit = phiếu còn sửa/xoá được (chỉ phiếu lưu tạm).
+        type: boolean
+      created_at:
+        type: string
+      created_by:
+        type: integer
+      creator_name:
+        type: string
+      from_shop_id:
+        description: |-
+          FromShopID / ToShopID chốt lúc lập phiếu và không đổi nữa. Lượt duyệt ghi
+          kho theo hai con số này, KHÔNG theo chi nhánh của người bấm duyệt: thủ kho
+          ở Quận 1 duyệt giúp một phiếu Quận 7 → Quận 3 là chuyện thường.
+        type: integer
+      from_shop_name:
+        description: |-
+          Bốn cột tên dưới đây tra kèm khi đọc lên, bảng không có chúng. Chỉ có id thì
+          mọi màn hình muốn in tên đều phải tự đi tra một lượt nữa.
+        type: string
+      handled_by:
+        type: integer
+      id:
+        type: integer
+      items:
+        items:
+          $ref: '#/definitions/domain.PhieuDieuChuyenItem'
+        type: array
+      items_amount:
+        description: |-
+          ItemsAmount là tổng giá trị hàng chuyển theo giá vốn — con số để đối chiếu,
+          không phải tiền phải trả: hàng vẫn nằm trong cùng một cửa hàng.
+        type: number
+      note:
+        type: string
+      receiver_id:
+        description: ReceiverID là nhân viên ở kho NHẬN, người ký nhận hàng.
+        type: integer
+      receiver_name:
+        type: string
+      status:
+        type: string
+      to_shop_id:
+        type: integer
+      to_shop_name:
+        type: string
+      transfer_code:
+        type: string
+      updated_at:
+        type: string
     type: object
   service.InventoryDetail:
     properties:
@@ -7669,6 +8322,99 @@ paths:
       summary: Sắp xếp lại banner
       tags:
       - Admin - Banners
+  /admin/bien-the/{id}/gia-chi-nhanh:
+    get:
+      description: Chỉ liệt kê chi nhánh ĐÃ khai giá riêng. Chi nhánh không có trong
+        danh sách là chi nhánh đang dùng giá gốc.
+      parameters:
+      - description: ID biến thể
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/domain.GiaChiNhanh'
+                  type: array
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Giá riêng theo chi nhánh của một biến thể
+      tags:
+      - Admin - Giá theo chi nhánh
+    post:
+      consumes:
+      - application/json
+      description: Khai lại chi nhánh đã có thì ghi đè. Muốn trở lại giá gốc thì XOÁ,
+        đừng khai bằng đúng giá gốc.
+      parameters:
+      - description: ID biến thể
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Chi nhánh và giá
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.GiaChiNhanhRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Body'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Khai giá riêng cho một chi nhánh
+      tags:
+      - Admin - Giá theo chi nhánh
+  /admin/bien-the/{id}/gia-chi-nhanh/{shop_id}:
+    delete:
+      description: Chi nhánh trở lại dùng giá gốc. Gỡ một thứ vốn không có cũng trả
+        200 — đó là kết quả người dùng muốn.
+      parameters:
+      - description: ID biến thể
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: ID chi nhánh
+        in: path
+        name: shop_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Gỡ giá riêng của một chi nhánh
+      tags:
+      - Admin - Giá theo chi nhánh
   /admin/ca-lam-viec:
     get:
       description: Lịch sử các ca, mới nhất trước. Lọc theo chi nhánh, trạng thái
@@ -8914,6 +9660,378 @@ paths:
       summary: Thống kê khách hàng
       tags:
       - Admin - Customers
+  /admin/dieu-chinh-ton-kho:
+    get:
+      description: |-
+        Lọc theo từ khoá (mã phiếu / ghi chú), loại, trạng thái phiếu, trạng thái kho, người lập và khoảng ngày lập.
+        `status` và `created_by` nhận nhiều giá trị ngăn bởi dấu phẩy. Không gửi `shop_id` thì cắt theo chi nhánh đang làm việc.
+      parameters:
+      - description: Mã phiếu hoặc ghi chú
+        in: query
+        name: keyword
+        type: string
+      - description: adjust | balance
+        in: query
+        name: type
+        type: string
+      - description: draft | pending | approved | rejected (ngăn bởi dấu phẩy)
+        in: query
+        name: status
+        type: string
+      - description: pending | done | rejected
+        in: query
+        name: warehouse_status
+        type: string
+      - description: id người lập, ngăn bởi dấu phẩy
+        in: query
+        name: created_by
+        type: string
+      - description: Chi nhánh; 0 = mọi chi nhánh
+        in: query
+        name: shop_id
+        type: integer
+      - description: YYYY-MM-DD
+        in: query
+        name: from_date
+        type: string
+      - description: YYYY-MM-DD
+        in: query
+        name: to_date
+        type: string
+      - description: newest | oldest | code_asc | code_desc
+        in: query
+        name: sort
+        type: string
+      - description: Trang, mặc định 1
+        in: query
+        name: page
+        type: integer
+      - description: Số dòng mỗi trang, mặc định 20
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/domain.PhieuDieuChinh'
+                  type: array
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Danh sách phiếu điều chỉnh tồn kho
+      tags:
+      - Admin - Điều chỉnh tồn kho
+    post:
+      consumes:
+      - application/json
+      description: '`status` nói nút nào được bấm: draft (lưu tạm), pending (gửi duyệt),
+        approved (duyệt luôn — kho đổi ngay).'
+      parameters:
+      - description: Phiếu
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.DieuChinhCreateRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/domain.PhieuDieuChinh'
+              type: object
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Lập phiếu điều chỉnh tồn kho
+      tags:
+      - Admin - Điều chỉnh tồn kho
+  /admin/dieu-chinh-ton-kho/{id}:
+    delete:
+      description: Chỉ phiếu LƯU TẠM xoá được.
+      parameters:
+      - description: ID phiếu
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Body'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Xoá phiếu điều chỉnh
+      tags:
+      - Admin - Điều chỉnh tồn kho
+    get:
+      parameters:
+      - description: ID phiếu
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/domain.PhieuDieuChinh'
+              type: object
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Chi tiết một phiếu điều chỉnh
+      tags:
+      - Admin - Điều chỉnh tồn kho
+    put:
+      consumes:
+      - application/json
+      description: Chỉ phiếu LƯU TẠM sửa được. `status` pending / approved = lưu xong
+        thì gửi duyệt / duyệt luôn.
+      parameters:
+      - description: ID phiếu
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Phiếu
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.DieuChinhUpdateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/domain.PhieuDieuChinh'
+              type: object
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Sửa phiếu điều chỉnh
+      tags:
+      - Admin - Điều chỉnh tồn kho
+  /admin/dieu-chinh-ton-kho/{id}/duyet:
+    post:
+      consumes:
+      - application/json
+      description: Số tồn của kho đổi theo từng dòng phiếu, trong một transaction.
+        Sau bước này phiếu khoá lại.
+      parameters:
+      - description: ID phiếu
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Ghi chú
+        in: body
+        name: body
+        schema:
+          $ref: '#/definitions/dto.DieuChinhApproveRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/domain.PhieuDieuChinh'
+              type: object
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Duyệt phiếu điều chỉnh
+      tags:
+      - Admin - Điều chỉnh tồn kho
+  /admin/dieu-chinh-ton-kho/{id}/gui-duyet:
+    post:
+      description: Lưu tạm → chờ duyệt. Chưa đụng tới kho.
+      parameters:
+      - description: ID phiếu
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/domain.PhieuDieuChinh'
+              type: object
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Gửi duyệt phiếu điều chỉnh
+      tags:
+      - Admin - Điều chỉnh tồn kho
+  /admin/dieu-chinh-ton-kho/{id}/tu-choi:
+    post:
+      consumes:
+      - application/json
+      description: Lưu tạm / chờ duyệt → từ chối, lý do bắt buộc. Không đụng tới kho.
+      parameters:
+      - description: ID phiếu
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Lý do
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.DieuChinhRejectRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/domain.PhieuDieuChinh'
+              type: object
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Từ chối phiếu điều chỉnh
+      tags:
+      - Admin - Điều chỉnh tồn kho
+  /admin/dieu-chinh-ton-kho/hang-am:
+    get:
+      description: Các lô có tồn âm tại kho của request, đã trừ phần các phiếu cân
+        đối chưa duyệt. Kho không có lô âm nào → 404.
+      parameters:
+      - description: Chi nhánh; bỏ trống = chi nhánh đang làm việc
+        in: query
+        name: shop_id
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/domain.HangAm'
+                  type: array
+              type: object
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Lô đang âm chờ cân đối
+      tags:
+      - Admin - Điều chỉnh tồn kho
+  /admin/dieu-chinh-ton-kho/mat-hang:
+    get:
+      description: Màn lập phiếu gọi sau khi chọn hàng (vai `getMenu` của v2). Trả
+        cả lô "Không xác định" (lot_number rỗng) và lô đang âm.
+      parameters:
+      - description: id biến thể, ngăn bởi dấu phẩy
+        in: query
+        name: ids
+        required: true
+        type: string
+      - description: Chi nhánh; bỏ trống = chi nhánh đang làm việc
+        in: query
+        name: shop_id
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/domain.DieuChinhHang'
+                  type: array
+              type: object
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Hồ sơ + tồn + mọi lô của các mặt hàng tại kho
+      tags:
+      - Admin - Điều chỉnh tồn kho
   /admin/don-vi-tinh:
     get:
       description: |-
@@ -11691,6 +12809,260 @@ paths:
       summary: Thống kê đơn hàng
       tags:
       - Admin - Orders
+  /admin/phieu-dieu-chuyen:
+    get:
+      description: |-
+        Lọc theo từ khoá (mã phiếu / ghi chú), trạng thái, mặt hàng và khoảng ngày lập.
+        `status` nhận nhiều giá trị ngăn bởi dấu phẩy — bộ lọc ngoài bảng là các ô tick.
+        Không gửi `shop_id` thì cắt theo chi nhánh đang làm việc, và cắt theo CẢ HAI ĐẦU: phiếu chi nhánh đó gửi đi lẫn phiếu nó nhận về.
+      parameters:
+      - description: Mã phiếu hoặc ghi chú
+        in: query
+        name: keyword
+        type: string
+      - description: draft | approved (ngăn bởi dấu phẩy)
+        in: query
+        name: status
+        type: string
+      - description: Chi nhánh; 0 = mọi chi nhánh
+        in: query
+        name: shop_id
+        type: integer
+      - description: Lọc phiếu có chứa mặt hàng này
+        in: query
+        name: variant_id
+        type: integer
+      - description: YYYY-MM-DD
+        in: query
+        name: from_date
+        type: string
+      - description: YYYY-MM-DD
+        in: query
+        name: to_date
+        type: string
+      - description: newest | oldest
+        in: query
+        name: sort
+        type: string
+      - description: Trang, mặc định 1
+        in: query
+        name: page
+        type: integer
+      - description: Số dòng mỗi trang, mặc định 20, tối đa 100
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/domain.PhieuDieuChuyen'
+                  type: array
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Danh sách phiếu điều chuyển
+      tags:
+      - Admin - Phiếu điều chuyển
+    post:
+      consumes:
+      - application/json
+      description: Phiếu lập ra LUÔN ở trạng thái lưu tạm, chưa đụng tới kho. Duyệt
+        đi đường riêng.
+      parameters:
+      - description: Phiếu
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.DieuChuyenCreateRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.DieuChuyenDetail'
+              type: object
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Lập phiếu điều chuyển
+      tags:
+      - Admin - Phiếu điều chuyển
+  /admin/phieu-dieu-chuyen/{id}:
+    delete:
+      description: Chỉ phiếu LƯU TẠM xoá được. Phiếu đã duyệt nằm lại trong sổ vì
+        kho hai đầu đã đổi theo nó.
+      parameters:
+      - description: ID phiếu
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Body'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Xoá phiếu điều chuyển
+      tags:
+      - Admin - Phiếu điều chuyển
+    get:
+      parameters:
+      - description: ID phiếu
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.DieuChuyenDetail'
+              type: object
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Chi tiết một phiếu điều chuyển
+      tags:
+      - Admin - Phiếu điều chuyển
+    put:
+      consumes:
+      - application/json
+      description: Chỉ phiếu LƯU TẠM sửa được — phiếu đã duyệt khoá lại vì kho hai
+        đầu đã đổi theo nó.
+      parameters:
+      - description: ID phiếu
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Phiếu
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.DieuChuyenUpdateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.DieuChuyenDetail'
+              type: object
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Sửa phiếu điều chuyển
+      tags:
+      - Admin - Phiếu điều chuyển
+  /admin/phieu-dieu-chuyen/{id}/duyet:
+    post:
+      consumes:
+      - application/json
+      description: Hàng RỜI kho xuất và VÀO kho nhập, cả hai trong cùng một transaction.
+        Sau bước này phiếu khoá lại.
+      parameters:
+      - description: ID phiếu
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Ghi chú
+        in: body
+        name: body
+        schema:
+          $ref: '#/definitions/dto.DieuChuyenApproveRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.DieuChuyenDetail'
+              type: object
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Duyệt phiếu điều chuyển
+      tags:
+      - Admin - Phiếu điều chuyển
+  /admin/phieu-dieu-chuyen/stats:
+    get:
+      description: Đếm theo CÙNG bộ lọc với danh sách, chỉ bỏ `status` — bốn con số
+        phải nói về cùng một tập phiếu.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/domain.DieuChuyenStats'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Con số đầu trang phiếu điều chuyển
+      tags:
+      - Admin - Phiếu điều chuyển
   /admin/phieu-mua-hang:
     get:
       description: |-

@@ -80,6 +80,8 @@ type Handlers struct {
 	TraHangNCC *handler.TraHangNCCHandler
 	// DieuChuyen — chuyển hàng giữa hai kho (Quản lý kho → Phiếu điều chuyển).
 	DieuChuyen *handler.PhieuDieuChuyenHandler
+	// DieuChinh — nắn số tồn của một kho theo chứng từ (Quản lý kho → Điều chỉnh tồn kho).
+	DieuChinh *handler.PhieuDieuChinhHandler
 	// GiaChiNhanh — giá bán riêng của từng chi nhánh cho một biến thể.
 	GiaChiNhanh *handler.GiaChiNhanhHandler
 	// Thue — thuế suất (Hàng hóa → Thuế).
@@ -766,6 +768,23 @@ func New(
 			q.Dat(manage, http.MethodPut, "/phieu-dieu-chuyen/:id", "phieu-dieu-chuyen.sua", h.DieuChuyen.Update)
 			q.Dat(manage, http.MethodPost, "/phieu-dieu-chuyen/:id/duyet", "phieu-dieu-chuyen.duyet", h.DieuChuyen.Approve)
 			q.Dat(manage, http.MethodDelete, "/phieu-dieu-chuyen/:id", "phieu-dieu-chuyen.xoa", h.DieuChuyen.Delete)
+
+			// Phiếu điều chỉnh tồn kho — nắn số tồn của MỘT kho theo chứng từ.
+			//
+			// "hang-am" đứng TRƯỚC ":id" để gin không hiểu nhầm nó là một ID.
+			//
+			// Duyệt đi đường RIÊNG với quyền riêng: đó là lúc duy nhất số tồn
+			// đổi theo phiếu. Từ chối dùng quyền sửa, như huỷ phiếu mua.
+			q.Dat(manage, http.MethodGet, "/dieu-chinh-ton-kho", "dieu-chinh-ton-kho.xem", h.DieuChinh.List)
+			q.Dat(manage, http.MethodGet, "/dieu-chinh-ton-kho/hang-am", "dieu-chinh-ton-kho.xem", h.DieuChinh.HangAm)
+			q.Dat(manage, http.MethodGet, "/dieu-chinh-ton-kho/mat-hang", "dieu-chinh-ton-kho.xem", h.DieuChinh.MatHang)
+			q.Dat(manage, http.MethodPost, "/dieu-chinh-ton-kho", "dieu-chinh-ton-kho.them", h.DieuChinh.Create)
+			q.Dat(manage, http.MethodGet, "/dieu-chinh-ton-kho/:id", "dieu-chinh-ton-kho.xem", h.DieuChinh.Get)
+			q.Dat(manage, http.MethodPut, "/dieu-chinh-ton-kho/:id", "dieu-chinh-ton-kho.sua", h.DieuChinh.Update)
+			q.Dat(manage, http.MethodPost, "/dieu-chinh-ton-kho/:id/gui-duyet", "dieu-chinh-ton-kho.sua", h.DieuChinh.Submit)
+			q.Dat(manage, http.MethodPost, "/dieu-chinh-ton-kho/:id/duyet", "dieu-chinh-ton-kho.duyet", h.DieuChinh.Approve)
+			q.Dat(manage, http.MethodPost, "/dieu-chinh-ton-kho/:id/tu-choi", "dieu-chinh-ton-kho.sua", h.DieuChinh.Reject)
+			q.Dat(manage, http.MethodDelete, "/dieu-chinh-ton-kho/:id", "dieu-chinh-ton-kho.xoa", h.DieuChinh.Delete)
 
 			// Giá bán riêng theo chi nhánh — gắn vào một BIẾN THỂ.
 			//

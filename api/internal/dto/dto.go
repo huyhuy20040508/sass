@@ -2877,6 +2877,66 @@ type DieuChuyenApproveRequest struct {
 }
 
 // ---------------------------------------------------------------------
+//  Phiếu điều chỉnh tồn kho — nắn lại số tồn của một kho theo chứng từ
+// ---------------------------------------------------------------------
+
+// DieuChinhItemRequest — một dòng hàng điều chỉnh.
+//
+// Client nói BA thứ: mặt hàng nào, lô nào, lệch bao nhiêu (có dấu). Tên hàng,
+// mã, đơn vị, giá vốn, tồn hiện tại đều tra lại ở danh mục và ở sổ lô.
+//
+// Số lượng nhận dạng số thực vì trang quản trị (PHP) mã hoá 2 thành 2.0, nhưng
+// phải là số NGUYÊN — sổ kho đếm nguyên; service kiểm và trả 422 nếu có phần lẻ.
+type DieuChinhItemRequest struct {
+	VariantID uint `json:"variant_id" binding:"required,min=1" example:"58"`
+	// LotNumber để trống hoặc "Không xác định" = lô không xác định.
+	LotNumber string `json:"lot_number" binding:"omitempty,max=50" example:"LO-2026-01"`
+	// ExpireDate cho lô MỚI (chưa có trong kho), khuôn YYYY-MM-DD hoặc DD-MM-YYYY.
+	// Lô đã có thì bỏ qua — hạn dùng lấy từ sổ lô.
+	ExpireDate string `json:"expire_date" binding:"omitempty,max=10"`
+	// AdjustQuantity là số lệch: dương = cộng vào kho, âm = bớt đi. Dòng bằng 0
+	// bị bỏ qua.
+	AdjustQuantity float64 `json:"adjust_quantity" example:"-2"`
+	// Attachment là đường dẫn ảnh chứng từ của dòng, đã tải lên trước.
+	Attachment string `json:"attachment" binding:"omitempty,max=500"`
+}
+
+// DieuChinhCreateRequest — payload lập phiếu điều chỉnh.
+//
+// `status` nói nút nào được bấm, đúng ba nút của v2: draft (lưu tạm), pending
+// (gửi duyệt), approved (duyệt luôn — kho đổi ngay trong cùng lượt gọi).
+type DieuChinhCreateRequest struct {
+	// ShopID = 0 nghĩa là chi nhánh đang làm việc.
+	ShopID uint   `json:"shop_id"`
+	Type   string `json:"type" binding:"omitempty,oneof=adjust balance"`
+	Status string `json:"status" binding:"omitempty,oneof=draft pending approved"`
+	Note   string `json:"note" binding:"omitempty,max=500"`
+
+	Items []DieuChinhItemRequest `json:"items" binding:"required,min=1,max=1000,dive"`
+}
+
+// DieuChinhUpdateRequest — sửa phiếu. Chỉ phiếu LƯU TẠM sửa được; `status`
+// pending / approved nghĩa là lưu xong thì gửi duyệt / duyệt luôn.
+type DieuChinhUpdateRequest struct {
+	// UpdatedAt là mốc sửa của bản người dùng đang xem — xem DieuChuyenUpdateRequest.
+	UpdatedAt string `json:"updated_at"`
+	Status    string `json:"status" binding:"omitempty,oneof=draft pending approved"`
+	Note      string `json:"note" binding:"omitempty,max=500"`
+
+	Items []DieuChinhItemRequest `json:"items" binding:"required,min=1,max=1000,dive"`
+}
+
+// DieuChinhApproveRequest — duyệt phiếu: kho đổi số theo phiếu.
+type DieuChinhApproveRequest struct {
+	Note string `json:"note" binding:"omitempty,max=500"`
+}
+
+// DieuChinhRejectRequest — từ chối phiếu, lý do bắt buộc.
+type DieuChinhRejectRequest struct {
+	RejectReason string `json:"reject_reason" binding:"required,max=500"`
+}
+
+// ---------------------------------------------------------------------
 //  Giá bán theo chi nhánh
 // ---------------------------------------------------------------------
 

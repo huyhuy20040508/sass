@@ -203,6 +203,23 @@ func handleServiceError(c *gin.Context, err error) {
 	case errors.Is(err, domain.ErrDieuChuyenThieuTon):
 		response.Error(c, 422, "Kho xuất không đủ hàng: "+
 			strings.TrimPrefix(err.Error(), domain.ErrDieuChuyenThieuTon.Error()+": "))
+	// Phiếu điều chỉnh tồn kho
+	case errors.Is(err, domain.ErrDieuChinhEmpty):
+		response.Error(c, 422, "Phiếu điều chỉnh phải có ít nhất một dòng hàng có số lệch khác 0")
+	case errors.Is(err, domain.ErrDieuChinhLocked):
+		response.Error(c, 409, "Phiếu đã duyệt hoặc đã từ chối nên không sửa được. "+
+			"Kho đã đổi theo nó — muốn chữa thì lập phiếu điều chỉnh mới")
+	case errors.Is(err, domain.ErrDieuChinhSaiTrangThai):
+		response.Error(c, 409, "Phiếu không ở trạng thái cho phép thao tác này")
+	case errors.Is(err, domain.ErrDieuChinhTrungLo):
+		response.Error(c, 422, "Cùng một mặt hàng không được chọn trùng lô trong một phiếu")
+	case errors.Is(err, domain.ErrDieuChinhKhongCoHangAm):
+		response.Error(c, 404, "Kho đang không có hàng hoá nào âm cả")
+	// err đã kèm tên mặt hàng và cặp số — in nguyên, vì "không đủ hàng" chung
+	// chung thì không biết sửa dòng nào.
+	case errors.Is(err, domain.ErrDieuChinhThieuTon):
+		response.Error(c, 422, "Kho không đủ hàng để bớt: "+
+			strings.TrimPrefix(err.Error(), domain.ErrDieuChinhThieuTon.Error()+": "))
 	// Trả hàng nhà cung cấp
 	case errors.Is(err, domain.ErrSupplierReturnEmpty):
 		response.Error(c, 422, "Phiếu trả hàng phải có ít nhất một dòng hàng")

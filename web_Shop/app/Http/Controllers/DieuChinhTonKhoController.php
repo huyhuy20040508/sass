@@ -78,9 +78,6 @@ class DieuChinhTonKhoController extends Controller
 
     public const MUC_SO_DONG = [10, 20, 30, 40, 50];
 
-    /** Trạng thái "đang làm" của hồ sơ nhân viên — khớp domain.NhanSuDangLam. */
-    public const NHAN_SU_DANG_LAM = 'dang_lam';
-
     public function __construct(protected ApiClient $api) {}
 
     // ---------------------------------------------------------------------
@@ -196,6 +193,36 @@ class DieuChinhTonKhoController extends Controller
         }
     }
 
+    /**
+     * Hồ sơ + tồn + mọi lô của các mặt hàng vừa chọn — vai `getMenu` của v2. Ô tìm
+     * hàng (matHang) chỉ để gõ tìm; lô thì hỏi ở đây vì đường dùng chung của phiếu
+     * mua chỉ bày lô dương, còn màn này phải thấy cả lô "Không xác định" đang âm.
+     */
+    public function loHang(Request $request)
+    {
+        $ids = collect(explode(',', (string) $request->query('ids', '')))
+            ->map(fn ($v) => (int) trim($v))->filter()->unique()->values()->all();
+        if ($ids === []) {
+            return response()->json(['data' => [], 'message' => 'Chưa chọn mặt hàng nào.'], 422);
+        }
+
+        try {
+            $res = $this->api->dieuChinhTonKhoMatHang($ids);
+            if (! $res->successful()) {
+                return response()->json(
+                    ['data' => [], 'message' => $res->json('message') ?: 'Không đọc được lô hàng.'],
+                    $res->status() >= 400 ? $res->status() : 502,
+                );
+            }
+
+            return response()->json(['data' => $res->json('data') ?? []]);
+        } catch (\Throwable $e) {
+            Log::error('Doc lo hang cho phieu dieu chinh failed', ['msg' => $e->getMessage()]);
+
+            return response()->json(['data' => [], 'message' => 'Không kết nối được API.'], 502);
+        }
+    }
+
     /** Hàng đang âm chờ cân đối — nguồn của hộp "Cân đối hàng âm". */
     public function hangAm(Request $request)
     {
@@ -278,16 +305,16 @@ class DieuChinhTonKhoController extends Controller
         } catch (\Throwable $e) {
             Log::error('Tao phieu dieu chinh failed', ['msg' => $e->getMessage()]);
 
-            return back()->withInput()->with('error', 'Không kết nối được API. Vui lòng thử lại.');
+            return $this->traLoiGhi($request, 'Không kết nối được API. Vui lòng thử lại.', false);
         }
 
         if (! $res->successful()) {
-            return back()->withInput()->with('error', $this->loi($res, 'Lập phiếu không thành công.'));
+            return $this->traLoiGhi($request, $this->loi($res, 'Lập phiếu không thành công.'), false, $res->status());
         }
 
         $ma = $res->json('data.code') ?? '';
 
-        return $this->veDanhSach($request)->with('success', $this->cauLuu($data['status'], $ma));
+        return $this->traLoiGhi($request, $this->cauLuu($data['status'], $ma));
     }
 
     /** Sửa phiếu — API chỉ nhận phiếu lưu tạm. */
@@ -300,16 +327,37 @@ class DieuChinhTonKhoController extends Controller
         } catch (\Throwable $e) {
             Log::error('Sua phieu dieu chinh failed', ['id' => $id, 'msg' => $e->getMessage()]);
 
-            return back()->withInput()->with('error', 'Không kết nối được API. Vui lòng thử lại.');
+            return $this->traLoiGhi($request, 'Không kết nối được API. Vui lòng thử lại.', false);
         }
 
         if (! $res->successful()) {
-            return back()->withInput()->with('error', $this->loi($res, 'Cập nhật phiếu không thành công.'));
+            return $this->traLoiGhi($request, $this->loi($res, 'Cập nhật phiếu không thành công.'), false, $res->status());
         }
 
         $ma = $res->json('data.code') ?? '';
 
-        return $this->veDanhSach($request)->with('success', $this->cauLuu($data['status'], $ma));
+        return $this->traLoiGhi($request, $this->cauLuu($data['status'], $ma));
+    }
+
+    /**
+     * Trả lời một lượt GHI từ hộp thoại, theo đúng lối bên gọi đang dùng.
+     *
+     * Hộp thoại lưu bằng AJAX (V2.luuHop) và chờ JSON: lưu được thì nó tự đóng
+     * hộp, bắn toast rồi nạp lại danh sách tại chỗ — đúng cách v2 làm
+     * (`$('#modalCreate').modal('hide'); list(1);`). Lưu hỏng thì hộp Ở NGUYÊN
+     * cùng lưới hàng vừa gõ, người dùng sửa đúng chỗ sai rồi bấm lại.
+     *
+     * Lối cũ (form gửi thật, tải lại trang) vẫn giữ cho ai gọi không qua AJAX.
+     */
+    protected function traLoiGhi(Request $request, string $cau, bool $ok = true, int $ma = 422)
+    {
+        if ($request->expectsJson()) {
+            return response()->json(['success' => $ok, 'message' => $cau], $ok ? 200 : max(400, $ma));
+        }
+
+        return $ok
+            ? $this->veDanhSach($request)->with('success', $cau)
+            : back()->withInput()->with('error', $cau);
     }
 
     /** Gửi duyệt phiếu lưu tạm. */
@@ -546,15 +594,20 @@ class DieuChinhTonKhoController extends Controller
         ];
     }
 
-    /** Nhân viên đang làm — ô lọc "Người tạo". */
+    /**
+     * Tài khoản nội bộ đang hoạt động — ô lọc "Người tạo" và ô "Người lập" của
+     * hộp phiếu. Lấy TÀI KHOẢN (users) chứ không phải hồ sơ nhân sự: API ghi
+     * `created_by` bằng id tài khoản đăng nhập, lọc theo id nhân sự là không
+     * bao giờ khớp.
+     */
     protected function danhMucNhanVien(): array
     {
         try {
-            $res = $this->api->nhanSu(['status' => self::NHAN_SU_DANG_LAM]);
+            $res = $this->api->users(['status' => 'active', 'page_size' => 100]);
 
             return $res->successful() ? ($res->json('data') ?? []) : [];
         } catch (\Throwable $e) {
-            Log::error('Load nhan su cho phieu dieu chinh failed', ['msg' => $e->getMessage()]);
+            Log::error('Load tai khoan cho phieu dieu chinh failed', ['msg' => $e->getMessage()]);
 
             return [];
         }
