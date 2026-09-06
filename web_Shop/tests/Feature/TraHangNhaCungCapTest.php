@@ -195,15 +195,30 @@ class TraHangNhaCungCapTest extends TestCase
             || str_contains($req->url(), 'page_size=10'));
     }
 
-    /** Xuất mang theo đúng bộ lọc đang xem. */
-    public function test_xuat_csv(): void
+    /**
+     * Xuất ra .xlsx THẬT, mang theo đúng bộ lọc đang xem.
+     *
+     * Từng là CSV đội tên "Xuất Excel" — Excel mở được nhưng mất số 0 đầu của
+     * số điện thoại và cột nào cũng thành chữ. Mã phiếu nằm trong sheet1.xml
+     * của gói zip; đọc bằng ZipArchive chứ không dò chuỗi trên dữ liệu nén.
+     */
+    public function test_xuat_xlsx(): void
     {
         $this->fakeApi();
 
         $res = $this->withSession($this->phien())->get('/admin/supplier-returns/export');
 
         $res->assertOk();
-        $this->assertStringContainsString('.csv', $res->headers->get('Content-Disposition'));
-        $this->assertStringContainsString('PTH20260901001', $res->streamedContent());
+        $this->assertStringContainsString('.xlsx', $res->headers->get('Content-Disposition'));
+        $this->assertSame('PK', substr($res->getContent(), 0, 2), 'Tệp không phải xlsx (zip).');
+
+        $tep = tempnam(sys_get_temp_dir(), 'xlsx');
+        file_put_contents($tep, $res->getContent());
+        $zip = new \ZipArchive;
+        $this->assertTrue($zip->open($tep));
+        $sheet = $zip->getFromName('xl/worksheets/sheet1.xml');
+        $zip->close();
+        unlink($tep);
+        $this->assertStringContainsString('PTH20260901001', (string) $sheet);
     }
 }

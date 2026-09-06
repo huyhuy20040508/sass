@@ -243,49 +243,39 @@ class DieuChinhTonKhoController extends Controller
         }
     }
 
-    /** Xuất đúng phần đang lọc, lấy hết trang chứ không chỉ trang đang xem. */
+    /** Xuất đúng phần đang lọc ra .xlsx, lấy hết trang chứ không chỉ trang đang xem. */
     public function export(Request $request)
     {
-        $filters = $this->filters($request);
-        $query = $this->query($filters);
-        $query['page'] = 1;
-        $query['page_size'] = 1000;
+        $query = $this->query($this->filters($request));
 
         try {
-            $res = $this->api->dieuChinhTonKho($query);
-            $list = $res->successful() ? ($res->json('data') ?? []) : [];
+            $list = $this->docHetTrang(fn (array $q) => $this->api->dieuChinhTonKho($q), $query);
         } catch (\Throwable $e) {
             Log::error('Export phieu dieu chinh failed', ['msg' => $e->getMessage()]);
 
-            return back()->with('error', 'Không kết nối được API để xuất tệp.');
+            return back()->with('error', $e instanceof \RuntimeException ? $e->getMessage() : 'Không kết nối được API để xuất tệp.');
         }
 
-        $ten = 'dieu-chinh-ton-kho-'.date('Ymd-His').'.csv';
+        $hang = [[
+            'STT', 'Mã điều chỉnh', 'Loại', 'Người tạo', 'Ngày tạo', 'Người duyệt',
+            'Trạng thái phiếu', 'Lý do từ chối', 'Trạng thái kho', 'Ghi chú',
+        ]];
+        foreach ($list as $i => $p) {
+            $hang[] = [
+                $i + 1,
+                (string) ($p['code'] ?? ''),
+                self::LOAI_PHIEU[$p['type'] ?? 'adjust'] ?? '',
+                (string) ($p['created_by_name'] ?? ''),
+                $this->ngay($p['created_at'] ?? null),
+                (string) ($p['approver_name'] ?? ''),
+                self::TRANG_THAI[$p['status'] ?? ''] ?? '',
+                (string) ($p['reject_reason'] ?? ''),
+                self::TRANG_THAI_KHO[$p['warehouse_status'] ?? ''] ?? '',
+                (string) ($p['note'] ?? ''),
+            ];
+        }
 
-        return response()->streamDownload(function () use ($list) {
-            $out = fopen('php://output', 'w');
-            fwrite($out, "\xEF\xBB\xBF");
-            fputcsv($out, [
-                'STT', 'Mã điều chỉnh', 'Loại', 'Người tạo', 'Ngày tạo', 'Người duyệt',
-                'Trạng thái phiếu', 'Lý do từ chối', 'Trạng thái kho', 'Ghi chú',
-            ]);
-
-            foreach ($list as $i => $p) {
-                fputcsv($out, [
-                    $i + 1,
-                    $p['code'] ?? '',
-                    self::LOAI_PHIEU[$p['type'] ?? 'adjust'] ?? '',
-                    $p['created_by_name'] ?? '',
-                    $this->ngay($p['created_at'] ?? null),
-                    $p['approver_name'] ?? '',
-                    self::TRANG_THAI[$p['status'] ?? ''] ?? '',
-                    $p['reject_reason'] ?? '',
-                    self::TRANG_THAI_KHO[$p['warehouse_status'] ?? ''] ?? '',
-                    $p['note'] ?? '',
-                ]);
-            }
-            fclose($out);
-        }, $ten, ['Content-Type' => 'text/csv; charset=UTF-8']);
+        return $this->taiXlsx($hang, 'dieu-chinh-ton-kho-'.date('Ymd-His'), 'Dieu chinh ton kho');
     }
 
     // ---------------------------------------------------------------------
@@ -633,23 +623,6 @@ class DieuChinhTonKhoController extends Controller
 
             return null;
         }
-    }
-
-    /** Lấy câu lỗi API nói ra, kể cả lỗi theo từng ô. */
-    protected function loi($res, string $macDinh): string
-    {
-        if ($cau = $res->json('message')) {
-            return $cau;
-        }
-        $o = $res->json('errors');
-        if (is_array($o)) {
-            $dau = reset($o);
-            if (is_string($dau) && $dau !== '') {
-                return $dau;
-            }
-        }
-
-        return $macDinh;
     }
 
     /** Gọi API rồi quay lại danh sách, in nguyên văn lời API khi hỏng. */
