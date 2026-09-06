@@ -2561,6 +2561,27 @@ type TrangThaiDonViTinhRequest struct {
 	IsActive *bool `json:"is_active" binding:"required"`
 }
 
+// ---------- Loại thu chi (Thu chi → Loại thu chi) ----------
+
+// LoaiThuChiRequest — payload tạo một phân loại thu hoặc chi.
+//
+// Type dùng con trỏ vì 0 là giá trị HỢP LỆ (loại thu): để uint8 trần thì
+// `binding:"required"` coi 0 là "chưa gửi" và mọi lượt thêm loại thu bị từ chối,
+// còn bỏ required đi thì gửi thiếu `type` lại lặng lẽ thành loại thu.
+type LoaiThuChiRequest struct {
+	Type *uint8 `json:"type" binding:"required,oneof=0 1"`
+	Name string `json:"name" binding:"required,max=255"`
+}
+
+// SuaLoaiThuChiRequest — sửa CHỈ đổi tên.
+//
+// Cố ý không có `type`: đổi vế thu/chi của một loại đang có phiếu trỏ vào là
+// mọi phiếu cũ nhảy sang bên kia trong các bảng cộng dồn. Nhận trường ấy rồi bỏ
+// qua thì người gọi tưởng đã đổi được — không nhận là câu trả lời rõ hơn.
+type SuaLoaiThuChiRequest struct {
+	Name string `json:"name" binding:"required,max=255"`
+}
+
 // ---------- Vị trí (Hàng hóa → Vị trí) ----------
 
 // ViTriRequest — payload tạo/sửa vị trí.

@@ -68,6 +68,9 @@ type Handlers struct {
 	QuyTacMa *handler.QuyTacMaHandler
 	// ThuocTinh — thuộc tính và giá trị của nó (Hàng hóa → Thuộc tính).
 	ThuocTinh *handler.ThuocTinhHandler
+	// LoaiThuChi — loại thu chi (Thu chi → Loại thu chi).
+	LoaiThuChi *handler.LoaiThuChiHandler
+
 	// DonViTinh — đơn vị tính (Hàng hóa → Đơn vị).
 	DonViTinh *handler.DonViTinhHandler
 	// ViTri — chỗ để hàng trong cửa hàng/kho (Hàng hóa → Vị trí).
@@ -536,6 +539,13 @@ func New(
 			q.Dat(manage, http.MethodPut, "/don-vi-tinh/:id/trang-thai", "don-vi-tinh.sua", h.DonViTinh.DoiTrangThai)
 			q.Dat(manage, http.MethodDelete, "/don-vi-tinh/:id", "don-vi-tinh.xoa", h.DonViTinh.Delete)
 
+			// Loại thu chi — bảng tra cho phiếu thu và phiếu chi. Cùng tầng
+			// quyền với đơn vị tính: khung phân loại, không phải việc của quầy.
+			q.Dat(manage, http.MethodGet, "/loai-thu-chi", "loai-thu-chi.xem", h.LoaiThuChi.List)
+			q.Dat(manage, http.MethodPost, "/loai-thu-chi", "loai-thu-chi.them", h.LoaiThuChi.Create)
+			q.Dat(manage, http.MethodGet, "/loai-thu-chi/:id", "loai-thu-chi.xem", h.LoaiThuChi.Get)
+			q.Dat(manage, http.MethodPut, "/loai-thu-chi/:id", "loai-thu-chi.sua", h.LoaiThuChi.Update)
+			q.Dat(manage, http.MethodDelete, "/loai-thu-chi/:id", "loai-thu-chi.xoa", h.LoaiThuChi.Delete)
 			// Vị trí — chỗ để hàng ("Kệ A - Tầng 1", "Kho lạnh"). Cùng khuôn và
 			// cùng tầng quyền với đơn vị tính: khung phân loại của mặt hàng.
 			q.Dat(manage, http.MethodGet, "/vi-tri", "vi-tri.xem", h.ViTri.List)

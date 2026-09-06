@@ -17,6 +17,7 @@ use App\Http\Controllers\TonKhoChiNhanhController;
 use App\Http\Controllers\NhaCungCapController;
 use App\Http\Controllers\PhieuDieuChuyenController;
 use App\Http\Controllers\PhieuMuaHangController;
+use App\Http\Controllers\LoaiThuChiController;
 use App\Http\Controllers\NhanSuController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\OrderController;
@@ -507,6 +508,14 @@ Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:quan_ly', 'chi.v2'])->
         Route::post('/staff/{id}/reset-password', [NhanSuController::class, 'resetPassword'])
             ->whereNumber('id')->name('nhan-su.resetPassword');
         Route::delete('/staff/{id}', [NhanSuController::class, 'destroy'])->whereNumber('id')->name('nhan-su.destroy');
+
+        // Loại thu chi — bảng tra cho phiếu thu / phiếu chi (module Thu chi).
+        // Đường dẫn /cashbook/* để header nhận ra module đang mở. Chủ tiệm mới
+        // được sửa khung phân loại; người đứng quầy chỉ chọn nó lúc lập phiếu.
+        Route::get('/cashbook/categories', [LoaiThuChiController::class, 'index'])->name('loai-thu-chi.index');
+        Route::post('/cashbook/categories', [LoaiThuChiController::class, 'store'])->name('loai-thu-chi.store');
+        Route::put('/cashbook/categories/{id}', [LoaiThuChiController::class, 'update'])->whereNumber('id')->name('loai-thu-chi.update');
+        Route::delete('/cashbook/categories/{id}', [LoaiThuChiController::class, 'destroy'])->whereNumber('id')->name('loai-thu-chi.destroy');
 
         // Chi nhánh — các ĐIỂM BÁN của chính cửa hàng này (bảng `shops` bên API),
         // không phải khách hàng của nhà cung cấp.

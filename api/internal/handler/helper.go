@@ -451,6 +451,13 @@ func handleServiceError(c *gin.Context, err error) {
 		response.ValidationError(c, map[string]string{
 			"name": "Tên đơn vị này đã có trong cửa hàng",
 		})
+	// Loại thu chi — trùng tên trong cùng vế thu/chi, và loại hệ thống khoá lại.
+	case errors.Is(err, domain.ErrLoaiThuChiTrungTen):
+		response.ValidationError(c, map[string]string{
+			"name": "Tên phân loại này đã có trong cửa hàng",
+		})
+	case errors.Is(err, domain.ErrLoaiThuChiMacDinh):
+		response.Error(c, 409, "Đây là loại thu chi do hệ thống dựng, có phiếu tự sinh trỏ vào nên không sửa hay xoá được")
 	// Vị trí — cùng hai lỗi trùng với đơn vị tính.
 	case errors.Is(err, domain.ErrViTriTrungMa):
 		response.ValidationError(c, map[string]string{

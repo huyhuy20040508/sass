@@ -116,7 +116,7 @@
     $statisticDefaultRoute = '#';
     $routeUlMenu = route('admin.products.index');
     $routeUlWarehouse = route('admin.nha-cung-cap.index');
-    $routeUlCashbook = '#';
+    $routeUlCashbook = route('admin.loai-thu-chi.index');
     $routeUlEmployee = route('admin.nhan-su.index');
     $routeUlCrm = '#';
     $routeUlSettings = route('admin.chi-nhanh.index');
@@ -126,6 +126,9 @@
 
     // Tab trong module NHÂN SỰ.
     $employeePer = true;                // Danh sách nhân sự — ĐÃ CÓ
+
+    // Tab trong module THU CHI — cùng luật: màn nào chưa dựng thì giấu.
+    $incomeExpenseTypePer = true;       // Loại thu chi — ĐÃ CÓ
 
     /*
        Tab trong module KHO — CHỈ bày màn đã dựng.
@@ -535,6 +538,16 @@
                             <a href="#"
                                 class="sub-nav-btn">
                                 {{ __('message.warehouse_report') }}
+                            </a>
+                        @endif
+                    @endif
+
+                    {{-- 4. THU CHI --}}
+                    @if($ulCashbookPer && $isCashbookSection)
+                        @if($incomeExpenseTypePer)
+                            <a href="{{ route('admin.loai-thu-chi.index') }}"
+                                class="sub-nav-btn {{ request()->routeIs('admin.loai-thu-chi.*') ? 'active' : '' }}">
+                                {{ __('message.type_of_income_expense') }}
                             </a>
                         @endif
                     @endif

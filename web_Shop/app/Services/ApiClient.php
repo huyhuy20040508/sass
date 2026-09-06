@@ -1992,4 +1992,28 @@ class ApiClient
             'contact' => implode(' — ', $contact),
         ];
     }
+
+    // ---------- Loại thu chi (Thu chi → Loại thu chi) ----------
+
+    /** Toàn bộ phân loại thu và chi của cửa hàng. Mỗi dòng {id, type 0 thu/1 chi, name, is_default}. */
+    public function loaiThuChi(): Response
+    {
+        return $this->get('/admin/loai-thu-chi');
+    }
+
+    public function taoLoaiThuChi(array $payload): Response
+    {
+        return $this->post('/admin/loai-thu-chi', $payload);
+    }
+
+    /** Chỉ đổi tên — không đổi thu/chi vì phiếu cũ đang trỏ vào. */
+    public function suaLoaiThuChi(int $id, array $payload): Response
+    {
+        return $this->put("/admin/loai-thu-chi/{$id}", $payload);
+    }
+
+    public function xoaLoaiThuChi(int $id): Response
+    {
+        return $this->delete("/admin/loai-thu-chi/{$id}");
+    }
 }

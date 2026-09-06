@@ -32,6 +32,7 @@ class ChiHienGiaoDienV2
         'admin.phieu-dieu-chuyen.index',
         'admin.chi-nhanh.index',
         'admin.nhan-su.index',
+        'admin.loai-thu-chi.index',
     ];
 
     /**
