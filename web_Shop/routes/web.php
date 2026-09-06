@@ -503,6 +503,9 @@ Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:quan_ly', 'chi.v2'])->
         // Công tắc trạng thái trên bảng danh sách — chỉ đổi một cột.
         Route::put('/staff/{id}/status', [NhanSuController::class, 'updateStatus'])
             ->whereNumber('id')->name('nhan-su.updateStatus');
+        // Đặt lại mật khẩu mặc định cho tài khoản của hồ sơ (nút của v2).
+        Route::post('/staff/{id}/reset-password', [NhanSuController::class, 'resetPassword'])
+            ->whereNumber('id')->name('nhan-su.resetPassword');
         Route::delete('/staff/{id}', [NhanSuController::class, 'destroy'])->whereNumber('id')->name('nhan-su.destroy');
 
         // Chi nhánh — các ĐIỂM BÁN của chính cửa hàng này (bảng `shops` bên API),

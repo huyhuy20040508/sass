@@ -603,7 +603,10 @@ func (s *authService) LoginShop(ctx context.Context, req dto.ShopLoginRequest) (
 	}
 	res.Tenant = shop
 	res.CuaHangKhoa = khoa
-	res.ChiNhanhID = s.chiNhanhCuaNguoi(ctx, user.ID)
+	res.ChiNhanhIDs = s.chiNhanhCuaNguoi(ctx, user.ID)
+	if len(res.ChiNhanhIDs) > 0 {
+		res.ChiNhanhID = &res.ChiNhanhIDs[0]
+	}
 
 	return res, nil
 }
@@ -976,26 +979,29 @@ func (s *authService) Refresh(ctx context.Context, refreshToken string) (*dto.Au
 		return nil, err
 	}
 	res.CuaHangKhoa = khoa
-	res.ChiNhanhID = s.chiNhanhCuaNguoi(ctx, user.ID)
+	res.ChiNhanhIDs = s.chiNhanhCuaNguoi(ctx, user.ID)
+	if len(res.ChiNhanhIDs) > 0 {
+		res.ChiNhanhID = &res.ChiNhanhIDs[0]
+	}
 
 	return res, nil
 }
 
-// chiNhanhCuaNguoi tra chi nhánh mà tài khoản này được phân về. nil = không bị
-// buộc vào chi nhánh nào (chủ tiệm, hoặc nhân viên chưa phân công).
+// chiNhanhCuaNguoi tra các chi nhánh mà tài khoản này được phân về (phần tử đầu
+// là chi nhánh chính). Rỗng = không bị buộc vào chi nhánh nào.
 //
 // Lỗi đọc sổ trả nil chứ không chặn lượt đăng nhập: một trục trặc database
 // không được phép biến thành "không ai vào được phần mềm".
-func (s *authService) chiNhanhCuaNguoi(ctx context.Context, userID uint) *uint {
+func (s *authService) chiNhanhCuaNguoi(ctx context.Context, userID uint) []uint {
 	if s.nhanVien == nil || userID == 0 {
 		return nil
 	}
-	id, err := s.nhanVien.ChiNhanhCuaTaiKhoan(ctx, userID)
+	ids, err := s.nhanVien.ChiNhanhCuaTaiKhoan(ctx, userID)
 	if err != nil {
 		return nil
 	}
 
-	return id
+	return ids
 }
 
 func (s *authService) Me(ctx context.Context, userID uint) (*domain.User, error) {

@@ -861,6 +861,8 @@ func New(
 			q.Dat(manage, http.MethodPut, "/nhan-su/:id", "nhan-su.sua", h.NhanSu.Update)
 			// Công tắc trạng thái trên bảng danh sách — chỉ đổi một cột.
 			q.Dat(manage, http.MethodPut, "/nhan-su/:id/trang-thai", "nhan-su.sua", h.NhanSu.DoiTrangThai)
+			// Đặt lại mật khẩu mặc định cho tài khoản của hồ sơ (nút của v2).
+			q.Dat(manage, http.MethodPost, "/nhan-su/:id/dat-lai-mat-khau", "nhan-su.sua", h.NhanSu.DatLaiMatKhau)
 			q.Dat(manage, http.MethodDelete, "/nhan-su/:id", "nhan-su.xoa", h.NhanSu.Delete)
 
 			// Phân quyền theo chức năng. "danh-muc" phải đứng TRƯỚC /:id, nếu không

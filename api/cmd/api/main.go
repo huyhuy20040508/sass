@@ -425,7 +425,7 @@ func main() {
 	// trò cấp được, tên đăng nhập, email trùng, hạn mức tài khoản của hợp đồng),
 	// và chép lại năm luật đó ở tầng nhân sự là chép thiếu một cái.
 	quyenRepo := repository.NewQuyenRepository(db)
-	nhanSuSvc := service.NewNhanSuService(nhanSuRepo, chiNhanhRepo, userSvc, quyenRepo, quyTacMaRepo)
+	nhanSuSvc := service.NewNhanSuService(nhanSuRepo, chiNhanhRepo, userSvc, quyenRepo, quyTacMaRepo, settingSvc)
 	nhomQuyenSvc := service.NewNhomQuyenService(quyenRepo, userRepo)
 	// Hub SSE + service thông báo: đơn mới hiện ngay trên trang admin và trạng thái
 	// đơn hiện ngay ở trang tài khoản của khách, không cần tải lại trang.

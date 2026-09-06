@@ -117,12 +117,15 @@
     $routeUlMenu = route('admin.products.index');
     $routeUlWarehouse = route('admin.nha-cung-cap.index');
     $routeUlCashbook = '#';
-    $routeUlEmployee = '#';
+    $routeUlEmployee = route('admin.nhan-su.index');
     $routeUlCrm = '#';
     $routeUlSettings = route('admin.chi-nhanh.index');
 
     // Tab trong module CÀI ĐẶT — cùng luật: màn nào chưa dựng thì giấu.
     $branchPer = true;                  // Quản lý chi nhánh — ĐÃ CÓ
+
+    // Tab trong module NHÂN SỰ.
+    $employeePer = true;                // Danh sách nhân sự — ĐÃ CÓ
 
     /*
        Tab trong module KHO — CHỈ bày màn đã dựng.
@@ -532,6 +535,16 @@
                             <a href="#"
                                 class="sub-nav-btn">
                                 {{ __('message.warehouse_report') }}
+                            </a>
+                        @endif
+                    @endif
+
+                    {{-- 5. NHÂN SỰ --}}
+                    @if($ulEmployeePer && $isHumanSection)
+                        @if($employeePer)
+                            <a href="{{ route('admin.nhan-su.index') }}"
+                                class="sub-nav-btn {{ request()->routeIs('admin.nhan-su.*') ? 'active' : '' }}">
+                                {{ __('message.personnel-list') }}
                             </a>
                         @endif
                     @endif

@@ -3,6 +3,8 @@ package domain
 import (
 	"context"
 	"errors"
+	"strconv"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -22,7 +24,10 @@ type NhanVien struct {
 	// ShopID NULL được: cửa hàng một điểm bán thì "làm ở chi nhánh nào" chưa có
 	// nghĩa. UserID NULL = người này không có tài khoản đăng nhập.
 	ShopID *uint `json:"shop_id"`
-	UserID *uint `json:"user_id"`
+	// ShopIDs là CSV id các chi nhánh người này được làm ("1,3"); NULL = mọi chi
+	// nhánh (như 'all' của v2). ShopID ở trên là chi nhánh CHÍNH = phần tử đầu.
+	ShopIDs StringOrNull `json:"shop_ids"`
+	UserID  *uint        `json:"user_id"`
 
 	Code     string `json:"code"`
 	FullName string `json:"full_name"`
@@ -54,10 +59,13 @@ type NhanVien struct {
 	Allowance      float64    `json:"allowance"`
 	CommissionRate float64    `json:"commission_rate"`
 
-	Note      StringOrNull   `json:"note"`
-	CreatedAt time.Time      `json:"created_at"`
-	UpdatedAt time.Time      `json:"updated_at"`
-	DeletedAt gorm.DeletedAt `json:"-" gorm:"index"`
+	Note StringOrNull `json:"note"`
+	// AllowOutsideArea — cho phép dùng ứng dụng ngoài phạm vi hoạt động của chi
+	// nhánh (allow_access_outside_area_scope của v2). Mặc định cho phép.
+	AllowOutsideArea bool           `json:"allow_outside_area"`
+	CreatedAt        time.Time      `json:"created_at"`
+	UpdatedAt        time.Time      `json:"updated_at"`
+	DeletedAt        gorm.DeletedAt `json:"-" gorm:"index"`
 }
 
 func (NhanVien) TableName() string { return "employees" }
@@ -137,6 +145,9 @@ type NhanVienRepository interface {
 	ExistsByCode(ctx context.Context, code string, excludeID uint) (bool, error)
 	// ExistsByName chặn hai hồ sơ cùng tên trong một cửa hàng.
 	ExistsByName(ctx context.Context, name string, excludeID uint) (bool, error)
+	// ExistsByCot kiểm trùng MỘT cột định danh (phone, email, id_number) trong
+	// cửa hàng, như v2 kiểm unique ở tầng ứng dụng. Bỏ qua hồ sơ đã xoá mềm.
+	ExistsByCot(ctx context.Context, cot, giaTri string, excludeID uint) (bool, error)
 	// ExistsByUser cho biết tài khoản này đã có hồ sơ nhân sự khác nhận chưa —
 	// uq_employees_user chỉ cho một hồ sơ giữ một tài khoản.
 	ExistsByUser(ctx context.Context, userID uint, excludeID uint) (bool, error)
@@ -154,13 +165,14 @@ type NhanVienRepository interface {
 	// và tách ra thì chỗ gọi phải nhớ hỏi đủ — quên một câu là lỗ hổng im lặng.
 	RangBuocCuaTaiKhoan(ctx context.Context, userID uint) (coCaChuaDong bool, coSoQuy bool, err error)
 
-	// ChiNhanhCuaTaiKhoan trả về chi nhánh mà tài khoản này được phân về.
+	// ChiNhanhCuaTaiKhoan trả về các chi nhánh mà tài khoản này được phân về
+	// (phần tử đầu là chi nhánh chính).
 	//
-	// nil = KHÔNG bị buộc vào chi nhánh nào: hoặc người này chưa có hồ sơ nhân sự
-	// (chủ tiệm), hoặc hồ sơ chưa khai chi nhánh (tiệm một điểm bán). Cả hai
+	// Rỗng = KHÔNG bị buộc vào chi nhánh nào: hoặc người này chưa có hồ sơ nhân
+	// sự (chủ tiệm), hoặc hồ sơ chưa khai chi nhánh (tiệm một điểm bán). Cả hai
 	// trường hợp đều được làm ở mọi chi nhánh — đây là chốt CHẶN người đã bị phân
 	// công, không phải chốt cấp quyền cho người chưa.
-	ChiNhanhCuaTaiKhoan(ctx context.Context, userID uint) (*uint, error)
+	ChiNhanhCuaTaiKhoan(ctx context.Context, userID uint) ([]uint, error)
 }
 
 // Lỗi nghiệp vụ của module nhân sự. Ba lỗi riêng chứ không gộp vào ErrConflict:
@@ -185,4 +197,28 @@ var (
 	// tiền ấy còn tra ra được tên người ghi. Nghỉ việc thì đặt trạng thái
 	// "đã nghỉ" — hồ sơ ở lại, tài khoản vẫn bị khoá.
 	ErrNhanSuDaGhiSoQuy = errors.New("nhân viên này đã ghi sổ quỹ")
+	// ErrNhanSuChuaCoTaiKhoan — đặt lại mật khẩu cho hồ sơ chưa từng cấp tài khoản.
+	ErrNhanSuChuaCoTaiKhoan = errors.New("hồ sơ này chưa có tài khoản đăng nhập")
 )
+
+// ChiNhanhTuCSV đọc cột shop_ids ("1,3") thành danh sách id; rỗng -> nil.
+func ChiNhanhTuCSV(s string) []uint {
+	var ra []uint
+	for _, p := range strings.Split(s, ",") {
+		if n, err := strconv.ParseUint(strings.TrimSpace(p), 10, 64); err == nil && n > 0 {
+			ra = append(ra, uint(n))
+		}
+	}
+
+	return ra
+}
+
+// ChiNhanhRaCSV ghi danh sách id thành chuỗi cho cột shop_ids.
+func ChiNhanhRaCSV(ids []uint) string {
+	parts := make([]string, 0, len(ids))
+	for _, id := range ids {
+		parts = append(parts, strconv.FormatUint(uint64(id), 10))
+	}
+
+	return strings.Join(parts, ",")
+}

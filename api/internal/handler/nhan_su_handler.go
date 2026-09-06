@@ -197,6 +197,31 @@ func (h *NhanSuHandler) DoiTrangThai(c *gin.Context) {
 	response.OKMessage(c, "Đã cập nhật trạng thái làm việc", nv)
 }
 
+// DatLaiMatKhau godoc
+//
+//	@Summary		Đặt lại mật khẩu mặc định cho tài khoản của hồ sơ
+//	@Description	Mật khẩu về giá trị cấu hình `staff_default_password` (rỗng thì mặc định phần mềm).
+//	@Tags			Admin - Nhân sự
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			id	path		int	true	"ID hồ sơ"
+//	@Success		200	{object}	response.Body
+//	@Failure		404	{object}	response.Body
+//	@Failure		409	{object}	response.Body
+//	@Router			/admin/nhan-su/{id}/dat-lai-mat-khau [post]
+func (h *NhanSuHandler) DatLaiMatKhau(c *gin.Context) {
+	id, ok := parseUintParam(c, "id")
+	if !ok {
+		return
+	}
+	if err := h.svc.DatLaiMatKhau(c.Request.Context(), id, currentActor(c)); err != nil {
+		handleServiceError(c, err)
+
+		return
+	}
+	response.OKMessage(c, "Đã đặt lại mật khẩu mặc định cho tài khoản này", nil)
+}
+
 // Delete godoc
 //
 //	@Summary		Xoá hồ sơ nhân viên

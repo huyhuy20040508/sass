@@ -29,11 +29,11 @@ type soNhanSu struct {
 	// phương thức khác thì panic nil — đúng ý: middleware này chỉ được phép hỏi
 	// sổ nhân sự đúng một câu.
 	domain.NhanVienRepository
-	cua *uint
+	cua []uint
 	err error
 }
 
-func (s soNhanSu) ChiNhanhCuaTaiKhoan(context.Context, uint) (*uint, error) {
+func (s soNhanSu) ChiNhanhCuaTaiKhoan(context.Context, uint) ([]uint, error) {
 	return s.cua, s.err
 }
 
@@ -89,7 +89,7 @@ func TestChiNhanhDangLam_NhanVienGoHeaderVanBiGhim(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	kho := uint(7)
-	r := dungEngineChiNhanh(domain.RoleStaff, 42, soNhanSu{cua: &kho})
+	r := dungEngineChiNhanh(domain.RoleStaff, 42, soNhanSu{cua: []uint{kho}})
 
 	ma, than := goiThu(t, r, "")
 	if ma != http.StatusOK {
@@ -108,7 +108,7 @@ func TestChiNhanhDangLam_ChuTiemKhongBiGhim(t *testing.T) {
 
 	kho := uint(7)
 	// Sổ nhân sự CÓ trả về chi nhánh, nhưng vai trò không phải nhân viên.
-	r := dungEngineChiNhanh(domain.RoleAdmin, 42, soNhanSu{cua: &kho})
+	r := dungEngineChiNhanh(domain.RoleAdmin, 42, soNhanSu{cua: []uint{kho}})
 
 	ma, than := goiThu(t, r, "")
 	if ma != http.StatusOK {
@@ -155,7 +155,7 @@ func TestChiNhanhDangLam_NguoiBiPhanCongThiCoCoGhim(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	kho := uint(7)
-	nv := dungEngineChiNhanh(domain.RoleStaff, 42, soNhanSu{cua: &kho})
+	nv := dungEngineChiNhanh(domain.RoleStaff, 42, soNhanSu{cua: []uint{kho}})
 
 	// Không khai header.
 	if _, than := goiThu(t, nv, ""); !strings.Contains(than, `"ghim":true`) {
@@ -167,7 +167,7 @@ func TestChiNhanhDangLam_NguoiBiPhanCongThiCoCoGhim(t *testing.T) {
 	}
 
 	// Chủ tiệm chọn kho 7: KHÔNG ghim, họ đổi được.
-	chu := dungEngineChiNhanh(domain.RoleAdmin, 42, soNhanSu{cua: &kho})
+	chu := dungEngineChiNhanh(domain.RoleAdmin, 42, soNhanSu{cua: []uint{kho}})
 	if _, than := goiThu(t, chu, "7"); strings.Contains(than, `"ghim":true`) {
 		t.Fatalf("chủ tiệm không được bị ghim, nhận: %s", than)
 	}
@@ -179,7 +179,7 @@ func TestChiNhanhDangLam_NhanVienKhaiKhoKhacThiBiTuChoi(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	kho := uint(7)
-	r := dungEngineChiNhanh(domain.RoleStaff, 42, soNhanSu{cua: &kho})
+	r := dungEngineChiNhanh(domain.RoleStaff, 42, soNhanSu{cua: []uint{kho}})
 
 	if ma, than := goiThu(t, r, "9"); ma != http.StatusForbidden {
 		t.Fatalf("khai kho không phải của mình phải bị chặn 403, nhận %d: %s", ma, than)

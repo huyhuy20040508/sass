@@ -25,6 +25,8 @@ use Illuminate\Support\Facades\Log;
  */
 class NhanSuController extends Controller
 {
+    use \App\Http\Controllers\Concerns\TraLoiHopThoai;
+
     /** Nhãn NGẮN cho thanh điều hướng. Tiêu đề trang là TITLE_PAGE bên dưới. */
     public const TITLE = 'Nhân sự';
 
@@ -158,9 +160,9 @@ class NhanSuController extends Controller
         $list = [];
 
         try {
-            $res = $this->api->nhanSu(array_filter($filters, fn ($v) => $v !== '' && $v !== 0));
+            $res = $this->api->nhanSu($this->queryApi($filters));
             if ($res->successful()) {
-                $list = $res->json('data') ?? [];
+                $list = $this->locTaiCho($res->json('data') ?? [], $filters);
             } else {
                 Log::warning('Load nhan su failed', ['status' => $res->status()]);
                 $error = $res->json('message') ?: 'Không tải được danh sách nhân sự.';
@@ -178,7 +180,7 @@ class NhanSuController extends Controller
         $soTrang = max(1, (int) ceil($tong / $soDong));
         $trang = min(max(1, (int) $request->query('page', 1)), $soTrang);
 
-        $view = view('nhan-su.index', [
+        $view = view('v2::nhan-su.index', [
             'list' => array_slice($list, ($trang - 1) * $soDong, $soDong),
             'tong' => $tong,
             'dangLam' => $dangLam,
@@ -340,7 +342,9 @@ class NhanSuController extends Controller
         $ve = redirect()->route('admin.nhan-su.index');
 
         if ($loi === []) {
-            return $ve->with('success', $viec.' '.$ok.' hồ sơ.');
+            return request()->expectsJson()
+                ? response()->json(['success' => true, 'message' => $viec.' '.$ok.' hồ sơ.'])
+                : $ve->with('success', $viec.' '.$ok.' hồ sơ.');
         }
 
         $chiTiet = collect($loi)
@@ -352,9 +356,13 @@ class NhanSuController extends Controller
         //
         // Báo bằng 'error' kể cả khi có phần thành công — lượt bulk hỏng một phần
         // mà hiện lên nền xanh thì không ai đọc tới vế thứ hai.
-        return $ve->with('error', $ok > 0
+        $cau = $ok > 0
             ? $viec.' '.$ok.' hồ sơ. Phần còn lại chưa được — '.$chiTiet
-            : 'Không hồ sơ nào được xử lý — '.$chiTiet);
+            : 'Không hồ sơ nào được xử lý — '.$chiTiet;
+
+        return request()->expectsJson()
+            ? response()->json(['success' => false, 'message' => $cau], 422)
+            : $ve->with('error', $cau);
     }
 
     /**
@@ -373,11 +381,11 @@ class NhanSuController extends Controller
      */
     public function export(Request $request)
     {
-        $filters = array_filter($this->filters($request), fn ($v) => $v !== '' && $v !== 0);
+        $filters = $this->filters($request);
 
         try {
-            $res = $this->api->nhanSu($filters);
-            $list = $res->successful() ? ($res->json('data') ?? []) : [];
+            $res = $this->api->nhanSu($this->queryApi($filters));
+            $list = $res->successful() ? $this->locTaiCho($res->json('data') ?? [], $filters) : [];
         } catch (\Throwable $e) {
             Log::error('Export nhan su failed', ['msg' => $e->getMessage()]);
 
@@ -427,6 +435,15 @@ class NhanSuController extends Controller
     protected static function ngayGon(?string $ngay): string
     {
         return filled($ngay) ? Carbon::parse($ngay)->format('d/m/Y') : '';
+    }
+
+    /** Đặt lại mật khẩu mặc định cho tài khoản của hồ sơ (nút của v2). */
+    public function resetPassword(Request $request, int $id)
+    {
+        return $this->send(
+            fn () => $this->api->datLaiMatKhauNhanSu($id),
+            'Đã đặt lại mật khẩu mặc định cho tài khoản này.'
+        );
     }
 
     /**
@@ -502,16 +519,61 @@ class NhanSuController extends Controller
 
     protected function filters(Request $request): array
     {
-        $caLam = (string) $request->query('work_shift', '');
         $status = (string) $request->query('status', '');
+        // Ba ô lọc chọn NHIỀU (chi nhánh, ca, giới tính); nhận cả dạng một giá trị.
+        $mang = fn (string $khoa, array $hopLe) => array_values(array_intersect(
+            array_map('strval', (array) $request->query($khoa, [])), $hopLe
+        ));
 
         return [
             'keyword' => trim((string) $request->query('keyword', '')),
             'status' => isset(self::TRANG_THAI[$status]) ? $status : '',
-            // Hai khoá dưới đây là hàng lọc "Nâng cao" của màn hình.
-            'work_shift' => isset(self::CA_LAM[$caLam]) ? $caLam : '',
-            'shop_id' => max(0, (int) $request->query('shop_id', 0)),
+            'work_shift' => $mang('work_shift', array_keys(self::CA_LAM)),
+            'gender' => $mang('gender', array_keys(self::GIOI_TINH)),
+            'shop_id' => array_values(array_filter(
+                array_map('intval', (array) $request->query('shop_id', [])), fn ($v) => $v > 0
+            )),
         ];
+    }
+
+    /** Phần bộ lọc API hiểu được: một giá trị thì gửi thẳng, chọn nhiều thì lọc tại chỗ. */
+    protected function queryApi(array $filters): array
+    {
+        $q = ['keyword' => $filters['keyword'], 'status' => $filters['status']];
+        foreach (['work_shift', 'shop_id'] as $khoa) {
+            if (count($filters[$khoa]) === 1) {
+                $q[$khoa] = $filters[$khoa][0];
+            }
+        }
+
+        return array_filter($q, fn ($v) => $v !== '' && $v !== 0);
+    }
+
+    /** Lọc chọn nhiều trên danh sách API trả về (API chỉ nhận một ca / một chi nhánh). */
+    protected function locTaiCho(array $list, array $filters): array
+    {
+        return array_values(array_filter($list, function (array $ns) use ($filters) {
+            if ($filters['shop_id'] !== []) {
+                $cua = array_map('intval', array_filter(explode(',', (string) ($ns['shop_ids'] ?? ''))));
+                if ($cua === [] && (int) ($ns['shop_id'] ?? 0) > 0) {
+                    $cua = [(int) $ns['shop_id']];
+                }
+                if (array_intersect($cua, $filters['shop_id']) === []) {
+                    return false;
+                }
+            }
+            if ($filters['gender'] !== [] && ! in_array((string) ($ns['gender'] ?? ''), $filters['gender'], true)) {
+                return false;
+            }
+            if ($filters['work_shift'] !== []) {
+                $ca = array_filter(explode(',', (string) ($ns['work_shift'] ?? '')));
+                if (array_intersect($ca, $filters['work_shift']) === []) {
+                    return false;
+                }
+            }
+
+            return true;
+        }));
     }
 
     /**
@@ -525,11 +587,11 @@ class NhanSuController extends Controller
             'full_name' => ['required', 'string', 'max:150'],
             'gender' => ['nullable', 'in:'.implode(',', array_keys(self::GIOI_TINH))],
             'birth_date' => ['nullable', 'date', 'before:today'],
-            'phone' => ['nullable', 'string', 'max:20'],
+            'phone' => ['nullable', 'string', 'regex:/^0[0-9]{9,10}$/'],
             // Email bắt buộc khi cấp tài khoản: bảng `users` bên API bắt buộc có và
             // đặt UNIQUE lên nó.
             'email' => ['required_if:co_tai_khoan,1', 'nullable', 'email', 'max:191'],
-            'id_number' => ['nullable', 'string', 'max:20'],
+            'id_number' => ['nullable', 'string', 'regex:/^[0-9]+$/', 'max:20'],
             'address' => ['nullable', 'string', 'max:255'],
 
             // Ca trực — mảng, một người trực được nhiều ca. Không bắt buộc: hồ sơ
@@ -545,7 +607,13 @@ class NhanSuController extends Controller
             'work_shift.*' => ['string', 'in:'.implode(',', array_keys(self::CA_LAM))],
             // Chi nhánh bắt buộc: báo cáo theo chi nhánh sau này phải xếp được người
             // đó vào đâu đó.
-            'shop_id' => ['required', 'integer', 'min:1'],
+            // Chọn NHIỀU chi nhánh như v2 (shop_ids); đường gọi cũ vẫn gửi shop_id đơn.
+            'shop_id' => ['required_without:shop_ids', 'nullable', 'integer', 'min:1'],
+            'shop_ids' => ['required_without:shop_id', 'nullable', 'array', 'min:1'],
+            'shop_ids.*' => ['integer', 'min:1'],
+            'allow_outside_area' => ['nullable', 'boolean'],
+            // Đổi mật khẩu cho tài khoản đã có (ô mật khẩu ở hộp sửa của v2).
+            'mat_khau_moi' => ['nullable', 'string', 'min:6', 'max:72'],
             'hired_on' => ['nullable', 'date'],
             'status' => ['required', 'in:'.implode(',', array_keys(self::TRANG_THAI))],
 
@@ -587,7 +655,11 @@ class NhanSuController extends Controller
             'birth_date.before' => 'Ngày sinh phải là một ngày đã qua.',
             'email.email' => 'Email không đúng định dạng.',
             'work_shift.*.in' => 'Ca làm việc không hợp lệ.',
-            'shop_id.required' => 'Chưa chọn chi nhánh làm việc.',
+            'shop_id.required_without' => 'Chưa chọn chi nhánh làm việc.',
+            'shop_ids.required_without' => 'Chưa chọn chi nhánh làm việc.',
+            'phone.regex' => 'Số điện thoại phải bắt đầu bằng 0 và có 10–11 chữ số.',
+            'id_number.regex' => 'CCCD chỉ gồm chữ số.',
+            'mat_khau_moi.min' => 'Mật khẩu mới tối thiểu 6 ký tự.',
             'status.required' => 'Chưa chọn trạng thái làm việc.',
             'status.in' => 'Trạng thái làm việc không hợp lệ.',
             'salary.numeric' => 'Mức lương phải là một con số.',
@@ -603,6 +675,11 @@ class NhanSuController extends Controller
 
         $coTaiKhoan = $request->boolean('co_tai_khoan');
         $email = trim((string) ($du['email'] ?? ''));
+        // Chi nhánh chính đứng đầu; không gửi shop_ids thì lấy shop_id.
+        $chiNhanh = array_values(array_unique(array_filter(array_map('intval', (array) ($du['shop_ids'] ?? [])))));
+        if ($chiNhanh === [] && (int) ($du['shop_id'] ?? 0) > 0) {
+            $chiNhanh = [(int) $du['shop_id']];
+        }
 
         $data = [
             'code' => trim((string) ($du['code'] ?? '')),
@@ -616,7 +693,11 @@ class NhanSuController extends Controller
             // Chức danh KHÔNG gửi nữa (màn hình đã thay bằng ca làm). API hiểu ô
             // trống là giữ nguyên giá trị cũ, hồ sơ mới rơi về mặc định của cột.
             'work_shift' => array_values((array) ($du['work_shift'] ?? [])),
-            'shop_id' => (int) ($du['shop_id'] ?? 0),
+            'shop_id' => $chiNhanh[0] ?? 0,
+            'shop_ids' => $chiNhanh,
+            // null = giữ nguyên; API hiểu bỏ khoá là không đổi.
+            'allow_outside_area' => $request->has('allow_outside_area') ? $request->boolean('allow_outside_area') : null,
+            'mat_khau_moi' => (string) ($du['mat_khau_moi'] ?? ''),
             'hired_on' => (string) ($du['hired_on'] ?? ''),
             'status' => $du['status'],
             'salary_type' => (string) ($du['salary_type'] ?? ''),
@@ -676,12 +757,14 @@ class NhanSuController extends Controller
      */
     protected function send(callable $call, string $success, ?callable $sauKhiLuu = null)
     {
+        $request = request();
+
         try {
             $res = $call();
         } catch (\Throwable $e) {
             Log::error('Nhan su API call failed', ['msg' => $e->getMessage()]);
 
-            return back()->withInput()->with('error', 'Không kết nối được API. Vui lòng thử lại.');
+            return $this->traLoiHopThoai($request, false, 'Không kết nối được API. Vui lòng thử lại.');
         }
 
         if ($res->successful()) {
@@ -695,18 +778,16 @@ class NhanSuController extends Controller
             // lần đăng nhập sau. Đây đúng là chỗ "đáng hỏi" mà CuaVao nói tới.
             CuaVao::lamMoi();
 
+            // Hộp thoại v2 gọi bằng AJAX: trả JSON để hộp tự đóng và bắn toast.
+            if ($request->expectsJson()) {
+                return response()->json(['success' => true, 'message' => trim($success.' '.($loiPhu ?? ''))]);
+            }
+
             $ve = redirect()->route('admin.nhan-su.index')->with('success', $success);
 
             return $loiPhu ? $ve->with('error', $loiPhu) : $ve;
         }
 
-        // 422 trả lỗi theo từng ô; gom thành một câu vì hộp thoại đã đóng sau khi
-        // trang tải lại.
-        $loi = $res->json('errors');
-        $message = is_array($loi) && $loi
-            ? implode(' ', $loi)
-            : ($res->json('message') ?: 'Thao tác không thành công.');
-
-        return back()->withInput()->with('error', $message);
+        return $this->traLoiHopThoai($request, false, $this->cauLoiApi($res, 'Thao tác không thành công.'));
     }
 }

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -32,6 +33,10 @@ type NhanSuService interface {
 	// Delete cần Actor vì nó KHOÁ tài khoản đăng nhập gắn kèm — mà mọi luật của
 	// tài khoản (super admin cuối cùng, quyền của người thao tác) đều hỏi Actor.
 	Delete(ctx context.Context, id uint, actor Actor) error
+	// DatLaiMatKhau đặt mật khẩu tài khoản của hồ sơ về mật khẩu mặc định (cấu
+	// hình staff_default_password, rỗng thì lấy mặc định phần mềm) — như nút
+	// "Đặt lại mật khẩu" của v2.
+	DatLaiMatKhau(ctx context.Context, id uint, actor Actor) error
 }
 
 type nhanSuService struct {
@@ -46,6 +51,8 @@ type nhanSuService struct {
 	quyen domain.QuyenRepository
 	// quyTac là quy tắc đánh số của cửa hàng. Chưa bật thì mã vẫn là NV0001…
 	quyTac domain.QuyTacMaRepository
+	// settings cho mật khẩu mặc định của nhân viên (v2: employee_password).
+	settings SettingService
 }
 
 func NewNhanSuService(
@@ -54,8 +61,9 @@ func NewNhanSuService(
 	users UserService,
 	quyen domain.QuyenRepository,
 	quyTac domain.QuyTacMaRepository,
+	settings SettingService,
 ) NhanSuService {
-	return &nhanSuService{repo: repo, chiNhanh: chiNhanh, users: users, quyen: quyen, quyTac: quyTac}
+	return &nhanSuService{repo: repo, chiNhanh: chiNhanh, users: users, quyen: quyen, quyTac: quyTac, settings: settings}
 }
 
 // Tiền tố mã tự sinh; bốn chữ số đủ cho 9999 người.
@@ -95,13 +103,16 @@ func (s *nhanSuService) Create(ctx context.Context, req *dto.NhanSuRequest, acto
 	if err := s.chanTrungTen(ctx, req.FullName, 0); err != nil {
 		return nil, err
 	}
+	if err := s.chanTrungDinhDanh(ctx, req, 0); err != nil {
+		return nil, err
+	}
 
-	shopID, err := s.chotChiNhanh(ctx, req.ShopID)
+	shopIDs, err := s.chotChiNhanhNhieu(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 
-	nv := &domain.NhanVien{Code: ma, ShopID: shopID}
+	nv := &domain.NhanVien{Code: ma, ShopID: &shopIDs[0], ShopIDs: domain.StringOrNull(domain.ChiNhanhRaCSV(shopIDs)), AllowOutsideArea: true}
 	dienHoSo(nv, req)
 
 	// Tài khoản dựng TRƯỚC hồ sơ: đó là lượt dễ hỏng nhất (trùng tên đăng nhập,
@@ -145,6 +156,9 @@ func (s *nhanSuService) Update(ctx context.Context, id uint, req *dto.NhanSuRequ
 	if err := s.chanTrungTen(ctx, req.FullName, id); err != nil {
 		return nil, err
 	}
+	if err := s.chanTrungDinhDanh(ctx, req, id); err != nil {
+		return nil, err
+	}
 
 	// Mã bỏ trống khi sửa = GIỮ NGUYÊN, không sinh mã mới. Khác hẳn lúc tạo, và
 	// khác có chủ ý: mã cũ đã nằm trong bảng lương và bảng chấm công.
@@ -156,12 +170,20 @@ func (s *nhanSuService) Update(ctx context.Context, id uint, req *dto.NhanSuRequ
 		nv.Code = chot
 	}
 
-	shopID, err := s.chotChiNhanh(ctx, req.ShopID)
+	shopIDs, err := s.chotChiNhanhNhieu(ctx, req)
 	if err != nil {
 		return nil, err
 	}
-	nv.ShopID = shopID
+	nv.ShopID = &shopIDs[0]
+	nv.ShopIDs = domain.StringOrNull(domain.ChiNhanhRaCSV(shopIDs))
 	dienHoSo(nv, req)
+
+	// Đổi mật khẩu cho tài khoản đã có — ô mật khẩu ở hộp sửa của v2.
+	if nv.UserID != nil && strings.TrimSpace(req.MatKhauMoi) != "" {
+		if _, err := s.users.SetPassword(ctx, *nv.UserID, req.MatKhauMoi, actor); err != nil {
+			return nil, err
+		}
+	}
 
 	// Hồ sơ đang có tài khoản thì dừng: tạo thêm cái thứ hai cho cùng một người là
 	// cách chắc chắn để cửa hàng không biết ai đang đăng nhập bằng gì.
@@ -337,6 +359,16 @@ func (s *nhanSuService) dungDanhSach(ctx context.Context, list []domain.NhanVien
 		if nv.ShopID != nil {
 			item.ShopName = tenChiNhanh[*nv.ShopID]
 		}
+		item.ShopNames = []string{}
+		ids := domain.ChiNhanhTuCSV(string(nv.ShopIDs))
+		if len(ids) == 0 && nv.ShopID != nil {
+			ids = []uint{*nv.ShopID}
+		}
+		for _, id := range ids {
+			if ten, ok := tenChiNhanh[id]; ok {
+				item.ShopNames = append(item.ShopNames, ten)
+			}
+		}
 		if nv.UserID != nil {
 			if u, ok := taiKhoan[*nv.UserID]; ok {
 				item.Username = u.Username
@@ -350,6 +382,115 @@ func (s *nhanSuService) dungDanhSach(ctx context.Context, list []domain.NhanVien
 	}
 
 	return items, nil
+}
+
+// DatLaiMatKhau — xem NhanSuService.
+func (s *nhanSuService) DatLaiMatKhau(ctx context.Context, id uint, actor Actor) error {
+	nv, err := s.repo.FindByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	if nv.UserID == nil {
+		return domain.ErrNhanSuChuaCoTaiKhoan
+	}
+	_, err = s.users.SetPassword(ctx, *nv.UserID, s.matKhauMacDinh(ctx), actor)
+
+	return err
+}
+
+// matKhauMacDinh — cấu hình của cửa hàng, rỗng thì mặc định của phần mềm.
+func (s *nhanSuService) matKhauMacDinh(ctx context.Context) string {
+	if s.settings != nil {
+		if mk := strings.TrimSpace(s.settings.Get(ctx, SettingStaffDefaultPassword)); mk != "" {
+			return mk
+		}
+	}
+
+	return defaultStaffPassword
+}
+
+// chanTrungDinhDanh — SĐT, email, CCCD không được trùng người khác trong cửa
+// hàng, và SĐT / CCCD phải đúng khuôn (như validate của v2).
+func (s *nhanSuService) chanTrungDinhDanh(ctx context.Context, req *dto.NhanSuRequest, excludeID uint) error {
+	loi := map[string]string{}
+	phone := strings.TrimSpace(req.Phone)
+	if phone != "" && !soDienThoaiRe.MatchString(phone) {
+		loi["phone"] = "Số điện thoại phải bắt đầu bằng 0 và có 10–11 chữ số"
+	}
+	cccd := strings.TrimSpace(req.IDNumber)
+	if cccd != "" && !chuSoRe.MatchString(cccd) {
+		loi["id_number"] = "CCCD chỉ gồm chữ số"
+	}
+	if len(loi) > 0 {
+		return loiO(loi)
+	}
+
+	for cot, gt := range map[string]string{"phone": phone, "id_number": cccd, "email": strings.TrimSpace(req.Email)} {
+		if gt == "" {
+			continue
+		}
+		trung, err := s.repo.ExistsByCot(ctx, cot, gt, excludeID)
+		if err != nil {
+			return err
+		}
+		if trung {
+			loi[cot] = map[string]string{
+				"phone":     "Số điện thoại này đã có nhân viên khác dùng",
+				"id_number": "Số CCCD này đã có nhân viên khác dùng",
+				"email":     "Email này đã có nhân viên khác dùng",
+			}[cot]
+		}
+	}
+	if len(loi) > 0 {
+		return loiO(loi)
+	}
+
+	return nil
+}
+
+var (
+	soDienThoaiRe = regexp.MustCompile(`^0[0-9]{9,10}$`)
+	chuSoRe       = regexp.MustCompile(`^[0-9]+$`)
+)
+
+// chotChiNhanhNhieu — danh sách chi nhánh được làm (v2 cho chọn nhiều). Không
+// gửi shop_ids thì lấy shop_id; phần tử đầu là chi nhánh chính. Phải có ít nhất một.
+func (s *nhanSuService) chotChiNhanhNhieu(ctx context.Context, req *dto.NhanSuRequest) ([]uint, error) {
+	ids := req.ShopIDs
+	if len(ids) == 0 && req.ShopID > 0 {
+		ids = []uint{req.ShopID}
+	}
+	if req.ShopID > 0 {
+		// Chi nhánh chính đứng đầu.
+		sap := []uint{req.ShopID}
+		for _, id := range ids {
+			if id != req.ShopID {
+				sap = append(sap, id)
+			}
+		}
+		ids = sap
+	}
+	if len(ids) == 0 {
+		return nil, loiO(map[string]string{"shop_id": "Chưa chọn chi nhánh làm việc"})
+	}
+	ra := make([]uint, 0, len(ids))
+	thay := map[uint]bool{}
+	for _, id := range ids {
+		if id == 0 || thay[id] {
+			continue
+		}
+		cn, err := s.chiNhanh.FindByID(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		thay[id] = true
+		ra = append(ra, cn.ID)
+	}
+	if len(ra) == 0 {
+		return nil, loiO(map[string]string{"shop_id": "Chưa chọn chi nhánh làm việc"})
+	}
+
+	return ra, nil
 }
 
 // dongBoTaiKhoan giữ TÀI KHOẢN ĐĂNG NHẬP đi theo trạng thái làm việc của hồ sơ.
@@ -391,6 +532,17 @@ func (s *nhanSuService) dongBoTaiKhoan(
 		if *nv.UserID == actor.ID {
 			return domain.ErrTuDanhDauNghiViec
 		}
+		// Còn ca chưa đóng thì chưa được cho nghỉ (v2 chặn ở update/changeStatus):
+		// khoá tài khoản là người giữ két mất đường đóng ca.
+		if nv.Status != domain.NhanSuDaNghi {
+			coCa, _, err := s.repo.RangBuocCuaTaiKhoan(ctx, *nv.UserID)
+			if err != nil {
+				return err
+			}
+			if coCa {
+				return domain.ErrNhanSuDangMoCa
+			}
+		}
 		_, err := s.users.UpdateStatus(ctx, *nv.UserID, "inactive", actor)
 
 		return err
@@ -430,6 +582,10 @@ func (s *nhanSuService) taoTaiKhoan(ctx context.Context, req *dto.NhanSuRequest,
 	}
 
 	tk := req.TaiKhoan
+	matKhau := tk.Password
+	if strings.TrimSpace(matKhau) == "" {
+		matKhau = s.matKhauMacDinh(ctx)
+	}
 
 	return s.users.Create(ctx, &dto.UserRequest{
 		FullName: strings.TrimSpace(req.FullName),
@@ -441,7 +597,7 @@ func (s *nhanSuService) taoTaiKhoan(ctx context.Context, req *dto.NhanSuRequest,
 		RoleID: req.RoleID,
 		// Người vừa tuyển thì tài khoản mở luôn.
 		Status:   "active",
-		Password: tk.Password,
+		Password: matKhau,
 	}, actor)
 }
 
@@ -510,22 +666,6 @@ func (s *nhanSuService) maTiepTheo(ctx context.Context) (string, error) {
 
 	// Không sinh nổi mã thì bắt người dùng tự đặt, chứ đừng ghi một mã trùng.
 	return "", domain.ErrMaNhanVienDaCo
-}
-
-// chotChiNhanh xác minh chi nhánh thuộc CHÍNH cửa hàng đang đăng nhập: FindByID
-// đi qua bộ lọc tenant nên id của tiệm khác trả về ErrNotFound.
-//
-// Chi nhánh bắt buộc; cột `shop_id` vẫn cho NULL vì hồ sơ cũ có thể chưa có.
-func (s *nhanSuService) chotChiNhanh(ctx context.Context, id uint) (*uint, error) {
-	if id == 0 {
-		return nil, loiO(map[string]string{"shop_id": "Chưa chọn chi nhánh làm việc"})
-	}
-	cn, err := s.chiNhanh.FindByID(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-
-	return &cn.ID, nil
 }
 
 // kiemEnumNhanSu chặn giá trị ngoài danh sách ENUM. Kiểm ở đây chứ không để
@@ -614,6 +754,9 @@ func dienHoSo(nv *domain.NhanVien, req *dto.NhanSuRequest) {
 	nv.CommissionRate = req.CommissionRate
 
 	nv.Note = domain.StringOrNull(strings.TrimSpace(req.Note))
+	if req.AllowOutsideArea != nil {
+		nv.AllowOutsideArea = *req.AllowOutsideArea
+	}
 }
 
 // parseNgay đọc "YYYY-MM-DD"; rỗng hoặc sai -> nil.

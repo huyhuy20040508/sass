@@ -1616,6 +1616,12 @@ class ApiClient
         ]);
     }
 
+    /** Đặt mật khẩu tài khoản của hồ sơ về mật khẩu mặc định (cấu hình staff_default_password). */
+    public function datLaiMatKhauNhanSu(int $id): Response
+    {
+        return $this->post("/admin/nhan-su/{$id}/dat-lai-mat-khau", []);
+    }
+
     /** Xoá (mềm) một hồ sơ nhân viên. Tài khoản đăng nhập của người đó giữ nguyên. */
     public function xoaNhanSu(int $id): Response
     {

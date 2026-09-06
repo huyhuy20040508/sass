@@ -488,7 +488,9 @@ func handleServiceError(c *gin.Context, err error) {
 			"values": "Danh sách gửi lên có giá trị không thuộc thuộc tính đang sửa",
 		})
 	case errors.Is(err, domain.ErrNhanSuDangMoCa):
-		response.Error(c, 409, "Nhân viên này còn một ca chưa đóng. Đóng ca đó trước đã — xoá bây giờ là khoá luôn tài khoản của chính người đang giữ két")
+		response.Error(c, 409, "Nhân viên này còn một ca chưa đóng. Đóng ca đó trước đã — khoá tài khoản bây giờ là chính người đang giữ két mất đường đóng ca")
+	case errors.Is(err, domain.ErrNhanSuChuaCoTaiKhoan):
+		response.Error(c, 409, "Hồ sơ này chưa có tài khoản đăng nhập nên không có mật khẩu để đặt lại")
 	case errors.Is(err, domain.ErrNhanSuDaGhiSoQuy):
 		response.Error(c, 409, "Nhân viên này đã ghi sổ quỹ nên hồ sơ phải giữ lại để đối chiếu tiền. Nghỉ việc thì đặt trạng thái \"Đã nghỉ\" — tài khoản vẫn bị khoá")
 	case errors.Is(err, domain.ErrTuDanhDauNghiViec):

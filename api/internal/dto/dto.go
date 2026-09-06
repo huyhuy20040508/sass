@@ -178,6 +178,8 @@ type AuthResponse struct {
 	// thì phiên mở ra ở trạng thái "chưa chọn chi nhánh", và mọi lượt ghi kho
 	// sau đó hoặc bị từ chối, hoặc (trước đây) rơi vào một kho do máy đoán.
 	ChiNhanhID *uint `json:"chi_nhanh_id,omitempty"`
+	// ChiNhanhIDs — mọi chi nhánh người này được làm; rỗng = không bị buộc.
+	ChiNhanhIDs []uint `json:"chi_nhanh_ids,omitempty"`
 }
 
 // PlatformAuthResponse — kết quả đăng nhập / làm mới token của KHU ĐIỀU HÀNH.
@@ -745,7 +747,10 @@ type NhanSuRequest struct {
 	// KHÔNG dùng binding:"required" ở đây: bộ validate của gin đặt tên ô theo tên
 	// TRƯỜNG GO ("ShopID") nên trang quản trị nhận về một khoá không khớp ô nào
 	// trên form. Lượt kiểm nằm ở service và trả đúng khoá `shop_id`.
-	ShopID       uint   `json:"shop_id"`
+	ShopID uint `json:"shop_id"`
+	// ShopIDs — CÁC chi nhánh người này được làm (v2 cho chọn nhiều). Bỏ trống
+	// thì lấy mỗi ShopID; có thì phần tử đầu là chi nhánh chính.
+	ShopIDs      []uint `json:"shop_ids"`
 	HiredOn      string `json:"hired_on" binding:"omitempty" example:"2026-08-17"`
 	ContractType string `json:"contract_type" binding:"omitempty"`
 	Status       string `json:"status" binding:"required" example:"dang_lam"`
@@ -758,6 +763,12 @@ type NhanSuRequest struct {
 	CommissionRate float64 `json:"commission_rate" binding:"omitempty,gte=0,lte=100"`
 
 	Note string `json:"note" binding:"omitempty,max=500"`
+	// AllowOutsideArea — cho phép dùng ứng dụng ngoài phạm vi chi nhánh. Bỏ hẳn
+	// khoá (null) = giữ nguyên (hồ sơ mới: cho phép).
+	AllowOutsideArea *bool `json:"allow_outside_area"`
+	// MatKhauMoi — đổi mật khẩu cho tài khoản ĐÃ CÓ của hồ sơ (như ô mật khẩu ở
+	// hộp sửa của v2). Bỏ trống = không đổi. Hồ sơ chưa có tài khoản thì bỏ qua.
+	MatKhauMoi string `json:"mat_khau_moi" binding:"omitempty,min=6,max=72"`
 
 	// TaiKhoan có mặt = cấp tài khoản đăng nhập cho người này. Bỏ hẳn khoá này
 	// (null) = không cấp, KHÁC với gửi khối rỗng.
@@ -828,8 +839,10 @@ type NhanSuTrangThaiRequest struct {
 type NhanSuResponse struct {
 	domain.NhanVien
 	ShopName string `json:"shop_name"`
-	Username string `json:"username"`
-	RoleID   uint   `json:"role_id"`
+	// ShopNames — tên các chi nhánh được làm, cùng thứ tự với shop_ids.
+	ShopNames []string `json:"shop_names"`
+	Username  string   `json:"username"`
+	RoleID    uint     `json:"role_id"`
 	// UserStatus (active | inactive) là trạng thái của TÀI KHOẢN, khác với Status
 	// của hồ sơ. Hai cột tách nhau nên màn hình phải nói được "đang làm nhưng tài
 	// khoản đang khoá" — trường hợp có thật sau khi nhận lại người cũ mà chưa mở

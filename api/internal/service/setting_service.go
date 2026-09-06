@@ -84,18 +84,22 @@ const (
 	SettingFreeShippingThreshold = "free_shipping_threshold"
 	SettingLowStockThreshold     = "low_stock_threshold"
 	SettingPOSStaffDiscountLimit = "pos_staff_discount_limit"
-	SettingPaymentCODEnabled     = "payment_cod_enabled"
-	SettingPaymentBankEnabled    = "payment_bank_enabled"
-	SettingPaymentPayOSEnabled   = "payment_payos_enabled"
-	SettingPaymentSePayEnabled   = "payment_sepay_enabled"
-	SettingBankName              = "bank_name"
-	SettingBankAccountNumber     = "bank_account_number"
-	SettingBankAccountName       = "bank_account_name"
-	SettingBankTransferNote      = "bank_transfer_note"
-	SettingBankQRImage           = "bank_qr_image"
-	SettingTaxDirect             = "tax_direct"
-	SettingLotIssueMethod        = "lot_issue_method"
-	SettingBlockExpiredStock     = "block_expired_stock"
+	// SettingStaffDefaultPassword — mật khẩu cấp cho tài khoản nhân viên khi bỏ
+	// trống ô mật khẩu, và là mật khẩu mà nút "Đặt lại mật khẩu" đặt về (v2 gọi
+	// là employee_password trong cấu hình chung). Rỗng = dùng mặc định của phần mềm.
+	SettingStaffDefaultPassword = "staff_default_password"
+	SettingPaymentCODEnabled    = "payment_cod_enabled"
+	SettingPaymentBankEnabled   = "payment_bank_enabled"
+	SettingPaymentPayOSEnabled  = "payment_payos_enabled"
+	SettingPaymentSePayEnabled  = "payment_sepay_enabled"
+	SettingBankName             = "bank_name"
+	SettingBankAccountNumber    = "bank_account_number"
+	SettingBankAccountName      = "bank_account_name"
+	SettingBankTransferNote     = "bank_transfer_note"
+	SettingBankQRImage          = "bank_qr_image"
+	SettingTaxDirect            = "tax_direct"
+	SettingLotIssueMethod       = "lot_issue_method"
+	SettingBlockExpiredStock    = "block_expired_stock"
 )
 
 // Thứ tự rút lô khi xuất kho — bản v2 gọi là thông số `inventory_valuation`.
@@ -339,6 +343,11 @@ var settingRegistry = []settingDef{
 		// Chủ cửa hàng và quản trị viên KHÔNG bị con số này chặn — họ tự chịu trách
 		// nhiệm về mức mình bấm. Đây là hạn quyền cho người làm thuê đứng quầy.
 		Default: "10", Required: true, MaxNum: 100,
+	},
+	{
+		Key: SettingStaffDefaultPassword, Group: SettingGroupPOS, Type: SettingTypeText,
+		Label:   "Mật khẩu mặc định cấp cho nhân viên",
+		Default: "", Max: 72,
 	},
 }
 
