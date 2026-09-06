@@ -44,6 +44,7 @@ const (
 	LoaiPhieuMuaHang = "phieu-mua-hang"
 	LoaiTraHangNCC   = "tra-hang-ncc"
 	LoaiDieuChuyen   = "phieu-dieu-chuyen"
+	LoaiDieuChinhTon = "dieu-chinh-ton-kho"
 )
 
 // LoaiMa — một loại chứng từ / danh mục đánh số được.
@@ -97,6 +98,7 @@ var DanhMucLoaiMa = []LoaiMa{
 	{Ma: LoaiPhieuMuaHang, Ten: "Phiếu mua hàng", TienToGoiY: "PMH"},
 	{Ma: LoaiTraHangNCC, Ten: "Trả hàng nhà cung cấp", TienToGoiY: "PTH"},
 	{Ma: LoaiDieuChuyen, Ten: "Phiếu điều chuyển", TienToGoiY: "PDC"},
+	{Ma: LoaiDieuChinhTon, Ten: "Phiếu điều chỉnh tồn kho", TienToGoiY: "DCT"},
 }
 
 // TimLoaiMa tra một loại theo mã.

@@ -110,6 +110,7 @@ class AdminSmokeTest extends TestCase
         // kế, không phải trang hỏng.
         'admin.dieu-chinh-ton-kho.hangAm',
         'admin.dieu-chinh-ton-kho.matHangTheoNhom',
+        'admin.dieu-chinh-ton-kho.loHang',
     ];
 
     // ---------------------------------------------------------------- helpers

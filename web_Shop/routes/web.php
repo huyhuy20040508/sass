@@ -336,6 +336,7 @@ Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:quan_ly', 'chi.v2'])->
         Route::get('/inventory-adjustments/products', [DieuChinhTonKhoController::class, 'matHang'])->name('dieu-chinh-ton-kho.matHang');
         Route::get('/inventory-adjustments/category-products', [DieuChinhTonKhoController::class, 'matHangTheoNhom'])->name('dieu-chinh-ton-kho.matHangTheoNhom');
         Route::get('/inventory-adjustments/negative-stock', [DieuChinhTonKhoController::class, 'hangAm'])->name('dieu-chinh-ton-kho.hangAm');
+        Route::get('/inventory-adjustments/lots', [DieuChinhTonKhoController::class, 'loHang'])->name('dieu-chinh-ton-kho.loHang');
         Route::post('/inventory-adjustments/photo', [DieuChinhTonKhoController::class, 'uploadAnh'])->name('dieu-chinh-ton-kho.anh');
         Route::post('/inventory-adjustments/bulk-approve', [DieuChinhTonKhoController::class, 'bulkApprove'])->name('dieu-chinh-ton-kho.bulkApprove');
         Route::post('/inventory-adjustments/bulk-delete', [DieuChinhTonKhoController::class, 'bulkDestroy'])->name('dieu-chinh-ton-kho.bulkDestroy');

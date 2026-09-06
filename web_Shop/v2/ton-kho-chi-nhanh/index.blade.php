@@ -186,10 +186,8 @@
                     </div>
                 </div>
 
-                @if (!empty($error))
-                    <div class="alert alert-warning py-2 my-2">{{ $error }}</div>
-                @endif
-
+                {{-- Lỗi nạp API do vỏ master bắn toast ($error) — không kẻ banner ở đây,
+                     banner vừa lặp câu báo vừa đẩy bảng xa hàng nút. --}}
                 <div class="list scrollDiv">
                     <div class="table-responsive table-border-style">
                         <table class="table-list-warehouse none_mobile">

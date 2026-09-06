@@ -405,6 +405,8 @@ func main() {
 	// này và đang mở trước khi ghi phiếu.
 	dieuChuyenSvc := service.NewPhieuDieuChuyenService(
 		repository.NewPhieuDieuChuyenRepository(db), chiNhanhRepo)
+	// Phiếu điều chỉnh tồn kho — nắn số tồn của một kho theo chứng từ có duyệt.
+	dieuChinhSvc := service.NewPhieuDieuChinhService(repository.NewPhieuDieuChinhRepository(db))
 	// Thuộc tính — cùng khuôn với đơn vị tính, thêm tầng giá trị con.
 	thuocTinhSvc := service.NewThuocTinhService(thuocTinhRepo, quyTacMaRepo)
 	// Chương trình khuyến mãi: vừa là module quản trị, vừa là thứ tính giá sau giảm
@@ -480,6 +482,7 @@ func main() {
 		PhieuMuaHang: handler.NewPhieuMuaHangHandler(phieuMuaHangSvc),
 		TraHangNCC:   handler.NewTraHangNCCHandler(traHangNCCSvc),
 		DieuChuyen:   handler.NewPhieuDieuChuyenHandler(dieuChuyenSvc),
+		DieuChinh:    handler.NewPhieuDieuChinhHandler(dieuChinhSvc),
 		GiaChiNhanh: handler.NewGiaChiNhanhHandler(
 			service.NewGiaChiNhanhService(repository.NewGiaChiNhanhRepository(db), chiNhanhRepo)),
 		ThuocTinh: handler.NewThuocTinhHandler(thuocTinhSvc),

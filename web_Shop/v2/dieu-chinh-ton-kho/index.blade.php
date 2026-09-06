@@ -1,152 +1,276 @@
-{{-- Màn Điều chỉnh tồn kho dựng theo khuôn v2 (warehouse/adjust: index + list + create).
-     Dữ liệu do DieuChinhTonKhoController đẩy sang: $list, $filters, $meta, $nhanVien, $nhomHang. --}}
+{{-- Màn Điều chỉnh tồn kho — chép bố cục v2 (warehouse/adjust: index + list + create + edit).
+     Bên v2 hộp lập/sửa là HTML máy chủ trả về nạp vào #content_create; ở đây hai khuôn đó
+     nằm sẵn trong <template> và JS đổ dữ liệu vào, vì backend phiếu chưa có.
+     Dữ liệu controller đẩy sang: $list, $filters, $meta, $nhanVien, $nhomHang. --}}
 @extends('v2::layouts.master')
 
 @section('title', \App\Http\Controllers\DieuChinhTonKhoController::TITLE)
 
 @php
     $C = \App\Http\Controllers\DieuChinhTonKhoController::class;
-    // Đang lọc mà bảng rỗng thì nói "không khớp bộ lọc", đừng nói "chưa có":
-    // chưa có là chưa khai gì, còn khớp là khai rồi nhưng lọc không ra — hai
-    // việc phải làm khác hẳn nhau. Cùng khuôn với khu cũ (resources/views/chi-nhanh).
-    $hasFilter = collect($filters)->only(['keyword', 'type', 'status', 'warehouse_status', 'created_by', 'from_date', 'to_date'])
+    $hasFilter = collect($filters)->only(['keyword', 'type', 'status', 'warehouse_status', 'created_by'])
         ->contains(fn ($v) => $v !== '' && $v !== null && $v !== 0 && $v !== [] && $v !== 'all');
     $stt = ($meta['page'] - 1) * $meta['page_size'];
     $trangThaiChon = array_filter(explode(',', $filters['status']));
     $nguoiTaoChon = array_filter(explode(',', (string) $filters['created_by']));
+    $ngayVN = fn ($v) => $v ? date('d-m-Y', strtotime($v)) : '';
+
+    // Người đang đăng nhập — ô "Người lập" mặc định của hộp lập phiếu.
+    $u = session('api.user');
+    $uId = (int) data_get($u, 'id', 0);
+    $uTen = (string) (data_get($u, 'full_name') ?? data_get($u, 'name') ?? '');
 @endphp
 
 @push('styles')
     <style>
-        /* Lấy nguyên khối style của warehouse/adjust bản v2. */
-        body { overflow-x: hidden }
-        .select2-container { width: 100% !important; }
+        /* ===== Khối style của warehouse/adjust/index.blade.php (v2) ===== */
+        body{
+            overflow-x: hidden
+        }
+        .custom-form-select2 .select2-container {
+            width: 90% !important;
+        }
+        .bg-B0C7D240-25{
+            background-color: rgba(176,199,210,.25) !important;
+        }
+        .bg-425D6D{
+            background-color: #425D6D !important;
+        }
+        .btn-search,.btn-search i.fa {
+            cursor: pointer;
+            color: #666666 !important;
+        }
+        .btn-print {
+            background-color: #026b97 !important;
+            color: white;
+            border: 1px solid #026b97 !important;
+        }
+        .select2-container{
+            width: 100%!important;
+        }
+
         .quantity-control {
             display: inline-flex;
             border: 1px solid #ccc;
             font-family: Arial, sans-serif;
         }
+
         .quantity-control button {
-            width: 30px; height: 30px; border: none;
-            background-color: #f1f1f1; cursor: pointer; font-size: 16px;
+            width: 30px;
+            height: 30px;
+            border: none;
+            background-color: #f1f1f1;
+            cursor: pointer;
+            font-size: 16px;
         }
-        .quantity-control .btn-minus { border-right: 1px solid #ccc; }
-        .quantity-control .btn-plus { border-left: 1px solid #ccc; }
+
+        .quantity-control .btn-minus {
+            border-right: 1px solid #ccc;
+        }
+
+        .quantity-control .btn-plus {
+            border-left: 1px solid #ccc;
+        }
+
         .quantity-control .quantity-adjust {
-            width: 60px; text-align: center; line-height: 27px; display: inline-block; border: none;
+            width: 40px;
+            text-align: center;
+            line-height: 27px;
+            display: inline-block;
+            border: none;
         }
-        .attachment-label i { color: #5392f3; cursor: pointer; }
-        .attachment-filename { display: inline-flex; align-items: center; gap: 5px; }
-        .attachment-remove { cursor: pointer; color: #dc3545; margin-left: 5px; }
-        .default-to-zero-item, .remove-menu { cursor: pointer; }
-        .btn-print { background-color: #026b97 !important; color: white; border: 1px solid #026b97 !important; }
+        .attachment-label i {
+            color: #5392f3;
+            cursor: pointer;
+        }
+        .attachment-filename {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .attachment-remove {
+            cursor: pointer;
+            color: #dc3545;
+            margin-left: 5px;
+        }
+
+        .default-to-zero-item,
+        .remove-menu {
+            cursor: pointer;
+        }
+
+        /* ===== Khối style của create/edit.blade.php (v2) ===== */
+        .form-check {
+            gap: 10px !important;
+            width: 100%;
+        }
+        .label-custom {
+            font-size: 13px;
+        }
+        .hide {
+            display: none;
+        }
         #content_create label.form-label { text-align: left !important }
+
+        /* Select2 trong hộp thoại phải nổi trên lớp phủ của modal. */
+        #modalCreate .select2-container--open, #modalCreate .select2-dropdown { z-index: 1065 !important; }
         .table-product td, .table-product th { vertical-align: middle; }
-        .lot-new-box { display: flex; gap: 6px; align-items: center; margin-top: 4px; }
-        .lot-new-box input { width: 110px; }
+
+        /* ---- Lưới hàng KHÔNG cuộn ngang trên máy tính (như v2) ----
+           `table-layout: fixed` + mọi cột chia % cộng đúng 100%: để auto thì ô chọn
+           lô và tên hàng dài nới bảng rộng hơn hộp và đẻ ra thanh cuộn. Dưới 992px
+           thì 12 cột không thể vừa, chỗ đó mới cho cuộn. Cùng khuôn với lưới
+           .table-lines của Phiếu điều chuyển. */
+        #content_create .table-responsive, .modal-view-materials .table-responsive { overflow-x: hidden; }
+        @media (max-width: 991px) {
+            #content_create .table-responsive, .modal-view-materials .table-responsive { overflow-x: auto; }
+            #content_create .table-product { min-width: 1100px; }
+        }
+        /* Hộp rộng hơn v2 một chút (v2 min-width 70%) để tiêu đề cột đứng nguyên
+           một dòng — cắt "Trạng thái tồn kho" làm hai dòng là hàng tiêu đề cao gấp
+           đôi và đọc khó. */
+        #modalCreate .modal-dialog { min-width: 70%; width: 94%; max-width: 1700px; }
+        .table-product { width: 100%; table-layout: fixed; }
+        .table-product th { white-space: nowrap; vertical-align: middle; }
+        .table-product td { overflow: hidden; text-overflow: ellipsis; }
+        .table-product th:nth-child(1)  { width: 4%; }   /* STT */
+        .table-product th:nth-child(2)  { width: 9%; }   /* Mã hàng */
+        .table-product th:nth-child(3)  { width: 14%; }  /* Tên hàng */
+        .table-product th:nth-child(4)  { width: 6%; }   /* ĐVT */
+        .table-product th:nth-child(5)  { width: 12%; }  /* Số lô */
+        .table-product th:nth-child(6)  { width: 9%; }   /* Hạn dùng */
+        .table-product th:nth-child(7)  { width: 8%; }   /* SL tồn */
+        .table-product th:nth-child(8)  { width: 10%; }  /* Điều chỉnh */
+        .table-product th:nth-child(9)  { width: 9%; }   /* Tồn sau chỉnh */
+        .table-product th:nth-child(10) { width: 9%; }   /* Trạng thái tồn kho */
+        .table-product th:nth-child(11) { width: 5%; }   /* Đính kèm */
+        .table-product th:nth-child(12) { width: 5%; }   /* Hành động */
+        .table-product td.name { white-space: nowrap; }
+        .table-product .lot_number_select { width: 100%; min-width: 0; }
+        .table-product .quantity-control { max-width: 100%; }
+
+        /* Bảng cân đối hàng âm: 7 cột, cùng luật chia %. */
+        .table-balance { width: 100%; table-layout: fixed; }
+        .table-balance th:nth-child(1) { width: 4%; }
+        .table-balance th:nth-child(2) { width: 12%; }
+        .table-balance th:nth-child(3) { width: 30%; }
+        .table-balance th:nth-child(4) { width: 10%; }
+        .table-balance th:nth-child(5) { width: 16%; }
+        .table-balance th:nth-child(6) { width: 12%; }
+        .table-balance th:nth-child(7) { width: 16%; }
+
+        /* Ô khoá (mã, ngày, người lập…) vẫn phải đọc được chữ: style.css của vỏ v2
+           tô mọi input và select trong modal màu #999 gần trắng. */
+        #content_create .form-control:disabled { color: #212529 !important; background: #f4f6f8; }
     </style>
 @endpush
 
 @section('content')
-    {{-- Nút mở bộ lọc dạng offcanvas, chỉ hiện trên điện thoại — đúng bốn nút của v2. --}}
     <div class="call-to-action-container">
         <div class="wrapper-call-to-action">
-            <div class="btn-open-modal" type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasBottomInMobile"
-                aria-controls="offcanvasBottomInMobile" data-offcanvas-target="#filterSearch">
-                <p class="open-modal-label">{{ __('message.search') }}</p>
-                <div class="icon-for-cta"><i class="fa-solid fa-magnifying-glass"></i></div>
-            </div>
-            <div class="btn-open-modal" type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasBottomInMobile"
-                aria-controls="offcanvasBottomInMobile" data-offcanvas-target="#filterTime">
-                <p class="open-modal-label">{{ __('message.time') }}</p>
-                <div class="icon-for-cta"><i class="fa-regular fa-calendar"></i></div>
-            </div>
-            <div class="btn-open-modal" type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasBottomInMobile"
-                aria-controls="offcanvasBottomInMobile" data-offcanvas-target="#filterCreator">
-                <p class="open-modal-label">{{ __('message.creator') }}</p>
-                <div class="icon-for-cta"><i class="fa-regular fa-user"></i></div>
-            </div>
-            <div class="btn-open-modal" type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasBottomInMobile"
-                aria-controls="offcanvasBottomInMobile" data-offcanvas-target="#filterStatus">
-                <p class="open-modal-label">{{ __('message.adjustment_status') }}</p>
-                <div class="icon-for-cta"><i class="fa-solid fa-filter"></i></div>
-            </div>
+            @include('v2::partials.filter-button-mobile',
+                [
+                    'dataBsTarget' => 'offcanvasBottomInMobile',
+                    'dataOffcanvasTarget' => "filterSearch",
+                    'modalLabel' => __('message.search'),
+                ]
+            )
+            @include('v2::partials.filter-button-mobile',
+                [
+                    'dataBsTarget' => 'offcanvasBottomInMobile',
+                    'dataOffcanvasTarget' => "filterTime",
+                    'modalLabel' => __('message.time'),
+                ]
+            )
+            @include('v2::partials.filter-button-mobile',
+                [
+                    'dataBsTarget' => 'offcanvasBottomInMobile',
+                    'dataOffcanvasTarget' => "filterCreator",
+                    'modalLabel' => __('message.creator'),
+                ]
+            )
+            @include('v2::partials.filter-button-mobile',
+                [
+                    'dataBsTarget' => 'offcanvasBottomInMobile',
+                    'dataOffcanvasTarget' => "filterStatus",
+                    'modalLabel' => __('message.adjustment_status'),
+                ]
+            )
         </div>
     </div>
 
     <div class="row index-warehouse-ajust-page">
-        {{-- Cột lọc bên trái — lưới nửa bậc 2_5 / 9_5 của riêng v2. --}}
-        <div class="col-12 col-lg-2_5 col-xl-2 d-none d-lg-block pe-lg-0 fillter-box-container">
+        <div class="col-12 col-lg-2_5 col-xl-2 d-none d-lg-block pe-lg-0">
             <div class="fillter-box">
                 <div class="card">
-                    <div class="card-header card-header-primary header_search">{{ __('message.filter') }}</div>
+                    <div class="card-header card-header-primary header_search">
+                        {{ __('message.filter') }}
+                    </div>
                     <div class="card-body px-2">
+                        {{-- Form GET: master chặn submit và nạp lại bảng tại chỗ (V2.napLai). --}}
+                        {{-- Bốn khối lọc theo đúng khuôn các màn phiếu (Phiếu điều chuyển, Trả hàng NCC):
+                             mỗi khối = tiêu đề + ô; khoảng cách giữa khối do vỏ master lo, không rải mt-3.
+                             Bỏ cặp custom-multiselect / chevron-down của v2: mũi tên ảnh đè lên ô select2. --}}
                         <form action="{{ route('admin.dieu-chinh-ton-kho.index') }}" method="GET" id="search-form"
                             class="d-sm-flex justify-content-sm-between align-items-sm-start flex-lg-column">
 
-                            <div id="filterSearch">
+                            <div id="filterSearch" class="w-100">
                                 <div class="inner-modal-in-mobile">
-                                    <div class="input-group mb-3">
-                                        <span class="title_search">{{ __('message.order_code') }}</span>
-                                        <div class="d-flex w-100">
-                                            <input type="text" name="keyword" value="{{ $filters['keyword'] }}"
-                                                class="form-control code" id="code"
-                                                placeholder="{{ __('message.enter_code') }}" autocomplete="off">
-                                        </div>
-                                    </div>
+                                    <span class="title_search">{{ __('message.adjustment_code') }}</span>
+                                    <input type="text" name="keyword" value="{{ $filters['keyword'] }}"
+                                        class="form-control mt-1 code" id="code" autocomplete="off"
+                                        placeholder="{{ __('message.enter_code') }}">
                                 </div>
                             </div>
 
                             <div id="filterTime" class="w-100">
                                 <div class="inner-modal-in-mobile">
-                                    <span class="title_search">{{ __('message.order-created-at') }}</span>
+                                    <span class="title_search">{{ __('message.adjustment_created_date') }}</span>
                                     {{-- Hai ô ngày gõ theo DD-MM-YYYY và mở lịch daterangepicker, đúng như v2. --}}
                                     <div class="d-flex flex-lg-column gap-2 gap-lg-0">
                                         <input type="text" name="from_date" autocomplete="off"
-                                            value="{{ $filters['from_date'] ? date('d-m-Y', strtotime($filters['from_date'])) : '' }}"
-                                            class="form-control mb-lg-1" id="from_date"
+                                            value="{{ $ngayVN($filters['from_date']) }}"
+                                            class="form-control mb-lg-1" id="from_created_at"
                                             placeholder="{{ __('message.from_date') }}">
                                         <input type="text" name="to_date" autocomplete="off"
-                                            value="{{ $filters['to_date'] ? date('d-m-Y', strtotime($filters['to_date'])) : '' }}"
-                                            class="form-control" id="to_date"
-                                            placeholder="{{ __('message.to_date') }}">
+                                            value="{{ $ngayVN($filters['to_date']) }}"
+                                            class="form-control" id="to_created_at" placeholder="{{ __('message.to_date') }}">
                                     </div>
                                 </div>
                             </div>
 
                             <div id="filterCreator" class="w-100">
                                 <div class="inner-modal-in-mobile">
-                                    <span class="form-label title_search">{{ __('message.creator') }}</span>
-                                    <div class="d-flex custom-multiselect">
-                                        <select class="form-control form-select select2" id="select_employee"
-                                            name="created_by[]" multiple>
-                                            @foreach ($nhanVien as $nv)
-                                                <option value="{{ $nv['id'] }}"
-                                                    {{ in_array((string) $nv['id'], $nguoiTaoChon, true) ? 'selected' : '' }}>
-                                                    {{ $nv['full_name'] ?? ($nv['name'] ?? '') }}
-                                                </option>
-                                            @endforeach
-                                        </select>
-                                        <span class="chevron-down"></span>
-                                    </div>
+                                    <span class="title_search">{{ __('message.adjustment_created_by') }}</span>
+                                    <select class="form-control form-select mt-1" id="select_employee" name="created_by[]" multiple>
+                                        @foreach ($nhanVien as $item)
+                                            <option value="{{ $item['id'] }}"
+                                                {{ in_array((string) $item['id'], $nguoiTaoChon, true) ? 'selected' : '' }}>
+                                                {{ ($item['code'] ?? '') ? $item['code'] . ' - ' : '' }}{{ $item['full_name'] ?? ($item['name'] ?? '') }}
+                                            </option>
+                                        @endforeach
+                                    </select>
                                 </div>
                             </div>
 
-                            <div id="filterStatus">
-                                <div class="inner-modal-in-mobile input-group d-flex flex-column" id="search_status">
-                                    <span class="title_search d-none d-md-block">{{ __('message.adjustment_status') }}</span>
+                            <div id="filterStatus" class="w-100">
+                                <div class="inner-modal-in-mobile" id="search_status">
+                                    <span class="title_search">{{ __('message.receipt_status') }}</span>
                                     @foreach ($C::TRANG_THAI as $ma => $ten)
                                         <div class="form-check gap-0">
                                             <input class="form-check-input status" type="checkbox" name="status[]"
                                                 value="{{ $ma }}" id="order_status_{{ $ma }}"
                                                 {{ in_array($ma, $trangThaiChon, true) ? 'checked' : '' }}>
                                             <label class="form-check-label ms-2 {{ $C::CHU_TRANG_THAI[$ma] }}"
-                                                style="font-weight: bold" for="order_status_{{ $ma }}">{{ $ten }}</label>
+                                                style="font-weight: bold"
+                                                for="order_status_{{ $ma }}">{{ $ten }}</label>
                                         </div>
                                     @endforeach
                                 </div>
                             </div>
 
+                            {{-- Đổi bộ lọc là về trang 1; số dòng mỗi trang thì giữ. --}}
                             <input type="hidden" name="page_size" value="{{ $meta['page_size'] }}">
                         </form>
                     </div>
@@ -154,12 +278,9 @@
             </div>
         </div>
 
-        <div class="col-12 col-lg-9_5 col-xl-10 mt-md-2 mt-lg-0 wrapper-content-dashboard-middle">
+        <div class="col-12 col-lg-9_5 col-xl-10 mt-md-2 mt-lg-0">
             <div class="content_midd">
                 <div class="content_midd_title">
-                    {{-- h1 chứ không phải h3: đây là tiêu đề cấp 1 của trang. Cỡ chữ dùng
-                         .tieu-de-trang như mọi màn v2 khác — trước đây màn này để .h5
-                         (20px) còn màn khác 24px, mà bản gốc v2 thì 18px cả loạt. --}}
                     <h1 class="tieu-de-trang">{{ __('message.warehouse_adjustment') }}</h1>
 
                     <div class="button-group d-flex my-auto">
@@ -176,130 +297,122 @@
                     </div>
                 </div>
 
-                @if(!empty($error))
-                    <div class="alert alert-warning py-2 my-2">{{ $error }}</div>
-                @endif
-
+                {{-- Bảng đi liền dưới thanh tiêu đề như mọi màn v2 khác (không lồng content_top / content_midd
+                     thứ hai như bản v2 gốc: hai lớp đó đẩy bảng cách xa hàng nút). ===== list.blade.php của v2 ===== --}}
                 <div class="list scrollDiv">
-                    <div class="table-responsive table-border-style">
-                        <table class="table-purchase list none_mobile">
-                            <tr>
-                                <th class="text-center not-export"><input class="form-check-input item-select-all" type="checkbox"></th>
-                                <th class="text-center">{{ __('message.stt') }}</th>
-                                <th class="text-left">{{ __('message.adjustment_code') }}</th>
-                                <th class="text-center">{{ __('message.type') }}</th>
-                                <th class="text-center">{{ __('message.adjustment_created_by') }}</th>
-                                <th class="text-center">{{ __('message.adjustment_created_date') }}</th>
-                                <th class="text-left">{{ __('message.approver') }}</th>
-                                <th class="text-left">{{ __('message.receipt_status') }}</th>
-                                <th class="text-left">{{ __('message.reject_reason') }}</th>
-                                <th class="text-left">{{ __('message.warehouse_status') }}</th>
-                                <th class="text-left">{{ __('message.note') }}</th>
-                                <th class="text-center not-export">{{ __('message.action') }}</th>
-                            </tr>
+                            <div class="table-responsive table-border-style">
+                                <table class="table-purchase list none_mobile">
+                                    <tr>
+                                        <th class="text-center not-export"><input class="form-check-input item-select-all" type="checkbox"></th>
+                                        <th class="text-center">{{ __('message.stt') }}</th>
+                                        <th class="text-left">{{ __('message.adjustment_code') }}</th>
+                                        <th class="text-center">{{ __('message.type') }} </th>
+                                        <th class="text-center">{{ __('message.adjustment_created_by') }}</th>
+                                        <th class="text-center">{{ __('message.adjustment_created_date') }}</th>
+                                        <th class="text-left">{{__('message.approver')}}</th>
+                                        <th class="text-left">{{ __('message.receipt_status') }}</th>
+                                        <th class="text-left">{{ __('message.reject_reason') }}</th>
+                                        <th class="text-left">{{ __('message.warehouse_status') }}</th>
+                                        <th class="text-left">{{ __('message.note') }}</th>
+                                        <th class="text-center not-export">{{ __('message.action') }}</th>
+                                    </tr>
 
-                            @forelse ($list as $i => $p)
-                                @php
-                                    $id = (int) ($p['id'] ?? 0);
-                                    $tt = $p['status'] ?? 'draft';
-                                    $loai = $p['type'] ?? 'adjust';
-                                    $ttKho = $p['warehouse_status'] ?? '';
-                                @endphp
-                                <tr class="item" data-id="{{ $id }}" data-status="{{ $tt }}"
-                                    data-code="{{ $p['code'] ?? '' }}">
-                                    <td class="text-center not-export">
-                                        <input class="form-check-input item-select" type="checkbox" value="{{ $id }}">
-                                    </td>
-                                    <td class="text-center">{{ $stt + $i + 1 }}</td>
-                                    <td class="text-left">
-                                        <a type="button" data-id="{{ $id }}" class="edit_bt edit-item text-decoration-none"
-                                            data-bs-toggle="tooltip" data-bs-placement="top"
-                                            data-bs-title="{{ __('message.edit') }}">{{ $p['code'] ?? '' }}</a>
-                                    </td>
-                                    <td class="text-center">
-                                        <span class="badge {{ $loai === 'balance' ? 'bg-success' : 'bg-info' }} me-1">
-                                            {{ $C::LOAI_PHIEU[$loai] ?? $loai }}
-                                        </span>
-                                    </td>
-                                    <td class="text-center">{{ $p['created_by_name'] ?? '' }}</td>
-                                    <td class="text-center">
-                                        {{ !empty($p['created_at']) ? date('d-m-Y', strtotime($p['created_at'])) : 'N/A' }}
-                                    </td>
-                                    <td class="text-left">
-                                        {{ $tt === 'approved' ? ($p['approver_name'] ?? '') : '' }}
-                                    </td>
-                                    <td class="text-left">
-                                        <b class="{{ $C::CHU_TRANG_THAI[$tt] ?? '' }}">{{ $C::TRANG_THAI[$tt] ?? $tt }}</b>
-                                    </td>
-                                    <td class="text-left">{{ $p['reject_reason'] ?? '' }}</td>
-                                    <td class="text-left">
-                                        @if($ttKho !== '' && isset($C::TRANG_THAI_KHO[$ttKho]))
-                                            <b class="{{ $C::CHU_TRANG_THAI_KHO[$ttKho] }}">{{ $C::TRANG_THAI_KHO[$ttKho] }}</b>
-                                        @endif
-                                    </td>
-                                    <td class="text-left">{{ $p['note'] ?? '' }}</td>
-                                    <td class="action not-export">
-                                        @if($tt === 'draft')
-                                            <a class="dele_bt delete-item" type="button" data-bs-toggle="tooltip"
-                                                data-bs-placement="top" data-bs-title="{{ __('message.delete') }}">
-                                                <i class="fa fa-times"></i>
-                                            </a>
-                                        @endif
-                                    </td>
-                                </tr>
-                            @empty
-                                <tr>
-                                    <td colspan="12" class="text-center py-4">{{ $hasFilter ? 'Không có phiếu điều chỉnh nào khớp bộ lọc đang bật.' : $C::EMPTY_TEXT }}</td>
-                                </tr>
-                            @endforelse
-                        </table>
+                                    @forelse ($list as $i => $item)
+                                        @php
+                                            $id = (int) ($item['id'] ?? 0);
+                                            $tt = $item['status'] ?? 'draft';
+                                            $loai = $item['type'] ?? 'adjust';
+                                            $ttKho = $item['warehouse_status'] ?? '';
+                                        @endphp
+                                        <tr class="item" data-id="{{ $id }}" data-status="{{ $tt }}">
+                                            <td class="text-center not-export"><input class="form-check-input item-select" type="checkbox" value="{{ $id }}"></td>
+                                            <td class="text-center">{{ $stt + $i + 1 }}</td>
+                                            <td class="text-left">
+                                                <a type="button" data-id="{{ $id }}" class="edit_bt edit-item text-decoration-none" data-bs-toggle="tooltip" data-bs-placement="top"
+                                                    data-bs-title="{{ __('message.edit') }}">
+                                                    {{ $item['code'] ?? '' }}
+                                                </a>
+                                            </td>
+                                            <td class="text-center">
+                                                <span class="badge {{ $loai === 'balance' ? 'bg-success' : 'bg-info' }}  me-1">
+                                                    {{ $C::LOAI_PHIEU[$loai] ?? $loai }}
+                                                </span>
+                                            </td>
+                                            <td class="text-center">{{ $item['created_by_name'] ?? '' }}</td>
+                                            <td class="text-center">{{ !empty($item['created_at']) ? $ngayVN($item['created_at']) : 'N/A' }}</td>
+                                            <td class="text-left">{{ $tt === 'approved' ? ($item['approver_name'] ?? '') : '' }}</td>
+                                            <td class="text-left">
+                                                <b class="{{ $C::CHU_TRANG_THAI[$tt] ?? '' }}">{{ $C::TRANG_THAI[$tt] ?? $tt }}</b>
+                                            </td>
+                                            <td class="text-left">{{ $item['reject_reason'] ?? '' }}</td>
+                                            <td class="text-left">
+                                                @if ($ttKho !== '' && isset($C::TRANG_THAI_KHO[$ttKho]))
+                                                    <b class="{{ $C::CHU_TRANG_THAI_KHO[$ttKho] }}">{{ $C::TRANG_THAI_KHO[$ttKho] }}</b>
+                                                @endif
+                                            </td>
+                                            <td class="text-left">{{ $item['note'] ?? '' }}</td>
+                                            <td class="action not-export">
+                                                @if ($tt === 'draft')
+                                                    <a class="dele_bt delete-item" type="button" data-bs-toggle="tooltip" data-bs-placement="top"
+                                                        data-bs-title="{{ __('message.delete') }}"><i class="fa fa-times"></i></a>
+                                                @endif
+                                            </td>
+                                        </tr>
+                                    @empty
+                                        <tr>
+                                            <td colspan="12" class="text-center py-4">
+                                                {{ $hasFilter ? 'Không có phiếu điều chỉnh nào khớp bộ lọc đang bật.' : $C::EMPTY_TEXT }}
+                                            </td>
+                                        </tr>
+                                    @endforelse
+                                </table>
 
-                        {{-- Bản thẻ cho điện thoại: cùng dữ liệu, dựng lại lần hai — đúng như v2. --}}
-                        <div class="table-purchase list none_desktop">
-                            <div class="d-flex align-items-center justify-content-between gap-1 p-2 border">
-                                <input class="form-check-input item-select-all" type="checkbox">
-                                <div class="fw-bold" style="flex: 1">{{ __('message.adjustment_code') }}</div>
-                                <div class="fw-bold">{{ __('message.warehouse_status') }}</div>
-                            </div>
-                            @foreach ($list as $p)
-                                @php $tt = $p['status'] ?? 'draft'; @endphp
-                                <div class="item" data-id="{{ (int) ($p['id'] ?? 0) }}" data-status="{{ $tt }}">
-                                    <input class="form-check-input item-select" type="checkbox" value="{{ (int) ($p['id'] ?? 0) }}">
-                                    <div class="d-flex flex-column" style="flex: 1">
-                                        <span class="fw-semibold">{{ $p['code'] ?? '' }}</span>
+                                <div class="table-purchase list none_desktop">
+                                    <div class="d-flex align-items-center justify-content-between gap-1 p-2 border">
+                                        <input class="form-check-input item-select-all" type="checkbox">
+                                        <div class="fw-bold" style="flex: 1">
+                                            {{ __('message.adjustment_code') }}
+                                        </div>
+                                        <div class="fw-bold">
+                                            {{ __('message.warehouse_status') }}
+                                        </div>
                                     </div>
-                                    <div class="d-flex justify-content-end text-right show_quantity gap-2" style="min-width: 100px">
-                                        <b class="{{ $C::CHU_TRANG_THAI[$tt] ?? '' }}">{{ $C::TRANG_THAI[$tt] ?? $tt }}</b>
-                                    </div>
+                                    @foreach ($list as $key => $item)
+                                        @php $tt = $item['status'] ?? 'draft'; @endphp
+                                        <div key={{ $key }} class="item" data-id="{{ (int) ($item['id'] ?? 0) }}" data-status="{{ $tt }}">
+                                            <input class="form-check-input item-select" type="checkbox" value="{{ (int) ($item['id'] ?? 0) }}">
+                                            <div class="d-flex flex-column" style="flex: 1">
+                                                <span class="fw-semibold">{{ $item['code'] ?? '' }}</span>
+                                            </div>
+                                            <div class="d-flex justify-content-end text-right show_quantity gap-2" style="min-width: 100px">
+                                                <b class="{{ $C::CHU_TRANG_THAI[$tt] ?? '' }}">{{ $C::TRANG_THAI[$tt] ?? $tt }}</b>
+                                                <i class="fa-solid fa-angle-right d-none"></i>
+                                            </div>
+                                        </div>
+                                    @endforeach
                                 </div>
-                            @endforeach
-                        </div>
-                    </div>
+                            </div>
 
-                    {{-- Phân trang dựng đúng khuôn bootstrap-4 mà bản v2 in ra. --}}
-                    <div class="form_pagi">
-                        @include('v2::partials.pagination', ['meta' => $meta])
-                    </div>
+                            <div class="form_pagi">
+                                @include('v2::partials.pagination', ['meta' => $meta])
+                            </div>
                 </div>
 
-                <select class="form-control item-per-page select-width" data-param="page_size">
+                <select class="form-control item-per-page select-width {{ count($list) ? '' : 'd-none' }}" data-param="page_size">
                     @foreach ($C::MUC_SO_DONG as $muc)
-                        <option value="{{ $muc }}" {{ $filters['page_size'] == $muc ? 'selected' : '' }}>
-                            {{ __('message.display', ['name' => $muc]) }}
-                        </option>
+                        <option value="{{ $muc }}" {{ $filters['page_size'] == $muc ? 'selected' : '' }}>{{ __('message.display', ['name' => $muc]) }}</option>
                     @endforeach
                 </select>
-            </div>
+           </div>
         </div>
     </div>
 
-    {{-- ================= Hộp xoá phiếu ================= --}}
     <div class="modal" id="deleteItem">
-        <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-dialog modal-dialog-centered ">
             <div class="modal-content">
                 <div class="modal-header">
                     <h6 class="modal-title">{{ __('message.delete') }} ?</h6>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <button type="button" class="btn-close denied-delete" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
                     <input type="hidden" id="deleteValue">
@@ -312,136 +425,529 @@
                     </div>
                 </div>
                 <div class="modal-footer justify-content-center">
-                    <button type="button" class="bt btn_red" data-bs-dismiss="modal">{{ __('message.close') }}</button>
+                    <button type="button" class="bt btn_red denied-delete" data-bs-dismiss="modal">{{ __('message.close') }}</button>
                     <button type="button" class="bt btn_green delete-value">{{ __('message.delete') }}</button>
                 </div>
             </div>
         </div>
     </div>
 
-    {{-- ================= Hộp lập / sửa phiếu ================= --}}
-    <div class="modal" id="modalCreate" data-bs-keyboard="false">
+    <div class="modal" id="modalCreate" data-bs-keyboard="false" >
         <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable mx-auto" style="min-width: 70%;">
             <div class="modal-content">
                 <div class="modal-header">
                     <h4 class="modal-title">{{ __('message.warehouse_adjustment_document') }}</h4>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <button type="button" class="btn-close denied-delete" data-bs-dismiss="modal"></button>
                 </div>
+                <div class="modal-body " style="padding-top: 0!important" id="content_create">
+                </div>
+            </div>
+        </div>
+    </div>
 
-                <div class="modal-body" style="padding-top: 0!important" id="content_create">
-                    <div class="row">
-                        <div class="col-12">
-                            <div class="py-3 px-2 pt-2 payment-info">
-                                {{-- Hàng nút nằm TRÊN cùng, canh phải — đúng bản v2. --}}
-                                <div class="card-header border-bottom mb-3 pb-2">
-                                    <div class="d-flex justify-content-end">
-                                        <div class="button-group d-flex my-auto">
-                                            <button type="button" class="btn btn-secondary d-inline-block save-order"
-                                                data-status="draft">{{ __('message.status-temporary') }}</button>
-                                            <button type="button" class="btn btn-warning d-inline-block show-popup-confirm-send-approval mx-2"
-                                                style="color: white;">{{ __('message.submit_for_approval') }}</button>
-                                            <button type="button" class="btn btn-success d-inline-block show-popup-confirm-approval">
-                                                {{ __('message.approve') }}</button>
-                                            <button type="button" class="btn btn-danger d-inline-block show-popup-confirm-reject ms-2 d-none">
-                                                {{ __('message.reject') }}</button>
-                                        </div>
-                                    </div>
-                                </div>
+    <div class="offcanvas offcanvas-end offcanvas-custom" tabindex="-1" id="offcanvasDetail"
+        aria-labelledby="offcanvasDetailLabel">
+        <div class="offcanvas-header">
+            <a type="button" aria-label="Đóng" class="btn-back">
+                <i class="fa-solid fa-arrow-left" style="font-size: 20px;"></i>
+            </a>
+            <div class="d-flex" style="flex: 1;">
+                <h5 class="offcanvas-title" id="offcanvasDetailLabel">{{ __('message.detail') }}</h5>
+            </div>
+            <div class="d-flex button-header" style="gap: 12px;">
+                <a class="dele_bt delete-item-canvas d-none" type="button"><i class="fa fa-trash"
+                        style="color: red;"></i></a>
+            </div>
+        </div>
+        <div class="offcanvas-body p-0" style="height: calc(100vh - 58px);">
+            <div class="modal-view-materials" style="padding: 12px"></div>
+            <div class="modal-edit-materials d-none">
+                <div class="item-common">
+                    <span class="name"></span>
+                    <span class="code"></span>
+                    <span class="quantity"></span>
+                </div>
+                <div class="item-quantity">
+                    <h5>{{ __('message.general_information') }}</h5>
+                    <div class="d-flex align-items-center justify-content-between"
+                        style="border-bottom: 1px solid #ddd; padding: 4px;">
+                        <span class="show_menu">{{ __('message.unit_of_measure') }}</span>
+                        <span class="data-unit"></span>
+                    </div>
+                    <div class="d-flex align-items-center justify-content-between"
+                        style="border-bottom: 1px solid #ddd; padding: 4px;">
+                        <span class="show_menu">{{ __('message.unit_price') }}</span>
+                        <span class="data-adjust-price"></span>
+                    </div>
+                    <div class="d-flex align-items-center justify-content-between"
+                        style="border-bottom: 1px solid #ddd; padding: 4px;">
+                        <span class="show_menu">{{ __('message.stock_after_adjustment') }}</span>
+                        <span class="data-stock-after-adjust"></span>
+                    </div>
+                    <div class="d-flex align-items-center justify-content-between"
+                        style="border-bottom: 1px solid #ddd; padding: 4px;">
+                        <span class="show_menu">{{ __('message.status') }}</span>
+                        <span class="data-status"></span>
+                    </div>
+                    <div class="d-flex align-items-center justify-content-between"
+                        style="border-bottom: 1px solid #ddd; padding: 4px;">
+                        <span class="show_menu">{{ __('message.batch_number') }}</span>
+                        <span class="data-lot-number"></span>
+                    </div>
+                    <div class="d-flex align-items-center justify-content-between"
+                        style="border-bottom: 1px solid #ddd; padding: 4px;">
+                        <span class="show_menu">{{ __('message.expiry_date') }}</span>
+                        <span class="data-expire-date"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
-                                <div class="card-body">
-                                    <div class="row mb-2">
-                                        <div class="col-12 col-md-4">
-                                            <label class="form-label mt-1">{{ __('message.document_number') }}</label>
-                                            <input type="text" name="code" class="form-control"
-                                                placeholder="{{ __('message.auto_increment_code') }}" disabled>
-                                        </div>
-                                        <div class="col-12 col-md-4">
-                                            <label class="form-label mt-1">{{ __('message.creation-date') }}</label>
-                                            <input type="text" name="created_date" class="form-control" disabled>
-                                        </div>
-                                        <div class="col-12 col-md-4">
-                                            <label class="form-label mt-1">{{ __('message.created_po_by') }}</label>
-                                            <input type="text" name="created_by_name" class="form-control" disabled
-                                                value="{{ session('api.user.full_name') ?? '' }}">
-                                        </div>
-                                    </div>
+    <div class="modal" id="modalBalanceQuantity">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable" style="min-width: 90%;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h6 class="modal-title">{{ __('message.negative_orders_pending_balance') }}</h6>
+                    <button type="button" class="btn-close denied-delete" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mx-1">
+                        <span class="title_search">{{__('message.negative_stock_balance_description')}} </span>
+                    </div>
+                    <div class="mt-3" style="overflow: auto; height: 400px">
+                        <table class="table-balance">
+                            <thead>
+                                <tr>
+                                    <th class="text-center not-export"><input class="form-check-input item-select-all-balance" type="checkbox" checked></th>
+                                    <th class="text-left">{{ __('message.menu-code') }}</th>
+                                    <th class="text-left">{{ __('message.menu-name') }}</th>
+                                    <th class="text-center">{{ __('message.unit') }}</th>
+                                    <th class="text-center"> {{__('message.batch_number')}}</th>
+                                    <th class="text-center">{{__('message.stock_quantity')}}</th>
+                                    <th class="text-center">{{__('message.adjustment')}}</th>
+                                </tr>
+                            </thead>
+                            <tbody class="list-balance"></tbody>
+                        </table>
+                   </div>
+                </div>
+                <div class="modal-footer justify-content-center">
+                    <button type="button" class="btn btn-danger denied-delete"
+                        data-bs-dismiss="modal">{{ __('message.close') }}</button>
+                    <button type="button" class="btn btn-success btn_create_balance" style="color: white;" data-status="1">{{__('message.create_adjustment_note')}}</button>
+                </div>
+            </div>
+        </div>
+    </div>
 
-                                    <div class="row mb-2">
-                                        <div class="col-12 col-md-4">
-                                            <label class="form-label mt-1">{{ __('message.receipt_status') }}</label>
-                                            <input type="text" name="adjustment_status" class="form-control"
-                                                style="font-weight: bold; color: green !important;"
-                                                value="{{ __('message.create_new') }}" disabled>
-                                        </div>
-                                        <div class="col-12 col-md-4">
-                                            <label class="form-label mt-1">{{ __('message.warehouse_status') }}</label>
-                                            <input type="text" name="warehouse_status" class="form-control" disabled>
-                                        </div>
-                                        <div class="col-12 col-md-4">
-                                            <label class="form-label mt-1">{{ __('message.note') }}</label>
-                                            <div class="box-textarea-cus">
-                                                <textarea class="form-control note p-2" maxlength="200"
-                                                    style="height: 70px" rows="3"></textarea>
-                                                <small id="count-textarea" class="char-counter char-counter2"></small>
-                                            </div>
-                                        </div>
-                                    </div>
+    {{-- Báo "không thể gửi duyệt" khi máy chủ trả err_id = 1 (hàng đã bán ở POS). --}}
+    <div class="modal" id="modalError">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable" style="min-width: 40%;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h6 class="modal-title">{{ __('message.approve_request') }}</h6>
+                    <button type="button" class="btn-close denied-delete" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="modal_center" style="color: red; text-align: center">
+                        <h3 style="font-size: 20px;">{{ __('message.cannot_approve') }}</h3>
+                        <p class="mb-0">{{ __('message.pos_transaction_exists') }}</p>
+                        <p>{{ __('message.approve_may_cause_negative_stock') }}</p>
+                        <p>{{ __('message.check_adjust_quantity_before_continue') }}</p>
+                    </div>
+                </div>
+                <div class="modal-footer justify-content-center">
+                    <button type="button" class="bt btn_red denied-delete"
+                        data-bs-dismiss="modal">{{ __('message.close') }}</button>
+                </div>
+            </div>
+        </div>
+    </div>
 
-                                    <div class="row mb-2 align-items-end">
-                                        <div class="col-12 col-md-4">
-                                            <label class="form-label mt-1">{{ __('message.product_group') }}</label>
-                                            <select class="form-control select-categories">
-                                                <option value="">{{ __('message.select-menu-group') }}</option>
-                                                @foreach ($nhomHang ?? [] as $nh)
-                                                    <option value="{{ $nh['id'] }}">{{ $nh['name'] ?? '' }}</option>
-                                                @endforeach
-                                            </select>
-                                        </div>
-                                        <div class="col-12 col-md-4 mt-2 mt-md-0">
-                                            <button type="button" class="btn btn-primary add-category w-100" disabled>
-                                                {{ __('message.add_all_products_from_group') }}
-                                            </button>
-                                        </div>
-                                        <div class="col-12 col-md-4">
-                                            <label class="form-label mt-1">{{ __('message.goods') }}</label>
-                                            <select class="form-control select-menus form-select" multiple></select>
-                                        </div>
-                                    </div>
+    <div class="modal" id="modalErrorApproval">
+        <div class="modal-dialog modal-dialog-centered " style="min-width:60%;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h6 class="modal-title">{{ __('message.confirm_approval') }}</h6>
+                    <button type="button" class="btn-close denied-delete" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="modal_center" style="color: red; text-align: center">
+                        <h3 style="font-size: 20px;">{{ __('message.cannot_approve') }}</h3>
+                        <p class="mb-0" style="white-space: pre-line">{{ __('message.warning_adjust_sold_pos') }}</p>
+                    </div>
+                </div>
+                <div class="modal-footer justify-content-center">
+                    <button type="button" class="bt btn_red denied-delete"
+                        data-bs-dismiss="modal">{{ __('message.close') }}</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="modalConfirmSendApproval">
+        <div class="modal-dialog modal-dialog-centered " style="min-width: 20%;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h6 class="modal-title">{{ __('message.confirm_send_request') }}</h6>
+                    <button type="button" class="btn-close denied-delete" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="modal_center" style="color: red; text-align: center">
+                        <p>{{ __('message.confirm_approve_request') }}</p>
+                    </div>
+                </div>
+                <div class="modal-footer justify-content-center">
+                    <button type="button" class="btn btn-danger denied-delete"
+                        data-bs-dismiss="modal">{{ __('message.close') }}</button>
+                    {{-- Nút đồng ý luôn xanh, nút bỏ đi luôn đỏ — luật chung, dù v2 để cam. --}}
+                    <button type="button" class="btn btn-success d-inline-block save-order" data-status="1">{{__('message.submit_for_approval')}}</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="modalConfirmApproval">
+        <div class="modal-dialog modal-dialog-centered " style="min-width: 20%;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h6 class="modal-title">{{ __('message.confirm_approval') }}</h6>
+                    <button type="button" class="btn-close denied-delete" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="modal_center" style="color: red; text-align: center">
+                        <p>{{ __('message.confirm_approve_action') }}</p>
+                    </div>
+                </div>
+                <div class="modal-footer justify-content-center">
+                    <button type="button" class="btn btn-danger denied-delete"
+                        data-bs-dismiss="modal">{{ __('message.close') }}</button>
+                    <button type="button" class="btn btn-success d-inline-block save-order" data-status="2">{{ __('message.approve') }}</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="modalReasonCancel">
+        <div class="modal-dialog modal-dialog-centered " style="min-width: 40%;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h6 class="modal-title">{{ __('message.reject_reason') }}</h6>
+                    <button type="button" class="btn-close denied-delete" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="modal_center" style="color: red; text-align: center">
+                        <div class="box-textarea-cus">
+                            <textarea
+                                class="form-control reject_reason p-2"
+                                maxlength="200"
+                                style="height: 70px"
+                                rows="3"
+                                placeholder="{{ __('message.enter_reject_reason') }}"
+                            ></textarea>
+                            <small class="char-counter char-counter2"></small>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer justify-content-center">
+                    <button type="button" class="btn btn-danger denied-delete"
+                        data-bs-dismiss="modal">{{ __('message.close') }}</button>
+                    <button type="button" class="btn btn-success d-inline-block save-order" data-status="3">{{__('message.reject')}}</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {{-- ===== Khuôn hộp LẬP phiếu — create.blade.php của v2 ===== --}}
+    <template id="tplCreate">
+    <div class="row">
+        <div class="col-12">
+            <form action="" id="formPayment">
+                <div class="py-3 px-4 pt-2 payment-info">
+                    <div class="card-header border-bottom mb-3 pb-2">
+                        <div class="d-flex justify-content-end">
+                            <div class="button-group d-flex my-auto">
+                                <button type="button" class="btn btn-secondary d-inline-block save-order" data-status="0">{{ __('message.status-temporary') }}</button>
+                                <button type="button" class="btn btn-warning d-inline-block show-popup-confirm-send-approval mx-2" style="color: white;">{{__('message.submit_for_approval')}}</button>
+                                <button type="button" class="btn btn-success d-inline-block show-popup-confirm-approval">{{ __('message.approve') }}</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card-body">
+                        <div class="row mb-2">
+                            <div class="col-12 col-md-4">
+                                <label class="form-label mt-1" style="text-align: left!important;">{{__('message.document_number')}}</label>
+                                <div>
+                                    <input type="text" name="code" class="form-control" placeholder="{{__('message.auto_increment_code')}}" disabled>
                                 </div>
                             </div>
 
-                            <div class="col-12 d-flex justify-content-end mb-2">
-                                <button type="button" class="btn btn-primary default-to-zero" disabled>
-                                    <i class="fa-solid fa-rotate-right me-2"></i>{{ __('message.default_to_zero') }}
-                                </button>
+                            <div class="col-12 col-md-4">
+                                <label class="form-label mt-1" style="text-align: left!important;">{{__('message.creation-date')}}</label>
+                                <div>
+                                    <input type="text" name="created_date" class="form-control date_picker" disabled>
+                                </div>
                             </div>
 
-                            <div class="col-12">
-                                <div class="info-product border-top">
-                                    <div class="content_midd border-0">
-                                        <div class="table-responsive" style="max-height: calc(100vh - 420px);">
-                                            <table class="table-product">
-                                                <tbody>
-                                                    <tr>
-                                                        <th class="text-center">{{ __('message.stt') }}</th>
-                                                        <th class="text-left">{{ __('message.menu-code') }}</th>
-                                                        <th class="text-left">{{ __('message.menu-name') }}</th>
-                                                        <th class="text-left">{{ __('message.unit') }}</th>
-                                                        <th class="text-center">{{ __('message.batch_number') }} <span class="required">*</span></th>
-                                                        <th class="text-right">{{ __('message.expiry_date') }}</th>
-                                                        <th class="text-center">{{ __('message.stock_quantity') }}</th>
-                                                        <th class="text-center">{{ __('message.adjustment') }}</th>
-                                                        <th class="text-center">{{ __('message.stock_after_adjustment') }}</th>
-                                                        <th class="text-right">{{ __('message.status') }} {{ Str::lower(__('message.inventory')) }}</th>
-                                                        <th class="text-center">{{ __('message.attachment') }}</th>
-                                                        <th class="text-center not-export">{{ __('message.action') }}</th>
-                                                    </tr>
-                                                </tbody>
-                                                <tbody class="list-menu"></tbody>
-                                            </table>
-                                        </div>
+                            <div class="col-12 col-md-4">
+                                <label class="form-label mt-1" style="text-align: left!important;">{{__('message.created_po_by')}}</label>
+                                <div>
+                                    <select name="created_by" id="created_by" class="form-control select2" disabled>
+                                        @php $coToi = false; @endphp
+                                        @foreach ($nhanVien as $item)
+                                            @php $coToi = $coToi || (int) $item['id'] === $uId; @endphp
+                                            <option {{ (int) $item['id'] === $uId ? 'selected' : '' }} value="{{ $item['id'] }}">{{ $item['code'] ?? '' }} {{ !empty($item['code']) ? '-' : '' }} {{ $item['full_name'] ?? ($item['name'] ?? '') }}</option>
+                                        @endforeach
+                                        @if (!$coToi && $uTen !== '')
+                                            <option value="{{ $uId }}" selected>{{ $uTen }}</option>
+                                        @endif
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row mb-2">
+                            <div class="col-12 col-md-4">
+                                <label class="form-label mt-1" style="text-align: left!important;">{{__('message.receipt_status')}}</label>
+                                <div>
+                                    <input type="text" style="font-weight: bold; color: green !important;" name="adjustment_status" class="form-control" value="{{__('message.create_new')}}" disabled>
+                                </div>
+                            </div>
+
+                            <div class="col-12 col-md-4">
+                                <label class="form-label mt-1" style="text-align: left!important;">{{__('message.warehouse_status')}}</label>
+                                <div>
+                                    <input type="text" name="warehouse_status" class="form-control" disabled>
+                                </div>
+                            </div>
+
+                            <div class="col-12 col-md-4">
+                                <label class="form-label mt-1" style="text-align: left!important;">{{__('message.note')}}</label>
+                                <div class="box-textarea-cus">
+                                    <textarea class="form-control note p-2" aria-label="{{ __('message.detailed_reason') }}" maxlength="200" style="height: 70px" rows="3"></textarea>
+                                    <small class="char-counter char-counter2"></small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row mb-2 align-items-end">
+                            <div class="col-12 col-md-4">
+                                <label class="form-label mt-1" style="text-align: left!important;">{{__('message.product_group')}}</label>
+                                <select class="form-control select-categories">
+                                    <option value="">{{ __('message.select-menu-group') }}</option>
+                                    @foreach ($nhomHang ?? [] as $category)
+                                        <option value="{{ $category['id'] }}">{{ $category['name'] ?? '' }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+
+                            <div class="col-12 col-md-4 mt-2 mt-md-0">
+                                <button type="button" class="btn btn-primary add-category w-100" disabled>{{ __('message.add_all_products_from_group') }}</button>
+                            </div>
+
+                            <div class="col-12 col-md-4">
+                                <label class="form-label mt-1" style="text-align: left!important;">{{__('message.goods')}}</label>
+                                <select class="form-control select-menus form-select select2" multiple ></select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </form>
+
+            <div class="col-12 px-md-4 d-flex justify-content-end mb-2">
+                <button type="button" class="btn btn-primary default-to-zero" disabled>
+                    <i class="fa-solid fa-rotate-right me-2"></i>{{__('message.default_to_zero')}}
+                </button>
+            </div>
+
+            <div class="col-12 px-md-4">
+                <div class="info-product border-top">
+                    <div class="content_midd border-0">
+                        <div class="table-responsive" style="max-height: calc(100vh - 500px);">
+                            <table class="table-product">
+                                <tbody>
+                                    <tr>
+                                        <th class="text-center">{{ __('message.stt') }}</th>
+                                        <th class="text-left">{{ __('message.menu-code') }}</th>
+                                        <th class="text-left">{{ __('message.menu-name') }}</th>
+                                        <th class="text-left">{{ __('message.unit') }}</th>
+                                        <th class="text-center"> {{__('message.batch_number')}} <span class="required">*</span></th>
+                                        <th class="text-right">{{__('message.expiry_date')}}</th>
+                                        <th class="text-center">{{__('message.stock_quantity')}}</th>
+                                        <th class="text-center">{{__('message.adjustment')}}</th>
+                                        <th class="text-center">{{__('message.stock_after_adjustment')}}</th>
+                                        <th class="text-right">{{__('message.status')}} {{ Str::lower(__('message.inventory')) }}</th>
+                                        <th class="text-center">{{__('message.attachment')}}</th>
+                                        <th class="text-center not-import not-export">{{__('message.action')}}</th>
+                                    </tr>
+                                </tbody>
+                                <tbody class="list-menu">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    </template>
+
+    {{-- ===== Khuôn hộp SỬA / XEM phiếu — edit.blade.php của v2 (JS đổ dữ liệu vào) ===== --}}
+    <template id="tplEdit">
+    <div class="row">
+        <div class="col-12">
+            <form action="" id="formPayment">
+                <input type="hidden" name="id" value="">
+                <div class="py-3 px-4 pt-2 payment-info">
+                    <div class="card-header border-bottom mb-3 pb-2 edit-actions">
+                        <div class="d-flex justify-content-end">
+                            <div class="button-group d-flex my-auto gap-2">
+                                <button type="button" class="btn btn-secondary d-inline-block save-order chi-luu-tam" data-status="0">{{ __('message.status-temporary') }}</button>
+                                <button type="button" class="btn btn-warning d-inline-block show-popup-confirm-send-approval chi-luu-tam" style="color: white;">{{__('message.submit_for_approval')}}</button>
+                                <button type="button" class="btn btn-success d-inline-block show-popup-confirm-approval chi-cho-duyet">{{ __('message.approve') }}</button>
+                                <button type="button" class="btn btn-danger d-inline-block show-popup-confirm-reject chi-cho-duyet">{{__('message.reject')}}</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card-body">
+                        <div class="row mb-2">
+                            <div class="col-md-4 mb-2 item1">
+                                <label class="form-label mt-1" style="text-align: left!important;">{{__('message.document_number')}}</label>
+                                <div>
+                                    <input type="text" name="code" class="form-control" placeholder="{{__('message.auto_increment_code')}}" value="" disabled>
+                                </div>
+                            </div>
+
+                            <div class="col-md-4 mb-2 item1">
+                                <label class="form-label mt-1" style="text-align: left!important;">{{__('message.creation-date')}}</label>
+                                <div>
+                                    <input type="text" name="created_date" value="" class="form-control date_picker" disabled>
+                                </div>
+                            </div>
+
+                            <div class="col-md-4 mb-2 item1">
+                                <label class="form-label mt-1" style="text-align: left!important;">{{__('message.created_po_by')}}</label>
+                                <div>
+                                    <select name="created_by" id="created_by" class="form-control select2" disabled>
+                                        @foreach ($nhanVien as $item)
+                                            <option value="{{ $item['id'] }}">{{ $item['code'] ?? '' }} {{ !empty($item['code']) ? '-' : '' }} {{ $item['full_name'] ?? ($item['name'] ?? '') }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row mb-2">
+                            <div class="col-md-4 mb-2 item1">
+                                <label class="form-label mt-1" style="text-align: left!important;">{{__('message.approval_date')}}</label>
+                                <div>
+                                    <input type="text" name="approval_date" value="" class="form-control" disabled>
+                                </div>
+                            </div>
+
+                            <div class="col-md-4 mb-2 item1">
+                                <label class="form-label mt-1" style="text-align: left!important;">{{__('message.approver')}}</label>
+                                <div>
+                                    <select name="approver" id="approver" class="form-control select2" disabled>
+                                        <option value=""></option>
+                                        @foreach ($nhanVien as $item)
+                                            <option value="{{ $item['id'] }}">{{ $item['code'] ?? '' }} {{ !empty($item['code']) ? '-' : '' }} {{ $item['full_name'] ?? ($item['name'] ?? '') }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="col-md-4 mb-2 item1">
+                                <label class="form-label mt-1" style="text-align: left!important;">{{__('message.receipt_status')}}</label>
+                                <div>
+                                    <input type="text" style="font-weight: bold;" name="adjustment_status" class="form-control" value="" disabled>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-4 mb-2 item1">
+                                <label class="form-label mt-1" style="text-align: left!important;">{{__('message.warehouse_status')}}</label>
+                                <div>
+                                    <input type="text" name="warehouse_status" class="form-control" value="" style="font-weight: bold; color: black !important;" disabled>
+                                </div>
+                            </div>
+
+                            <div class="col-md-8 mb-2">
+                                <label class="form-label mt-1" style="text-align: left!important;">{{__('message.note')}}</label>
+                                <div class="box-textarea-cus">
+                                    <textarea class="form-control note p-2" maxlength="200" style="height: 70px" rows="3"></textarea>
+                                    <small class="char-counter char-counter2"></small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row mb-2 align-items-end">
+                            <div class="col-12 col-md-4">
+                                <label class="form-label mt-1" style="text-align: left!important;">{{__('message.product_group')}}</label>
+                                <select class="form-control select-categories">
+                                    <option value="">{{ __('message.select-menu-group') }}</option>
+                                    @foreach ($nhomHang ?? [] as $category)
+                                        <option value="{{ $category['id'] }}">{{ $category['name'] ?? '' }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+
+                            <div class="col-12 col-md-4 mt-2 mt-md-0">
+                                <button type="button" class="btn btn-primary add-category w-100" disabled>{{ __('message.add_all_products_from_group') }}</button>
+                            </div>
+
+                            <div class="col-12 col-md-4">
+                                <label class="form-label mt-1" style="text-align: left!important;">{{__('message.goods')}}</label>
+                                <select class="form-control select-menus form-select select2" multiple></select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </form>
+            <div class="col-12 d-flex justify-content-end mb-2 px-2">
+                <button type="button" class="btn btn-primary default-to-zero">
+                    <i class="fa-solid fa-rotate-right me-2"></i>{{__('message.default_to_zero')}}
+                </button>
+            </div>
+
+            <div class="col-12 px-2">
+                <div class="info-product border-top">
+                    <div class="content_midd border-0">
+                        <div class="table-responsive"  style="max-height: calc(100vh - 500px);">
+                            <table class="table-product none_mobile">
+                                <thead>
+                                    <tr>
+                                        <th class="text-center">{{ __('message.stt') }}</th>
+                                        <th class="text-left">{{ __('message.menu-code') }}</th>
+                                        <th class="text-left">{{ __('message.menu-name') }}</th>
+                                        <th class="text-left">{{ __('message.unit') }}</th>
+                                        <th class="text-center"> {{__('message.batch_number')}} <span class="required">*</span></th>
+                                        <th class="text-right">{{__('message.expiry_date')}}</th>
+                                        <th class="text-center">{{__('message.stock_quantity')}}</th>
+                                        <th class="text-center">{{__('message.adjustment')}}</th>
+                                        <th class="text-center">{{__('message.stock_after_adjustment')}}</th>
+                                        <th class="text-right">{{__('message.status')}} {{ Str::lower(__('message.inventory')) }}</th>
+                                        <th class="text-center">{{__('message.attachment')}}</th>
+                                        <th class="text-center not-import not-export">{{__('message.action')}}</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="list-menu"></tbody>
+                            </table>
+                            {{-- Bản thẻ cho điện thoại: bấm một dòng thì mở chi tiết trong offcanvas. --}}
+                            <div class="table-product none_desktop">
+                                <div class="item">
+                                    <div class="fw-bold" style="flex: 1">
+                                        {{ __('message.menu-name') }}
+                                    </div>
+                                    <div class="fw-bold">
+                                        {{ __('message.stock_quantity') }}
                                     </div>
                                 </div>
+                                <div class="list-menu-mobile"></div>
                             </div>
                         </div>
                     </div>
@@ -449,111 +955,7 @@
             </div>
         </div>
     </div>
-
-    {{-- ================= Hộp cân đối hàng âm ================= --}}
-    <div class="modal" id="modalBalanceQuantity">
-        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable" style="min-width: 90%;">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h6 class="modal-title">{{ __('message.negative_orders_pending_balance') }}</h6>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="mx-1">
-                        <span class="title_search">{{ __('message.negative_stock_balance_description') }}</span>
-                    </div>
-                    <div class="mt-3" style="overflow: auto; height: 400px">
-                        <table class="table-balance">
-                            <thead>
-                                <tr>
-                                    <th class="text-center not-export">
-                                        <input class="form-check-input item-select-all-balance" type="checkbox" checked>
-                                    </th>
-                                    <th class="text-left">{{ __('message.menu-code') }}</th>
-                                    <th class="text-left">{{ __('message.menu-name') }}</th>
-                                    <th class="text-center">{{ __('message.unit') }}</th>
-                                    <th class="text-center">{{ __('message.batch_number') }}</th>
-                                    <th class="text-center">{{ __('message.stock_quantity') }}</th>
-                                    <th class="text-center">{{ __('message.adjustment') }}</th>
-                                </tr>
-                            </thead>
-                            <tbody class="list-balance"></tbody>
-                        </table>
-                    </div>
-                </div>
-                <div class="modal-footer justify-content-center">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ __('message.close') }}</button>
-                    <button type="button" class="btn btn-success btn_create_balance" style="color: white;">
-                        {{ __('message.create_adjustment_note') }}
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    {{-- ================= Hộp xác nhận gửi duyệt ================= --}}
-    <div class="modal" id="modalConfirmSendApproval">
-        <div class="modal-dialog modal-dialog-centered" style="min-width: 20%;">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h6 class="modal-title">{{ __('message.confirm_send_request') }}</h6>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="modal_center" style="color: red; text-align: center">
-                        <p>{{ __('message.confirm_approve_request') }}</p>
-                    </div>
-                </div>
-                <div class="modal-footer justify-content-center">
-                    <button type="button" class="btn btn-danger" data-bs-dismiss="modal">{{ __('message.close') }}</button>
-                    <button type="button" class="btn btn-warning d-inline-block save-order" style="color: white;"
-                        data-status="pending">{{ __('message.submit_for_approval') }}</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    {{-- ================= Hộp xác nhận duyệt ================= --}}
-    <div class="modal" id="modalConfirmApproval">
-        <div class="modal-dialog modal-dialog-centered" style="min-width: 20%;">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h6 class="modal-title">{{ __('message.approve') }} ?</h6>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="modal_center" style="color: red; text-align: center">
-                        <p>{{ __('message.confirm_approve_request') }}</p>
-                    </div>
-                </div>
-                <div class="modal-footer justify-content-center">
-                    <button type="button" class="btn btn-danger" data-bs-dismiss="modal">{{ __('message.close') }}</button>
-                    <button type="button" class="btn btn-success d-inline-block save-order"
-                        data-status="approved">{{ __('message.approve') }}</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    {{-- ================= Hộp lý do từ chối ================= --}}
-    <div class="modal" id="modalReject">
-        <div class="modal-dialog modal-dialog-centered" style="min-width: 30%;">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h6 class="modal-title">{{ __('message.reject_reason') }}</h6>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <textarea class="form-control reject_reason p-2" rows="3" maxlength="500"
-                        placeholder="{{ __('message.enter_reject_reason') }}"></textarea>
-                </div>
-                <div class="modal-footer justify-content-center">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ __('message.close') }}</button>
-                    <button type="button" class="btn btn-danger btn-reject-confirm">{{ __('message.reject') }}</button>
-                </div>
-            </div>
-        </div>
-    </div>
+    </template>
 
     {{-- Dòng mẫu của lưới hàng — v2 để sẵn một <table class="d-none"> rồi clone. --}}
     <table class="d-none">
@@ -572,6 +974,9 @@
                         <input type="text" class="quantity-adjust" value="0">
                         <button type="button" class="btn-plus">+</button>
                     </div>
+                    <div class="lot-undefined-control" style="display: none">
+                        <span class="text-danger">{{__('message.adjust_to_zero')}} </span>
+                    </div>
                 </td>
                 <td class="text-center stock_after_adjust"></td>
                 <td class="text-left inventory_status"></td>
@@ -579,7 +984,7 @@
                     <div class="attachment-wrap">
                         <label class="attachment-label">
                             <i class="fa-solid fa-paperclip"></i>
-                            <input type="file" class="form-control attachment-input" accept="image/*" hidden>
+                            <input type="file" class="form-control attachment-input" hidden>
                         </label>
                     </div>
                 </td>
@@ -594,526 +999,1036 @@
 
 @push('scripts')
     <script>
-        const CSRF = '{{ csrf_token() }}';
         const URL_BASE = @json(url('/admin/inventory-adjustments'));
         const URL_STORE = @json(route('admin.dieu-chinh-ton-kho.store'));
         const URL_MAT_HANG = @json(route('admin.dieu-chinh-ton-kho.matHang'));
         const URL_NHOM_HANG = @json(route('admin.dieu-chinh-ton-kho.matHangTheoNhom'));
         const URL_HANG_AM = @json(route('admin.dieu-chinh-ton-kho.hangAm'));
+        const URL_LO_HANG = @json(route('admin.dieu-chinh-ton-kho.loHang'));
         const URL_ANH = @json(route('admin.dieu-chinh-ton-kho.anh'));
-        const LO_MAC_DINH = @json(\App\Http\Controllers\DieuChinhTonKhoController::LO_KHONG_XAC_DINH);
-        const NHAN_DONG = @json(\App\Http\Controllers\DieuChinhTonKhoController::TRANG_THAI_DONG);
+        const LO_KHONG_XAC_DINH = @json(\App\Http\Controllers\DieuChinhTonKhoController::LO_KHONG_XAC_DINH);
         const NHAN_TRANG_THAI = @json(\App\Http\Controllers\DieuChinhTonKhoController::TRANG_THAI);
         const NHAN_KHO = @json(\App\Http\Controllers\DieuChinhTonKhoController::TRANG_THAI_KHO);
+        const NHAN_DONG = @json(\App\Http\Controllers\DieuChinhTonKhoController::TRANG_THAI_DONG);
+        // Nút của v2 mang số 0/1/2/3; API bên này nói bằng chữ.
+        const MA_TRANG_THAI = { 0: 'draft', 1: 'pending', 2: 'approved', 3: 'rejected' };
+        const MAU_TRANG_THAI = { draft: 'green', pending: 'orange', approved: 'blue', rejected: 'red' };
+        const CHU_KHO = { pending: 'text-secondary', done: 'text-primary', rejected: 'text-danger' };
+        const TOI_ID = @json($uId);
 
-        // Số lượng cho tới 3 số lẻ, bỏ đuôi ".000" thừa — đúng cách v2 hiển thị.
-        function soLuong(v) {
+        var startOfMonth = moment().startOf('month');
+        var today = moment().endOf('day');
+        let list_new_lot = [];
+        let sentMenuIds = [];
+        let PHIEU = null;        // phiếu đang mở trong hộp (null = lập mới)
+        let lotUndefined = [];
+        let $HOP = $('#content_create'); // nơi đang đổ khuôn phiếu: modal, hoặc offcanvas trên điện thoại
+
+        // isMobileChecked() lấy từ public/v2/js/script.js (khai const toàn cục) — khai lại
+        // ở đây là SyntaxError "already been declared" và cả trang chết script.
+
+        // Số lượng tới 3 số lẻ, bỏ đuôi ".000" — đúng formatDecimal của v2.
+        function formatDecimal(v) {
             const n = Math.round((Number(v) || 0) * 1000) / 1000;
-            return n.toLocaleString('vi-VN', { maximumFractionDigits: 3 });
+            return Number.isInteger(n) ? n : n.toFixed(3).replace(/0+$/, '');
         }
 
-        /** Mọi thao tác ghi đi bằng form POST ẩn: trang tải lại và toast do session bắn ra. */
-        function postForm(action, method, fields) {
-            const $f = $('<form>', { method: 'POST', action, css: { display: 'none' } });
-            const them = (n, v) => $f.append($('<input>', { type: 'hidden', name: n, value: v == null ? '' : v }));
-            them('_token', CSRF);
-            if (method && method !== 'POST') them('_method', method);
-            them('return', location.pathname + location.search);
-            $.each(fields || {}, (k, v) => them(k, v));
-            $('body').append($f);
-            $f.trigger('submit');
-        }
-
-        // ---------- Bộ lọc: đổi ô nào là lọc lại ngay, gõ thì chờ 400ms ----------
+        // ---------- Bộ lọc: v2 gọi list() ngay khi đổi; bên này gửi form cho master nạp lại ----------
         const $form = $('#search-form');
-        $form.on('change', 'select, input[type="checkbox"]', () => $form.trigger('submit'));
 
-        // Hai ô ngày: lịch một ngày, khuôn DD-MM-YYYY — cùng bộ daterangepicker của v2.
-        $('#from_date, #to_date').each(function () {
-            $(this).daterangepicker({
-                singleDatePicker: true,
-                showDropdowns: true,
-                autoUpdateInput: false,
-                autoApply: true,
-                locale: V2.lichVN(),
-            }, function (start) {
-                $(this.element).val(start.format('DD-MM-YYYY'));
-                $form.trigger('submit');
-            });
+        $('input#from_created_at').daterangepicker({
+            singleDatePicker: true,
+            showDropdowns: true,
+            locale: V2.lichVN(),
+            autoUpdateInput: false,
+            autoApply: true,
+            maxDate: today.format('DD-MM-YYYY')
+        }, function(start, end, label) {
+            $('input#from_created_at').val(start.format('DD-MM-YYYY')).trigger("change");
+            $('input#to_created_at').data('daterangepicker').minDate = start;
         });
-        let timerTim = null;
-        $form.on('input', '#code', function () {
-            clearTimeout(timerTim);
-            timerTim = setTimeout(() => $form.trigger('submit'), 400);
+
+        $('input#to_created_at').daterangepicker({
+            singleDatePicker: true,
+            showDropdowns: true,
+            locale: V2.lichVN(),
+            autoUpdateInput: false,
+            autoApply: true,
+            maxDate: today.format('DD-MM-YYYY'),
+            minDate: startOfMonth
+        }, function(start, end, label) {
+            $('input#to_created_at').val(start.format('DD-MM-YYYY')).trigger("change");
+            $('input#from_created_at').data('daterangepicker').maxDate = start;
         });
+
         $('#select_employee').select2({ placeholder: '{{ __('message.all') }}', width: '100%' });
 
-        $(document).on('change', '.item-select-all', function () {
-            $('.item-select').prop('checked', this.checked);
+        let debounceTimer;
+        $(document).on('input', '#code', function(e) {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(function() {
+                $form.trigger('submit');
+            }, 300);
+        });
+        $(document).on('change', '#select_employee', function() { $form.trigger('submit'); });
+        $(document).on('change', '#from_created_at, #to_created_at', function () { $form.trigger('submit'); });
+        $(document).on('change', '.status', function() { $form.trigger('submit'); });
+
+        $(document).on('click', '.list .item-select-all', function() {
+            let checked = $(this).is(':checked')
+            $('.list .item .item-select').prop('checked', checked)
+        })
+
+        $(document).on('click', '.item-select-balance', function() {
+            let isAllCheck = true;
+            $('.item-select-balance').each(function() {
+                if (!this.checked) {
+                    isAllCheck = false;
+                }
+            });
+            $('.item-select-all-balance').prop('checked', isAllCheck);
         });
 
-        // =================================================================
-        //  Lưới hàng của phiếu
-        // =================================================================
-        let DONG = [];   // dòng hàng đang gõ
-        let SUA_ID = 0;  // 0 = đang lập mới
+        $(document).on('click', '.item-select-all-balance', function() {
+            let checked = $(this).is(':checked')
+            $('.item-select-balance').prop('checked', checked)
+        })
 
-        const timDong = ($tr) => DONG.find((d) => d.key === Number($tr.data('key')));
+        // ---------- Xoá ----------
+        $(document).on('click', '.delete-item', function(e) {
+            e.stopPropagation();
+            let item = $(this).closest('.item')
+            let id = item.attr('data-id')
+            $('#deleteValue').val(id)
+            $('#deleteItem').modal('show')
+        })
 
-        /** Số điều chỉnh: cho số âm, tối đa 3 số lẻ, tồn sau chỉnh không được âm. */
-        function datDieuChinh(d, v) {
-            let n = Number(v);
-            if (!Number.isFinite(n)) n = 0;
-            n = Math.round(n * 1000) / 1000;
-            const ton = Number(d.quantity) || 0;
-            if (ton + n < 0) n = -ton;
-            d.adjust_quantity = n;
-        }
+        $(document).on('click', '.delete-value', function() {
+            var deleteValue = $('#deleteValue').val();
+            var deleteArray = deleteValue.split(/[\s,]+/).filter(Boolean);
+            deleteItems(deleteArray)
+        })
 
-        function veLuoi() {
-            const $body = $('#modalCreate .list-menu').empty();
+        $('#deleteItem').on('hidden.bs.modal', function() {
+            $('#deleteValue').val('');
+        });
 
-            DONG.forEach((d, i) => {
-                const $tr = $('table.d-none tr.menu-item').clone();
-                $tr.attr('data-key', d.key).attr('data-id', d.variant_id);
-
-                $tr.find('.index').text(i + 1);
-                $tr.find('.code').text(d.sku || '');
-                $tr.find('.name').text([d.product_name, d.variant_name].filter(Boolean).join(' · '));
-
-                // Đơn vị tính: hàng có nhiều đơn vị thì thành ô chọn, một đơn vị thì để chữ.
-                if ((d.units || []).length > 1) {
-                    const $sl = $('<select class="form-control form-select unit-select" style="min-width:110px">');
-                    d.units.forEach((u) => $sl.append($('<option>', {
-                        value: u.unit_id, text: u.name || 'Đơn vị chính', selected: Number(u.unit_id) === Number(d.unit_id),
-                    })));
-                    $tr.find('.unit').empty().append($sl);
-                } else {
-                    $tr.find('.unit').text(d.base_unit_name || '');
-                }
-
-                // Ô số lô: các lô đang có + "Không xác định" + "Lô mới…" như v2.
-                const $lo = $('<select class="form-control form-select lot_number_select" style="min-width:150px">');
-                const dsLo = [LO_MAC_DINH].concat((d.lots || []).map((l) => l.lot_number).filter(Boolean));
-                if (d.lot_number && dsLo.indexOf(d.lot_number) === -1) dsLo.push(d.lot_number);
-                [...new Set(dsLo)].forEach((l) => $lo.append($('<option>', {
-                    value: l, text: l === LO_MAC_DINH ? '{{ __('message.unknown') }}' : l, selected: l === d.lot_number,
-                })));
-                $lo.append($('<option>', { value: 'new', text: '{{ __('message.enter_new_batch') }}' }));
-                $tr.find('.lot_number').empty().append($lo);
-
-                $tr.find('.expire_date').text(d.lot_number === LO_MAC_DINH ? '' : (d.expire_date || ''));
-                $tr.find('.quantity').text(soLuong(d.quantity));
-                $tr.find('.quantity-adjust').val(soLuong(d.adjust_quantity));
-
-                const sau = (Number(d.quantity) || 0) + (Number(d.adjust_quantity) || 0);
-                $tr.find('.stock_after_adjust').text(soLuong(sau));
-                $tr.find('.inventory_status').text(NHAN_DONG[d.inventory_status] || '');
-
-                if (d.attachment) {
-                    $tr.find('.attachment-wrap').html(
-                        '<span class="attachment-filename"><a href="' + d.attachment + '" target="_blank">Ảnh</a>'
-                        + '<i class="fa-solid fa-xmark attachment-remove"></i></span>');
-                }
-
-                $body.append($tr);
-            });
-
-            $('#modalCreate .default-to-zero').prop('disabled', DONG.length === 0);
-            $('#modalCreate .show-popup-confirm-send-approval, #modalCreate .show-popup-confirm-approval')
-                .prop('disabled', DONG.length === 0);
-        }
-
-        /** Thêm một dòng. Cùng mặt hàng + cùng lô là một dòng, không nhân đôi. */
-        function themDong(mh, cu, imLang) {
-            if (!mh) return;
-            const donVi = (mh.units && mh.units.length) ? mh.units
-                : [{ unit_id: mh.base_unit_id || 0, name: mh.base_unit_name || '', ratio: 1 }];
-            const lo = cu ? (cu.lot_number || LO_MAC_DINH) : LO_MAC_DINH;
-
-            if (!cu && DONG.some((d) => d.variant_id === mh.variant_id && d.lot_number === lo)) {
-                if (!imLang) toastr.warning('{{ __('message.duplicate_batch_for_product') }}');
-                return;
+        function deleteItems(ids) {
+            $('#deleteItem').modal('hide');
+            $('#offcanvasDetail').offcanvas('hide');
+            if (ids.length === 1) {
+                V2.ghi(URL_BASE + '/' + ids[0], 'DELETE', {});
+            } else if (ids.length > 1) {
+                V2.ghi(URL_BASE + '/bulk-delete', 'POST', { 'ids[]': ids });
             }
-
-            DONG.push({
-                key: DONG.length ? Math.max(...DONG.map((x) => x.key)) + 1 : 1,
-                variant_id: mh.variant_id,
-                sku: mh.sku || '',
-                product_name: mh.product_name || '',
-                variant_name: mh.variant_name || '',
-                base_unit_name: mh.base_unit_name || '',
-                units: donVi,
-                unit_id: cu ? Number(cu.unit_id || 0) : Number(donVi[0].unit_id || 0),
-                lots: mh.lots || [],
-                lot_number: lo,
-                expire_date: cu ? (cu.expire_date || '') : '',
-                quantity: cu ? Number(cu.quantity || 0) : Number(mh.stock || 0),
-                adjust_quantity: cu ? Number(cu.adjust_quantity || 0) : 0,
-                inventory_status: cu ? (cu.inventory_status || '') : '',
-                attachment: cu ? (cu.attachment || '') : '',
-            });
         }
 
-        // ---------- Ô chọn hàng hóa (select2 gọi API tìm) ----------
-        function napSelectMenus() {
-            $('#modalCreate .select-menus').select2({
+        // =================================================================
+        //  Hộp lập / sửa phiếu
+        // =================================================================
+        function moHop(html, $dich) {
+            $HOP = $dich && $dich.length ? $dich : $('#content_create');
+            $HOP.html(html);
+            if ($HOP.is('#content_create')) $('#modalCreate').modal('show');
+            khoiTaoHop();
+        }
+
+        function khoiTaoHop() {
+            const $hop = $HOP;
+            $hop.find('input.date_picker').val($hop.find('input.date_picker').val() || moment().format('DD-MM-YYYY'));
+
+            $hop.find('.select-categories').select2({
                 dropdownParent: $('#modalCreate'),
-                placeholder: '{{ __('message.goods') }}',
+            });
+            $hop.find('#created_by, #approver').select2({
+                dropdownParent: $('#modalCreate'),
                 width: '100%',
-                minimumInputLength: 0,
-                language: { errorLoading: V2.loiTimHang },
+            });
+
+            $hop.find('.select-menus').select2({
                 ajax: {
                     url: URL_MAT_HANG,
+                    delay: 200,
                     transport: V2.ajaxTimHang,
+                    data: function(params) {
+                        return {
+                            keyword: params.term || '',
+                            category_id: $hop.find('.select-categories').val() || 0,
+                        };
+                    },
                     dataType: 'json',
-                    delay: 300,
-                    data: (params) => ({
-                        keyword: params.term || '',
-                        category_id: $('#modalCreate .select-categories').val() || 0,
-                    }),
-                    processResults: (res) => ({
-                        results: (res.data || []).map((r) => ({
-                            id: r.variant_id,
-                            text: [r.product_name, r.variant_name].filter(Boolean).join(' · ')
-                                + ' (' + (r.sku || '') + ')',
-                            mh: r,
-                        })),
-                    }),
+                    processResults: function(data) {
+                        return {
+                            results: $.map(data.data || [], function(item) {
+                                return {
+                                    id: item.variant_id,
+                                    text: [item.product_name, item.variant_name].filter(Boolean).join(' · '),
+                                    mh: item,
+                                };
+                            })
+                        };
+                    },
+                    cache: false
                 },
+                language: { errorLoading: V2.loiTimHang },
+                dropdownParent: $HOP,
+                placeholder: "{{__('message.item-name')}}",
+                allowClear: true
+            }).on('select2:opening', function(e) {
+                if ($(this).data('preventOpen')) {
+                    $(this).removeData('preventOpen');
+                    e.preventDefault();
+                }
             });
+
+            toggleAddCategoryButton();
+            updateCharCounter();
+            calculatorMenuList();
         }
 
-        $(document).on('select2:select', '#modalCreate .select-menus', function (e) {
-            themDong(e.params.data.mh);
-            veLuoi();
-            $(this).val(null).trigger('change');
+        $(document).on('mousedown', '.select2-selection__choice__remove', function(e) {
+            const select = $(this).closest('.select2-container').prev('.select-menus');
+            select.data('preventOpen', true);
         });
 
-        $(document).on('change', '#modalCreate .select-categories', function () {
-            $('#modalCreate .add-category').prop('disabled', !$(this).val());
+        function toggleAddCategoryButton() {
+            let categoryId = $('#content_create .select-categories').val();
+            let khoa = $('#content_create .select-categories').prop('disabled');
+            $('#content_create .add-category').prop('disabled', khoa || !categoryId);
+        }
+
+        $(document).on('change', '#content_create .select-categories', function() {
+            toggleAddCategoryButton();
         });
 
-        /** Đổ cả một nhóm hàng vào lưới — nút của v2. */
-        $(document).on('click', '#modalCreate .add-category', function () {
-            const nhom = $('#modalCreate .select-categories').val();
-            if (!nhom) return;
+        // Chọn hàng ở ô "Hàng hóa" → thêm dòng (v2: loadMenuByIds gọi getMenu lấy lô).
+        $(document).on('select2:select', '#content_create .select-menus', function(e) {
+            const mh = e.params.data.mh;
+            if (!mh) return;
+            loadMenuByIds([mh.variant_id]);
+            $(this).val('').trigger('change');
+        });
+
+        /**
+         * Chọn hàng xong mới hỏi lô — đúng hai nhịp của v2 (menu.select rồi getMenu).
+         * Ô tìm hàng dùng chung của phiếu mua chỉ bày lô dương; đường lô riêng của
+         * màn này trả cả lô "Không xác định" và lô đang âm để có chỗ mà chữa.
+         */
+        function loadMenuByIds(ids) {
+            ids = (ids || []).map(Number).filter(Boolean);
+            if (!ids.length) return;
+
+            $.getJSON(URL_LO_HANG, { ids: ids.join(',') })
+                .done(function(res) {
+                    (res.data || []).forEach(function(mh) { themDongHang(mh); });
+                    sentMenuIds = $('.list-menu .menu-item').map(function() { return $(this).attr('data-id'); }).get();
+                    calculatorMenuList();
+                })
+                .fail(function(x) {
+                    handleMessage({ success: false, message: (x.responseJSON || {}).message || 'Không đọc được lô hàng.' });
+                });
+        }
+
+        $(document).on('select2:unselect', '#content_create .select-menus', function(e) {
+            let removedId = e.params.data.id;
+            $('.list-menu .menu-item[data-id="' + removedId + '"]').remove();
+            calculatorMenuList();
+        });
+
+        $(document).on('click', '#content_create .add-category', function() {
+            let groupId = $('#content_create .select-categories').val();
+            if (!groupId) {
+                alert("Vui lòng chọn nhóm trước!");
+                return;
+            }
             const $nut = $(this).prop('disabled', true);
 
-            $.getJSON(URL_NHOM_HANG, { category_id: nhom })
-                .done((res) => {
+            $.getJSON(URL_NHOM_HANG, { category_id: groupId })
+                .done(function(res) {
                     const ds = res.data || [];
-                    if (!ds.length) { toastr.warning('{{ __('message.import-none') }}'); return; }
-                    ds.forEach((mh) => themDong(mh, null, true));
-                    veLuoi();
+                    if (!ds.length) {
+                        alert("Không có sản phẩm nào trong nhóm.");
+                        return;
+                    }
+                    // Bấm nút hai lần không được nhân đôi lưới: chỉ thêm mặt hàng chưa có dòng.
+                    // (Chọn từng hàng ở ô "Hàng hóa" vẫn thêm được dòng thứ hai cho lô khác, như v2.)
+                    const daCo = $('#content_create .list-menu .menu-item').map(function() { return String($(this).attr('data-id')); }).get();
+                    const moi = ds.map(function(mh) { return mh.variant_id; }).filter(function(id) { return daCo.indexOf(String(id)) === -1; });
+                    if (!moi.length) {
+                        handleMessage({ success: 'info', message: 'Mọi mặt hàng của nhóm đã có trong phiếu.' });
+                        return;
+                    }
+                    loadMenuByIds(moi);
                 })
-                .fail((x) => toastr.error(((x.responseJSON || {}).message) || 'Không đọc được nhóm hàng.'))
-                .always(() => $nut.prop('disabled', false));
+                .fail(function(x) {
+                    handleMessage({ success: false, message: (x.responseJSON || {}).message || 'Không đọc được nhóm hàng.' });
+                })
+                .always(function() { $nut.prop('disabled', false); });
         });
+
+        /** Dựng một dòng hàng từ mặt hàng API trả về (mh) — v2: loadMenuByIds. */
+        function themDongHang(mh, cu) {
+            let item = $('table.d-none tr.menu-item').clone();
+            item.attr('data-id', mh.variant_id);
+            item.attr('data-lot-quantity', 0);
+            item.find('.code').text(mh.sku || '');
+            item.find('.name').text([mh.product_name, mh.variant_name].filter(Boolean).join(' · '));
+            item.find('.unit').html(mh.base_unit_name || mh.unit_name || '');
+            item.attr('data-unit-id', mh.base_unit_id || mh.unit_id || 0);
+
+            // Ô số lô: mọi lô đang có dòng tại kho kèm "(SL: x)" — kể cả lô "Không xác
+            // định" (lot_number rỗng) và lô âm. Hàng chưa có dòng lô nào thì bày lô
+            // "Không xác định" với tổng tồn, để vẫn chỉnh được.
+            let lots = (mh.lots || []).slice();
+            if (!lots.length) {
+                lots.push({ lot_number: LO_KHONG_XAC_DINH, expire_date: '', quantity: mh.stock || 0 });
+            }
+            var innerHtml = `<select name="lot_number" class="form-control form-select lot_number_select">
+                              <option value="">{{__('message.select_batch')}}</option>`;
+            if (list_new_lot.length > 0) {
+                list_new_lot.forEach(function (lot) {
+                    innerHtml += `<option value="${lot}">${lot}</option>`;
+                });
+            }
+            lots.forEach(function (lot) {
+                let lotQty = (lot.quantity != null && lot.quantity !== '') ? parseFloat(lot.quantity) : null;
+                innerHtml += `<option
+                                value="${lot.lot_number ?? ''}"
+                                data-expire-date="${ngayVN(lot.expire_date)}"
+                                data-lot-quantity="${lotQty ?? ''}"
+                            >${lot.lot_number == LO_KHONG_XAC_DINH ? "{{__('message.unknown')}}" : (lot.lot_number ?? '')} (SL: ${lotQty ?? 0})</option>`;
+            });
+            innerHtml += `</select>`;
+            item.find('.lot_number').html(innerHtml);
+
+            // Dòng của phiếu đang sửa: chọn sẵn lô và số đã lưu.
+            if (cu) {
+                item.attr('data-detail-id', cu.id || '');
+                const $sel = item.find('.lot_number_select');
+                const lo = cu.lot_number || LO_KHONG_XAC_DINH;
+                if (!$sel.find(`option[value="${lo}"]`).length) {
+                    $sel.append(`<option value="${lo}" data-lot-quantity="${formatDecimal(cu.quantity)}" data-expire-date="${ngayVN(cu.expire_date)}">${lo == LO_KHONG_XAC_DINH ? "{{__('message.unknown')}}" : lo} (SL: ${formatDecimal(cu.quantity)})</option>`);
+                }
+                $sel.val(lo);
+                item.attr('data-lot-quantity', formatDecimal(cu.quantity));
+                item.find('.quantity').text(formatDecimal(cu.quantity));
+                item.find('.expire_date').text(lo == LO_KHONG_XAC_DINH ? '' : ngayVN(cu.expire_date));
+                item.find('.quantity-adjust').val(formatDecimal(cu.adjust_quantity));
+                item.find('.stock_after_adjust').text(formatDecimal((Number(cu.quantity) || 0) + (Number(cu.adjust_quantity) || 0)));
+                item.find('.inventory_status').html(chuTrangThaiKho(PHIEU ? PHIEU.warehouse_status : ''));
+                item.attr('data-adjust-price', cu.adjust_price || 0);
+                if (lo == LO_KHONG_XAC_DINH) {
+                    item.find('.remove-menu').hide();
+                }
+                if (cu.attachment) {
+                    item.find('.attached').html(`
+                        <input type="text" name="old_attached" class="old-attached" value="${cu.attachment}" hidden>
+                        <a href="${cu.attachment}" target="_blank" download><i class="fa-solid fa-download"></i></a>`);
+                }
+            }
+
+            $HOP.find('.list-menu').append(item);
+        }
+
+        function ngayVN(v) {
+            if (!v) return '';
+            const m = moment(v, ['YYYY-MM-DD', 'DD-MM-YYYY', moment.ISO_8601], true);
+            return m.isValid() ? m.format('DD-MM-YYYY') : '';
+        }
+
+        function chuTrangThaiKho(ma) {
+            if (!ma || !NHAN_KHO[ma]) return '';
+            return `<b class="${CHU_KHO[ma] || ''}">${NHAN_KHO[ma]}</b>`;
+        }
+
+        $(document).on('click', '.remove-menu', function() {
+            $(this).closest('.menu-item').remove();
+            sentMenuIds = $('.list-menu .menu-item').map(function() {
+                return $(this).attr('data-id');
+            }).get();
+            calculatorMenuList();
+        });
+
+        function calculatorMenuList() {
+            const $items = $HOP.find('.list-menu .menu-item');
+            $items.each(function (i, e) {
+                $(e).find('.index').text(i + 1);
+            });
+            const khoa = PHIEU && PHIEU.status !== 'draft';
+            $HOP.find('.default-to-zero').prop('disabled', khoa || $items.length === 0);
+        }
 
         // ---------- Ô số lô ----------
-        $(document).on('change', '#modalCreate .lot_number_select', function () {
-            const $tr = $(this).closest('tr');
-            const d = timDong($tr);
-            if (!d) return;
+        $(document).on('change', '.lot_number_select', function() {
+            const selectedOption = $(this).find('option:selected');
+            const item = $(this).closest('tr');
 
-            if (this.value === 'new') {
-                // Gõ lô mới ngay tại chỗ: ô lô + ô hạn dùng + hai nút Áp dụng / Đóng.
-                $(this).hide();
-                $tr.find('.lot_number').append(
-                    '<div class="lot-new-box">'
-                    + '<input type="text" class="form-control lot-input" placeholder="{{ __('message.enter_new_batch') }}">'
-                    + '<input type="date" class="form-control expire-input">'
-                    + '</div>'
-                    + '<div class="d-flex justify-content-center gap-1 mt-1">'
-                    + '<button type="button" class="btn btn-outline-success btn-sm apply-lot-btn">{{ __('message.apply') }}</button>'
-                    + '<button type="button" class="btn btn-outline-danger btn-sm close-lot-btn">{{ __('message.close') }}</button>'
-                    + '</div>');
+            let id_menu = item.data('id');
+            let val = $(this).val();
+            let arr_lot = [];
+            $('.list-menu .menu-item[data-id="' + id_menu + '"]').not(item).each(function() {
+                let lotVal = $(this).find('.lot_number_select').val();
+                if (lotVal !== 'new' && lotVal !== '' && lotVal !== null && lotVal !== undefined) {
+                    arr_lot.push(lotVal);
+                }
+            })
+
+            if (arr_lot.includes(val)) {
+                alert('{{__('message.duplicate_batch_for_product')}}');
+                $(this).val('');
                 return;
             }
 
-            const lo = (d.lots || []).find((l) => l.lot_number === this.value);
-            d.lot_number = this.value;
-            d.expire_date = lo ? (lo.expire_date || '') : '';
-            veLuoi();
+            if (selectedOption.val() != '') {
+                let lotQuantity = selectedOption.data('lot-quantity');
+                if (lotQuantity !== '' && lotQuantity !== null && lotQuantity !== undefined) {
+                    if (selectedOption.val() == LO_KHONG_XAC_DINH) {
+                        item.find('.stock_after_adjust').text(0);
+                        item.find('.expire_date').text('');
+                        item.find('.lot-undefined-control').show();
+                        item.find('.default-to-zero-item').hide();
+                    } else {
+                        item.find('.lot-undefined-control').hide();
+                        item.find('.default-to-zero-item').show();
+                    }
+                    item.find('.quantity').text(lotQuantity);
+                    item.attr('data-lot-quantity', lotQuantity);
+                    item.find('.quantity-adjust').val(0);
+                    item.find('.stock_after_adjust').text('');
+                } else {
+                    item.find('.quantity-adjust').val(0);
+                    item.find('.quantity').text('0');
+                    item.attr('data-lot-quantity', 0);
+                    item.find('.stock_after_adjust').text('');
+                }
+
+                if (selectedOption.data('expire-date') && selectedOption.data('expire-date') != '') {
+                    item.find('.expire_date').text(selectedOption.data('expire-date'));
+                }
+            } else {
+                item.find('.expire_date').text('');
+                item.find('.quantity').text('');
+                item.attr('data-lot-quantity', 0);
+                item.find('.quantity-adjust').val(0);
+                item.find('.stock_after_adjust').text('');
+            }
         });
 
-        $(document).on('click', '#modalCreate .apply-lot-btn', function () {
-            const $tr = $(this).closest('tr');
-            const d = timDong($tr);
-            const lo = $tr.find('.lot-input').val().trim();
-            const han = $tr.find('.expire-input').val();
+        // ---------- Ô điều chỉnh: nút − / + ----------
+        const ALLOW_DECIMAL_ADJUST = true;
 
-            if (!lo) { alert('{{ __('message.please_enter_batch_number') }}'); return; }
-            if (DONG.some((x) => x !== d && x.variant_id === d.variant_id && x.lot_number === lo)) {
-                alert('{{ __('message.batch_already_exists') }}');
+        $(document).on('click', '.btn-minus', function () {
+            const $item = $(this).closest('.menu-item');
+            const selectedOption = $item.find('option:selected');
+            const $input = $item.find('.quantity-adjust');
+
+            if (selectedOption.val() == '') {
                 return;
             }
-            d.lot_number = lo;
-            d.expire_date = han || '';
-            veLuoi();
-        });
 
-        $(document).on('click', '#modalCreate .close-lot-btn', function () {
-            veLuoi();
-        });
+            $item.css('border', 'none');
 
-        // ---------- Ô điều chỉnh: nút − / + và gõ tay ----------
-        $(document).on('click', '#modalCreate .btn-minus, #modalCreate .btn-plus', function () {
-            const $tr = $(this).closest('tr');
-            const d = timDong($tr);
-            if (!d) return;
-            datDieuChinh(d, (Number(d.adjust_quantity) || 0) + ($(this).hasClass('btn-plus') ? 1 : -1));
-            veLuoi();
-        });
+            const $stockAfterAdjust = $item.find('.stock_after_adjust');
+            const lotQuantity = parseFloat($item.attr('data-lot-quantity')) || 0;
+            let value = parseFloat($input.val()) || 0;
 
-        $(document).on('input', '#modalCreate .quantity-adjust', function () {
-            const $tr = $(this).closest('tr');
-            const d = timDong($tr);
-            if (!d) return;
-
-            // Giữ nguyên chuỗi đang gõ ("-", "1."), chỉ tính lại cột tồn sau chỉnh.
-            let raw = this.value.replace(/[^\d.-]/g, '');
-            if (raw.indexOf('-') > 0) raw = raw.replace(/-/g, '');
-            const phan = raw.split('.');
-            if (phan.length > 2) raw = phan[0] + '.' + phan.slice(1).join('');
-            const cham = raw.indexOf('.');
-            if (cham !== -1 && raw.length - cham - 1 > 3) raw = raw.slice(0, cham + 4);
-            if (this.value !== raw) this.value = raw;
-
-            datDieuChinh(d, ['', '-', '.', '-.'].includes(raw) ? 0 : parseFloat(raw));
-            $tr.find('.stock_after_adjust').text(soLuong((Number(d.quantity) || 0) + d.adjust_quantity));
-        });
-
-        $(document).on('change', '#modalCreate .unit-select', function () {
-            const d = timDong($(this).closest('tr'));
-            if (d) d.unit_id = Number(this.value) || 0;
-        });
-
-        $(document).on('click', '#modalCreate .remove-menu', function () {
-            const d = timDong($(this).closest('tr'));
-            DONG = DONG.filter((x) => x !== d);
-            veLuoi();
-        });
-
-        $(document).on('click', '#modalCreate .default-to-zero-item', function () {
-            const d = timDong($(this).closest('tr'));
-            if (d) { d.adjust_quantity = 0; veLuoi(); }
-        });
-
-        $(document).on('click', '#modalCreate .default-to-zero', function () {
-            DONG.forEach((d) => { d.adjust_quantity = 0; });
-            veLuoi();
-        });
-
-        // ---------- Ảnh chứng từ từng dòng ----------
-        $(document).on('change', '#modalCreate .attachment-input', function () {
-            const $tr = $(this).closest('tr');
-            const d = timDong($tr);
-            if (!d || !this.files[0]) return;
-
-            const fd = new FormData();
-            fd.append('anh', this.files[0]);
-            fd.append('_token', CSRF);
-
-            $.ajax({ url: URL_ANH, method: 'POST', data: fd, contentType: false, processData: false })
-                .done((res) => { d.attachment = res.url || ''; veLuoi(); })
-                .fail((x) => toastr.error((x.responseJSON || {}).message || 'Không tải được ảnh lên.'));
-        });
-
-        $(document).on('click', '#modalCreate .attachment-remove', function () {
-            const d = timDong($(this).closest('tr'));
-            if (d) { d.attachment = ''; veLuoi(); }
-        });
-
-        // ---------- Đếm ký tự ghi chú ----------
-        $(document).on('input', '#modalCreate .note', function () {
-            $(this).siblings('.char-counter2').text(this.value.length + '/' + $(this).attr('maxlength'));
-        });
-
-        // =================================================================
-        //  Mở hộp lập / sửa phiếu
-        // =================================================================
-        function moPhieu(p) {
-            const $m = $('#modalCreate');
-            SUA_ID = p ? Number(p.id || 0) : 0;
-            DONG = [];
-
-            $m.find('input[name="code"]').val(p ? (p.code || '') : '');
-            $m.find('input[name="created_date"]').val(
-                p && p.created_at ? moment(p.created_at).format('DD-MM-YYYY') : moment().format('DD-MM-YYYY'));
-            if (p && p.created_by_name) $m.find('input[name="created_by_name"]').val(p.created_by_name);
-            $m.find('input[name="adjustment_status"]')
-                .val(p ? (NHAN_TRANG_THAI[p.status] || '') : '{{ __('message.create_new') }}')
-                .css('color', p && p.status === 'rejected' ? 'red' : (p && p.status === 'approved' ? 'blue' : 'green'));
-            $m.find('input[name="warehouse_status"]').val(p ? (NHAN_KHO[p.warehouse_status] || '') : '');
-            $m.find('.note').val(p ? (p.note || '') : '').trigger('input');
-
-            // Phiếu đã duyệt / bị từ chối chỉ để xem; phiếu chờ duyệt thì hiện nút Duyệt và Từ chối.
-            const nhap = !p || p.status === 'draft';
-            const cho = p && p.status === 'pending';
-            $m.find('.save-order[data-status="draft"], .show-popup-confirm-send-approval').toggleClass('d-none', !nhap);
-            $m.find('.show-popup-confirm-approval').toggleClass('d-none', !(nhap || cho));
-            $m.find('.show-popup-confirm-reject').toggleClass('d-none', !cho);
-            $m.find('.select-categories, .select-menus, .add-category, .default-to-zero, .note')
-                .prop('disabled', !nhap);
-
-            ((p && p.items) || []).forEach((it) => themDong({
-                variant_id: Number(it.variant_id || 0),
-                sku: it.sku || '',
-                product_name: it.product_name || '',
-                variant_name: it.variant_name || '',
-                base_unit_name: it.base_unit_name || it.unit_name || '',
-                units: it.units || [{ unit_id: it.unit_id || 0, name: it.unit_name || '' }],
-                lots: it.lots || [],
-            }, it, true));
-
-            veLuoi();
-            if (!nhap) $m.find('.list-menu :input').prop('disabled', true);
-            $m.modal('show');
-        }
-
-        $(document).on('click', '.btn_create', function () {
-            moPhieu(null);
-            napSelectMenus();
-        });
-
-        $(document).on('click', '.edit-item', function () {
-            const id = $(this).data('id') || $(this).closest('.item').data('id');
-            $.getJSON(URL_BASE + '/' + id)
-                .done((res) => { moPhieu(res.data); napSelectMenus(); })
-                .fail((x) => toastr.error((x.responseJSON || {}).message || 'Không đọc được phiếu.'));
-        });
-
-        // ---------- Lưu ----------
-        /** Soát lưới trước khi gửi: thiếu lô, trùng lô, hay chỉnh 0 hết là chặn. */
-        function soatLuoi() {
-            if (!DONG.length) return '{{ __('message.product_list_required') }}';
-
-            const daGap = new Set();
-            for (const d of DONG) {
-                const lo = (d.lot_number || '').trim();
-                if (!lo) return '{{ __('message.please_enter_complete_lot_number') }}';
-                const khoa = d.variant_id + '|' + lo;
-                if (daGap.has(khoa)) return '{{ __('message.duplicate_batch_for_product') }}';
-                daGap.add(khoa);
+            if ((value + lotQuantity) > 0) {
+                value--;
+                $input.val(formatDecimal(value));
+                $stockAfterAdjust.text(formatDecimal(lotQuantity + value));
             }
-            if (DONG.every((d) => (Number(d.adjust_quantity) || 0) === 0)) {
-                return 'Mọi dòng đều đang điều chỉnh 0 — chưa có gì để lưu.';
+        });
+
+        $(document).on('click', '.btn-plus', function () {
+            const $item = $(this).closest('.menu-item');
+            const $input = $item.find('.quantity-adjust');
+            const selectedOption = $item.find('option:selected');
+
+            if (selectedOption.val() == '') {
+                return;
             }
-            return '';
-        }
 
-        $(document).on('click', '.save-order', function () {
-            const status = $(this).data('status');
-            const loi = soatLuoi();
-            if (loi) { toastr.error(loi); return; }
+            $item.css('border', 'none');
 
-            const items = DONG.map((d) => ({
-                variant_id: d.variant_id,
-                unit_id: d.unit_id,
-                lot_number: (d.lot_number || '').trim() || LO_MAC_DINH,
-                expire_date: d.expire_date || '',
-                quantity: d.quantity,
-                adjust_quantity: d.adjust_quantity,
-                attachment: d.attachment || '',
-            }));
+            const $stockAfterAdjust = $item.find('.stock_after_adjust');
+            const lotQuantity = parseFloat($item.attr('data-lot-quantity')) || 0;
+            let value = parseFloat($input.val()) || 0;
 
-            postForm(SUA_ID ? URL_BASE + '/' + SUA_ID : URL_STORE, SUA_ID ? 'PUT' : 'POST', {
-                type: 'adjust',
-                status,
-                note: $('#modalCreate .note').val() || '',
-                items: JSON.stringify(items),
+            value++;
+            $input.val(formatDecimal(value));
+            $stockAfterAdjust.text(formatDecimal(lotQuantity + value));
+        });
+
+        $(document).on('input', '.quantity-adjust', function (e) {
+            const $input = $(this);
+            const $item = $input.closest('.menu-item');
+            const selectedOption = $item.find('option:selected');
+            const $stockAfterAdjust = $item.find('.stock_after_adjust');
+
+            if (selectedOption.val() == '') {
+                $input.val('');
+                e.preventDefault();
+                return;
+            }
+
+            const lotQuantity = parseFloat($item.attr('data-lot-quantity')) || 0;
+
+            let rawValue = $input.val();
+
+            // Chỉ giữ một dấu trừ ở đầu.
+            rawValue = rawValue.replace(/-/g, '');
+            if ($input.val().charAt(0) === '-') {
+                rawValue = '-' + rawValue;
+            }
+
+            rawValue = rawValue.replace(/[^\d.-]/g, '');
+
+            if (!ALLOW_DECIMAL_ADJUST) {
+                rawValue = rawValue.replace(/\./g, '');
+            }
+
+            const parts = rawValue.split('.');
+            if (parts.length > 2) {
+                rawValue = parts[0] + '.' + parts.slice(1).join('');
+            }
+
+            // Tối đa 3 số thập phân.
+            const dotIdx = rawValue.indexOf('.');
+            if (dotIdx !== -1 && rawValue.length - dotIdx - 1 > 3) {
+                rawValue = rawValue.slice(0, dotIdx + 4);
+            }
+
+            if (rawValue === '-' || rawValue === '-0' || rawValue === '-.' || rawValue === '.') {
+                $input.val(rawValue);
+                $stockAfterAdjust.text(lotQuantity);
+                return;
+            }
+
+            if (rawValue === '') {
+                $stockAfterAdjust.text(lotQuantity);
+                return;
+            }
+
+            if (rawValue.charAt(0) !== '-' && !rawValue.startsWith('0.')) {
+                rawValue = rawValue.replace(/^0+/, '');
+                if (rawValue === '' || rawValue === '.') rawValue = '0';
+            }
+
+            if (rawValue.startsWith('-') && !rawValue.startsWith('-0.')) {
+                let numberPart = rawValue.slice(1).replace(/^0+/, '');
+                rawValue = '-' + numberPart;
+                if (rawValue === '-' || rawValue === '-0' || rawValue === '-.') {
+                    $input.val(rawValue);
+                    $stockAfterAdjust.text(lotQuantity);
+                    return;
+                }
+            }
+
+            $input.val(rawValue);
+
+            let value = parseFloat(rawValue);
+            if (isNaN(value)) value = 0;
+
+            // Tồn sau chỉnh không được âm.
+            if ((value + lotQuantity) < 0) {
+                value = -lotQuantity;
+                $input.val(value);
+            }
+
+            let stockAfterAdjustValue = lotQuantity + value;
+
+            if (stockAfterAdjustValue % 1 !== 0) {
+                $stockAfterAdjust.text(stockAfterAdjustValue.toFixed(3));
+            } else {
+                $stockAfterAdjust.text(stockAfterAdjustValue);
+            }
+        });
+
+        $(document).on('blur', '.quantity-adjust', function () {
+            const $input = $(this);
+            const $item = $input.closest('.menu-item');
+            const $stockAfterAdjust = $item.find('.stock_after_adjust');
+            const lotQuantity = parseFloat($item.attr('data-lot-quantity')) || 0;
+
+            let rawValue = $input.val();
+
+            if (rawValue === '' ||
+                rawValue === '-' ||
+                rawValue === '.' ||
+                rawValue === '-.' ||
+                rawValue.endsWith('.')) {
+
+                rawValue = rawValue.replace(/\.$/, '');
+
+                if (rawValue === '' || rawValue === '-') {
+                    rawValue = '0';
+                }
+
+                let value = parseFloat(rawValue);
+                if (isNaN(value)) value = 0;
+
+                if (Number.isInteger(value)) {
+                    $input.val(value);
+                } else {
+                    $input.val(value.toFixed(3));
+                }
+
+                const stockAfter = lotQuantity + value;
+                if (stockAfter != 0 || lotQuantity != 0) {
+                    $stockAfterAdjust.text(parseFloat(stockAfter.toFixed(3)));
+                } else {
+                    $stockAfterAdjust.text('');
+                }
+            }
+        });
+
+        // ---------- Đính kèm từng dòng: hiện tên tệp + nút xoá như v2; tệp đẩy lên ngay để lấy đường dẫn ----------
+        $(document).on('change', '.attachment-input', function () {
+            const $input = $(this);
+            const $item = $input.closest('.menu-item');
+            const $wrap = $item.find('.attachment-wrap');
+            const file = this.files[0];
+
+            if (file) {
+                $wrap.find('.attachment-label').hide();
+
+                let filename = file.name;
+                if (filename.length > 10) {
+                    const ext = filename.split('.').pop();
+                    filename = filename.substring(0, 3) + '...' + filename.slice(-3 - ext.length);
+                }
+
+                $wrap.append(`
+                    <span class="attachment-filename">
+                        ${filename}
+                        <i class="fa-solid fa-xmark attachment-remove"></i>
+                    </span>
+                `);
+
+                const fd = new FormData();
+                fd.append('anh', file);
+                $.ajax({ url: URL_ANH, method: 'POST', data: fd, contentType: false, processData: false })
+                    .done(function(res) { $item.attr('data-attachment', res.url || ''); })
+                    .fail(function(x) {
+                        handleMessage({ success: false, message: (x.responseJSON || {}).message || 'Không tải được tệp đính kèm.' });
+                        $wrap.find('.attachment-remove').trigger('click');
+                    });
+            }
+        });
+
+        $(document).on('click', '.attachment-remove', function () {
+            const $item = $(this).closest('.menu-item');
+            const $wrap = $item.find('.attachment-wrap');
+            $wrap.find('.attachment-input').val('');
+            $wrap.find('.attachment-filename').remove();
+            $wrap.find('.attachment-label').show();
+            $item.attr('data-attachment', '');
+        });
+
+        // ---------- Mặc định về 0 ----------
+        $(document).on('click', '.default-to-zero', function () {
+            $('#content_create .quantity-adjust').val(0);
+            $('#content_create .list-menu .menu-item').each(function (i, item) {
+                const $item = $(item);
+                const $stockAfterAdjust = $item.find('.stock_after_adjust');
+                const lotQuantity = parseFloat($item.attr('data-lot-quantity')) || 0;
+                $stockAfterAdjust.text(lotQuantity != 0 ? formatDecimal(lotQuantity) : '');
             });
         });
 
-        $(document).on('click', '.show-popup-confirm-send-approval', () => $('#modalConfirmSendApproval').modal('show'));
-        $(document).on('click', '.show-popup-confirm-approval', function () {
-            // Phiếu đang chờ duyệt thì duyệt thẳng, không gửi lại cả lưới hàng.
-            if (SUA_ID && $('#modalCreate input[name="adjustment_status"]').val() === NHAN_TRANG_THAI.pending) {
-                postForm(URL_BASE + '/' + SUA_ID + '/approve', 'POST', {});
+        $(document).on('click', '.default-to-zero-item', function () {
+            const $item = $(this).closest('.menu-item');
+            const selectedOption = $item.find('option:selected');
+            $item.find('.quantity-adjust').val(0);
+            const $stockAfterAdjust = $item.find('.stock_after_adjust');
+            const lotQuantity = parseFloat($item.attr('data-lot-quantity')) || 0;
+
+            if (lotQuantity != 0 && selectedOption.val() != LO_KHONG_XAC_DINH) {
+                $stockAfterAdjust.text(formatDecimal(lotQuantity));
+            } else {
+                $stockAfterAdjust.text('');
+            }
+        });
+
+        // ---------- Đếm ký tự ----------
+        $(document).on('input', '#formPayment textarea, #modalReasonCancel textarea', function() {
+            updateCharCounter();
+        });
+
+        function updateCharCounter() {
+            $('#formPayment textarea, #modalReasonCancel textarea').each(function() {
+                let length = $(this).val().length;
+                let maxLength = $(this).attr('maxlength');
+                $(this).siblings('.char-counter2').text(length + '/' + maxLength);
+            });
+        }
+
+        // ---------- Mở hộp lập mới ----------
+        $(document).on('click', '.btn_create', function(e) {
+            PHIEU = null;
+            list_new_lot = [];
+            sentMenuIds = [];
+            moHop(document.getElementById('tplCreate').innerHTML);
+        })
+
+        // ---------- Mở hộp sửa / xem ----------
+        $(document).on('click', '.edit-item', function(e) {
+            e.stopPropagation();
+            var id = $(this).data('id');
+            moPhieu(id);
+        });
+
+        function moPhieu(id) {
+            lotUndefined = [];
+            $.getJSON(URL_BASE + '/' + id)
+                .done(function(res) {
+                    doPhieuVaoHop(res.data || {});
+                })
+                .fail(function(x) {
+                    handleMessage({ success: false, message: (x.responseJSON || {}).message || 'Không đọc được phiếu.' });
+                });
+        }
+
+        /** Đổ một phiếu vào khuôn edit — thay cho HTML máy chủ trả về ở v2. $dich bỏ trống = hộp modal. */
+        function doPhieuVaoHop(p, $dich) {
+            PHIEU = p;
+            list_new_lot = [];
+            const $html = $('<div>').html(document.getElementById('tplEdit').innerHTML);
+            const tt = p.status || 'draft';
+            const nhap = tt === 'draft';
+
+            $html.find('input[name="id"]').val(p.id || '');
+            $html.find('input[name="code"]').val(p.code || '');
+            $html.find('input[name="created_date"]').val(p.created_at ? moment(p.created_at).format('DD-MM-YYYY') : '');
+            $html.find('#created_by').val(String(p.created_by || TOI_ID));
+
+            // Ngày duyệt: đã duyệt lấy approval_date, từ chối lấy ngày sửa cuối.
+            let ngayDuyet = '';
+            if (tt === 'approved' && p.approval_date) ngayDuyet = moment(p.approval_date).format('DD-MM-YYYY');
+            else if (tt === 'rejected' && p.updated_at) ngayDuyet = moment(p.updated_at).format('DD-MM-YYYY');
+            $html.find('input[name="approval_date"]').val(ngayDuyet);
+            // API ghi người duyệt / từ chối vào handled_by; ô Người duyệt chỉ có nghĩa khi đã duyệt.
+            $html.find('#approver').val(String(tt === 'approved' ? (p.handled_by || '') : ''));
+
+            $html.find('input[name="adjustment_status"]')
+                .val(NHAN_TRANG_THAI[tt] || '{{ __('message.create_new') }}')
+                .css('color', (MAU_TRANG_THAI[tt] || 'black') + '');
+            $html.find('input[name="adjustment_status"]')[0].style.setProperty('color', MAU_TRANG_THAI[tt] || 'black', 'important');
+            $html.find('input[name="warehouse_status"]').val(NHAN_KHO[p.warehouse_status] || '');
+            $html.find('textarea.note').val(p.note || '');
+
+            // Đã duyệt / từ chối: giấu hẳn hàng nút. Lưu tạm: Lưu tạm + Gửi duyệt. Chờ duyệt: Duyệt + Từ chối.
+            if (tt === 'approved' || tt === 'rejected') $html.find('.edit-actions').remove();
+            $html.find('.chi-luu-tam').toggleClass('d-none', tt !== 'draft');
+            $html.find('.chi-cho-duyet').toggleClass('d-none', tt !== 'pending');
+
+            if (!nhap) {
+                $html.find('textarea.note, .select-categories, .select-menus, .default-to-zero').prop('disabled', true);
+            }
+
+            moHop($html.html(), $dich);
+
+            (p.items || []).forEach(function(it) {
+                themDongHang({
+                    variant_id: it.variant_id,
+                    sku: it.sku || '',
+                    product_name: it.product_name || '',
+                    variant_name: it.variant_name || '',
+                    base_unit_name: it.base_unit_name || it.unit_name || '',
+                    base_unit_id: it.unit_id || 0,
+                    lots: it.lots || [],
+                    stock: it.quantity || 0,
+                }, it);
+            });
+
+            if (!nhap) {
+                $HOP.find('.list-menu :input').prop('disabled', true);
+                $HOP.find('.list-menu .remove-menu, .list-menu .default-to-zero-item').remove();
+            }
+
+            veTheMobile(p);
+            calculatorMenuList();
+        }
+
+        /** Bản thẻ cho điện thoại của hộp sửa — mỗi dòng mang dữ liệu để offcanvas đọc. */
+        function veTheMobile(p) {
+            const $ds = $HOP.find('.list-menu-mobile').empty();
+            (p.items || []).forEach(function(it, key) {
+                const ttKho = NHAN_KHO[p.warehouse_status] || NHAN_KHO.pending;
+                $ds.append(`
+                    <div key="${key}" class="item"
+                        data-id="${it.id || ''}"
+                        data-code="${it.sku || ''}"
+                        data-name="${[it.product_name, it.variant_name].filter(Boolean).join(' · ')}"
+                        data-quantity="${formatDecimal(it.quantity)}"
+                        data-unit="${it.base_unit_name || it.unit_name || ''}"
+                        data-lot-number="${it.lot_number || LO_KHONG_XAC_DINH}"
+                        data-expire-date="${ngayVN(it.expire_date)}"
+                        data-status="${ttKho}"
+                        data-adjust-price="${Number(it.adjust_price || 0).toLocaleString('vi-VN')}"
+                        data-stock-after-adjust="${formatDecimal((Number(it.quantity) || 0) + (Number(it.adjust_quantity) || 0))}">
+                        <div class="d-flex flex-column" style="flex: 1">
+                            <span class="fw-semibold">${[it.product_name, it.variant_name].filter(Boolean).join(' · ')}</span>
+                            <span style="font-size: 14px">${it.sku || ''}</span>
+                        </div>
+                        <div class="d-flex text-right show_quantity gap-2">
+                            ${formatDecimal(it.quantity)}
+                            <i class="fa-solid fa-angle-right d-none"></i>
+                        </div>
+                    </div>`);
+            });
+        }
+
+        // ---------- Gom dữ liệu lưới → gửi ----------
+        function submitOrder(status, $nut) {
+            let details = [];
+
+            $('#content_create .list-menu .menu-item').each(function(i, e) {
+                let lot_number = $(e).find('select.lot_number_select').val();
+                let expire_date = $(e).find('.expire_date').text();
+
+                details.push({
+                    variant_id: $(e).attr('data-id'),
+                    unit_id: $(e).attr('data-unit-id') || 0,
+                    quantity: parseFloat($(e).find('.quantity').text()) || 0,
+                    adjust_quantity: parseFloat($(e).find('.quantity-adjust').val()) || 0,
+                    lot_number: lot_number || '',
+                    expire_date: expire_date,
+                    attachment: $(e).attr('data-attachment') || $(e).find('.old-attached').val() || '',
+                })
+            });
+
+            // Soát như validator store() của v2: phải có dòng, dòng nào cũng phải có lô.
+            if (!details.length) {
+                handleMessage({ success: false, message: '{{ __('message.product_list_required') }}' });
                 return;
             }
+            if (details.some(function(d) { return !d.lot_number; })) {
+                handleMessage({ success: false, message: '{{ __('message.please_enter_complete_lot_number') }}' });
+                return;
+            }
+
+            const maTT = MA_TRANG_THAI[status] || 'draft';
+            const note = $('#content_create textarea.note').val() || '';
+
+            // Phiếu chờ duyệt: Duyệt / Từ chối đi đường riêng, không gửi lại lưới hàng.
+            // Hai lượt này đóng hộp rồi nạp lại bảng; hỏng thì toast báo.
+            if (PHIEU && PHIEU.status === 'pending' && maTT === 'approved') {
+                $('#modalCreate').modal('hide');
+                return V2.ghi(URL_BASE + '/' + PHIEU.id + '/approve', 'POST', { note: note });
+            }
+            if (PHIEU && maTT === 'rejected') {
+                $('#modalCreate').modal('hide');
+                return V2.ghi(URL_BASE + '/' + PHIEU.id + '/reject', 'POST', { reject_reason: $('#modalReasonCancel .reject_reason').val() || '' });
+            }
+
+            // Lưu bằng AJAX: hỏng (bớt quá tồn, trùng lô, mất kết nối) thì GIỮ HỘP LẠI
+            // cùng lưới hàng vừa gõ; được thì hộp tự đóng, toast, nạp lại bảng — đúng
+            // nhịp `modal('hide'); list(1)` của v2.
+            const fields = {
+                type: PHIEU ? (PHIEU.type || 'adjust') : 'adjust',
+                status: maTT,
+                note: note,
+                items: JSON.stringify(details),
+            };
+            V2.luuHop($('#modalCreate'), PHIEU ? URL_BASE + '/' + PHIEU.id : URL_STORE, PHIEU ? 'PUT' : 'POST', fields, $nut);
+        }
+
+        $(document).on('click', '.save-order', function() {
+            let status = $(this).attr('data-status');
+            if (status == 3 && !$('#modalReasonCancel .reject_reason').val().trim()) {
+                handleMessage({ success: false, message: '{{ __('message.enter_reject_reason') }}' });
+                return;
+            }
+            $('#modalConfirmSendApproval').modal('hide');
+            $('#modalConfirmApproval').modal('hide');
+            $('#modalReasonCancel').modal('hide');
+            submitOrder(status, $(this));
+        })
+
+        $(document).on('click', '.show-popup-confirm-send-approval', function() {
+            $('#modalConfirmSendApproval').modal('show');
+        })
+        $(document).on('click', '.show-popup-confirm-approval', function() {
             $('#modalConfirmApproval').modal('show');
-        });
-        $(document).on('click', '.show-popup-confirm-reject', () => $('#modalReject').modal('show'));
-
-        $(document).on('click', '.btn-reject-confirm', function () {
-            const lyDo = $('#modalReject .reject_reason').val().trim();
-            if (!lyDo) { toastr.error('{{ __('message.enter_reject_reason') }}'); return; }
-            postForm(URL_BASE + '/' + SUA_ID + '/reject', 'POST', { reject_reason: lyDo });
-        });
-
-        // ---------- Xoá phiếu ----------
-        $(document).on('click', '.delete-item', function () {
-            $('#deleteValue').val($(this).closest('.item').data('id'));
-            $('#deleteItem').modal('show');
-        });
-        $(document).on('click', '.delete-value', function () {
-            postForm(URL_BASE + '/' + $('#deleteValue').val(), 'DELETE', {});
-        });
+        })
+        $(document).on('click', '.show-popup-confirm-reject', function() {
+            $('#modalReasonCancel .reject_reason').val('');
+            updateCharCounter();
+            $('#modalReasonCancel').modal('show');
+        })
 
         // =================================================================
         //  Cân đối hàng âm
         // =================================================================
-        let HANG_AM = [];
-
-        $(document).on('click', '.btn_balance_quantity', function () {
+        $(document).on('click', '.btn_balance_quantity', function(e) {
+            const modal = $('#modalBalanceQuantity');
             $.getJSON(URL_HANG_AM)
-                .done((res) => {
-                    HANG_AM = res.data || [];
-                    if (!HANG_AM.length) {
-                        toastr.warning(res.message || '{{ __('message.no_negative_stock') }}');
+                .done(function(data) {
+                    const lots = data.data || [];
+                    if (!lots.length) {
+                        handleMessage({ success: false, message: data.message || '{{ __('message.no_negative_stock') }}' });
+                        modal.find('.list-balance').html('');
                         return;
                     }
-                    veHangAm();
-                    $('#modalBalanceQuantity').modal('show');
+                    var html = '';
+                    lots.forEach(function(lot, i) {
+                        html += `
+                            <tr class="item-balance" data-id="${lot.variant_id}" data-i="${i}">
+                                <td class="text-center not-export"><input class="form-check-input item-select-balance" type="checkbox" checked></td>
+                                <td class="text-left">${lot.sku ?? '-'}</td>
+                                <td class="name text-left">${[lot.product_name, lot.variant_name].filter(Boolean).join(' · ') || '-'}</td>
+                                <td class="unit text-center">${lot.unit_name ?? lot.base_unit_name ?? '-'}</td>
+                                <td class="lot_number text-center">${lot.lot_number || LO_KHONG_XAC_DINH}</td>
+                                <td class="quantity text-center">${formatDecimal(lot.quantity)}</td>
+                                <td class="text-center"><span class="text-danger">{{__('message.adjust_to_zero')}}</span></td>
+                            </tr>
+                        `
+                    });
+                    modal.data('lots', lots);
+                    modal.find('.list-balance').html(html);
+                    modal.modal('show');
                 })
-                .fail((x) => toastr.warning(((x.responseJSON || {}).message) || '{{ __('message.no_negative_stock') }}'));
-        });
-
-        function veHangAm() {
-            $('#modalBalanceQuantity .list-balance').html(HANG_AM.map((r, i) => `
-                <tr class="item-balance" data-i="${i}">
-                    <td class="text-center"><input class="form-check-input item-select-balance" type="checkbox" checked></td>
-                    <td class="text-left">${r.sku || '-'}</td>
-                    <td class="text-left">${[r.product_name, r.variant_name].filter(Boolean).join(' · ')}</td>
-                    <td class="text-center">${r.unit_name || r.base_unit_name || '-'}</td>
-                    <td class="text-center">${r.lot_number || LO_MAC_DINH}</td>
-                    <td class="text-center">${soLuong(r.quantity)}</td>
-                    <td class="text-center"><span class="text-danger">{{ __('message.adjust_to_zero') }}</span></td>
-                </tr>`).join(''));
-        }
-
-        $(document).on('change', '.item-select-all-balance', function () {
-            $('.item-select-balance').prop('checked', this.checked);
-        });
-
-        /** Phiếu cân đối luôn dừng ở lưu tạm — người dùng soát lại rồi mới gửi duyệt. */
-        $(document).on('click', '.btn_create_balance', function () {
-            const items = [];
-            $('#modalBalanceQuantity .item-balance').each(function () {
-                if (!$(this).find('.item-select-balance').is(':checked')) return;
-                const r = HANG_AM[Number($(this).data('i'))];
-                if (!r) return;
-                items.push({
-                    variant_id: Number(r.variant_id || 0),
-                    unit_id: Number(r.unit_id || r.base_unit_id || 0),
-                    lot_number: r.lot_number || LO_MAC_DINH,
-                    expire_date: r.expire_date || '',
-                    quantity: Number(r.quantity || 0),
-                    adjust_quantity: -Number(r.quantity || 0),
-                    attachment: '',
+                .fail(function(x) {
+                    handleMessage({ success: false, message: (x.responseJSON || {}).message || '{{ __('message.no_negative_stock') }}' });
                 });
-            });
+        })
 
-            if (!items.length) { toastr.error('{{ __('message.product_list_required') }}'); return; }
-            postForm(URL_STORE, 'POST', {
+        // Phiếu cân đối luôn lưu tạm (status 0, is_balance_sheet = 1) — đúng v2.
+        $(document).on('click', '.btn_create_balance', function(e) {
+            const lots = $('#modalBalanceQuantity').data('lots') || [];
+            let details = [];
+            $('#modalBalanceQuantity .item-balance').each(function(i, e) {
+                if (!$(e).find('.item-select-balance').is(':checked')) return;
+                const lot = lots[Number($(e).attr('data-i'))] || {};
+                let quantity = parseFloat(lot.quantity) || 0;
+                details.push({
+                    variant_id: $(e).attr('data-id'),
+                    unit_id: lot.unit_id || lot.base_unit_id || 0,
+                    quantity: quantity,
+                    adjust_quantity: Math.abs(quantity),
+                    lot_number: lot.lot_number || LO_KHONG_XAC_DINH,
+                    expire_date: '',
+                    attachment: '',
+                })
+            })
+            if (!details.length) {
+                handleMessage({ success: false, message: '{{ __('message.product_list_required') }}' });
+                return;
+            }
+            $('.btn_create_balance').prop('disabled', true);
+            $('#modalBalanceQuantity').modal('hide');
+            V2.ghi(URL_STORE, 'POST', {
                 type: 'balance',
                 status: 'draft',
-                note: '{{ __('message.balance_negative_stock') }}',
-                items: JSON.stringify(items),
+                note: '',
+                items: JSON.stringify(details),
             });
+            $('.btn_create_balance').prop('disabled', false);
+        })
+
+        // =================================================================
+        //  Điện thoại: bấm dòng phiếu → offcanvas chi tiết; bấm dòng hàng → thẻ chi tiết
+        // =================================================================
+        $(document).on('click', '.table-purchase .item', function (e) {
+            if ($(e.target).closest('.item-select, .delete-item, .edit-item').length) {
+                return;
+            }
+            if (isMobileChecked()) {
+                let item = $(this).closest('.item');
+                var id = item.attr('data-id');
+                var status = item.attr('data-status');
+                $('#offcanvasDetail').attr('data-id', id);
+                $('#offcanvasDetail').attr('data-status', status);
+                if (status == 'draft') {
+                    $('.delete-item-canvas').removeClass('d-none');
+                } else $('.delete-item-canvas').addClass('d-none');
+
+                $.getJSON(URL_BASE + '/' + id)
+                    .done(function(res) {
+                        // Chỉ xem: đổ khuôn vào offcanvas rồi khoá hết ô nhập.
+                        doPhieuVaoHop(res.data || {}, $('.modal-view-materials'));
+                        $HOP.find(':input').prop('disabled', true);
+                        $HOP.find('.edit-actions, .remove-menu, .default-to-zero-item').remove();
+                        $HOP = $('#content_create');
+
+                        let offcanvasEl = document.getElementById('offcanvasDetail');
+                        let bsOffcanvas = bootstrap.Offcanvas.getOrCreateInstance(offcanvasEl);
+                        bsOffcanvas.show();
+                    })
+                    .fail(function(x) {
+                        handleMessage({ success: false, message: (x.responseJSON || {}).message || 'Không đọc được phiếu.' });
+                    });
+            }
+        });
+
+        $(document).on('click', '.table-product .item', function (e) {
+            if (isMobileChecked()) {
+                let value = $(this).closest('.item');
+                if (!value.attr('data-name')) return;
+
+                $('#offcanvasDetail').attr('data-id', value.attr('data-id'));
+
+                $('#offcanvasDetail').find('.item-common .name').text(value.attr('data-name'));
+                $('#offcanvasDetail').find('.item-common .code').text(value.attr('data-code'));
+                $('#offcanvasDetail').find('.item-common .quantity').text(value.attr('data-quantity'))
+
+                $('#offcanvasDetail').find('.item-quantity .data-lot-number').text(value.attr('data-lot-number') || '-')
+                $('#offcanvasDetail').find('.item-quantity .data-expire-date').text(value.attr('data-expire-date') || '-');
+                $('#offcanvasDetail').find('.item-quantity .data-unit').text(value.attr('data-unit') || '-');
+                $('#offcanvasDetail').find('.item-quantity .data-status').text(value.attr('data-status') || '-')
+                $('#offcanvasDetail').find('.item-quantity .data-stock-after-adjust').text(value.attr('data-stock-after-adjust') || '-');
+                $('#offcanvasDetail').find('.item-quantity .data-adjust-price').text(value.attr('data-adjust-price') || '-');
+                state.isEdit = true;
+            }
+        });
+
+        $(document).on('click', '.delete-item-canvas', function() {
+            let id = $(this).closest('#offcanvasDetail').attr('data-id')
+            $('#deleteValue').val(id)
+            $('#deleteItem').modal('show')
+        });
+
+        const state = new Proxy({
+            isEdit: false
+        }, {
+            set(target, property, value) {
+                target[property] = value;
+                if (property === 'isEdit') {
+                    updateUI(value);
+                }
+                return true;
+            }
+        });
+
+        function updateUI(isEdit) {
+            if (isEdit) {
+                $('.modal-edit-materials').removeClass('d-none');
+                $('.modal-view-materials').addClass('d-none');
+                $('.button-header').addClass('d-none');
+                document.querySelector('.offcanvas-title').innerText = "{{ __('message.product_details') }}";
+            } else {
+                $('.button-header').removeClass('d-none');
+                $('.button-header').addClass('d-flex');
+                $('.modal-edit-materials').addClass('d-none');
+                $('.modal-view-materials').removeClass('d-none');
+                document.querySelector('.offcanvas-title').innerText = "{{ __('message.detail') }}";
+            }
+        }
+        $(document).on('hidden.bs.offcanvas', '#offcanvasDetail', function () {
+            state.isEdit = false;
+        });
+        $(document).on('click', '.btn-back', function () {
+            if (state.isEdit) {
+                state.isEdit = false;
+            } else {
+                $('.offcanvas.show').each(function () {
+                    let bsOffcanvas = bootstrap.Offcanvas.getInstance(this);
+                    if (bsOffcanvas) {
+                        bsOffcanvas.hide();
+                    }
+                });
+            }
         });
     </script>
 @endpush

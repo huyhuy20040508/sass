@@ -1252,6 +1252,17 @@ class ApiClient
         return $this->get("/admin/dieu-chinh-ton-kho/{$id}");
     }
 
+    /**
+     * Hồ sơ + tồn + MỌI lô (kể cả "Không xác định" và lô âm) của các mặt hàng tại
+     * kho đang làm việc — màn lập phiếu gọi sau khi chọn hàng, như getMenu của v2.
+     *
+     * @param int[] $ids id biến thể
+     */
+    public function dieuChinhTonKhoMatHang(array $ids): Response
+    {
+        return $this->get('/admin/dieu-chinh-ton-kho/mat-hang', ['ids' => implode(',', $ids)]);
+    }
+
     /** Hàng đang âm chờ cân đối — nguồn của hộp "Cân đối hàng âm". */
     public function dieuChinhTonKhoHangAm(): Response
     {

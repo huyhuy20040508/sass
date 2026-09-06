@@ -204,6 +204,16 @@ var DanhMucQuyen = []KhuQuyen{
 							{Ma: "duyet", Ten: "Duyệt phiếu và chuyển hàng giữa hai kho"},
 						},
 					},
+					{
+						Prefix: "dieu-chinh-ton-kho", Ten: "Điều chỉnh tồn kho",
+						Viec: []string{QuyenXem, QuyenThem, QuyenSua, QuyenXoa},
+						Le: []QuyenLe{
+							// Duyệt tách riêng: đó là lúc số tồn đổi theo phiếu. Người
+							// đếm kho lập phiếu được, còn ai gánh trách nhiệm về con số
+							// thì mới được bấm nút đó.
+							{Ma: "duyet", Ten: "Duyệt phiếu và đổi số tồn"},
+						},
+					},
 				},
 			},
 			{
