@@ -961,3 +961,65 @@ func TestNhanSuChanXoaKhiDaGhiSoQuy(t *testing.T) {
 		t.Fatalf("đánh dấu nghỉ việc phải trả 200, nhận %d\n%s", tt.ma, catBot(tt.than))
 	}
 }
+
+// XOÁ HỒ SƠ THÌ NHẢ LẠI EMAIL VÀ TÊN ĐĂNG NHẬP.
+//
+// Trước migration 0056, ba UNIQUE của `users` không xét `deleted_at`: tài khoản
+// đã xoá giữ email và tên đăng nhập của nó vĩnh viễn. Xoá NV2 xong khai lại đúng
+// người ấy — hoặc chỉ là gõ nhầm rồi xoá đi khai lại — đều nhận 422 "Email đã
+// được sử dụng", mà nhìn danh sách thì không ai đang dùng email đó cả. Không có
+// đường nào gỡ trừ vào thẳng database.
+//
+// Bài này khai lại CẢ HAI thứ, vì hai khoá khác nhau và trước đây cùng chắn.
+func TestNhanSuXoaRoiKhaiLaiDuocEmail(t *testing.T) {
+	h := dungHeThong(t)
+	a, _ := haiCuaHang(t, h)
+
+	email := "khai.lai." + a.vet + "@cua-hang-a.test"
+	tenDangNhap := "khai.lai." + a.vet
+	hoSo := func(ten string) map[string]any {
+		return map[string]any{
+			"full_name": ten,
+			"status":    "dang_lam",
+			"shop_id":   a.chiNhanh,
+			"email":     email,
+			"role_id":   3,
+			"quyen":     []string{"thu_ngan"},
+			"tai_khoan": map[string]any{"username": tenDangNhap, "password": matKhauTest},
+		}
+	}
+
+	res := h.goi(t, a.token, http.MethodPost, "/api/v1/admin/nhan-su", hoSo("Người cũ "+a.vet))
+	if res.ma != http.StatusCreated {
+		t.Fatalf("thêm nhân sự lần đầu phải trả 201, nhận %d\n%s", res.ma, catBot(res.than))
+	}
+	var tao struct {
+		Data struct{ ID uint } `json:"data"`
+	}
+	_ = json.Unmarshal([]byte(res.than), &tao)
+
+	// Còn hồ sơ thì vẫn phải chặn trùng — luật cũ không được nới cho người đang sống.
+	trung := h.goi(t, a.token, http.MethodPost, "/api/v1/admin/nhan-su", hoSo("Người trùng "+a.vet))
+	if trung.ma != http.StatusUnprocessableEntity {
+		t.Fatalf("email đang có người dùng phải bị chặn 422, nhận %d\n%s", trung.ma, catBot(trung.than))
+	}
+
+	duong := fmt.Sprintf("/api/v1/admin/nhan-su/%d", tao.Data.ID)
+	if x := h.goi(t, a.token, http.MethodDelete, duong, nil); x.ma != http.StatusOK {
+		t.Fatalf("xoá hồ sơ phải trả 200, nhận %d\n%s", x.ma, catBot(x.than))
+	}
+
+	// Xoá xong: khai lại đúng email và tên đăng nhập ấy.
+	lai := h.goi(t, a.token, http.MethodPost, "/api/v1/admin/nhan-su", hoSo("Người cũ tuyển lại "+a.vet))
+	if lai.ma != http.StatusCreated {
+		t.Fatalf("xoá hồ sơ rồi phải khai lại được email/tên đăng nhập cũ, nhận %d\n%s", lai.ma, catBot(lai.than))
+	}
+
+	// Và tài khoản khai lại là tài khoản MỚI, đăng nhập được bằng mật khẩu vừa đặt.
+	dn := h.goi(t, "", http.MethodPost, "/api/v1/auth/shop-login", map[string]any{
+		"shop_code": a.ma, "username": tenDangNhap, "password": matKhauTest,
+	})
+	if dn.ma != http.StatusOK {
+		t.Fatalf("tài khoản khai lại phải đăng nhập được, nhận %d\n%s", dn.ma, catBot(dn.than))
+	}
+}

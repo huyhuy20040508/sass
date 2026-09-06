@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Services\ApiClient;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -331,25 +332,40 @@ class NhanSuTest extends TestCase
     {
         $this->fakeApi([[
             'id' => 12, 'code' => 'NV0001', 'full_name' => 'Nguyễn Văn An',
-            'status' => 'dang_lam', 'phone' => '0912345678', 'salary' => 8000000,
+            'status' => 'dang_lam', 'phone' => '0912345678', 'id_number' => '001234567890',
+            'salary' => 8000000,
             'work_shift' => 'sang,chieu', 'quyen' => ['thu_ngan'], 'username' => 'an.nv',
         ]]);
 
-        $csv = $this->withSession($this->phienQuanTri())
+        $res = $this->withSession($this->phienQuanTri())
             ->get(route('admin.nhan-su.export', ['work_shift' => 'sang']))
-            ->assertOk()
-            ->streamedContent();
+            ->assertOk();
 
-        $this->assertStringContainsString('NV0001', $csv);
-        $this->assertStringContainsString('Nguyễn Văn An', $csv);
+        // .xlsx THẬT, không phải CSV đội tên nút "Xuất Excel" — cùng đường taiXlsx()
+        // với Nhà cung cấp, Phiếu mua hàng, Điều chỉnh tồn kho, Trả hàng NCC.
+        $this->assertStringContainsString('.xlsx', (string) $res->headers->get('Content-Disposition'));
+        $this->assertSame('PK', substr($res->getContent(), 0, 2), 'Tệp không phải xlsx (zip).');
+
+        $tep = tempnam(sys_get_temp_dir(), 'xlsx');
+        file_put_contents($tep, $res->getContent());
+        $zip = new \ZipArchive;
+        $this->assertTrue($zip->open($tep));
+        $sheet = (string) $zip->getFromName('xl/worksheets/sheet1.xml');
+        $zip->close();
+        unlink($tep);
+
+        $this->assertStringContainsString('NV0001', $sheet);
+        $this->assertStringContainsString('Nguyễn Văn An', $sheet);
         // Ca ghi bằng nhãn tiếng Việt, không phải chuỗi thô của cột SET.
-        $this->assertStringContainsString('Ca sáng, Ca chiều', $csv);
-        $this->assertStringNotContainsString('sang,chieu', $csv);
-        // BOM: thiếu nó thì Excel trên Windows đọc tiếng Việt thành ký tự lạ.
-        $this->assertStringStartsWith("\xEF\xBB\xBF", $csv);
+        $this->assertStringContainsString('Ca sáng, Ca chiều', $sheet);
+        $this->assertStringNotContainsString('sang,chieu', $sheet);
+        // Điện thoại và CCCD giữ nguyên số 0 đầu — chỗ CSV hay hỏng nhất: Excel đọc
+        // chúng thành SỐ rồi cắt số 0 đi, và người nhận không có cách nào biết.
+        $this->assertStringContainsString('>0912345678<', $sheet);
+        $this->assertStringContainsString('>001234567890<', $sheet);
         // Không có cột lương, và cũng không có con số lương lọt vào dòng nào.
-        $this->assertStringNotContainsString('Lương', $csv);
-        $this->assertStringNotContainsString('8000000', $csv);
+        $this->assertStringNotContainsString('Lương', $sheet);
+        $this->assertStringNotContainsString('8000000', $sheet);
 
         // Bộ lọc đi thẳng sang API, không rơi mất ở giữa.
         Http::assertSent(fn ($request) => str_contains($request->url(), '/admin/nhan-su')
@@ -913,5 +929,67 @@ class NhanSuTest extends TestCase
         $this->withSession($this->phienQuanTri())
             ->post('/admin/staff', $hoSo + ['phone' => '0912345678', 'id_number' => '079200001234'])
             ->assertSessionHasNoErrors();
+    }
+
+    /** Bản ghi API trả về sau lượt lưu — nguồn duy nhất biết hồ sơ nằm ở kho nào. */
+    protected function fakeLuu(string $shopIds, array $shopNames): void
+    {
+        Http::fake([
+            '*/admin/nhan-su*' => Http::response(['data' => [
+                'id' => 12,
+                'full_name' => 'Nguyễn Văn An',
+                'shop_ids' => $shopIds,
+                'shop_names' => $shopNames,
+            ]]),
+            '*' => Http::response(['data' => []]),
+        ]);
+    }
+
+    /**
+     * Chuyển hồ sơ sang chi nhánh khác thì bảng của tab đang mở không bày người
+     * đó nữa. Lời báo phải GỌI TÊN chi nhánh mới — không thì người vừa bấm Lưu
+     * thấy dòng biến mất và tưởng vừa mất dữ liệu.
+     */
+    public function test_doi_chi_nhanh_thi_bao_ho_so_da_di_dau(): void
+    {
+        $this->fakeLuu('4', ['Kho miền Nam']);
+
+        $this->withSession($this->phienQuanTri() + [ApiClient::KHOA_CHI_NHANH => 3])
+            ->put('/admin/staff/12', [
+                'full_name' => 'Nguyễn Văn An', 'status' => 'dang_lam', 'shop_ids' => ['4'],
+            ])
+            ->assertRedirect(route('admin.nhan-su.index'));
+
+        $cau = (string) session('success');
+        $this->assertStringContainsString('Đã cập nhật hồ sơ', $cau);
+        $this->assertStringContainsString('Kho miền Nam', $cau);
+        // Câu này là lời báo, không phải lỗi: nhét vào ô error là toast đỏ.
+        $this->assertNull(session('error'));
+    }
+
+    /** Còn thuộc chi nhánh của tab (dù thêm kho khác) thì không nói thêm gì. */
+    public function test_van_thuoc_chi_nhanh_cua_tab_thi_khong_noi_them(): void
+    {
+        $this->fakeLuu('3,4', ['Kho miền Bắc', 'Kho miền Nam']);
+
+        $this->withSession($this->phienQuanTri() + [ApiClient::KHOA_CHI_NHANH => 3])
+            ->put('/admin/staff/12', [
+                'full_name' => 'Nguyễn Văn An', 'status' => 'dang_lam', 'shop_ids' => ['3', '4'],
+            ]);
+
+        $this->assertSame('Đã cập nhật hồ sơ "Nguyễn Văn An".', session('success'));
+    }
+
+    /** Đang xem gộp mọi chi nhánh: bảng bày hết, không giấu ai nên không cảnh báo. */
+    public function test_xem_gop_thi_khong_noi_them(): void
+    {
+        $this->fakeLuu('4', ['Kho miền Nam']);
+
+        $this->withSession($this->phienQuanTri() + [ApiClient::KHOA_CHI_NHANH => 0])
+            ->put('/admin/staff/12', [
+                'full_name' => 'Nguyễn Văn An', 'status' => 'dang_lam', 'shop_ids' => ['4'],
+            ]);
+
+        $this->assertSame('Đã cập nhật hồ sơ "Nguyễn Văn An".', session('success'));
     }
 }

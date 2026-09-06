@@ -261,7 +261,7 @@ func (s *nhanSuService) DoiTrangThai(ctx context.Context, id uint, req *dto.Nhan
 	return s.GetByID(ctx, id)
 }
 
-// Delete xoá MỀM hồ sơ, và KHOÁ luôn tài khoản đăng nhập gắn kèm.
+// Delete xoá MỀM hồ sơ, và XOÁ luôn tài khoản đăng nhập gắn kèm.
 //
 // Trước đây chỗ này để nguyên tài khoản, và đó là một lỗ hổng đúng bằng lỗ hổng
 // migration 0011 đã bịt cho trạng thái "đã nghỉ" — chỉ khác là kín hơn nhiều:
@@ -274,8 +274,19 @@ func (s *nhanSuService) DoiTrangThai(ctx context.Context, id uint, req *dto.Nhan
 //
 // Xoá là hành động MẠNH HƠN "đã nghỉ", nên nó không thể lỏng hơn.
 //
-// Đi qua UserService.UpdateStatus chứ không ghi thẳng cột: mọi luật của tài
-// khoản nằm ở đó và chỉ ở đó.
+// XOÁ tài khoản chứ không chỉ khoá lại. Khoá thì dòng `users` nằm lại mãi mãi:
+// không hồ sơ nào trỏ tới (repository nhả `user_id` trước khi xoá), không màn
+// hình nào bày ra, mà vẫn giữ email và tên đăng nhập trong khoá duy nhất. Tuyển
+// lại đúng người đó — hay chỉ là gõ nhầm rồi xoá đi khai lại — đều nhận 422
+// "Email đã được sử dụng" mà không nhìn thấy ai đang dùng email ấy.
+//
+// Nhả tài khoản là câu trả lời đúng cho MÀN NÀY, vì hai chốt ngay bên dưới đã
+// bắt mọi hồ sơ có dấu vết sổ sách phải đi đường "đã nghỉ" (hồ sơ ở lại, tài
+// khoản vẫn bị khoá). Cái còn xoá được là hồ sơ chẳng có gì để giữ. Chứng từ cũ
+// vẫn đọc ra tên người lập: chúng tra `users` bằng Unscoped.
+//
+// Đi qua UserService.Delete chứ không ghi thẳng cột: mọi luật của tài khoản nằm
+// ở đó và chỉ ở đó — kể cả chốt "không xoá super admin cuối cùng".
 func (s *nhanSuService) Delete(ctx context.Context, id uint, actor Actor) error {
 	nv, err := s.repo.FindByID(ctx, id)
 	if err != nil {
@@ -318,7 +329,7 @@ func (s *nhanSuService) Delete(ctx context.Context, id uint, actor Actor) error 
 		}
 		// Tài khoản đi TRƯỚC hồ sơ: hỏng ở đây (super admin cuối cùng, thiếu quyền)
 		// thì hồ sơ chưa mất, và cửa hàng đọc màn hình vẫn thấy đúng những gì đang có.
-		if _, err := s.users.UpdateStatus(ctx, *nv.UserID, "inactive", actor); err != nil {
+		if err := s.users.Delete(ctx, *nv.UserID, actor); err != nil {
 			return err
 		}
 	}

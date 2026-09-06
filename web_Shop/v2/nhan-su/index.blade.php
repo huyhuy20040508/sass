@@ -533,7 +533,9 @@
                                         </div>
                                     </div>
                                     <div class="col-md-2">
-                                        <label class="form-label d-block">{{ __('message.personnel-type') }}</label>
+                                        {{-- Cùng chữ với cột trên bảng và ô trong hộp Sửa: ba chỗ cùng bày
+                                             một thứ (CỬA vào của người này) nên phải gọi cùng một tên. --}}
+                                        <label class="form-label d-block">{{ __('message.hr_permission') }}</label>
                                         @foreach ($C::NHAN_CUA as $cua => $ten)
                                             <div class="form-check gap-0">
                                                 <input class="form-check-input" type="checkbox" value="{{ $cua }}" id="detail_cua_{{ $cua }}" disabled>

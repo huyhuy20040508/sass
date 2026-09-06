@@ -112,9 +112,11 @@ func (r *userRepository) ExistsByEmail(ctx context.Context, email string) (bool,
 }
 
 func (r *userRepository) ExistsByEmailExcept(ctx context.Context, email string, excludeID uint) (bool, error) {
-	// Unscoped: tài khoản xoá mềm vẫn chiếm email trong UNIQUE index nên phải tính vào,
-	// nếu không sẽ lọt xuống DB và vỡ thành lỗi 500 thay vì báo trùng email.
-	q := r.db.WithContext(ctx).Unscoped().Model(&domain.User{}).Where("email = ?", email)
+	// CHỈ tài khoản đang sống. Từ migration 0056, uq_users_email có thêm cột
+	// deleted_mark nên tài khoản đã xoá không giữ email nữa — đếm cả chúng vào là
+	// tự dựng lại đúng cái tường vừa dỡ: xoá hồ sơ nhân sự xong không khai lại
+	// được người đó, mà màn hình chẳng cho thấy ai đang dùng email ấy.
+	q := r.db.WithContext(ctx).Model(&domain.User{}).Where("email = ?", email)
 	if excludeID > 0 {
 		q = q.Where("id <> ?", excludeID)
 	}
@@ -135,9 +137,9 @@ func (r *userRepository) ExistsByUsernameExcept(ctx context.Context, username st
 	// truy vấn, nên điều kiện ở đây khớp đúng khoá thật (tenant_id, username) —
 	// hai cửa hàng cùng có tài khoản 'admin' là bình thường và không được báo trùng.
 	//
-	// Unscoped vì cùng lý do với ExistsByEmailExcept: uq_users_username không loại
-	// tài khoản đã xoá mềm ra, tên vẫn bị giữ chỗ.
-	q := r.db.WithContext(ctx).Unscoped().Model(&domain.User{}).Where("username = ?", username)
+	// Chỉ tài khoản đang sống, cùng lý do với ExistsByEmailExcept: từ migration
+	// 0056 uq_users_username không giữ chỗ cho tài khoản đã xoá nữa.
+	q := r.db.WithContext(ctx).Model(&domain.User{}).Where("username = ?", username)
 	if excludeID > 0 {
 		q = q.Where("id <> ?", excludeID)
 	}
