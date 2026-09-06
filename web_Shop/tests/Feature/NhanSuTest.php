@@ -92,16 +92,15 @@ class NhanSuTest extends TestCase
             ->get('/admin/staff')->assertOk()->getContent();
 
         $this->assertStringContainsString('>STT<', $html);
-        $this->assertStringContainsString('>Mã NV<', $html);
-        $this->assertStringContainsString('>Họ tên<', $html);
+        $this->assertStringContainsString('>Mã nhân sự<', $html);
+        $this->assertStringContainsString('>Họ và tên<', $html);
 
         // Mã nằm trong ô riêng của nó, không phải trong khối chữ phụ dưới tên.
-        $this->assertStringContainsString('<code class="nsu-code">NV0001</code>', $html);
-        $this->assertStringNotContainsString('nsu-small">NV0001', $html);
+        $this->assertStringContainsString('<td class="text-left item-code show_code">NV0001</td>', $html);
 
         // Số thứ tự đếm từ 1.
-        $this->assertMatchesRegularExpression('#<td class="nsu-c-stt nsu-muted">\s*1\s*</td>#u', $html);
-        $this->assertMatchesRegularExpression('#<td class="nsu-c-stt nsu-muted">\s*2\s*</td>#u', $html);
+        $this->assertMatchesRegularExpression('#<td class="text-center">\s*1\s*</td>#u', $html);
+        $this->assertMatchesRegularExpression('#<td class="text-center">\s*2\s*</td>#u', $html);
     }
 
     /**
@@ -305,12 +304,12 @@ class NhanSuTest extends TestCase
 
         $res = $this->withSession($this->phienQuanTri())->get('/admin/staff')->assertOk();
 
-        // Nút con mắt trên dòng, mang theo nguyên hồ sơ.
-        $res->assertSee('data-nsu-xem', false);
-        $res->assertSee('Xem chi tiết', false);
-        // KHÔNG có hộp thoại thứ hai — chỉ có đúng một hộp thêm/sửa cho cả trang.
-        $res->assertSee('id="nsuOverlay"', false);
-        $this->assertSame(1, substr_count($res->getContent(), 'id="nsuForm"'));
+        // Nút con mắt trên dòng; hồ sơ đọc từ khối JSON nhúng trong trang.
+        $res->assertSee('class="detail-item"', false);
+        $res->assertSee('id="DetailEmployee"', false);
+        $res->assertSee('id="v2-rows"', false);
+        // Đúng một hộp thêm/sửa cho cả trang.
+        $this->assertSame(1, substr_count($res->getContent(), 'id="employeeForm"'));
         // Mấy ô đã bỏ khỏi bảng vẫn có mặt trong dữ liệu nhúng để hộp xem dựng lên.
         $res->assertSee('079200001234', false);
         $res->assertSee('12 Lê Lợi', false);
@@ -374,9 +373,12 @@ class NhanSuTest extends TestCase
         $html = $this->withSession($this->phienQuanTri())
             ->get('/admin/staff')->assertOk()->getContent();
 
-        $this->assertStringContainsString('id="nsuBulkForm"', $html);
-        $this->assertStringContainsString('form="nsuBulkForm"', $html);
-        $this->assertStringContainsString('id="nsuChonHet"', $html);
+        $this->assertStringContainsString('item-select-all', $html);
+        $this->assertStringContainsString('id="delete-mutil-data"', $html);
+        // Không form nào bọc bảng: ô tick và nút xoá hàng loạt gửi bằng AJAX.
+        $dau = strpos($html, 'class="list scrollDiv"');
+        $bang = substr($html, $dau, strpos($html, 'id="v2-rows"') - $dau);
+        $this->assertStringNotContainsString('<form', $bang);
 
         // Đánh dấu nghỉ việc hai hồ sơ -> hai lượt gọi trạng thái.
         $this->withSession($this->phienQuanTri())
@@ -766,13 +768,14 @@ class NhanSuTest extends TestCase
         $res = $this->withSession($this->phienQuanTri())->get('/admin/staff');
 
         $res->assertOk();
-        $res->assertSee('id="nsuConfirm"', false);
+        $res->assertSee('id="hoiEmployee"', false);
         // Không còn ô phân quyền thứ hai: chức danh là chỗ duy nhất phân quyền.
         $res->assertDontSee('name="role_id"', false);
         // Xác nhận xoá cũng đi qua hộp đó: hai kiểu hộp thoại trên cùng một
         // màn hình thì cái nào cũng trông như của người khác.
         $res->assertDontSee('onsubmit="return confirm', false);
-        $res->assertSee('data-nsu-xoa', false);
+        $res->assertSee('id="deleteItem"', false);
+        $res->assertSee('class="dele_bt delete-item"', false);
     }
 
     /** API từ chối thì in nguyên câu của nó ra, không nuốt thành "thao tác không thành công". */
@@ -838,22 +841,14 @@ class NhanSuTest extends TestCase
         $html = $this->withSession($this->phienQuanTri())
             ->get('/admin/staff')->assertOk()->getContent();
 
-        // Bề rộng cột lấy từ CSS, không nhét style thẳng vào từng ô.
-        preg_match_all('/td\.(nsu-c-[a-z]+)\s*\{\s*width:\s*([0-9.]+)%/', $html, $m);
-        $rong = array_combine($m[1], array_map('floatval', $m[2]));
-
-        // Đủ mười cột của bảng, không sót cột nào.
-        preg_match_all('/<th class="(nsu-c-[a-z]+)"/', $html, $cot);
-        $this->assertCount(10, $cot[1]);
-        foreach ($cot[1] as $lop) {
-            $this->assertArrayHasKey($lop, $rong, "Cột {$lop} chưa khai bề rộng");
-        }
-
-        $this->assertSame(100.0, array_sum($rong));
+        // Bề rộng cột lấy từ CSS, không nhét style thẳng vào từng ô. Đủ 13 cột.
+        preg_match_all('/table\.table-employee\.none_mobile th[^{]*\{\s*width:\s*([0-9.]+)%/', $html, $m);
+        $this->assertCount(13, $m[1]);
+        $this->assertSame(100.0, array_sum(array_map('floatval', $m[1])));
     }
 
-    /** Bảng canh giữa và chia cột cố định — cùng khuôn với các trang danh sách khác. */
-    public function test_bang_canh_giua_va_chia_cot_co_dinh(): void
+    /** Bảng trong vỏ v2: không ép table-layout fixed, không min-width — trang không cuộn ngang. */
+    public function test_bang_v2_khong_ep_fixed_khong_min_width(): void
     {
         $this->fakeApi([
             ['id' => 12, 'code' => 'NV0001', 'full_name' => 'Người thứ nhất', 'status' => 'dang_lam'],
@@ -862,7 +857,61 @@ class NhanSuTest extends TestCase
         $html = $this->withSession($this->phienQuanTri())
             ->get('/admin/staff')->assertOk()->getContent();
 
-        $this->assertStringContainsString('table-layout: fixed', $html);
-        $this->assertStringContainsString('padding: 14px 10px; vertical-align: middle; text-align: center;', $html);
+        $dau = strpos($html, 'table.table-employee.none_mobile {');
+        $khoi = substr($html, $dau, strpos($html, '.hoi-body') - $dau);
+        $this->assertStringNotContainsString('table-layout', $khoi);
+        $this->assertStringNotContainsString('min-width', $khoi);
+        $this->assertStringContainsString('white-space: nowrap', $khoi);
+    }
+
+    /** Chọn NHIỀU chi nhánh như v2: gửi shop_ids, shop_id là chi nhánh chính (phần tử đầu). */
+    public function test_chon_nhieu_chi_nhanh_gui_shop_ids(): void
+    {
+        $this->fakeApi();
+
+        $this->withSession($this->phienQuanTri())->post('/admin/staff', [
+            'full_name' => 'Nguyễn Văn An', 'status' => 'dang_lam',
+            'shop_ids' => ['3', '4'], 'allow_outside_area' => '0',
+        ])->assertRedirect(route('admin.nhan-su.index'));
+
+        Http::assertSent(function ($request) {
+            if ($request->method() !== 'POST' || ! str_contains($request->url(), '/admin/nhan-su')) {
+                return false;
+            }
+            $body = $request->data();
+
+            return $body['shop_ids'] === [3, 4] && $body['shop_id'] === 3 && $body['allow_outside_area'] === false;
+        });
+    }
+
+    /** Nút "Đặt lại mật khẩu" gọi đường riêng của API, không gửi mật khẩu từ trình duyệt. */
+    public function test_dat_lai_mat_khau_goi_duong_rieng(): void
+    {
+        $this->fakeApi();
+
+        $this->withSession($this->phienQuanTri())
+            ->post('/admin/staff/12/reset-password')
+            ->assertRedirect(route('admin.nhan-su.index'))
+            ->assertSessionHas('success');
+
+        Http::assertSent(fn ($request) => $request->method() === 'POST'
+            && str_contains($request->url(), '/admin/nhan-su/12/dat-lai-mat-khau'));
+    }
+
+    /** SĐT và CCCD phải đúng khuôn như v2, chặn ngay tại form. */
+    public function test_so_dien_thoai_va_cccd_dung_khuon(): void
+    {
+        $this->fakeApi();
+        $hoSo = ['full_name' => 'Nguyễn Văn An', 'status' => 'dang_lam', 'shop_id' => '3'];
+
+        $this->withSession($this->phienQuanTri())
+            ->post('/admin/staff', $hoSo + ['phone' => '12345'])
+            ->assertSessionHasErrors('phone');
+        $this->withSession($this->phienQuanTri())
+            ->post('/admin/staff', $hoSo + ['id_number' => '07A2'])
+            ->assertSessionHasErrors('id_number');
+        $this->withSession($this->phienQuanTri())
+            ->post('/admin/staff', $hoSo + ['phone' => '0912345678', 'id_number' => '079200001234'])
+            ->assertSessionHasNoErrors();
     }
 }

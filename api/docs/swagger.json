@@ -5453,6 +5453,52 @@
                 }
             }
         },
+        "/admin/nhan-su/{id}/dat-lai-mat-khau": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Mật khẩu về giá trị cấu hình `staff_default_password` (rỗng thì mặc định phần mềm).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin - Nhân sự"
+                ],
+                "summary": "Đặt lại mật khẩu mặc định cho tài khoản của hồ sơ",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID hồ sơ",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/nhan-su/{id}/trang-thai": {
             "put": {
                 "security": [
@@ -21029,6 +21075,13 @@
                     "description": "ChiNhanhID là chi nhánh người này được phân về (hồ sơ nhân sự). null =\nkhông bị buộc vào chi nhánh nào — chủ tiệm, hoặc nhân viên chưa phân công.\n\nShop Admin ghim luôn con số này vào phiên ngay sau khi đăng nhập. Thiếu nó\nthì phiên mở ra ở trạng thái \"chưa chọn chi nhánh\", và mọi lượt ghi kho\nsau đó hoặc bị từ chối, hoặc (trước đây) rơi vào một kho do máy đoán.",
                     "type": "integer"
                 },
+                "chi_nhanh_ids": {
+                    "description": "ChiNhanhIDs — mọi chi nhánh người này được làm; rỗng = không bị buộc.",
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
                 "cua_hang_khoa": {
                     "description": "CuaHangKhoa = true: cửa hàng đã HẾT HẠN HỢP ĐỒNG. Phiên vừa cấp vẫn dùng\nđược, nhưng chỉ cho ĐÚNG một đường đọc (gói dịch vụ) — mọi đường khác trả\n403 kèm mã CUA_HANG_KHOA.\n\nChỉ vai trò quản lý mới nhận được phiên như vậy; nhân viên bị từ chối ngay\ntừ lượt đăng nhập. Shop Admin đọc cờ này để đưa người dùng thẳng tới trang\ngói dịch vụ thay vì để họ bấm quanh và nhận lỗi ở từng trang.",
                     "type": "boolean"
@@ -23624,6 +23677,10 @@
                     "type": "string",
                     "maxLength": 255
                 },
+                "allow_outside_area": {
+                    "description": "AllowOutsideArea — cho phép dùng ứng dụng ngoài phạm vi chi nhánh. Bỏ hẳn\nkhoá (null) = giữ nguyên (hồ sơ mới: cho phép).",
+                    "type": "boolean"
+                },
                 "allowance": {
                     "type": "number",
                     "minimum": 0
@@ -23678,6 +23735,12 @@
                     "type": "string",
                     "maxLength": 20
                 },
+                "mat_khau_moi": {
+                    "description": "MatKhauMoi — đổi mật khẩu cho tài khoản ĐÃ CÓ của hồ sơ (như ô mật khẩu ở\nhộp sửa của v2). Bỏ trống = không đổi. Hồ sơ chưa có tài khoản thì bỏ qua.",
+                    "type": "string",
+                    "maxLength": 72,
+                    "minLength": 6
+                },
                 "mo_tai_khoan": {
                     "description": "MoTaiKhoan = \"nhận người này làm lại thì mở luôn tài khoản cũ\".\n\nChỉ có nghĩa khi Status quay về `dang_lam`. Đặt trạng thái `da_nghi` luôn\nKHOÁ tài khoản (không hỏi), còn mở lại thì phải nói rõ ở đây — xem\nservice.dongBoTaiKhoan.",
                     "type": "boolean"
@@ -23722,6 +23785,13 @@
                     "description": "ShopID BẮT BUỘC: mỗi nhân viên phải đứng ở một chi nhánh cụ thể. Cửa hàng\nmột điểm bán thì màn hình tự chọn sẵn chi nhánh duy nhất đó, người dùng\nkhông phải làm gì thêm — nhưng dữ liệu vẫn ghi rõ nơi làm việc, để bảng\nchấm công và báo cáo theo chi nhánh sau này không phải đoán.\nKHÔNG dùng binding:\"required\" ở đây: bộ validate của gin đặt tên ô theo tên\nTRƯỜNG GO (\"ShopID\") nên trang quản trị nhận về một khoá không khớp ô nào\ntrên form. Lượt kiểm nằm ở service và trả đúng khoá `shop_id`.",
                     "type": "integer"
                 },
+                "shop_ids": {
+                    "description": "ShopIDs — CÁC chi nhánh người này được làm (v2 cho chọn nhiều). Bỏ trống\nthì lấy mỗi ShopID; có thì phần tử đầu là chi nhánh chính.",
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
                 "status": {
                     "type": "string",
                     "example": "dang_lam"
@@ -23752,6 +23822,10 @@
             "properties": {
                 "address": {
                     "type": "string"
+                },
+                "allow_outside_area": {
+                    "description": "AllowOutsideArea — cho phép dùng ứng dụng ngoài phạm vi hoạt động của chi\nnhánh (allow_access_outside_area_scope của v2). Mặc định cho phép.",
+                    "type": "boolean"
                 },
                 "allowance": {
                     "type": "number"
@@ -23827,8 +23901,19 @@
                     "description": "ShopID NULL được: cửa hàng một điểm bán thì \"làm ở chi nhánh nào\" chưa có\nnghĩa. UserID NULL = người này không có tài khoản đăng nhập.",
                     "type": "integer"
                 },
+                "shop_ids": {
+                    "description": "ShopIDs là CSV id các chi nhánh người này được làm (\"1,3\"); NULL = mọi chi\nnhánh (như 'all' của v2). ShopID ở trên là chi nhánh CHÍNH = phần tử đầu.",
+                    "type": "string"
+                },
                 "shop_name": {
                     "type": "string"
+                },
+                "shop_names": {
+                    "description": "ShopNames — tên các chi nhánh được làm, cùng thứ tự với shop_ids.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 },
                 "status": {
                     "type": "string"

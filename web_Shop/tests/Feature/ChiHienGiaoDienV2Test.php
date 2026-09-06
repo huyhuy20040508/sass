@@ -54,7 +54,7 @@ class ChiHienGiaoDienV2Test extends TestCase
     {
         $this->fakeApi();
 
-        $res = $this->withSession($this->phienQuanTri())->get('/admin/staff');
+        $res = $this->withSession($this->phienQuanTri())->get('/admin/customers');
 
         $res->assertRedirect(route('admin.nha-cung-cap.index'));
     }

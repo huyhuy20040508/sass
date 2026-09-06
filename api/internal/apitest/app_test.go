@@ -377,7 +377,7 @@ func dungHeThongVoi(t *testing.T, banHang, dieuHanh bool) *heThong {
 			ETax:     handler.NewEtaxHandler(etaxSvc),
 			NhanSu: handler.NewNhanSuHandler(service.NewNhanSuService(
 				repository.NewNhanVienRepository(db), chiNhanhRepo, userSvc,
-				repository.NewQuyenRepository(db), quyTacMaRepo)),
+				repository.NewQuyenRepository(db), quyTacMaRepo, settingSvc)),
 			NhomQuyen: handler.NewNhomQuyenHandler(
 				service.NewNhomQuyenService(repository.NewQuyenRepository(db), userRepo)),
 			QuyTacMa: handler.NewQuyTacMaHandler(

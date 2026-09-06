@@ -632,10 +632,11 @@ func ChiNhanhDangLam(repo domain.ChiNhanhRepository, nhanVien domain.NhanVienRep
 			// nên chỉ cần gỡ header đi là nhân viên kho 2 đọc được sổ của kho 1 —
 			// và không tầng nào dưới cứu được, vì chúng tin rằng ctx trống nghĩa là
 			// người này quản cả cửa hàng.
-			if cua := chiNhanhDuocPhan(c, nhanVien); cua != nil && *cua > 0 {
-				c.Set(CtxChiNhanhID, *cua)
+			// Nhiều chi nhánh thì gắn chi nhánh CHÍNH (phần tử đầu).
+			if cua := chiNhanhDuocPhan(c, nhanVien); len(cua) > 0 {
+				c.Set(CtxChiNhanhID, cua[0])
 				c.Set(CtxChiNhanhGhim, true)
-				c.Request = c.Request.WithContext(chinhanh.WithID(c.Request.Context(), *cua))
+				c.Request = c.Request.WithContext(chinhanh.WithID(c.Request.Context(), cua[0]))
 			}
 
 			c.Next()
@@ -679,7 +680,7 @@ func ChiNhanhDangLam(repo domain.ChiNhanhRepository, nhanVien domain.NhanVienRep
 		// Người BỊ PHÂN CÔNG thì chi nhánh này là bắt buộc, không phải một lựa
 		// chọn — kể cả khi họ tự khai đúng nó. chiNhanhLoc đọc cờ này để không
 		// cho tham số `shop_id` trên URL kéo họ sang kho khác.
-		if cua := chiNhanhDuocPhan(c, nhanVien); cua != nil && *cua > 0 {
+		if cua := chiNhanhDuocPhan(c, nhanVien); len(cua) > 0 {
 			c.Set(CtxChiNhanhGhim, true)
 		}
 		c.Request = c.Request.WithContext(chinhanh.WithID(c.Request.Context(), cn.ID))
@@ -702,18 +703,27 @@ func ChiNhanhDangLam(repo domain.ChiNhanhRepository, nhanVien domain.NhanVienRep
 // thành "không ai bán hàng được nữa".
 func duocLamTaiChiNhanh(c *gin.Context, nhanVien domain.NhanVienRepository, shopID uint) bool {
 	cua := chiNhanhDuocPhan(c, nhanVien)
+	if len(cua) == 0 {
+		return true
+	}
+	for _, id := range cua {
+		if id == shopID {
+			return true
+		}
+	}
 
-	return cua == nil || *cua == shopID
+	return false
 }
 
-// chiNhanhDuocPhan trả chi nhánh mà người đang gọi BỊ BUỘC vào, hoặc nil khi họ
-// đi đâu cũng được (chủ tiệm, quản lý, nhân viên chưa phân công).
+// chiNhanhDuocPhan trả các chi nhánh mà người đang gọi BỊ BUỘC vào (phần tử đầu
+// là chi nhánh chính), hoặc rỗng khi họ đi đâu cũng được (chủ tiệm, quản lý,
+// nhân viên chưa phân công).
 //
 // Trả nil ở MỌI nhánh "không biết": sổ nhân sự chưa dựng, không đọc được tài
 // khoản, database trục trặc. Một trục trặc không được phép biến thành "không ai
 // bán hàng được nữa" — nhưng cũng vì thế nil KHÔNG phải bằng chứng rằng người
 // này được tự do đi lại, nơi gọi đừng dùng nó để phân quyền.
-func chiNhanhDuocPhan(c *gin.Context, nhanVien domain.NhanVienRepository) *uint {
+func chiNhanhDuocPhan(c *gin.Context, nhanVien domain.NhanVienRepository) []uint {
 	if nhanVien == nil {
 		return nil
 	}

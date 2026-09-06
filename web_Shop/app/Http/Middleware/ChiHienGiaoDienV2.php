@@ -31,6 +31,7 @@ class ChiHienGiaoDienV2
         'admin.tra-hang-nha-cung-cap.index',
         'admin.phieu-dieu-chuyen.index',
         'admin.chi-nhanh.index',
+        'admin.nhan-su.index',
     ];
 
     /**
@@ -51,6 +52,7 @@ class ChiHienGiaoDienV2
         'admin.tra-hang-nha-cung-cap.', // xuất / phiếu mua của NCC / dòng phiếu mua / chi tiết
         'admin.phieu-dieu-chuyen.', // tìm mặt hàng cho hộp lập phiếu
         'admin.products.',       // xuất / nhập / mẫu / ảnh / chi tiết một mặt hàng
+        'admin.nhan-su.',        // xuất CSV / ảnh / hàng loạt
         'admin.goi-dich-vu.',    // cửa hàng hết hạn bị dồn về đây, chặn là kẹt cứng
     ];
 

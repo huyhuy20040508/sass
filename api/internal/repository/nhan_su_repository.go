@@ -45,7 +45,7 @@ func (r *nhanVienRepository) List(ctx context.Context, f domain.NhanSuFilter) ([
 	// "không thuộc chi nhánh nào". Bỏ vế NULL thì tiệm nào lỡ chưa khai chi nhánh
 	// cho nhân viên sẽ thấy sổ nhân sự rỗng trơn.
 	if f.ShopID > 0 {
-		q = q.Where("shop_id = ? OR shop_id IS NULL", f.ShopID)
+		q = q.Where("shop_id = ? OR shop_id IS NULL OR FIND_IN_SET(?, shop_ids)", f.ShopID, f.ShopID)
 	}
 
 	var list []domain.NhanVien
@@ -90,6 +90,24 @@ func (r *nhanVienRepository) ExistsByName(ctx context.Context, name string, excl
 	var count int64
 	q := r.db.WithContext(ctx).Model(&domain.NhanVien{}).
 		Where("LOWER(full_name) COLLATE utf8mb4_bin = LOWER(?)", name)
+	if excludeID > 0 {
+		q = q.Where("id <> ?", excludeID)
+	}
+	err := q.Count(&count).Error
+
+	return count > 0, err
+}
+
+// ExistsByCot — trùng phone / email / id_number trong cửa hàng. Cột nằm trong
+// danh sách trắng để không ai ghép được tên cột từ ngoài vào câu SQL.
+func (r *nhanVienRepository) ExistsByCot(ctx context.Context, cot, giaTri string, excludeID uint) (bool, error) {
+	switch cot {
+	case "phone", "email", "id_number":
+	default:
+		return false, errors.New("cột kiểm trùng không hợp lệ: " + cot)
+	}
+	var count int64
+	q := r.db.WithContext(ctx).Model(&domain.NhanVien{}).Where(cot+" = ?", giaTri)
 	if excludeID > 0 {
 		q = q.Where("id <> ?", excludeID)
 	}
@@ -197,10 +215,10 @@ func (r *nhanVienRepository) RangBuocCuaTaiKhoan(ctx context.Context, userID uin
 // Không có hồ sơ, hoặc có mà `shop_id` NULL, đều trả nil: hai chuyện khác nhau
 // (chủ tiệm / nhân viên chưa phân công) nhưng dẫn tới cùng một kết luận là
 // "không bị buộc vào chi nhánh nào", nên nơi gọi không cần phân biệt.
-func (r *nhanVienRepository) ChiNhanhCuaTaiKhoan(ctx context.Context, userID uint) (*uint, error) {
+func (r *nhanVienRepository) ChiNhanhCuaTaiKhoan(ctx context.Context, userID uint) ([]uint, error) {
 	var nv domain.NhanVien
 	err := r.db.WithContext(ctx).
-		Select("shop_id").
+		Select("shop_id, shop_ids").
 		Where("user_id = ?", userID).
 		Take(&nv).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -210,5 +228,13 @@ func (r *nhanVienRepository) ChiNhanhCuaTaiKhoan(ctx context.Context, userID uin
 		return nil, err
 	}
 
-	return nv.ShopID, nil
+	// Chi nhánh chính đứng đầu; hồ sơ trước migration 0055 chỉ có shop_id.
+	if ids := domain.ChiNhanhTuCSV(string(nv.ShopIDs)); len(ids) > 0 {
+		return ids, nil
+	}
+	if nv.ShopID != nil {
+		return []uint{*nv.ShopID}, nil
+	}
+
+	return nil, nil
 }
