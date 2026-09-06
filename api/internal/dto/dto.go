@@ -2904,8 +2904,8 @@ type DieuChinhItemRequest struct {
 	VariantID uint `json:"variant_id" binding:"required,min=1" example:"58"`
 	// LotNumber để trống hoặc "Không xác định" = lô không xác định.
 	LotNumber string `json:"lot_number" binding:"omitempty,max=50" example:"LO-2026-01"`
-	// ExpireDate cho lô MỚI (chưa có trong kho), khuôn YYYY-MM-DD hoặc DD-MM-YYYY.
-	// Lô đã có thì bỏ qua — hạn dùng lấy từ sổ lô.
+	// ExpireDate: KHÔNG còn dùng — lô lạ bị từ chối (ErrDieuChinhLoKhongCo), hạn
+	// dùng luôn lấy từ sổ lô. Giữ trường để client cũ gửi lên không bị 400.
 	ExpireDate string `json:"expire_date" binding:"omitempty,max=10"`
 	// AdjustQuantity là số lệch: dương = cộng vào kho, âm = bớt đi. Dòng bằng 0
 	// bị bỏ qua.

@@ -220,6 +220,10 @@ func handleServiceError(c *gin.Context, err error) {
 	case errors.Is(err, domain.ErrDieuChinhThieuTon):
 		response.Error(c, 422, "Kho không đủ hàng để bớt: "+
 			strings.TrimPrefix(err.Error(), domain.ErrDieuChinhThieuTon.Error()+": "))
+	case errors.Is(err, domain.ErrDieuChinhLoKhongCo):
+		response.Error(c, 422, "Lô không có trong kho: "+
+			strings.TrimPrefix(err.Error(), domain.ErrDieuChinhLoKhongCo.Error()+": ")+
+			" — chọn lô có sẵn trong ô chọn; hàng của lô mới thì vào kho bằng phiếu nhập")
 	// Trả hàng nhà cung cấp
 	case errors.Is(err, domain.ErrSupplierReturnEmpty):
 		response.Error(c, 422, "Phiếu trả hàng phải có ít nhất một dòng hàng")

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 )
 
@@ -374,5 +375,44 @@ func TestDieuChinh_KhongLotSangCuaHangKhac(t *testing.T) {
 	if res := h.goiChiNhanh(t, b.token, b.chiNhanh, http.MethodPost,
 		fmt.Sprintf("%s/%d/duyet", duongDieuChinh, p.ID), nil); res.ma == http.StatusOK {
 		t.Fatal("cửa hàng B duyệt được phiếu của cửa hàng A")
+	}
+}
+
+// Lô có số mà kho chưa có thì bị từ chối ngay lúc lập — kể cả lưu tạm.
+//
+// Trước đây API nhận với tồn 0 (coi như khai lô mới), trong khi màn hình không
+// có mục "lô mới": đường ấy chỉ đi được bằng tay, và một phiếu như thế duyệt lên
+// là kho có một lô chưa từng nhập. Chủ tiệm chốt: phiếu điều chỉnh chỉ nắn số
+// của lô đã có, lô mới vào kho bằng phiếu nhập.
+func TestDieuChinh_TuChoiLoKhongCoTrongKho(t *testing.T) {
+	h := dungHeThong(t)
+	a, _ := haiCuaHang(t, h)
+
+	donKho(t, h, a)
+	nhapLo(t, h, a, "LO-CO", 5, "")
+
+	ma, _ := lapDieuChinh(t, h, a, map[string]any{
+		"status": "draft",
+		"items":  []any{map[string]any{"variant_id": a.bienThe, "lot_number": "LO-KHONG-CO", "adjust_quantity": 1}},
+	})
+	if ma != http.StatusUnprocessableEntity {
+		t.Fatalf("lô lạ phải bị từ chối 422, nhận %d", ma)
+	}
+
+	res := h.goiChiNhanh(t, a.token, a.chiNhanh, http.MethodPost, duongDieuChinh, map[string]any{
+		"status": "draft",
+		"items":  []any{map[string]any{"variant_id": a.bienThe, "lot_number": "LO-KHONG-CO", "adjust_quantity": 1}},
+	})
+	if !strings.Contains(res.than, "LO-KHONG-CO") {
+		t.Fatalf("câu từ chối phải nêu số lô:\n%s", catBot(res.than))
+	}
+
+	// Lô có thật vẫn lập được như thường.
+	ma, _ = lapDieuChinh(t, h, a, map[string]any{
+		"status": "draft",
+		"items":  []any{map[string]any{"variant_id": a.bienThe, "lot_number": "LO-CO", "adjust_quantity": 1}},
+	})
+	if ma != http.StatusCreated {
+		t.Fatalf("lô có trong kho phải lập được, nhận %d", ma)
 	}
 }

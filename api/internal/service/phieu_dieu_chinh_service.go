@@ -215,8 +215,9 @@ func (s *phieuDieuChinhService) chotDongHang(
 			continue
 		}
 
-		// Tồn, hạn dùng, giá vốn lấy của ĐÚNG LÔ khi lô đã có trong kho; lô mới thì
-		// tồn 0, hạn dùng theo client khai, giá vốn theo mặt hàng.
+		// Tồn, hạn dùng, giá vốn lấy của ĐÚNG LÔ trong kho. Lô có số mà kho chưa có
+		// thì TỪ CHỐI — xem ErrDieuChinhLoKhongCo. Chỉ lô "Không xác định" (soLo
+		// rỗng) được đi tiếp với tồn 0: đó là lô mặc định của hàng chưa chia lô.
 		ton := 0
 		var han *time.Time
 		gia := h.CostPrice
@@ -227,7 +228,7 @@ func (s *phieuDieuChinhService) chotDongHang(
 				gia = l.UnitCost
 			}
 		} else if soLo != "" {
-			han = docNgayLo(it.ExpireDate)
+			return nil, fmt.Errorf("%w: %s lô %s", domain.ErrDieuChinhLoKhongCo, h.ProductName, soLo)
 		}
 
 		// Phiếu thường không được bớt quá số lô đang có. Kẹp NGAY LÚC LẬP để người
