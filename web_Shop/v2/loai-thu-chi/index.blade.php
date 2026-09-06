@@ -48,7 +48,15 @@
                 <div class="col-12 col-md-6 bang-loai" data-loai="{{ $loai }}">
                     <div class="content_midd table-border-style">
                         <div class="content_midd_title">
-                            <h4>{{ $laThu ? __('message.income_category') : __('message.expense_category') }}</h4>
+                            {{-- Khung THU mang h1 — mỗi trang phải có đúng một mốc cấp 1 cho
+                                 trình đọc màn hình; khung CHI mang h2 vì hai khung ngang hàng
+                                 nhau. Cùng .tieu-de-trang nên cỡ chữ y hệt v2 và y hệt mọi màn
+                                 khác (xem TieuDeTrangV2Test). --}}
+                            @if ($laThu)
+                                <h1 class="tieu-de-trang">{{ __('message.income_category') }}</h1>
+                            @else
+                                <h2 class="tieu-de-trang">{{ __('message.expense_category') }}</h2>
+                            @endif
                             {{-- Lọc realtime, nút Thêm đứng cuối thanh lọc — quy tắc chung mọi trang danh sách. --}}
                             <div class="d-flex searchContainer">
                                 <input type="text" class="form-control tim-loai" autocomplete="off"
