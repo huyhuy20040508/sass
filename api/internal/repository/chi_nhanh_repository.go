@@ -103,7 +103,10 @@ func (r *chiNhanhRepository) ganTenNguoiTao(ctx context.Context, list []domain.C
 		ID       uint
 		FullName string
 	}
-	if err := r.db.WithContext(ctx).Model(&domain.User{}).
+	// Unscoped: người mở chi nhánh có thể đã nghỉ và tài khoản đã bị xoá mềm, cột
+	// "Người tạo" của chi nhánh cũ vẫn phải đọc ra tên họ. Cùng lối với
+	// phieu_mua_hang_repository.
+	if err := r.db.WithContext(ctx).Unscoped().Model(&domain.User{}).
 		Select("id", "full_name").Where("id IN ?", ids).Find(&rows).Error; err != nil {
 		return err
 	}

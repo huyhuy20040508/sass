@@ -206,7 +206,8 @@ class NhanSuController extends Controller
 
         return $this->send(
             fn () => $this->api->taoNhanSu($data),
-            'Đã thêm hồ sơ "'.$data['full_name'].'".'
+            'Đã thêm hồ sơ "'.$data['full_name'].'".',
+            fn (?array $hoSo) => $this->cauDoiChiNhanh($hoSo)
         );
     }
 
@@ -228,7 +229,7 @@ class NhanSuController extends Controller
                     ImageStore::xoa($anhCu);
                 }
 
-                return null;
+                return $this->cauDoiChiNhanh($hoSo);
             }
         );
     }
@@ -368,10 +369,16 @@ class NhanSuController extends Controller
     /**
      * Xuất danh sách nhân sự ra tệp mở được bằng Excel.
      *
-     * CSV chứ không phải .xlsx, cùng lối với trang Đơn hàng và Sản phẩm: Excel mở
-     * thẳng CSV, mà dựng .xlsx thì phải kéo thêm một thư viện chỉ để làm đúng việc
-     * này. Có BOM ở đầu tệp — thiếu nó thì Excel trên Windows đọc tiếng Việt thành
-     * ký tự lạ, và người nhận tưởng dữ liệu hỏng.
+     * .xlsx THẬT, không phải CSV đội tên nút "Xuất Excel".
+     *
+     * Lý do cũ ("dựng .xlsx phải kéo thêm một thư viện") không còn: App\Support\XlsxDon
+     * dựng bằng ZipArchive sẵn có của PHP, và taiXlsx() ở lớp cha nay là đường chung
+     * của Nhà cung cấp, Phiếu mua hàng, Điều chỉnh tồn kho, Trả hàng NCC.
+     *
+     * Ở màn NÀY, CSV còn hỏng đúng hai cột không được phép hỏng: Excel đọc
+     * "0912345678" và số CCCD thành SỐ rồi cắt mất số 0 đầu — bảng nhân sự gửi đi
+     * mất sạch đầu số điện thoại, mà người nhận không có cách nào biết. XlsxDon ghi
+     * chuỗi ở dạng inlineStr nên giữ nguyên từng ký tự.
      *
      * Mang theo ĐÚNG bộ lọc đang xem: người ta lọc ra một nhóm rồi mới bấm xuất.
      *
@@ -392,43 +399,40 @@ class NhanSuController extends Controller
             return back()->with('error', 'Không kết nối được API để xuất tệp.');
         }
 
-        $ten = 'nhan-su-'.date('Ymd-His').'.csv';
+        $hang = [[
+            'Mã NV', 'Họ tên', 'Giới tính', 'Ngày sinh', 'Điện thoại', 'CCCD',
+            'Email', 'Địa chỉ', 'Chi nhánh', 'Ca làm việc', 'Ngày vào làm',
+            'Phân quyền', 'Tên đăng nhập', 'Trạng thái', 'Ghi chú',
+        ]];
 
-        return response()->streamDownload(function () use ($list) {
-            $out = fopen('php://output', 'w');
-            fwrite($out, "\xEF\xBB\xBF");
-            fputcsv($out, [
-                'Mã NV', 'Họ tên', 'Giới tính', 'Ngày sinh', 'Điện thoại', 'CCCD',
-                'Email', 'Địa chỉ', 'Chi nhánh', 'Ca làm việc', 'Ngày vào làm',
-                'Phân quyền', 'Tên đăng nhập', 'Trạng thái', 'Ghi chú',
-            ]);
+        foreach ($list as $ns) {
+            $ca = collect(explode(',', (string) ($ns['work_shift'] ?? '')))
+                ->filter()->map(fn ($c) => self::CA_LAM[$c] ?? $c)->implode(', ');
+            $quyen = collect((array) ($ns['quyen'] ?? []))
+                ->map(fn ($c) => self::NHAN_CUA[$c] ?? $c)->implode(', ');
 
-            foreach ($list as $ns) {
-                $ca = collect(explode(',', (string) ($ns['work_shift'] ?? '')))
-                    ->filter()->map(fn ($c) => self::CA_LAM[$c] ?? $c)->implode(', ');
-                $quyen = collect((array) ($ns['quyen'] ?? []))
-                    ->map(fn ($c) => self::NHAN_CUA[$c] ?? $c)->implode(', ');
+            // Ép chuỗi cho MỌI ô: điện thoại và CCCD toàn chữ số, để kiểu số thì
+            // Excel cắt số 0 đầu và bẻ CCCD dài thành ký hiệu khoa học.
+            $hang[] = [
+                (string) ($ns['code'] ?? ''),
+                (string) ($ns['full_name'] ?? ''),
+                self::GIOI_TINH[$ns['gender'] ?? ''] ?? '',
+                self::ngayGon($ns['birth_date'] ?? null),
+                (string) ($ns['phone'] ?? ''),
+                (string) ($ns['id_number'] ?? ''),
+                (string) ($ns['email'] ?? ''),
+                (string) ($ns['address'] ?? ''),
+                (string) ($ns['shop_name'] ?? ''),
+                $ca,
+                self::ngayGon($ns['hired_on'] ?? null),
+                $quyen,
+                (string) ($ns['username'] ?? ''),
+                self::TRANG_THAI[$ns['status'] ?? ''] ?? ($ns['status'] ?? ''),
+                (string) ($ns['note'] ?? ''),
+            ];
+        }
 
-                fputcsv($out, [
-                    $ns['code'] ?? '',
-                    $ns['full_name'] ?? '',
-                    self::GIOI_TINH[$ns['gender'] ?? ''] ?? '',
-                    self::ngayGon($ns['birth_date'] ?? null),
-                    $ns['phone'] ?? '',
-                    $ns['id_number'] ?? '',
-                    $ns['email'] ?? '',
-                    $ns['address'] ?? '',
-                    $ns['shop_name'] ?? '',
-                    $ca,
-                    self::ngayGon($ns['hired_on'] ?? null),
-                    $quyen,
-                    $ns['username'] ?? '',
-                    self::TRANG_THAI[$ns['status'] ?? ''] ?? ($ns['status'] ?? ''),
-                    $ns['note'] ?? '',
-                ]);
-            }
-            fclose($out);
-        }, $ten, ['Content-Type' => 'text/csv; charset=UTF-8']);
+        return $this->taiXlsx($hang, 'nhan-su-'.date('Ymd-His'), 'Nhan su');
     }
 
     /** Ngày dạng người đọc; API trả chuỗi ISO đầy đủ. */
@@ -665,6 +669,7 @@ class NhanSuController extends Controller
             'salary.numeric' => 'Mức lương phải là một con số.',
             'allowance.numeric' => 'Phụ cấp phải là một con số.',
             'commission_rate.max' => 'Hoa hồng tính theo phần trăm doanh số, tối đa 100.',
+            'quyen.required_if' => 'Đã cấp tài khoản thì phải tick ít nhất một quyền — tài khoản không quyền là tài khoản đăng nhập được mà không mở được cửa nào.',
             'username.required_if' => 'Đã cấp tài khoản thì phải có tên đăng nhập.',
             'username.min' => 'Tên đăng nhập tối thiểu 3 ký tự.',
             'username.max' => 'Tên đăng nhập tối đa 50 ký tự.',
@@ -752,8 +757,53 @@ class NhanSuController extends Controller
     }
 
     /**
+     * Câu nói thêm khi hồ sơ vừa lưu KHÔNG còn thuộc chi nhánh của tab đang mở.
+     *
+     * Bảng chỉ bày người của chi nhánh đang đứng (xem ChiNhanhTheoTab). Sửa một
+     * hồ sơ sang chi nhánh khác là dòng đó biến mất ngay lượt nạp lại — mà người
+     * vừa bấm Lưu không có cách nào phân biệt "đã chuyển đi" với "vừa mất dữ
+     * liệu". Gọi tên chi nhánh mới ra, thay vì để họ đoán.
+     *
+     * Đọc bản ghi API TRẢ VỀ chứ không đọc thứ vừa gửi lên: sau lượt lưu, chỉ
+     * bên đó mới biết hồ sơ thực sự nằm ở đâu.
+     *
+     * Trả null khi không có gì để nói: đang xem gộp mọi chi nhánh (bảng bày hết,
+     * không giấu ai), hồ sơ vẫn thuộc chi nhánh của tab, hoặc hồ sơ không khai
+     * chi nhánh nào (NULL = đi đâu cũng được).
+     */
+    protected function cauDoiChiNhanh(?array $hoSo): ?string
+    {
+        $tab = ApiClient::chiNhanhDangLam();
+        if ($tab <= 0 || $hoSo === null) {
+            return null;
+        }
+
+        $ids = array_values(array_filter(array_map(
+            'intval',
+            explode(',', (string) ($hoSo['shop_ids'] ?? ''))
+        )));
+        if ($ids === [] || in_array($tab, $ids, true)) {
+            return null;
+        }
+
+        $ten = array_values(array_filter(array_map(
+            fn ($t) => trim((string) $t),
+            (array) ($hoSo['shop_names'] ?? [])
+        )));
+
+        return $ten === []
+            ? 'Hồ sơ nay thuộc chi nhánh khác nên không còn hiện trong bảng của chi nhánh bạn đang đứng.'
+            : 'Hồ sơ nay thuộc '.implode(', ', $ten)
+                .' nên không còn hiện trong bảng của chi nhánh bạn đang đứng.';
+    }
+
+    /**
      * Gọi API rồi quay lại danh sách. In `message` của API nguyên văn khi hỏng:
      * mỗi câu bên đó chỉ ra một việc phải làm khác nhau.
+     *
+     * $sauKhiLuu nhận bản ghi API vừa trả về, làm nốt việc phụ (dọn ảnh mồ côi)
+     * và ĐƯỢC PHÉP trả về một câu nói thêm — câu đó nối vào sau lời báo thành
+     * công, không thay nó.
      */
     protected function send(callable $call, string $success, ?callable $sauKhiLuu = null)
     {
@@ -768,10 +818,11 @@ class NhanSuController extends Controller
         }
 
         if ($res->successful()) {
-            // Việc phụ chạy SAU khi hồ sơ đã lưu, và hỏng thì chỉ nói thêm một
-            // câu chứ không nuốt mất lời báo thành công — hồ sơ đã ghi rồi, che
-            // đi thì người dùng bấm Lưu lần nữa và tạo ra bản thứ hai.
-            $loiPhu = $sauKhiLuu ? $sauKhiLuu($res->json('data')) : null;
+            // Việc phụ chạy SAU khi hồ sơ đã lưu, và câu nó trả về chỉ NỐI THÊM
+            // chứ không nuốt mất lời báo thành công — hồ sơ đã ghi rồi, che đi
+            // thì người dùng bấm Lưu lần nữa và tạo ra bản thứ hai.
+            $noiThem = $sauKhiLuu ? $sauKhiLuu($res->json('data')) : null;
+            $cau = trim($success.' '.((string) $noiThem));
 
             // Lượt lưu này có thể vừa đổi CỬA của chính người đang bấm — hỏi lại
             // API ngay, thay vì để họ nhìn một thanh điều hướng nói sai cho tới
@@ -780,12 +831,10 @@ class NhanSuController extends Controller
 
             // Hộp thoại v2 gọi bằng AJAX: trả JSON để hộp tự đóng và bắn toast.
             if ($request->expectsJson()) {
-                return response()->json(['success' => true, 'message' => trim($success.' '.($loiPhu ?? ''))]);
+                return response()->json(['success' => true, 'message' => $cau]);
             }
 
-            $ve = redirect()->route('admin.nhan-su.index')->with('success', $success);
-
-            return $loiPhu ? $ve->with('error', $loiPhu) : $ve;
+            return redirect()->route('admin.nhan-su.index')->with('success', $cau);
         }
 
         return $this->traLoiHopThoai($request, false, $this->cauLoiApi($res, 'Thao tác không thành công.'));
