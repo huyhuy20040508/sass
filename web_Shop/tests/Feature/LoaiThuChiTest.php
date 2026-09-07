@@ -90,11 +90,13 @@ class LoaiThuChiTest extends TestCase
             ->assertOk()
             ->getContent();
 
-        // Mỗi bảng một khối thẻ.
-        $this->assertSame(2, substr_count($html, 'class="none_desktop"'));
-        // KHÔNG dùng khuôn .table-list-container-mobile của v2: khối đó do
-        // public/v2/js/script.js đổ dữ liệu, mà vỏ v2 ở đây không nạp tệp ấy.
-        $this->assertStringNotContainsString('table-list-container-mobile', $html);
+        // Mỗi bảng một khối thẻ, dùng ĐÚNG khung .table-list-container-mobile của v2
+        // (CSS của v2 ẩn nó ở desktop, bày ở mobile).
+        $this->assertSame(2, substr_count($html, 'class="table-list-container-mobile"'));
+        // Thẻ dựng SẴN ở máy chủ — v2 để khung này rỗng rồi nhờ
+        // public/v2/js/script.js đổ dữ liệu, mà vỏ v2 ở đây không nạp tệp ấy nên nó
+        // rỗng suốt. Mỗi dòng đúng một thẻ.
+        $this->assertSame(2, substr_count($html, 'table-list-mobile-item'));
     }
 
     /** Sửa một id không tồn tại: API trả 404 thì màn hình cũng phải trả 404. */

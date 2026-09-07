@@ -114,33 +114,42 @@
                             </table>
                         </div>
 
-                        {{-- BẢN THẺ CHO ĐIỆN THOẠI.
-                             Dưới 992px v2 giấu hẳn .table-list-container (responsive-manager.css),
-                             nên không có khối này thì cả bảng biến mất, chỉ còn tiêu đề với ô tìm.
+                        {{-- BẢN THẺ CHO ĐIỆN THOẠI — đúng khuôn v2 cũ.
+                             Dưới 992px v2 giấu hẳn .table-list-container và bày khối này thay chỗ;
+                             thiếu nó thì màn hình trắng trơn, chỉ còn tiêu đề với ô tìm.
 
-                             Dựng SẴN Ở MÁY CHỦ bằng .none_desktop, giống mọi màn đang chạy được
-                             (nhà cung cấp, phiếu mua hàng, điều chỉnh tồn kho). KHÔNG dùng cặp
-                             .table-list-container-mobile của v2: khối đó do public/v2/js/script.js
-                             đổ dữ liệu vào, mà vỏ v2 ở đây không nạp tệp ấy — ba màn đang khai nó
-                             (đơn vị tính, thuế, thuộc tính) chỉ hiện một hộp trống.
+                             Khác v2 đúng một chỗ: v2 để khối này RỖNG rồi nhờ
+                             public/v2/js/script.js dựng thẻ lúc chạy, mà vỏ v2 ở đây không nạp tệp
+                             ấy — nên nó rỗng suốt. Dựng thẳng bằng Blade, giữ nguyên bộ class của
+                             v2 để CSS của v2 tự ăn vào.
 
-                             Cùng class .item và cùng bộ data-* với dòng bảng, nên lọc, sửa, xoá
-                             dùng chung một đoạn JS. --}}
-                        <div class="none_desktop">
+                             Cùng class .item và cùng bộ data-* với dòng bảng nên lọc, sửa, xoá dùng
+                             chung một đoạn JS. --}}
+                        <div class="table-list-container-mobile">
                             @forelse ($danhSach as $item)
                                 @php
                                     $id = (int) ($item['id'] ?? 0);
                                     $heThong = (bool) ($item['is_default'] ?? false);
                                 @endphp
-                                <div class="item" data-id="{{ $id }}" data-loai="{{ $loai }}"
-                                    data-name="{{ $item['name'] ?? '' }}">
-                                    <span class="item-name">{{ $item['name'] ?? '' }}</span>
-                                    <span class="action d-flex gap-2 flex-shrink-0">
+                                <div class="table-list-mobile-item item w-100" data-id="{{ $id }}"
+                                    data-loai="{{ $loai }}" data-name="{{ $item['name'] ?? '' }}">
+                                    <div class="content-finished-product-item w-100">
+                                        <div class="header-finished-product">
+                                            <p class="finished-product-name">{{ $item['name'] ?? '' }}</p>
+                                        </div>
+                                        {{-- Loại hệ thống: phiếu tự sinh (bán hàng, trả hàng…) trỏ vào đây,
+                                             không sửa/xoá được — v2 để trống ô, nên thẻ cũng không có gạch
+                                             ngăn lẫn hàng nút. --}}
                                         @unless ($heThong)
-                                            <a class="edit_bt edit-item" type="button" title="{{ __('message.edit') }}"><i class="fa fa-edit"></i></a>
-                                            <a class="dele_bt delete-item" type="button" title="{{ __('message.delete') }}"><i class="fa fa-times"></i></a>
+                                            <div class="line-finished-product"></div>
+                                            <div class="body-finished-product justify-content-end">
+                                                <span class="action d-flex gap-2">
+                                                    <a class="edit_bt edit-item" type="button" title="{{ __('message.edit') }}"><i class="fa fa-edit"></i></a>
+                                                    <a class="dele_bt delete-item" type="button" title="{{ __('message.delete') }}"><i class="fa fa-times"></i></a>
+                                                </span>
+                                            </div>
                                         @endunless
-                                    </span>
+                                    </div>
                                 </div>
                             @empty
                                 <div class="text-center py-4">{{ $laThu ? $C::EMPTY_THU : $C::EMPTY_CHI }}</div>
@@ -243,7 +252,7 @@
             });
 
             // Thẻ điện thoại: cùng một bộ dữ liệu, chỉ không có cột số thứ tự.
-            $bang.find('.none_desktop > .item').each(function () {
+            $bang.find('.table-list-container-mobile > .item').each(function () {
                 $(this).toggleClass('d-none', !khop($(this)));
             });
 

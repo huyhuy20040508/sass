@@ -102,7 +102,60 @@
                         </table>
                     </div>
 
-                    <div class="table-list-container-mobile"></div>
+                        {{-- BẢN THẺ CHO ĐIỆN THOẠI — đúng khuôn v2 cũ.
+                             Dưới 992px v2 giấu hẳn .table-list-container, và bày khối này thay chỗ
+                             (responsive-manager.css: ẩn ở desktop, hiện ở mobile). Thiếu nó thì màn
+                             hình trắng trơn — bảng vẫn nằm nguyên trong HTML nên nhìn mã nguồn
+                             không thấy gì sai.
+
+                             Khác v2 đúng một chỗ: v2 để khối này RỖNG rồi nhờ
+                             public/v2/js/script.js dựng thẻ lúc chạy, mà vỏ v2 ở đây không nạp tệp
+                             ấy — nên nó rỗng suốt. Dựng thẳng bằng Blade, giữ nguyên bộ class của
+                             v2 để CSS của v2 tự ăn vào: hộp trắng bo góc, tên đậm, gạch ngăn, các
+                             dòng "nhãn: giá trị", mã màu cam.
+
+                             Cùng class .item và cùng bộ data-* với dòng bảng nên chọn, sửa, xoá,
+                             gạt trạng thái dùng chung một đoạn JS. --}}
+                        <div class="table-list-container-mobile">
+                            @forelse($rows as $item)
+                                @php
+                                    $id = (int) ($item['id'] ?? 0);
+                                    $bat = (bool) ($item['is_active'] ?? false);
+                                    $nhan = $item['muc_nhan'] ?? [];
+                                @endphp
+                                <div class="table-list-mobile-item item w-100"
+                                    data-id="{{ $id }}" data-name="{{ $item['ten'] ?? '' }}"
+                                    data-desc="{{ $item['mo_ta'] ?? '' }}" data-status="{{ $bat ? 1 : 0 }}">
+                                    <div class="content-finished-product-item w-100">
+                                        <div class="header-finished-product">
+                                            <p class="finished-product-name">{{ $item['ten'] ?? '' }}</p>
+                                        </div>
+                                        <div class="line-finished-product"></div>
+                                        <div class="body-finished-product">
+                                            <div class="finished-product-property">
+                                                <p>{{ __('message.tax-value') }}:</p>
+                                                {{-- Mức -1 / -2 là mã của hoá đơn điện tử (KCT / KKKNT), không
+                                                     phải phần trăm âm — API đã trả sẵn nhãn. --}}
+                                                <p class="text-end">{{ implode(', ', $nhan) }}</p>
+                                            </div>
+                                            <div class="finished-product-property">
+                                                <p>{{ __('message.status') }}:</p>
+                                                <p class="text-end">
+                                                    <input type="checkbox" class="switch_customer item-status" data-id="{{ $id }}"
+                                                        {{ $bat ? 'checked' : '' }}>
+                                                </p>
+                                            </div>
+                                            <p class="finished-product-code">{{ $item['loai'] ?? '' }}</p>
+                                            <span class="action d-flex gap-2">
+                                                <a class="edit_bt edit-item" type="button" title="{{ __('message.edit') }}"><i class="fa fa-edit"></i></a>
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            @empty
+                                <div class="text-center py-4">Không đọc được danh sách thuế từ máy chủ. Tải lại trang, hoặc kiểm tra kết nối API.</div>
+                            @endforelse
+                        </div>
                 </div>
 
                 <select class="form-control item-per-page select-width d-none">
@@ -235,8 +288,9 @@
                 .select2({ dropdownParent: $hop, width: '100%' });
         });
 
+        // `.item` chứ không `tr.item`: nút còn nằm trên thẻ điện thoại.
         $(document).on('click', '.edit-item', function () {
-            moHop($(this).closest('tr.item').data('id'));
+            moHop($(this).closest('.item').data('id'));
         });
 
         $(document).on('click', '#modalTax .save-item', function () {
