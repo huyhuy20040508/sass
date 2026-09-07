@@ -33,6 +33,8 @@ class ChiHienGiaoDienV2
         'admin.chi-nhanh.index',
         'admin.nhan-su.index',
         'admin.loai-thu-chi.index',
+        'admin.thu-chi.index',
+        'admin.cong-no.index',
     ];
 
     /**
@@ -54,6 +56,8 @@ class ChiHienGiaoDienV2
         'admin.phieu-dieu-chuyen.', // tìm mặt hàng cho hộp lập phiếu
         'admin.products.',       // xuất / nhập / mẫu / ảnh / chi tiết một mặt hàng
         'admin.nhan-su.',        // xuất CSV / ảnh / hàng loạt
+        'admin.thu-chi.',        // xuất Excel / nạp phân loại, người nộp cho hộp lập phiếu
+        'admin.cong-no.',        // xuất Excel / lịch sử trả nợ / ghi lượt trả
         'admin.goi-dich-vu.',    // cửa hàng hết hạn bị dồn về đây, chặn là kẹt cứng
     ];
 

@@ -36,6 +36,10 @@ const (
 	SoQuyTuDonHang = "order"
 	SoQuyTuTraHang = "order_return"
 	SoQuyGhiTay    = "manual"
+	// SoQuyTuThuChi — dòng DẪN XUẤT từ một phiếu thu/chi tiền mặt. Két của ca
+	// cộng từ bảng này (xem tongKetCa), nên phiếu chi tiền mặt mà không có dòng
+	// ở đây là lúc đóng ca đếm thiếu đúng bằng số ấy mà không ai biết vì sao.
+	SoQuyTuThuChi = "income_expense"
 )
 
 // CaLamViec — một lượt trực két tại một chi nhánh.

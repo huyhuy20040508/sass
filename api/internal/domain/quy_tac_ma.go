@@ -45,6 +45,11 @@ const (
 	LoaiTraHangNCC   = "tra-hang-ncc"
 	LoaiDieuChuyen   = "phieu-dieu-chuyen"
 	LoaiDieuChinhTon = "dieu-chinh-ton-kho"
+	// Phiếu thu và phiếu chi đánh số RIÊNG, giữ đúng cách tách đôi của v2
+	// (`cash-receipts` / `cash-payments`): đọc sổ là thấy ngay dải mã nào tiền
+	// vào, dải nào tiền ra.
+	LoaiPhieuThu = "phieu-thu"
+	LoaiPhieuChi = "phieu-chi"
 )
 
 // LoaiMa — một loại chứng từ / danh mục đánh số được.
@@ -99,6 +104,8 @@ var DanhMucLoaiMa = []LoaiMa{
 	{Ma: LoaiTraHangNCC, Ten: "Trả hàng nhà cung cấp", TienToGoiY: "PTH"},
 	{Ma: LoaiDieuChuyen, Ten: "Phiếu điều chuyển", TienToGoiY: "PDC"},
 	{Ma: LoaiDieuChinhTon, Ten: "Phiếu điều chỉnh tồn kho", TienToGoiY: "DCT"},
+	{Ma: LoaiPhieuThu, Ten: "Phiếu thu", TienToGoiY: "PT"},
+	{Ma: LoaiPhieuChi, Ten: "Phiếu chi", TienToGoiY: "PC"},
 }
 
 // TimLoaiMa tra một loại theo mã.

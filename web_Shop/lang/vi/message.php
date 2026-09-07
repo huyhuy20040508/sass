@@ -182,6 +182,8 @@ return [
   'general-settings' => 'Thông số chung',
   'form' => 'Biểu mẫu',
   'payment-method' => 'Phương thức thanh toán',
+  // Bản ngắn dùng cho TIÊU ĐỀ CỘT: bảng Thu chi có 13 cột, nhãn dài là bảng tràn ngang.
+  'payment-method-short' => 'Phương thức',
   'user-permissions' => 'Phân quyền người dùng',
   'branch_management' => 'Quản lý chi nhánh',
   'you-are-at' => 'Bạn đang ở',
@@ -1151,6 +1153,7 @@ return [
   'payer' => 'Người nộp',
   'payee' => 'Người nhận',
   'recorded-time' => 'Thời gian ghi nhận',
+  'recorded-time-short' => 'Thời gian',
   'amount' => 'Số tiền',
   'unit-price' => 'Đơn giá',
 
@@ -1165,7 +1168,14 @@ return [
   'select_payment_method' => 'Chọn phương thức thanh toán',
   'enter_description' => 'Nhập mô tả',
   'income_expense_category' => 'Phân loại thu chi',
+  'income_expense_category-short' => 'Phân loại',
   'payer_name' => 'Tên người nộp',
+
+  // Màn Quản lý thu chi — bốn khoá bản v2 cũ dùng mà bộ chữ này chưa có.
+  'object_type' => 'Loại đối tượng',
+  'bank_account_name' => 'Tài khoản ngân hàng',
+  'select_one' => 'Chọn một',
+  'not_found' => 'Không tìm thấy',
 
   'select_time' => 'Chọn thời gian',
   'status_shift' => 'Trạng thái ca',
@@ -2313,6 +2323,28 @@ return [
   'quantity_in_stock'=>'Số lượng nhập kho',
 
   'still_in_debt'=>'Còn nợ',
+  // Màn Khách hàng (khuôn crm/customers của v2): cột bảng và mấy ô lọc.
+  'orders_count' => 'Số đơn',
+  'last_payment' => 'Chi tiêu gần nhất',
+  'last_transaction' => 'Giao dịch lần cuối',
+  'age' => 'Tuổi',
+  'other_gender' => 'Khác',
+  'next_7_days' => '7 ngày tới',
+  'next_14_days' => '14 ngày tới',
+  'next_30_days' => '30 ngày tới',
+  'custom' => 'Tuỳ chọn',
+  'nearest_birthday' => 'Sinh nhật gần nhất',
+  // Thống kê → Khách hàng (khuôn report/end-day/customer của v2).
+  'price_avg' => 'Giá trị trung bình',
+  'see_report' => 'Xem báo cáo',
+  'revenue_report_workday_summary' => 'Tổng hợp số liệu bán hàng trong kỳ',
+  // Nhãn 9 tab của module Thống kê, đúng $reportTypes của v2.
+  'report_customer' => 'Khách hàng',
+  'revenue_report' => 'Bán hàng',
+  'revenue_by_table' => 'Bàn',
+  'expense_report' => 'Chi phí',
+  'report_employee' => 'Nhân viên',
+  'commission-employee-report' => 'Hoa hồng nhân viên',
   'show_payment_qr' => 'Hiển thị QR thanh toán',
   'show_footer' => 'Hiển thị footer',
   'show_wifi' => 'Hiển thị wifi',

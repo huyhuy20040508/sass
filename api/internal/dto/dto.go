@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"sass-api/internal/domain"
+	"sass-api/pkg/response"
 )
 
 // ---------- Auth ----------
@@ -589,6 +590,21 @@ type CustomerRequest struct {
 	DateOfBirth string `json:"date_of_birth" binding:"omitempty" example:"1998-08-23"`
 	Address     string `json:"address" binding:"omitempty,max=255"`
 	Status      string `json:"status" binding:"required,oneof=active inactive"`
+
+	// ----- Hồ sơ khách theo khuôn v2 (migration 0061) -----
+	// Code bỏ trống khi TẠO = hệ thống tự sinh (cus-00001, cus-00002…). Bỏ trống
+	// khi SỬA = giữ nguyên mã cũ: mã đã đi vào chứng từ, tự đổi là hồ sơ hai bên
+	// lệch nhau.
+	Code string `json:"customer_code" binding:"omitempty,max=30"`
+	// CustomerType: 0 cá nhân (mặc định), 1 doanh nghiệp.
+	CustomerType    uint   `json:"customer_type" binding:"omitempty,oneof=0 1"`
+	CustomerGroupID uint   `json:"customer_group_id" binding:"omitempty"`
+	TaxCode         string `json:"tax_code" binding:"omitempty,max=20"`
+	CitizenID       string `json:"citizen_id" binding:"omitempty,max=12"`
+
+	RepresentativeName  string `json:"representative_name" binding:"omitempty,max=150"`
+	RepresentativePhone string `json:"representative_phone" binding:"omitempty,max=20"`
+	Note                string `json:"customer_note" binding:"omitempty,max=500"`
 	// Password chỉ dùng khi tạo mới (tài khoản đăng nhập storefront);
 	// bỏ trống thì hệ thống cấp mật khẩu mặc định.
 	Password string `json:"password" binding:"omitempty,min=6,max=72"`
@@ -1442,7 +1458,23 @@ type CustomerResponse struct {
 	Status      string  `json:"status" example:"active"`
 	TotalOrders int64   `json:"total_orders"`
 	TotalSpent  float64 `json:"total_spent"`
+	// TotalPaid / StillInDebt gộp từ sổ đơn theo `payment_status`, không có sổ nợ
+	// khách riêng — xem AggregateCustomerOrders.
+	TotalPaid   float64 `json:"total_paid"`
+	StillInDebt float64 `json:"still_in_debt"`
 	LastOrderAt string  `json:"last_order_at"`
+
+	// ----- Hồ sơ khách theo khuôn v2 -----
+	Code            string `json:"customer_code" example:"cus-00432"`
+	CustomerType    uint   `json:"customer_type" example:"0"`
+	CustomerGroupID uint   `json:"customer_group_id"`
+	// GroupName tra kèm khi đọc để bảng in ra tên nhóm mà không phải gọi thêm lượt nữa.
+	GroupName           string `json:"customer_group_name"`
+	TaxCode             string `json:"tax_code"`
+	CitizenID           string `json:"citizen_id"`
+	RepresentativeName  string `json:"representative_name"`
+	RepresentativePhone string `json:"representative_phone"`
+	Note                string `json:"customer_note"`
 
 	// ----- Tài khoản đăng nhập storefront -----
 	// LoginEmail là tên đăng nhập (chính là email); rỗng nghĩa là chưa thể đăng nhập.
@@ -2580,6 +2612,68 @@ type LoaiThuChiRequest struct {
 // qua thì người gọi tưởng đã đổi được — không nhận là câu trả lời rõ hơn.
 type SuaLoaiThuChiRequest struct {
 	Name string `json:"name" binding:"required,max=255"`
+}
+
+// ---------- Thu chi (Thu chi → Quản lý thu chi) ----------
+
+// ThuChiRequest — payload lập / sửa một phiếu thu hoặc phiếu chi.
+//
+// Type dùng con trỏ cùng lý do với LoaiThuChiRequest: 0 là giá trị HỢP LỆ
+// (phiếu thu), để uint8 trần thì `required` coi 0 là "chưa gửi".
+//
+// KHÔNG có `code`, `shop_id`, `created_by`, `source`, `shift_id`: mã do quy tắc
+// đánh số của cửa hàng sinh, chi nhánh và ca lấy từ chính request, người lập lấy
+// từ phiên, còn nguồn thì phiếu lập tay luôn là `manual`. Nhận chúng từ trình
+// duyệt là mở đường cho một lượt gọi tự khai mình là phiếu tự sinh của đơn hàng
+// — và phiếu tự sinh thì không ai sửa/xoá được nữa.
+type ThuChiRequest struct {
+	Type   *uint8  `json:"type" binding:"required,oneof=0 1"`
+	Amount float64 `json:"amount" binding:"required,gt=0"`
+
+	CategoryID uint `json:"category_id"`
+
+	// PayerType rỗng = không khai đối tượng. Khai rồi thì PayerID phải có, và
+	// service tra đúng bảng theo loại này.
+	PayerType string `json:"payer_type" binding:"omitempty,oneof=quan_ly thu_ngan supplier other"`
+	PayerID   uint   `json:"payer_id"`
+
+	PaymentMethod string `json:"payment_method" binding:"required,oneof=cash transfer"`
+
+	// Attachment là ĐƯỜNG DẪN tệp, không phải tệp: Shop Admin đẩy tệp lên trước
+	// bằng một lượt riêng rồi gửi kèm địa chỉ ở đây.
+	Attachment string `json:"attachment" binding:"omitempty,max=2048"`
+	Note       string `json:"note" binding:"omitempty,max=255"`
+}
+
+// NguoiNopThuChiRequest — thêm nhanh một người nộp / người nhận vãng lai.
+//
+// Ba ô, đúng bằng số ô bản cũ v2 thật sự gửi lên. Hộp thoại của v2 bày sáu ô
+// (loại KH, giới tính, ngày sinh…) nhưng ba trong số đó rơi mất trên đường đi,
+// mà một ô nữa — email — còn không có ô nào trong hộp.
+type NguoiNopThuChiRequest struct {
+	Name    string `json:"name" binding:"required,max=255"`
+	Phone   string `json:"phone" binding:"omitempty,max=20"`
+	Address string `json:"address" binding:"omitempty,max=255"`
+}
+
+// ThuChiMeta — khối `meta` của danh sách thu chi: phân trang GỘP bốn ô quỹ.
+//
+// Gộp vào `meta` thay vì thêm một khoá `summary` ở tầng ngoài cùng: bốn con số
+// ấy là thông tin VỀ tập kết quả, đúng nghĩa metadata, và thêm một trường mới
+// vào response.Body là đổi khuôn phản hồi của toàn bộ API cho một màn hình.
+type ThuChiMeta struct {
+	response.Pagination
+	domain.ThuChiTongKet
+}
+
+// CongNoMeta — khối `meta` của danh sách công nợ: phân trang GỘP bốn con số của
+// bốn nút lọc nhanh và tổng tiền còn nợ.
+//
+// Cùng lý do gộp như ThuChiMeta: đó là thông tin VỀ tập kết quả, và thêm một
+// trường mới ở tầng ngoài cùng là đổi khuôn phản hồi của cả API cho một màn.
+type CongNoMeta struct {
+	response.Pagination
+	domain.CongNoTongKet
 }
 
 // ---------- Vị trí (Hàng hóa → Vị trí) ----------

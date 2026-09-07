@@ -1,0 +1,56 @@
+-- =====================================================================
+--  0059_chi-muc-cong-no-2026-09-07.sql
+--  Ngày: 07/09/2026
+-- =====================================================================
+--  KHÔNG viết CREATE DATABASE hay USE ở đây: công cụ đã kết nối sẵn đúng
+--  database của môi trường đang chạy (cục bộ / thử / thật đều khác tên).
+--
+--  MySQL không cho DDL nằm trong transaction, nên tệp chạy dở là dở thật.
+--
+--  Tệp này đã chạy ở đâu đó rồi thì TUYỆT ĐỐI không sửa nội dung nữa —
+--  công cụ giữ vân tay và sẽ báo lệch. Cần thêm gì thì viết tệp mới.
+-- =====================================================================
+--
+--  CHỈ MỤC CHO MÀN CÔNG NỢ
+--
+--  Migration 0048 cố ý KHÔNG đánh chỉ mục cho (is_debt, debt_due_date),
+--  và nói rõ vì sao: lúc ấy chưa màn nào hỏi "phiếu nào sắp tới hạn", mà
+--  dựng sẵn chỉ mục cho một truy vấn chưa tồn tại là bắt mọi lượt ghi trả
+--  phí cho một thứ không ai đọc. Nguyên văn dòng cuối tệp ấy: "Làm màn
+--  công nợ thì thêm, lúc ấy còn biết nó lọc theo đúng cái gì."
+--
+--  Giờ thì biết. Màn Công nợ (Thu chi → Công nợ) chạy đúng MỘT khuôn
+--  truy vấn, lặp lại bốn lần cho bốn nút đếm và một lần nữa cho bảng:
+--
+--      WHERE tenant_id = ? AND deleted_at IS NULL
+--        AND status = 'approved' AND is_debt = 1
+--        AND shop_id = ?                     -- khi đã chọn chi nhánh
+--        AND debt_due_date <hạn>             -- quá hạn / hôm nay / sắp tới
+--      ORDER BY debt_due_date IS NULL, debt_due_date, id DESC
+--
+--  THỨ TỰ CỘT CỦA CHỈ MỤC — đọc kỹ, đây là toàn bộ lý do tệp này tồn tại:
+--
+--  Hai cột `status` và `is_debt` đứng TRƯỚC vì chúng là điều kiện bằng và
+--  không bộ lọc nào của màn tắt được. `shop_id` đứng thứ ba vì nó cũng là
+--  điều kiện bằng nhưng CÓ THỂ vắng (xem hết mọi chi nhánh). `debt_due_date`
+--  đứng CUỐI vì nó là điều kiện KHOẢNG, và một cột khoảng đặt giữa chừng
+--  thì mọi cột sau nó không dùng được chỉ mục nữa.
+--
+--  Nhờ đúng thứ tự ấy, `ORDER BY debt_due_date` cũng đọc thẳng theo chỉ
+--  mục thay vì gom cả tập rồi sắp lại — mà màn này sắp theo hạn nợ chứ
+--  không theo id, nên không có chỉ mục là mỗi lần lật trang lại sắp lại
+--  toàn bộ khoản nợ của cửa hàng.
+--
+--  VÌ SAO KHÔNG CÓ `tenant_id` Ở ĐẦU: bảng đã có chỉ mục mang tenant_id
+--  dẫn đầu từ 0041, và MySQL chỉ dùng được MỘT chỉ mục cho một lần quét.
+--  Cửa hàng nào cũng chỉ có vài trăm tới vài nghìn phiếu mua, còn số phiếu
+--  ĐANG NỢ thì ít hơn nhiều — lọc bằng chỉ mục dưới đây rồi mới cắt theo
+--  tenant cho ra tập nhỏ hơn hẳn so với chiều ngược lại.
+--
+--  KHÔNG dùng `ADD INDEX IF NOT EXISTS`: MySQL 8 không có cú pháp ấy (chỉ
+--  MariaDB), xem lại chú thích ở migration 0002 và 0048. Tệp này vì thế
+--  chạy được đúng một lần.
+-- =====================================================================
+
+ALTER TABLE purchase_orders
+  ADD INDEX idx_po_cong_no (status, is_debt, shop_id, debt_due_date);

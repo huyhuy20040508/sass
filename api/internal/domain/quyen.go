@@ -30,6 +30,15 @@ const (
 	QuyenXoa  = "xoa"
 )
 
+// QuyenThuChiMoiNguoi — phần đuôi của quyền lẻ cho phép sửa/xoá phiếu thu chi do
+// người khác lập. Khai thành hằng vì tầng handler so khớp chuỗi đầy đủ
+// ("thu-chi." + hằng này); gõ tay ở hai nơi là một ngày nào đó hai nơi lệch nhau
+// và lớp khoá im lặng mở ra cho tất cả.
+const QuyenThuChiMoiNguoi = "sua-moi-nguoi"
+
+// QuyenSuaThuChiMoiNguoi là chuỗi quyền đầy đủ.
+const QuyenSuaThuChiMoiNguoi = "thu-chi." + QuyenThuChiMoiNguoi
+
 // QuyenLe — một việc RIÊNG nằm ngoài bốn việc chuẩn, vì nó nguy hiểm hơn hẳn
 // phần còn lại của cùng màn hình. Ví dụ: ai cũng có thể xem tồn kho, nhưng nhìn
 // thấy giá vốn là biết cửa hàng lãi bao nhiêu trên mỗi món.
@@ -229,10 +238,38 @@ var DanhMucQuyen = []KhuQuyen{
 				Ten: "Thu chi",
 				Mucs: []MucQuyen{
 					{
+						// Sổ phiếu thu / phiếu chi.
+						//
+						// Bốn việc chuẩn chỉ mở phiếu của CHÍNH mình: ai lập thì
+						// người ấy sửa, người ấy xoá. Đó là mặc định của v2 và cũng
+						// là mặc định ở đây — hai người cùng trực một két mà sửa
+						// được phiếu của nhau thì không truy được ai ghi sai.
+						Prefix: "thu-chi", Ten: "Quản lý thu chi",
+						Viec: []string{QuyenXem, QuyenThem, QuyenSua, QuyenXoa},
+						Le: []QuyenLe{
+							// Vượt lớp khoá "phiếu của người khác" — xem domain.ThuChiKhoa.
+							// KHÔNG vượt được hai lớp còn lại (phiếu tự sinh, ca đã đóng):
+							// hai lớp ấy chặn mọi người, kể cả chủ tiệm.
+							{Ma: QuyenThuChiMoiNguoi, Ten: "Sửa và xoá phiếu do người khác lập"},
+						},
+					},
+					{
 						// Khung phân loại của phiếu thu chi — cùng tầng với danh mục
 						// hàng hoá: việc của chủ tiệm, không phải của người đứng quầy.
 						Prefix: "loai-thu-chi", Ten: "Loại thu chi",
 						Viec: []string{QuyenXem, QuyenThem, QuyenSua, QuyenXoa},
+					},
+					{
+						// Sổ công nợ nhà cung cấp. CHỈ có việc "xem": màn này không
+						// tự ghi gì cả, lượt trả nợ đi bằng quyền `phieu-mua-hang.sua`
+						// của chính phiếu mua. Khai thêm thêm/sửa/xoá ở đây là bày ba
+						// ô tick không điều khiển được thứ gì.
+						//
+						// Tách khỏi `thu-chi.xem` vì sổ này bày tên và số điện thoại
+						// người đại diện bên bán cùng số tiền còn nợ từng nhà cung cấp
+						// — ai đọc được sổ thu chi không đương nhiên được đọc ngần ấy.
+						Prefix: "cong-no", Ten: "Công nợ",
+						Viec: []string{QuyenXem},
 					},
 				},
 			},

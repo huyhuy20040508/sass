@@ -386,6 +386,7 @@ func dungHeThongVoi(t *testing.T, banHang, dieuHanh bool) *heThong {
 			Thue:         handler.NewThueHandler(service.NewThueService(thueRepo)),
 			DonViTinh:    handler.NewDonViTinhHandler(service.NewDonViTinhService(donViTinhRepo, quyTacMaRepo)),
 			LoaiThuChi:   handler.NewLoaiThuChiHandler(service.NewLoaiThuChiService(loaiThuChiRepo)),
+			ThuChi:       handler.NewThuChiHandler(service.NewThuChiService(repository.NewThuChiRepository(db), quyTacMaRepo)),
 			ViTri:        handler.NewViTriHandler(service.NewViTriService(viTriRepo, quyTacMaRepo)),
 			NhaCungCap:   handler.NewNhaCungCapHandler(service.NewNhaCungCapService(nhaCungCapRepo, quyTacMaRepo)),
 			PhieuMuaHang: handler.NewPhieuMuaHangHandler(service.NewPhieuMuaHangService(phieuMuaHangRepo, nhaCungCapRepo)),
