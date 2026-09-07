@@ -165,7 +165,76 @@
                         </table>
                     </div>
 
-                    <div class="table-list-container-mobile"></div>
+                        {{-- BẢN THẺ CHO ĐIỆN THOẠI — đúng khuôn v2 cũ.
+                             Dưới 992px v2 giấu hẳn .table-list-container, và bày khối này thay chỗ
+                             (responsive-manager.css: ẩn ở desktop, hiện ở mobile). Thiếu nó thì màn
+                             hình trắng trơn — bảng vẫn nằm nguyên trong HTML nên nhìn mã nguồn
+                             không thấy gì sai.
+
+                             Khác v2 đúng một chỗ: v2 để khối này RỖNG rồi nhờ
+                             public/v2/js/script.js dựng thẻ lúc chạy, mà vỏ v2 ở đây không nạp tệp
+                             ấy — nên nó rỗng suốt. Dựng thẳng bằng Blade, giữ nguyên bộ class của
+                             v2 để CSS của v2 tự ăn vào: hộp trắng bo góc, tên đậm, gạch ngăn, các
+                             dòng "nhãn: giá trị", mã màu cam.
+
+                             Cùng class .item và cùng bộ data-* với dòng bảng nên chọn, sửa, xoá,
+                             gạt trạng thái dùng chung một đoạn JS. --}}
+                        <div class="table-list-container-mobile">
+                            @forelse($list as $item)
+                                @php
+                                    $id = (int) ($item['id'] ?? 0);
+                                    $bat = (bool) ($item['is_active'] ?? false);
+                                    $dangDung = (bool) ($item['in_use'] ?? false);
+                                    $giaTri = $item['values'] ?? [];
+                                    $hien = array_slice($giaTri, 0, $C::SO_GIA_TRI_HIEN);
+                                    $du = count($giaTri) - count($hien);
+                                    $tenGiaTri = implode(', ', array_map(fn ($g) => $g['name'] ?? '', $hien));
+                                @endphp
+                                <div class="table-list-mobile-item item d-flex align-items-stretch w-100 gap-0"
+                                    data-id="{{ $id }}" data-code="{{ $item['code'] ?? '' }}"
+                                    data-name="{{ $item['name'] ?? '' }}" data-status="{{ $bat ? 1 : 0 }}"
+                                    data-type="attribute"
+                                    data-detail="{{ json_encode(array_map(fn ($g) => [
+                                        'id' => $g['id'] ?? 0, 'code' => $g['code'] ?? '', 'name' => $g['name'] ?? '',
+                                    ], $giaTri), JSON_UNESCAPED_UNICODE) }}">
+                                    <div class="item-select-mobile-wrap flex-shrink-0 d-flex align-items-center pe-1 align-self-start">
+                                        <input class="form-check-input item-select" type="checkbox" value="{{ $id }}">
+                                    </div>
+                                    <div class="content-finished-product-item flex-grow-1" style="min-width: 0">
+                                        <div class="header-finished-product">
+                                            <p class="finished-product-name">{{ $item['name'] ?? '' }}</p>
+                                        </div>
+                                        <div class="line-finished-product"></div>
+                                        <div class="body-finished-product">
+                                            <div class="finished-product-property">
+                                                <p>{{ __('message.detail') }}:</p>
+                                                <p class="text-end">{{ $tenGiaTri }}@if($du > 0) <b>+{{ $du }}</b>@endif</p>
+                                            </div>
+                                            <div class="finished-product-property">
+                                                <p>{{ __('message.status') }}:</p>
+                                                <p class="text-end">
+                                                    <input type="checkbox" class="switch_customer item-status" data-id="{{ $id }}"
+                                                        {{ $bat ? 'checked' : '' }}>
+                                                </p>
+                                            </div>
+                                            <p class="finished-product-code">{{ $item['code'] ?? '' }}</p>
+                                            <span class="action d-flex gap-2">
+                                                <a class="edit_bt edit-item text-decoration-none" type="button" title="{{ __('message.edit') }}"><i class="fa fa-edit"></i></a>
+                                                @if($dangDung)
+                                                    <a class="dele_bt text-decoration-none" type="button"
+                                                        title="Đang được biến thể hoặc định lượng dùng — không xoá được"><i class="fa fa-times text-muted"></i></a>
+                                                @else
+                                                    <a class="dele_bt delete-item text-decoration-none" type="button" title="{{ __('message.delete') }}"><i class="fa fa-times"></i></a>
+                                                @endif
+                                                <a class="copy_bt copy-item text-decoration-none" type="button" title="{{ __('message.copy') }}"><i class="fa fa-copy"></i></a>
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            @empty
+                                <div class="text-center py-4">{{ $hasFilter ? 'Không có thuộc tính nào khớp bộ lọc đang bật.' : $C::EMPTY_TEXT }}</div>
+                            @endforelse
+                        </div>
 
                     {{-- Phân trang dựng đúng khuôn bootstrap-4 mà bản v2 in ra. --}}
                     <div class="form_pagi">
@@ -373,8 +442,10 @@
         }
 
         $(document).on('click', '.add-item', () => moHop('add', null));
-        $(document).on('click', '.edit-item', function () { moHop('edit', $(this).closest('tr.item')); });
-        $(document).on('click', '.copy-item', function () { moHop('copy', $(this).closest('tr.item')); });
+        // `.item` chứ không `tr.item`: nút còn nằm trên thẻ điện thoại, và thẻ mang
+        // đúng bộ data-* như dòng bảng.
+        $(document).on('click', '.edit-item', function () { moHop('edit', $(this).closest('.item')); });
+        $(document).on('click', '.copy-item', function () { moHop('copy', $(this).closest('.item')); });
 
         $(document).on('click', '.add-detail-attribute', function () {
             $('#menu-attribute-detail').append(dongGiaTri(null, false));
@@ -426,12 +497,13 @@
         });
 
         $(document).on('click', '.delete-item', function () {
-            $('#deleteValue').val($(this).closest('tr.item').data('id'));
+            $('#deleteValue').val($(this).closest('.item').data('id'));
             $('#deleteItem').modal('show');
         });
 
         $(document).on('click', '.mass-delete', function () {
-            const ids = $('.item-select:checked').map((i, el) => el.value).get();
+            // Set: mỗi dòng có hai ô tick (bảng + thẻ điện thoại) nên id hay lặp.
+            const ids = [...new Set($('.item-select:checked').map((i, el) => el.value).get())];
             if (!ids.length) { toastr.error('{{ __('message.delete-none') }}'); return; }
             $('#deleteValue').val(ids.join(','));
             $('#deleteItem').modal('show');
