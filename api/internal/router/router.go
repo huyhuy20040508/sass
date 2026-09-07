@@ -70,6 +70,11 @@ type Handlers struct {
 	ThuocTinh *handler.ThuocTinhHandler
 	// LoaiThuChi — loại thu chi (Thu chi → Loại thu chi).
 	LoaiThuChi *handler.LoaiThuChiHandler
+	// ThuChi — sổ phiếu thu / phiếu chi (Thu chi → Quản lý thu chi).
+	ThuChi *handler.ThuChiHandler
+	// CongNo — sổ công nợ nhà cung cấp (Thu chi → Công nợ). Chỉ đọc: lượt trả nợ
+	// đi bằng đường thanh toán phiếu mua, xem service.CongNoService.
+	CongNo *handler.CongNoHandler
 
 	// DonViTinh — đơn vị tính (Hàng hóa → Đơn vị).
 	DonViTinh *handler.DonViTinhHandler
@@ -546,6 +551,23 @@ func New(
 			q.Dat(manage, http.MethodGet, "/loai-thu-chi/:id", "loai-thu-chi.xem", h.LoaiThuChi.Get)
 			q.Dat(manage, http.MethodPut, "/loai-thu-chi/:id", "loai-thu-chi.sua", h.LoaiThuChi.Update)
 			q.Dat(manage, http.MethodDelete, "/loai-thu-chi/:id", "loai-thu-chi.xoa", h.LoaiThuChi.Delete)
+
+			// Sổ thu chi. Đường người nộp nằm cùng nhóm quyền `thu-chi`: nó chỉ
+			// phục vụ ô chọn của hộp lập phiếu, tách một prefix riêng là bắt chủ
+			// tiệm tick thêm một ô nữa cho cùng một việc.
+			q.Dat(manage, http.MethodGet, "/thu-chi", "thu-chi.xem", h.ThuChi.List)
+			q.Dat(manage, http.MethodPost, "/thu-chi", "thu-chi.them", h.ThuChi.Create)
+			q.Dat(manage, http.MethodGet, "/thu-chi/:id", "thu-chi.xem", h.ThuChi.Get)
+			q.Dat(manage, http.MethodPut, "/thu-chi/:id", "thu-chi.sua", h.ThuChi.Update)
+			q.Dat(manage, http.MethodDelete, "/thu-chi/:id", "thu-chi.xoa", h.ThuChi.Delete)
+			q.Dat(manage, http.MethodGet, "/nguoi-nop-thu-chi", "thu-chi.xem", h.ThuChi.ListNguoiNop)
+			q.Dat(manage, http.MethodPost, "/nguoi-nop-thu-chi", "thu-chi.them", h.ThuChi.CreateNguoiNop)
+
+			// Công nợ. Quyền riêng `cong-no.xem`: sổ này bày tên và số điện thoại
+			// người đại diện bên bán cùng số tiền còn nợ từng nhà cung cấp — ai
+			// đọc được sổ thu chi không đương nhiên được đọc ngần ấy.
+			q.Dat(manage, http.MethodGet, "/cong-no", "cong-no.xem", h.CongNo.List)
+			q.Dat(manage, http.MethodGet, "/cong-no/:id/lich-su-tra", "cong-no.xem", h.CongNo.LichSuTra)
 			// Vị trí — chỗ để hàng ("Kệ A - Tầng 1", "Kho lạnh"). Cùng khuôn và
 			// cùng tầng quyền với đơn vị tính: khung phân loại của mặt hàng.
 			q.Dat(manage, http.MethodGet, "/vi-tri", "vi-tri.xem", h.ViTri.List)

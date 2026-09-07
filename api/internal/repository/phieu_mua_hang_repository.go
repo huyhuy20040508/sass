@@ -598,13 +598,77 @@ func (r *purchaseOrderRepository) Create(ctx context.Context, po *domain.Purchas
 		}
 		po.Items = items
 
-		return tx.Create(&domain.PurchaseOrderHistory{
+		if err := tx.Create(&domain.PurchaseOrderHistory{
 			PurchaseOrderID: po.ID,
 			FromStatus:      "",
 			ToStatus:        po.Status,
 			Note:            "Lập phiếu, lưu tạm",
 			ChangedBy:       po.CreatedBy,
-		}).Error
+		}).Error; err != nil {
+			return err
+		}
+
+		// Mua hàng trả tiền LUÔN lúc lập phiếu — rất thường gặp ở cửa hàng nhỏ.
+		// Trước đây khoản ấy chỉ nằm ở `paid_amount` và không vào sổ nào cả.
+		return ghiLuotTraNCC(ctx, tx, po, 0, po.CreatedBy)
+	})
+}
+
+// ghiLuotTraNCC ghi MỘT lượt trả tiền nhà cung cấp: dòng sổ `purchase_payments`
+// và phiếu chi tự sinh trong sổ thu chi, trong đúng transaction của phiếu mua.
+//
+// VÌ SAO PHẢI GOM VÀO ĐÂY: `PurchasePayment` khai một bất biến —
+//
+//	purchase_orders.paid_amount = SUM(purchase_payments.amount)
+//
+// — nhưng `paid_amount` được đặt ở BA đường: lập phiếu, sửa phiếu nháp, và bấm
+// Thanh toán. Trước đây chỉ đường thứ ba ghi sổ, nên mua hàng mà trả tiền luôn
+// ngay lúc lập phiếu là khoản tiền ấy biến mất khỏi sổ trả tiền, khỏi màn Công
+// nợ, và khỏi sổ thu chi — chỉ mỗi con số trên phiếu biết.
+//
+// `truoc` là số luỹ kế TRƯỚC lượt này; hàm tự lấy phần chênh. Chênh 0 thì không
+// ghi gì: sửa mỗi ghi chú không được đẻ ra một dòng "trả 0 đồng".
+func ghiLuotTraNCC(
+	ctx context.Context, tx *gorm.DB, po *domain.PurchaseOrder, truoc float64, actorID *uint,
+) error {
+	chenh := po.PaidAmount - truoc
+	if chenh == 0 {
+		return nil
+	}
+
+	if err := tx.Create(&domain.PurchasePayment{
+		// Tenant do tầng dưới GORM tự đóng dấu; chi nhánh thì chép từ PHIẾU chứ
+		// không lấy của người bấm — dòng sổ này thuộc về nơi đã chi tiền.
+		ShopID:          po.ShopID,
+		PurchaseOrderID: po.ID,
+		Amount:          chenh,
+		PaidAfter:       po.PaidAmount,
+		PaymentMethod:   po.PaymentMethod,
+		CreatedBy:       actorID,
+	}).Error; err != nil {
+		return err
+	}
+
+	// LƯỢT CHỮA (chênh âm) ĐỔI VẾ: nó là tiền quay lại nên vào sổ thu chi thành
+	// phiếu THU với trị tuyệt đối. Ghi nguyên số âm thành phiếu chi thì cột "Số
+	// tiền" in ra "-500,000", và không ai đọc sổ theo kiểu đó.
+	loai, tien := domain.ThuChiPhieuChi, chenh
+	ghiChu := "Trả tiền phiếu mua " + po.POCode
+	if tien < 0 {
+		loai, tien = domain.ThuChiPhieuThu, -tien
+		ghiChu = "Chữa lại lượt trả tiền phiếu mua " + po.POCode
+	}
+	poID := po.ID
+
+	return GhiThuChiTuSinh(ctx, tx, &domain.ThuChi{
+		ShopID:        po.ShopID,
+		Type:          loai,
+		Amount:        tien,
+		PaymentMethod: phuongThucThuChi(po.PaymentMethod),
+		Note:          ghiChu,
+		Source:        domain.ThuChiTuPhieuMua,
+		SourceID:      &poID,
+		CreatedBy:     actorID,
 	})
 }
 
@@ -636,6 +700,10 @@ func (r *purchaseOrderRepository) Update(
 		if err := chanChungTuKhacChiNhanh(ctx, tx, po.ShopID); err != nil {
 			return err
 		}
+
+		// Chụp số đã trả TRƯỚC khi mutate đè lên: đó là mốc để biết lượt sửa này
+		// có đổi tiền hay không, và đổi bao nhiêu.
+		daTraTruoc := po.PaidAmount
 
 		// Điều kiện sửa được kiểm TRONG khoá dòng: kiểm trước khi gọi thì một lượt
 		// duyệt chen vào giữa sẽ bị danh sách hàng mới xoá đè lên.
@@ -669,6 +737,13 @@ func (r *purchaseOrderRepository) Update(
 			}
 		}
 		po.Items = items
+
+		// Sửa phiếu nháp mà gõ lại số đã trả cũng là một lượt trả tiền (hoặc một
+		// lượt chữa) — phải vào sổ đúng như bấm nút Thanh toán, không thì bất biến
+		// `paid_amount = SUM(purchase_payments.amount)` gãy ngay tại đây.
+		if err := ghiLuotTraNCC(ctx, tx, &po, daTraTruoc, po.HandledBy); err != nil {
+			return err
+		}
 
 		result = &po
 
@@ -726,6 +801,38 @@ func (r *purchaseOrderRepository) LockAndUpdate(
 			tra.ShopID = po.ShopID
 			tra.PurchaseOrderID = po.ID
 			if err := tx.Create(tra).Error; err != nil {
+				return err
+			}
+
+			// Tiền trả nhà cung cấp vào SỔ THU CHI — cùng giao dịch với lượt trả.
+			// Đây là khoản tiền RA lớn nhất của một cửa hàng bán lẻ; sổ thu chi mà
+			// thiếu nó thì tổng chi in ra không có nghĩa gì.
+			//
+			// LƯỢT CHỮA (Amount âm) ĐỔI VẾ: nó là tiền quay lại, nên vào sổ thành
+			// phiếu THU với trị tuyệt đối. Ghi nguyên số âm thành phiếu chi thì
+			// tổng chi cộng một số âm — nhìn thì vẫn ra đúng tổng, nhưng cột "Số
+			// tiền" in ra "-500,000" và không ai đọc sổ theo kiểu đó. Bỏ qua nó thì
+			// tệ hơn nữa: sổ giữ mãi khoản đã ghi sai.
+			//
+			// Chi nhánh lấy từ PHIẾU MUA chứ không từ người bấm, cùng lý do với
+			// mấy dòng ngay trên.
+			poID := po.ID
+			loaiTra, tien := domain.ThuChiPhieuChi, tra.Amount
+			ghiChu := "Trả tiền phiếu mua " + po.POCode
+			if tien < 0 {
+				loaiTra, tien = domain.ThuChiPhieuThu, -tien
+				ghiChu = "Chữa lại lượt trả tiền phiếu mua " + po.POCode
+			}
+			if err := GhiThuChiTuSinh(ctx, tx, &domain.ThuChi{
+				ShopID:        po.ShopID,
+				Type:          loaiTra,
+				Amount:        tien,
+				PaymentMethod: phuongThucThuChi(tra.PaymentMethod),
+				Note:          ghiChu,
+				Source:        domain.ThuChiTuPhieuMua,
+				SourceID:      &poID,
+				CreatedBy:     tra.CreatedBy,
+			}); err != nil {
 				return err
 			}
 		}

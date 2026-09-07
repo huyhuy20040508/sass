@@ -182,6 +182,25 @@ func (r *orderRepository) DoiHang(
 			if err := ghiSoQuy(tx, quy); err != nil {
 				return err
 			}
+
+			// 9b. Và vào SỔ THU CHI. Chiều lấy thẳng từ dòng sổ quỹ vừa dựng:
+			// khách bù thêm là tiền vào (phiếu thu), cửa hàng trả lại là tiền ra
+			// (phiếu chi) — hai sổ không được nói ngược nhau về cùng một khoản.
+			loai := domain.ThuChiPhieuThu
+			if quy.Direction == domain.SoQuyChi {
+				loai = domain.ThuChiPhieuChi
+			}
+			if err := GhiThuChiTuSinh(ctx, tx, &domain.ThuChi{
+				ShopID:        shopID,
+				Type:          loai,
+				Amount:        quy.Amount,
+				PaymentMethod: domain.ThuChiTienMat,
+				Note:          "Đổi hàng đơn " + don.OrderCode,
+				Source:        domain.ThuChiTuDonHang,
+				SourceID:      &refID,
+			}); err != nil {
+				return err
+			}
 		}
 
 		phieu, moi = rt, don

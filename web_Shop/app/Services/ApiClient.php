@@ -2016,4 +2016,64 @@ class ApiClient
     {
         return $this->delete("/admin/loai-thu-chi/{$id}");
     }
+
+    // ---------- Thu chi (Thu chi → Quản lý thu chi) ----------
+
+    /**
+     * Sổ phiếu thu / phiếu chi. API lọc và cắt trang sẵn, trả về
+     * {data, meta, summary} — summary là bốn ô thống kê đầu bảng
+     * (quỹ đầu kỳ, tổng thu, tổng chi, quỹ cuối kỳ).
+     */
+    public function thuChi(array $query = []): Response
+    {
+        return $this->get('/admin/thu-chi', $query);
+    }
+
+    public function taoThuChi(array $payload): Response
+    {
+        return $this->post('/admin/thu-chi', $payload);
+    }
+
+    public function suaThuChi(int $id, array $payload): Response
+    {
+        return $this->put("/admin/thu-chi/{$id}", $payload);
+    }
+
+    public function xoaThuChi(int $id): Response
+    {
+        return $this->delete("/admin/thu-chi/{$id}");
+    }
+
+    /** Người nộp / người nhận vãng lai — không phải nhân viên, không phải NCC. */
+    public function nguoiNopThuChi(array $query = []): Response
+    {
+        return $this->get('/admin/nguoi-nop-thu-chi', $query);
+    }
+
+    public function taoNguoiNopThuChi(array $payload): Response
+    {
+        return $this->post('/admin/nguoi-nop-thu-chi', $payload);
+    }
+
+    // ---------- Công nợ (Thu chi → Công nợ) ----------
+    //
+    // CHỈ ĐỌC. Ghi một lượt trả nợ đi bằng traTienPhieuMuaHang() ở trên: khoản
+    // nợ nhà cung cấp KHÔNG có bảng riêng, nó chính là phiếu mua đã duyệt còn
+    // thiếu tiền (xem domain.CongNo bên API và migration 0048).
+
+    /**
+     * Sổ công nợ. API lọc, cắt trang và đếm sẵn bốn mốc hạn — trả về
+     * {data, meta}, trong đó `meta` gộp phân trang với count_all / count_near /
+     * count_over / count_today và total_remaining.
+     */
+    public function congNo(array $query = []): Response
+    {
+        return $this->get('/admin/cong-no', $query);
+    }
+
+    /** Sổ từng lượt trả của một khoản nợ. `$id` là id PHIẾU MUA. */
+    public function congNoLichSuTra(int $id): Response
+    {
+        return $this->get("/admin/cong-no/{$id}/lich-su-tra");
+    }
 }

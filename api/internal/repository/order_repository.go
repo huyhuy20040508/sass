@@ -772,6 +772,33 @@ func (r *orderRepository) Checkout(
 			}
 		}
 
+		// 6d. Tiền đã thu vào SỔ THU CHI — cũng trong cùng giao dịch với đơn.
+		//
+		// Khác bước 6c ở phạm vi, và khác có chủ ý: sổ quỹ chỉ nhận TIỀN MẶT vì nó
+		// đối chiếu cái két, còn sổ thu chi là sổ kế toán nên nhận MỌI phương thức.
+		// Điều kiện chung là "đã thu tiền" — đơn còn nợ thì chưa có đồng nào để ghi.
+		//
+		// Phiếu này mang `source = order` nên không ai sửa/xoá được: sửa nó là số
+		// liệu của đơn hàng đổi mà đơn hàng không biết.
+		if o.PaymentStatus == domain.OrderPaymentPaid && o.TotalAmount > 0 {
+			orderID := o.ID
+			if err := GhiThuChiTuSinh(ctx, tx, &domain.ThuChi{
+				ShopID:        o.ShopID,
+				Type:          domain.ThuChiPhieuThu,
+				Amount:        o.TotalAmount,
+				PaymentMethod: phuongThucThuChi(o.PaymentMethod),
+				Note:          "Bán hàng " + o.OrderCode,
+				Source:        domain.ThuChiTuDonHang,
+				SourceID:      &orderID,
+				// CreatedBy để trống: tầng repository không biết ai đang bấm (ctx
+				// chỉ mang cửa hàng và chi nhánh), và gán bừa một id là nói dối về
+				// người chịu trách nhiệm. Cột "Người tạo" của dòng này trống, đúng
+				// nghĩa "máy ghi" — ai bán thì tra ở chính đơn hàng.
+			}); err != nil {
+				return err
+			}
+		}
+
 		// 7. Mốc lịch sử khởi tạo
 		if err := tx.Create(&domain.OrderStatusHistory{
 			OrderID:    o.ID,

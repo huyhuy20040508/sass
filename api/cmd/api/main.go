@@ -307,6 +307,8 @@ func main() {
 	thueRepo := repository.NewThueRepository(db)
 	donViTinhRepo := repository.NewDonViTinhRepository(db)
 	loaiThuChiRepo := repository.NewLoaiThuChiRepository(db)
+	thuChiRepo := repository.NewThuChiRepository(db)
+	congNoRepo := repository.NewCongNoRepository(db)
 	viTriRepo := repository.NewViTriRepository(db)
 	nhaCungCapRepo := repository.NewNhaCungCapRepository(db)
 	phieuMuaHangRepo := repository.NewPurchaseOrderRepository(db)
@@ -395,6 +397,8 @@ func main() {
 	// quyTacMaRepo để mã bỏ trống được đặt theo quy tắc đánh số của cửa hàng.
 	donViTinhSvc := service.NewDonViTinhService(donViTinhRepo, quyTacMaRepo)
 	loaiThuChiSvc := service.NewLoaiThuChiService(loaiThuChiRepo)
+	thuChiSvc := service.NewThuChiService(thuChiRepo, quyTacMaRepo)
+	congNoSvc := service.NewCongNoService(congNoRepo, phieuMuaHangRepo)
 	// Vị trí — cùng khuôn với đơn vị tính: bảng tra mã + tên của riêng cửa hàng.
 	viTriSvc := service.NewViTriService(viTriRepo, quyTacMaRepo)
 	// Nhà cung cấp — danh mục đầu mối mua vào của khu Kho.
@@ -480,6 +484,8 @@ func main() {
 		Thue:         handler.NewThueHandler(thueSvc),
 		DonViTinh:    handler.NewDonViTinhHandler(donViTinhSvc),
 		LoaiThuChi:   handler.NewLoaiThuChiHandler(loaiThuChiSvc),
+		ThuChi:       handler.NewThuChiHandler(thuChiSvc),
+		CongNo:       handler.NewCongNoHandler(congNoSvc),
 		ViTri:        handler.NewViTriHandler(viTriSvc),
 		NhaCungCap:   handler.NewNhaCungCapHandler(nhaCungCapSvc),
 		PhieuMuaHang: handler.NewPhieuMuaHangHandler(phieuMuaHangSvc),

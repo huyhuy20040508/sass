@@ -31,6 +31,8 @@ use App\Http\Controllers\SettingController;
 use App\Http\Controllers\ThongSoChungController;
 use App\Http\Controllers\ThueController;
 use App\Http\Controllers\ThuNganController;
+use App\Http\Controllers\CongNoController;
+use App\Http\Controllers\ThuChiController;
 use App\Http\Controllers\ThuocTinhController;
 use App\Http\Controllers\TraHangNhaCungCapController;
 use App\Http\Controllers\UserController;
@@ -516,6 +518,26 @@ Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:quan_ly', 'chi.v2'])->
         Route::post('/cashbook/categories', [LoaiThuChiController::class, 'store'])->name('loai-thu-chi.store');
         Route::put('/cashbook/categories/{id}', [LoaiThuChiController::class, 'update'])->whereNumber('id')->name('loai-thu-chi.update');
         Route::delete('/cashbook/categories/{id}', [LoaiThuChiController::class, 'destroy'])->whereNumber('id')->name('loai-thu-chi.destroy');
+
+        // Quản lý thu chi — sổ phiếu thu / phiếu chi (module Thu chi).
+        // Cùng tiền tố /cashbook/* với Loại thu chi để header nhận ra module.
+        Route::get('/cashbook/entries', [ThuChiController::class, 'index'])->name('thu-chi.index');
+        Route::get('/cashbook/entries/export', [ThuChiController::class, 'export'])->name('thu-chi.export');
+        Route::get('/cashbook/entries/payers', [ThuChiController::class, 'nguoiNop'])->name('thu-chi.nguoiNop');
+        Route::post('/cashbook/entries/payers', [ThuChiController::class, 'taoNguoiNop'])->name('thu-chi.taoNguoiNop');
+        Route::post('/cashbook/entries/attachment', [ThuChiController::class, 'dinhKem'])->name('thu-chi.dinhKem');
+        Route::get('/cashbook/entries/categories', [ThuChiController::class, 'phanLoai'])->name('thu-chi.phanLoai');
+        Route::post('/cashbook/entries', [ThuChiController::class, 'store'])->name('thu-chi.store');
+        Route::put('/cashbook/entries/{id}', [ThuChiController::class, 'update'])->whereNumber('id')->name('thu-chi.update');
+        Route::delete('/cashbook/entries/{id}', [ThuChiController::class, 'destroy'])->whereNumber('id')->name('thu-chi.destroy');
+
+        // Công nợ. CHỈ có đường đọc và một đường ghi lượt trả — khoản nợ không
+        // có bảng riêng, nó là phiếu mua đã duyệt còn thiếu tiền. Xem
+        // CongNoController.
+        Route::get('/cashbook/debts', [CongNoController::class, 'index'])->name('cong-no.index');
+        Route::get('/cashbook/debts/export', [CongNoController::class, 'export'])->name('cong-no.export');
+        Route::get('/cashbook/debts/{id}/payments', [CongNoController::class, 'lichSuTra'])->whereNumber('id')->name('cong-no.lichSuTra');
+        Route::post('/cashbook/debts/{id}/payments', [CongNoController::class, 'traNo'])->whereNumber('id')->name('cong-no.traNo');
 
         // Chi nhánh — các ĐIỂM BÁN của chính cửa hàng này (bảng `shops` bên API),
         // không phải khách hàng của nhà cung cấp.

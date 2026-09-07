@@ -648,6 +648,27 @@ func recordRefund(tx *gorm.DB, rt *domain.OrderReturn) error {
 		return err
 	}
 
+	// Tiền hoàn cho khách vào SỔ THU CHI — phiếu CHI, ngay tại lúc hoàn.
+	//
+	// Chi nhánh lấy từ ĐƠN GỐC, không phải nơi người bấm đang đứng: tiền ra khỏi
+	// két nào là do đơn ấy bán ở đâu quyết định.
+	//
+	// Phương thức suy từ `provider` vừa dựng ở trên thay vì tự đọc lại
+	// `rt.RefundMethod`: hai chỗ đọc hai kiểu là một ngày nào đó sổ thu chi ghi
+	// tiền mặt trong khi sổ thanh toán ghi chuyển khoản.
+	returnID := rt.ID
+	if err := GhiThuChiTuSinh(tx.Statement.Context, tx, &domain.ThuChi{
+		ShopID:        o.ShopID,
+		Type:          domain.ThuChiPhieuChi,
+		Amount:        rt.RefundAmount,
+		PaymentMethod: phuongThucThuChi(provider),
+		Note:          "Hoàn tiền trả hàng " + rt.ReturnCode,
+		Source:        domain.ThuChiTuTraHang,
+		SourceID:      &returnID,
+	}); err != nil {
+		return err
+	}
+
 	if o.PaymentStatus != "paid" {
 		// Đơn COD chưa thu tiền thì không có gì để "hoàn" trên sổ thanh toán.
 		return nil

@@ -116,7 +116,7 @@
     $statisticDefaultRoute = '#';
     $routeUlMenu = route('admin.products.index');
     $routeUlWarehouse = route('admin.nha-cung-cap.index');
-    $routeUlCashbook = route('admin.loai-thu-chi.index');
+    $routeUlCashbook = route('admin.thu-chi.index');
     $routeUlEmployee = route('admin.nhan-su.index');
     $routeUlCrm = '#';
     $routeUlSettings = route('admin.chi-nhanh.index');
@@ -127,8 +127,11 @@
     // Tab trong module NHÂN SỰ.
     $employeePer = true;                // Danh sách nhân sự — ĐÃ CÓ
 
+
     // Tab trong module THU CHI — cùng luật: màn nào chưa dựng thì giấu.
+    $incomeExpensePer = true;           // Quản lý thu chi — ĐÃ CÓ
     $incomeExpenseTypePer = true;       // Loại thu chi — ĐÃ CÓ
+    $debtPer = true;                    // Công nợ — ĐÃ CÓ
 
     /*
        Tab trong module KHO — CHỈ bày màn đã dựng.
@@ -544,10 +547,22 @@
 
                     {{-- 4. THU CHI --}}
                     @if($ulCashbookPer && $isCashbookSection)
+                        @if($incomeExpensePer)
+                            <a href="{{ route('admin.thu-chi.index') }}"
+                                class="sub-nav-btn {{ request()->routeIs('admin.thu-chi.*') ? 'active' : '' }}">
+                                {{ __('message.income_expense_management') }}
+                            </a>
+                        @endif
                         @if($incomeExpenseTypePer)
                             <a href="{{ route('admin.loai-thu-chi.index') }}"
                                 class="sub-nav-btn {{ request()->routeIs('admin.loai-thu-chi.*') ? 'active' : '' }}">
                                 {{ __('message.type_of_income_expense') }}
+                            </a>
+                        @endif
+                        @if($debtPer)
+                            <a href="{{ route('admin.cong-no.index') }}"
+                                class="sub-nav-btn {{ request()->routeIs('admin.cong-no.*') ? 'active' : '' }}">
+                                {{ __('message.debt') }}
                             </a>
                         @endif
                     @endif

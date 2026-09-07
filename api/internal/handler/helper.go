@@ -158,6 +158,16 @@ func handleServiceError(c *gin.Context, err error) {
 		response.Error(c, 422, "Không khai quy đổi cho chính đơn vị tính của mặt hàng")
 	case errors.Is(err, domain.ErrQuyDoiSoLuong):
 		response.Error(c, 422, "Số lượng quy đổi phải lớn hơn 0")
+	// Thu chi — ba lớp khoá sửa/xoá. 409 chứ không 403: phiếu tồn tại và người
+	// gọi có quyền vào màn hình, chỉ là TRẠNG THÁI của phiếu không cho thao tác.
+	case errors.Is(err, domain.ErrThuChiTuSinh),
+		errors.Is(err, domain.ErrThuChiCaDaDong),
+		errors.Is(err, domain.ErrThuChiCuaNguoiKhac):
+		response.Error(c, 409, err.Error())
+	case errors.Is(err, domain.ErrNguoiNopTrungTen):
+		response.ValidationError(c, map[string]string{
+			"name": "Tên này đã có trong danh sách người nộp",
+		})
 	// Phiếu mua hàng
 	case errors.Is(err, domain.ErrPurchaseEmpty):
 		response.Error(c, 422, "Phiếu mua hàng phải có ít nhất một dòng hàng")
