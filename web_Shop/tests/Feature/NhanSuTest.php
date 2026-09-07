@@ -860,11 +860,23 @@ class NhanSuTest extends TestCase
         // Bề rộng cột lấy từ CSS, không nhét style thẳng vào từng ô. Đủ 13 cột.
         preg_match_all('/table\.table-employee\.none_mobile th[^{]*\{\s*width:\s*([0-9.]+)%/', $html, $m);
         $this->assertCount(13, $m[1]);
-        $this->assertSame(100.0, array_sum(array_map('floatval', $m[1])));
+        // Cộng float không bao giờ ra đúng 100.0: 13 số thập phân cộng lại cho
+        // 99.99999999999999. Sai số đó không đẩy nổi một pixel nào, nên đo bằng
+        // delta — assertSame ở đây là bắt lỗi của IEEE 754, không phải của bảng.
+        $this->assertEqualsWithDelta(100.0, array_sum(array_map('floatval', $m[1])), 0.01);
     }
 
-    /** Bảng trong vỏ v2: không ép table-layout fixed, không min-width — trang không cuộn ngang. */
-    public function test_bang_v2_khong_ep_fixed_khong_min_width(): void
+    /**
+     * Bảng trong vỏ v2: KHÔNG min-width, và PHẢI `table-layout: fixed`.
+     *
+     * Luật cũ ở đây là "không ép fixed" — và chính nó đẻ ra lỗi vừa sửa. Để
+     * `auto` thì phần trăm chỉ là GỢI Ý: trình duyệt đo nội dung rồi tự nới, một
+     * mã phiếu dài là bảng phình quá khung và tràn ngang, đúng thứ luật này định
+     * chặn. `fixed` mới làm con số phần trăm có hiệu lực thật.
+     *
+     * min-width vẫn cấm: đó mới là thứ ép trang cuộn ngang.
+     */
+    public function test_bang_v2_fixed_khong_min_width(): void
     {
         $this->fakeApi([
             ['id' => 12, 'code' => 'NV0001', 'full_name' => 'Người thứ nhất', 'status' => 'dang_lam'],
@@ -875,7 +887,7 @@ class NhanSuTest extends TestCase
 
         $dau = strpos($html, 'table.table-employee.none_mobile {');
         $khoi = substr($html, $dau, strpos($html, '.hoi-body') - $dau);
-        $this->assertStringNotContainsString('table-layout', $khoi);
+        $this->assertStringContainsString('table-layout: fixed', $khoi);
         $this->assertStringNotContainsString('min-width', $khoi);
         $this->assertStringContainsString('white-space: nowrap', $khoi);
     }

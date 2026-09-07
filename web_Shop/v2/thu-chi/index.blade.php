@@ -108,12 +108,12 @@
            trăm lớn, không thì nó là cột đầu tiên bị bẻ dòng. */
         table.table-thu-chi.none_mobile {
             width: 100%;
-            /* 1150 = tổng bề rộng nhỏ nhất để cả 13 tiêu đề nằm gọn một dòng, đo
+            /* 1060 = tổng bề rộng nhỏ nhất để cả 13 tiêu đề nằm gọn một dòng, đo
                thật theo hàng tiêu đề chung của v2 (13px — xem v2::layouts.master)
-               và hai nhãn đã rút gọn. Số cũ là 1360, tính theo cỡ chữ 14px và
-               nhãn dài, nên ở màn 1536 (khung 1177px) bảng trượt ngang và cột
-               Hành động rơi ra ngoài. */
-            min-width: 1150px;
+               và ba nhãn đã rút gọn. Số cũ là 1360, tính theo cỡ chữ 14px và nhãn
+               dài, nên ở màn 1536 bảng trượt ngang và cột Hành động rơi ra ngoài.
+               Đừng nâng quá 1060 mà không đo lại: khung của màn này chỉ 1140px. */
+            min-width: 1060px;
             table-layout: fixed;
         }
         table.table-thu-chi.none_mobile th { white-space: nowrap; }
@@ -775,7 +775,7 @@
                                     {{-- Mã phiếu là CHỮ TRẦN, không phải liên kết: cửa xem chi tiết
                                          nay là con mắt ở cột Hành động. Để mã trần thì bôi đen chép lại
                                          được — thứ người dùng làm với một mã nhiều hơn hẳn là bấm vào nó. --}}
-                                    <td class="text-left show_code {{ $columns['show_code'] ? '' : 'hide' }}" title="{{ $item['code'] ?? '' }}">{{ $item['code'] ?? '' }}</td>
+                                    <td class="text-left item-code show_code {{ $columns['show_code'] ? '' : 'hide' }}" title="{{ $item['code'] ?? '' }}">{{ $item['code'] ?? '' }}</td>
                                     <td class="text-left show_type {{ $columns['show_type'] ? '' : 'hide' }}">
                                         <b class="{{ $C::CHU_LOAI[$loai] ?? '' }}">{{ $C::LOAI[$loai] ?? '' }}</b>
                                     </td>

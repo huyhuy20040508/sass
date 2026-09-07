@@ -308,13 +308,13 @@
                                         <th class="text-center not-export"><input class="form-check-input item-select-all" type="checkbox"></th>
                                         <th class="text-center">{{ __('message.stt') }}</th>
                                         <th class="text-left">{{ __('message.adjustment_code') }}</th>
-                                        <th class="text-center">{{ __('message.type') }} </th>
-                                        <th class="text-center">{{ __('message.adjustment_created_by') }}</th>
+                                        <th class="text-left">{{ __('message.type') }} </th>
+                                        <th class="text-left">{{ __('message.adjustment_created_by') }}</th>
                                         <th class="text-center">{{ __('message.adjustment_created_date') }}</th>
                                         <th class="text-left">{{__('message.approver')}}</th>
-                                        <th class="text-left">{{ __('message.receipt_status') }}</th>
+                                        <th class="text-center">{{ __('message.receipt_status') }}</th>
                                         <th class="text-left">{{ __('message.reject_reason') }}</th>
-                                        <th class="text-left">{{ __('message.warehouse_status') }}</th>
+                                        <th class="text-center">{{ __('message.warehouse_status') }}</th>
                                         <th class="text-left">{{ __('message.note') }}</th>
                                         <th class="text-center not-export">{{ __('message.action') }}</th>
                                     </tr>
@@ -329,25 +329,25 @@
                                         <tr class="item" data-id="{{ $id }}" data-status="{{ $tt }}">
                                             <td class="text-center not-export"><input class="form-check-input item-select" type="checkbox" value="{{ $id }}"></td>
                                             <td class="text-center">{{ $stt + $i + 1 }}</td>
-                                            <td class="text-left">
+                                            <td class="text-left item-code">
                                                 <a type="button" data-id="{{ $id }}" class="edit_bt edit-item text-decoration-none" data-bs-toggle="tooltip" data-bs-placement="top"
                                                     data-bs-title="{{ __('message.edit') }}">
                                                     {{ $item['code'] ?? '' }}
                                                 </a>
                                             </td>
-                                            <td class="text-center">
+                                            <td class="text-left">
                                                 <span class="badge {{ $loai === 'balance' ? 'bg-success' : 'bg-info' }}  me-1">
                                                     {{ $C::LOAI_PHIEU[$loai] ?? $loai }}
                                                 </span>
                                             </td>
-                                            <td class="text-center">{{ $item['created_by_name'] ?? '' }}</td>
+                                            <td class="text-left">{{ $item['created_by_name'] ?? '' }}</td>
                                             <td class="text-center">{{ !empty($item['created_at']) ? $ngayVN($item['created_at']) : 'N/A' }}</td>
                                             <td class="text-left">{{ $tt === 'approved' ? ($item['approver_name'] ?? '') : '' }}</td>
-                                            <td class="text-left">
+                                            <td class="text-center">
                                                 <b class="{{ $C::CHU_TRANG_THAI[$tt] ?? '' }}">{{ $C::TRANG_THAI[$tt] ?? $tt }}</b>
                                             </td>
                                             <td class="text-left">{{ $item['reject_reason'] ?? '' }}</td>
-                                            <td class="text-left">
+                                            <td class="text-center">
                                                 @if ($ttKho !== '' && isset($C::TRANG_THAI_KHO[$ttKho]))
                                                     <b class="{{ $C::CHU_TRANG_THAI_KHO[$ttKho] }}">{{ $C::TRANG_THAI_KHO[$ttKho] }}</b>
                                                 @endif

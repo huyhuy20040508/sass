@@ -21,10 +21,10 @@
            `overflow-x: auto` chỉ là đường lùi. */
         .list .table-responsive { overflow-x: auto; }
         table.table-supplier.none_mobile { width: 100%; table-layout: fixed; }
-        table.table-supplier.none_mobile th { white-space: normal; line-height: 1.3; }
         table.table-supplier.none_mobile td { overflow: hidden; text-overflow: ellipsis; }
         /* Đệm ngang 4px thay vì 8px của v2: 14 cột × 8px là thêm gần một cột tiền. */
-table.table-supplier.none_mobile th, table.table-supplier.none_mobile td { padding: 8px 4px; }
+table.table-supplier.none_mobile th, table.table-supplier.none_mobile td { padding-left: 4px; padding-right: 4px; }
+        table.table-supplier.none_mobile td { padding-top: 8px; padding-bottom: 8px; }
 table.table-supplier.none_mobile td.action a { padding: 0 2px; }
         /* Chia % — đo thật ở khung 1182px (màn 1536): cột SỐ (tiền tới 13 chữ số,
            SĐT, MST) và 4 nút Hành động không bị cắt; chữ tự do (tên, email, địa
@@ -35,20 +35,20 @@ table.table-supplier.none_mobile td.action a { padding: 0 2px; }
            không mất thông tin nào.
            ☐ 2.5 · STT 3.5 · Mã 8 · Tên 11 · MST 7 · SĐT 7 · Email 6.5 · Địa chỉ 7 · Địa chỉ 2 4.5
            · Trạng thái 7 · Tổng mua 9.5 · Tổng TT 9.5 · Còn nợ 7.5 · Hành động 9.5 = 100 */
-        table.table-supplier.none_mobile th:first-child { width: 2.78%; }
-        table.table-supplier.none_mobile th:nth-child(2) { width: 3.28%; }
-        table.table-supplier.none_mobile th.show_code { width: 10.7%; }
-        table.table-supplier.none_mobile th.show_name { width: 11.29%; }
-        table.table-supplier.none_mobile th.show_tax_code { width: 7.24%; }
-        table.table-supplier.none_mobile th.show_phone { width: 8.34%; }
-        table.table-supplier.none_mobile th.show_email { width: 4.58%; }
-        table.table-supplier.none_mobile th.show_address { width: 5.42%; }
-        table.table-supplier.none_mobile th.show_address_2 { width: 6.07%; }
-        table.table-supplier.none_mobile th.show_status { width: 6.65%; }
-        table.table-supplier.none_mobile th.show_total_purchases { width: 9.84%; }
-        table.table-supplier.none_mobile th.show_total_payment { width: 10.19%; }
-        table.table-supplier.none_mobile th.show_still_in_debt { width: 5.86%; }
-        table.table-supplier.none_mobile th:last-child { width: 7.76%; }
+        table.table-supplier.none_mobile th:first-child { width: 2.65%; }
+        table.table-supplier.none_mobile th:nth-child(2) { width: 3.32%; }
+        table.table-supplier.none_mobile th.show_code { width: 10.17%; }
+        table.table-supplier.none_mobile th.show_name { width: 11.34%; }
+        table.table-supplier.none_mobile th.show_tax_code { width: 6.99%; }
+        table.table-supplier.none_mobile th.show_phone { width: 8.75%; }
+        table.table-supplier.none_mobile th.show_email { width: 3.99%; }
+        table.table-supplier.none_mobile th.show_address { width: 4.74%; }
+        table.table-supplier.none_mobile th.show_address_2 { width: 5.74%; }
+        table.table-supplier.none_mobile th.show_status { width: 6.49%; }
+        table.table-supplier.none_mobile th.show_total_purchases { width: 9.33%; }
+        table.table-supplier.none_mobile th.show_total_payment { width: 9.83%; }
+        table.table-supplier.none_mobile th.show_still_in_debt { width: 7.83%; }
+        table.table-supplier.none_mobile th:last-child { width: 8.83%; }
 
         /* Hai bảng trong hộp chi tiết: chia cột theo %, vừa khít hộp, không cuộn ngang;
            ô dài cắt "…" (ghi chú có title). Tiêu đề màu #c4c9d7 theo ý chủ tiệm. */
@@ -282,7 +282,7 @@ table.table-supplier.none_mobile td.action a { padding: 0 2px; }
                                     <td class="text-center">{{ $stt + $i + 1 }}</td>
                                     <td class="text-left show_code {{ $columns['show_code'] ? '' : 'hide' }} item-code">{{ $ncc['code'] ?? '' }}</td>
                                     <td class="text-left show_name {{ $columns['show_name'] ? '' : 'hide' }} item-name" title="{{ $ncc['name'] ?? '' }}">{{ $ncc['name'] ?? '' }}</td>
-                                    <td class="text-left show_tax_code {{ $columns['show_tax_code'] ? '' : 'hide' }} item-tax">{{ $ncc['tax_code'] ?? '' }}</td>
+                                    <td class="text-left item-code show_tax_code {{ $columns['show_tax_code'] ? '' : 'hide' }} item-tax">{{ $ncc['tax_code'] ?? '' }}</td>
                                     <td class="text-left show_phone {{ $columns['show_phone'] ? '' : 'hide' }} item-phone">{{ $ncc['phone'] ?? '' }}</td>
                                     <td class="text-left show_email {{ $columns['show_email'] ? '' : 'hide' }} item-email" title="{{ $ncc['email'] ?? '' }}">{{ $ncc['email'] ?? '' }}</td>
                                     <td class="text-left show_address {{ $columns['show_address'] ? '' : 'hide' }} item-address" title="{{ $ncc['address'] ?? '' }}">{{ $ncc['address'] ?? '' }}</td>

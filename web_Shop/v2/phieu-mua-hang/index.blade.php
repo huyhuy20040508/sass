@@ -196,35 +196,42 @@
 
         {{-- Khoảng cách giữa các khối lọc nay là luật CHUNG, nằm ở v2::layouts.master. --}}
 
-        /* Bảng danh sách: 14 cột CHIA THEO %, cộng đúng 100 — vừa khít khung, không
+        /* Bảng danh sách: 13 cột CHIA THEO %, cộng đúng 100 — vừa khít khung, không
            cuộn ngang, cột Hành động luôn trong màn. `table-layout: fixed` để bề rộng
            do hàng tiêu đề quyết; ô dữ liệu dài cắt "…" (chữ đủ ở title), nhãn cột
            dài xuống dòng. Tắt cột (.col-x ẩn) thì % hụt được chia lại cho cột còn lại. */
         .list .table-responsive { overflow-x: auto; }
         table.table-purchase.none_mobile { width: 100%; table-layout: fixed; }
-        table.table-purchase.none_mobile th { white-space: normal; line-height: 1.3; }
         table.table-purchase.none_mobile td { overflow: hidden; text-overflow: ellipsis; }
-        /* Đệm ngang 4px thay vì 8px của v2: 14 cột × 8px là thêm gần một cột tiền. */
-table.table-purchase.none_mobile th, table.table-purchase.none_mobile td { padding: 8px 2px; }
-        /* Chia % — đo thật ở khung 1182px (màn 1536): mã phiếu (16 ký tự), ngày,
-           tiền, ba cột trạng thái và nút Hành động không bị cắt; tên NCC, người
-           tạo, ghi chú chịu cắt "…" (có title).
-           ☐ 2.5 · STT 3.5 · Mã 13.5 · NCC 6.5 · Ngày CT 8.5 · Tiền hàng 9 · Tổng tiền 9 · Còn nợ 8.5
-           · TT đơn 7 · TT kho 8 · TT thanh toán 8.5 · Người tạo 4.5 · Ghi chú 5 · Hành động 6 = 100 */
-        table.table-purchase.none_mobile th:first-child { width: 2.51%; }
-        table.table-purchase.none_mobile th:nth-child(2) { width: 3.02%; }
-        table.table-purchase.none_mobile th.col-code { width: 8.04%; }
-        table.table-purchase.none_mobile th.col-supplier { width: 8.58%; }
-        table.table-purchase.none_mobile th.col-docdate { width: 9.0%; }
-        table.table-purchase.none_mobile th.col-items { width: 9.19%; }
-        table.table-purchase.none_mobile th.col-total { width: 6.23%; }
-        table.table-purchase.none_mobile th.col-debt { width: 4.98%; }
-        table.table-purchase.none_mobile th.col-status { width: 8.83%; }
-        table.table-purchase.none_mobile th.col-warehouse { width: 8.75%; }
-        table.table-purchase.none_mobile th.col-pay { width: 12.62%; }
-        table.table-purchase.none_mobile th.col-creator { width: 6.32%; }
-        table.table-purchase.none_mobile th.col-note { width: 5.04%; }
-        table.table-purchase.none_mobile th:last-child { width: 6.89%; }
+        /* Đệm ngang: 4px là mức hẹp nhất còn đủ chỗ ở màn 1536. Màn rộng hơn thì
+           nới dần cho hai ô kề nhau tách hẳn ra. Hai cột đầu (ô tick, STT) luôn giữ
+           4px — chúng quá hẹp, nới thêm là nhãn "STT" gãy dòng. */
+        table.table-purchase.none_mobile th, table.table-purchase.none_mobile td { padding-left: 4px; padding-right: 4px; }
+        table.table-purchase.none_mobile td { padding-top: 8px; padding-bottom: 8px; }
+        @media (min-width: 1650px) { table.table-purchase.none_mobile th, table.table-purchase.none_mobile td { padding-left: 8px; padding-right: 8px; } }
+        @media (min-width: 1800px) { table.table-purchase.none_mobile th, table.table-purchase.none_mobile td { padding-left: 12px; padding-right: 12px; } }
+        @media (min-width: 1950px) { table.table-purchase.none_mobile th, table.table-purchase.none_mobile td { padding-left: 16px; padding-right: 16px; } }
+        @media (min-width: 1650px) {
+            table.table-purchase.none_mobile th:first-child, table.table-purchase.none_mobile td:first-child,
+            table.table-purchase.none_mobile th:nth-child(2), table.table-purchase.none_mobile td:nth-child(2) { padding-left: 4px; padding-right: 4px; }
+        }
+        /* Chia % — đo thật ở khung 1197px (màn 1536): nhãn cột nào cũng nằm một
+           dòng, mã phiếu 15 ký tự, mọi số tiền và người tạo hiện đủ. Tên NCC
+           chịu cắt "…" (có title). Nhãn lấy thẳng từ COT_BANG nên tiêu đề và bảng
+           chọn cột luôn cùng một chữ. Cột "Còn nợ" xem trong hộp chi tiết phiếu. */
+        table.table-purchase.none_mobile th:first-child { width: 2.59%; }
+        table.table-purchase.none_mobile th:nth-child(2) { width: 3.26%; }
+        table.table-purchase.none_mobile th.col-code { width: 12.87%; }
+        table.table-purchase.none_mobile th.col-supplier { width: 9.11%; }
+        table.table-purchase.none_mobile th.col-docdate { width: 9.26%; }
+        table.table-purchase.none_mobile th.col-items { width: 8.86%; }
+        table.table-purchase.none_mobile th.col-total { width: 9.36%; }
+        table.table-purchase.none_mobile th.col-status { width: 6.68%; }
+        table.table-purchase.none_mobile th.col-warehouse { width: 9.02%; }
+        table.table-purchase.none_mobile th.col-pay { width: 8.44%; }
+        table.table-purchase.none_mobile th.col-creator { width: 8.19%; }
+        table.table-purchase.none_mobile th.col-note { width: 5.26%; }
+        table.table-purchase.none_mobile th:last-child { width: 7.1%; }
 
         /* ---- Canh lưới hàng ----
            style.css của v2 ép `th, td { text-align: center !important }` cho MỌI
@@ -584,17 +591,16 @@ table.table-purchase.none_mobile th, table.table-purchase.none_mobile td { paddi
                             <tr>
                                 <th class="text-center not-export"><input class="form-check-input item-select-all" type="checkbox"></th>
                                 <th class="text-center">{{ __('message.stt') }}</th>
-                                <th class="text-left col-code">{{ __('message.order-code') }}</th>
-                                <th class="text-left col-supplier">{{ __('message.supplier') }}</th>
-                                <th class="text-center col-docdate">{{ __('message.document_date') }}</th>
-                                <th class="text-right col-items">{{ __('message.goods-total-money') }}</th>
-                                <th class="text-right col-total">{{ __('message.total_money') }}</th>
-                                <th class="text-right col-debt">{{ __('message.still_in_debt') }}</th>
-                                <th class="text-left col-status">{{ __('message.order-status') }}</th>
-                                <th class="text-left col-warehouse">{{ __('message.warehouse_status') }}</th>
-                                <th class="text-left col-pay">{{ __('message.payment-status') }}</th>
-                                <th class="text-left col-creator">{{ __('message.creator') }}</th>
-                                <th class="text-left col-note">{{ __('message.note') }}</th>
+                                <th class="text-left col-code">{{ $C::COT_BANG['code'] }}</th>
+                                <th class="text-left col-supplier">{{ $C::COT_BANG['supplier'] }}</th>
+                                <th class="text-center col-docdate">{{ $C::COT_BANG['docdate'] }}</th>
+                                <th class="text-right col-items">{{ $C::COT_BANG['items'] }}</th>
+                                <th class="text-right col-total">{{ $C::COT_BANG['total'] }}</th>
+                                <th class="text-center col-status">{{ $C::COT_BANG['status'] }}</th>
+                                <th class="text-center col-warehouse">{{ $C::COT_BANG['warehouse'] }}</th>
+                                <th class="text-center col-pay">{{ $C::COT_BANG['pay'] }}</th>
+                                <th class="text-left col-creator">{{ $C::COT_BANG['creator'] }}</th>
+                                <th class="text-left col-note">{{ $C::COT_BANG['note'] }}</th>
                                 <th class="text-center not-export">{{ __('message.action') }}</th>
                             </tr>
 
@@ -604,7 +610,6 @@ table.table-purchase.none_mobile th, table.table-purchase.none_mobile td { paddi
                                     $tt = $p['status'] ?? 'draft';
                                     $ttTra = $p['payment_status'] ?? 'unpaid';
                                     $tong = (float) ($p['total_amount'] ?? 0);
-                                    $conNo = max(0, $tong - (float) ($p['paid_amount'] ?? 0));
                                     $nhap = $tt === 'draft';
                                 @endphp
                                 <tr class="item" data-id="{{ $id }}" data-status="{{ $tt }}">
@@ -612,7 +617,7 @@ table.table-purchase.none_mobile th, table.table-purchase.none_mobile td { paddi
                                         <input class="form-check-input item-select" type="checkbox" value="{{ $id }}">
                                     </td>
                                     <td class="text-center">{{ $stt + $i + 1 }}</td>
-                                    <td class="text-left col-code">
+                                    <td class="text-left item-code col-code">
                                         {{-- Bấm mã phiếu là mở phiếu, đúng lối của v2 — lưu tạm thì sửa được, đã duyệt thì chỉ xem. --}}
                                         <a type="button" data-id="{{ $id }}"
                                             class="edit_bt detail-item text-decoration-none" title="{{ __('message.detail') }}">
@@ -625,22 +630,17 @@ table.table-purchase.none_mobile th, table.table-purchase.none_mobile td { paddi
                                     <td class="text-center col-docdate">{{ $ngay($p['document_date'] ?? null) ?: 'N/A' }}</td>
                                     <td class="text-right col-items">{{ $tien($p['items_amount'] ?? 0) }}</td>
                                     <td class="text-right col-total"><b>{{ $tien($tong) }}</b></td>
-                                    <td class="text-right col-debt">
-                                        @if ($conNo > 0 && $tt !== 'cancelled')
-                                            <span class="money-no">{{ $tien($conNo) }}</span>
-                                        @endif
-                                    </td>
-                                    <td class="text-left col-status">
+                                    <td class="text-center col-status">
                                         <b class="{{ $C::CHU_TRANG_THAI[$tt] ?? '' }}">{{ $C::TRANG_THAI[$tt] ?? $tt }}</b>
                                     </td>
-                                    <td class="text-left col-warehouse">
+                                    <td class="text-center col-warehouse">
                                         @if ($tt === 'approved')
                                             <b class="text-primary">{{ __('message.status-imported') }}</b>
                                         @elseif ($tt === 'draft')
                                             <b class="text-secondary">{{ __('message.not_yet_stocked') }}</b>
                                         @endif
                                     </td>
-                                    <td class="text-left col-pay">
+                                    <td class="text-center col-pay">
                                         @if ($tt !== 'cancelled')
                                             <b class="{{ $C::CHU_TRANG_THAI_TRA[$ttTra] ?? '' }}">
                                                 {{ $C::TRANG_THAI_TRA[$ttTra] ?? $ttTra }}
@@ -663,7 +663,7 @@ table.table-purchase.none_mobile th, table.table-purchase.none_mobile td { paddi
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="14" class="text-center py-4">{{ $hasFilter ? 'Không có phiếu mua hàng nào khớp bộ lọc đang bật.' : $C::EMPTY_TEXT }}</td>
+                                    <td colspan="13" class="text-center py-4">{{ $hasFilter ? 'Không có phiếu mua hàng nào khớp bộ lọc đang bật.' : $C::EMPTY_TEXT }}</td>
                                 </tr>
                             @endforelse
                         </table>

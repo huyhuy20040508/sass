@@ -382,9 +382,9 @@
            đề quyết; ô dữ liệu dài cắt "…" (chữ đủ ở title), nhãn cột dài xuống dòng.
            Tắt bớt cột thì % hụt được chia lại cho các cột còn lại. */
         #sortableTable { width: 100%; table-layout: fixed; }
-        #sortableTable th { white-space: normal; line-height: 1.3; }
         #sortableTable td { overflow: hidden; text-overflow: ellipsis; }
-        #sortableTable th, #sortableTable td { padding: 8px 4px; }
+        #sortableTable th { padding-left: 4px; padding-right: 4px; }
+        #sortableTable td { padding: 8px 4px; }
         /* Đo thật ở khung 1182px: 5 nút Hành động (lên, xuống, sửa, chép, xoá) và cột
            Chi nhánh không bị cắt kể cả màn 1366; tên hàng chịu cắt "…" (có title).
            ☐ 3 · STT 4 · Mã 8 · Tên 22.5 · Nhóm 11.5 · VAT 5 · ĐVT 5.5 · Giá bán 8 · Chi nhánh 13.5
@@ -739,7 +739,7 @@
 
                 {{-- Bảng — khuôn của v2 (menu/menu/list): .table-list-container +
                      lớp show_* trên từng ô để nút chọn cột bật/tắt cả cột. --}}
-                <div class="table-list-container table-border-style table-responsive">
+                <div class="list table-list-container table-border-style table-responsive">
                     <table id="sortableTable" data-stt-dau="{{ $firstRank + 1 }}">
                         <thead>
                             <tr class="header-table-list">

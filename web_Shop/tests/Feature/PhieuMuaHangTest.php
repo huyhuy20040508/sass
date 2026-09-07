@@ -148,14 +148,21 @@ class PhieuMuaHangTest extends TestCase
         return substr($html, $dau, strpos($html, '</a>', $dau) - $dau);
     }
 
-    public function test_con_no_tinh_dung(): void
+    /**
+     * Cột "Còn nợ" ĐÃ BỎ khỏi sổ phiếu mua — số ấy giờ nằm ở màn Công nợ, nơi có
+     * đủ hạn nợ và lịch sử trả để đọc nó cho ra nghĩa. Bảng này mười mấy cột,
+     * giữ thêm một cột trùng chỗ khác là ép mọi cột còn lại hẹp đi.
+     *
+     * Bài kiểm cũ ở đây soi đúng cột ấy trên trang danh sách; đổi chỗ rồi thì
+     * chỗ canh cũng phải chuyển theo, xem CongNoController.
+     */
+    public function test_khong_con_cot_con_no(): void
     {
         $this->fakeApi();
 
-        $res = $this->withSession($this->phien())->get('/admin/purchase-orders');
-
-        // 5.400.000 − 2.000.000 = 3.400.000
-        $res->assertSee('3.400.000₫');
+        $this->withSession($this->phien())->get('/admin/purchase-orders')
+            ->assertOk()
+            ->assertDontSee('col-debt');
     }
 
     /**

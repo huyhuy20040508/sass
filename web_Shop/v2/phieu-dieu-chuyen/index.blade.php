@@ -418,7 +418,7 @@
                                         <input class="form-check-input item-select" type="checkbox" value="{{ $id }}">
                                     </td>
                                     <td class="text-center col-stt">{{ $stt + $i + 1 }}</td>
-                                    <td class="text-left col-code">
+                                    <td class="text-left item-code col-code">
                                         {{-- Bấm số phiếu là mở phiếu, đúng lối của v2 — lưu tạm thì sửa được,
                                              đã duyệt thì chỉ xem. --}}
                                         <a type="button" data-id="{{ $id }}"

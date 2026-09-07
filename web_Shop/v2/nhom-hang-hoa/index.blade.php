@@ -343,7 +343,7 @@
                 return `<tr>
                     <td class="text-center"><input data-id="${d.id}" class="form-check-input item-select" type="checkbox"></td>
                     <td class="text-center">${i + 1}</td>
-                    <td class="text-left">${esc(d.code)}</td>
+                    <td class="text-left item-code">${esc(d.code)}</td>
                     <td class="text-left">${esc(d.name)}</td>
                     <td class="text-center">
                         <input type="checkbox" class="switch_customer doi-trang-thai" data-id="${d.id}" ${d.status ? 'checked' : ''}>

@@ -97,7 +97,7 @@
                                     <th data-table-label="ordinal_number" class="text-center none_mobile">{{ __('message.stt') }}</th>
                                     <th data-table-label="object_code" class="text-left">{{ __('message.menu-attribute-code') }}</th>
                                     <th data-table-label="object_name" class="text-left">{{ __('message.menu-attribute-name') }}</th>
-                                    <th data-table-label="object_detail" class="text-right none_mobile">{{ __('message.detail') }}</th>
+                                    <th data-table-label="object_detail" class="text-left none_mobile">{{ __('message.detail') }}</th>
                                     <th data-table-label="object_status" class="text-center none_mobile">{{ __('message.status') }}</th>
                                     <th data-table-label="object_action" class="text-center none_mobile">{{ __('message.action') }}</th>
                                 </tr>
@@ -137,7 +137,7 @@
                                             {{ $item['name'] ?? '' }}
                                             <i class="fa-solid fa-angle-right d-none"></i>
                                         </td>
-                                        <td data-table-label="object_detail" class="text-right none_mobile"
+                                        <td data-table-label="object_detail" class="text-left none_mobile"
                                             title="{{ implode(', ', array_map(fn ($g) => $g['name'] ?? '', $giaTri)) }}">
                                             {{ $tenGiaTri }}@if($du > 0) <b>+{{ $du }}</b>@endif
                                         </td>

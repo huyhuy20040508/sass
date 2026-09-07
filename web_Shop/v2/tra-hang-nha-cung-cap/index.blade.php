@@ -259,32 +259,30 @@
            `table-layout: auto` nên cột nào cần rộng hơn để tiêu đề khỏi gãy dòng
            thì tự lấy thêm, và tắt bớt cột thì phần còn lại tự giãn ra. */
         .list .table-responsive { overflow-x: auto; }
-        table.table-return.none_mobile { width: 100%; }
+        /* Chia % CỨNG. Để `auto` như trước thì % chỉ là gợi ý: một mã phiếu dài là
+           bảng phình ra 1265px trong khung 1197px, tràn ngang và đẩy cột Hành động
+           khỏi màn. Bề rộng dưới đây đo thật ở khung 1197px (màn 1536), đủ cho
+           MỌI tiêu đề nằm một dòng; chữ dài thì cắt "…" (có title). */
+        table.table-return.none_mobile { width: 100%; table-layout: fixed; }
         table.table-return.none_mobile th { white-space: nowrap; }
-        /* Bốn cột chữ tự do phải cắt bằng "…": v2 để `white-space: nowrap` cho mọi
-           ô, nên một tên nhà cung cấp hay ghi chú dài sẽ đội cả bảng rộng ra và
-           kéo theo thanh cuộn ngang — đúng thứ vừa phải bỏ. Chữ đủ nằm ở thuộc
-           tính title của ô. */
-        table.table-return.none_mobile td.col-supplier,
-        table.table-return.none_mobile td.col-branch,
-        table.table-return.none_mobile td.col-creator,
-        table.table-return.none_mobile td.col-note {
-            max-width: 220px; overflow: hidden; text-overflow: ellipsis;
-        }
-        table.table-return th.col-check { width: 3%; }
-        table.table-return th.col-stt { width: 3%; }
-        table.table-return th.col-code { width: 8%; }
-        table.table-return th.col-suppliercode { width: 7%; }
-        table.table-return th.col-supplier { width: 13%; }
-        table.table-return th.col-docdate { width: 7%; }
-        table.table-return th.col-branch { width: 8%; }
-        table.table-return th.col-items { width: 8%; }
-        table.table-return th.col-total { width: 8%; }
-        table.table-return th.col-status { width: 7%; }
-        table.table-return th.col-stock { width: 7%; }
-        table.table-return th.col-creator { width: 8%; }
-        table.table-return th.col-note { width: 7%; }
-        table.table-return th.col-act { width: 6%; }
+        table.table-return.none_mobile td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        /* Đệm ngang 4px: 14 cột × 8px thừa ra là mất hơn một cột. */
+        table.table-return.none_mobile th,
+        table.table-return.none_mobile td { padding-left: 4px; padding-right: 4px; }
+        table.table-return th.col-check { width: 3.21%; }
+        table.table-return th.col-stt { width: 3.03%; }
+        table.table-return th.col-code { width: 5.87%; }
+        table.table-return th.col-suppliercode { width: 9.71%; }
+        table.table-return th.col-supplier { width: 8.04%; }
+        table.table-return th.col-docdate { width: 8.63%; }
+        table.table-return th.col-branch { width: 6.21%; }
+        table.table-return th.col-items { width: 8.71%; }
+        table.table-return th.col-total { width: 10.22%; }
+        table.table-return th.col-status { width: 8.46%; }
+        table.table-return th.col-stock { width: 8.29%; }
+        table.table-return th.col-creator { width: 7.88%; }
+        table.table-return th.col-note { width: 4.95%; }
+        table.table-return th.col-act { width: 6.79%; }
     </style>
     {{-- Cột đang tắt ở ô "chọn cột". Là CSS nên nạp lại danh sách bằng AJAX vẫn giữ. --}}
     <style id="cotAnCss"></style>
@@ -477,7 +475,7 @@
                                         <input class="form-check-input item-select" type="checkbox" value="{{ $id }}">
                                     </td>
                                     <td class="text-center col-stt">{{ $stt + $i + 1 }}</td>
-                                    <td class="text-left col-code">
+                                    <td class="text-left item-code col-code" title="{{ $p['return_code'] ?? '' }}">
                                         {{-- Bấm mã phiếu là mở phiếu, đúng lối của v2 — lưu tạm thì sửa được,
                                              đã duyệt thì chỉ xem. --}}
                                         <a type="button" data-id="{{ $id }}"
@@ -485,7 +483,7 @@
                                             {{ ($p['return_code'] ?? '') ?: '—' }}
                                         </a>
                                     </td>
-                                    <td class="text-left col-suppliercode">{{ $p['supplier_code'] ?? '' }}</td>
+                                    <td class="text-left item-code col-suppliercode">{{ $p['supplier_code'] ?? '' }}</td>
                                     <td class="text-left col-supplier" title="{{ $p['supplier_name'] ?? '' }}">
                                         {{ $p['supplier_name'] ?? '' }}
                                     </td>

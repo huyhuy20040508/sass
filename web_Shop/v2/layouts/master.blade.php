@@ -27,6 +27,27 @@
         <link rel="icon" type="image/svg+xml" href="{{ asset('favicon.svg') }}?v=3">
     @endif
 
+    {{-- ĐÁNH DẤU "TRANG NÀY CÓ JAVASCRIPT" — phải là đoạn chạy đầu tiên của <head>.
+         Ô lọc là <select> thường, mãi tới lượt DOM ready mới được select2 thay
+         bằng ô của nó. Mà CSS nằm hết ở <head> nên trang ĐÃ VẼ XONG trước lúc
+         ấy: người dùng thấy ô select thường một nhịp rồi nó nháy thành ô select2.
+         Cờ này cho CSS bên dưới giữ chỗ mà chưa vẽ ô nào cho tới khi select2
+         dựng xong.
+
+         HAI LƯỚI AN TOÀN, vì ô lọc mất hẳn thì tệ hơn nháy một cái:
+
+           - `load`: mọi thứ đã tải xong mà select2 vẫn chưa dựng (CDN bị chặn, JS
+             lỗi) thì bày ô thường ra. Đây mới là mốc ĐÚNG. Hẹn giờ cứng không
+             thay được nó: máy chậm hay mạng yếu thì trang chưa tải xong đồng hồ
+             đã hết, cờ gỡ sớm, và ô select thường lại nháy đúng như cũ.
+           - 8 giây: phòng khi `load` không bao giờ tới (một tệp treo mãi). --}}
+    <script>
+        document.documentElement.className += ' co-js';
+        var goCoLoc = function () { document.documentElement.classList.remove('co-js'); };
+        window.addEventListener('load', goCoLoc);
+        setTimeout(goCoLoc, 8000);
+    </script>
+
     {{-- Bắt tay sẵn với mấy nhà CDN ngay từ đầu <head>: đỡ được một vòng DNS +
          TLS cho mỗi nhà, mà vòng đó nằm ngay trên đường tới nét vẽ đầu tiên. --}}
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -151,6 +172,47 @@
         /* Dãy ô tick trong một khối: giãn nhẹ cho dễ bấm, nhất là trên điện thoại. */
         .fillter-box .form-check { margin-bottom: 4px; }
 
+        /* ---------- Hàng tiêu đề bảng ----------
+           Một luật cho MỌI bảng v2, đặt ở đây chứ không rải vào từng màn: trước
+           tệp này mỗi trang một chiều cao — 35px chỗ thường, 45px chỗ có mũi tên
+           sắp xếp, 58px chỗ để nhãn xuống dòng.
+
+           Chữ tiêu đề nhỏ hơn chữ trong bảng một nấc để hàng tiêu đề đọc như dải
+           nhãn, không tranh chỗ với dữ liệu. Chỉ nắn đệm DỌC, đệm ngang để từng
+           màn tự lo vì nó ăn vào phép chia bề rộng cột. */
+        .list th {
+            font-size: 13px;
+            padding-top: 6px;
+            padding-bottom: 6px;
+            line-height: 18px;
+            vertical-align: middle;
+            /* MỘT DÒNG ở MỌI khổ màn. Cho nhãn xuống dòng thì bề rộng cột phải đủ
+               cho nhãn dài nhất, mà bề rộng cột là phần trăm — xuống 1440 hay
+               1366 là cùng tỉ lệ ấy ra ít pixel hơn và hàng tiêu đề cao gấp rưỡi.
+               Cắt "…" chặn được mọi khổ màn, không phải chỉnh số cho từng mốc;
+               nhãn bị cắt vẫn đọc được vì có `title` (đoạn script cuối trang). */
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        /* Nhãn cột bấm được: `inline-flex` chứ không `inline-block` — cặp mũi tên
+           sắp xếp nằm giữa theo chiều dọc mà KHÔNG kéo dài hộp dòng, nên trang có
+           nút sắp xếp cao đúng bằng trang không có. */
+        .list th > a { display: inline-flex; align-items: center; line-height: 18px; max-width: 100%; }
+        .list th .sort-icons { height: 14px; flex: none; }
+        /* Cắt phần CHỮ thôi, cặp mũi tên sắp xếp luôn còn nguyên. */
+        .list th > a > .nhan-cot { overflow: hidden; text-overflow: ellipsis; }
+
+        /* ---------- Mã trong bảng ----------
+           Mọi ô MÃ cùng một màu xanh, kể cả mã KHÔNG bấm được. Trước tệp này chỉ
+           mã nào là đường dẫn mới xanh (màu mặc định của thẻ a), còn lại đen như
+           chữ thường — cùng một cột mã mà hai màu, nhìn như hai loại dữ liệu.
+
+           Chỉ đổi MÀU, không gạch chân và không đổi con trỏ: mã không bấm được
+           vẫn phải trông là không bấm được. */
+        .list td.item-code,
+        .list td.item-code a { color: #0d6efd; }
+
         /* ---------- Ô chọn của bộ lọc ----------
            Mọi ô chọn trong khung lọc chạy select2 (xem khối script cuối trang),
            nên phải kéo select2 về đúng dáng .form-control: cùng chiều cao, cùng
@@ -173,6 +235,16 @@
             box-shadow: 0 0 0 .2rem rgba(13, 110, 253, .2);
         }
         .fillter-box .select2-container { width: 100% !important; }
+
+        /* Giữ chỗ nhưng CHƯA VẼ ô lọc cho tới khi select2 dựng xong — xem đoạn
+           script đánh dấu `co-js` ở đầu <head>.
+
+           `visibility: hidden` chứ không `display: none`: ô vẫn chiếm đúng chỗ
+           của nó nên khung lọc không co lại rồi giãn ra, tức là không có cú nhảy
+           nào cả. Select2 dựng xong thì thẻ gốc mang thêm lớp
+           `.select2-hidden-accessible`, luật này nhả ra, và ô select2 hiện lên
+           đúng chỗ vừa giữ. */
+        html.co-js .fillter-box select:not(.select2-hidden-accessible) { visibility: hidden; }
         /* Danh sách xổ ra: cùng cỡ chữ với phần còn lại của khung lọc. */
         .select2-container--default .select2-results__option { font-size: 13px; }
         .select2-container--default .select2-results__option--highlighted[aria-selected] { background-color: #486a7f; }
@@ -746,7 +818,37 @@
                         },
                     });
                 });
+
+            // Dựng xong thì gỡ cờ ngay, không đợi hết lưới an toàn 3 giây: màn
+            // nào không có ô lọc nào cũng phải thoát khỏi trạng thái "đang chờ".
+            document.documentElement.classList.remove('co-js');
         });
+
+        // Nhãn cột bị cắt "…" thì cho rê chuột đọc đủ. Chạy lại khi đổi khổ màn
+        // và sau mỗi lượt nạp danh sách bằng AJAX (bảng lúc đó là bảng mới).
+        (function () {
+            function chuThichNhan() {
+                document.querySelectorAll('.list th').forEach(function (th) {
+                    var chu = th.innerText.trim();
+                    if (!chu) return;
+                    // Đã có gì mang title rồi thì để nguyên, không chồng hai tooltip.
+                    if (th.title || th.querySelector('[title]')) return;
+                    var o = th.querySelector('.nhan-cot') || th;
+                    th.title = o.scrollWidth > o.clientWidth + 1 ? chu : '';
+                });
+            }
+            document.addEventListener('DOMContentLoaded', chuThichNhan);
+            window.addEventListener('load', chuThichNhan);
+            var hen;
+            window.addEventListener('resize', function () {
+                clearTimeout(hen);
+                hen = setTimeout(chuThichNhan, 150);
+            });
+            new MutationObserver(function () {
+                clearTimeout(hen);
+                hen = setTimeout(chuThichNhan, 50);
+            }).observe(document.body, { childList: true, subtree: true });
+        })();
     </script>
 </body>
 

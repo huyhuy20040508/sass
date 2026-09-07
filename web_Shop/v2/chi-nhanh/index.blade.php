@@ -79,24 +79,24 @@
            Tắt bớt cột thì % hụt được chia lại cho các cột còn lại. */
         .table-list-container { overflow-x: auto; }
         table.table-list-branch { width: 100%; table-layout: fixed; }
-        table.table-list-branch th { white-space: normal; line-height: 1.3; }
         table.table-list-branch td { overflow: hidden; text-overflow: ellipsis; }
-        table.table-list-branch th, table.table-list-branch td { padding: 8px 4px; }
+        table.table-list-branch th, table.table-list-branch td { padding-left: 4px; padding-right: 4px; }
+        table.table-list-branch td { padding-top: 8px; padding-bottom: 8px; }
         /* Đo thật ở khung 1182px: MST 13 ký tự, thời gian tạo đủ giờ phút giây và 3 nút
            Hành động không bị cắt; tên chi nhánh chịu cắt "…" (có title).
            STT 4 · Mã 8 · Tên 12.5 · MST 12 · SĐT 8 · HĐĐT 8 · Công ty/CN 9 · Người tạo 9
            · Thời gian tạo 14.5 · Trạng thái 6.5 · Hành động 8.5 = 100 */
-        table.table-list-branch th:first-child { width: 3.74%; }
-        table.table-list-branch th.show_branch_code { width: 9.72%; }
-        table.table-list-branch th.show_branch_name { width: 11.19%; }
-        table.table-list-branch th.show_tax_code { width: 9.0%; }
-        table.table-list-branch th.show_phone { width: 7.54%; }
-        table.table-list-branch th.show_hddt { width: 10.67%; }
-        table.table-list-branch th.show_type { width: 14.09%; }
-        table.table-list-branch th.show_creator { width: 7.86%; }
-        table.table-list-branch th.show_creation_time { width: 10.4%; }
-        table.table-list-branch th.show_status { width: 7.54%; }
-        table.table-list-branch th.show_action { width: 8.22%; }
+        table.table-list-branch th:first-child { width: 4.16%; }
+        table.table-list-branch th.show_branch_code { width: 9.08%; }
+        table.table-list-branch th.show_branch_name { width: 9.17%; }
+        table.table-list-branch th.show_tax_code { width: 11.0%; }
+        table.table-list-branch th.show_phone { width: 7.41%; }
+        table.table-list-branch th.show_hddt { width: 9.75%; }
+        table.table-list-branch th.show_type { width: 12.26%; }
+        table.table-list-branch th.show_creator { width: 9.0%; }
+        table.table-list-branch th.show_creation_time { width: 12.93%; }
+        table.table-list-branch th.show_status { width: 7.33%; }
+        table.table-list-branch th.show_action { width: 7.91%; }
 
         /* Dấu "Đang làm việc" ở dòng chi nhánh mình đang đứng. */
         .cn-here {
@@ -289,12 +289,12 @@
                                     <th class="text-center">{{ __('message.stt') }}</th>
                                     <th data-table-label="branch_code" class="text-left show_branch_code {{ $columns['show_branch_code'] ? '' : 'hide' }}">{{ __('message.branch-code') }}</th>
                                     <th data-table-label="branch_name" class="text-left show_branch_name {{ $columns['show_branch_name'] ? '' : 'hide' }}">{{ __('message.branch-name') }}</th>
-                                    <th data-table-label="tax_code" class="text-right show_tax_code {{ $columns['show_tax_code'] ? '' : 'hide' }}">{{ __('message.tax_code') }}</th>
-                                    <th data-table-label="phone" class="text-right show_phone {{ $columns['show_phone'] ? '' : 'hide' }}">{{ __('message.phone') }}</th>
+                                    <th data-table-label="tax_code" class="text-left show_tax_code {{ $columns['show_tax_code'] ? '' : 'hide' }}">{{ __('message.tax_code') }}</th>
+                                    <th data-table-label="phone" class="text-left show_phone {{ $columns['show_phone'] ? '' : 'hide' }}">{{ __('message.phone') }}</th>
                                     <th data-table-label="hddt" class="text-center show_hddt {{ $columns['show_hddt'] ? '' : 'hide' }} not-export">{{ __('message.use_etax') }}</th>
                                     <th data-table-label="type" class="text-left show_type {{ $columns['show_type'] ? '' : 'hide' }}">{{ __('message.company') }} / {{ __('message.branch') }}</th>
                                     <th data-table-label="creator" class="text-left show_creator {{ $columns['show_creator'] ? '' : 'hide' }}">{{ __('message.creator') }}</th>
-                                    <th data-table-label="creation_time" class="text-right show_creation_time {{ $columns['show_creation_time'] ? '' : 'hide' }}">{{ __('message.creation_time') }}</th>
+                                    <th data-table-label="creation_time" class="text-center show_creation_time {{ $columns['show_creation_time'] ? '' : 'hide' }}">{{ __('message.creation_time') }}</th>
                                     <th data-table-label="status" class="text-center show_status {{ $columns['show_status'] ? '' : 'hide' }}">{{ __('message.status') }}</th>
                                     <th data-table-label="action" class="text-center show_action {{ $columns['show_action'] ? '' : 'hide' }} not-export">{{ __('message.action') }}</th>
                                 </tr>
@@ -324,11 +324,11 @@
                                             @endif
                                         </td>
 
-                                        <td data-table-label="tax_code" class="text-right show_tax_code {{ $columns['show_tax_code'] ? '' : 'hide' }}">
+                                        <td data-table-label="tax_code" class="text-left item-code show_tax_code {{ $columns['show_tax_code'] ? '' : 'hide' }}">
                                             {{ ($cn['tax_code'] ?? '') ?: '-' }}
                                         </td>
 
-                                        <td data-table-label="phone" class="text-right show_phone {{ $columns['show_phone'] ? '' : 'hide' }}">
+                                        <td data-table-label="phone" class="text-left show_phone {{ $columns['show_phone'] ? '' : 'hide' }}">
                                             {{ ($cn['phone'] ?? '') ?: '-' }}
                                         </td>
 
@@ -356,7 +356,7 @@
                                             {{ ($cn['created_by_name'] ?? '') ?: '-' }}
                                         </td>
 
-                                        <td data-table-label="creation_time" class="text-right show_creation_time {{ $columns['show_creation_time'] ? '' : 'hide' }}">
+                                        <td data-table-label="creation_time" class="text-center show_creation_time {{ $columns['show_creation_time'] ? '' : 'hide' }}">
                                             {{ $gio($cn['created_at'] ?? null) }}
                                         </td>
 
