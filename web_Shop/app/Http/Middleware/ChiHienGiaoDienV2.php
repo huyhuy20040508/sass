@@ -36,6 +36,7 @@ class ChiHienGiaoDienV2
         'admin.thu-chi.index',
         'admin.cong-no.index',
         'admin.customers.index',
+        'admin.orders.index',
     ];
 
     /**
@@ -60,6 +61,7 @@ class ChiHienGiaoDienV2
         'admin.thu-chi.',        // xuất Excel / nạp phân loại, người nộp cho hộp lập phiếu
         'admin.cong-no.',        // xuất Excel / lịch sử trả nợ / ghi lượt trả
         'admin.customers.',      // xuất CSV / mẫu nhập / chi tiết / sổ đơn của khách / ảnh
+        'admin.orders.',         // xuất CSV / chi tiết một đơn / bản in đơn, tem / hoá đơn điện tử
         'admin.goi-dich-vu.',    // cửa hàng hết hạn bị dồn về đây, chặn là kẹt cứng
     ];
 

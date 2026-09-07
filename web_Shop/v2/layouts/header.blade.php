@@ -104,7 +104,7 @@
 
     // Section đang mở — bản gốc dò bằng is_menu_active(đường v2); mình dò theo
     // đường của web_Shop.
-    $isStatisticSection = request()->is('admin/dashboard', 'admin/reports*', 'admin/customers*');
+    $isStatisticSection = request()->is('admin/dashboard', 'admin/reports*', 'admin/customers*', 'admin/orders*');
     $isMenuSection = request()->is('admin/products*', 'admin/categories*', 'admin/taxes*', 'admin/units*', 'admin/attributes*');
     $isWarehouseSection = request()->is('admin/suppliers*', 'admin/inventory-adjustments*', 'admin/purchase-orders*', 'admin/supplier-returns*', 'admin/stock-transfers*', 'admin/inventory*');
     $isCashbookSection = request()->is('admin/cashbook*');
@@ -133,7 +133,7 @@
     $tabThongKe = [
         ['nhan' => 'Tổng quan', 'route' => null],
         ['nhan' => 'Khách hàng', 'route' => 'admin.customers.index'],
-        ['nhan' => 'Quản lý đơn hàng', 'route' => null],
+        ['nhan' => 'Quản lý đơn hàng', 'route' => 'admin.orders.index'],
         ['nhan' => 'Hoá đơn điện tử', 'route' => null],
         ['nhan' => 'Báo cáo kết ca', 'route' => null],
         ['nhan' => 'Báo cáo cuối ngày', 'route' => null],

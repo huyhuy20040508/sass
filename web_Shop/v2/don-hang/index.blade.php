@@ -40,7 +40,12 @@
 
     // Trạng thái đơn chọn được NHIỀU (API nhận chuỗi ngăn bởi dấu phẩy); ba ô
     // còn lại chỉ nhận một giá trị nên để ô chọn đơn kèm dòng "Tất cả".
-    $trangThaiChon = array_filter(explode(',', (string) $filters['status']));
+    // 'all' là "không lọc", không phải một trạng thái — lọc bỏ để ô thả xuống
+    // không tick nhầm và để câu "bảng rỗng" không đổ tại bộ lọc.
+    $trangThaiChon = array_values(array_filter(
+        explode(',', (string) $filters['status']),
+        fn ($s) => $s !== '' && $s !== 'all'
+    ));
 
     $coLoc = collect($filters)
         ->only(['keyword', 'payment_status', 'payment_method', 'channel'])
@@ -575,17 +580,30 @@
                             <div class="dh-dong dh-cong"><span>Tổng thanh toán</span><span id="dh-v-total"></span></div>
                             <div class="dh-dong"><span>{{ __('message.payment-method-short') }}</span><span id="dh-v-method"></span></div>
                             <div class="dh-dong"><span>Trạng thái tiền</span><span id="dh-v-paystatus"></span></div>
-                            <div class="dh-dong" id="dh-v-shipmethod-wrap">
-                                <span class="dh-nhan-nho">Đơn vị vận chuyển</span><span id="dh-v-shipmethod"></span>
-                            </div>
-                            <div class="dh-dong" id="dh-v-tracking-wrap">
-                                <span class="dh-nhan-nho">Mã vận đơn</span><span id="dh-v-tracking"></span>
-                            </div>
                             <div class="dh-dong" id="dh-v-note-wrap">
-                                <span class="dh-nhan-nho">{{ __('message.note') }}</span><span id="dh-v-note"></span>
+                                <span class="dh-nhan-nho">Khách ghi chú</span><span id="dh-v-note"></span>
                             </div>
                             <div class="dh-dong" id="dh-v-etax-wrap">
                                 <span class="dh-nhan-nho">Hoá đơn điện tử</span><span id="dh-v-etax"></span>
+                            </div>
+
+                            {{-- Ba ô SỬA ĐƯỢC, thứ duy nhất trong hộp không phải chỉ để đọc.
+                                 v2 không có khối này vì quán ăn không giao hàng; shop thì
+                                 đơn giao đi mà không ghi được mã vận đơn là mất dấu hàng. --}}
+                            <div id="dh-v-sua" class="mt-3">
+                                <div class="dh-tt-tieude">Vận chuyển &amp; ghi chú nội bộ</div>
+                                <div id="dh-v-ship-fields">
+                                    <label class="form-label mb-1">Đơn vị vận chuyển</label>
+                                    <input type="text" class="form-control mb-2" id="dh-v-shipmethod" maxlength="100"
+                                        placeholder="VD: GHN, GHTK">
+                                    <label class="form-label mb-1">Mã vận đơn</label>
+                                    <input type="text" class="form-control mb-2" id="dh-v-tracking" maxlength="100">
+                                </div>
+                                <label class="form-label mb-1">Ghi chú nội bộ</label>
+                                <textarea class="form-control" id="dh-v-adminnote" rows="2" maxlength="500"></textarea>
+                                <div class="text-center mt-2">
+                                    <button type="button" class="bt btn_green" id="dh-v-luu">{{ __('message.save') }}</button>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -823,9 +841,16 @@
                 + thoat(DH_PAY_STATUSES[o.payment_status] || '') + '</b>');
 
             dongCoDieuKien('#dh-v-voucher-wrap', '#dh-v-voucher', o.voucher_code);
-            dongCoDieuKien('#dh-v-shipmethod-wrap', '#dh-v-shipmethod', o.shipping_method);
-            dongCoDieuKien('#dh-v-tracking-wrap', '#dh-v-tracking', o.tracking_number);
             dongCoDieuKien('#dh-v-note-wrap', '#dh-v-note', o.note);
+
+            // Đơn quầy giao ngay tại chỗ nên không có gì để vận chuyển — giấu hai
+            // ô ấy đi, chỉ để lại ghi chú nội bộ.
+            $('#dh-v-ship-fields').toggle((o.channel || 'web') !== 'pos');
+            $('#dh-v-shipmethod').val(o.shipping_method || '');
+            $('#dh-v-tracking').val(o.tracking_number || '');
+            $('#dh-v-adminnote').val(o.admin_note || '');
+            // Hộp dùng lại cho mọi đơn nên phải mở khoá nút Lưu ở mỗi lượt mở.
+            $('#dh-v-luu').prop('disabled', false);
 
             veHoaDon(o, hoaDon);
             veNutThaoTac(o);
@@ -833,7 +858,7 @@
             $('#dh-v-print').attr('href', URL_DH + '/' + o.id + '/print');
             $('#dh-v-label').attr('href', URL_DH + '/' + o.id + '/label');
 
-            V2.moModal ? V2.moModal('#modalOrderDetail') : $('#modalOrderDetail').modal('show');
+            $('#modalOrderDetail').modal('show');
         }
 
         /** Dòng hoá đơn điện tử. Chưa nối cổng thì API trả null — giấu hẳn dòng. */
@@ -953,6 +978,67 @@
 
             $('#modalOrderDetail').modal('hide');
             V2.ghi(URL_DH + '/' + id + '/payment', 'PUT', { payment_status: $(this).data('payment') });
+        });
+
+        // ---------- Lưu vận chuyển + ghi chú nội bộ ----------
+        //
+        // Hai đường ghi khác nhau nhưng người dùng chỉ bấm MỘT nút, nên không dùng
+        // được V2.ghi (nó nạp lại trang ngay sau lượt đầu). Gửi tay lần lượt, chỉ
+        // gửi cái nào thật sự đổi, rồi nhặt câu báo ở phản hồi cuối và nạp lại.
+        function guiPut(url, fields) {
+            const fd = new FormData();
+            fd.append('_token', $('meta[name="csrf-token"]').attr('content'));
+            fd.append('_method', 'PUT');
+            fd.append('return', location.pathname + location.search);
+            if (V2.chiNhanhTab) fd.append('chi_nhanh', String(V2.chiNhanhTab));
+            Object.keys(fields).forEach(function (k) { fd.append(k, fields[k] == null ? '' : fields[k]); });
+
+            return fetch(url, {
+                method: 'POST',
+                body: fd,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                credentials: 'same-origin',
+            }).then(function (r) { return r.text(); });
+        }
+
+        $(document).on('click', '#dh-v-luu', function () {
+            const o = donDangXem;
+            if (!o) return;
+
+            const $nut = $(this).prop('disabled', true);
+            const ship = String($('#dh-v-shipmethod').val() || '');
+            const track = String($('#dh-v-tracking').val() || '');
+            const ghiChu = String($('#dh-v-adminnote').val() || '');
+
+            const viec = [];
+            if (ship !== (o.shipping_method || '') || track !== (o.tracking_number || '')) {
+                viec.push(function () {
+                    return guiPut(URL_DH + '/' + o.id + '/shipping', { shipping_method: ship, tracking_number: track });
+                });
+            }
+            if (ghiChu !== (o.admin_note || '')) {
+                viec.push(function () {
+                    return guiPut(URL_DH + '/' + o.id + '/note', { admin_note: ghiChu });
+                });
+            }
+
+            if (!viec.length) {
+                toastr.info('Chưa có gì thay đổi.');
+                $nut.prop('disabled', false);
+
+                return;
+            }
+
+            viec.reduce(function (truoc, lam) { return truoc.then(lam); }, Promise.resolve())
+                .then(function (html) {
+                    V2.toastTu(new DOMParser().parseFromString(html, 'text/html'));
+                    $('#modalOrderDetail').modal('hide');
+                    V2.napLai(location.href, false);
+                })
+                .catch(function () {
+                    toastr.error('Không lưu được. Vui lòng thử lại.');
+                    $nut.prop('disabled', false);
+                });
         });
 
         // ---------- Phát hành hoá đơn điện tử ----------

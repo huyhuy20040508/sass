@@ -39,7 +39,7 @@
                     'children' => [
                         [
                             'href' => route('admin.orders.index'),
-                            'label' => \App\Http\Controllers\OrderController::VIEWS['all']['label'],
+                            'label' => 'Danh sách đơn hàng',
                             'active' => request()->routeIs('admin.orders.*'),
                         ],
                         ...($canManage ? [[

@@ -7,21 +7,20 @@ use App\Http\Controllers\CaLamViecController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\ChiNhanhController;
 use App\Http\Controllers\ChonCuaVaoController;
+use App\Http\Controllers\CongNoController;
 use App\Http\Controllers\ContactController;
 use App\Http\Controllers\CustomerController;
-use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DieuChinhTonKhoController;
 use App\Http\Controllers\DonViTinhController;
 use App\Http\Controllers\GoiDichVuController;
-use App\Http\Controllers\TonKhoChiNhanhController;
-use App\Http\Controllers\NhaCungCapController;
-use App\Http\Controllers\PhieuDieuChuyenController;
-use App\Http\Controllers\PhieuMuaHangController;
 use App\Http\Controllers\LoaiThuChiController;
+use App\Http\Controllers\NhaCungCapController;
 use App\Http\Controllers\NhanSuController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\PhanQuyenController;
+use App\Http\Controllers\PhieuDieuChuyenController;
+use App\Http\Controllers\PhieuMuaHangController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\PromotionController;
@@ -29,15 +28,16 @@ use App\Http\Controllers\ReportController;
 use App\Http\Controllers\ReturnController;
 use App\Http\Controllers\SettingController;
 use App\Http\Controllers\ThongSoChungController;
+use App\Http\Controllers\ThuChiController;
 use App\Http\Controllers\ThueController;
 use App\Http\Controllers\ThuNganController;
-use App\Http\Controllers\CongNoController;
-use App\Http\Controllers\ThuChiController;
 use App\Http\Controllers\ThuocTinhController;
+use App\Http\Controllers\TonKhoChiNhanhController;
 use App\Http\Controllers\TraHangNhaCungCapController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\ViTriController;
 use App\Http\Controllers\VoucherController;
+use App\Services\ModuleLamViec;
 use Illuminate\Support\Facades\Route;
 
 // --- Route gốc: về module của người đang đăng nhập ---
@@ -46,7 +46,7 @@ use Illuminate\Support\Facades\Route;
 // ModuleLamViec. Chưa đăng nhập thì cứ đi vào /admin, chốt chặn ở đó sẽ đưa
 // sang trang đăng nhập kèm lý do.
 Route::get('/', fn () => session('api.access_token')
-    ? redirect()->to(\App\Services\ModuleLamViec::trangChuCuaPhien())
+    ? redirect()->to(ModuleLamViec::trangChuCuaPhien())
     : redirect('/admin'));
 
 // --- Khách (chưa đăng nhập) ---
@@ -227,7 +227,6 @@ Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:quan_ly', 'chi.v2'])->
         Route::put('/products/{id}', [ProductController::class, 'update'])->name('products.update');
         Route::delete('/products/{id}', [ProductController::class, 'destroy'])->name('products.destroy');
 
-
         // Banner trang chủ — nội dung tiếp thị hiện trên storefront.
         Route::get('/banners', [BannerController::class, 'index'])->name('banners.index');
         Route::get('/banners/export', [BannerController::class, 'export'])->name('banners.export');
@@ -258,16 +257,12 @@ Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:quan_ly', 'chi.v2'])->
         Route::delete('/vouchers/{id}', [VoucherController::class, 'destroy'])->whereNumber('id')->name('vouchers.destroy');
     });
 
-
     // Đơn hàng
     Route::get('/orders', [OrderController::class, 'index'])->name('orders.index');
     Route::get('/orders/export', [OrderController::class, 'export'])->name('orders.export');
-    // In hàng loạt (?ids=1,2,3) + xác nhận hàng loạt — đặt trước route {id} để không bị nuốt.
+    // In hàng loạt (?ids=1,2,3) — đặt trước route {id} để không bị nuốt.
     Route::get('/orders/print', [OrderController::class, 'print'])->name('orders.printBatch');
     Route::get('/orders/label', [OrderController::class, 'label'])->name('orders.labelBatch');
-    Route::post('/orders/bulk-status', [OrderController::class, 'bulkStatus'])->name('orders.bulkStatus');
-    Route::post('/orders', [OrderController::class, 'store'])->name('orders.store');
-    Route::put('/orders/{id}', [OrderController::class, 'update'])->name('orders.update');
     Route::get('/orders/{id}/detail', [OrderController::class, 'detail'])->name('orders.detail');
     // Phát hành hoá đơn điện tử cho một đơn — trả JSON, nút nằm trong hộp chi tiết.
     Route::post('/orders/{id}/etax', [OrderController::class, 'phatHanhHoaDon'])->name('orders.phatHanhHoaDon');
@@ -663,4 +658,3 @@ Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:thu_ngan'])->prefix('c
     // còn đơn quầy thì xong ngay lúc tạo.
     Route::get('/orders', [ThuNganController::class, 'donHang'])->name('don-hang.index');
 });
-
