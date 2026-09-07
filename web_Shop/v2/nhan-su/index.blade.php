@@ -13,24 +13,26 @@
         .btn_top_content > * { margin-left: 8px; }
         .btn_top_content .btn-export { cursor: pointer; }
 
-        /* 13 cột chia % chỉ như tỉ lệ gợi ý: không ép fixed, không min-width, trang không cuộn ngang.
-           ☐ 3 · STT 4 · Mã 8 · Họ tên 13 · Quyền 11 · Ngày sinh 8 · Giới tính 6 · SĐT 8
-           · CCCD 9 · Chi nhánh 10 · Ca 8 · Trạng thái 6 · Hành động 6 = 100 */
-        table.table-employee.none_mobile { width: 100%; }
+        /* 13 cột chia % CỨNG (`table-layout: fixed`), tổng đúng 100 — đo thật ở
+           khung 1197px (màn 1536). Trước đây bảng chạy `auto` và % chỉ là gợi ý,
+           nên một tên chi nhánh dài là bảng phình ra 1235px, tràn ngang và đẩy
+           cột Hành động khỏi màn. Nay chữ dài thì cắt "…" (có title). */
+        table.table-employee.none_mobile { width: 100%; table-layout: fixed; }
         table.table-employee.none_mobile th { white-space: nowrap; }
-        table.table-employee.none_mobile th:first-child { width: 3%; }
-        table.table-employee.none_mobile th:nth-child(2) { width: 4%; }
-        table.table-employee.none_mobile th.show_code { width: 8%; }
-        table.table-employee.none_mobile th.show_name { width: 13%; }
-        table.table-employee.none_mobile th.show_type { width: 11%; }
-        table.table-employee.none_mobile th.show_birthday { width: 8%; }
-        table.table-employee.none_mobile th.show_gender { width: 6%; }
-        table.table-employee.none_mobile th.show_phone { width: 8%; }
-        table.table-employee.none_mobile th.show_cccd { width: 9%; }
-        table.table-employee.none_mobile th.show_branch { width: 10%; }
-        table.table-employee.none_mobile th.show_work_shift { width: 8%; }
-        table.table-employee.none_mobile th.show_status { width: 6%; }
-        table.table-employee.none_mobile th:last-child { width: 6%; }
+        table.table-employee.none_mobile td { overflow: hidden; text-overflow: ellipsis; }
+        table.table-employee.none_mobile th:first-child { width: 3.45%; }
+        table.table-employee.none_mobile th:nth-child(2) { width: 4.13%; }
+        table.table-employee.none_mobile th.show_code { width: 8.05%; }
+        table.table-employee.none_mobile th.show_name { width: 6.97%; }
+        table.table-employee.none_mobile th.show_type { width: 12.23%; }
+        table.table-employee.none_mobile th.show_birthday { width: 9.56%; }
+        table.table-employee.none_mobile th.show_gender { width: 6.3%; }
+        table.table-employee.none_mobile th.show_phone { width: 7.3%; }
+        table.table-employee.none_mobile th.show_cccd { width: 11.06%; }
+        table.table-employee.none_mobile th.show_branch { width: 7.3%; }
+        table.table-employee.none_mobile th.show_work_shift { width: 8.05%; }
+        table.table-employee.none_mobile th.show_status { width: 7.3%; }
+        table.table-employee.none_mobile th:last-child { width: 8.3%; }
         table.table-employee.none_mobile td.item-name,
         table.table-employee.none_mobile td.show_branch {
             max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -172,10 +174,10 @@
                                 <th class="text-left show_code">{{ __('message.personnel-code') }}</th>
                                 <th class="text-left show_name">{{ __('message.full-name') }}</th>
                                 <th class="text-left show_type">{{ __('message.hr_permission') }}</th>
-                                <th class="text-right show_birthday">{{ __('message.date-of-birth') }}</th>
+                                <th class="text-center show_birthday">{{ __('message.date-of-birth') }}</th>
                                 <th class="text-left show_gender">{{ __('message.gender') }}</th>
-                                <th class="text-right show_phone">{{ __('message.phone') }}</th>
-                                <th class="text-right show_cccd">CCCD</th>
+                                <th class="text-left show_phone">{{ __('message.phone') }}</th>
+                                <th class="text-left show_cccd">CCCD</th>
                                 <th class="text-left show_branch">{{ __('message.branch') }}</th>
                                 <th class="text-left show_work_shift">{{ __('message.work-shift') }}</th>
                                 <th class="text-center show_status">{{ __('message.status') }}</th>
@@ -195,7 +197,8 @@
                                         <td class="text-center">{{ $stt + $i + 1 }}</td>
                                         <td class="text-left item-code show_code">{{ $nv['code'] ?? '' }}</td>
                                         <td class="text-left item-name show_name" title="{{ $nv['full_name'] ?? '' }}">{{ $nv['full_name'] ?? '' }}</td>
-                                        <td class="text-left show_type">
+                                        <td class="text-left show_type"
+                                            title="{{ implode(', ', array_map(fn ($c) => $C::NHAN_CUA[$c] ?? $c, (array) ($nv['quyen'] ?? []))) }}">
                                             @foreach ((array) ($nv['quyen'] ?? []) as $cua)
                                                 <span class="badge {{ $lopQuyen[$cua] ?? 'bg-secondary' }} me-1 is-cua-{{ $cua }}">{{ $C::NHAN_CUA[$cua] ?? $cua }}</span>
                                             @endforeach
@@ -203,10 +206,10 @@
                                                 <span class="badge bg-secondary me-1">Tài khoản đã khoá</span>
                                             @endif
                                         </td>
-                                        <td class="text-right show_birthday">{{ $ngay($nv['birth_date'] ?? null) }}</td>
+                                        <td class="text-center show_birthday">{{ $ngay($nv['birth_date'] ?? null) }}</td>
                                         <td class="text-left show_gender">{{ $C::GIOI_TINH[$nv['gender'] ?? ''] ?? '' }}</td>
-                                        <td class="text-right show_phone">{{ $nv['phone'] ?? '' }}</td>
-                                        <td class="text-right show_cccd">{{ $nv['id_number'] ?? '' }}</td>
+                                        <td class="text-left show_phone">{{ $nv['phone'] ?? '' }}</td>
+                                        <td class="text-left show_cccd">{{ $nv['id_number'] ?? '' }}</td>
                                         @php $tenCN = implode(', ', (array) ($nv['shop_names'] ?? [])) ?: ($nv['shop_name'] ?? ''); @endphp
                                         <td class="text-left show_branch" title="{{ $tenCN }}">{{ $tenCN }}</td>
                                         <td class="text-left show_work_shift">{{ $ca }}</td>

@@ -31,7 +31,7 @@
 @endphp
 
 {{-- Lô rỗng = domain.LoKhongXacDinh. Nhãn đặt ở đây, dưới database là chuỗi rỗng. --}}
-<td class="text-right show_lot">
+<td class="text-left show_lot">
     {{ $soLo !== '' ? $soLo : __('message.unknown') }}
 </td>
 <td class="text-right show_lot_qty">
@@ -39,6 +39,6 @@
 </td>
 {{-- Hạn dùng NULL = hàng không có hạn, khác hẳn "chưa ai khai" nên không bịa ra
      một ngày mốc — để dấu gạch như mọi ô trống khác của bảng. --}}
-<td class="text-right show_expire {{ $mauHan }}">
+<td class="text-center show_expire {{ $mauHan }}">
     {{ $hanTs !== null ? date('d-m-Y', $hanTs) : '-' }}
 </td>

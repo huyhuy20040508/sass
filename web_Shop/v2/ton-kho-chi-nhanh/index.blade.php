@@ -48,6 +48,25 @@
            chữ xuống dòng. Bỏ: tên hàng gãy làm hai ba dòng khiến bảng cao vống
            lên, đọc mệt hơn hẳn so với kéo ngang.) */
 
+        /* Bảng danh sách: 11 cột chia % CỨNG, tổng đúng 100 — đo thật ở khung
+           1197px (màn 1536). Trước đây bảng chạy `auto` không đặt bề rộng, nên chỉ
+           cần một mã hàng dài là bảng phình lên 1612px: tràn ngang, cột Hành động
+           rơi khỏi màn. Nay mã và tên hàng dài thì cắt "…" (có title). */
+        table.table-list-warehouse.none_mobile { width: 100%; table-layout: fixed; }
+        table.table-list-warehouse.none_mobile th { white-space: nowrap; }
+        table.table-list-warehouse.none_mobile td { overflow: hidden; text-overflow: ellipsis; }
+        table.table-list-warehouse.none_mobile th:first-child { width: 3.83%; }
+        table.table-list-warehouse.none_mobile th.show_menu_code { width: 5.01%; }
+        table.table-list-warehouse.none_mobile th.show_menu_name { width: 13.23%; }
+        table.table-list-warehouse.none_mobile th.show_quantity { width: 9.19%; }
+        table.table-list-warehouse.none_mobile th.show_menu_unit { width: 10.19%; }
+        table.table-list-warehouse.none_mobile th.show_menu_type { width: 9.02%; }
+        table.table-list-warehouse.none_mobile th.show_menu_group { width: 10.28%; }
+        table.table-list-warehouse.none_mobile th.show_lot { width: 11.99%; }
+        table.table-list-warehouse.none_mobile th.show_lot_qty { width: 6.27%; }
+        table.table-list-warehouse.none_mobile th.show_expire { width: 9.14%; }
+        table.table-list-warehouse.none_mobile th:last-child { width: 11.85%; }
+
         /* Ô gộp theo lô: chữ neo lên đỉnh chứ không giữa. Mặt hàng có bốn lô thì
            ô tên hàng cao gấp bốn, để giữa là tên trôi xuống lưng chừng, không
            còn ngang hàng với dòng lô đầu tiên của chính nó. */
@@ -204,12 +223,12 @@
                                     <th data-column="menu-code" class="text-left show_menu_code">{{ __('message.menu-code') }}</th>
                                     <th data-column="menu-name" class="text-left show_menu_name">{{ __('message.menu-name') }}</th>
                                     <th data-column="quantity" class="text-right show_quantity">{{ __('message.total-quantity') }}</th>
-                                    <th data-column="menu-unit" class="text-center show_menu_unit">{{ __('message.menu-unit') }}</th>
+                                    <th data-column="menu-unit" class="text-left show_menu_unit">{{ __('message.menu-unit') }}</th>
                                     <th data-column="menu-type" class="text-left show_menu_type">{{ __('message.menu-type') }}</th>
                                     <th data-column="menu-group" class="text-left show_menu_group">{{ __('message.menu-group') }}</th>
-                                    <th data-column="lot" class="text-right show_lot">{{ __('message.batch_number') }}</th>
+                                    <th data-column="lot" class="text-left show_lot">{{ __('message.batch_number') }}</th>
                                     <th data-column="lot-qty" class="text-right show_lot_qty">{{ __('message.quantity') }}</th>
-                                    <th data-column="expire" class="text-right show_expire">{{ __('message.expiration_date') }}</th>
+                                    <th data-column="expire" class="text-center show_expire">{{ __('message.expiration_date') }}</th>
                                     <th data-column="action" class="text-center">{{ __('message.action') }}</th>
                                 </tr>
                             </thead>
@@ -265,8 +284,8 @@
                                     <tr class="item {{ $keDong }}" data-cn="{{ $shopId }}"
                                         data-id="{{ $maDong }}" data-item-id="{{ $maDong }}">
                                         <td rowspan="1" class="merge rowspan-{{ $maDong }} text-center">{{ $stt }}</td>
-                                        <td rowspan="1" class="merge rowspan-{{ $maDong }} text-left show_menu_code">{{ $r['sku'] ?? '' }}</td>
-                                        <td rowspan="1" class="merge rowspan-{{ $maDong }} text-left show_menu_name">
+                                        <td rowspan="1" class="merge rowspan-{{ $maDong }} text-left item-code show_menu_code" title="{{ $r['sku'] ?? '' }}">{{ $r['sku'] ?? '' }}</td>
+                                        <td rowspan="1" class="merge rowspan-{{ $maDong }} text-left show_menu_name" title="{{ $r['product_name'] ?? '' }}">
                                             {{ $r['product_name'] ?? '' }}
                                             @if (empty($r['is_active']))
                                                 <small class="muted">(Ngừng bán)</small>
@@ -275,7 +294,7 @@
                                         <td rowspan="1" class="merge rowspan-{{ $maDong }} text-right show_quantity">
                                             <b class="qty-{{ $muc }}">{{ $so($qty) }}</b>
                                         </td>
-                                        <td rowspan="1" class="merge rowspan-{{ $maDong }} text-center show_menu_unit">
+                                        <td rowspan="1" class="merge rowspan-{{ $maDong }} text-left show_menu_unit">
                                             {{ ($r['unit_name'] ?? '') !== '' ? $r['unit_name'] : '-' }}
                                         </td>
                                         {{-- Loại hàng hoá: bản v2 chia năm loại theo nhóm cha
@@ -429,12 +448,12 @@
                  lô phải có chỗ ở đây, không thì người dùng điện thoại mất hẳn. --}}
             <div class="item-materials">
                 <h5>{{ __('message.batch_info') }}</h5>
-                <div class="mt-3">
+                <div class="list mt-3">
                     <table>
                         <thead>
                             <th>{{ __('message.batch_number') }}</th>
                             <th>{{ __('message.quantity') }}</th>
-                            <th class="text-right">{{ __('message.expiration_date') }}</th>
+                            <th class="text-center">{{ __('message.expiration_date') }}</th>
                         </thead>
                         <tbody id="menu-materials"></tbody>
                     </table>

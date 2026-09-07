@@ -33,7 +33,8 @@
 <a href="{{ request()->fullUrlWithQuery(['sort' => $keTiep, 'page' => 1]) }}"
     class="js-table-sort text-decoration-none" style="color: #212521; white-space: nowrap;" data-sort-by="{{ $key }}"
     title="Sắp xếp theo {{ mb_strtolower($label) }}">
-    {{ $label }}
+    {{-- Bọc riêng phần chữ: cột hẹp thì CHỮ cắt "…", cặp mũi tên vẫn còn. --}}
+    <span class="nhan-cot">{{ $label }}</span>
     <span class="sort-icons"
         style="margin-left:4px; display:inline-flex; flex-direction:column; line-height:7px; vertical-align:middle;">
         <i class="fa fa-caret-up" style="font-size: 14px; opacity: {{ $moTang }};"></i>

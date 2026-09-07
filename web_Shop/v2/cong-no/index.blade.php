@@ -461,7 +461,7 @@
                                     data-creator="{{ $item['created_by_name'] ?? '' }}"
                                     data-created-at="{{ $ngayVN($item['created_at'] ?? '') }}">
                                     <td class="text-center">{{ $stt + $i + 1 }}</td>
-                                    <td class="text-left show_code {{ $columns['show_code'] ? '' : 'hide' }}">
+                                    <td class="text-left item-code show_code {{ $columns['show_code'] ? '' : 'hide' }}">
                                         <a type="button" class="edit_bt detail-item text-decoration-none"
                                             title="{{ __('message.view-detail') }}">{{ $item['code'] ?? '' }}</a>
                                     </td>

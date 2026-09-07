@@ -122,7 +122,6 @@ class PhieuMuaHangController extends Controller
         'docdate' => 'Ngày chứng từ',
         'items' => 'Tiền hàng',
         'total' => 'Tổng tiền',
-        'debt' => 'Còn nợ',
         'status' => 'Trạng thái',
         'warehouse' => 'Trạng thái kho',
         'pay' => 'Thanh toán',
