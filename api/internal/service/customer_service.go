@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -72,12 +73,18 @@ func (s *customerService) GetByID(ctx context.Context, id uint) (*dto.CustomerRe
 }
 
 func (s *customerService) Create(ctx context.Context, req *dto.CustomerRequest) (*dto.CustomerResponse, error) {
-	exists, err := s.userRepo.ExistsByEmail(ctx, req.Email)
-	if err != nil {
-		return nil, err
-	}
-	if exists {
-		return nil, domain.ErrEmailExists
+	// Bỏ trống email thì KHÔNG kiểm trùng: `email = ''` khớp với mọi khách khác
+	// cũng để trống, và lượt khai thứ hai sẽ bị báo "email đã được sử dụng" trong
+	// khi người dùng có nhập email nào đâu. Khoá duy nhất dưới database cũng bỏ
+	// qua chúng — xem migration 0062.
+	if strings.TrimSpace(req.Email) != "" {
+		exists, err := s.userRepo.ExistsByEmail(ctx, req.Email)
+		if err != nil {
+			return nil, err
+		}
+		if exists {
+			return nil, domain.ErrEmailExists
+		}
 	}
 
 	password := req.Password
@@ -103,9 +110,18 @@ func (s *customerService) Create(ctx context.Context, req *dto.CustomerRequest) 
 	if u.Status == "" {
 		u.Status = "active"
 	}
+	hoSoKhach(u, req)
 
 	if err := s.userRepo.Create(ctx, u); err != nil {
 		return nil, err
+	}
+
+	// Mã sinh SAU khi ghi vì nó lấy từ id. Khai mã tay thì giữ nguyên mã đó.
+	if u.CustomerCode == "" {
+		u.CustomerCode = maKhachTheoID(u.ID)
+		if err := s.userRepo.Update(ctx, u); err != nil {
+			return nil, err
+		}
 	}
 	if err := s.userRepo.SaveDefaultAddress(ctx, u, req.Address); err != nil {
 		return nil, err
@@ -140,6 +156,7 @@ func (s *customerService) Update(ctx context.Context, id uint, req *dto.Customer
 	if req.Status != "" {
 		u.Status = req.Status
 	}
+	hoSoKhach(u, req)
 
 	if err := s.userRepo.Update(ctx, u); err != nil {
 		return nil, err
@@ -223,7 +240,19 @@ func buildCustomer(u *domain.User, agg domain.CustomerAggregate, address string)
 		Status:      u.Status,
 		TotalOrders: agg.TotalOrders,
 		TotalSpent:  agg.TotalSpent,
+		TotalPaid:   agg.TotalPaid,
+		StillInDebt: agg.TotalDebt,
 		LastOrderAt: formatDateTime(agg.LastOrderAt),
+
+		Code:                u.CustomerCode,
+		CustomerType:        u.CustomerType,
+		CustomerGroupID:     idNhomKhach(u.CustomerGroupID),
+		GroupName:           tenNhomKhach(u),
+		TaxCode:             string(u.TaxCode),
+		CitizenID:           string(u.CitizenID),
+		RepresentativeName:  string(u.RepresentativeName),
+		RepresentativePhone: string(u.RepresentativePhone),
+		Note:                string(u.CustomerNote),
 
 		LoginEmail:    u.Email,
 		EmailVerified: u.EmailVerifiedAt != nil,
@@ -258,4 +287,62 @@ func formatDateTime(t *time.Time) string {
 		return ""
 	}
 	return t.Format(time.RFC3339)
+}
+
+// hoSoKhach chép phần hồ sơ riêng của khách từ payload vào bản ghi.
+//
+// Mã bỏ trống khi SỬA thì GIỮ NGUYÊN mã cũ: mã đã đi vào chứng từ, tự đổi là hồ
+// sơ hai bên lệch nhau. Khách cá nhân thì xoá sạch mấy ô của doanh nghiệp và
+// ngược lại — để sót mã số thuế trên một khách cá nhân thì hoá đơn xuất ra mang
+// mã của lần khai trước.
+func hoSoKhach(u *domain.User, req *dto.CustomerRequest) {
+	if ma := strings.TrimSpace(req.Code); ma != "" {
+		u.CustomerCode = ma
+	}
+
+	u.CustomerType = req.CustomerType
+	if req.CustomerGroupID > 0 {
+		id := req.CustomerGroupID
+		u.CustomerGroupID = &id
+	} else {
+		u.CustomerGroupID = nil
+	}
+	u.CustomerNote = domain.StringOrNull(strings.TrimSpace(req.Note))
+
+	if req.CustomerType == 1 {
+		u.TaxCode = domain.StringOrNull(strings.TrimSpace(req.TaxCode))
+		u.RepresentativeName = domain.StringOrNull(strings.TrimSpace(req.RepresentativeName))
+		u.RepresentativePhone = domain.StringOrNull(strings.TrimSpace(req.RepresentativePhone))
+		u.CitizenID = ""
+
+		return
+	}
+
+	u.CitizenID = domain.StringOrNull(strings.TrimSpace(req.CitizenID))
+	u.TaxCode = ""
+	u.RepresentativeName = ""
+	u.RepresentativePhone = ""
+}
+
+// maKhachTheoID sinh mã theo dải `cus-00001` — đúng dạng bản v2 đang chạy.
+func maKhachTheoID(id uint) string {
+	return fmt.Sprintf("cus-%05d", id)
+}
+
+// idNhomKhach đọc con trỏ id nhóm; chưa xếp nhóm thì trả 0.
+func idNhomKhach(p *uint) uint {
+	if p == nil {
+		return 0
+	}
+
+	return *p
+}
+
+// tenNhomKhach lấy tên nhóm đã Preload; chưa xếp nhóm thì trả chuỗi rỗng.
+func tenNhomKhach(u *domain.User) string {
+	if u.CustomerGroup == nil {
+		return ""
+	}
+
+	return u.CustomerGroup.Name
 }

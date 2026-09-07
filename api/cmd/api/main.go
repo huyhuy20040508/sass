@@ -423,6 +423,8 @@ func main() {
 	// nhập mã lúc thanh toán chưa nối vào luồng đặt hàng.
 	voucherSvc := service.NewVoucherService(voucherRepo)
 	customerSvc := service.NewCustomerService(userRepo)
+	// Nhóm khách hàng — bảng tra của màn Khách hàng (migration 0061).
+	nhomKhachSvc := service.NewCustomerGroupService(repository.NewCustomerGroupRepository(db))
 	// Tài khoản nội bộ (quản trị & nhân viên) + vai trò — dùng chung userRepo với
 	// khách hàng nhưng lọc ngược vai trò nên hai luồng không thấy dữ liệu của nhau.
 	userSvc := service.NewUserService(userRepo, roleRepo, hanMucSvc)
@@ -470,6 +472,7 @@ func main() {
 		Product:      handler.NewProductHandler(productSvc, promotionSvc),
 		Tep:          handler.NewTepHandler(cfg.App.UploadDir, cfg.App.BaseURL),
 		Customer:     handler.NewCustomerHandler(customerSvc),
+		NhomKhach:    handler.NewCustomerGroupHandler(nhomKhachSvc),
 		Order:        handler.NewOrderHandler(orderSvc),
 		Return:       handler.NewOrderReturnHandler(returnSvc),
 		Notif:        handler.NewNotificationHandler(notifSvc, hub),

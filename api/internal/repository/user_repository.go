@@ -166,6 +166,16 @@ func (r *userRepository) ListCustomers(ctx context.Context, f domain.CustomerFil
 		q = q.Where("gender = ?", f.Gender)
 	}
 
+	// Bỏ tick hết loại khách thì ra bảng RỖNG, không phải "lấy tất": người dùng
+	// vừa nói rõ là không muốn thấy loại nào cả.
+	if f.Types != nil {
+		q = q.Where("customer_type IN ?", f.Types)
+	}
+
+	if f.GroupID > 0 {
+		q = q.Where("customer_group_id = ?", f.GroupID)
+	}
+
 	var total int64
 	if err := q.Count(&total).Error; err != nil {
 		return nil, 0, err
@@ -196,7 +206,9 @@ func (r *userRepository) ListCustomers(ctx context.Context, f domain.CustomerFil
 	q = q.Offset(offset).Limit(pageSize)
 
 	var users []domain.User
-	err := q.Preload("Role").Find(&users).Error
+	// Nạp kèm nhóm khách để bảng in ra TÊN nhóm; thiếu nó thì mỗi dòng lại một
+	// lượt truy vấn nữa chỉ để lấy một chuỗi.
+	err := q.Preload("Role").Preload("CustomerGroup").Find(&users).Error
 	return users, total, err
 }
 
@@ -343,10 +355,21 @@ func (r *userRepository) AggregateCustomerOrders(ctx context.Context, userIDs []
 		UserID      uint
 		TotalOrders int64
 		TotalSpent  float64
+		TotalPaid   float64
 		LastOrderAt *time.Time
 	}
+	// "Đã thanh toán" là tổng tiền của những đơn ĐÃ THU (payment_status = paid);
+	// phần còn lại của tổng mua chính là còn nợ. Không có sổ nợ khách riêng, và
+	// cố ý không đẻ ra: hai nguồn sự thật cho cùng một con số thì sớm muộn cũng
+	// lệch nhau, mà sổ đơn mới là chỗ tiền thật sự đi qua.
+	//
+	// `refunded` không tính vào đã trả: tiền đã hoàn lại cho khách rồi.
 	err := r.db.WithContext(ctx).Table("orders").
-		Select("user_id, COUNT(*) AS total_orders, COALESCE(SUM(total_amount), 0) AS total_spent, MAX(created_at) AS last_order_at").
+		Select(`user_id,
+			COUNT(*) AS total_orders,
+			COALESCE(SUM(total_amount), 0) AS total_spent,
+			COALESCE(SUM(CASE WHEN payment_status = 'paid' THEN total_amount ELSE 0 END), 0) AS total_paid,
+			MAX(created_at) AS last_order_at`).
 		Where("user_id IN ?", userIDs).
 		Where("deleted_at IS NULL").
 		Where("status NOT IN ?", []string{"cancelled", "returned"}).
@@ -357,10 +380,18 @@ func (r *userRepository) AggregateCustomerOrders(ctx context.Context, userIDs []
 	}
 
 	for _, row := range rows {
+		// Kẹp sàn 0: đơn hoàn tiền một phần có thể cho paid > spent trong vài
+		// nghiệp vụ, mà "còn nợ âm" thì không đọc ra nghĩa gì.
+		debt := row.TotalSpent - row.TotalPaid
+		if debt < 0 {
+			debt = 0
+		}
 		out[row.UserID] = domain.CustomerAggregate{
 			UserID:      row.UserID,
 			TotalOrders: row.TotalOrders,
 			TotalSpent:  row.TotalSpent,
+			TotalPaid:   row.TotalPaid,
+			TotalDebt:   debt,
 			LastOrderAt: row.LastOrderAt,
 		}
 	}

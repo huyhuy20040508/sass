@@ -49,14 +49,22 @@ class ChiHienGiaoDienV2Test extends TestCase
         }
     }
 
-    /** Màn CHƯA port thì dồn về màn v2 gần nhất, không mở bản cũ. */
+    /**
+     * Màn CHƯA port thì dồn về màn v2 gần nhất, không mở bản cũ.
+     *
+     * Lấy Khuyến mãi làm ví dụ, KHÔNG lấy Khách hàng như bản cũ: Khách hàng đã
+     * port rồi. Bài này vốn tự hỏng mỗi lần port thêm một màn — port xong màn
+     * đang dùng làm ví dụ là nó đỏ, mà cái đỏ ấy không nói lên điều gì sai. Chọn
+     * màn nào cũng được, miễn nó chưa nằm trong DA_CO_V2; hôm nào port tới
+     * Khuyến mãi thì đổi sang màn khác.
+     */
     public function test_man_chua_port_thi_don_ve_khu_v2(): void
     {
         $this->fakeApi();
 
-        $res = $this->withSession($this->phienQuanTri())->get('/admin/customers');
+        $res = $this->withSession($this->phienQuanTri())->get('/admin/promotions');
 
-        $res->assertRedirect(route('admin.nha-cung-cap.index'));
+        $res->assertRedirect(route('admin.customers.index'));
     }
 
     /**

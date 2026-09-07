@@ -367,10 +367,29 @@ type User struct {
 	FacebookID StringOrNull `json:"-" gorm:"column:facebook_id"`
 	// GoogleID là `sub` trong id_token của Google — định danh ổn định, không đổi kể
 	// cả khi khách đổi email. Rỗng = chưa liên kết. Cũng không trả ra JSON.
-	GoogleID        StringOrNull   `json:"-" gorm:"column:google_id"`
-	Avatar          string         `json:"avatar"`
-	Gender          EnumOrNull     `json:"gender"`
-	DateOfBirth     *time.Time     `json:"date_of_birth"`
+	GoogleID    StringOrNull `json:"-" gorm:"column:google_id"`
+	Avatar      string       `json:"avatar"`
+	Gender      EnumOrNull   `json:"gender"`
+	DateOfBirth *time.Time   `json:"date_of_birth"`
+
+	// ----- Hồ sơ KHÁCH HÀNG (chỉ có nghĩa với dòng mang vai customer) -----
+	//
+	// Khách hàng bên mình không có bảng riêng như `3rd_customers` của v2 mà là
+	// dòng trong `users`, nên phần hồ sơ riêng của khách gắn thẳng vào đây. Tài
+	// khoản nội bộ để trống hết — xem migration 0061.
+	CustomerCode string `json:"customer_code" gorm:"column:customer_code"`
+	// CustomerType: 0 cá nhân, 1 doanh nghiệp. Doanh nghiệp mới dùng tới TaxCode
+	// và Representative*; cá nhân mới dùng CitizenID.
+	CustomerType    uint           `json:"customer_type" gorm:"column:customer_type"`
+	CustomerGroupID *uint          `json:"customer_group_id" gorm:"column:customer_group_id"`
+	CustomerGroup   *CustomerGroup `json:"customer_group,omitempty" gorm:"foreignKey:CustomerGroupID"`
+	TaxCode         StringOrNull   `json:"tax_code" gorm:"column:tax_code"`
+	CitizenID       StringOrNull   `json:"citizen_id" gorm:"column:citizen_id"`
+
+	RepresentativeName  StringOrNull `json:"representative_name" gorm:"column:representative_name"`
+	RepresentativePhone StringOrNull `json:"representative_phone" gorm:"column:representative_phone"`
+	CustomerNote        StringOrNull `json:"customer_note" gorm:"column:customer_note"`
+
 	Status          string         `json:"status"`
 	EmailVerifiedAt *time.Time     `json:"email_verified_at"`
 	PhoneVerifiedAt *time.Time     `json:"phone_verified_at"`

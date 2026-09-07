@@ -127,7 +127,7 @@ Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:quan_ly', 'chi.v2'])->
     // Màn chưa dựng thì KHÔNG mở ra giao diện cũ nữa — dồn hết về Nhà cung cấp,
     // là màn v2 duy nhất chạy được lúc này. Dựng xong màn nào thì bỏ nó ra khỏi
     // danh sách chuyển hướng bên dưới.
-    Route::get('/dashboard', fn () => redirect()->route('admin.nha-cung-cap.index'))->name('dashboard');
+    Route::get('/dashboard', fn () => redirect()->route('admin.customers.index'))->name('dashboard');
 
     // Tài khoản của tôi — hồ sơ + mật khẩu của chính người đang đăng nhập.
     //
@@ -574,10 +574,14 @@ Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:quan_ly', 'chi.v2'])->
         Route::get('/customers/export', [CustomerController::class, 'export'])->name('customers.export');
         Route::get('/customers/import-template', [CustomerController::class, 'importTemplate'])->name('customers.importTemplate');
         Route::get('/customers/{id}/detail', [CustomerController::class, 'detail'])->name('customers.detail');
+        // Tab "Lịch sử giao dịch" trong hộp Chi tiết — trả JSON, không vẽ trang.
+        Route::get('/customers/{id}/orders', [CustomerController::class, 'donHang'])
+            ->whereNumber('id')->name('customers.donHang');
+        // Nhóm khách hàng: ô chọn trong hộp Thêm/Sửa và nút "+" thêm nhanh.
+        Route::post('/customer-groups', [CustomerController::class, 'taoNhom'])->name('customers.taoNhom');
         Route::post('/customers/import', [CustomerController::class, 'import'])->name('customers.import');
         Route::post('/customers/upload-avatar', [CustomerController::class, 'uploadAvatar'])->name('customers.uploadAvatar');
         Route::post('/customers', [CustomerController::class, 'store'])->name('customers.store');
-        Route::post('/customers/login-account', [CustomerController::class, 'loginAccount'])->name('customers.loginAccount');
         Route::post('/customers/bulk-destroy', [CustomerController::class, 'bulkDestroy'])->name('customers.bulkDestroy');
         Route::put('/customers/{id}', [CustomerController::class, 'update'])->name('customers.update');
         Route::put('/customers/{id}/toggle-status', [CustomerController::class, 'toggleStatus'])->name('customers.toggleStatus');
