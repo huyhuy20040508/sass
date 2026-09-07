@@ -29,22 +29,26 @@ table.table-supplier.none_mobile td.action a { padding: 0 2px; }
         /* Chia % — đo thật ở khung 1182px (màn 1536): cột SỐ (tiền tới 13 chữ số,
            SĐT, MST) và 4 nút Hành động không bị cắt; chữ tự do (tên, email, địa
            chỉ) chịu cắt "…" vì đã có title. Màn 1366 chỉ tiền tỷ mới bị cắt.
-           ☐ 2.5 · STT 3.5 · Mã 8 · Tên 11 · MST 7 · SĐT 7 · Email 8 · Địa chỉ 8 · Địa chỉ 2 4.5
-           · Trạng thái 4.5 · Tổng mua 9.5 · Tổng TT 9.5 · Còn nợ 7.5 · Hành động 9.5 = 100 */
-        table.table-supplier.none_mobile th:first-child { width: 2.5%; }
-        table.table-supplier.none_mobile th:nth-child(2) { width: 3.5%; }
-        table.table-supplier.none_mobile th.show_code { width: 8%; }
-        table.table-supplier.none_mobile th.show_name { width: 11%; }
-        table.table-supplier.none_mobile th.show_tax_code { width: 7%; }
-        table.table-supplier.none_mobile th.show_phone { width: 7%; }
-        table.table-supplier.none_mobile th.show_email { width: 8%; }
-        table.table-supplier.none_mobile th.show_address { width: 8%; }
-        table.table-supplier.none_mobile th.show_address_2 { width: 4.5%; }
-        table.table-supplier.none_mobile th.show_status { width: 4.5%; }
-        table.table-supplier.none_mobile th.show_total_purchases { width: 9.5%; }
-        table.table-supplier.none_mobile th.show_total_payment { width: 9.5%; }
-        table.table-supplier.none_mobile th.show_still_in_debt { width: 7.5%; }
-        table.table-supplier.none_mobile th:last-child { width: 9.5%; }
+           "Trạng thái" phải nằm gọn MỘT DÒNG: nhãn cần ~78px, mà 4.5% chỉ ra 54px nên
+           nó gãy làm hai và đội cả hàng tiêu đề cao lên. Phần bù lấy từ Email và Địa
+           chỉ — hai cột chữ tự do, vốn đã cắt "…" và có title, hụt vài chục pixel
+           không mất thông tin nào.
+           ☐ 2.5 · STT 3.5 · Mã 8 · Tên 11 · MST 7 · SĐT 7 · Email 6.5 · Địa chỉ 7 · Địa chỉ 2 4.5
+           · Trạng thái 7 · Tổng mua 9.5 · Tổng TT 9.5 · Còn nợ 7.5 · Hành động 9.5 = 100 */
+        table.table-supplier.none_mobile th:first-child { width: 2.78%; }
+        table.table-supplier.none_mobile th:nth-child(2) { width: 3.28%; }
+        table.table-supplier.none_mobile th.show_code { width: 10.7%; }
+        table.table-supplier.none_mobile th.show_name { width: 11.29%; }
+        table.table-supplier.none_mobile th.show_tax_code { width: 7.24%; }
+        table.table-supplier.none_mobile th.show_phone { width: 8.34%; }
+        table.table-supplier.none_mobile th.show_email { width: 4.58%; }
+        table.table-supplier.none_mobile th.show_address { width: 5.42%; }
+        table.table-supplier.none_mobile th.show_address_2 { width: 6.07%; }
+        table.table-supplier.none_mobile th.show_status { width: 6.65%; }
+        table.table-supplier.none_mobile th.show_total_purchases { width: 9.84%; }
+        table.table-supplier.none_mobile th.show_total_payment { width: 10.19%; }
+        table.table-supplier.none_mobile th.show_still_in_debt { width: 5.86%; }
+        table.table-supplier.none_mobile th:last-child { width: 7.76%; }
 
         /* Hai bảng trong hộp chi tiết: chia cột theo %, vừa khít hộp, không cuộn ngang;
            ô dài cắt "…" (ghi chú có title). Tiêu đề màu #c4c9d7 theo ý chủ tiệm. */

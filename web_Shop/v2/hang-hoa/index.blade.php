@@ -384,22 +384,22 @@
         #sortableTable { width: 100%; table-layout: fixed; }
         #sortableTable th { white-space: normal; line-height: 1.3; }
         #sortableTable td { overflow: hidden; text-overflow: ellipsis; }
-        #sortableTable th, #sortableTable td { padding: 8px 6px; }
+        #sortableTable th, #sortableTable td { padding: 8px 4px; }
         /* Đo thật ở khung 1182px: 5 nút Hành động (lên, xuống, sửa, chép, xoá) và cột
            Chi nhánh không bị cắt kể cả màn 1366; tên hàng chịu cắt "…" (có title).
            ☐ 3 · STT 4 · Mã 8 · Tên 22.5 · Nhóm 11.5 · VAT 5 · ĐVT 5.5 · Giá bán 8 · Chi nhánh 13.5
            · Trạng thái 6 · Hành động 13 = 100 */
-        #sortableTable th:first-child { width: 3%; }
-        #sortableTable th:nth-child(2) { width: 4%; }
-        #sortableTable th.show_code { width: 8%; }
-        #sortableTable th.show_name { width: 22.5%; }
-        #sortableTable th.show_group { width: 11.5%; }
-        #sortableTable th.show_vat { width: 5%; }
-        #sortableTable th.show_unit { width: 5.5%; }
-        #sortableTable th.show_sale_price { width: 8%; }
-        #sortableTable th.show_branch { width: 13.5%; }
-        #sortableTable th.show_status { width: 6%; }
-        #sortableTable th:last-child { width: 13%; }
+        #sortableTable th:first-child { width: 2.58%; }
+        #sortableTable th:nth-child(2) { width: 3.53%; }
+        #sortableTable th.show_code { width: 9.23%; }
+        #sortableTable th.show_name { width: 20.33%; }
+        #sortableTable th.show_group { width: 14.68%; }
+        #sortableTable th.show_vat { width: 3.53%; }
+        #sortableTable th.show_unit { width: 5.21%; }
+        #sortableTable th.show_sale_price { width: 9.11%; }
+        #sortableTable th.show_branch { width: 12.67%; }
+        #sortableTable th.show_status { width: 7.33%; }
+        #sortableTable th:last-child { width: 11.82%; }
         /* Hàng nút trên bảng: mọi nút cùng một khối — cao 32px, bo 6px, chữ
            14px — theo đúng luật `.bt` của v2. Nút "Nâng cao" là dropdown nên
            Bootstrap tự nhét padding riêng, phải kéo về cho bằng ba nút kia. */

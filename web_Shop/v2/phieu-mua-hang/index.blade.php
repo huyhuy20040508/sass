@@ -205,26 +205,26 @@
         table.table-purchase.none_mobile th { white-space: normal; line-height: 1.3; }
         table.table-purchase.none_mobile td { overflow: hidden; text-overflow: ellipsis; }
         /* Đệm ngang 4px thay vì 8px của v2: 14 cột × 8px là thêm gần một cột tiền. */
-table.table-purchase.none_mobile th, table.table-purchase.none_mobile td { padding: 8px 4px; }
+table.table-purchase.none_mobile th, table.table-purchase.none_mobile td { padding: 8px 2px; }
         /* Chia % — đo thật ở khung 1182px (màn 1536): mã phiếu (16 ký tự), ngày,
            tiền, ba cột trạng thái và nút Hành động không bị cắt; tên NCC, người
            tạo, ghi chú chịu cắt "…" (có title).
            ☐ 2.5 · STT 3.5 · Mã 13.5 · NCC 6.5 · Ngày CT 8.5 · Tiền hàng 9 · Tổng tiền 9 · Còn nợ 8.5
            · TT đơn 7 · TT kho 8 · TT thanh toán 8.5 · Người tạo 4.5 · Ghi chú 5 · Hành động 6 = 100 */
-        table.table-purchase.none_mobile th:first-child { width: 2.5%; }
-        table.table-purchase.none_mobile th:nth-child(2) { width: 3.5%; }
-        table.table-purchase.none_mobile th.col-code { width: 13.5%; }
-        table.table-purchase.none_mobile th.col-supplier { width: 6.5%; }
-        table.table-purchase.none_mobile th.col-docdate { width: 8.5%; }
-        table.table-purchase.none_mobile th.col-items { width: 9%; }
-        table.table-purchase.none_mobile th.col-total { width: 9%; }
-        table.table-purchase.none_mobile th.col-debt { width: 8.5%; }
-        table.table-purchase.none_mobile th.col-status { width: 7%; }
-        table.table-purchase.none_mobile th.col-warehouse { width: 8%; }
-        table.table-purchase.none_mobile th.col-pay { width: 8.5%; }
-        table.table-purchase.none_mobile th.col-creator { width: 4.5%; }
-        table.table-purchase.none_mobile th.col-note { width: 5%; }
-        table.table-purchase.none_mobile th:last-child { width: 6%; }
+        table.table-purchase.none_mobile th:first-child { width: 2.51%; }
+        table.table-purchase.none_mobile th:nth-child(2) { width: 3.02%; }
+        table.table-purchase.none_mobile th.col-code { width: 8.04%; }
+        table.table-purchase.none_mobile th.col-supplier { width: 8.58%; }
+        table.table-purchase.none_mobile th.col-docdate { width: 9.0%; }
+        table.table-purchase.none_mobile th.col-items { width: 9.19%; }
+        table.table-purchase.none_mobile th.col-total { width: 6.23%; }
+        table.table-purchase.none_mobile th.col-debt { width: 4.98%; }
+        table.table-purchase.none_mobile th.col-status { width: 8.83%; }
+        table.table-purchase.none_mobile th.col-warehouse { width: 8.75%; }
+        table.table-purchase.none_mobile th.col-pay { width: 12.62%; }
+        table.table-purchase.none_mobile th.col-creator { width: 6.32%; }
+        table.table-purchase.none_mobile th.col-note { width: 5.04%; }
+        table.table-purchase.none_mobile th:last-child { width: 6.89%; }
 
         /* ---- Canh lưới hàng ----
            style.css của v2 ép `th, td { text-align: center !important }` cho MỌI
