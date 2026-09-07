@@ -59,6 +59,54 @@ class ReportController extends Controller
     /** Số dòng của bảng xếp hạng (sản phẩm, khách hàng). */
     public const LIMITS = [10, 20, 50, 100];
 
+    /**
+     * Chín tab của module Thống kê — đúng `$reportTypes` của v2, kể cả tab mình
+     * chưa dựng. Giá trị là khoá ngôn ngữ, y như bản gốc.
+     */
+    public const TAB_THONG_KE = [
+        'total' => 'report_summary',
+        'sales' => 'revenue_report',
+        'products' => 'report_products',
+        'table' => 'revenue_by_table',
+        'expense' => 'expense_report',
+        'employee' => 'report_employee',
+        'customer' => 'report_customer',
+        'commission' => 'commission_report',
+        'commissionEmployee' => 'commission-employee-report',
+    ];
+
+    /**
+     * Sáu nút xem nhanh của khối Thời gian trên trang Thống kê, đúng bản v2.
+     *
+     * Khác `QUICK_CODES` của ba trang báo cáo cũ (7/30/90/365 ngày): bên này là
+     * tuần và tháng, nên tự tính chứ không đi qua Period.
+     */
+    public const KY_NHANH = [
+        'today' => 'Hôm nay',
+        'yesterday' => 'Hôm qua',
+        'thisWeek' => 'Tuần này',
+        'lastWeek' => 'Tuần trước',
+        'thisMonth' => 'Tháng này',
+        'lastMonth' => 'Tháng trước',
+    ];
+
+    /** Mười cột của bảng Thống kê → Khách hàng, đúng thứ tự bản v2. */
+    public const COT_KHACH = [
+        'code' => 'Mã khách hàng',
+        'name' => 'Tên khách hàng',
+        'name_group' => 'Nhóm khách hàng',
+        'rank' => 'Hạng',
+        'total_expense' => 'Tổng chi tiêu',
+        'price_avg' => 'Giá trị trung bình',
+        'accumulated_points' => 'Điểm tích luỹ',
+        'payment' => 'Đã thanh toán',
+        'debt' => 'Còn nợ',
+        'total_order' => 'Tổng số đơn',
+    ];
+
+    /** Cột bấm được để sắp xếp — chỉ những cột có SỐ để so. */
+    public const SAP_XEP_KHACH = ['total_expense', 'price_avg', 'payment', 'total_order'];
+
     /** Thứ trong tuần — API trả key "1".."7" với 1 = Thứ Hai. */
     public const WEEKDAYS = [
         1 => 'Thứ Hai', 2 => 'Thứ Ba', 3 => 'Thứ Tư', 4 => 'Thứ Năm',
@@ -121,17 +169,219 @@ class ReportController extends Controller
         ]));
     }
 
+    /**
+     * Thống kê → Khách hàng, dựng theo tab `customer` của báo cáo v2
+     * (report/end-day/customer): bảng 10 cột gộp theo từng khách trong kỳ.
+     *
+     * API trả `top` — bảng xếp hạng chi tiêu đã cắt sẵn theo `limit`; ở đây chỉ
+     * đổi tên cột sang đúng khuôn v2, sắp lại theo cột người dùng bấm và cộng
+     * dòng tổng.
+     */
     public function customers(Request $request)
     {
-        $filters = $this->filters($request);
+        $filters = $this->locKhach($request);
 
-        return $this->render('reports.customers', 'customers', $filters, fn () => $this->api->reportCustomers([
-            'from' => $filters['from_date'],
-            'to' => $filters['to_date'],
-            'shop_id' => $filters['shop_id'],
-            'group_by' => $filters['group_by'],
-            'limit' => $filters['limit'],
-        ]));
+        $bao = [];
+        $error = null;
+
+        try {
+            $res = $this->api->reportCustomers([
+                'from' => $filters['from_date'],
+                'to' => $filters['to_date'],
+                'shop_id' => $filters['shop_id'],
+                'group_by' => $filters['group_by'],
+                'limit' => $filters['limit'],
+            ]);
+            if ($res->successful()) {
+                $bao = $res->json('data') ?? [];
+            } else {
+                Log::warning('Load report failed', ['page' => 'customers', 'status' => $res->status()]);
+                $error = $res->json('message') ?: 'Không tải được số liệu báo cáo.';
+            }
+        } catch (\Throwable $e) {
+            Log::error('Load report failed', ['page' => 'customers', 'msg' => $e->getMessage()]);
+            $error = 'Không tải được số liệu báo cáo. Kiểm tra kết nối API.';
+        }
+
+        $rows = $this->dongKhach($bao['top'] ?? [], $filters);
+
+        if ($request->query('xuat') === 'excel') {
+            return $this->xuatKhach($rows, $filters);
+        }
+
+        // Cột đang tắt nằm ở ?hide=, giữ được sau khi đổi bộ lọc.
+        $cotTat = array_filter(explode(',', (string) $request->query('hide', '')));
+        $columns = [];
+        foreach (array_keys(self::COT_KHACH) as $c) {
+            $columns['show_'.$c] = in_array($c, $cotTat, true) ? 0 : 1;
+        }
+
+        $view = view('v2::thong-ke.khach-hang', [
+            'page' => 'customers',
+            'filters' => $filters,
+            'rows' => $rows,
+            'tong' => $this->tongKhach($rows),
+            'columns' => $columns,
+            'chiNhanh' => $this->chiNhanhChoLoc(),
+        ]);
+
+        return $error ? $view->with('error', $error) : $view;
+    }
+
+    /**
+     * Bộ lọc của riêng trang Thống kê → Khách hàng.
+     *
+     * Không dùng chung `filters()` với ba trang báo cáo cũ vì khối Thời gian ở
+     * đây là sáu mốc tuần/tháng của v2, không phải 7/30/90/365 ngày.
+     */
+    protected function locKhach(Request $request): array
+    {
+        $doc = function (?string $v): ?Carbon {
+            $v = trim((string) $v);
+            try {
+                return $v === '' ? null : Carbon::createFromFormat('Y-m-d', $v)->startOfDay();
+            } catch (\Throwable $e) {
+                return null;
+            }
+        };
+
+        $from = $doc($request->query('from_date'));
+        $to = $doc($request->query('to_date'));
+
+        // Khai đủ hai đầu thì khoảng tự chọn thắng; không thì rơi về mốc nhanh.
+        $quick = null;
+        if ($from === null || $to === null) {
+            $ma = (string) $request->query('range', 'today');
+            if (! isset(self::KY_NHANH[$ma])) {
+                $ma = 'today';
+            }
+            [$from, $to] = $this->khoangKyNhanh($ma);
+            $quick = $ma;
+        }
+        if ($from->gt($to)) {
+            [$from, $to] = [$to, $from];
+        }
+
+        $shop = $request->query('shop_id');
+        $limit = (int) $request->query('limit', 20);
+
+        return [
+            'from_date' => $from->format('Y-m-d'),
+            'to_date' => $to->format('Y-m-d'),
+            // Ép về int: Carbon 3 trả float, để nguyên thì so sánh chặt ở view trượt.
+            'days' => (int) $from->diffInDays($to) + 1,
+            'quick' => $quick,
+            'shop_id' => $shop === null || $shop === '' ? '' : (string) (int) $shop,
+            'limit' => in_array($limit, self::LIMITS, true) ? $limit : 20,
+            'group_by' => 'day',
+            'keyword' => trim((string) $request->query('keyword', '')),
+            'sort_field' => in_array($request->query('sort_field'), self::SAP_XEP_KHACH, true)
+                ? (string) $request->query('sort_field')
+                : '',
+            'sort_type' => $request->query('sort_type') === 'asc' ? 'asc' : 'desc',
+        ];
+    }
+
+    /** Sáu mốc nhanh của v2 quy về khoảng ngày cụ thể. */
+    protected function khoangKyNhanh(string $ma): array
+    {
+        $homNay = Carbon::today();
+
+        return match ($ma) {
+            'yesterday' => [$homNay->copy()->subDay(), $homNay->copy()->subDay()],
+            'thisWeek' => [$homNay->copy()->startOfWeek(), $homNay->copy()->endOfWeek()],
+            'lastWeek' => [
+                $homNay->copy()->subWeek()->startOfWeek(),
+                $homNay->copy()->subWeek()->endOfWeek(),
+            ],
+            'thisMonth' => [$homNay->copy()->startOfMonth(), $homNay->copy()->endOfMonth()],
+            'lastMonth' => [
+                $homNay->copy()->subMonthNoOverflow()->startOfMonth(),
+                $homNay->copy()->subMonthNoOverflow()->endOfMonth(),
+            ],
+            default => [$homNay->copy(), $homNay->copy()],
+        };
+    }
+
+    /**
+     * Đổi `top` của API sang đúng 10 cột của bảng v2.
+     *
+     * Bốn cột chưa có sổ để lấy số (nhóm, hạng, điểm) thì để trống — không suy ra
+     * từ cột khác. Riêng "đã thanh toán / còn nợ": bên mình CHƯA có sổ nợ khách,
+     * mọi đơn vào doanh thu đều là đơn đã thu, nên đã trả = tổng chi tiêu và còn
+     * nợ = 0. Có sổ nợ khách rồi thì sửa lại hai dòng này.
+     */
+    protected function dongKhach(array $top, array $filters): array
+    {
+        $rows = [];
+        foreach ($top as $r) {
+            $ten = (string) ($r['name'] ?? '');
+            if ($filters['keyword'] !== '' && mb_stripos($ten, $filters['keyword']) === false) {
+                continue;
+            }
+
+            $chiTieu = (float) ($r['revenue'] ?? 0);
+            $rows[] = [
+                'code' => 'KH'.str_pad((string) ($r['user_id'] ?? 0), 6, '0', STR_PAD_LEFT),
+                'name' => $ten !== '' ? $ten : __('message.retail_customer'),
+                'name_group' => '',
+                'rank' => '',
+                'total_expense' => $chiTieu,
+                'price_avg' => (float) ($r['aov'] ?? 0),
+                'accumulated_points' => 0,
+                'payment' => $chiTieu,
+                'debt' => 0,
+                'total_order' => (int) ($r['orders'] ?? 0),
+            ];
+        }
+
+        if ($filters['sort_field'] !== '') {
+            $huong = $filters['sort_type'] === 'asc' ? 1 : -1;
+            $cot = $filters['sort_field'];
+            usort($rows, fn ($a, $b) => $huong * ($a[$cot] <=> $b[$cot]));
+        }
+
+        return $rows;
+    }
+
+    /** Dòng tổng cuối bảng — cộng đúng phần đang bày. */
+    protected function tongKhach(array $rows): array
+    {
+        $tong = array_fill_keys(
+            ['total_expense', 'price_avg', 'accumulated_points', 'payment', 'debt', 'total_order'],
+            0
+        );
+
+        foreach ($rows as $r) {
+            foreach (array_keys($tong) as $k) {
+                $tong[$k] += $r[$k];
+            }
+        }
+
+        // Giá trị trung bình KHÔNG cộng dồn được: tổng chi tiêu chia tổng số đơn
+        // mới ra con số đúng của cả kỳ.
+        $tong['price_avg'] = $tong['total_order'] > 0 ? $tong['total_expense'] / $tong['total_order'] : 0;
+
+        return $tong;
+    }
+
+    /** Xuất đúng phần đang lọc, 10 cột như bảng. */
+    protected function xuatKhach(array $rows, array $filters)
+    {
+        $ten = 'thong-ke-khach-hang-'.$filters['from_date'].'-den-'.$filters['to_date'].'.csv';
+
+        return response()->streamDownload(function () use ($rows) {
+            $out = fopen('php://output', 'w');
+            fwrite($out, "\xEF\xBB\xBF");
+            fputcsv($out, array_merge(['STT'], array_values(self::COT_KHACH)));
+            foreach ($rows as $i => $r) {
+                fputcsv($out, array_merge([$i + 1], array_map(
+                    fn ($k) => $r[$k],
+                    array_keys(self::COT_KHACH)
+                )));
+            }
+            fclose($out);
+        }, $ten, ['Content-Type' => 'text/csv; charset=UTF-8']);
     }
 
     // ---------- Phần dùng chung ----------

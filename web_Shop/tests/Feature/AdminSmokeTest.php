@@ -57,7 +57,7 @@ class AdminSmokeTest extends TestCase
         'admin.' => '/admin/dashboard',
         // Trang chủ đang đỗ trong đợt chuyển sang khu v2: chưa dựng lại thì dồn
         // về màn v2 đầu tiên thay vì mở bản cũ.
-        'admin.dashboard' => '/admin/suppliers',
+        'admin.dashboard' => '/admin/customers',
         'admin.reports.index' => '/admin/reports/revenue',
         'admin.settings.index' => '/admin/settings/general',
         // Thông số chung là một cụm tab; đường trần nhảy vào tab đầu.
@@ -458,6 +458,7 @@ class AdminSmokeTest extends TestCase
         // Tham số lấy từ dữ liệu thật của API; thiếu dữ liệu thì bỏ qua route đó.
         $params = [
             'admin.customers.detail' => ['id' => $this->firstValue('/admin/customers', 'id')],
+            'admin.customers.donHang' => ['id' => $this->firstValue('/admin/customers', 'id')],
             'admin.inventory.detail' => ['id' => $this->firstValue('/admin/inventory', 'variant_id')],
             'admin.inventory.history' => ['id' => $this->firstValue('/admin/inventory', 'variant_id')],
             'admin.orders.detail' => ['id' => $this->firstValue('/admin/orders', 'id')],

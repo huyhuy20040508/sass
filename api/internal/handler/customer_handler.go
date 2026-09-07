@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -52,8 +53,12 @@ func (h *CustomerHandler) List(c *gin.Context) {
 		Status:   c.Query("status"),
 		Gender:   c.Query("gender"),
 		Sort:     c.Query("sort"),
+		Types:    loaiKhachLoc(c),
 		Page:     page,
 		PageSize: pageSize,
+	}
+	if id, err := strconv.ParseUint(c.Query("group_id"), 10, 64); err == nil && id > 0 {
+		filter.GroupID = uint(id)
 	}
 
 	items, total, err := h.svc.List(c.Request.Context(), filter)
@@ -291,4 +296,36 @@ func respondCustomerError(c *gin.Context, err error, fallback string) {
 	default:
 		response.Error(c, http.StatusInternalServerError, fallback)
 	}
+}
+
+// loaiKhachLoc đọc ô lọc "Loại khách hàng" — tick nhiều nên nhận cả hai lối:
+// `types=0,1` (một chuỗi, lối chính) và `type[]=0&type[]=1` (lối của form HTML).
+//
+// KHÔNG gửi gì  -> nil        : không cắt theo loại.
+// Gửi chuỗi rỗng -> lát cắt rỗng: người dùng bỏ tick hết, bảng phải rỗng theo.
+// Hai chuyện đó khác hẳn nhau nên không gộp vào cùng một giá trị.
+func loaiKhachLoc(c *gin.Context) []uint {
+	raw, co := c.GetQuery("types")
+	if !co {
+		ds, coMang := c.GetQueryArray("type[]")
+		if !coMang {
+			return nil
+		}
+		raw = strings.Join(ds, ",")
+	}
+
+	out := []uint{}
+	for _, v := range strings.Split(raw, ",") {
+		v = strings.TrimSpace(v)
+		if v == "" {
+			continue
+		}
+		n, err := strconv.ParseUint(v, 10, 8)
+		if err != nil || n > 1 {
+			continue
+		}
+		out = append(out, uint(n))
+	}
+
+	return out
 }

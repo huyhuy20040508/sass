@@ -582,8 +582,11 @@ type CategoryRequest struct {
 // Tài khoản khách hàng chỉ có 2 trạng thái: active (hoạt động) | inactive (không hoạt động).
 type CustomerRequest struct {
 	FullName string `json:"full_name" binding:"required,max=150"`
-	// Email bắt buộc & duy nhất: vừa là tên đăng nhập storefront, vừa là UNIQUE key ở bảng users.
-	Email       string `json:"email" binding:"required,email,max=191"`
+	// Email KHÔNG bắt buộc từ 07/09/2026: khách hàng bỏ chức năng đăng nhập
+	// storefront nên email chỉ còn là ô liên lạc. Khai thì vẫn phải duy nhất
+	// trong cửa hàng; bỏ trống thì bao nhiêu khách cùng trống cũng được — xem
+	// migration 0062 (cột sinh `email_key`).
+	Email       string `json:"email" binding:"omitempty,email,max=191"`
 	Phone       string `json:"phone" binding:"omitempty,max=20"`
 	Avatar      string `json:"avatar" binding:"omitempty,max=255"`
 	Gender      string `json:"gender" binding:"omitempty,oneof=male female other"`
@@ -608,6 +611,29 @@ type CustomerRequest struct {
 	// Password chỉ dùng khi tạo mới (tài khoản đăng nhập storefront);
 	// bỏ trống thì hệ thống cấp mật khẩu mặc định.
 	Password string `json:"password" binding:"omitempty,min=6,max=72"`
+}
+
+// ---------- Nhóm khách hàng ----------
+
+// CustomerGroupRequest — payload tạo/sửa một nhóm khách hàng.
+type CustomerGroupRequest struct {
+	// Type: 0 nhóm khách cá nhân, 1 nhóm khách doanh nghiệp. Hai danh sách tách
+	// hẳn nhau — xem migration 0063. Lượt SỬA bỏ qua trường này.
+	Type uint   `json:"type" binding:"omitempty,oneof=0 1"`
+	Name string `json:"name" binding:"required,max=150"`
+	Note string `json:"note" binding:"omitempty,max=255"`
+	// Status là con trỏ để phân biệt "không khai" với "khai 0": nút thêm nhanh ở
+	// màn Khách hàng chỉ gửi mỗi tên, và nhóm mới phải mặc định là đang dùng.
+	Status *int `json:"status" binding:"omitempty,oneof=0 1"`
+}
+
+// CustomerGroupResponse — một nhóm khách hàng trả về cho ô chọn và bảng.
+type CustomerGroupResponse struct {
+	ID     uint   `json:"id"`
+	Type   uint   `json:"type" example:"0"`
+	Name   string `json:"name"`
+	Note   string `json:"note"`
+	Status int    `json:"status" example:"1"`
 }
 
 // ---------- Chi nhánh ----------

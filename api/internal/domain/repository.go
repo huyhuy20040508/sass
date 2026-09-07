@@ -61,10 +61,17 @@ type ProductFilter struct {
 
 // CustomerFilter là tham số lọc/sắp xếp/phân trang khi liệt kê khách hàng.
 type CustomerFilter struct {
-	Keyword  string
-	Status   string // all | active | inactive
-	Gender   string // all | male | female | other
-	Sort     string // newest | oldest | name_asc | name_desc | spent_desc
+	Keyword string
+	Status  string // all | active | inactive
+	Gender  string // all | male | female | other
+	Sort    string // newest | oldest | name_asc | name_desc | spent_desc
+	// Types là các LOẠI khách được nhận: 0 cá nhân, 1 doanh nghiệp. nil = không
+	// cắt theo loại. Dùng lát cắt chứ không dùng một giá trị vì màn lọc cho tick
+	// nhiều loại cùng lúc, và bỏ tick hết thì phải ra bảng rỗng chứ không phải
+	// "lấy tất" — hai chuyện đó là lát cắt RỖNG và nil.
+	Types []uint
+	// GroupID = 0 nghĩa là không cắt theo nhóm khách hàng.
+	GroupID  uint
 	Page     int
 	PageSize int
 }
@@ -94,6 +101,11 @@ type CustomerAggregate struct {
 	UserID      uint
 	TotalOrders int64
 	TotalSpent  float64
+	// TotalPaid là phần khách ĐÃ trả, TotalDebt là phần còn nợ — cả hai gộp từ
+	// chính `orders` theo `payment_status`, không có sổ nợ riêng. Hai nguồn sự
+	// thật cho cùng một con số thì sớm muộn cũng lệch nhau.
+	TotalPaid   float64
+	TotalDebt   float64
 	LastOrderAt *time.Time
 }
 

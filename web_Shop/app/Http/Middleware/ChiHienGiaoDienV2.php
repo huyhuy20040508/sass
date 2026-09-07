@@ -35,6 +35,7 @@ class ChiHienGiaoDienV2
         'admin.loai-thu-chi.index',
         'admin.thu-chi.index',
         'admin.cong-no.index',
+        'admin.customers.index',
     ];
 
     /**
@@ -58,6 +59,7 @@ class ChiHienGiaoDienV2
         'admin.nhan-su.',        // xuất CSV / ảnh / hàng loạt
         'admin.thu-chi.',        // xuất Excel / nạp phân loại, người nộp cho hộp lập phiếu
         'admin.cong-no.',        // xuất Excel / lịch sử trả nợ / ghi lượt trả
+        'admin.customers.',      // xuất CSV / mẫu nhập / chi tiết / sổ đơn của khách / ảnh
         'admin.goi-dich-vu.',    // cửa hàng hết hạn bị dồn về đây, chặn là kẹt cứng
     ];
 
@@ -84,6 +86,6 @@ class ChiHienGiaoDienV2
             }
         }
 
-        return redirect()->route('admin.nha-cung-cap.index');
+        return redirect()->route('admin.customers.index');
     }
 }

@@ -46,12 +46,14 @@ type Handlers struct {
 	// Tep nhận file tải lên (ảnh mặt hàng) — xem handler.TepHandler.
 	Tep      *handler.TepHandler
 	Customer *handler.CustomerHandler
-	Order    *handler.OrderHandler
-	Return   *handler.OrderReturnHandler
-	Notif    *handler.NotificationHandler
-	Stock    *handler.InventoryHandler
-	Setting  *handler.SettingHandler
-	User     *handler.UserHandler
+	// NhomKhach: bảng tra "Nhóm khách hàng" của màn Khách hàng.
+	NhomKhach *handler.CustomerGroupHandler
+	Order     *handler.OrderHandler
+	Return    *handler.OrderReturnHandler
+	Notif     *handler.NotificationHandler
+	Stock     *handler.InventoryHandler
+	Setting   *handler.SettingHandler
+	User      *handler.UserHandler
 	// ChiNhanh là các ĐIỂM BÁN của chính cửa hàng (bảng `shops`), không phải
 	// khách hàng của nền tảng — xem domain.ChiNhanh. Luôn có mặt: đây là dữ liệu
 	// data plane, không phụ thuộc control plane.
@@ -657,6 +659,13 @@ func New(
 			q.Dat(manage, http.MethodPut, "/customers/:id/status", "khach-hang.sua", h.Customer.UpdateStatus)
 			q.Dat(manage, http.MethodPut, "/customers/:id/password", "khach-hang.sua", h.Customer.SetPassword)
 			q.Dat(manage, http.MethodDelete, "/customers/:id", "khach-hang.xoa", h.Customer.Delete)
+
+			// Nhóm khách hàng — bảng tra, đi chung quyền với khách hàng: ai khai
+			// được khách thì khai được nhóm để xếp khách vào.
+			q.Dat(manage, http.MethodGet, "/customer-groups", "khach-hang.xem", h.NhomKhach.List)
+			q.Dat(manage, http.MethodPost, "/customer-groups", "khach-hang.them", h.NhomKhach.Create)
+			q.Dat(manage, http.MethodPut, "/customer-groups/:id", "khach-hang.sua", h.NhomKhach.Update)
+			q.Dat(manage, http.MethodDelete, "/customer-groups/:id", "khach-hang.xoa", h.NhomKhach.Delete)
 
 			// Đơn hàng — cùng với Bán tại quầy và Ca làm việc, đây là phần CÒN LẠI
 			// ở nhóm `admin`: người trực quầy phải tra lại đơn vừa bán, in lại hoá

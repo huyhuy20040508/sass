@@ -104,16 +104,17 @@
 
     // Section đang mở — bản gốc dò bằng is_menu_active(đường v2); mình dò theo
     // đường của web_Shop.
-    $isStatisticSection = request()->is('admin/dashboard');
+    $isStatisticSection = request()->is('admin/dashboard', 'admin/reports*', 'admin/customers*');
     $isMenuSection = request()->is('admin/products*', 'admin/categories*', 'admin/taxes*', 'admin/units*', 'admin/attributes*');
     $isWarehouseSection = request()->is('admin/suppliers*', 'admin/inventory-adjustments*', 'admin/purchase-orders*', 'admin/supplier-returns*', 'admin/stock-transfers*', 'admin/inventory*');
     $isCashbookSection = request()->is('admin/cashbook*');
     $isHumanSection = request()->is('admin/staff*');
-    $isCrmSection = request()->is('admin/customers*');
+    // CRM chưa có màn nào: Khách hàng nằm ở module THỐNG KÊ, đúng như v2.
+    $isCrmSection = false;
     $isSettingSection = request()->is('admin/settings*', 'admin/branches*');
 
     // Đường vào từng module. Bật cờ ở trên rồi thì thay '#' bằng route thật.
-    $statisticDefaultRoute = '#';
+    $statisticDefaultRoute = route('admin.customers.index');
     $routeUlMenu = route('admin.products.index');
     $routeUlWarehouse = route('admin.nha-cung-cap.index');
     $routeUlCashbook = route('admin.thu-chi.index');
@@ -126,6 +127,17 @@
 
     // Tab trong module NHÂN SỰ.
     $employeePer = true;                // Danh sách nhân sự — ĐÃ CÓ
+
+    // Sáu tab của module THỐNG KÊ, đúng bản v2. Màn nào chưa dựng thì bày ra
+    // nhưng làm mờ — bấm vào rồi bị đá đi chỗ khác thì tưởng bấm nhầm.
+    $tabThongKe = [
+        ['nhan' => 'Tổng quan', 'route' => null],
+        ['nhan' => 'Khách hàng', 'route' => 'admin.customers.index'],
+        ['nhan' => 'Quản lý đơn hàng', 'route' => null],
+        ['nhan' => 'Hoá đơn điện tử', 'route' => null],
+        ['nhan' => 'Báo cáo kết ca', 'route' => null],
+        ['nhan' => 'Báo cáo cuối ngày', 'route' => null],
+    ];
 
 
     // Tab trong module THU CHI — cùng luật: màn nào chưa dựng thì giấu.
@@ -182,7 +194,7 @@
                          Sellio bản chữ sáng — thanh này nền đen, logo chữ tối
                          tải lên sẽ chìm. --}}
                     <div class="logo">
-                        <a href="{{ route('admin.nha-cung-cap.index') }}"><img alt="{{ $tenCuaHang }}"
+                        <a href="{{ route('admin.customers.index') }}"><img alt="{{ $tenCuaHang }}"
                                 src="{{ $logoCuaHang }}"></a>
                     </div>
                 </div>
@@ -296,7 +308,7 @@
                                 <ul class="dropdown-menu-function-method-container">
                                     @if($dashboardPer)
                                         <li class="quick-link-admin">
-                                            <a href="{{ route('admin.nha-cung-cap.index') }}">
+                                            <a href="{{ route('admin.customers.index') }}">
                                                 <img class="dropdown-menu-normal"
                                                     src="{{ asset('v2/images/admin_normal.png') }}" alt="admin_normal" />
                                                 <img class="dropdown-menu-hover" src="{{ asset('v2/images/admin_hover.png') }}"
@@ -577,6 +589,23 @@
                         @endif
                     @endif
 
+                    {{-- 1. THỐNG KÊ — sáu tab, đúng bản v2. Tab của màn chưa dựng
+                         vẫn bày ra nhưng làm mờ và không bấm được. --}}
+                    @if($ulDashboardPer && $isStatisticSection)
+                        @foreach($tabThongKe as $tab)
+                            @if($tab['route'])
+                                <a href="{{ route($tab['route']) }}"
+                                    class="sub-nav-btn {{ request()->routeIs($tab['route']) ? 'active' : '' }}">
+                                    {{ $tab['nhan'] }}
+                                </a>
+                            @else
+                                <a class="sub-nav-btn" href="#" title="Màn này chưa dựng"
+                                    style="opacity: .45; cursor: not-allowed;"
+                                    onclick="return false;">{{ $tab['nhan'] }}</a>
+                            @endif
+                        @endforeach
+                    @endif
+
                     {{-- 8. CÀI ĐẶT --}}
                     @if($ulSettingsPer && $isSettingSection)
                         @if($branchPer)
@@ -596,7 +625,7 @@
                 <nav aria-label="breadcrumb">
                     <ol class="breadcrumb">
                         <li class="breadcrumb-item">
-                            <a href="{{ route('admin.nha-cung-cap.index') }}">
+                            <a href="{{ route('admin.customers.index') }}">
                                 <i class="fa fa-home"></i>
                             </a>
                         </li>

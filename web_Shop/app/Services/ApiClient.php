@@ -856,6 +856,27 @@ class ApiClient
         return $this->delete("/admin/customers/{$id}");
     }
 
+    /**
+     * Nhóm khách hàng — bảng tra cho ô chọn ở hộp Thêm/Sửa khách.
+     *
+     * $loai: 0 nhóm cá nhân · 1 nhóm doanh nghiệp; null = cả hai. Hai danh sách
+     * KHÔNG dùng chung — xem migration 0063.
+     */
+    public function nhomKhachHang(bool $onlyActive = false, ?int $loai = null): Response
+    {
+        $q = $onlyActive ? ['active' => 'true'] : [];
+        if ($loai !== null) {
+            $q['type'] = $loai;
+        }
+
+        return $this->get('/admin/customer-groups', $q);
+    }
+
+    public function taoNhomKhachHang(array $data): Response
+    {
+        return $this->post('/admin/customer-groups', $data);
+    }
+
     // ---------- Orders ----------
 
     /**
