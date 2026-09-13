@@ -383,10 +383,12 @@ func dungHeThongVoi(t *testing.T, banHang, dieuHanh bool) *heThong {
 				service.NewNhomQuyenService(repository.NewQuyenRepository(db), userRepo)),
 			QuyTacMa: handler.NewQuyTacMaHandler(
 				service.NewQuyTacMaService(quyTacMaRepo, chiNhanhRepo)),
-			Thue:         handler.NewThueHandler(service.NewThueService(thueRepo)),
-			DonViTinh:    handler.NewDonViTinhHandler(service.NewDonViTinhService(donViTinhRepo, quyTacMaRepo)),
-			LoaiThuChi:   handler.NewLoaiThuChiHandler(service.NewLoaiThuChiService(loaiThuChiRepo)),
-			ThuChi:       handler.NewThuChiHandler(service.NewThuChiService(repository.NewThuChiRepository(db), quyTacMaRepo)),
+			Thue:       handler.NewThueHandler(service.NewThueService(thueRepo)),
+			DonViTinh:  handler.NewDonViTinhHandler(service.NewDonViTinhService(donViTinhRepo, quyTacMaRepo)),
+			LoaiThuChi: handler.NewLoaiThuChiHandler(service.NewLoaiThuChiService(loaiThuChiRepo)),
+			ThuChi:     handler.NewThuChiHandler(service.NewThuChiService(repository.NewThuChiRepository(db), quyTacMaRepo)),
+			CongNo: handler.NewCongNoHandler(
+				service.NewCongNoService(repository.NewCongNoRepository(db), phieuMuaHangRepo)),
 			ViTri:        handler.NewViTriHandler(service.NewViTriService(viTriRepo, quyTacMaRepo)),
 			NhaCungCap:   handler.NewNhaCungCapHandler(service.NewNhaCungCapService(nhaCungCapRepo, quyTacMaRepo)),
 			PhieuMuaHang: handler.NewPhieuMuaHangHandler(service.NewPhieuMuaHangService(phieuMuaHangRepo, nhaCungCapRepo)),

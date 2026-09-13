@@ -33,6 +33,19 @@
            đặt thẳng trong .modal-body là nội dung tràn ra sát mép hộp. */
         #modalMenuCategory .hang-o { display: flex; flex-wrap: wrap; gap: 16px; }
         #modalMenuCategory .hang-o > div { min-width: 0; }
+        /* Bảng danh sách: chia % CỨNG, tổng đúng 100. Để `table-layout: auto` thì
+           phần trăm chỉ là gợi ý — nội dung dài là bảng tự phình quá khung, tràn
+           ngang và đẩy cột Hành động khỏi màn (đo ở 1366: bảng 1198px trong khung
+           1071px). Bề rộng dưới đây đo thật ở khung 1192px; chữ dài thì cắt "…"
+           (có title). */
+        .list > table { width: 100%; table-layout: fixed; }
+        .list > table td { overflow: hidden; text-overflow: ellipsis; }
+        .list > table th:first-child { width: 4%; }
+        .list > table th:nth-child(2) { width: 5%; }
+        .list > table th:nth-child(3) { width: 22%; }
+        .list > table th:nth-child(4) { width: 46%; }
+        .list > table th:nth-child(5) { width: 11%; }
+        .list > table th:last-child { width: 12%; }
     </style>
 @endpush
 

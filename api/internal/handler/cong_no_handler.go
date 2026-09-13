@@ -24,7 +24,7 @@ func NewCongNoHandler(svc service.CongNoService) *CongNoHandler {
 // List godoc
 //
 //	@Summary		Sổ công nợ
-//	@Description	Khoản nợ nhà cung cấp: phiếu mua ĐÃ DUYỆT và hai bên đã thoả thuận cho nợ (`is_debt`). Chưa có nợ khách hàng vì chưa có bảng đơn bán.
+//	@Description	Khoản nợ nhà cung cấp: phiếu mua ĐÃ DUYỆT còn thiếu tiền, hoặc hai bên đã thoả thuận cho nợ (`is_debt`). Chưa có nợ khách hàng vì chưa có bảng đơn bán.
 //	@Description	`meta` gộp phân trang VỚI bốn con số của bốn nút lọc nhanh (tất cả / gần đến hạn / quá hạn / đến hạn hôm nay) và tổng tiền còn nợ.
 //	@Description	Bốn con số ấy theo mọi bộ lọc đang bật NHƯNG bỏ qua `due` — bốn nút là để so với nhau, đổi theo mốc đang bấm thì không còn so được.
 //	@Description	`days_left` âm là đã quá hạn ngần ấy ngày; null là phiếu không ghi hạn.

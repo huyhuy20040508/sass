@@ -61,14 +61,25 @@ func veTrangThai(t string) string {
 //
 //   - `status = approved`: phiếu lưu tạm chưa vào kho và chưa ai nợ ai. v2 không
 //     lọc trạng thái phiếu nên một phiếu nháp bỏ dở vẫn nằm trong sổ nợ.
-//   - `is_debt = 1`: chỉ khoản HAI BÊN ĐÃ THOẢ THUẬN cho nợ mới phải đi đòi.
-//     Trả thiếu vì mới trả một phần thì còn thiếu thật, nhưng chưa hẹn ngày nào
-//     cả — v2 gộp cả hai nên sổ nợ đầy phiếu không có hạn, và cột "Hạn còn lại"
-//     bên đó in ra ngày 01/01/1970.
+//
+//   - còn nợ THẬT, hoặc hai bên đã thoả thuận cho nợ. Trước đây điều kiện là
+//     `is_debt = 1` — sai ở chỗ cờ ấy CHỈ đặt được qua hộp Thanh toán của màn
+//     Phiếu mua hàng, lượt duyệt phiếu không đặt. Ai duyệt xong rồi đóng luôn,
+//     không mở hộp Thanh toán, thì phiếu đã nhận hàng mà chưa trả đồng nào
+//     không bao giờ vào sổ nợ (PMH202609050001: duyệt, tổng 40tr, trả 0).
+//     Nợ là tiền còn thiếu, không phải một ô tick.
+//
+//     Vế `is_debt = 1` vẫn giữ để khoản ĐÃ thoả thuận không rời sổ ngay khi
+//     trả xong — mặc định bộ lọc trạng thái đang bỏ "Đã trả đủ" nên nó không
+//     hiện, nhưng bấm xem lại thì còn.
+//
+//     `is_debt` KHÔNG đổi nghĩa: nó vẫn chỉ nói hai bên có hẹn hạn hay không,
+//     đúng như chú thích cột ở migration 0048. Phiếu vào sổ mà không có hẹn
+//     thì hai cột Hạn còn / Ngày đáo hạn để TRỐNG, không bịa ra ngày.
 func (r *congNoRepository) nen(ctx context.Context, f domain.CongNoFilter) *gorm.DB {
 	q := r.db.WithContext(ctx).Model(&domain.PurchaseOrder{}).
 		Where("status = ?", domain.PurchaseStatusApproved).
-		Where("is_debt = ?", true)
+		Where("is_debt = ? OR paid_amount < total_amount - 0.005", true)
 
 	if f.ShopID > 0 {
 		q = q.Where("shop_id = ?", f.ShopID)

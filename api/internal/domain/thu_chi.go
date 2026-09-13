@@ -219,6 +219,9 @@ type ThuChiRepository interface {
 	// TonTaiNguoiNopTen xét trên dòng chưa xoá, để khai lại tên đã xoá vẫn được.
 	TonTaiNguoiNopTen(ctx context.Context, name string) (bool, error)
 	CreateNguoiNop(ctx context.Context, n *NguoiNopThuChi) error
+	// DeleteNguoiNop xoá MỀM. Phiếu cũ vẫn in ra đúng tên người nộp: tên đọc từ
+	// bảng bằng truy vấn thô (xem tenTheoID), không qua bộ lọc xoá mềm của GORM.
+	DeleteNguoiNop(ctx context.Context, id uint) error
 }
 
 // Lỗi của cụm thu chi.

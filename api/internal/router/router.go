@@ -564,6 +564,7 @@ func New(
 			q.Dat(manage, http.MethodDelete, "/thu-chi/:id", "thu-chi.xoa", h.ThuChi.Delete)
 			q.Dat(manage, http.MethodGet, "/nguoi-nop-thu-chi", "thu-chi.xem", h.ThuChi.ListNguoiNop)
 			q.Dat(manage, http.MethodPost, "/nguoi-nop-thu-chi", "thu-chi.them", h.ThuChi.CreateNguoiNop)
+			q.Dat(manage, http.MethodDelete, "/nguoi-nop-thu-chi/:id", "thu-chi.xoa", h.ThuChi.DeleteNguoiNop)
 
 			// Công nợ. Quyền riêng `cong-no.xem`: sổ này bày tên và số điện thoại
 			// người đại diện bên bán cùng số tiền còn nợ từng nhà cung cấp — ai

@@ -230,7 +230,15 @@ class CongNoController extends Controller
     public function traNo(Request $request, int $id)
     {
         $du = $request->validate([
-            'amount' => ['required', 'numeric', 'gt:0'],
+            // Số tiền KHÔNG bắt buộc: hộp này còn là chỗ sửa thoả thuận nợ (hạn
+            // trả, người đại diện), mà sửa hạn thì không có đồng nào đổi chủ. Bắt
+            // nhập tiền thì người dùng phải ghi một lượt trả giả rồi ghi tiếp một
+            // lượt âm để bù — sổ thu chi lãnh đủ hai phiếu vô nghĩa
+            // (PC "trả 10.000" + PT "chữa lại lượt trả 10.000").
+            //
+            // API đã lo phần còn lại: chênh lệch bằng 0 thì nó KHÔNG đẻ dòng trả
+            // tiền nào, cũng không sinh phiếu thu chi — xem phieuMuaHangService.Pay.
+            'amount' => ['nullable', 'numeric', 'gte:0'],
             'payment_method' => ['required', 'in:'.implode(',', array_keys(self::PHUONG_THUC))],
             'note' => ['nullable', 'string', 'max:500'],
             // Đường dẫn ảnh, KHÔNG phải tệp: hộp thoại đã đẩy ảnh lên qua đường
@@ -241,12 +249,19 @@ class CongNoController extends Controller
             // chứ không phải mở lại phiếu mua để sửa.
             'contact_name' => ['nullable', 'string', 'max:150'],
             'contact_phone' => ['nullable', 'string', 'max:30'],
+            // Hạn trả cũng SỬA ĐƯỢC ở đây, và bỏ tick được. Trước đó cờ ghi nợ
+            // chỉ bật được ở hộp Thanh toán của màn Phiếu mua hàng, mà hộp ấy
+            // đóng ngay khi phiếu có lượt trả đầu tiên — bật nhầm là hạn nợ đóng
+            // băng vĩnh viễn, không có đường hoàn nguyên nào từ giao diện.
+            'co_han' => ['nullable', 'boolean'],
+            'due_date' => ['nullable', 'date_format:d-m-Y', 'required_if:co_han,1'],
         ], [
-            'amount.required' => 'Nhập số tiền trả.',
             'amount.numeric' => 'Số tiền phải là số.',
-            'amount.gt' => 'Số tiền phải lớn hơn 0.',
+            'amount.gte' => 'Số tiền không được âm.',
             'payment_method.required' => 'Chọn hình thức trả.',
             'payment_method.in' => 'Hình thức trả không hợp lệ.',
+            'due_date.required_if' => 'Chọn hạn trả, hoặc bỏ tick "Hẹn hạn trả".',
+            'due_date.date_format' => 'Hạn trả phải theo dạng ngày-tháng-năm.',
         ]);
 
         try {
@@ -263,7 +278,8 @@ class CongNoController extends Controller
 
             $daTra = (float) ($hienTai->json('data.paid_amount') ?? 0);
             $tong = (float) ($hienTai->json('data.total_amount') ?? 0);
-            $moi = $daTra + (float) $du['amount'];
+            $traThem = (float) ($du['amount'] ?? 0);
+            $moi = $daTra + $traThem;
 
             // Chặn trả quá số nợ ở ĐÂY chứ không chỉ ở trình duyệt: v2 chỉ chặn
             // bằng JS trong ô nhập, nên một lượt gọi thẳng vào đường ghi là sổ
@@ -278,20 +294,27 @@ class CongNoController extends Controller
                 );
             }
 
-            // Giữ nguyên thoả thuận nợ đang có (hạn, người đại diện): lượt này
-            // chỉ ghi tiền. Không gửi lại thì server đọc ra là bỏ trống và xoá
-            // mất hạn nợ — khoản nợ rơi khỏi mọi mốc lọc của chính màn này.
+            // Thoả thuận nợ do NGƯỜI DÙNG quyết ngay trong hộp này: ô tick "Hẹn
+            // hạn trả" bật thì giữ hẹn, bỏ tick thì API dọn cả hạn lẫn người đại
+            // diện. Trả nốt thì không còn gì để hẹn — API từ chối thẳng lượt ghi
+            // nợ trên phiếu đã trả đủ, nên ép về false ở đây.
+            $conNo = $moi < $tong - 0.005;
+            $coHan = $conNo && (bool) ($du['co_han'] ?? false);
             $res = $this->api->traTienPhieuMuaHang($id, $moi, trim((string) ($du['note'] ?? '')), [
                 'payment_method' => $du['payment_method'],
-                'is_debt' => $moi < $tong - 0.005,
-                'debt_due_date' => $this->ngayApi($hienTai->json('data.debt_due_date')),
-                // Gõ mới thì lấy cái vừa gõ, bỏ trống thì giữ nguyên cái đang có —
-                // KHÔNG ghi đè bằng chuỗi rỗng: API dọn sạch hai trường này khi
-                // nhận rỗng, và khoản nợ mất luôn người để gọi khi tới hạn.
-                'debt_contact_name' => trim((string) ($du['contact_name'] ?? ''))
-                    ?: (string) ($hienTai->json('data.debt_contact_name') ?? ''),
-                'debt_contact_phone' => trim((string) ($du['contact_phone'] ?? ''))
-                    ?: (string) ($hienTai->json('data.debt_contact_phone') ?? ''),
+                'is_debt' => $coHan,
+                'debt_due_date' => $coHan ? $this->ngayApi($du['due_date'] ?? '') : '',
+                // Còn hẹn hạn: gõ mới thì lấy cái vừa gõ, bỏ trống thì giữ nguyên
+                // cái đang có — KHÔNG ghi đè bằng chuỗi rỗng, khoản nợ mất luôn
+                // người để gọi khi tới hạn. Bỏ hẹn thì gửi rỗng cho API dọn sạch.
+                'debt_contact_name' => $coHan
+                    ? (trim((string) ($du['contact_name'] ?? ''))
+                        ?: (string) ($hienTai->json('data.debt_contact_name') ?? ''))
+                    : '',
+                'debt_contact_phone' => $coHan
+                    ? (trim((string) ($du['contact_phone'] ?? ''))
+                        ?: (string) ($hienTai->json('data.debt_contact_phone') ?? ''))
+                    : '',
                 // Ảnh uỷ nhiệm chi của LƯỢT NÀY. Bỏ trống thì giữ ảnh cũ chứ
                 // không ghi đè bằng chuỗi rỗng — mỗi lượt trả một chứng từ, xoá
                 // mất chứng từ của lượt trước là mất bằng chứng đã trả.
@@ -308,7 +331,7 @@ class CongNoController extends Controller
             ? $this->traLoiHopThoai(
                 $request,
                 true,
-                'Đã ghi nhận khoản trả.',
+                $traThem > 0 ? 'Đã ghi nhận khoản trả.' : 'Đã lưu thoả thuận nợ.',
                 fn () => redirect()->route('admin.cong-no.index')
             )
             : $this->traLoiHopThoai(
@@ -404,12 +427,12 @@ class CongNoController extends Controller
             return __('message.paid');
         }
 
-        // Không có hạn thì gạch ngang chứ không để trắng: một ô trống trơn đọc ra
-        // là trang hỏng. (API chỉ cho ghi nợ khi ĐÃ khai hạn, nên đây là lưới an
-        // toàn cho dòng cũ sót lại chứ không phải cảnh thường gặp.)
+        // Không có hạn thì ĐỂ TRỐNG. Sổ nợ nhận mọi phiếu đã duyệt còn thiếu tiền,
+        // mà phần lớn trong số đó hai bên chưa hẹn ngày nào cả — đó là cảnh
+        // THƯỜNG GẶP chứ không phải dòng hỏng, nên không đánh dấu gì.
         $ngay = $c['days_left'] ?? null;
         if ($ngay === null) {
-            return '—';
+            return '';
         }
 
         return match (true) {

@@ -2076,6 +2076,11 @@ class ApiClient
         return $this->post('/admin/nguoi-nop-thu-chi', $payload);
     }
 
+    public function xoaNguoiNopThuChi(int $id): Response
+    {
+        return $this->delete("/admin/nguoi-nop-thu-chi/{$id}");
+    }
+
     // ---------- Công nợ (Thu chi → Công nợ) ----------
     //
     // CHỈ ĐỌC. Ghi một lượt trả nợ đi bằng traTienPhieuMuaHang() ở trên: khoản

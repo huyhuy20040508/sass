@@ -22,6 +22,7 @@ type ThuChiService interface {
 
 	ListNguoiNop(ctx context.Context, keyword string) ([]domain.NguoiNopThuChi, error)
 	CreateNguoiNop(ctx context.Context, req *dto.NguoiNopThuChiRequest) (*domain.NguoiNopThuChi, error)
+	DeleteNguoiNop(ctx context.Context, id uint) error
 }
 
 type thuChiService struct {
@@ -274,6 +275,10 @@ func (s *thuChiService) sinhMa(ctx context.Context, loai uint8, shopID uint) (st
 }
 
 // ---------- Người nộp ----------
+
+func (s *thuChiService) DeleteNguoiNop(ctx context.Context, id uint) error {
+	return s.repo.DeleteNguoiNop(ctx, id)
+}
 
 func (s *thuChiService) ListNguoiNop(ctx context.Context, keyword string) ([]domain.NguoiNopThuChi, error) {
 	return s.repo.ListNguoiNop(ctx, keyword)

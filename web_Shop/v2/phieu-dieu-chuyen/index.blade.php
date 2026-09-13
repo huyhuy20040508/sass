@@ -250,6 +250,24 @@
         table.table-transfer th.col-date { width: 9%; }
         table.table-transfer th.col-note { width: 13%; }
         table.table-transfer th.col-act { width: 6%; }
+        /* Bảng danh sách: chia % CỨNG, tổng đúng 100. Để `table-layout: auto` thì
+           phần trăm chỉ là gợi ý — nội dung dài là bảng tự phình quá khung, tràn
+           ngang và đẩy cột Hành động khỏi màn (đo ở 1366: bảng 1198px trong khung
+           1071px). Bề rộng dưới đây đo thật ở khung 1192px; chữ dài thì cắt "…"
+           (có title). */
+        table.table-transfer.none_mobile { width: 100%; table-layout: fixed; }
+        table.table-transfer.none_mobile td { overflow: hidden; text-overflow: ellipsis; }
+        table.table-transfer.none_mobile th.col-check { width: 4.15%; }
+        table.table-transfer.none_mobile th.col-stt { width: 4.83%; }
+        table.table-transfer.none_mobile th.col-code { width: 14.56%; }
+        table.table-transfer.none_mobile th.col-from { width: 7.51%; }
+        table.table-transfer.none_mobile th.col-to { width: 9.19%; }
+        table.table-transfer.none_mobile th.col-status { width: 11.46%; }
+        table.table-transfer.none_mobile th.col-creator { width: 9.69%; }
+        table.table-transfer.none_mobile th.col-receiver { width: 12.88%; }
+        table.table-transfer.none_mobile th.col-date { width: 10.62%; }
+        table.table-transfer.none_mobile th.col-note { width: 6.67%; }
+        table.table-transfer.none_mobile th.col-act { width: 8.44%; }
     </style>
     {{-- Cột đang tắt ở ô "chọn cột". Là CSS nên nạp lại danh sách bằng AJAX vẫn giữ. --}}
     <style id="cotAnCss"></style>

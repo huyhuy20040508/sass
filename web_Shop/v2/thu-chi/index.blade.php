@@ -112,8 +112,10 @@
                thật theo hàng tiêu đề chung của v2 (13px — xem v2::layouts.master)
                và ba nhãn đã rút gọn. Số cũ là 1360, tính theo cỡ chữ 14px và nhãn
                dài, nên ở màn 1536 bảng trượt ngang và cột Hành động rơi ra ngoài.
-               Đừng nâng quá 1060 mà không đo lại: khung của màn này chỉ 1140px. */
-            min-width: 1060px;
+               Sàn 1060 cũ vẫn thừa 9px ở màn 1366 (khung chỉ 1051px). Hạ xuống
+               1040: nhãn nay KHÔNG xuống dòng nữa mà cắt "…" (luật chung ở
+               v2::layouts.master), nên sàn không còn phải gánh việc giữ nhãn. */
+            min-width: 1040px;
             table-layout: fixed;
         }
         table.table-thu-chi.none_mobile th { white-space: nowrap; }
@@ -432,6 +434,7 @@
 
         /* Nút thêm nhanh người nộp đứng sát ô chọn, vuông bằng chiều cao ô. */
         #addIncomeExpense .div-add-payer .bt { width: 34px; padding: 0; }
+        #addIncomeExpense .div-add-payer .bt.disabled { opacity: .5; pointer-events: none; }
         #addIncomeExpense .box-textarea-cus { position: relative; }
         #addIncomeExpense .char-counter { position: absolute; right: 8px; bottom: 4px; font-size: 11px; color: #999; }
         /* Ô chọn tệp của v2 cao 30px, thấp hơn các ô còn lại — kéo cho bằng. */
@@ -952,6 +955,15 @@
                                             <i class="fa fa-plus" aria-hidden="true"></i>
                                         </a>
                                     </div>
+                                    {{-- Danh mục này trước đây CHỈ có đường thêm: gõ nhầm một cái tên
+                                         là nó nằm trong ô chọn mãi mãi. Nút xoá đứng ngay cạnh nút
+                                         thêm, và chỉ mở khi đã chọn một người — xoá là phải biết
+                                         đang xoá ai. --}}
+                                    <div class="div-add-payer d-none">
+                                        <a type="button" class="bt btn_red del-payer" title="{{ __('message.delete') }}">
+                                            <i class="fa fa-trash" aria-hidden="true"></i>
+                                        </a>
+                                    </div>
                                 </div>
                             </div>
                             <div class="mb-3">
@@ -1091,6 +1103,38 @@
         </div>
     </div>
 
+    <div class="modal" id="xoaNguoiNop">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h6 class="modal-title">{{ __('message.delete') }} ?</h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="xoaNguoiNopId">
+                    <div class="modal_center">
+                        <div class="row">
+                            <div class="col">
+                                <label class="form-label">
+                                    Xoá <b class="xoa-nguoi-nop-ten"></b> khỏi danh mục?
+                                </label>
+                                {{-- Nói rõ phiếu cũ không việc gì: người dùng ngại bấm Xoá vì
+                                     sợ mất luôn tên trên những phiếu đã lập. --}}
+                                <div class="text-muted" style="font-size: 13px">
+                                    Phiếu đã lập vẫn giữ nguyên tên này. Xoá xong vẫn khai lại được.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer justify-content-center">
+                    <button type="button" class="bt btn_red" data-bs-dismiss="modal">{{ __('message.close') }}</button>
+                    <button type="button" class="bt btn_green xoa-nguoi-nop">{{ __('message.delete') }}</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     {{-- ===================== Tấm trượt chi tiết cho điện thoại ===================== --}}
     <div class="offcanvas offcanvas-end offcanvas-custom" tabindex="-1" id="offcanvasDetail">
         <div class="offcanvas-header">
@@ -1118,6 +1162,7 @@
         const URL_TC_PHAN_LOAI = @json(route('admin.thu-chi.phanLoai'));
         const URL_TC_NGUOI_NOP = @json(route('admin.thu-chi.nguoiNop'));
         const URL_TC_TAO_NGUOI_NOP = @json(route('admin.thu-chi.taoNguoiNop'));
+        const URL_TC_XOA_NGUOI_NOP = @json(url('admin/cashbook/entries/payers'));
         const URL_TC_DINH_KEM = @json(route('admin.thu-chi.dinhKem'));
 
         const CHU_CHON = @json(__('message.chose'));
@@ -1372,6 +1417,8 @@
             function dat(ds) {
                 ds.forEach(function (n) { $o.append($('<option></option>').val(n.id).text(n.name || '')); });
                 if (chon) $o.val(String(chon));
+                // Thay options KHÔNG bắn `change`, nên nắn nút xoá ngay tại đây.
+                nanNutXoaNguoiNop();
             }
 
             // Hai vai nhân viên: lọc ngay trên danh sách đã có sẵn trong trang.
@@ -1525,6 +1572,53 @@
         });
 
         // ================= Thêm nhanh người nộp =================
+        // Nút xoá theo ô chọn: chưa chọn ai thì mờ đi, bấm không được.
+        function nanNutXoaNguoiNop() {
+            $('.del-payer').toggleClass('disabled', !$('#tc-payer-id').val());
+        }
+        $(document).on('change', '#tc-payer-id', nanNutXoaNguoiNop);
+
+        $(document).on('click', '.del-payer', function () {
+            const $o = $('#tc-payer-id');
+            const id = $o.val();
+            if (!id) return;
+
+            $('#xoaNguoiNopId').val(id);
+            $('.xoa-nguoi-nop-ten').text($o.find('option:selected').text());
+            $('#xoaNguoiNop').modal('show');
+        });
+
+        $(document).on('click', '#xoaNguoiNop .xoa-nguoi-nop', function () {
+            const id = $('#xoaNguoiNopId').val();
+            if (!id) return;
+
+            const $nut = $(this);
+            if ($nut.prop('disabled')) return;
+            $nut.prop('disabled', true);
+
+            // Cùng lý do với lượt thêm: KHÔNG đi V2.luuHop, vì hàm đó nạp lại trang
+            // mà hộp lập phiếu đang mở phía sau — nạp lại là mất sạch thứ vừa gõ.
+            $.ajax({
+                url: URL_TC_XOA_NGUOI_NOP + '/' + id,
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content'),
+                },
+                data: { _method: 'DELETE' },
+            })
+                .done(function (r) {
+                    toastr.success((r && r.message) || 'Đã xoá khỏi danh mục.');
+                    $('#xoaNguoiNop').modal('hide');
+                    napNguoiNop('other', null).always(nanNutXoaNguoiNop);
+                })
+                .fail(function (x) {
+                    const b = x.responseJSON || {};
+                    toastr.error(b.message || 'Xoá không thành công.');
+                })
+                .always(function () { $nut.prop('disabled', false); });
+        });
+
         $(document).on('click', '.add-payer', function () {
             $('#addPayer').find('input, textarea').val('');
             $('#addPayer').modal('show');
@@ -1560,6 +1654,7 @@
                             return $(this).text() === ten;
                         }).prop('selected', true);
                         veChon($('#tc-payer-id'));
+                        nanNutXoaNguoiNop();
                     });
                 })
                 .fail(function (x) {

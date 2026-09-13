@@ -520,6 +520,7 @@ Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:quan_ly', 'chi.v2'])->
         Route::get('/cashbook/entries/export', [ThuChiController::class, 'export'])->name('thu-chi.export');
         Route::get('/cashbook/entries/payers', [ThuChiController::class, 'nguoiNop'])->name('thu-chi.nguoiNop');
         Route::post('/cashbook/entries/payers', [ThuChiController::class, 'taoNguoiNop'])->name('thu-chi.taoNguoiNop');
+        Route::delete('/cashbook/entries/payers/{id}', [ThuChiController::class, 'xoaNguoiNop'])->whereNumber('id')->name('thu-chi.xoaNguoiNop');
         Route::post('/cashbook/entries/attachment', [ThuChiController::class, 'dinhKem'])->name('thu-chi.dinhKem');
         Route::get('/cashbook/entries/categories', [ThuChiController::class, 'phanLoai'])->name('thu-chi.phanLoai');
         Route::post('/cashbook/entries', [ThuChiController::class, 'store'])->name('thu-chi.store');
