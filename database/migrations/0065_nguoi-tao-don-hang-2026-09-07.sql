@@ -1,0 +1,51 @@
+-- =====================================================================
+--  0065_nguoi-tao-don-hang-2026-09-07.sql
+--  Ngày: 07/09/2026
+-- =====================================================================
+--  KHÔNG viết CREATE DATABASE hay USE ở đây: công cụ đã kết nối sẵn đúng
+--  database của môi trường đang chạy (cục bộ / thử / thật đều khác tên).
+--
+--  MySQL không cho DDL nằm trong transaction, nên tệp chạy dở là dở thật.
+--
+--  Tệp này đã chạy ở đâu đó rồi thì TUYỆT ĐỐI không sửa nội dung nữa —
+--  công cụ giữ vân tay và sẽ báo lệch. Cần thêm gì thì viết tệp mới.
+-- =====================================================================
+--
+--  NGƯỜI LẬP ĐƠN
+--
+--  Bảng `orders` tới giờ chỉ biết NGƯỜI MUA (`user_id`), không biết ai
+--  lập ra tờ đơn. Hai chuyện khác hẳn nhau:
+--
+--    - đơn bán tại quầy: người mua thường là khách vãng lai KHÔNG có tài
+--      khoản (`user_id` NULL), còn người lập đơn là nhân viên đứng quầy;
+--    - đơn khách tự đặt trên website: hai bên là một người;
+--    - đơn nhân viên đặt hộ khi khách gọi điện: người mua là khách, người
+--      lập là nhân viên.
+--
+--  Thiếu cột này thì màn Quản lý đơn hàng không trả lời được câu hỏi đầu
+--  tiên của mọi lượt đối soát — "đơn này ai bán" — và cũng không có đường
+--  nào dựng báo cáo doanh số theo nhân viên hay tính hoa hồng. Suy ngược
+--  từ ca làm việc thì chỉ là đoán theo mốc thời gian: `orders` không trỏ
+--  sang `work_shifts`, và hai người cùng đứng một ca là hết phân biệt.
+--
+--  NULL nghĩa là KHÔNG BIẾT, và đó là câu trả lời đúng cho mọi đơn đã có
+--  trước tệp này — đừng gieo bừa một id nào vào chỗ ấy. Màn hình in "—".
+--
+--  KHÔNG khai khoá ngoại sang `users`: xoá một nhân viên nghỉ việc không
+--  được phép kéo theo lỗi trên những đơn họ đã bán, và cũng không được
+--  phép xoá lịch sử ấy đi. Repository tra tên bằng một lượt đọc riêng, tra
+--  không thấy thì để rỗng — cùng cách `chi_nhanh.created_by` vẫn làm.
+--
+--  CHỈ MỤC: có, vì báo cáo "doanh số theo nhân viên" lọc thẳng theo cột
+--  này. Đặt `tenant_id` lên đầu để dùng chung được với bộ lọc tenant mà
+--  mọi câu truy vấn đều mang.
+--
+--  KHÔNG dùng `ADD COLUMN IF NOT EXISTS`: MySQL 8 không có cú pháp ấy
+--  (chỉ MariaDB), xem chú thích ở migration 0002 và 0048. Máy dev chạy
+--  MariaDB còn CI và máy thật chạy MySQL 8, nên viết theo bên chặt hơn.
+--  Tệp này vì thế chạy được đúng một lần.
+-- =====================================================================
+
+ALTER TABLE orders
+  ADD COLUMN created_by BIGINT UNSIGNED NULL AFTER user_id,
+  ADD INDEX idx_orders_nguoi_tao (tenant_id, created_by);

@@ -42,7 +42,7 @@ func (h *OrderHandler) Create(c *gin.Context) {
 		return
 	}
 
-	res, err := h.svc.Create(c.Request.Context(), &req)
+	res, err := h.svc.Create(c.Request.Context(), &req, c.GetUint(middleware.CtxUserID))
 	if err != nil {
 		respondOrderError(c, err, "Lỗi tạo đơn hàng")
 		return
@@ -76,7 +76,8 @@ func (h *OrderHandler) POSCheckout(c *gin.Context) {
 
 	// Vai trò lấy từ access token, KHÔNG từ payload: đây là thứ quyết định người
 	// này được bấm giảm bao nhiêu phần trăm.
-	res, err := h.svc.POSCheckout(c.Request.Context(), &req, c.GetString(middleware.CtxRole))
+	res, err := h.svc.POSCheckout(c.Request.Context(), &req, c.GetString(middleware.CtxRole),
+		c.GetUint(middleware.CtxUserID))
 	if err != nil {
 		respondOrderError(c, err, "Lỗi bán hàng tại quầy")
 		return
@@ -222,10 +223,12 @@ func (h *OrderHandler) List(c *gin.Context) {
 
 	filter := domain.OrderFilter{
 		Keyword:       c.Query("keyword"),
+		Customer:      c.Query("customer"),
 		Status:        c.Query("status"),
 		PaymentStatus: c.Query("payment_status"),
 		PaymentMethod: c.Query("payment_method"),
 		Channel:       c.Query("channel"),
+		CreatedBy:     c.Query("created_by"),
 		ShopID:        chiNhanhLoc(c),
 		FromDate:      c.Query("from_date"),
 		ToDate:        c.Query("to_date"),
@@ -255,6 +258,95 @@ func (h *OrderHandler) List(c *gin.Context) {
 		Total:      total,
 		TotalPages: totalPages,
 	})
+}
+
+// @Summary		Sổ chứng từ bán hàng (màn Quản lý đơn hàng)
+// @Description	Một dòng một chứng từ: đơn bán và phiếu trả hàng nằm chung một danh sách, sắp theo lần đụng tới gần nhất — đúng cách bản v2 dựng màn này.
+// @Description	Khác `/admin/orders` ở chỗ đây trả về DÒNG BẢNG đã quy đổi sẵn (tiền theo phương thức, số còn nợ, tên người lập), không phải thực thể đơn hàng. Hộp chi tiết vẫn đọc `/admin/orders/{id}`.
+// @Description	Phiếu trả (chỉ phiếu đã nhận hàng / đã hoàn tiền) có mặt khi bộ lọc trạng thái để trống hoặc có tick "returned". Lọc phương thức giữ phiếu hoàn bằng cùng nhóm phương thức; lọc "HĐĐT: có" hay trạng thái thanh toán thì phiếu trả bị loại.
+// @Description	`meta.tong` là hàng tổng trên MỌI dòng khớp bộ lọc (không chỉ trang đang xem).
+// @Tags			Admin - Orders
+// @Produce		json
+// @Param			keyword			query		string	false	"Mã đơn / mã phiếu trả"
+// @Param			customer		query		string	false	"Tên hoặc số điện thoại khách"
+// @Param			status			query		string	false	"paid|unpaid|partial|returned|cancelled (trạng thái của sổ), ngăn bởi dấu phẩy"
+// @Param			payment_status	query		string	false	"Trạng thái thanh toán, ngăn bởi dấu phẩy"
+// @Param			payment_method	query		string	false	"Phương thức thanh toán, ngăn bởi dấu phẩy"
+// @Param			channel			query		string	false	"web|pos, ngăn bởi dấu phẩy"
+// @Param			created_by		query		string	false	"Id người lập, ngăn bởi dấu phẩy"
+// @Param			from_date		query		string	false	"Từ ngày (YYYY-MM-DD)"
+// @Param			to_date			query		string	false	"Đến ngày (YYYY-MM-DD)"
+// @Param			sort			query		string	false	"updated|newest|oldest|total_desc|total_asc (mặc định updated: vừa đụng tới)"
+// @Param			page			query		int		false	"Trang (mặc định 1)"
+// @Param			page_size		query		int		false	"Số dòng/trang (mặc định 20, tối đa 100)"
+// @Success		200				{object}	response.Body{data=[]domain.DongSoDon,meta=dto.SoDonMeta}
+// @Failure		401				{object}	response.Body
+// @Failure		500				{object}	response.Body
+// @Security		BearerAuth
+// @Router			/admin/orders/so-don [get]
+func (h *OrderHandler) SoDon(c *gin.Context) {
+	filter, page, pageSize := h.locSoDon(c)
+
+	rows, tong, err := h.svc.SoDon(c.Request.Context(), filter)
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, "Lỗi truy vấn sổ chứng từ bán hàng")
+
+		return
+	}
+
+	totalPages := 1
+	if tong.SoDong > 0 {
+		totalPages = int((tong.SoDong + int64(pageSize) - 1) / int64(pageSize))
+	}
+
+	// KHÔNG dùng response.Paginated: `meta` gộp phân trang với hàng tổng của
+	// sổ. Xem dto.SoDonMeta.
+	c.JSON(http.StatusOK, response.Body{
+		Success: true,
+		Data:    rows,
+		Meta: dto.SoDonMeta{
+			Pagination: response.Pagination{
+				Page:       page,
+				PageSize:   pageSize,
+				Total:      tong.SoDong,
+				TotalPages: totalPages,
+			},
+			Tong: tong,
+		},
+	})
+}
+
+// locSoDon đọc bộ lọc của màn Quản lý đơn hàng từ query.
+//
+// Tách khỏi List() dù hai bên đọc gần hết cùng tên tham số: List phục vụ cả
+// storefront lẫn báo cáo và còn nhận `user_id`, còn màn này thì không — trộn lại
+// là mỗi lần một bên thêm tham số, bên kia cũng nhận theo mà không ai định thế.
+func (h *OrderHandler) locSoDon(c *gin.Context) (domain.OrderFilter, int, int) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 100 {
+		pageSize = 20
+	}
+
+	return domain.OrderFilter{
+		Keyword:       c.Query("keyword"),
+		Customer:      c.Query("customer"),
+		Status:        c.Query("status"),
+		PaymentStatus: c.Query("payment_status"),
+		PaymentMethod: c.Query("payment_method"),
+		Channel:       c.Query("channel"),
+		CreatedBy:     c.Query("created_by"),
+		HoaDonDienTu:  c.Query("etax"),
+		ShopID:        chiNhanhLoc(c),
+		FromDate:      c.Query("from_date"),
+		ToDate:        c.Query("to_date"),
+		Sort:          c.Query("sort"),
+		Page:          page,
+		PageSize:      pageSize,
+	}, page, pageSize
 }
 
 // @Summary		Thống kê đơn hàng
@@ -361,6 +453,44 @@ func (h *OrderHandler) UpdateStatus(c *gin.Context) {
 		return
 	}
 	response.OKMessage(c, "Đã cập nhật trạng thái đơn hàng", res)
+}
+
+// @Summary		Ghi một lượt thu tiền
+// @Description	Ghi một khoản tiền THẬT đã nhận cho đơn chưa thu đủ — đây là đường tạo ra trạng thái "thanh toán một phần" và số công nợ của đơn.
+// @Description	Khác `PUT /payment`: đường kia chỉ gạt cờ "coi như đã thu đủ", đường này ghi số tiền vào sổ. Thu nốt phần còn lại thì đơn tự sang `paid`.
+// @Description	Thu quá phần còn nợ bị từ chối (422) chứ không cắt bớt cho vừa: gõ nhầm một số 0 thì phải thấy lỗi, không phải thấy phiếu ghi một số khác.
+// @Tags			Admin - Orders
+// @Accept			json
+// @Produce		json
+// @Param			id		path		int							true	"ID đơn hàng"
+// @Param			body	body		dto.OrderThuTienRequest		true	"Số tiền và phương thức"
+// @Success		200		{object}	response.Body{data=service.OrderDetail}
+// @Failure		400		{object}	response.Body
+// @Failure		404		{object}	response.Body
+// @Failure		422		{object}	response.Body	"Đơn đã thu đủ, hoặc thu quá phần còn nợ"
+// @Security		BearerAuth
+// @Router			/admin/orders/{id}/payments [post]
+func (h *OrderHandler) GhiLuotThu(c *gin.Context) {
+	id, err := orderID(c)
+	if err != nil {
+		response.Error(c, http.StatusBadRequest, "ID đơn hàng không hợp lệ")
+
+		return
+	}
+
+	var req dto.OrderThuTienRequest
+	if !bindJSON(c, &req) {
+		return
+	}
+
+	res, err := h.svc.GhiLuotThu(c.Request.Context(), id, &req, c.GetUint(middleware.CtxUserID))
+	if err != nil {
+		respondOrderError(c, err, "Lỗi ghi lượt thu tiền")
+
+		return
+	}
+
+	response.OK(c, res)
 }
 
 // @Summary		Cập nhật tình trạng thanh toán

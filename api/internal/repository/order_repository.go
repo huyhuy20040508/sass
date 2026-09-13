@@ -32,6 +32,27 @@ func splitCSV(s string) []string {
 	return out
 }
 
+// locNhieu gắn điều kiện cho một ô lọc nhận nhiều giá trị ngăn bởi dấu phẩy.
+//
+// Rỗng hoặc "all" = không lọc, và đó là điều kiện phải kiểm TRƯỚC khi tách chuỗi:
+// "all" tách ra vẫn là một phần tử hợp lệ, gắn vào câu là lọc đúng những đơn có
+// trạng thái tên là "all" — tức không đơn nào.
+func locNhieu(q *gorm.DB, cot, giaTri string) *gorm.DB {
+	if giaTri == "" || giaTri == "all" {
+		return q
+	}
+
+	list := splitCSV(giaTri)
+	switch len(list) {
+	case 0:
+		return q
+	case 1:
+		return q.Where(cot+" = ?", list[0])
+	default:
+		return q.Where(cot+" IN ?", list)
+	}
+}
+
 // orderStockLedger tổng hợp số lượng đã xuất/nhập kho cho một đơn, đọc từ sổ kho
 // (nguồn sự thật). Giá trị âm = đang giữ hàng của kho, 0 = đơn chưa từng trừ kho.
 func orderStockLedger(tx *gorm.DB, orderID uint) (map[uint]int, error) {
@@ -306,23 +327,19 @@ func (r *orderRepository) List(ctx context.Context, f domain.OrderFilter) ([]dom
 		q = q.Where("(order_code LIKE ? OR recipient_name LIKE ? OR recipient_phone LIKE ? OR recipient_email LIKE ?)",
 			kw, kw, kw, kw)
 	}
-	if f.Status != "" && f.Status != "all" {
-		// Cho phép lọc nhiều trạng thái cùng lúc: "pending,confirmed,shipping".
-		if list := splitCSV(f.Status); len(list) > 1 {
-			q = q.Where("status IN ?", list)
-		} else {
-			q = q.Where("status = ?", f.Status)
-		}
+	if f.Customer != "" {
+		kw := "%" + f.Customer + "%"
+		q = q.Where("(recipient_name LIKE ? OR recipient_phone LIKE ?)", kw, kw)
 	}
-	if f.PaymentStatus != "" && f.PaymentStatus != "all" {
-		q = q.Where("payment_status = ?", f.PaymentStatus)
-	}
-	if f.PaymentMethod != "" && f.PaymentMethod != "all" {
-		q = q.Where("payment_method = ?", f.PaymentMethod)
-	}
-	if f.Channel != "" && f.Channel != "all" {
-		q = q.Where("channel = ?", f.Channel)
-	}
+	// Năm ô lọc dưới đây đều nhận NHIỀU giá trị ngăn bởi dấu phẩy, vì khung lọc
+	// của màn Quản lý đơn hàng bày chúng thành dãy checkbox. Một giá trị thì so
+	// bằng `=`, nhiều thì `IN` — để MySQL vẫn dùng được chỉ mục ở trường hợp
+	// thường gặp nhất.
+	q = locNhieu(q, "status", f.Status)
+	q = locNhieu(q, "payment_status", f.PaymentStatus)
+	q = locNhieu(q, "payment_method", f.PaymentMethod)
+	q = locNhieu(q, "channel", f.Channel)
+	q = locNhieu(q, "created_by", f.CreatedBy)
 	// Cắt theo chi nhánh phát sinh chứng từ. Bỏ qua khi = 0 (xem gộp cả cửa
 	// hàng) — chỉ có ở báo cáo và khi người dùng chủ động chọn "tất cả".
 	if f.ShopID > 0 {
@@ -385,8 +402,36 @@ func (r *orderRepository) FindByID(ctx context.Context, id uint) (*domain.Order,
 	if err := chanChungTuKhacChiNhanh(ctx, r.db, o.ShopID); err != nil {
 		return nil, err
 	}
+	r.ganTenNguoiTao(ctx, &o)
 
 	return &o, nil
+}
+
+// ganTenNguoiTao điền domain.Order.CreatedByName cho một đơn.
+//
+// MỘT lượt đọc bảng `users`, KHÔNG phải JOIN: bộ lọc tenant chèn `tenant_id = ?`
+// không kèm tên bảng, nên câu có JOIN sang `users` (cũng có cột tenant_id) hỏng
+// vì cột nhập nhằng — cùng lý do đã ghi ở chiNhanhRepository.ganTenNguoiTao.
+//
+// Unscoped: nhân viên bán đơn này có thể đã nghỉ và tài khoản bị xoá mềm, nhưng
+// tờ đơn cũ vẫn phải đọc ra tên họ.
+//
+// NUỐT LỖI CÓ CHỦ Ý: thiếu một cái tên thì màn hình in "—", còn để lượt đọc phụ
+// này làm hỏng cả hộp chi tiết thì người dùng không xem được đơn nữa. Cùng cách
+// hoDonCuaDon bên Shop Admin xử lý cổng hoá đơn.
+func (r *orderRepository) ganTenNguoiTao(ctx context.Context, o *domain.Order) {
+	if o.CreatedBy == nil || *o.CreatedBy == 0 {
+		return
+	}
+
+	var row struct {
+		FullName string
+	}
+	if err := r.db.WithContext(ctx).Unscoped().Model(&domain.User{}).
+		Select("full_name").Where("id = ?", *o.CreatedBy).Take(&row).Error; err != nil {
+		return
+	}
+	o.CreatedByName = row.FullName
 }
 
 func (r *orderRepository) FindByCode(ctx context.Context, code string) (*domain.Order, error) {
