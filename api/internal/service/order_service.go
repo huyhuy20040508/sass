@@ -38,10 +38,20 @@ import (
 // sánh tới. Cố ý: nếu một cửa hàng nào đó còn dòng dữ liệu mang trạng thái cũ
 // thì báo cáo doanh thu và luật trả hàng vẫn xử đúng như trước. Bỏ ở đây là bỏ
 // đường SINH RA chúng, không phải bỏ khả năng đọc chúng.
+//
+// Đơn còn mang trạng thái CŨ vẫn phải KHÉP được: POST /admin/orders vẫn sinh đơn
+// `pending`, và dữ liệu cũ có thể còn đơn đang dở. Không cho đi đâu thì đơn ấy
+// giữ tồn kho vĩnh viễn — huỷ / hoàn hàng là đường duy nhất trả hàng về kho. Chỉ
+// mở đường KHÉP, không mở lại các bước giao hàng.
 var orderFlow = map[string][]string{
-	domain.OrderStatusCompleted: {domain.OrderStatusCancelled, domain.OrderStatusReturned},
-	domain.OrderStatusCancelled: {},
-	domain.OrderStatusReturned:  {},
+	domain.OrderStatusPending:    {domain.OrderStatusCancelled},
+	domain.OrderStatusConfirmed:  {domain.OrderStatusCancelled},
+	domain.OrderStatusProcessing: {domain.OrderStatusCancelled},
+	domain.OrderStatusShipping:   {domain.OrderStatusReturned},
+	domain.OrderStatusDelivered:  {domain.OrderStatusReturned},
+	domain.OrderStatusCompleted:  {domain.OrderStatusCancelled, domain.OrderStatusReturned},
+	domain.OrderStatusCancelled:  {},
+	domain.OrderStatusReturned:   {},
 }
 
 // nguoiTao đổi id người lập đơn thành con trỏ để ghi vào orders.created_by.
