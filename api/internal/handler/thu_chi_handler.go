@@ -283,3 +283,28 @@ func (h *ThuChiHandler) CreateNguoiNop(c *gin.Context) {
 	}
 	response.CreatedMessage(c, "Đã thêm người nộp", n)
 }
+
+// DeleteNguoiNop godoc
+//
+//	@Summary		Xoá người nộp / người nhận
+//	@Description	Xoá MỀM. Phiếu cũ vẫn in ra đúng tên người nộp, và tên vừa xoá khai lại được. Danh mục này trước đây chỉ có đường thêm nên một cái tên gõ nhầm nằm lại vĩnh viễn.
+//	@Tags			Admin - Thu chi
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			id	path		int	true	"ID người nộp"
+//	@Success		200	{object}	response.Body
+//	@Failure		404	{object}	response.Body
+//	@Router			/admin/nguoi-nop-thu-chi/{id} [delete]
+func (h *ThuChiHandler) DeleteNguoiNop(c *gin.Context) {
+	id, ok := parseUintParam(c, "id")
+	if !ok {
+		return
+	}
+
+	if err := h.svc.DeleteNguoiNop(c.Request.Context(), id); err != nil {
+		handleServiceError(c, err)
+
+		return
+	}
+	response.OKMessage(c, "Đã xoá người nộp", nil)
+}

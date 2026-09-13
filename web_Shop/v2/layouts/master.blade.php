@@ -195,6 +195,34 @@
             overflow: hidden;
             text-overflow: ellipsis;
         }
+        /* ---------- Hàng tiêu đề ở khổ màn hẹp ----------
+           Bề rộng cột là PHẦN TRĂM, nên xuống 1440 hay 1366 là cùng tỉ lệ ấy ra
+           ít pixel hơn — mà nhãn thì không co. Kết quả: bảng nhiều cột cắt mất
+           đuôi hàng loạt nhãn, nặng nhất là Trả hàng NCC với 12 nhãn ở 1366.
+
+           Chỉnh phần trăm không chữa được: cấp thêm cho cột này là lấy của cột
+           kia, tổng nhu cầu vẫn vượt khung. Thứ co được là CHÍNH CỠ CHỮ của
+           hàng tiêu đề — nhỏ đi một nấc thì mọi nhãn ngắn lại cùng lúc.
+
+           Chỉ động tới `th`: chữ trong bảng giữ nguyên 14px, vì đó là dữ liệu
+           người ta phải đọc, còn hàng tiêu đề chỉ là dải nhãn.
+
+           `!important` ở đây là cố ý, và là chỗ duy nhất trong tệp này dùng nó:
+           màn nào tự khai cỡ chữ tiêu đề riêng (selector của trang bao giờ cũng
+           thắng selector chung) là dựng lại đúng lỗi này ở riêng màn ấy — đã gặp
+           với màn Khách hàng, nó khai 13.5px nên hai mốc dưới đây không với tới.
+           Sàn co chữ theo khổ màn phải là luật CHUNG, không thương lượng. */
+        @media (max-width: 1500px) {
+            .list th,
+            .list th > a,
+            .list th .nhan-cot { font-size: 12px !important; }
+        }
+        @media (max-width: 1400px) {
+            .list th,
+            .list th > a,
+            .list th .nhan-cot { font-size: 11px !important; }
+        }
+
         /* Nhãn cột bấm được: `inline-flex` chứ không `inline-block` — cặp mũi tên
            sắp xếp nằm giữa theo chiều dọc mà KHÔNG kéo dài hộp dòng, nên trang có
            nút sắp xếp cao đúng bằng trang không có. */

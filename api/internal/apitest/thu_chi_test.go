@@ -796,3 +796,166 @@ func TestThuChi_SoTienPhaiDuong(t *testing.T) {
 		}
 	}
 }
+
+// giaoQuyen giao thêm một quyền lẻ cho tài khoản đang có, ngay giữa bài kiểm.
+//
+// Không cần đăng nhập lại: tập quyền đọc lại theo TỪNG lượt gọi, nên token cũ
+// vẫn dùng được — và chính điều đó là thứ đáng kiểm.
+func giaoQuyen(t *testing.T, h *heThong, c *cuaHang, username, quyen string) {
+	t.Helper()
+
+	ctx := tenant.WithID(context.Background(), c.id)
+	if err := h.db.WithContext(ctx).Create(&domain.QuyenRieng{
+		UserID: idTaiKhoan(t, h, c, username), Permission: quyen,
+	}).Error; err != nil {
+		t.Fatalf("không giao được quyền %s: %v", quyen, err)
+	}
+}
+
+// TestThuChi_BonViecTachRieng — bốn việc của sổ thu chi là BỐN quyền rời nhau.
+//
+// Trên máy chủ thật bảng `user_permissions` đang rỗng, nên chưa ai kiểm được
+// bốn quyền này có tách thật hay không — cấp một cái là mở luôn ba cái kia thì
+// người chỉ được giao việc XEM cũng xoá được phiếu, mà không ai phát hiện ra cho
+// tới khi mất sổ.
+//
+// Bài này cấp từng quyền một, và sau mỗi lượt cấp thì đúng một đường mở thêm.
+func TestThuChi_BonViecTachRieng(t *testing.T) {
+	h := dungHeThong(t)
+	a, _ := haiCuaHang(t, h)
+
+	// Người thứ nhất lập sẵn một phiếu để có cái mà đọc.
+	_, p := lapPhieuTC(t, h, a.token, thuTienMat(50000))
+
+	// Quản lý thứ hai: CHỈ có quyền xem.
+	hai := themQuanLyThuHai(t, h, a, "quantri2", []string{"thu-chi.xem"})
+	duongPhieu := fmt.Sprintf("/api/v1/admin/thu-chi/%d", p.ID)
+
+	if res := h.goi(t, hai, http.MethodGet, "/api/v1/admin/thu-chi", nil); res.ma != http.StatusOK {
+		t.Fatalf("có thu-chi.xem thì phải đọc được sổ, nhận %d", res.ma)
+	}
+	if res := h.goi(t, hai, http.MethodPost, "/api/v1/admin/thu-chi", thuTienMat(10000)); res.ma != http.StatusForbidden {
+		t.Fatalf("chỉ có quyền XEM mà lập được phiếu, nhận %d\n%s", res.ma, catBot(res.than))
+	}
+	if res := h.goi(t, hai, http.MethodPut, duongPhieu, thuTienMat(20000)); res.ma != http.StatusForbidden {
+		t.Fatalf("chỉ có quyền XEM mà sửa được phiếu, nhận %d\n%s", res.ma, catBot(res.than))
+	}
+	if res := h.goi(t, hai, http.MethodDelete, duongPhieu, nil); res.ma != http.StatusForbidden {
+		t.Fatalf("chỉ có quyền XEM mà xoá được phiếu, nhận %d\n%s", res.ma, catBot(res.than))
+	}
+
+	// Cấp quyền LẬP: mở đúng đường lập, hai đường còn lại vẫn đóng.
+	giaoQuyen(t, h, a, "quantri2", "thu-chi.them")
+	ma, cua := lapPhieuTC(t, h, hai, thuTienMat(30000))
+	if ma != http.StatusCreated && ma != http.StatusOK {
+		t.Fatalf("có thu-chi.them thì phải lập được phiếu, nhận %d", ma)
+	}
+	duongCua := fmt.Sprintf("/api/v1/admin/thu-chi/%d", cua.ID)
+	if res := h.goi(t, hai, http.MethodPut, duongCua, thuTienMat(31000)); res.ma != http.StatusForbidden {
+		t.Fatalf("chưa có thu-chi.sua mà sửa được phiếu CỦA CHÍNH MÌNH, nhận %d", res.ma)
+	}
+	if res := h.goi(t, hai, http.MethodDelete, duongCua, nil); res.ma != http.StatusForbidden {
+		t.Fatalf("chưa có thu-chi.xoa mà xoá được phiếu CỦA CHÍNH MÌNH, nhận %d", res.ma)
+	}
+
+	// Cấp quyền SỬA: sửa được phiếu của mình, vẫn chưa xoá được.
+	giaoQuyen(t, h, a, "quantri2", "thu-chi.sua")
+	if res := h.goi(t, hai, http.MethodPut, duongCua, thuTienMat(31000)); res.ma != http.StatusOK {
+		t.Fatalf("có thu-chi.sua thì phải sửa được phiếu của mình, nhận %d\n%s", res.ma, catBot(res.than))
+	}
+	if res := h.goi(t, hai, http.MethodDelete, duongCua, nil); res.ma != http.StatusForbidden {
+		t.Fatalf("chưa có thu-chi.xoa mà xoá được, nhận %d", res.ma)
+	}
+
+	// Cấp quyền XOÁ: giờ mới xoá được.
+	giaoQuyen(t, h, a, "quantri2", "thu-chi.xoa")
+	if res := h.goi(t, hai, http.MethodDelete, duongCua, nil); res.ma != http.StatusOK {
+		t.Fatalf("có thu-chi.xoa thì phải xoá được, nhận %d\n%s", res.ma, catBot(res.than))
+	}
+}
+
+// TestThuChi_XoaNguoiNop — danh mục người nộp phải có ĐƯỜNG RA.
+//
+// Trước bản này chỉ có đường thêm: gõ nhầm một cái tên là nó nằm trong ô chọn
+// mãi mãi, không cách nào gỡ trừ vào thẳng database.
+//
+// Ba điều phải đúng cùng lúc:
+//   - xoá xong thì tên rời khỏi danh sách của ô chọn;
+//   - PHIẾU CŨ vẫn in đúng tên người nộp — tên đọc bằng truy vấn thô nên không
+//     dính bộ lọc xoá mềm;
+//   - tên vừa xoá KHAI LẠI ĐƯỢC, vì chốt trùng tên chỉ xét dòng chưa xoá.
+func TestThuChi_XoaNguoiNop(t *testing.T) {
+	h := dungHeThong(t)
+	a, b := haiCuaHang(t, h)
+
+	duong := "/api/v1/admin/nguoi-nop-thu-chi"
+	than := map[string]any{"name": "Chu Tu " + a.vet, "phone": "0900000003"}
+
+	res := h.goi(t, a.token, http.MethodPost, duong, than)
+	if res.ma != http.StatusCreated {
+		t.Fatalf("thêm người nộp phải trả 201, nhận %d\n%s", res.ma, catBot(res.than))
+	}
+	var tao struct {
+		Data struct {
+			ID   uint   `json:"id"`
+			Name string `json:"name"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(res.than), &tao); err != nil {
+		t.Fatalf("không đọc được người nộp vừa thêm: %v", err)
+	}
+
+	// Lập một phiếu ĐỨNG TÊN người này để sau khi xoá còn soi lại.
+	ma, phieu := lapPhieuTC(t, h, a.token, map[string]any{
+		"type": 0, "amount": 70000, "payment_method": "cash",
+		"payer_type": "other", "payer_id": tao.Data.ID,
+	})
+	if ma != http.StatusCreated {
+		t.Fatalf("lập phiếu đứng tên người nộp phải trả 201, nhận %d", ma)
+	}
+	if phieu.PayerName != tao.Data.Name {
+		t.Fatalf("phiếu vừa lập chưa mang đúng tên, nhận %q", phieu.PayerName)
+	}
+
+	// Cửa hàng khác KHÔNG xoá được.
+	if res := h.goi(t, b.token, http.MethodDelete,
+		fmt.Sprintf("%s/%d", duong, tao.Data.ID), nil); res.ma != http.StatusNotFound {
+		t.Fatalf("cửa hàng khác xoá được người nộp của mình, nhận %d", res.ma)
+	}
+
+	if res := h.goi(t, a.token, http.MethodDelete,
+		fmt.Sprintf("%s/%d", duong, tao.Data.ID), nil); res.ma != http.StatusOK {
+		t.Fatalf("xoá người nộp phải trả 200, nhận %d\n%s", res.ma, catBot(res.than))
+	}
+
+	// 1. Rời khỏi ô chọn.
+	res = h.goi(t, a.token, http.MethodGet, duong, nil)
+	if contains(res.than, tao.Data.Name) {
+		t.Fatalf("xoá rồi mà vẫn còn trong danh sách: %s", catBot(res.than))
+	}
+
+	// 2. Phiếu cũ giữ nguyên tên.
+	ds, _ := docThuChi(t, h, a.token, "")
+	var thay bool
+	for _, p := range ds {
+		if p.ID == phieu.ID {
+			thay = true
+			if p.PayerName != tao.Data.Name {
+				t.Fatalf("xoá người nộp làm phiếu cũ mất tên, nhận %q", p.PayerName)
+			}
+		}
+	}
+	if !thay {
+		t.Fatalf("không tìm lại được phiếu vừa lập")
+	}
+
+	// 3. Khai lại đúng tên ấy vẫn được.
+	if res := h.goi(t, a.token, http.MethodPost, duong, than); res.ma != http.StatusCreated {
+		t.Fatalf("khai lại tên đã xoá phải được, nhận %d\n%s", res.ma, catBot(res.than))
+	}
+
+	// Xoá một id không có thì nói thẳng là không có.
+	if res := h.goi(t, a.token, http.MethodDelete, duong+"/999999", nil); res.ma != http.StatusNotFound {
+		t.Fatalf("xoá id không tồn tại phải trả 404, nhận %d", res.ma)
+	}
+}

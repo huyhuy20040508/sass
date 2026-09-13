@@ -165,6 +165,25 @@
         /* Ô khoá (mã, ngày, người lập…) vẫn phải đọc được chữ: style.css của vỏ v2
            tô mọi input và select trong modal màu #999 gần trắng. */
         #content_create .form-control:disabled { color: #212529 !important; background: #f4f6f8; }
+        /* Bảng danh sách: chia % CỨNG, tổng đúng 100. Để `table-layout: auto` thì
+           phần trăm chỉ là gợi ý — nội dung dài là bảng tự phình quá khung, tràn
+           ngang và đẩy cột Hành động khỏi màn (đo ở 1366: bảng 1198px trong khung
+           1071px). Bề rộng dưới đây đo thật ở khung 1192px; chữ dài thì cắt "…"
+           (có title). */
+        table.table-purchase.list.none_mobile { width: 100%; table-layout: fixed; }
+        table.table-purchase.list.none_mobile td { overflow: hidden; text-overflow: ellipsis; }
+        table.table-purchase.list.none_mobile th:first-child { width: 3.2%; }
+        table.table-purchase.list.none_mobile th:nth-child(2) { width: 3.9%; }
+        table.table-purchase.list.none_mobile th:nth-child(3) { width: 12.15%; }
+        table.table-purchase.list.none_mobile th:nth-child(4) { width: 10.2%; }
+        table.table-purchase.list.none_mobile th:nth-child(5) { width: 10.3%; }
+        table.table-purchase.list.none_mobile th:nth-child(6) { width: 10.4%; }
+        table.table-purchase.list.none_mobile th:nth-child(7) { width: 8.2%; }
+        table.table-purchase.list.none_mobile th:nth-child(8) { width: 10.4%; }
+        table.table-purchase.list.none_mobile th:nth-child(9) { width: 8.15%; }
+        table.table-purchase.list.none_mobile th:nth-child(10) { width: 9.3%; }
+        table.table-purchase.list.none_mobile th:nth-child(11) { width: 5.6%; }
+        table.table-purchase.list.none_mobile th:last-child { width: 8.2%; }
     </style>
 @endpush
 
@@ -340,19 +359,19 @@
                                                     {{ $C::LOAI_PHIEU[$loai] ?? $loai }}
                                                 </span>
                                             </td>
-                                            <td class="text-left">{{ $item['created_by_name'] ?? '' }}</td>
+                                            <td class="text-left" title="{{ $item['created_by_name'] ?? '' }}">{{ $item['created_by_name'] ?? '' }}</td>
                                             <td class="text-center">{{ !empty($item['created_at']) ? $ngayVN($item['created_at']) : 'N/A' }}</td>
-                                            <td class="text-left">{{ $tt === 'approved' ? ($item['approver_name'] ?? '') : '' }}</td>
+                                            <td class="text-left" title="{{ $tt === 'approved' ? ($item['approver_name'] ?? '') : '' }}">{{ $tt === 'approved' ? ($item['approver_name'] ?? '') : '' }}</td>
                                             <td class="text-center">
                                                 <b class="{{ $C::CHU_TRANG_THAI[$tt] ?? '' }}">{{ $C::TRANG_THAI[$tt] ?? $tt }}</b>
                                             </td>
-                                            <td class="text-left">{{ $item['reject_reason'] ?? '' }}</td>
+                                            <td class="text-left" title="{{ $item['reject_reason'] ?? '' }}">{{ $item['reject_reason'] ?? '' }}</td>
                                             <td class="text-center">
                                                 @if ($ttKho !== '' && isset($C::TRANG_THAI_KHO[$ttKho]))
                                                     <b class="{{ $C::CHU_TRANG_THAI_KHO[$ttKho] }}">{{ $C::TRANG_THAI_KHO[$ttKho] }}</b>
                                                 @endif
                                             </td>
-                                            <td class="text-left">{{ $item['note'] ?? '' }}</td>
+                                            <td class="text-left" title="{{ $item['note'] ?? '' }}">{{ $item['note'] ?? '' }}</td>
                                             <td class="action not-export">
                                                 @if ($tt === 'draft')
                                                     <a class="dele_bt delete-item" type="button" data-bs-toggle="tooltip" data-bs-placement="top"

@@ -278,8 +278,9 @@ Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:quan_ly', 'chi.v2'])->
     Route::get('/orders/{id}/label', [OrderController::class, 'label'])->name('orders.label');
     Route::put('/orders/{id}/status', [OrderController::class, 'updateStatus'])->name('orders.updateStatus');
     Route::put('/orders/{id}/payment', [OrderController::class, 'updatePayment'])->name('orders.updatePayment');
-    Route::put('/orders/{id}/shipping', [OrderController::class, 'updateShipping'])->name('orders.updateShipping');
-    Route::put('/orders/{id}/note', [OrderController::class, 'updateNote'])->name('orders.updateNote');
+    // Ghi một lượt THU TIỀN thật (thanh toán một phần / trả nợ dần). Khác đường
+    // ngay trên: đó là gạt cờ "coi như đã thu đủ", đây là ghi số tiền vào sổ.
+    Route::post('/orders/{id}/payments', [OrderController::class, 'ghiLuotThu'])->name('orders.ghiLuotThu');
 
     // --- Trả hàng, kho và mua vào: nhân viên (staff) KHÔNG vào ---
     //
@@ -520,6 +521,7 @@ Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:quan_ly', 'chi.v2'])->
         Route::get('/cashbook/entries/export', [ThuChiController::class, 'export'])->name('thu-chi.export');
         Route::get('/cashbook/entries/payers', [ThuChiController::class, 'nguoiNop'])->name('thu-chi.nguoiNop');
         Route::post('/cashbook/entries/payers', [ThuChiController::class, 'taoNguoiNop'])->name('thu-chi.taoNguoiNop');
+        Route::delete('/cashbook/entries/payers/{id}', [ThuChiController::class, 'xoaNguoiNop'])->whereNumber('id')->name('thu-chi.xoaNguoiNop');
         Route::post('/cashbook/entries/attachment', [ThuChiController::class, 'dinhKem'])->name('thu-chi.dinhKem');
         Route::get('/cashbook/entries/categories', [ThuChiController::class, 'phanLoai'])->name('thu-chi.phanLoai');
         Route::post('/cashbook/entries', [ThuChiController::class, 'store'])->name('thu-chi.store');

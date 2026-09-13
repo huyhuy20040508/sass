@@ -505,6 +505,29 @@ class ThuChiTest extends TestCase
             ->assertJsonPath('message', 'Không tìm thấy phiếu.');
     }
 
+    /**
+     * 403 thiếu quyền: toast in câu của API, không in mã máy.
+     *
+     * API trả `errors.ma = THIEU_QUYEN` kèm `message` cho người đọc. cauLoiApi
+     * đọc `errors` trước `message` (đúng cho 422), nên trước đây toast hiện trơ
+     * trọi "THIEU_QUYEN".
+     */
+    public function test_thieu_quyen_bao_cau_cua_api_khong_bao_ma(): void
+    {
+        Http::fake([
+            '*/admin/thu-chi/99' => Http::response([
+                'message' => 'Bạn không được giao việc này',
+                'errors' => ['ma' => 'THIEU_QUYEN'],
+            ], 403),
+            '*' => Http::response(['data' => []]),
+        ]);
+
+        $this->withSession($this->phien())
+            ->deleteJson(route('admin.thu-chi.destroy', 99))
+            ->assertStatus(403)
+            ->assertJsonPath('message', 'Bạn không được giao việc này');
+    }
+
     /** Cột bị tắt qua ?hide= thì cả tiêu đề lẫn ô dữ liệu đều mang class `hide`. */
     public function test_tat_cot_qua_query(): void
     {

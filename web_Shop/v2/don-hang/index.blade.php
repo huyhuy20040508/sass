@@ -4,18 +4,26 @@
      Giữ đúng dáng của v2: khung lọc bên trái, bảng chọn được cột bên phải, hộp
      xem chi tiết hai cột (bảng hàng bên trái, khối thanh toán bên phải).
 
-     Bốn chỗ khác v2, đều vì đây là cửa hàng chứ không phải quán ăn:
-     - Cột "Bàn" và ô lọc "Tại bàn / Mang về" đổi thành "Khách hàng" và "Kênh
-       bán" (đơn giao hàng / bán tại quầy) — shop không có bàn.
+     KHUNG LỌC dựng theo đúng thứ tự bản v2: Chi nhánh · Thời gian · Mã đơn ·
+     Kênh bán · Khách hàng · Phương thức thanh toán · Trạng thái · Thanh toán ·
+     Người tạo. Bốn ô giữa là DÃY CHECKBOX như v2, không phải ô thả xuống.
+
+     Năm chỗ khác v2, đều vì đây là cửa hàng chứ không phải quán ăn:
+     - Cột "Bàn", ô lọc "Bàn" và ô "Sử dụng (Tại bàn / Mang về / Online)" của v2
+       KHÔNG có ở đây: shop không có bàn ăn. Chỗ "Sử dụng" thay bằng "Kênh bán"
+       (đơn giao hàng / bán tại quầy) — cùng vai trò, nói đơn phát sinh ở đâu.
      - Bốn cột tiền theo phương thức của v2 (mặt / CK / thẻ / QR) gom còn ba:
        Tiền mặt (cash, COD) · Chuyển khoản (bank_transfer, SePay) · Thẻ/Ví
-       (VNPay, MoMo, PayOS). Đơn ở đây chỉ mang MỘT phương thức, không tách
-       total_payment_1/2 như v2.
-     - v2 gộp trạng thái đơn và trạng thái tiền vào một cột; bên này tách hai,
-       vì đơn giao hàng còn đi qua sáu bước sau khi đã thu tiền.
-     - Ba lỗi sẵn của v2 không bê sang: lọc "Người tạo" và "Hoá đơn điện tử" gửi
-       sai tên tham số nên không ăn, còn lựa chọn cột ghi nhầm page nên F5 là
-       mất. Bên này cột nằm ở ?hide= và mọi ô lọc đều đúng tên API đọc. --}}
+       (VNPay, MoMo, PayOS). API chia sẵn theo phương thức của TỪNG lượt thu,
+       đúng như v2 chia đơn công nợ theo cab_debt_details.
+     - v2 gộp trạng thái đơn và trạng thái tiền vào MỘT dãy; bên này tách hai
+       dãy, vì đơn giao hàng còn đi qua sáu bước sau khi đã thu tiền.
+     - Bỏ tick sạch một dãy = KHÔNG lọc dãy đó. Bên v2 bỏ tick sạch thì bảng
+       rỗng, mà "rỗng vì bạn vừa bỏ hết tick" là câu màn hình không nói ra được.
+
+     Ba lỗi sẵn của v2 không bê sang: lọc "Người tạo" và "Hoá đơn điện tử" gửi
+     sai tên tham số nên không ăn, còn lựa chọn cột ghi nhầm page nên F5 là mất.
+     Bên này cột nằm ở ?hide= và mọi ô lọc đều đúng tên API đọc. --}}
 @extends('v2::layouts.master')
 
 @section('title', \App\Http\Controllers\OrderController::TITLE)
@@ -38,29 +46,20 @@
     // Cùng nguồn với dropdown ba gạch trên thanh đầu trang.
     $chiNhanh = \App\Services\ChiNhanhDangLam::danhSach();
 
-    // Trạng thái đơn chọn được NHIỀU (API nhận chuỗi ngăn bởi dấu phẩy); ba ô
-    // còn lại chỉ nhận một giá trị nên để ô chọn đơn kèm dòng "Tất cả".
-    // 'all' là "không lọc", không phải một trạng thái — lọc bỏ để ô thả xuống
-    // không tick nhầm và để câu "bảng rỗng" không đổ tại bộ lọc.
-    $trangThaiChon = array_values(array_filter(
-        explode(',', (string) $filters['status']),
-        fn ($s) => $s !== '' && $s !== 'all'
+    // Năm ô lọc chọn-nhiều mang chuỗi ngăn bởi dấu phẩy. 'all' là "KHÔNG lọc",
+    // không phải một lựa chọn — lọc bỏ để không ô nào tick nhầm và để câu "bảng
+    // rỗng" không đổ oan cho bộ lọc.
+    $daChon = fn (string $khoa) => array_values(array_filter(
+        explode(',', (string) ($filters[$khoa] ?? '')),
+        fn ($v) => $v !== '' && $v !== 'all'
     ));
 
-    $coLoc = collect($filters)
-        ->only(['keyword', 'payment_status', 'payment_method', 'channel'])
-        ->contains(fn ($v) => $v !== '' && $v !== null && $v !== 'all')
-        || count($trangThaiChon) > 0;
+    $coLoc = collect(['keyword', 'customer', 'status', 'payment_method', 'channel', 'created_by', 'etax'])
+        ->contains(fn ($k) => ($filters[$k] ?? '') !== '' && ($filters[$k] ?? '') !== 'all');
 
-    // Màu chữ của hai cột trạng thái — đúng bảng màu v2 dùng cho danh sách đơn.
-    $mauTrangThai = [
-        'wait' => 'text-warning', 'info' => 'text-primary', 'move' => 'text-info',
-        'done' => 'text-success', 'stop' => 'text-danger',
-    ];
-    $mauTien = [
-        'paid' => 'text-success', 'pending' => '', 'failed' => 'text-danger',
-        'refunded' => 'text-warning',
-    ];
+    // Màu chữ của năm trạng thái sổ — giữ ở controller để dãy ô tick và cột
+    // trong bảng không bao giờ tô hai kiểu khác nhau.
+    $mauTrangThai = $C::MAU_TRANG_THAI_SO;
 @endphp
 
 @push('styles')
@@ -69,41 +68,134 @@
            Cùng luật với các màn v2 khác: TIÊU ĐỀ luôn một dòng, ô dữ liệu dài thì
            cắt bằng "…" (chữ đủ vẫn còn ở `title` và trong hộp chi tiết).
 
-           14 cột nên bảng có min-width; màn rộng thì vừa khít, màn hẹp thì
+           13 cột nên bảng có min-width; màn rộng thì vừa khít, màn hẹp thì
            `.table-responsive` cho cuộn ngang — không bóp chữ lại. */
         table.table-don-hang.none_mobile {
             width: 100%;
-            /* 1240 = bề rộng nhỏ nhất để cả 14 tiêu đề nằm gọn một dòng ở cỡ chữ
-               13px của vỏ v2. Nâng lên là bảng trượt ngang ngay ở màn 1536. */
-            min-width: 1240px;
+            /* 1040, KHÔNG phải 1320. Sàn cũ lớn hơn cả khung của màn 1536 (1212px)
+               nên bảng tràn ngang ở mọi khổ dưới 1920 — thừa 28px ở 1536, 108px ở
+               1440, 169px ở 1366 — và cột Hành động bị đẩy ra khỏi màn.
+               Phần trăm cột bên dưới nay đo theo sàn của khổ 1366 (khung 1071px):
+               nhãn cột nào cũng đủ chỗ từ 1366 trở lên, nên sàn chỉ còn để chặn
+               lúc màn hẹp hơn thế. */
+            min-width: 1040px;
             table-layout: fixed;
         }
+        /* TIÊU ĐỀ luôn một dòng — bẻ đôi một tiêu đề là hàng đầu cao gấp rưỡi và
+           mắt phải dừng lại đọc từng cột.
+
+           Hết chỗ thì cắt "…" chứ KHÔNG tràn ra ngoài ô: luật chung ở
+           v2::layouts.master lo phần cắt, và gắn `title` cho đúng nhãn nào bị cắt
+           để rê chuột vẫn đọc đủ. Bản cũ khai `text-overflow: clip` cho chữ tràn
+           ra "để nhìn thấy mà đi nới cột" — nhưng thứ nhìn thấy là chữ đè lên cột
+           bên cạnh, và cột Hành động thì đẩy hẳn khỏi màn. */
         table.table-don-hang.none_mobile th { white-space: nowrap; }
+        /* 13px thay cho 14px của vỏ: mười ba cột ở 14px thì riêng phần tiêu đề đã
+           đòi hơn 1400px, tức là lúc nào cũng phải cuộn ngang. */
         table.table-don-hang.none_mobile th,
-        table.table-don-hang.none_mobile td { padding-left: 4px; padding-right: 4px; }
+        table.table-don-hang.none_mobile td { padding: 6px 6px; font-size: 13px; }
+
+        /* Ô DỮ LIỆU KHÔNG BAO GIỜ BỊ CẮT. Chữ dài thì xuống dòng, ô cao thêm một
+           nhịp — còn hơn cắt bằng "…" rồi bắt người đọc rê chuột lên mới biết đủ.
+           Đây là chỗ khác hẳn màn Thu chi: bên đó 13 cột chen trong khung hẹp nên
+           đành cắt, bảng này bỏ được cột "Thanh toán" nên còn chỗ thở. */
         table.table-don-hang.none_mobile td {
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
+            white-space: normal;
+            word-break: break-word;
+            vertical-align: middle;
         }
+        /* Trừ ô mang SỐ: bẻ dòng giữa một con số thì đọc thành hai số khác nhau. */
+        table.table-don-hang.none_mobile td.la-so { white-space: nowrap; }
 
         /* Chia % theo bề rộng THẬT của thứ nằm trong cột, tổng đúng 100.
            Khách hàng rộng nhất vì ô chứa hai dòng (tên + số điện thoại); ba cột
            tiền theo phương thức hẹp vì chỉ chứa một con số. */
-        table.table-don-hang.none_mobile th:first-child { width: 3%; }
-        table.table-don-hang.none_mobile th.show_code { width: 9.5%; }
-        table.table-don-hang.none_mobile th.show_customer { width: 11%; }
-        table.table-don-hang.none_mobile th.show_time { width: 8.5%; }
-        table.table-don-hang.none_mobile th.show_discount { width: 6.5%; }
-        table.table-don-hang.none_mobile th.show_shipping_fee { width: 6%; }
-        table.table-don-hang.none_mobile th.show_cash { width: 6.5%; }
-        table.table-don-hang.none_mobile th.show_transfer { width: 8.5%; }
-        table.table-don-hang.none_mobile th.show_online { width: 6%; }
-        table.table-don-hang.none_mobile th.show_debt { width: 6%; }
+        table.table-don-hang.none_mobile th:first-child { width: 4%; }
+        table.table-don-hang.none_mobile th.show_code { width: 9.7%; }
+        table.table-don-hang.none_mobile th.show_customer { width: 14.8%; }
+        table.table-don-hang.none_mobile th.show_time { width: 7.2%; }
+        table.table-don-hang.none_mobile th.show_discount { width: 6.3%; }
+        table.table-don-hang.none_mobile th.show_shipping_fee { width: 6.0%; }
+        table.table-don-hang.none_mobile th.show_cash { width: 7%; }
+        table.table-don-hang.none_mobile th.show_transfer { width: 9.9%; }
+        table.table-don-hang.none_mobile th.show_online { width: 5.2%; }
+        table.table-don-hang.none_mobile th.show_debt { width: 6.3%; }
         table.table-don-hang.none_mobile th.show_total { width: 7%; }
-        table.table-don-hang.none_mobile th.show_payment { width: 8%; }
-        table.table-don-hang.none_mobile th.show_status { width: 7.5%; }
-        table.table-don-hang.none_mobile th:last-child { width: 6%; }
+        /* Trạng thái rộng nhất trong nhóm cuối: "Thanh toán một phần" là nhãn dài
+           nhất của cả bảng, hẹp hơn là nó bị cắt bằng "…" ngay ở dòng đầu tiên. */
+        table.table-don-hang.none_mobile th.show_status { width: 8.8%; }
+        table.table-don-hang.none_mobile th:last-child { width: 7.8%; }
+
+        /* ---------- KHUNG LỌC: SIẾT KHOẢNG CÁCH ----------
+
+           Chín khối lọc, mỗi khối `mb-3` (16px), cộng thêm nhãn 4px và margin
+           sẵn có của từng dòng `.form-check` — riêng phần khoảng trống đã ngốn
+           gần 200px, nên ô Người tạo rơi hẳn xuống dưới màn và phải cuộn mới
+           thấy. Bên v2 khung lọc gói gọn trong một màn.
+
+           Siết ở ĐÂY chứ không đổi `mb-3` thành `mb-2` trên từng khối: một chỗ
+           khai, một chỗ sửa, và thêm khối lọc mới thì nó tự theo nhịp chung.
+
+           KHÔNG bọc trong `.index-order-page`: dưới 992px vỏ v2 BƯNG từng khối
+           lọc sang tấm offcanvas nằm ngoài khung ấy, bọc vào là trên điện thoại
+           khoảng cách giãn lại như cũ. Tệp style này chỉ nạp ở màn này nên
+           `.fillter-box` trần đã đủ hẹp. */
+        .fillter-box .card-body > div[id^="filter"] { margin-bottom: 6px !important; }
+        .fillter-box .card-body > div[id^="filter"]:last-child { margin-bottom: 0 !important; }
+        .fillter-box .title_search { margin-bottom: 5px; display: block; }
+        /* DÒNG TICK — dựng lại hẳn thay vì vá từng thuộc tính.
+
+           Vì sao ô tick dính sát chữ: Bootstrap cho `.form-check` đệm trái 1.5em
+           rồi kéo ô tick ngược ra bằng `margin-left: -1.5em`, còn vỏ v2 lại đổi
+           `.form-check` thành `display: flex`. Trong flex thì cặp đệm-âm ấy hết
+           tác dụng như thiết kế: ô tick nằm sát mép, nhãn dính ngay sau nó, giữa
+           hai thứ không còn khoảng nào.
+
+           Nên bỏ luôn trò đệm-âm và khai một `gap` thật. Cách này không phụ thuộc
+           vỏ khai gì: thêm hay bớt quy tắc ở style.css cũng không kéo hai thứ dính
+           lại được nữa. */
+        .fillter-box .form-check {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            padding-left: 0;
+            min-height: 0;
+            margin-bottom: 3px;
+        }
+        .fillter-box .form-check:last-child { margin-bottom: 0; }
+        .fillter-box .form-check-input { margin: 0; flex: 0 0 auto; }
+        .fillter-box .form-check-label { line-height: 20px; cursor: pointer; }
+        /* Ô nhập/chọn đứng ngay dưới nhãn, không cần thêm nhịp nữa. */
+        .fillter-box .mt-1 { margin-top: 1px !important; }
+        /* Hai ô ngày sát nhau, không cần nhịp thở giữa chúng. */
+        .fillter-box .gap-lg-1 { gap: 3px !important; }
+
+        /* HAI NÚT Ở GÓC PHẢI TIÊU ĐỀ PHẢI BẰNG NHAU.
+
+           Vỏ v2 cho chúng hai mức đệm và hai độ dày viền khác nhau — .btn-export
+           đệm 3px viền 1px, .setting-col đệm 7px viền 2px — nên đứng cạnh nhau là
+           một cái cao hơn cái kia đúng một nhịp, nhìn như xếp lệch.
+
+           Ép về cùng chiều cao NGAY TRONG màn này, không sửa style.css chung: mấy
+           màn v2 khác đang dựa vào hai mức đệm ấy. */
+        .index-order-page .btn_top_content .btn-export,
+        .index-order-page .btn_top_content .setting-col {
+            height: 34px;
+            min-height: 34px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            margin: 0;
+        }
+        .index-order-page .btn_top_content .btn-export { padding: 0 12px !important; }
+        /* Nút chọn cột chỉ có một icon nên để vuông — cao bằng, rộng bằng cao. */
+        .index-order-page .btn_top_content .setting-col { width: 34px; padding: 0 !important; }
+        .index-order-page .btn_top_content .dropup { display: inline-flex; }
+        /* `margin: 0` ở trên xoá luôn khoảng cách GIỮA hai nút nên chúng dính vào
+           nhau. Trả lại bằng gap của chính hàng flex — một chỗ khai, không phải
+           nhớ gắn margin-right cho nút bên trái. */
+        .index-order-page .btn_top_content { gap: 8px; }
 
         /* Ô Khách hàng: tên trên, số điện thoại nhỏ bên dưới — đúng cách v2 xếp
            hai mẩu thông tin dính nhau vào một cột. */
@@ -117,33 +209,35 @@
             border-radius: 3px; background: #f0f5ff; color: #2f54eb;
             font-size: 10.5px; line-height: 16px; vertical-align: middle;
         }
+        /* Phiếu trả nằm chung sổ với đơn bán (đúng như v2 union hai bảng). Nhãn
+           cam + nền nhạt để mắt tách được ngay: đó là tiền đi RA, đọc lướt mà
+           cộng nhầm vào doanh thu là sai cả buổi đối soát. */
+        .dh-kenh.dh-tra { background: #fff7e6; color: #d46b08; }
+        tr.dong-tra-hang > td { background: #fffbf5; }
+        /* Hai hàng tổng dưới chân bảng — nền xám, chữ đậm như hàng tổng của v2.
+           Khai trên td chứ không trên tr: nền của tr bị nền td của vỏ đè mất. */
+        tr.dong-tong > td { background: #EFEFEF; font-weight: bold; }
 
         /* ---------- HỘP CHI TIẾT ----------
-           style.css của vỏ v2 cho `.modal-content` chạy hoạt ảnh riêng trong khi
-           Bootstrap 5 đang trượt `.modal-dialog` — hai hoạt ảnh chồng nhau thì
-           hộp giật. Tắt cái của vỏ, đúng như màn Công nợ đã làm. */
+           Ba lớp dưới đây v2 khai NGAY TRONG màn Quản lý đơn hàng của nó chứ
+           không có trong style.css chung, nên phải chép sang thì hộp mới đúng
+           dáng. */
+        .border-bottom-dotted { border-bottom: 1px dotted #dee2e6; }
+        .cus-bg-EFEFEF { background-color: #EFEFEF; }
+        .cus-fw-bold { font-weight: bold; }
+
         #modalOrderDetail .modal-dialog { max-width: 1100px; }
         #modalOrderDetail .modal-content { animation: none !important; }
-        #modalOrderDetail .dh-bang-hang { width: 100%; }
-        #modalOrderDetail .dh-bang-hang th {
-            background: #e9ecef; font-size: 12.5px; padding: 6px 8px; white-space: nowrap;
+        /* Bảng hàng: v2 để `.order-section th` nền #e9ecef, đệm .5rem. */
+        #modalOrderDetail table.bang-hang { width: 100%; }
+        #modalOrderDetail table.bang-hang th {
+            background: #e9ecef; padding: .5rem; white-space: nowrap; font-size: 12.5px;
         }
-        #modalOrderDetail .dh-bang-hang td { padding: 6px 8px; vertical-align: middle; }
-        #modalOrderDetail .dh-bang-hang tfoot td { font-weight: 700; background: #efefef; }
-        #modalOrderDetail .dh-tt-tieude {
-            background: #e7ebee; padding: 6px 8px; font-weight: 700;
-            border-bottom: 1px dotted #dee2e6; margin-bottom: 8px;
-        }
-        #modalOrderDetail .dh-dong {
-            display: flex; justify-content: space-between; gap: 12px; padding: 3px 4px;
-        }
-        #modalOrderDetail .dh-dong.dh-cong {
-            border-top: 1px solid #dee2e6; margin-top: 6px; padding-top: 8px;
-            font-weight: 700; color: #cf1322;
-        }
+        #modalOrderDetail table.bang-hang td { padding: .5rem; vertical-align: middle; }
+        /* Khối thanh toán bên phải — v2 xếp bằng d-flex justify-content-between,
+           chỉ thêm nhịp thở giữa các dòng. */
+        #modalOrderDetail .inftt > div { padding: 3px 4px; }
         #modalOrderDetail .dh-nhan-nho { color: #8c8c8c; }
-        /* Hàng nút chân hộp: canh giữa, không dạt phải. */
-        #modalOrderDetail .modal-footer { justify-content: center; flex-wrap: wrap; gap: 6px; }
     </style>
 @endpush
 
@@ -151,48 +245,25 @@
     {{-- Nút mở từng khối lọc trên điện thoại. Tám khối, đúng tám ô của khung trái. --}}
     <div class="call-to-action-container">
         <div class="wrapper-call-to-action">
-            @include('v2::partials.filter-button-mobile', [
-                'dataBsTarget' => 'offcanvasBottomInMobile',
-                'dataOffcanvasTarget' => 'filterKeyword',
-                'modalLabel' => __('message.search'),
-            ])
-            @if (count($chiNhanh['ds']) > 1)
-                @include('v2::partials.filter-button-mobile', [
-                    'dataBsTarget' => 'offcanvasBottomInMobile',
-                    'dataOffcanvasTarget' => 'filterBranch',
-                    'modalLabel' => __('message.branch'),
-                ])
-            @endif
-            @include('v2::partials.filter-button-mobile', [
-                'dataBsTarget' => 'offcanvasBottomInMobile',
-                'dataOffcanvasTarget' => 'filterTime',
-                'modalLabel' => __('message.time'),
-            ])
-            @include('v2::partials.filter-button-mobile', [
-                'dataBsTarget' => 'offcanvasBottomInMobile',
-                'dataOffcanvasTarget' => 'filterStatus',
-                'modalLabel' => __('message.status'),
-            ])
-            @include('v2::partials.filter-button-mobile', [
-                'dataBsTarget' => 'offcanvasBottomInMobile',
-                'dataOffcanvasTarget' => 'filterPaymentStatus',
-                'modalLabel' => 'Thanh toán',
-            ])
-            @include('v2::partials.filter-button-mobile', [
-                'dataBsTarget' => 'offcanvasBottomInMobile',
-                'dataOffcanvasTarget' => 'filterPaymentMethod',
-                'modalLabel' => __('message.payment-method-short'),
-            ])
-            @include('v2::partials.filter-button-mobile', [
-                'dataBsTarget' => 'offcanvasBottomInMobile',
-                'dataOffcanvasTarget' => 'filterChannel',
-                'modalLabel' => __('message.channel'),
-            ])
-            @include('v2::partials.filter-button-mobile', [
-                'dataBsTarget' => 'offcanvasBottomInMobile',
-                'dataOffcanvasTarget' => 'filterSort',
-                'modalLabel' => 'Sắp xếp',
-            ])
+            @foreach ([
+                'filterBranch' => __('message.branch'),
+                'filterTime' => __('message.time'),
+                'filterEtax' => 'HĐĐT',
+                'filterCode' => __('message.order_code'),
+                'filterChannel' => __('message.channel'),
+                'filterCustomer' => __('message.customer'),
+                'filterPaymentMethod' => __('message.payment-method'),
+                'filterStatus' => __('message.status'),
+                'filterCreator' => __('message.creator'),
+            ] as $oLoc => $nhan)
+                @if ($oLoc !== 'filterBranch' || count($chiNhanh['ds']) > 1)
+                    @include('v2::partials.filter-button-mobile', [
+                        'dataBsTarget' => 'offcanvasBottomInMobile',
+                        'dataOffcanvasTarget' => $oLoc,
+                        'modalLabel' => $nhan,
+                    ])
+                @endif
+            @endforeach
         </div>
     </div>
 
@@ -208,22 +279,10 @@
                              thoại vỏ v2 BƯNG từng khối lọc sang tấm offcanvas, mỗi lượt
                              một khối — submit lúc đó sẽ đánh rơi các ô còn lại. --}}
 
-                        {{-- MỘT ô tìm chung cho mã đơn / tên / SĐT / email, không tách
-                             "Mã hoá đơn" và "Khách hàng" thành hai ô như v2: API chỉ có
-                             một tham số `keyword` và nó đã dò cả bốn cột ấy. Tách làm hai
-                             ô là bày ra hai đường lọc mà chỉ một cái ăn. --}}
-                        <div id="filterKeyword" class="mb-3">
-                            <div class="inner-modal-in-mobile">
-                                <span class="title_search d-none d-lg-block">{{ __('message.search') }}</span>
-                                <input type="text" name="keyword" value="{{ $filters['keyword'] }}"
-                                    class="form-control mt-1" id="dh-keyword" autocomplete="off"
-                                    placeholder="Mã đơn, tên hoặc SĐT khách">
-                            </div>
-                        </div>
-
-                        {{-- CHI NHÁNH — chính là chi nhánh đang làm việc của TAB, cùng thứ
-                             dropdown ba gạch trên thanh đầu trang đổi. Cửa hàng một chi
-                             nhánh thì không bày: ô chỉ có một lựa chọn không lọc được gì. --}}
+                        {{-- 1. CHI NHÁNH — chính là chi nhánh đang làm việc của TAB, cùng
+                             thứ dropdown ba gạch trên thanh đầu trang đổi. Cửa hàng một
+                             chi nhánh thì không bày: ô chỉ có một lựa chọn không lọc được
+                             gì mà vẫn ăn nguyên một khoảng của cột. --}}
                         @if (count($chiNhanh['ds']) > 1)
                             <div id="filterBranch" class="mb-3">
                                 <div class="inner-modal-in-mobile">
@@ -240,29 +299,11 @@
                             </div>
                         @endif
 
+                        {{-- 2. THỜI GIAN — hai ô ngày, KHÔNG có dãy mốc nhanh: bản v2 chỉ
+                             bày đúng hai ô này. --}}
                         <div id="filterTime" class="mb-3">
                             <div class="inner-modal-in-mobile">
                                 <span class="title_search d-none d-lg-block">{{ __('message.time') }}</span>
-                                {{-- Sáu mốc nhanh của v2. Bấm mốc nào thì điền luôn hai ô ngày
-                                     bên dưới rồi lọc — hai ô vẫn là nguồn sự thật. --}}
-                                <div class="d-flex flex-wrap">
-                                    @foreach ([
-                                        'today' => __('message.today'),
-                                        'yesterday' => __('message.yesterday'),
-                                        'thisWeek' => __('message.this-week'),
-                                        'lastWeek' => __('message.last-week'),
-                                        'thisMonth' => __('message.this-month'),
-                                        'lastMonth' => __('message.last-month'),
-                                    ] as $ma => $ten)
-                                        <div class="col-6">
-                                            <div class="form-check gap-0">
-                                                <input class="me-1 form-check-input dh-moc-thoi-gian" type="radio"
-                                                    name="dh_moc" value="{{ $ma }}" id="dh_moc_{{ $ma }}">
-                                                <label class="form-check-label" for="dh_moc_{{ $ma }}">{{ $ten }}</label>
-                                            </div>
-                                        </div>
-                                    @endforeach
-                                </div>
                                 <div class="d-flex flex-lg-column gap-2 gap-lg-1 mt-1">
                                     <input type="text" name="from_date" autocomplete="off"
                                         value="{{ $ngayVN($filters['from_date']) }}" class="form-control"
@@ -274,70 +315,113 @@
                             </div>
                         </div>
 
-                        {{-- Trạng thái chọn được NHIỀU, đúng như dãy checkbox của v2 — chỉ
-                             khác là dùng ô thả xuống cho hợp với các màn v2 còn lại. --}}
-                        <div id="filterStatus" class="mb-3">
+                        {{-- 3. HĐĐT — đơn đã xuất hoá đơn điện tử hay chưa.
+
+                             Tick cả hai là KHÔNG lọc, đúng như v2 bày sẵn cả hai ô: mọi
+                             đơn đều rơi vào một trong hai nhóm nên hỏi cả hai là hỏi tất
+                             cả. Bật một bên thì phiếu trả rơi khỏi danh sách — nó không tự
+                             có tờ hoá đơn nào, v2 cũng gạt nhánh phiếu trả đúng lúc này. --}}
+                        <div id="filterEtax" class="mb-3">
                             <div class="inner-modal-in-mobile">
-                                <span class="title_search d-none d-lg-block">{{ __('message.status') }}</span>
-                                <select class="form-control form-select mt-1" id="dh-status" name="status" multiple>
-                                    @foreach ($C::STATUSES as $ma => $ten)
-                                        <option value="{{ $ma }}"
-                                            {{ in_array($ma, $trangThaiChon, true) ? 'selected' : '' }}>{{ $ten }}</option>
-                                    @endforeach
-                                </select>
+                                <span class="title_search d-none d-lg-block">HĐĐT</span>
+                                @foreach ($C::HOA_DON_DIEN_TU as $ma => $ten)
+                                    <div class="form-check">
+                                        <input class="form-check-input dh-o-tick" type="checkbox" name="etax"
+                                            value="{{ $ma }}" id="dh-hd-{{ $ma }}"
+                                            {{ in_array($ma, $daChon('etax'), true) ? 'checked' : '' }}>
+                                        <label class="form-check-label" for="dh-hd-{{ $ma }}">{{ $ten }}</label>
+                                    </div>
+                                @endforeach
                             </div>
                         </div>
 
-                        {{-- Ba ô dưới chỉ nhận MỘT giá trị: API so bằng dấu "=", không phải
-                             IN như trạng thái. Nên mỗi ô có sẵn dòng "Tất cả" để bỏ lọc. --}}
-                        <div id="filterPaymentStatus" class="mb-3">
+                        {{-- 4. MÃ ĐƠN — chỗ v2 để "Mã hoá đơn". --}}
+                        <div id="filterCode" class="mb-3">
                             <div class="inner-modal-in-mobile">
-                                <span class="title_search d-none d-lg-block">Thanh toán</span>
-                                <select class="form-control form-select mt-1" name="payment_status">
-                                    <option value="all">{{ __('message.all') }}</option>
-                                    @foreach ($C::PAYMENT_STATUSES as $ma => $ten)
-                                        <option value="{{ $ma }}"
-                                            {{ $filters['payment_status'] === $ma ? 'selected' : '' }}>{{ $ten }}</option>
-                                    @endforeach
-                                </select>
+                                <span class="title_search d-none d-lg-block">{{ __('message.order_code') }}</span>
+                                <input type="text" name="keyword" value="{{ $filters['keyword'] }}"
+                                    class="form-control mt-1" autocomplete="off" placeholder="Nhập mã">
                             </div>
                         </div>
 
-                        <div id="filterPaymentMethod" class="mb-3">
-                            <div class="inner-modal-in-mobile">
-                                <span class="title_search d-none d-lg-block">{{ __('message.payment-method-short') }}</span>
-                                <select class="form-control form-select mt-1" name="payment_method">
-                                    <option value="all">{{ __('message.all') }}</option>
-                                    @foreach ($C::PAYMENT_METHODS as $ma => $ten)
-                                        <option value="{{ $ma }}"
-                                            {{ $filters['payment_method'] === $ma ? 'selected' : '' }}>{{ $ten }}</option>
-                                    @endforeach
-                                </select>
-                            </div>
-                        </div>
-
-                        {{-- KÊNH BÁN thay cho ô "Tại bàn / Mang về" của v2: cùng vai trò —
-                             nói đơn phát sinh ở đâu và vận hành theo luồng nào. --}}
+                        {{-- 5. KÊNH BÁN — chỗ v2 để "Sử dụng: Tại bàn / Mang về / Online".
+                             Shop không có bàn; hai kênh thật là giao hàng và bán tại quầy. --}}
                         <div id="filterChannel" class="mb-3">
                             <div class="inner-modal-in-mobile">
                                 <span class="title_search d-none d-lg-block">{{ __('message.channel') }}</span>
-                                <select class="form-control form-select mt-1" name="channel">
-                                    <option value="all">{{ __('message.all') }}</option>
-                                    @foreach ($C::CHANNELS as $ma => $ten)
-                                        <option value="{{ $ma }}"
-                                            {{ $filters['channel'] === $ma ? 'selected' : '' }}>{{ $ten }}</option>
-                                    @endforeach
-                                </select>
+                                @foreach ($C::CHANNELS as $ma => $ten)
+                                    <div class="form-check">
+                                        <input class="form-check-input dh-o-tick" type="checkbox" name="channel"
+                                            value="{{ $ma }}" id="dh-kenh-{{ $ma }}"
+                                            {{ in_array($ma, $daChon('channel'), true) ? 'checked' : '' }}>
+                                        <label class="form-check-label" for="dh-kenh-{{ $ma }}">{{ $ten }}</label>
+                                    </div>
+                                @endforeach
                             </div>
                         </div>
 
-                        <div id="filterSort" class="mb-3">
+                        {{-- 6. KHÁCH HÀNG — ô riêng, đúng như v2. Gửi tham số `customer`
+                             chứ không dùng chung `keyword` với ô Mã đơn: chung một tham số
+                             thì gõ ô sau là ô trước mất tác dụng. --}}
+                        <div id="filterCustomer" class="mb-3">
                             <div class="inner-modal-in-mobile">
-                                <span class="title_search d-none d-lg-block">Sắp xếp</span>
-                                <select class="form-control form-select mt-1" name="sort">
-                                    @foreach ($C::SORTS as $ma => $ten)
-                                        <option value="{{ $ma }}"
-                                            {{ $filters['sort'] === $ma ? 'selected' : '' }}>{{ $ten }}</option>
+                                <span class="title_search d-none d-lg-block">{{ __('message.customer') }}</span>
+                                <input type="text" name="customer" value="{{ $filters['customer'] }}"
+                                    class="form-control mt-1" autocomplete="off" placeholder="Tên hoặc SĐT khách">
+                            </div>
+                        </div>
+
+                        {{-- 7. PHƯƠNG THỨC THANH TOÁN — v2 bày bốn ô chữ đậm (Tiền mặt /
+                             Chuyển khoản / Thẻ / QR). Shop có bảy phương thức nên bày đủ
+                             bảy, không gom: gom lại thì tick "Chuyển khoản" mà không biết
+                             nó có kéo theo SePay hay không. --}}
+                        <div id="filterPaymentMethod" class="mb-3">
+                            <div class="inner-modal-in-mobile">
+                                <span class="title_search d-none d-lg-block">{{ __('message.payment-method') }}</span>
+                                @foreach ($C::PAYMENT_METHODS as $ma => $ten)
+                                    <div class="form-check">
+                                        <input class="form-check-input dh-o-tick" type="checkbox" name="payment_method"
+                                            value="{{ $ma }}" id="dh-ptt-{{ $ma }}"
+                                            {{ in_array($ma, $daChon('payment_method'), true) ? 'checked' : '' }}>
+                                        <label class="form-check-label fw-bold" for="dh-ptt-{{ $ma }}">{{ $ten }}</label>
+                                    </div>
+                                @endforeach
+                            </div>
+                        </div>
+
+                        {{-- 8. TRẠNG THÁI — MỘT dãy, năm ô, đúng bộ và đúng thứ tự của v2.
+
+                             Trước đây chỗ này là hai dãy: tám bước giao hàng và bốn trạng
+                             thái tiền. Gộp lại theo v2 vì người đọc sổ hỏi đúng một câu —
+                             "đơn này thu tiền chưa" — còn đơn đang đi tới đâu thì mở hộp
+                             chi tiết ra xem, ở đó vẫn in đủ sáu bước. --}}
+                        <div id="filterStatus" class="mb-3">
+                            <div class="inner-modal-in-mobile">
+                                <span class="title_search d-none d-lg-block">{{ __('message.status') }}</span>
+                                @foreach ($C::TRANG_THAI_SO as $ma => $ten)
+                                    <div class="form-check">
+                                        <input class="form-check-input dh-o-tick" type="checkbox" name="status"
+                                            value="{{ $ma }}" id="dh-tt-{{ $ma }}"
+                                            {{ in_array($ma, $daChon('status'), true) ? 'checked' : '' }}>
+                                        <label class="form-check-label fw-bold {{ $mauTrangThai[$ma] ?? '' }}"
+                                            for="dh-tt-{{ $ma }}">{{ $ten }}</label>
+                                    </div>
+                                @endforeach
+                            </div>
+                        </div>
+
+                        {{-- 9. NGƯỜI TẠO — đọc orders.created_by (migration 0065). Đơn lập
+                             trước migration ấy không có người tạo nên không lọt vào bất kỳ
+                             lựa chọn nào; bỏ trống ô thì vẫn thấy đủ. --}}
+                        <div id="filterCreator" class="mb-3">
+                            <div class="inner-modal-in-mobile">
+                                <span class="title_search d-none d-lg-block">{{ __('message.creator') }}</span>
+                                <select class="form-control form-select mt-1" name="created_by" multiple>
+                                    @foreach ($nhanVien as $nv)
+                                        <option value="{{ $nv['id'] }}"
+                                            {{ in_array((string) $nv['id'], $daChon('created_by'), true) ? 'selected' : '' }}>
+                                            {{ $nv['full_name'] ?? ($nv['name'] ?? '') }}
+                                        </option>
                                     @endforeach
                                 </select>
                             </div>
@@ -403,7 +487,6 @@
                                 <th class="text-right show_online {{ $columns['show_online'] ? '' : 'hide' }}">Thẻ/Ví</th>
                                 <th class="text-center show_debt {{ $columns['show_debt'] ? '' : 'hide' }}">{{ __('message.debt') }}</th>
                                 <th class="text-right show_total {{ $columns['show_total'] ? '' : 'hide' }}">{{ __('message.total_money') }}</th>
-                                <th class="text-left show_payment {{ $columns['show_payment'] ? '' : 'hide' }}">Thanh toán</th>
                                 <th class="text-left show_status {{ $columns['show_status'] ? '' : 'hide' }}">{{ __('message.status') }}</th>
                                 <th class="text-center not-export">{{ __('message.action') }}</th>
                             </tr>
@@ -411,66 +494,102 @@
                             @forelse ($orders as $i => $o)
                                 @php
                                     $id = (int) ($o['id'] ?? 0);
-                                    $tt = (string) ($o['status'] ?? 'pending');
-                                    $ttTien = (string) ($o['payment_status'] ?? 'pending');
-                                    $pt = (string) ($o['payment_method'] ?? '');
-                                    $nhom = $C::NHOM_TIEN[$pt] ?? '';
-                                    // Tiền chỉ rơi vào cột phương thức khi đơn ĐÃ THU. Đơn chưa
-                                    // thu mà vẫn in số vào cột "Tiền mặt" là báo cáo nói dối.
-                                    $daThu = $ttTien === 'paid';
-                                    $oTien = fn ($k) => $daThu && $nhom === $k ? $tien($o['total_amount'] ?? 0) : '0';
-                                    $conNo = in_array($ttTien, ['pending', 'failed'], true);
+                                    $laTra = ($o['loai'] ?? 'don') === 'tra-hang';
+                                    $tt = (string) ($o['trang_thai'] ?? '');
                                 @endphp
-                                <tr class="item" data-id="{{ $id }}" data-code="{{ $o['order_code'] ?? '' }}">
+                                <tr class="item {{ $laTra ? 'dong-tra-hang' : '' }}" data-id="{{ $id }}"
+                                    data-loai="{{ $o['loai'] ?? 'don' }}" data-code="{{ $o['ma'] ?? '' }}">
                                     <td class="text-center">{{ $stt + $i + 1 }}</td>
-                                    {{-- Mã đơn là CHỮ TRẦN, không phải liên kết: cửa xem chi tiết là
+                                    {{-- Mã là CHỮ TRẦN, không phải liên kết: cửa xem chi tiết là
                                          con mắt ở cột Hành động. Để trần thì bôi đen chép lại được. --}}
-                                    <td class="text-left show_code {{ $columns['show_code'] ? '' : 'hide' }}"
-                                        title="{{ $o['order_code'] ?? '' }}">
-                                        {{ $o['order_code'] ?? '' }}
-                                        @if (($o['channel'] ?? 'web') === 'pos')
+                                    <td class="text-left show_code {{ $columns['show_code'] ? '' : 'hide' }}">
+                                        {{ $o['ma'] ?? '' }}
+                                        @if ($laTra)
+                                            <span class="dh-kenh dh-tra" title="Phiếu trả hàng">Trả</span>
+                                        @elseif (($o['kenh'] ?? 'web') === 'pos')
                                             <span class="dh-kenh" title="Đơn bán tại quầy">Quầy</span>
                                         @endif
                                     </td>
-                                    <td class="text-left show_customer {{ $columns['show_customer'] ? '' : 'hide' }}"
-                                        title="{{ trim(($o['recipient_name'] ?? '').' '.($o['recipient_phone'] ?? '')) }}">
-                                        <span class="dh-ten">{{ $o['recipient_name'] ?? '' }}</span>
-                                        <span class="dh-phu">{{ $o['recipient_phone'] ?? '' }}</span>
+                                    <td class="text-left show_customer {{ $columns['show_customer'] ? '' : 'hide' }}">
+                                        <span class="dh-ten">{{ $o['khach_hang'] ?? '' }}</span>
+                                        <span class="dh-phu">{{ $o['so_dien_thoai'] ?? '' }}</span>
                                     </td>
-                                    <td class="text-center show_time {{ $columns['show_time'] ? '' : 'hide' }}"
+                                    <td class="la-so text-center show_time {{ $columns['show_time'] ? '' : 'hide' }}"
                                         title="{{ $gioNgay($o['created_at'] ?? '') }}">{{ $ngayVN($o['created_at'] ?? '') }}</td>
-                                    <td class="text-right show_discount {{ $columns['show_discount'] ? '' : 'hide' }}">{{ $tien($o['discount_amount'] ?? 0) }}</td>
-                                    <td class="text-right show_shipping_fee {{ $columns['show_shipping_fee'] ? '' : 'hide' }}">{{ $tien($o['shipping_fee'] ?? 0) }}</td>
-                                    <td class="text-right show_cash {{ $columns['show_cash'] ? '' : 'hide' }}">{{ $oTien('cash') }}</td>
-                                    <td class="text-right show_transfer {{ $columns['show_transfer'] ? '' : 'hide' }}">{{ $oTien('transfer') }}</td>
-                                    <td class="text-right show_online {{ $columns['show_online'] ? '' : 'hide' }}">{{ $oTien('online') }}</td>
-                                    <td class="text-center show_debt {{ $columns['show_debt'] ? '' : 'hide' }}">
-                                        <span class="text-danger">{{ $conNo ? 'Có' : '-' }}</span>
+                                    <td class="la-so text-right show_discount {{ $columns['show_discount'] ? '' : 'hide' }}">{{ $tien($o['giam_gia'] ?? 0) }}</td>
+                                    <td class="la-so text-right show_shipping_fee {{ $columns['show_shipping_fee'] ? '' : 'hide' }}">{{ $tien($o['phi_giao'] ?? 0) }}</td>
+                                    {{-- Ba cột tiền do API chia sẵn theo phương thức của từng
+                                         lượt thu — bảng chỉ in ra. --}}
+                                    <td class="la-so text-right show_cash {{ $columns['show_cash'] ? '' : 'hide' }}">{{ $tien($o['tien_mat'] ?? 0) }}</td>
+                                    <td class="la-so text-right show_transfer {{ $columns['show_transfer'] ? '' : 'hide' }}">{{ $tien($o['chuyen_khoan'] ?? 0) }}</td>
+                                    <td class="la-so text-right show_online {{ $columns['show_online'] ? '' : 'hide' }}">{{ $tien($o['the_vi'] ?? 0) }}</td>
+                                    {{-- "Có" như `have_debt` của v2: đơn đã thu MỘT PHẦN và còn
+                                         thiếu. Đơn chưa thu đồng nào (COD đang giao) không phải nợ. --}}
+                                    <td class="la-so text-center show_debt {{ $columns['show_debt'] ? '' : 'hide' }}">
+                                        <span class="text-danger">{{ ! empty($o['co_cong_no']) ? 'Có' : '-' }}</span>
                                     </td>
-                                    <td class="text-right show_total {{ $columns['show_total'] ? '' : 'hide' }}">{{ $tien($o['total_amount'] ?? 0) }}</td>
-                                    <td class="text-left show_payment {{ $columns['show_payment'] ? '' : 'hide' }}">
-                                        <b class="{{ $mauTien[$ttTien] ?? '' }}">{{ $C::PAYMENT_STATUSES[$ttTien] ?? '' }}</b>
-                                    </td>
+                                    <td class="la-so text-right show_total {{ $columns['show_total'] ? '' : 'hide' }}">{{ $tien($o['tong_tien'] ?? 0) }}</td>
                                     <td class="text-left show_status {{ $columns['show_status'] ? '' : 'hide' }}">
-                                        <b class="{{ $mauTrangThai[$C::STATUS_TONES[$tt] ?? 'info'] ?? '' }}">{{ $C::STATUSES[$tt] ?? '' }}</b>
+                                        <b class="{{ $mauTrangThai[$tt] ?? '' }}">{{ $C::TRANG_THAI_SO[$tt] ?? '' }}</b>
                                     </td>
+                                    {{-- MỘT nút duy nhất, đúng như v2: con mắt xem chi tiết.
+
+                                         Dòng PHIẾU TRẢ mở hộp của phiếu trả, bằng class RIÊNG:
+                                         hộp đơn hàng đọc `/orders/{id}/detail`, mà id phiếu trả là
+                                         id của bảng khác — đi chung đường là mở nhầm một đơn tình cờ
+                                         trùng số. --}}
                                     <td class="text-center action not-export">
-                                        <a class="detail-item" type="button" title="{{ __('message.view-detail') }}"><i class="fa fa-eye"></i></a>
-                                        <a href="{{ route('admin.orders.print', $id) }}" target="_blank" rel="noopener"
-                                            title="In đơn hàng"><i class="fa fa-print"></i></a>
-                                        <a href="{{ route('admin.orders.label', $id) }}" target="_blank" rel="noopener"
-                                            title="In tem giao hàng"><i class="fa fa-tag"></i></a>
+                                        @if ($laTra)
+                                            <a class="detail-phieu-tra" type="button" title="{{ __('message.view-detail') }}"><i class="fa fa-eye"></i></a>
+                                        @else
+                                            <a class="detail-item" type="button" title="{{ __('message.view-detail') }}"><i class="fa fa-eye"></i></a>
+                                        @endif
                                     </td>
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="14" class="text-center py-4">
+                                    <td colspan="13" class="text-center py-4">
                                         {{ $coLoc
                                             ? 'Không có đơn hàng nào khớp bộ lọc đang bật.'
                                             : 'Chưa có đơn hàng nào. Đơn sẽ hiện ở đây khi khách đặt trên website hoặc khi thu ngân bán tại quầy.' }}
                                     </td>
                                 </tr>
                             @endforelse
+
+                            {{-- HAI HÀNG TỔNG, đúng như v2: trang đang xem và toàn bộ dòng khớp
+                                 bộ lọc. Hàng đầu cộng ngay tại đây; hàng sau API cộng sẵn
+                                 (`meta.tong`) vì nó trải qua mọi trang.
+
+                                 Mỗi ô mang đúng class show_* của cột mình, nên ẩn cột nào thì ô
+                                 tổng của cột ấy ẩn theo — không dùng colspan, colspan lệch ngay
+                                 khi có một cột bị tắt. --}}
+                            @if (count($orders))
+                                @php
+                                    $tongAll = $meta['tong'] ?? [];
+                                    $hangTong = [
+                                        'Tổng trang này' => collect($orders),
+                                        'Tổng tất cả' => null,
+                                    ];
+                                    $cong = fn ($ds, $k) => $ds ? $ds->sum(fn ($o) => (float) ($o[$k] ?? 0)) : (float) ($tongAll[$k] ?? 0);
+                                @endphp
+                                @foreach ($hangTong as $nhan => $ds)
+                                    <tr class="dong-tong cus-bg-EFEFEF cus-fw-bold">
+                                        <td></td>
+                                        <td class="text-left show_code {{ $columns['show_code'] ? '' : 'hide' }}">{{ $nhan }}</td>
+                                        <td class="show_customer {{ $columns['show_customer'] ? '' : 'hide' }}"></td>
+                                        <td class="show_time {{ $columns['show_time'] ? '' : 'hide' }}"></td>
+                                        <td class="la-so text-right show_discount {{ $columns['show_discount'] ? '' : 'hide' }}">{{ $tien($cong($ds, 'giam_gia')) }}</td>
+                                        <td class="la-so text-right show_shipping_fee {{ $columns['show_shipping_fee'] ? '' : 'hide' }}">{{ $tien($cong($ds, 'phi_giao')) }}</td>
+                                        <td class="la-so text-right show_cash {{ $columns['show_cash'] ? '' : 'hide' }}">{{ $tien($cong($ds, 'tien_mat')) }}</td>
+                                        <td class="la-so text-right show_transfer {{ $columns['show_transfer'] ? '' : 'hide' }}">{{ $tien($cong($ds, 'chuyen_khoan')) }}</td>
+                                        <td class="la-so text-right show_online {{ $columns['show_online'] ? '' : 'hide' }}">{{ $tien($cong($ds, 'the_vi')) }}</td>
+                                        <td class="show_debt {{ $columns['show_debt'] ? '' : 'hide' }}"></td>
+                                        <td class="la-so text-right show_total {{ $columns['show_total'] ? '' : 'hide' }}">{{ $tien($cong($ds, 'tong_tien')) }}</td>
+                                        <td class="show_status {{ $columns['show_status'] ? '' : 'hide' }}"></td>
+                                        <td class="not-export"></td>
+                                    </tr>
+                                @endforeach
+                            @endif
                         </table>
 
                         {{-- BẢN THẺ CHO ĐIỆN THOẠI. Dưới 992px vỏ v2 giấu hẳn bảng, không có
@@ -482,16 +601,20 @@
                                 <div class="fw-bold">{{ __('message.total_money') }}</div>
                             </div>
                             @foreach ($orders as $o)
-                                @php $tt = (string) ($o['status'] ?? 'pending'); @endphp
-                                <div class="item" data-id="{{ (int) ($o['id'] ?? 0) }}">
+                                @php
+                                    $tt = (string) ($o['trang_thai'] ?? '');
+                                    $laTra = ($o['loai'] ?? 'don') === 'tra-hang';
+                                @endphp
+                                <div class="item {{ $laTra ? 'dong-tra-hang' : '' }}"
+                                    data-id="{{ (int) ($o['id'] ?? 0) }}" data-loai="{{ $o['loai'] ?? 'don' }}">
                                     <div class="d-flex flex-column" style="flex: 1">
-                                        <span class="fw-semibold">{{ $o['order_code'] ?? '' }}</span>
-                                        <small class="{{ $mauTrangThai[$C::STATUS_TONES[$tt] ?? 'info'] ?? '' }}">
-                                            {{ $C::STATUSES[$tt] ?? '' }} · {{ $o['recipient_name'] ?? '' }}
+                                        <span class="fw-semibold">{{ $o['ma'] ?? '' }}</span>
+                                        <small class="{{ $mauTrangThai[$tt] ?? '' }}">
+                                            {{ $C::TRANG_THAI_SO[$tt] ?? '' }} · {{ $o['khach_hang'] ?? '' }}
                                         </small>
                                     </div>
                                     <div class="d-flex justify-content-end text-right gap-2" style="min-width: 110px">
-                                        <b>{{ $tien($o['total_amount'] ?? 0) }}</b>
+                                        <b>{{ $tien($o['tong_tien'] ?? 0) }}</b>
                                     </div>
                                 </div>
                             @endforeach
@@ -521,41 +644,59 @@
     </div>
 
     {{-- ===================== Hộp xem chi tiết =====================
-         Khuôn của v2 (manager-order/modal-view): tiêu đề "Đơn hàng - <mã>", hàng
-         thông tin khách, bảng hàng bên trái, khối "Thông tin thanh toán" bên
-         phải, hàng nút ở chân. --}}
+         Chép khuôn manager-order/modal-view.blade.php của v2, từng khối một:
+
+           header  : "Đơn hàng - <mã>" (mã tô cam)
+           hàng đầu: trái là người mua, phải là mốc thời gian
+           thân    : bảng hàng bên TRÁI (col-xl-8) + khối "Thông tin thanh toán"
+                     bên PHẢI (col-xl-4, class .inftt) — đúng tỉ lệ của v2
+           chân    : nút phát hành hoá đơn
+
+         Ba chỗ v2 có mà shop không có dữ liệu để điền, nên đổi cho đúng thứ
+         mình có (API trả về đơn hàng, không trả tên chi nhánh lẫn người tạo):
+           - "- <chi nhánh>" sau mã đơn      → bỏ
+           - "Số khách: N"                   → tên khách - số điện thoại
+           - "Người tạo : X"                 → trạng thái đơn
+         Và "Phụ thu" của quán ăn đổi thành "Phí giao hàng" của shop. --}}
     <div class="modal" id="modalOrderDetail" data-id="" style="padding-inline: 0 !important">
-        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable mx-auto">
+        <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable mx-auto">
             <div class="modal-content">
-                <div class="modal-header">
-                    <h6 class="modal-title">
+                <div class="modal-header border-bottom d-flex justify-content-between align-items-center">
+                    <h4 class="modal-title fs-6">
                         Đơn hàng - <span class="text-orange" id="dh-title-code"></span>
-                    </h6>
+                    </h4>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
                 </div>
 
                 <div class="modal-body">
-                    <div class="row px-2 mb-2">
-                        <div class="col-12 col-xl-8 d-flex flex-wrap gap-3">
+                    <div class="row px-2">
+                        <div class="col-12 col-xl-8 d-flex mt-3 mt-md-0">
                             <div>
-                                <i class="fa fa-user me-1" aria-hidden="true"></i>
-                                <b id="dh-v-name"></b>
-                                <span class="dh-nhan-nho" id="dh-v-phone"></span>
+                                <div class="d-flex bg-blue-dark">
+                                    <i class="fa fa-user my-auto" aria-hidden="true"
+                                        style="color: #599FBD; font-size: 20px;"></i>
+                                    <span class="my-auto mx-1"><strong id="dh-v-name"></strong></span>
+                                </div>
                             </div>
-                            <div id="dh-v-addr-wrap">
-                                <i class="fa fa-map-marker-alt me-1" aria-hidden="true"></i>
-                                <span id="dh-v-addr"></span>
+                            <div class="mx-2" id="dh-v-addr-wrap">
+                                <div class="bg-blue-dark" id="dh-v-addr"></div>
                             </div>
                         </div>
-                        <div class="col-12 col-xl-4 d-flex justify-content-xl-end gap-3">
-                            <span id="dh-v-status"></span>
-                            <span id="dh-v-created"></span>
+                        <div class="col-12 col-xl-4 d-flex justify-content-md-end justify-content-sm-start">
+                            <div class="mx-md-2 mx-0">
+                                <div class="bg-blue-dark" style="background: transparent">
+                                    <div>Người tạo : <span id="dh-v-creator"></span></div>
+                                </div>
+                            </div>
+                            <div class="d-flex justify-content-center">
+                                <div class="bg-blue-dark text-center" id="dh-v-created"></div>
+                            </div>
                         </div>
                     </div>
 
                     <div class="row p-2">
-                        <div class="col-12 col-lg-7 col-xl-8" style="overflow: auto;">
-                            <table class="dh-bang-hang">
+                        <div class="col-12 col-md-12 col-lg-7 col-xl-8" style="overflow: auto;">
+                            <table class="bang-hang">
                                 <thead>
                                     <tr>
                                         <th class="text-center">{{ __('message.stt') }}</th>
@@ -566,94 +707,214 @@
                                     </tr>
                                 </thead>
                                 <tbody id="dh-v-items"></tbody>
+                                <tbody class="cus-bg-EFEFEF cus-fw-bold">
+                                    <tr>
+                                        <td class="text-end" colspan="4"><strong>Tổng tiền hàng</strong></td>
+                                        <td class="text-right" id="dh-v-goods"></td>
+                                    </tr>
+                                </tbody>
                             </table>
                         </div>
 
-                        <div class="col-12 col-lg-5 col-xl-4 mt-3 mt-lg-0">
-                            <div class="dh-tt-tieude">Thông tin thanh toán</div>
-                            <div class="dh-dong"><span>Tiền hàng</span><span id="dh-v-subtotal"></span></div>
-                            <div class="dh-dong"><span>Giảm giá</span><span id="dh-v-discount"></span></div>
-                            <div class="dh-dong" id="dh-v-voucher-wrap">
-                                <span class="dh-nhan-nho">Mã giảm giá</span><span id="dh-v-voucher"></span>
+                        <div class="col-12 col-md-12 col-lg-5 col-xl-4 inftt mt-3 mt-lg-0">
+                            <div class="border-bottom-dotted bg-E7EBEE p-2 mb-2">
+                                <strong>Thông tin thanh toán</strong>
                             </div>
-                            <div class="dh-dong"><span>Phí giao hàng</span><span id="dh-v-ship"></span></div>
-                            <div class="dh-dong dh-cong"><span>Tổng thanh toán</span><span id="dh-v-total"></span></div>
-                            <div class="dh-dong"><span>{{ __('message.payment-method-short') }}</span><span id="dh-v-method"></span></div>
-                            <div class="dh-dong"><span>Trạng thái tiền</span><span id="dh-v-paystatus"></span></div>
-                            <div class="dh-dong" id="dh-v-note-wrap">
-                                <span class="dh-nhan-nho">Khách ghi chú</span><span id="dh-v-note"></span>
+                            <div class="d-flex justify-content-between">
+                                <span>Tổng tiền hàng</span><span id="dh-v-subtotal"></span>
                             </div>
-                            <div class="dh-dong" id="dh-v-etax-wrap">
-                                <span class="dh-nhan-nho">Hoá đơn điện tử</span><span id="dh-v-etax"></span>
+                            <div class="d-flex bg-E7EBEE justify-content-between">
+                                <span>Phí giao hàng</span><span id="dh-v-ship"></span>
                             </div>
-
-                            {{-- Ba ô SỬA ĐƯỢC, thứ duy nhất trong hộp không phải chỉ để đọc.
-                                 v2 không có khối này vì quán ăn không giao hàng; shop thì
-                                 đơn giao đi mà không ghi được mã vận đơn là mất dấu hàng. --}}
-                            <div id="dh-v-sua" class="mt-3">
-                                <div class="dh-tt-tieude">Vận chuyển &amp; ghi chú nội bộ</div>
-                                <div id="dh-v-ship-fields">
-                                    <label class="form-label mb-1">Đơn vị vận chuyển</label>
-                                    <input type="text" class="form-control mb-2" id="dh-v-shipmethod" maxlength="100"
-                                        placeholder="VD: GHN, GHTK">
-                                    <label class="form-label mb-1">Mã vận đơn</label>
-                                    <input type="text" class="form-control mb-2" id="dh-v-tracking" maxlength="100">
+                            <div class="bg-E7EBEE mt-1 d-flex justify-content-between">
+                                <span>Khuyến mãi</span><span id="dh-v-discount"></span>
+                            </div>
+                            <div class="mt-2" id="dh-v-voucher-wrap">
+                                <span>Voucher/Coupon</span>
+                                <div class="ps-2 d-flex justify-content-between">
+                                    <span class="text-secondary" id="dh-v-voucher"></span>
                                 </div>
-                                <label class="form-label mb-1">Ghi chú nội bộ</label>
-                                <textarea class="form-control" id="dh-v-adminnote" rows="2" maxlength="500"></textarea>
-                                <div class="text-center mt-2">
-                                    <button type="button" class="bt btn_green" id="dh-v-luu">{{ __('message.save') }}</button>
-                                </div>
+                            </div>
+                            <div class="d-flex justify-content-between">
+                                <span>Tổng sau giảm</span><span id="dh-v-after"></span>
+                            </div>
+                            <div class="d-flex justify-content-between text-red">
+                                <strong>Tổng thanh toán</strong><strong id="dh-v-total"></strong>
+                            </div>
+                            <div class="d-flex justify-content-between">
+                                <span id="dh-v-method"></span><span id="dh-v-paid"></span>
+                            </div>
+                            {{-- Các lần đã thu, cũ trước mới sau. Chỉ hiện khi đơn thu
+                                 làm nhiều lần — đơn thu một lần thì dòng "phương thức |
+                                 số tiền" ngay trên đã nói đủ. --}}
+                            <div id="dh-v-luotthu-wrap" class="mt-1">
+                                <span class="dh-nhan-nho">Các lần đã thu</span>
+                                <div id="dh-v-luotthu"></div>
+                            </div>
+                            <div class="d-flex justify-content-between" id="dh-v-debt-wrap">
+                                <span>Còn phải thu</span><span class="text-danger" id="dh-v-debt"></span>
+                            </div>
+                            <div class="d-flex justify-content-between">
+                                <span>Trạng thái đơn</span><span id="dh-v-status"></span>
+                            </div>
+                            <div class="d-flex justify-content-between" id="dh-v-note-wrap">
+                                <span>{{ __('message.note') }}</span><span id="dh-v-note"></span>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                {{-- Hàng nút canh giữa. Nút chuyển trạng thái do JS dựng theo đúng
-                     `next_statuses` API trả về — bày nút rồi báo lỗi lúc bấm là bẫy
-                     người dùng. Nút bỏ đi (huỷ / trả hàng) luôn đỏ, nút đồng ý xanh. --}}
-                <div class="modal-footer">
-                    <span id="dh-v-actions" class="d-flex flex-wrap gap-2 justify-content-center"></span>
-                    <a class="bt btn_advanced" id="dh-v-print" target="_blank" rel="noopener">In đơn</a>
-                    <a class="bt btn_advanced" id="dh-v-label" target="_blank" rel="noopener">In tem</a>
-                    <button type="button" class="bt btn_red" data-bs-dismiss="modal">Đóng</button>
+                {{-- Chân hộp có ĐÚNG MỘT nút, và nó chỉ hiện khi đơn CÒN NỢ.
+
+                     Hộp này vốn chỉ để đọc, nhưng ghi một lượt thu tiền thì phải bấm
+                     ở đâu đó — và đây là chỗ duy nhất người dùng đang nhìn thấy số
+                     "Còn phải thu". Đưa ra cột Hành động thì cột ấy hết là "chỉ xem
+                     chi tiết", mà nút thu tiền đứng cạnh con mắt cũng dễ bấm nhầm.
+
+                     Hoá đơn điện tử vẫn tách ra làm riêng sau, nên nút phát hành của
+                     v2 không dựng ở đây. --}}
+                <div class="modal-footer justify-content-center" id="dh-v-chan" hidden>
+                    <button type="button" class="bt btn_green" id="dh-v-thu">Thu tiền</button>
                 </div>
             </div>
         </div>
     </div>
 
-    {{-- Hộp hỏi lý do — huỷ đơn bắt buộc có lý do (API và controller cùng chặn). --}}
-    <div class="modal" id="modalOrderReason">
+    {{-- ===================== Hộp Thu tiền =====================
+         Một hộp nhỏ, ba ô. Số tiền điền sẵn ĐÚNG BẰNG phần còn nợ vì đó là con số
+         người dùng gõ vào chín trên mười lần; sửa lại được khi khách trả góp.
+
+         KHÔNG tự chặn "thu quá phần còn nợ" ở đây: chỉ API mới biết đơn đã thu tới
+         đâu, và hai nơi cùng giữ một luật là hai nơi sẽ lệch. Gõ quá thì API trả
+         422 kèm số còn nợ thật, hộp ở lại và hiện nguyên câu ấy. --}}
+    <div class="modal" id="modalThuTien" data-id="">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h6 class="modal-title" id="dh-reason-title"></h6>
+                    <h6 class="modal-title">Thu tiền đơn <span class="text-orange" id="tt-ma"></span></h6>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
                 </div>
                 <div class="modal-body">
-                    <label class="form-label">Lý do <span class="text-danger">*</span></label>
-                    <textarea class="form-control" id="dh-reason-note" rows="3" maxlength="255"></textarea>
-                    <input type="hidden" id="dh-reason-status">
+                    <div class="d-flex justify-content-between mb-2">
+                        <span class="dh-nhan-nho">Còn phải thu</span>
+                        <strong class="text-danger" id="tt-con-no"></strong>
+                    </div>
+                    <label class="form-label mb-1">Số tiền thu <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control mb-2" id="tt-so-tien" inputmode="numeric" autocomplete="off">
+                    <label class="form-label mb-1">{{ __('message.payment-method-short') }}</label>
+                    <select class="form-control form-select mb-2" id="tt-phuong-thuc">
+                        @foreach ($C::PAYMENT_METHODS as $ma => $ten)
+                            <option value="{{ $ma }}">{{ $ten }}</option>
+                        @endforeach
+                    </select>
+                    <label class="form-label mb-1">{{ __('message.note') }}</label>
+                    <textarea class="form-control" id="tt-ghi-chu" rows="2" maxlength="255"></textarea>
                 </div>
                 <div class="modal-footer justify-content-center">
-                    <button type="button" class="bt btn_red" data-bs-dismiss="modal">Huỷ</button>
-                    <button type="button" class="bt btn_green" id="dh-reason-ok">Xác nhận</button>
+                    <button type="button" class="bt btn_red" data-bs-dismiss="modal">{{ __('message.close') }}</button>
+                    <button type="button" class="bt btn_green" id="tt-luu">{{ __('message.save') }}</button>
                 </div>
             </div>
         </div>
     </div>
+
+    {{-- ===================== Hộp xem PHIẾU TRẢ =====================
+         Dòng "Trả hàng" của v2 mở được chi tiết ngay tại màn Quản lý đơn hàng
+         (getData, type = return-order): bảng hàng trả bên trái, khối hoàn tiền
+         bên phải. Chép đúng khuôn hộp đơn hàng ở trên để hai hộp đọc như một.
+
+         Chỉ để XEM: duyệt / nhận hàng / hoàn tiền vẫn làm ở màn Trả hàng, nơi có
+         đủ luồng chuyển trạng thái của phiếu. --}}
+    <div class="modal" id="modalPhieuTra" style="padding-inline: 0 !important">
+        <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable mx-auto">
+            <div class="modal-content">
+                <div class="modal-header border-bottom d-flex justify-content-between align-items-center">
+                    <h4 class="modal-title fs-6">
+                        Phiếu trả hàng - <span class="text-orange" id="pt-ma"></span>
+                    </h4>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+                </div>
+
+                <div class="modal-body">
+                    <div class="row px-2">
+                        <div class="col-12 col-xl-8 d-flex mt-3 mt-md-0">
+                            <div class="d-flex bg-blue-dark">
+                                <i class="fa fa-user my-auto" aria-hidden="true" style="color: #599FBD; font-size: 20px;"></i>
+                                <span class="my-auto mx-1"><strong id="pt-khach"></strong></span>
+                            </div>
+                        </div>
+                        <div class="col-12 col-xl-4 d-flex justify-content-md-end justify-content-sm-start">
+                            <div class="bg-blue-dark text-center" id="pt-luc"></div>
+                        </div>
+                    </div>
+
+                    <div class="row p-2">
+                        <div class="col-12 col-md-12 col-lg-7 col-xl-8" style="overflow: auto;">
+                            <table class="bang-hang">
+                                <thead>
+                                    <tr>
+                                        <th class="text-center">{{ __('message.stt') }}</th>
+                                        <th class="text-left">Hàng hoá</th>
+                                        <th class="text-right">Đơn giá</th>
+                                        <th class="text-right">SL trả</th>
+                                        <th class="text-right">Thành tiền</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="pt-hang"></tbody>
+                            </table>
+                        </div>
+
+                        <div class="col-12 col-md-12 col-lg-5 col-xl-4 inftt mt-3 mt-lg-0">
+                            <div class="border-bottom-dotted bg-E7EBEE p-2 mb-2">
+                                <strong>Thông tin hoàn tiền</strong>
+                            </div>
+                            <div class="d-flex justify-content-between">
+                                <span>Đơn gốc</span><span id="pt-don-goc"></span>
+                            </div>
+                            <div class="d-flex justify-content-between">
+                                <span>Tiền hàng trả</span><span id="pt-tien-hang"></span>
+                            </div>
+                            <div class="d-flex bg-E7EBEE justify-content-between">
+                                <span>Phí giao hoàn</span><span id="pt-phi"></span>
+                            </div>
+                            <div class="d-flex justify-content-between">
+                                <span>Khấu trừ</span><span id="pt-khau-tru"></span>
+                            </div>
+                            <div class="d-flex justify-content-between text-red">
+                                <strong>Tổng hoàn</strong><strong id="pt-tong"></strong>
+                            </div>
+                            <div class="d-flex justify-content-between">
+                                <span>Phương thức hoàn</span><span id="pt-phuong-thuc"></span>
+                            </div>
+                            <div class="d-flex justify-content-between">
+                                <span>Trạng thái phiếu</span><span id="pt-trang-thai"></span>
+                            </div>
+                            <div class="d-flex justify-content-between">
+                                <span>Lý do trả</span><span class="text-end" id="pt-ly-do"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
 @endsection
 
 @push('scripts')
     <script>
         const URL_DH = @json(url('/admin/orders'));
+        const CHU_SO = (o) => String(o == null ? '' : o).replace(/[^0-9]/g, '');
 
         const DH_STATUSES = @json(\App\Http\Controllers\OrderController::STATUSES);
         const DH_TONES = @json(\App\Http\Controllers\OrderController::STATUS_TONES);
-        const DH_PAY_STATUSES = @json(\App\Http\Controllers\OrderController::PAYMENT_STATUSES);
         const DH_PAY_METHODS = @json(\App\Http\Controllers\OrderController::PAYMENT_METHODS);
         const DH_MAU_TONE = { wait: 'text-warning', info: 'text-primary', move: 'text-info', done: 'text-success', stop: 'text-danger' };
-        const DH_MAU_TIEN = { paid: 'text-success', pending: '', failed: 'text-danger', refunded: 'text-warning' };
+        const URL_PT = @json(url('/admin/returns'));
+        const PT_STATUSES = @json(\App\Http\Controllers\ReturnController::STATUSES);
+        const PT_TONES = @json(\App\Http\Controllers\ReturnController::STATUS_TONES);
+        const PT_REASONS = @json(\App\Http\Controllers\ReturnController::REASONS);
+        const PT_REFUND_METHODS = @json(\App\Http\Controllers\ReturnController::REFUND_METHODS);
 
         const tienVN = (n) => Number(n || 0).toLocaleString('vi-VN');
         const thoat = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({
@@ -670,22 +931,27 @@
         function locLai() {
             const q = new URLSearchParams();
 
-            const kw = String(oLoc('keyword').val() || '').trim();
-            if (kw) q.set('keyword', kw);
-
-            // Trạng thái chọn nhiều: gộp thành chuỗi ngăn bởi dấu phẩy — đúng cái
-            // API đọc (status IN (...)).
-            const tt = [].concat(oLoc('status').val() || []);
-            if (tt.length) q.set('status', tt.join(','));
-
-            // Ba ô một-giá-trị: 'all' nghĩa là không lọc, không cần gửi.
-            ['payment_status', 'payment_method', 'channel'].forEach(function (ten) {
-                const v = String(oLoc(ten).val() || 'all');
-                if (v && v !== 'all') q.set(ten, v);
+            // Hai ô gõ tay: mã đơn và khách hàng, mỗi ô một tham số riêng.
+            ['keyword', 'customer'].forEach(function (ten) {
+                const v = String(oLoc(ten).val() || '').trim();
+                if (v) q.set(ten, v);
             });
 
-            const sap = String(oLoc('sort').val() || '');
-            if (sap && sap !== 'newest') q.set('sort', sap);
+            // Bốn dãy CHECKBOX: gộp những ô đang tick thành chuỗi ngăn bởi dấu
+            // phẩy — đúng cái API đọc (locNhieu → cột IN (...)).
+            //
+            // Không tick ô nào = KHÔNG lọc, tức xem tất cả. Đó là điểm khác v2:
+            // bên đó bỏ tick sạch thì bảng rỗng, mà "bảng rỗng vì bạn vừa bỏ hết
+            // tick" là câu không màn nào nói ra được.
+            ['status', 'payment_method', 'channel', 'etax'].forEach(function (ten) {
+                const chon = $('.fillter-box [name="' + ten + '"]:checked')
+                    .map(function () { return this.value; }).get();
+                if (chon.length) q.set(ten, chon.join(','));
+            });
+
+            // Người tạo là ô thả xuống chọn nhiều, không phải checkbox.
+            const nguoiTao = [].concat(oLoc('created_by').val() || []);
+            if (nguoiTao.length) q.set('created_by', nguoiTao.join(','));
 
             // Hai ô ngày LUÔN gửi, kể cả khi trống: bỏ trống là "không giới hạn",
             // không gửi thì mất nghĩa đó ở lượt lọc sau.
@@ -696,7 +962,7 @@
             // Tham số không có ô trong khung lọc thì chép lại từ URL cũ, không thì
             // đổi bộ lọc một cái là mất luôn cột đang ẩn và cỡ trang.
             const cu = new URLSearchParams(location.search);
-            ['hide', 'page_size'].forEach(function (ten) {
+            ['hide', 'page_size', 'sort'].forEach(function (ten) {
                 if (cu.get(ten)) q.set(ten, cu.get(ten));
             });
 
@@ -705,34 +971,14 @@
         }
 
         let timerLoc = null;
-        $(document).on('input', '.fillter-box [name="keyword"]', function () {
+        $(document).on('input', '.fillter-box [name="keyword"], .fillter-box [name="customer"]', function () {
             clearTimeout(timerLoc);
             timerLoc = setTimeout(locLai, 300);
         });
         $(document).on('change',
-            '.fillter-box [name="status"], .fillter-box [name="payment_status"], '
-            + '.fillter-box [name="payment_method"], .fillter-box [name="channel"], '
-            + '.fillter-box [name="sort"], .fillter-box [name="from_date"], .fillter-box [name="to_date"]',
+            '.fillter-box .dh-o-tick, .fillter-box [name="created_by"], '
+            + '.fillter-box [name="from_date"], .fillter-box [name="to_date"]',
             locLai);
-
-        // Sáu mốc nhanh: điền hai ô ngày rồi lọc. Hai ô vẫn là nguồn sự thật nên
-        // người dùng sửa tay sau đó cũng không chọi với mốc đang tick.
-        $(document).on('change', '.dh-moc-thoi-gian', function () {
-            const nay = moment();
-            let tu, den;
-            switch (this.value) {
-                case 'today': tu = nay.clone().startOf('day'); den = nay.clone(); break;
-                case 'yesterday': tu = nay.clone().subtract(1, 'days'); den = tu.clone(); break;
-                case 'thisWeek': tu = nay.clone().startOf('isoWeek'); den = nay.clone(); break;
-                case 'lastWeek': tu = nay.clone().subtract(1, 'weeks').startOf('isoWeek'); den = tu.clone().endOf('isoWeek'); break;
-                case 'thisMonth': tu = nay.clone().startOf('month'); den = nay.clone(); break;
-                case 'lastMonth': tu = nay.clone().subtract(1, 'months').startOf('month'); den = tu.clone().endOf('month'); break;
-                default: return;
-            }
-            oLoc('from_date').val(tu.format('DD-MM-YYYY'));
-            oLoc('to_date').val(den.format('DD-MM-YYYY'));
-            locLai();
-        });
 
         // Ô Chi nhánh KHÔNG đi qua locLai(): đây là chi nhánh đang làm việc của
         // tab, đổi nó là đổi cả phiên chứ không phải thêm một điều kiện lọc.
@@ -774,13 +1020,15 @@
         $(document).on('v2:da-nap', ganLich);
 
         // ================= Hộp xem chi tiết =================
-        let donDangXem = null;
 
+        /** Vẽ các dòng hàng, trả về tổng tiền hàng cho hàng tổng nằm ở tbody riêng
+         *  bên dưới — đúng cách v2 tách hai tbody. */
         function veHangHoa(items) {
             const ds = items || [];
             if (!ds.length) {
                 $('#dh-v-items').html('<tr><td colspan="5" class="text-center py-3">Đơn không có dòng hàng nào.</td></tr>');
-                return;
+
+                return 0;
             }
 
             let tongHang = 0;
@@ -800,9 +1048,27 @@
                     + '</tr>';
             }).join('');
 
-            $('#dh-v-items').html(dong
-                + '<tr><td colspan="4" class="text-end"><b>Tổng tiền hàng</b></td>'
-                + '<td class="text-right"><b>' + tienVN(tongHang) + 'đ</b></td></tr>');
+            $('#dh-v-items').html(dong);
+
+            return tongHang;
+        }
+
+        /** Các lần đã thu. Đơn thu MỘT lần thì không bày: dòng "phương thức | số
+         *  tiền" ngay trên đã nói đủ, thêm một danh sách một dòng chỉ tổ rườm. */
+        function veLuotThu(ds) {
+            const list = ds || [];
+            $('#dh-v-luotthu-wrap').toggle(list.length > 1);
+            if (list.length < 2) return;
+
+            $('#dh-v-luotthu').html(list.map(function (p) {
+                const luc = p.paid_at ? moment(p.paid_at).format('DD-MM-YYYY') : '';
+                const ten = DH_PAY_METHODS[p.payment_method] || p.payment_method || '';
+
+                return '<div class="ps-2 d-flex justify-content-between">'
+                    + '<span class="text-secondary">' + thoat(luc + (ten ? ' · ' + ten : '')) + '</span>'
+                    + '<span class="text-secondary">' + tienVN(p.amount) + 'đ</span>'
+                    + '</div>';
+            }).join(''));
         }
 
         /** Bày/giấu một dòng của khối thanh toán theo việc nó có giá trị hay không. */
@@ -811,110 +1077,107 @@
             $(idChu).text(giaTri || '');
         }
 
-        function veHopChiTiet(o, hoaDon) {
-            donDangXem = o;
-
-            $('#modalOrderDetail').attr('data-id', o.id);
+        function veHopChiTiet(o) {
+            // Hộp Thu tiền mở ra SAU khi hộp này đóng, nên nó không còn đọc được
+            // `o` nữa — gửi kèm hai con số nó cần qua data-*.
+            $('#modalOrderDetail').attr('data-id', o.id)
+                .data('con-no', Number(o.con_no || 0))
+                .data('phuong-thuc', o.payment_method || 'cash');
             $('#dh-title-code').text(o.order_code || '');
 
-            $('#dh-v-name').text(o.recipient_name || '—');
-            $('#dh-v-phone').text(o.recipient_phone ? ' · ' + o.recipient_phone : '');
+            // Chỗ v2 in "Số khách: N" — shop không đếm khách, in thẳng người mua.
+            $('#dh-v-name').text([o.recipient_name, o.recipient_phone].filter(Boolean).join(' - '));
 
             const diaChi = [o.shipping_address, o.shipping_ward, o.shipping_district, o.shipping_province]
                 .filter(Boolean).join(', ');
-            // Đơn quầy không có địa chỉ giao — giấu hẳn dòng thay vì in một gạch ngang.
+            // Đơn quầy không có địa chỉ giao — giấu hẳn ô thay vì in một gạch ngang.
             $('#dh-v-addr-wrap').toggle(Boolean(diaChi));
             $('#dh-v-addr').text(diaChi);
 
+            // Người tạo: `orders.created_by` (migration 0065). Đơn lập trước đó không
+            // có người tạo — in "—", đừng đoán.
+            $('#dh-v-creator').text(o.created_by_name || '—');
+            $('#dh-v-created').text(o.created_at ? moment(o.created_at).format('DD-MM-YYYY HH:mm') : '');
+
             $('#dh-v-status').html('<b class="' + (DH_MAU_TONE[DH_TONES[o.status]] || '') + '">'
                 + thoat(DH_STATUSES[o.status] || o.status || '') + '</b>');
-            $('#dh-v-created').text(o.created_at ? moment(o.created_at).format('HH:mm DD-MM-YYYY') : '');
 
-            veHangHoa(o.items);
+            const tienHang = veHangHoa(o.items);
+            $('#dh-v-goods').text(tienVN(tienHang) + 'đ');
 
+            const giam = Number(o.discount_amount || 0);
             $('#dh-v-subtotal').text(tienVN(o.subtotal_amount) + 'đ');
-            $('#dh-v-discount').text((Number(o.discount_amount || 0) > 0 ? '-' : '') + tienVN(o.discount_amount) + 'đ');
             $('#dh-v-ship').text(tienVN(o.shipping_fee) + 'đ');
+            $('#dh-v-discount').text(tienVN(giam) + 'đ');
+            $('#dh-v-after').text(tienVN(Number(o.subtotal_amount || 0) - giam) + 'đ');
             $('#dh-v-total').text(tienVN(o.total_amount) + 'đ');
+
+            // v2 in "tên phương thức | số tiền đã trả theo phương thức đó". Đơn của
+            // shop chỉ mang MỘT phương thức, nên chưa thu thì số ấy là 0.
             $('#dh-v-method').text(DH_PAY_METHODS[o.payment_method] || o.payment_method || '—');
-            $('#dh-v-paystatus').html('<b class="' + (DH_MAU_TIEN[o.payment_status] || '') + '">'
-                + thoat(DH_PAY_STATUSES[o.payment_status] || '') + '</b>');
+            $('#dh-v-paid').text(tienVN(o.da_thu) + 'đ');
+
+            // Chỗ v2 để "Hạn nợ / Ghi chú" khi đơn còn nợ. Hai con số dưới đây do
+            // API tính sẵn theo sổ thu tiền (migration 0066) — đừng suy lại từ
+            // `payment_status` như trước, đơn thu một phần sẽ ra sai.
+            const conNo = Number(o.con_no || 0);
+            $('#dh-v-debt-wrap').toggle(conNo > 0);
+            $('#dh-v-debt').text(tienVN(o.con_no) + 'đ');
+
+            veLuotThu(o.luot_thu);
+
+            // Nút Thu tiền chỉ có nghĩa khi đơn còn nợ. Bày nó trên một đơn đã thu
+            // đủ thì bấm vào chỉ nhận lỗi từ API — bẫy người dùng.
+            $('#dh-v-chan').prop('hidden', conNo <= 0);
+            $('#dh-v-thu').prop('disabled', false);
 
             dongCoDieuKien('#dh-v-voucher-wrap', '#dh-v-voucher', o.voucher_code);
             dongCoDieuKien('#dh-v-note-wrap', '#dh-v-note', o.note);
 
-            // Đơn quầy giao ngay tại chỗ nên không có gì để vận chuyển — giấu hai
-            // ô ấy đi, chỉ để lại ghi chú nội bộ.
-            $('#dh-v-ship-fields').toggle((o.channel || 'web') !== 'pos');
-            $('#dh-v-shipmethod').val(o.shipping_method || '');
-            $('#dh-v-tracking').val(o.tracking_number || '');
-            $('#dh-v-adminnote').val(o.admin_note || '');
-            // Hộp dùng lại cho mọi đơn nên phải mở khoá nút Lưu ở mỗi lượt mở.
-            $('#dh-v-luu').prop('disabled', false);
-
-            veHoaDon(o, hoaDon);
-            veNutThaoTac(o);
-
-            $('#dh-v-print').attr('href', URL_DH + '/' + o.id + '/print');
-            $('#dh-v-label').attr('href', URL_DH + '/' + o.id + '/label');
-
             $('#modalOrderDetail').modal('show');
         }
 
-        /** Dòng hoá đơn điện tử. Chưa nối cổng thì API trả null — giấu hẳn dòng. */
-        function veHoaDon(o, hd) {
-            if (!hd) {
-                $('#dh-v-etax-wrap').hide();
+        // ---------- Thu tiền ----------
+        $(document).on('click', '#dh-v-thu', function () {
+            const $chiTiet = $('#modalOrderDetail');
+            const conNo = Number($chiTiet.data('con-no') || 0);
+
+            $('#modalThuTien').attr('data-id', $chiTiet.attr('data-id'));
+            $('#tt-ma').text($('#dh-title-code').text());
+            $('#tt-con-no').text(tienVN(conNo) + 'đ');
+            // Điền sẵn ĐÚNG phần còn nợ: chín trên mười lần khách trả nốt, và sửa
+            // lại được khi họ trả góp.
+            $('#tt-so-tien').val(Number(conNo).toLocaleString('vi-VN'));
+            $('#tt-phuong-thuc').val($chiTiet.data('phuong-thuc') || 'cash');
+            $('#tt-ghi-chu').val('');
+            $('#tt-luu').prop('disabled', false);
+
+            $chiTiet.modal('hide');
+            $('#modalThuTien').modal('show');
+        });
+
+        $(document).on('input', '#tt-so-tien', function () {
+            const raw = CHU_SO(this.value).slice(0, 12);
+            this.value = raw ? Number(raw).toLocaleString('vi-VN') : '';
+        });
+
+        $(document).on('click', '#tt-luu', function () {
+            const id = $('#modalThuTien').attr('data-id');
+            const soTien = Number(CHU_SO($('#tt-so-tien').val()));
+            if (!id || !soTien) {
+                toastr.error('Nhập số tiền đã thu.');
+
                 return;
             }
 
-            const ten = {
-                draft: 'Nháp — chưa ký',
-                sent: 'Đã gửi — chờ cấp mã',
-                issued: 'Đã cấp mã' + (hd.invoice_no ? ' · số ' + hd.invoice_no : ''),
-                failed: 'Cổng từ chối',
-            }[hd.status] || hd.status || '';
-
-            let chu = thoat(ten);
-            if (hd.status === 'issued') {
-                chu += ' <a href="' + URL_DH + '/' + o.id + '/etax/pdf" target="_blank" rel="noopener">PDF</a>'
-                    + ' · <a href="' + URL_DH + '/' + o.id + '/etax/xml" target="_blank" rel="noopener">XML</a>';
-            }
-
-            $('#dh-v-etax-wrap').show();
-            $('#dh-v-etax').html(chu);
-        }
-
-        /** Nút chuyển trạng thái + đánh dấu tiền, dựng theo đúng `next_statuses`
-         *  API trả về. Không tự đoán luồng ở đây: hai nơi đoán khác nhau là bày ra
-         *  nút bấm vào chỉ nhận lỗi. */
-        function veNutThaoTac(o) {
-            const tiep = o.next_statuses || [];
-            const ketThuc = ['cancelled', 'returned'].indexOf(o.status) !== -1;
-
-            let html = tiep.map(function (st) {
-                // Nút bỏ đi luôn đỏ, nút đồng ý luôn xanh.
-                const bo = st === 'cancelled' || st === 'returned';
-
-                return '<button type="button" class="bt ' + (bo ? 'btn_red' : 'btn_green') + '"'
-                    + ' data-status="' + st + '"' + (bo ? ' data-reason="1"' : '')
-                    + '>' + thoat(DH_STATUSES[st] || st) + '</button>';
-            }).join('');
-
-            if (o.payment_status !== 'paid' && !ketThuc) {
-                html += '<button type="button" class="bt btn_advanced" data-payment="paid">Đánh dấu đã thanh toán</button>';
-            } else if (o.payment_status === 'paid') {
-                html += '<button type="button" class="bt btn_advanced" data-payment="refunded">Đánh dấu hoàn tiền</button>';
-            }
-
-            // Cổng hoá đơn chỉ nhận đơn ĐÃ THU tiền — ẩn nút thay vì để bấm rồi báo lỗi.
-            if (o.payment_status === 'paid' && !o.etax_issued) {
-                html += '<button type="button" class="bt btn_advanced" data-etax="1">Phát hành hoá đơn</button>';
-            }
-
-            $('#dh-v-actions').html(html
-                || '<span class="dh-nhan-nho">Đơn đã ở trạng thái cuối, không đổi tiếp được.</span>');
-        }
+            // luuHop giữ hộp lại khi API từ chối (thu quá phần còn nợ, đơn đã thu
+            // đủ) và in nguyên câu của API — số vừa gõ không mất.
+            V2.luuHop('#modalThuTien', URL_DH + '/' + id + '/payments', 'POST', {
+                amount: soTien,
+                payment_method: $('#tt-phuong-thuc').val() || '',
+                note: $('#tt-ghi-chu').val() || '',
+            }, $(this));
+        });
 
         $(document).on('click', '.detail-item', function () {
             const id = $(this).data('id') || $(this).closest('.item').data('id');
@@ -926,148 +1189,57 @@
 
                     return r.json();
                 })
-                .then(function (d) {
-                    const hd = d.etax || null;
-                    const o = d.data || {};
-                    // Cờ để veNutThaoTac biết đã có tờ hoá đơn còn hiệu lực chưa.
-                    o.etax_issued = Boolean(hd && hd.status !== 'failed');
-                    veHopChiTiet(o, hd);
-                })
+                .then(function (d) { veHopChiTiet(d.data || {}); })
                 .catch(function () { toastr.error('Không tải được chi tiết đơn hàng.'); });
         });
 
-        // ---------- Chuyển trạng thái ----------
-        $(document).on('click', '#dh-v-actions [data-status]', function () {
-            const st = $(this).data('status');
-            const id = $('#modalOrderDetail').attr('data-id');
-            if (!id) return;
+        // ================= Hộp xem phiếu trả =================
+        function veHopPhieuTra(p) {
+            const don = p.order || {};
+            $('#pt-ma').text(p.return_code || '');
+            $('#pt-khach').text([don.recipient_name, don.recipient_phone].filter(Boolean).join(' - '));
+            $('#pt-luc').text(p.created_at ? moment(p.created_at).format('DD-MM-YYYY HH:mm') : '');
 
-            // Huỷ / trả hàng phải có lý do — API và controller cùng chặn, nên hỏi
-            // ngay ở đây thay vì để người dùng bấm xong nhận toast đỏ.
-            if ($(this).data('reason')) {
-                $('#dh-reason-title').text(DH_STATUSES[st] || st);
-                $('#dh-reason-status').val(st);
-                $('#dh-reason-note').val('');
-                $('#modalOrderDetail').modal('hide');
-                $('#modalOrderReason').modal('show');
+            const hang = p.items || [];
+            $('#pt-hang').html(hang.length ? hang.map(function (d, i) {
+                const ten = [d.product_name, d.variant_name].filter(Boolean).join(' · ');
 
-                return;
-            }
+                return '<tr>'
+                    + '<td class="text-center">' + (i + 1) + '</td>'
+                    + '<td class="text-left">' + thoat(ten)
+                    + (d.variant_sku ? '<div class="dh-nhan-nho">' + thoat(d.variant_sku) + '</div>' : '')
+                    + '</td>'
+                    + '<td class="text-right">' + tienVN(d.unit_price) + 'đ</td>'
+                    + '<td class="text-right">' + tienVN(d.quantity) + '</td>'
+                    + '<td class="text-right">' + tienVN(d.total_price) + 'đ</td>'
+                    + '</tr>';
+            }).join('') : '<tr><td colspan="5" class="text-center py-3">Phiếu không có dòng hàng nào.</td></tr>');
 
-            $('#modalOrderDetail').modal('hide');
-            V2.ghi(URL_DH + '/' + id + '/status', 'PUT', { status: st });
-        });
+            $('#pt-don-goc').text(don.order_code || '');
+            $('#pt-tien-hang').text(tienVN(p.items_amount) + 'đ');
+            $('#pt-phi').text(tienVN(p.shipping_fee) + 'đ');
+            $('#pt-khau-tru').text(tienVN(p.deduction) + 'đ');
+            $('#pt-tong').text(tienVN(p.refund_amount) + 'đ');
+            $('#pt-phuong-thuc').text(PT_REFUND_METHODS[p.refund_method] || p.refund_method || '—');
+            $('#pt-trang-thai').html('<b class="' + (DH_MAU_TONE[PT_TONES[p.status]] || '') + '">'
+                + thoat(PT_STATUSES[p.status] || p.status || '') + '</b>');
+            $('#pt-ly-do').text([PT_REASONS[p.reason] || p.reason, p.reason_note].filter(Boolean).join(' — ') || '—');
 
-        $(document).on('click', '#dh-reason-ok', function () {
-            const note = String($('#dh-reason-note').val() || '').trim();
-            if (!note) {
-                toastr.error('Vui lòng nhập lý do.');
-
-                return;
-            }
-
-            const id = $('#modalOrderDetail').attr('data-id');
-            $('#modalOrderReason').modal('hide');
-            V2.ghi(URL_DH + '/' + id + '/status', 'PUT', { status: $('#dh-reason-status').val(), note: note });
-        });
-
-        // ---------- Đánh dấu thanh toán ----------
-        $(document).on('click', '#dh-v-actions [data-payment]', function () {
-            const id = $('#modalOrderDetail').attr('data-id');
-            if (!id) return;
-
-            $('#modalOrderDetail').modal('hide');
-            V2.ghi(URL_DH + '/' + id + '/payment', 'PUT', { payment_status: $(this).data('payment') });
-        });
-
-        // ---------- Lưu vận chuyển + ghi chú nội bộ ----------
-        //
-        // Hai đường ghi khác nhau nhưng người dùng chỉ bấm MỘT nút, nên không dùng
-        // được V2.ghi (nó nạp lại trang ngay sau lượt đầu). Gửi tay lần lượt, chỉ
-        // gửi cái nào thật sự đổi, rồi nhặt câu báo ở phản hồi cuối và nạp lại.
-        function guiPut(url, fields) {
-            const fd = new FormData();
-            fd.append('_token', $('meta[name="csrf-token"]').attr('content'));
-            fd.append('_method', 'PUT');
-            fd.append('return', location.pathname + location.search);
-            if (V2.chiNhanhTab) fd.append('chi_nhanh', String(V2.chiNhanhTab));
-            Object.keys(fields).forEach(function (k) { fd.append(k, fields[k] == null ? '' : fields[k]); });
-
-            return fetch(url, {
-                method: 'POST',
-                body: fd,
-                headers: { 'X-Requested-With': 'XMLHttpRequest' },
-                credentials: 'same-origin',
-            }).then(function (r) { return r.text(); });
+            $('#modalPhieuTra').modal('show');
         }
 
-        $(document).on('click', '#dh-v-luu', function () {
-            const o = donDangXem;
-            if (!o) return;
+        $(document).on('click', '.detail-phieu-tra', function () {
+            const id = $(this).closest('.item').data('id');
+            if (!id) return;
 
-            const $nut = $(this).prop('disabled', true);
-            const ship = String($('#dh-v-shipmethod').val() || '');
-            const track = String($('#dh-v-tracking').val() || '');
-            const ghiChu = String($('#dh-v-adminnote').val() || '');
+            fetch(URL_PT + '/' + id + '/detail', { headers: { Accept: 'application/json' }, credentials: 'same-origin' })
+                .then(function (r) {
+                    if (!r.ok) throw new Error('HTTP ' + r.status);
 
-            const viec = [];
-            if (ship !== (o.shipping_method || '') || track !== (o.tracking_number || '')) {
-                viec.push(function () {
-                    return guiPut(URL_DH + '/' + o.id + '/shipping', { shipping_method: ship, tracking_number: track });
-                });
-            }
-            if (ghiChu !== (o.admin_note || '')) {
-                viec.push(function () {
-                    return guiPut(URL_DH + '/' + o.id + '/note', { admin_note: ghiChu });
-                });
-            }
-
-            if (!viec.length) {
-                toastr.info('Chưa có gì thay đổi.');
-                $nut.prop('disabled', false);
-
-                return;
-            }
-
-            viec.reduce(function (truoc, lam) { return truoc.then(lam); }, Promise.resolve())
-                .then(function (html) {
-                    V2.toastTu(new DOMParser().parseFromString(html, 'text/html'));
-                    $('#modalOrderDetail').modal('hide');
-                    V2.napLai(location.href, false);
+                    return r.json();
                 })
-                .catch(function () {
-                    toastr.error('Không lưu được. Vui lòng thử lại.');
-                    $nut.prop('disabled', false);
-                });
-        });
-
-        // ---------- Phát hành hoá đơn điện tử ----------
-        // Trả JSON chứ không chuyển hướng như hai thao tác trên, nên gọi thẳng
-        // fetch rồi tự bắn toast và nạp lại bảng.
-        $(document).on('click', '#dh-v-actions [data-etax]', function () {
-            const id = $('#modalOrderDetail').attr('data-id');
-            const $nut = $(this).prop('disabled', true);
-
-            const fd = new FormData();
-            fd.append('_token', $('meta[name="csrf-token"]').attr('content'));
-
-            fetch(URL_DH + '/' + id + '/etax', {
-                method: 'POST',
-                body: fd,
-                headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-                credentials: 'same-origin',
-            })
-                .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
-                .then(function (kq) {
-                    kq.ok ? toastr.success(kq.j.message || 'Đã phát hành hoá đơn.')
-                        : toastr.error(kq.j.message || 'Phát hành hoá đơn không thành công.');
-                    $('#modalOrderDetail').modal('hide');
-                    V2.napLai(location.href, false);
-                })
-                .catch(function () {
-                    toastr.error('Không kết nối được cổng hoá đơn.');
-                    $nut.prop('disabled', false);
-                });
+                .then(function (d) { veHopPhieuTra(d.data || {}); })
+                .catch(function () { toastr.error('Không tải được chi tiết phiếu trả hàng.'); });
         });
     </script>
 @endpush

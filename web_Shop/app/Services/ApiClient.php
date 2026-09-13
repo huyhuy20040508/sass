@@ -889,6 +889,30 @@ class ApiClient
         return $this->get('/admin/orders', $query);
     }
 
+    /**
+     * Sổ chứng từ bán hàng — nguồn của màn Quản lý đơn hàng.
+     *
+     * Khác `orders()` ở chỗ đây trả về DÒNG BẢNG đã quy đổi sẵn (tiền theo phương
+     * thức, số còn nợ, tên người lập) và gộp cả phiếu trả hàng vào danh sách, đúng
+     * cách bản v2 dựng màn này. Hộp chi tiết vẫn đọc `order()`.
+     */
+    public function soDonHang(array $query = []): Response
+    {
+        return $this->get('/admin/orders/so-don', $query);
+    }
+
+    /**
+     * Ghi MỘT LƯỢT THU TIỀN cho đơn (thanh toán một phần / trả nợ dần).
+     *
+     * Khác `updateOrderPayment()`: đường kia gạt cờ "coi như đã thu đủ", đường này
+     * ghi một số tiền thật vào sổ. Thu nốt phần còn lại thì API tự đóng đơn sang
+     * `paid`, và thu quá phần còn nợ thì API từ chối.
+     */
+    public function ghiLuotThu(int $id, array $payload): Response
+    {
+        return $this->post("/admin/orders/{$id}/payments", $payload);
+    }
+
     /** Thống kê đơn hàng theo nhóm trạng thái + doanh thu. */
     public function orderStats(): Response
     {
@@ -2074,6 +2098,11 @@ class ApiClient
     public function taoNguoiNopThuChi(array $payload): Response
     {
         return $this->post('/admin/nguoi-nop-thu-chi', $payload);
+    }
+
+    public function xoaNguoiNopThuChi(int $id): Response
+    {
+        return $this->delete("/admin/nguoi-nop-thu-chi/{$id}");
     }
 
     // ---------- Công nợ (Thu chi → Công nợ) ----------

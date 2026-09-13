@@ -670,6 +670,23 @@ func (r *thuChiRepository) CreateNguoiNop(ctx context.Context, n *domain.NguoiNo
 	return translateThuChiErr(r.db.WithContext(ctx).Create(n).Error)
 }
 
+// DeleteNguoiNop xoá mềm một người nộp / người nhận.
+//
+// Không chặn khi đang có phiếu dùng tới: phiếu giữ `payer_id` và tên được đọc
+// bằng truy vấn thô nên vẫn in ra đủ. Chặn lại thì danh mục chỉ có đường vào,
+// một cái tên gõ nhầm nằm đó mãi mãi.
+func (r *thuChiRepository) DeleteNguoiNop(ctx context.Context, id uint) error {
+	kq := r.db.WithContext(ctx).Delete(&domain.NguoiNopThuChi{}, id)
+	if kq.Error != nil {
+		return translateThuChiErr(kq.Error)
+	}
+	if kq.RowsAffected == 0 {
+		return domain.ErrNotFound
+	}
+
+	return nil
+}
+
 func translateThuChiErr(err error) error {
 	switch {
 	case err == nil:

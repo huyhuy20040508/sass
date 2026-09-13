@@ -78,23 +78,66 @@ class XuatDonHangTest extends TestCase
         $this->assertStringContainsString('Đơn giao hàng', $csv);
     }
 
-    /** Xuất theo BỘ LỌC — nhánh còn lại, không có ?ids. */
+    /**
+     * Xuất theo BỘ LỌC — bản xuất của màn hình, đọc CÙNG sổ chứng từ với bảng.
+     *
+     * Trước đây nhánh này đọc danh sách thực thể đơn: tick "Đã thanh toán" rồi
+     * xuất là ra tệp rỗng (mã trạng thái của sổ bị đem so với `orders.status`),
+     * và phiếu trả không có mặt. Bài này chốt cả hai: tham số trạng thái đi sang
+     * đúng đường sổ chứng từ, và phiếu trả + hàng tổng cộng có trong tệp.
+     */
     public function test_xuat_theo_bo_loc(): void
     {
         Http::fake([
-            '*/admin/orders*' => Http::response([
-                'data' => [$this->donMau(11, 'DH011', 'pos')['data']],
+            '*/admin/orders/so-don*' => Http::response([
+                'data' => [
+                    ['loai' => 'don', 'id' => 11, 'ma' => 'DH011', 'kenh' => 'pos', 'khach_hang' => 'Chị Lan',
+                        'created_at' => '2026-08-17T10:00:00+07:00', 'tien_mat' => 30000, 'chuyen_khoan' => 20000,
+                        'the_vi' => 0, 'tong_tien' => 100000, 'co_cong_no' => true, 'trang_thai' => 'partial'],
+                    ['loai' => 'tra-hang', 'id' => 3, 'ma' => 'TH003', 'kenh' => 'web',
+                        'created_at' => '2026-08-17T11:00:00+07:00', 'tien_mat' => 50000, 'chuyen_khoan' => 0,
+                        'the_vi' => 0, 'tong_tien' => 50000, 'co_cong_no' => false, 'trang_thai' => 'returned'],
+                ],
                 'meta' => ['total_pages' => 1],
             ]),
             '*' => Http::response(['data' => []]),
         ]);
 
         $csv = $this->withSession($this->phienQuanTri())
-            ->get(route('admin.orders.export', ['channel' => 'pos']))
+            ->get(route('admin.orders.export', ['status' => 'partial,returned']))
             ->assertOk()
             ->streamedContent();
 
         $this->assertStringContainsString('DH011', $csv);
+        $this->assertStringContainsString('Thanh toán một phần', $csv);
+        $this->assertStringContainsString('TH003', $csv);
+        $this->assertStringContainsString('Phiếu trả hàng', $csv);
+        // Hàng tổng cộng như bản xuất của v2: 30.000 + 50.000 tiền mặt.
+        $this->assertStringContainsString('Tổng cộng', $csv);
+        $this->assertStringContainsString('80000', $csv);
+
+        Http::assertSent(fn ($req) => str_contains($req->url(), '/admin/orders/so-don')
+            && ($req->data()['status'] ?? null) === 'partial,returned');
+        Http::assertNotSent(fn ($req) => preg_match('#/admin/orders(\?|$)#', $req->url()) === 1);
+    }
+
+    /**
+     * Hai mặc định lấy theo v2: sắp xếp "vừa đụng tới" (`updated_at`) và tick ĐỦ
+     * mọi phương thức = không lọc. Gửi nguyên bảy phương thức thì API vẫn lọc và
+     * gạt mất phiếu trả không hoàn tiền của lượt đổi hàng.
+     */
+    public function test_mac_dinh_giong_v2(): void
+    {
+        Http::fake(['*' => Http::response(['data' => [], 'meta' => ['total_pages' => 1]])]);
+
+        $tatCa = implode(',', array_keys(\App\Http\Controllers\OrderController::PAYMENT_METHODS));
+        $this->withSession($this->phienQuanTri())
+            ->get(route('admin.orders.index', ['payment_method' => $tatCa]))
+            ->assertOk();
+
+        Http::assertSent(fn ($req) => str_contains($req->url(), '/admin/orders/so-don')
+            && ($req->data()['sort'] ?? null) === 'updated'
+            && ($req->data()['payment_method'] ?? null) === 'all');
     }
 
     /** Chọn toàn id không có thật thì nói rõ là chưa chọn được đơn nào. */

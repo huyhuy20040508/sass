@@ -339,6 +339,22 @@ class ThuChiController extends Controller
         );
     }
 
+    /**
+     * Xoá một người nộp / người nhận khỏi danh mục.
+     *
+     * Danh mục này trước đây chỉ có đường THÊM: gõ nhầm một cái tên là nó nằm
+     * trong ô chọn mãi mãi. Xoá ở đây là xoá MỀM — phiếu cũ vẫn in đúng tên
+     * người nộp (API đọc tên bằng truy vấn thô), và tên vừa xoá khai lại được.
+     */
+    public function xoaNguoiNop(Request $request, int $id)
+    {
+        return $this->send(
+            fn () => $this->api->xoaNguoiNopThuChi($id),
+            'Đã xoá khỏi danh mục.',
+            $request
+        );
+    }
+
     // ---------------------------------------------------------------------
     // Ghi
     // ---------------------------------------------------------------------

@@ -1063,6 +1063,19 @@ type OrderPaymentRequest struct {
 	PaymentStatus string `json:"payment_status" binding:"required,oneof=pending paid failed refunded"`
 }
 
+// OrderThuTienRequest — payload ghi MỘT LƯỢT THU TIỀN cho đơn (migration 0066).
+//
+// Khác OrderPaymentRequest ở trên: cái kia GẠT CỜ "đơn này coi như đã thu đủ",
+// cái này ghi một số tiền thật vào sổ. Đơn thu làm nhiều lần thì gọi nhiều lần.
+type OrderThuTienRequest struct {
+	// Amount phải lớn hơn 0 và không vượt phần còn nợ — repository chốt vế thứ
+	// hai vì chỉ nó mới biết đơn đã thu tới đâu.
+	Amount float64 `json:"amount" binding:"required,gt=0"`
+	// PaymentMethod bỏ trống thì lấy theo phương thức đã khai trên đơn.
+	PaymentMethod string `json:"payment_method" binding:"omitempty,oneof=cod vnpay momo bank_transfer payos sepay cash"`
+	Note          string `json:"note" binding:"omitempty,max=255"`
+}
+
 // OrderNoteRequest — payload ghi chú nội bộ của admin trên đơn hàng.
 type OrderNoteRequest struct {
 	AdminNote string `json:"admin_note" binding:"omitempty,max=500"`
@@ -2700,6 +2713,13 @@ type ThuChiMeta struct {
 type CongNoMeta struct {
 	response.Pagination
 	domain.CongNoTongKet
+}
+
+// SoDonMeta — `meta` của sổ chứng từ bán hàng: phân trang cộng hàng TỔNG trên
+// mọi dòng khớp bộ lọc (hàng "tất cả" dưới chân bảng của v2).
+type SoDonMeta struct {
+	response.Pagination
+	Tong domain.TongSoDon `json:"tong"`
 }
 
 // ---------- Vị trí (Hàng hóa → Vị trí) ----------

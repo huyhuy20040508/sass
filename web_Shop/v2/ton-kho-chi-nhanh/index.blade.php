@@ -55,17 +55,17 @@
         table.table-list-warehouse.none_mobile { width: 100%; table-layout: fixed; }
         table.table-list-warehouse.none_mobile th { white-space: nowrap; }
         table.table-list-warehouse.none_mobile td { overflow: hidden; text-overflow: ellipsis; }
-        table.table-list-warehouse.none_mobile th:first-child { width: 3.83%; }
-        table.table-list-warehouse.none_mobile th.show_menu_code { width: 5.01%; }
-        table.table-list-warehouse.none_mobile th.show_menu_name { width: 13.23%; }
-        table.table-list-warehouse.none_mobile th.show_quantity { width: 9.19%; }
-        table.table-list-warehouse.none_mobile th.show_menu_unit { width: 10.19%; }
-        table.table-list-warehouse.none_mobile th.show_menu_type { width: 9.02%; }
-        table.table-list-warehouse.none_mobile th.show_menu_group { width: 10.28%; }
-        table.table-list-warehouse.none_mobile th.show_lot { width: 11.99%; }
-        table.table-list-warehouse.none_mobile th.show_lot_qty { width: 6.27%; }
-        table.table-list-warehouse.none_mobile th.show_expire { width: 9.14%; }
-        table.table-list-warehouse.none_mobile th:last-child { width: 11.85%; }
+        table.table-list-warehouse.none_mobile th:first-child { width: 3.51%; }
+        table.table-list-warehouse.none_mobile th.show_menu_code { width: 9.2%; }
+        table.table-list-warehouse.none_mobile th.show_menu_name { width: 12.93%; }
+        table.table-list-warehouse.none_mobile th.show_quantity { width: 8.86%; }
+        table.table-list-warehouse.none_mobile th.show_menu_unit { width: 9.86%; }
+        table.table-list-warehouse.none_mobile th.show_menu_type { width: 8.69%; }
+        table.table-list-warehouse.none_mobile th.show_menu_group { width: 9.94%; }
+        table.table-list-warehouse.none_mobile th.show_lot { width: 11.36%; }
+        table.table-list-warehouse.none_mobile th.show_lot_qty { width: 6.02%; }
+        table.table-list-warehouse.none_mobile th.show_expire { width: 8.35%; }
+        table.table-list-warehouse.none_mobile th:last-child { width: 11.28%; }
 
         /* Ô gộp theo lô: chữ neo lên đỉnh chứ không giữa. Mặt hàng có bốn lô thì
            ô tên hàng cao gấp bốn, để giữa là tên trôi xuống lưng chừng, không

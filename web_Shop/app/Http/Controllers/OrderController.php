@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\TraLoiHopThoai;
 use App\Services\ApiClient;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -9,6 +10,8 @@ use Illuminate\Support\Facades\Log;
 
 class OrderController extends Controller
 {
+    use TraLoiHopThoai;
+
     public const TITLE = 'Quản lý đơn hàng';
 
     /** Cột bật/tắt được của bảng v2 — khoá cột => nhãn trong ô chọn cột. */
@@ -23,16 +26,7 @@ class OrderController extends Controller
         'online' => 'Thẻ/Ví',
         'debt' => 'Công nợ',
         'total' => 'Tổng tiền',
-        'payment' => 'Thanh toán',
         'status' => 'Trạng thái',
-    ];
-
-    /** Gom bảy phương thức về ba cột tiền của bảng v2. Một đơn chỉ mang MỘT
-     *  phương thức, nên mỗi dòng chỉ có đúng một trong ba cột mang số. */
-    public const NHOM_TIEN = [
-        'cash' => 'cash', 'cod' => 'cash',
-        'bank_transfer' => 'transfer', 'sepay' => 'transfer',
-        'vnpay' => 'online', 'momo' => 'online', 'payos' => 'online',
     ];
 
     public const STATUSES = [
@@ -48,9 +42,51 @@ class OrderController extends Controller
         'cancelled' => 'stop', 'returned' => 'stop',
     ];
 
+    /** Bốn giá trị THẬT của cột `orders.payment_status` — dùng để lọc và để
+     *  validate lượt đánh dấu thanh toán. */
     public const PAYMENT_STATUSES = [
         'pending' => 'Chưa thanh toán', 'paid' => 'Đã thanh toán',
         'failed' => 'Thất bại', 'refunded' => 'Đã hoàn tiền',
+    ];
+
+    /**
+     * NĂM trạng thái của sổ chứng từ — chép nguyên bộ và nguyên thứ tự của v2.
+     *
+     * Không giá trị nào nằm trong database: API suy ra mỗi lượt đọc từ
+     * `orders.status`, `orders.payment_status` và sổ thu tiền, đúng cách v2 suy từ
+     * `payment_status` + `cab_debts` + việc dòng đến từ bảng nào.
+     *
+     * Giữ RIÊNG khỏi STATUSES và PAYMENT_STATUSES — hai bộ kia là giá trị thật của
+     * hai cột enum, và lỡ gửi 'unpaid' hay 'partial' lên đường đổi trạng thái thì
+     * API từ chối. Sáu bước giao hàng vẫn còn nguyên trong STATUSES, hộp chi tiết
+     * vẫn in ra; chỉ DANH SÁCH là gộp lại theo tiền như v2.
+     */
+    /**
+     * Ô lọc "HĐĐT" — đơn đã xuất hoá đơn điện tử hay chưa.
+     *
+     * Tick cả hai = KHÔNG lọc: mọi đơn đều rơi vào đúng một trong hai nhóm, nên
+     * hỏi cả hai là hỏi tất cả. API cũng hiểu đúng như vậy.
+     */
+    public const HOA_DON_DIEN_TU = [
+        'co' => 'Có',
+        'khong' => 'Không',
+    ];
+
+    public const TRANG_THAI_SO = [
+        'paid' => 'Đã thanh toán',
+        'unpaid' => 'Chưa thanh toán',
+        'partial' => 'Thanh toán một phần',
+        'returned' => 'Trả hàng',
+        'cancelled' => 'Đã huỷ',
+    ];
+
+    /** Màu chữ của từng trạng thái sổ — đúng bảng màu v2 dùng cho dãy ô tick. */
+    public const MAU_TRANG_THAI_SO = [
+        'paid' => 'text-success',
+        'unpaid' => '',
+        'partial' => 'text-primary',
+        'returned' => 'text-warning',
+        'cancelled' => 'text-danger',
     ];
 
     public const PAYMENT_METHODS = [
@@ -67,7 +103,11 @@ class OrderController extends Controller
         'web' => 'Đơn giao hàng', 'pos' => 'Bán tại quầy',
     ];
 
+    /** Khoá đầu tiên là MẶC ĐỊNH. `updated` (vừa đụng tới lên đầu) đúng như v2
+     *  `orderByDesc('updated_at')`: đơn vừa thu tiền hay vừa huỷ phải nổi lên
+     *  trước, dù nó được lập từ hôm kia. */
     public const SORTS = [
+        'updated' => 'Mới cập nhật',
         'newest' => 'Mới nhất', 'oldest' => 'Cũ nhất',
         'total_desc' => 'Giá trị cao nhất', 'total_asc' => 'Giá trị thấp nhất',
     ];
@@ -82,9 +122,11 @@ class OrderController extends Controller
         $orders = [];
         $meta = ['page' => $filters['page'], 'page_size' => $filters['page_size'], 'total' => 0, 'total_pages' => 1];
         $error = null;
+        // `orders` ở đây là SỔ CHỨNG TỪ (đơn bán + phiếu trả), không phải danh sách
+        // thực thể đơn hàng — xem ApiClient::soDonHang.
 
         try {
-            $res = $this->api->orders($filters);
+            $res = $this->api->soDonHang($filters);
             if ($res->successful()) {
                 $orders = $res->json('data') ?? [];
                 $meta = array_merge($meta, $res->json('meta') ?? []);
@@ -97,9 +139,29 @@ class OrderController extends Controller
             $error = 'Không tải được danh sách đơn hàng. Kiểm tra kết nối API.';
         }
 
-        $view = view('v2::don-hang.index', compact('orders', 'filters', 'meta'));
+        $view = view('v2::don-hang.index', compact('orders', 'filters', 'meta'))
+            ->with('nhanVien', $this->danhMucNhanVien());
 
         return $error ? $view->with('error', $error) : $view;
+    }
+
+    /**
+     * Danh sách nhân viên cho ô lọc "Người tạo".
+     *
+     * Hỏng thì trả mảng rỗng chứ không làm hỏng cả trang: thiếu một ô lọc còn
+     * xem được sổ đơn, mất cả sổ đơn thì không.
+     */
+    protected function danhMucNhanVien(): array
+    {
+        try {
+            $res = $this->api->users(['status' => 'active', 'page_size' => 100]);
+
+            return $res->successful() ? ($res->json('data') ?? []) : [];
+        } catch (\Throwable $e) {
+            Log::warning('Load danh muc nhan vien cho loc don hang failed', ['msg' => $e->getMessage()]);
+
+            return [];
+        }
     }
 
     public function detail(int $id)
@@ -474,6 +536,35 @@ class OrderController extends Controller
         );
     }
 
+    /**
+     * Ghi một lượt thu tiền cho đơn còn nợ.
+     *
+     * Trả lời theo kiểu HỘP THOẠI (JSON) vì nút nằm trong hộp chi tiết: lưu hỏng
+     * thì hộp phải ở lại kèm câu báo, không phải biến mất rồi mới hiện toast —
+     * lúc đó số vừa gõ đã mất trắng.
+     *
+     * KHÔNG tự chặn "thu quá phần còn nợ" ở đây: chỉ API mới biết đơn đã thu tới
+     * đâu, và hai nơi cùng giữ một luật là hai nơi sẽ lệch.
+     */
+    public function ghiLuotThu(Request $request, int $id)
+    {
+        $data = $request->validate([
+            'amount' => 'required|numeric|min:1',
+            'payment_method' => 'nullable|in:'.implode(',', array_keys(self::PAYMENT_METHODS)),
+            'note' => 'nullable|string|max:255',
+        ]);
+
+        return $this->send(
+            fn () => $this->api->ghiLuotThu($id, [
+                'amount' => (float) $data['amount'],
+                'payment_method' => (string) ($data['payment_method'] ?? ''),
+                'note' => (string) ($data['note'] ?? ''),
+            ]),
+            'Đã ghi lượt thu tiền.',
+            $request
+        );
+    }
+
     public function updatePayment(Request $request, int $id)
     {
         $validated = $request->validate([
@@ -487,46 +578,21 @@ class OrderController extends Controller
         );
     }
 
-    public function updateNote(Request $request, int $id)
-    {
-        $validated = $request->validate(['admin_note' => 'nullable|string|max:500']);
-
-        return $this->send(
-            fn () => $this->api->updateOrderNote($id, (string) ($validated['admin_note'] ?? '')),
-            'Đã lưu ghi chú cho đơn hàng.',
-            $request
-        );
-    }
-
-    public function updateShipping(Request $request, int $id)
-    {
-        $validated = $request->validate([
-            'shipping_method' => 'nullable|string|max:100',
-            'tracking_number' => 'nullable|string|max:100',
-        ]);
-
-        return $this->send(
-            fn () => $this->api->updateOrderShipping(
-                $id,
-                (string) ($validated['shipping_method'] ?? ''),
-                (string) ($validated['tracking_number'] ?? '')
-            ),
-            'Đã cập nhật thông tin vận chuyển.',
-            $request
-        );
-    }
-
     public function export(Request $request)
     {
-        // Nếu có ?ids=... thì chỉ xuất các đơn được chọn; ngược lại xuất theo bộ lọc.
+        // Xuất THEO BỘ LỌC là bản xuất của màn hình: đúng những dòng đang hiện
+        // trên bảng. Xem xuatSoDon().
+        if ($request->query('ids', '') === '') {
+            return $this->xuatSoDon($request);
+        }
+
+        // ?ids=... : chỉ xuất các đơn được chọn, mỗi đơn một thực thể đầy đủ.
         //
         // Tham số thứ ba là VIỆC ĐANG LÀM, chèn vào câu báo lỗi khi không lấy được
         // đơn nào ("Chưa chọn đơn hàng nào để xuất tệp…"). Nó không có giá trị mặc
         // định, và chỗ gọi này từng bỏ quên — bấm Xuất trên vài đơn vừa tick là
         // nhận thẳng trang 500.
-        $orders = $request->query('ids', '') !== ''
-            ? $this->fetchOrdersForPrint($request, null, 'xuất tệp')
-            : $this->fetchAll($this->filters($request));
+        $orders = $this->fetchOrdersForPrint($request, null, 'xuất tệp');
         $fileName = 'don-hang-'.date('Ymd-His').'.csv';
 
         return response()->streamDownload(function () use ($orders) {
@@ -554,6 +620,86 @@ class OrderController extends Controller
         }, $fileName, ['Content-Type' => 'text/csv; charset=UTF-8']);
     }
 
+    /**
+     * Xuất SỔ CHỨNG TỪ theo bộ lọc đang bật — bản xuất của màn Quản lý đơn hàng.
+     *
+     * Đọc CÙNG nguồn với bảng (`/admin/orders/so-don`), đúng như v2 dựng tệp Excel
+     * từ chính câu truy vấn của danh sách: đơn bán lẫn phiếu trả, cùng năm trạng
+     * thái, cùng ba cột tiền, cùng cột công nợ. Trước đây tệp này đọc danh sách
+     * thực thể đơn, nên tick "Đã thanh toán" rồi xuất là ra tệp RỖNG — mã trạng
+     * thái của sổ bị đem so với cột `orders.status` — và phiếu trả không có mặt.
+     *
+     * Cột theo bản xuất của v2 (ManagerOrderExport), bỏ "Bàn" và "Chi nhánh" như
+     * chính bảng đã bỏ; cuối tệp có hàng TỔNG CỘNG như v2.
+     */
+    protected function xuatSoDon(Request $request)
+    {
+        $rows = $this->docHetSoDon($this->filters($request));
+        $fileName = 'don-hang-'.date('Ymd-His').'.csv';
+
+        return response()->streamDownload(function () use ($rows) {
+            $out = fopen('php://output', 'w');
+            fwrite($out, "\xEF\xBB\xBF");
+            fputcsv($out, ['STT', 'Mã đơn', 'Kênh', 'Thời gian', 'Khách hàng', 'Số điện thoại', 'Người tạo',
+                'Giảm giá', 'Phí giao', 'Tiền mặt', 'Chuyển khoản', 'Thẻ/Ví', 'Công nợ', 'Tổng tiền', 'Trạng thái']);
+
+            $tong = array_fill_keys(['giam_gia', 'phi_giao', 'tien_mat', 'chuyen_khoan', 'the_vi', 'tong_tien'], 0.0);
+            foreach ($rows as $i => $o) {
+                $laTra = ($o['loai'] ?? 'don') === 'tra-hang';
+                foreach ($tong as $k => $v) {
+                    $tong[$k] = $v + (float) ($o[$k] ?? 0);
+                }
+
+                fputcsv($out, [
+                    $i + 1,
+                    $o['ma'] ?? '',
+                    $laTra ? 'Phiếu trả hàng' : (self::CHANNELS[$o['kenh'] ?? ''] ?? ($o['kenh'] ?? '')),
+                    ! empty($o['created_at']) ? Carbon::parse($o['created_at'])->format('H:i:s d-m-Y') : '',
+                    $o['khach_hang'] ?? '', $o['so_dien_thoai'] ?? '', $o['nguoi_tao'] ?? '',
+                    (float) ($o['giam_gia'] ?? 0), (float) ($o['phi_giao'] ?? 0),
+                    (float) ($o['tien_mat'] ?? 0), (float) ($o['chuyen_khoan'] ?? 0), (float) ($o['the_vi'] ?? 0),
+                    ! empty($o['co_cong_no']) ? 'Có' : '-',
+                    (float) ($o['tong_tien'] ?? 0),
+                    self::TRANG_THAI_SO[$o['trang_thai'] ?? ''] ?? ($o['trang_thai'] ?? ''),
+                ]);
+            }
+
+            fputcsv($out, ['', 'Tổng cộng', '', '', '', '', '',
+                $tong['giam_gia'], $tong['phi_giao'], $tong['tien_mat'], $tong['chuyen_khoan'], $tong['the_vi'],
+                '', $tong['tong_tien'], '']);
+            fclose($out);
+        }, $fileName, ['Content-Type' => 'text/csv; charset=UTF-8']);
+    }
+
+    /**
+     * Đọc hết các trang của sổ chứng từ cho bản xuất.
+     *
+     * Chặn ở 100 trang × 100 dòng: một tệp mười nghìn dòng đã quá sức một lượt
+     * đối soát, và không chặn thì một bộ lọc để trống trên cửa hàng lâu năm giữ
+     * PHP tới lúc hết giờ.
+     */
+    protected function docHetSoDon(array $filters): array
+    {
+        $all = [];
+        $query = array_merge($filters, ['page' => 1, 'page_size' => 100]);
+        $totalPages = 1;
+        try {
+            do {
+                $res = $this->api->soDonHang($query);
+                if (! $res->successful()) {
+                    break;
+                }
+                $all = array_merge($all, $res->json('data') ?? []);
+                $totalPages = (int) ($res->json('meta.total_pages') ?? 1);
+                $query['page']++;
+            } while ($query['page'] <= $totalPages && $query['page'] <= 100);
+        } catch (\Throwable $e) {
+            Log::error('Export so don failed', ['msg' => $e->getMessage()]);
+        }
+
+        return $all;
+    }
+
     // Helpers
 
     public static function shippingAddress(array $o): string
@@ -566,32 +712,64 @@ class OrderController extends Controller
 
     protected function filters(Request $request): array
     {
-        // Trạng thái nhận NHIỀU giá trị ngăn bởi dấu phẩy — API lọc bằng IN.
-        // Giá trị lạ bị loại; loại sạch thì coi như không lọc trạng thái.
-        $status = implode(',', array_filter(
-            array_map('trim', explode(',', (string) $request->query('status', ''))),
-            fn ($s) => isset(self::STATUSES[$s])
-        ));
-        $status = $status !== '' ? $status : 'all';
-
-        $ps = (string) $request->query('payment_status', 'all');
-        $pm = (string) $request->query('payment_method', 'all');
-        $ch = (string) $request->query('channel', 'all');
-        $so = (string) $request->query('sort', 'newest');
+        $so = (string) $request->query('sort', array_key_first(self::SORTS));
         $psize = (int) $request->query('page_size', 20);
+
+        // Tick ĐỦ bảy phương thức = không lọc, đúng như v2 (isAllPaymentTypesSelected).
+        // Gửi nguyên bảy giá trị thì API vẫn lọc — và gạt mất phiếu trả hoàn "none"
+        // của lượt đổi hàng, thứ không thuộc phương thức nào.
+        $phuongThuc = $this->locNhieu($request->query('payment_method'), array_keys(self::PAYMENT_METHODS));
+        if (count(explode(',', $phuongThuc)) === count(self::PAYMENT_METHODS)) {
+            $phuongThuc = 'all';
+        }
 
         return [
             'keyword' => trim((string) $request->query('keyword', '')),
-            'status' => $status,
-            'payment_status' => isset(self::PAYMENT_STATUSES[$ps]) ? $ps : 'all',
-            'payment_method' => isset(self::PAYMENT_METHODS[$pm]) ? $pm : 'all',
-            'channel' => isset(self::CHANNELS[$ch]) ? $ch : 'all',
+            // Ô "Khách hàng" đứng RIÊNG, không dùng chung `keyword` với ô "Mã đơn":
+            // chung một tham số thì gõ ô sau là ô trước mất tác dụng.
+            'customer' => trim((string) $request->query('customer', '')),
+            // Năm ô dưới đây là DÃY CHECKBOX trong khung lọc, nên đều nhận nhiều
+            // giá trị ngăn bởi dấu phẩy — API lọc bằng IN (xem locNhieu bên Go).
+            'status' => $this->locNhieu($request->query('status'), array_keys(self::TRANG_THAI_SO)),
+            'payment_status' => $this->locNhieu($request->query('payment_status'), array_keys(self::PAYMENT_STATUSES)),
+            'payment_method' => $phuongThuc,
+            'channel' => $this->locNhieu($request->query('channel'), array_keys(self::CHANNELS)),
+            'created_by' => $this->locNhieuSo($request->query('created_by')),
+            'etax' => $this->locNhieu($request->query('etax'), array_keys(self::HOA_DON_DIEN_TU)),
             'from_date' => $this->ngayLoc($request->query('from_date')),
             'to_date' => $this->ngayLoc($request->query('to_date')),
-            'sort' => isset(self::SORTS[$so]) ? $so : 'newest',
+            'sort' => isset(self::SORTS[$so]) ? $so : array_key_first(self::SORTS),
             'page' => max(1, (int) $request->query('page', 1)),
             'page_size' => in_array($psize, self::PAGE_SIZES, true) ? $psize : 20,
         ];
+    }
+
+    /**
+     * Chuẩn hoá một ô lọc chọn-nhiều: bỏ giá trị lạ, gộp lại thành chuỗi.
+     *
+     * Loại sạch thì trả 'all' — API hiểu là KHÔNG lọc. Đó là cách duy nhất đúng:
+     * trả chuỗi rỗng thì đường dẫn cũ mang một giá trị đã bỏ đi sẽ lặng lẽ thành
+     * "xem tất cả", còn trả nguyên giá trị lạ thì bảng rỗng mà không ai hiểu vì sao.
+     */
+    protected function locNhieu($v, array $hopLe): string
+    {
+        $chon = array_filter(
+            array_map('trim', explode(',', (string) $v)),
+            fn ($x) => in_array($x, $hopLe, true)
+        );
+
+        return $chon ? implode(',', $chon) : 'all';
+    }
+
+    /** Cùng luật với locNhieu nhưng cho ô lọc mang id (Người tạo). */
+    protected function locNhieuSo($v): string
+    {
+        $chon = array_filter(
+            array_map('intval', explode(',', (string) $v)),
+            fn ($x) => $x > 0
+        );
+
+        return $chon ? implode(',', $chon) : 'all';
     }
 
     /** Ô ngày của khung lọc v2 gửi lên dạng dd-mm-yyyy; API đọc yyyy-mm-dd.
@@ -610,27 +788,13 @@ class OrderController extends Controller
         return '';
     }
 
-    protected function fetchAll(array $filters): array
-    {
-        $all = [];
-        $query = array_merge($filters, ['page' => 1, 'page_size' => 100]);
-        $totalPages = 1;
-        try {
-            do {
-                $res = $this->api->orders($query);
-                if (! $res->successful()) {
-                    break;
-                } $all = array_merge($all, $res->json('data') ?? []);
-                $totalPages = (int) ($res->json('meta.total_pages') ?? 1);
-                $query['page']++;
-            } while ($query['page'] <= $totalPages && $query['page'] <= 100);
-        } catch (\Throwable $e) {
-            Log::error('Export orders failed', ['msg' => $e->getMessage()]);
-        }
-
-        return $all;
-    }
-
+    /**
+     * Gọi API rồi trả lời đúng kiểu người gọi đang chờ.
+     *
+     * Hộp thoại gọi bằng fetch kèm `Accept: application/json` thì nhận JSON và giữ
+     * hộp lại khi hỏng; nút trên bảng submit thật thì nhận chuyển hướng kèm flash.
+     * Một hàm cho cả hai, vì cùng một thao tác không nên có hai câu báo khác nhau.
+     */
     protected function send(callable $call, string $success, Request $request)
     {
         try {
@@ -638,13 +802,22 @@ class OrderController extends Controller
         } catch (\Throwable $e) {
             Log::error('Order API call failed', ['msg' => $e->getMessage()]);
 
-            return $this->backToList($request)->with('error', 'Không kết nối được API. Vui lòng thử lại.');
-        }
-        if ($res->successful()) {
-            return $this->backToList($request)->with('success', $success);
+            return $this->traLoiHopThoai($request, false, 'Không kết nối được API. Vui lòng thử lại.', null, 502);
         }
 
-        return $this->backToList($request)->with('error', $res->json('message') ?: 'Thao tác không thành công.');
+        if ($res->successful()) {
+            return $this->traLoiHopThoai($request, true, $success, fn () => $this->backToList($request));
+        }
+
+        // Trả về ĐÚNG mã của API: thu quá phần còn nợ là 422, đơn không tồn tại là
+        // 404 — mã nói một đằng câu nói một nẻo thì nhật ký và giám sát bị dẫn sai.
+        return $this->traLoiHopThoai(
+            $request,
+            false,
+            $this->cauLoiApi($res, 'Thao tác không thành công.'),
+            null,
+            $res->status()
+        );
     }
 
     protected function backToList(Request $request)

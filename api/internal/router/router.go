@@ -564,6 +564,7 @@ func New(
 			q.Dat(manage, http.MethodDelete, "/thu-chi/:id", "thu-chi.xoa", h.ThuChi.Delete)
 			q.Dat(manage, http.MethodGet, "/nguoi-nop-thu-chi", "thu-chi.xem", h.ThuChi.ListNguoiNop)
 			q.Dat(manage, http.MethodPost, "/nguoi-nop-thu-chi", "thu-chi.them", h.ThuChi.CreateNguoiNop)
+			q.Dat(manage, http.MethodDelete, "/nguoi-nop-thu-chi/:id", "thu-chi.xoa", h.ThuChi.DeleteNguoiNop)
 
 			// Công nợ. Quyền riêng `cong-no.xem`: sổ này bày tên và số điện thoại
 			// người đại diện bên bán cùng số tiền còn nợ từng nhà cung cấp — ai
@@ -682,12 +683,19 @@ func New(
 			q.Dat(quay, http.MethodGet, "/orders/pos/discount-limit", "don-hang.xem", h.Order.POSDiscountLimit)
 			// Đổi hàng: nhận hàng cũ + bán hàng mới + ghi chênh lệch, một giao dịch.
 			q.Dat(quay, http.MethodPost, "/orders/pos/doi-hang", "don-hang.doi-hang", h.Order.POSDoiHang)
+			// Sổ chứng từ của màn Quản lý đơn hàng. Đứng TRƯỚC "/orders/:id" trong
+			// tệp này cho dễ đọc; gin tự ưu tiên đoạn tĩnh nên thứ tự không đổi
+			// hành vi, nhưng người đọc thì cần thấy nó không phải một id.
+			q.Dat(admin, http.MethodGet, "/orders/so-don", "don-hang.xem", h.Order.SoDon)
 			q.Dat(admin, http.MethodGet, "/orders/stats", "don-hang.xem", h.Order.Stats)
 			q.Dat(admin, http.MethodGet, "/orders/revenue", "don-hang.doanh-thu", h.Order.Revenue)
 			q.Dat(admin, http.MethodGet, "/orders/:id", "don-hang.xem", h.Order.Get)
 			q.Dat(admin, http.MethodPut, "/orders/:id", "don-hang.sua", h.Order.Update)
 			q.Dat(admin, http.MethodPut, "/orders/:id/status", "don-hang.sua", h.Order.UpdateStatus)
 			q.Dat(admin, http.MethodPut, "/orders/:id/payment", "don-hang.sua", h.Order.UpdatePayment)
+			// Ghi một lượt THU TIỀN thật (thanh toán một phần / trả nợ dần). Khác
+			// đường ngay trên: đó là gạt cờ, đây là ghi số tiền vào sổ.
+			q.Dat(admin, http.MethodPost, "/orders/:id/payments", "don-hang.sua", h.Order.GhiLuotThu)
 			q.Dat(admin, http.MethodPut, "/orders/:id/shipping", "don-hang.sua", h.Order.UpdateShipping)
 			q.Dat(admin, http.MethodPut, "/orders/:id/note", "don-hang.sua", h.Order.UpdateNote)
 

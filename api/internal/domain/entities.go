@@ -1007,7 +1007,19 @@ type Order struct {
 	Channel string `json:"channel" gorm:"default:web"`
 	// UserID nil = khách lẻ: người mua tại quầy không có tài khoản, và ép họ tạo
 	// một cái chỉ để bán được một lần là thứ không ai làm ở quầy thật.
-	UserID           *uint   `json:"user_id"`
+	UserID *uint `json:"user_id"`
+	// CreatedBy là NGƯỜI LẬP đơn — khác hẳn UserID ở trên (người MUA). Đơn quầy
+	// thì đây là nhân viên đứng bán còn người mua thường là khách vãng lai không
+	// tài khoản; đơn khách tự đặt trên website thì hai bên là một người.
+	//
+	// nil = KHÔNG BIẾT: đơn có trước migration 0060. Đừng đoán ngược từ ca làm
+	// việc — `orders` không trỏ sang `work_shifts`, mà hai người cùng một ca thì
+	// suy ra cũng chỉ là tung đồng xu.
+	CreatedBy *uint `json:"created_by"`
+	// CreatedByName KHÔNG phải cột: repository điền thêm bằng một lượt tra bảng
+	// `users`. Người tạo đã bị xoá thì để rỗng và màn hình in "—", đúng như
+	// ChiNhanh.CreatedByName vẫn làm.
+	CreatedByName    string  `json:"created_by_name" gorm:"-"`
 	VoucherID        *uint   `json:"voucher_id"`
 	RecipientName    string  `json:"recipient_name"`
 	RecipientPhone   string  `json:"recipient_phone"`
@@ -1123,6 +1135,32 @@ type OrderItem struct {
 // TableName: bảng trong schema là số ít (order_status_history), khác quy ước
 // số nhiều mặc định của GORM nên phải khai báo tường minh.
 func (OrderStatusHistory) TableName() string { return "order_status_history" }
+
+// OrderPayment là MỘT LƯỢT THU TIỀN của một đơn (xem migration 0066).
+//
+// Một đơn thu bao nhiêu lần cũng được, mỗi lần một dòng — khác v2, bên đó chỉ có
+// đúng hai ô cố định trong `odr_payments`.
+//
+// QUAN HỆ VỚI Order.PaymentStatus: `paid` vẫn là nguồn sự thật cho "đã thu đủ
+// chưa"; bảng này ghi những lượt thu LẺ của đơn CHƯA thu đủ. Đơn `paid` mà sổ
+// trống là chuyện bình thường (thu một lần ngay lúc bán) — đừng đọc tổng của sổ
+// rồi kết luận đơn ấy chưa thu đồng nào.
+type OrderPayment struct {
+	ID uint `json:"id" gorm:"primaryKey"`
+	TenantOwned
+	OrderID uint    `json:"order_id"`
+	Amount  float64 `json:"amount"`
+	// PaymentMethod cùng bộ giá trị với Order.PaymentMethod.
+	PaymentMethod string `json:"payment_method"`
+	// PaidAt là lúc TIỀN VÀO KÉT, không phải lúc gõ phiếu — hai mốc lệch nhau khi
+	// ghi bù cho lượt thu hôm trước.
+	PaidAt    time.Time      `json:"paid_at"`
+	CreatedBy *uint          `json:"created_by"`
+	Note      string         `json:"note"`
+	CreatedAt time.Time      `json:"created_at"`
+	UpdatedAt time.Time      `json:"updated_at"`
+	DeletedAt gorm.DeletedAt `json:"-" gorm:"index"`
+}
 
 type OrderStatusHistory struct {
 	ID uint `json:"id" gorm:"primaryKey"`

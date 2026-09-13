@@ -63,10 +63,18 @@ trait TraLoiHopThoai
      * đã có trong cửa hàng"). Gộp chúng lại thay vì lấy `message` chung chung:
      * "Dữ liệu không hợp lệ" thì người dùng không biết phải sửa ô nào, mà hộp
      * thoại thì chỉ bắn được một dòng toast.
+     *
+     * Trừ khoá `ma`: response.ErrorMa của API nhét MÃ MÁY vào `errors.ma` (VD 403
+     * THIEU_QUYEN) để phía trước rẽ nhánh, còn câu cho người đọc nằm ở `message`.
+     * Gộp nguyên `errors` thì toast in ra "THIEU_QUYEN" thay vì "Bạn không được
+     * giao việc này".
      */
     protected function cauLoiApi(Response $res, string $macDinh): string
     {
         $loi = $res->json('errors');
+        if (is_array($loi)) {
+            unset($loi['ma']);
+        }
         if (is_array($loi) && $loi !== []) {
             return implode(' ', array_map('strval', $loi));
         }

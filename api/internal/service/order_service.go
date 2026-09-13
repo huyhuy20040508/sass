@@ -20,15 +20,51 @@ import (
 
 // orderFlow khai báo các trạng thái được phép chuyển tới từ mỗi trạng thái.
 // Đơn đã hoàn tất / huỷ / hoàn hàng là điểm cuối, không đổi tiếp được.
+// orderFlow — các bước một đơn còn đi được.
+//
+// SÁU BƯỚC GIAO HÀNG ĐÃ BỎ (chờ xác nhận → đã xác nhận → đang chuẩn bị → đang
+// giao → đã giao). Cửa hàng này bán TẠI QUẦY: đơn sinh ra là đã giao xong và đã
+// thu tiền, nên cả sáu bước ấy chưa bao giờ có đường nào sinh ra kể từ khi
+// storefront tắt (STOREFRONT_API_ENABLED=false) và màn tạo đơn thủ công bị bỏ.
+// Bày ra một luồng không ai đi được chỉ khiến giao diện phải vẽ những nút bấm
+// vào là nhận lỗi.
+//
+// Vòng đời còn lại đúng ba trạng thái, và chúng khớp với ba trong năm ô của sổ
+// chứng từ (hai ô còn lại — đã/chưa thu — nói về TIỀN, xem domain.TrangThaiSo*):
+//
+//	completed → cancelled | returned
+//
+// CÁC HẰNG SỐ CŨ VẪN CÒN trong domain và vẫn được mọi chỗ đọc-tiền, đọc-kho so
+// sánh tới. Cố ý: nếu một cửa hàng nào đó còn dòng dữ liệu mang trạng thái cũ
+// thì báo cáo doanh thu và luật trả hàng vẫn xử đúng như trước. Bỏ ở đây là bỏ
+// đường SINH RA chúng, không phải bỏ khả năng đọc chúng.
+//
+// Đơn còn mang trạng thái CŨ vẫn phải KHÉP được: POST /admin/orders vẫn sinh đơn
+// `pending`, và dữ liệu cũ có thể còn đơn đang dở. Không cho đi đâu thì đơn ấy
+// giữ tồn kho vĩnh viễn — huỷ / hoàn hàng là đường duy nhất trả hàng về kho. Chỉ
+// mở đường KHÉP, không mở lại các bước giao hàng.
 var orderFlow = map[string][]string{
-	domain.OrderStatusPending:    {domain.OrderStatusConfirmed, domain.OrderStatusCancelled},
-	domain.OrderStatusConfirmed:  {domain.OrderStatusProcessing, domain.OrderStatusCancelled},
-	domain.OrderStatusProcessing: {domain.OrderStatusShipping, domain.OrderStatusCancelled},
-	domain.OrderStatusShipping:   {domain.OrderStatusDelivered, domain.OrderStatusReturned},
-	domain.OrderStatusDelivered:  {domain.OrderStatusCompleted, domain.OrderStatusReturned},
-	domain.OrderStatusCompleted:  {},
+	domain.OrderStatusPending:    {domain.OrderStatusCancelled},
+	domain.OrderStatusConfirmed:  {domain.OrderStatusCancelled},
+	domain.OrderStatusProcessing: {domain.OrderStatusCancelled},
+	domain.OrderStatusShipping:   {domain.OrderStatusReturned},
+	domain.OrderStatusDelivered:  {domain.OrderStatusReturned},
+	domain.OrderStatusCompleted:  {domain.OrderStatusCancelled, domain.OrderStatusReturned},
 	domain.OrderStatusCancelled:  {},
 	domain.OrderStatusReturned:   {},
+}
+
+// nguoiTao đổi id người lập đơn thành con trỏ để ghi vào orders.created_by.
+//
+// Trả nil khi id = 0 chứ không ghi số 0: NULL nghĩa là "không biết ai lập" —
+// đúng với đơn cũ và với những đường tạo đơn không đi qua một phiên đăng nhập —
+// còn 0 là một id không tồn tại. Hai thứ ấy đọc ra hai câu khác nhau lúc đối soát.
+func nguoiTao(id uint) *uint {
+	if id == 0 {
+		return nil
+	}
+
+	return &id
 }
 
 // OrderDetail là đơn hàng kèm lịch sử chuyển trạng thái.
@@ -40,18 +76,32 @@ type OrderDetail struct {
 	// CanCancel cho biết KHÁCH có được tự huỷ đơn này không. Storefront dựa vào đây
 	// để hiện nút huỷ, khỏi phải chép lại luật vào giao diện rồi lệch với server.
 	CanCancel bool `json:"can_cancel"`
+	// LuotThu là các lần đã thu tiền cho đơn (migration 0066). Rỗng KHÔNG có nghĩa
+	// là chưa thu đồng nào — đơn thu đủ ngay lúc bán không ghi dòng nào cả, xem
+	// domain.OrderPayment.
+	LuotThu []domain.OrderPayment `json:"luot_thu"`
+	// DaThu và ConNo là câu trả lời đã tính sẵn cho hộp chi tiết, theo đúng luật
+	// mà sổ chứng từ dùng: đơn `paid`/`refunded` coi như thu đủ dù sổ trống, đơn
+	// đã huỷ hay đã trả hết hàng không còn khoản nào phải thu.
+	DaThu float64 `json:"da_thu"`
+	ConNo float64 `json:"con_no"`
 }
 
 type OrderService interface {
 	List(ctx context.Context, filter domain.OrderFilter) ([]domain.Order, int64, error)
+	// SoDon — sổ chứng từ cho màn Quản lý đơn hàng (đơn bán + phiếu trả, đã quy
+	// đổi sẵn thành dòng bảng). Xem repository.SoDon.
+	SoDon(ctx context.Context, filter domain.OrderFilter) ([]domain.DongSoDon, domain.TongSoDon, error)
+	// GhiLuotThu ghi một lượt thu tiền cho đơn chưa thu đủ (thanh toán một phần).
+	GhiLuotThu(ctx context.Context, id uint, req *dto.OrderThuTienRequest, actorID uint) (*OrderDetail, error)
 	GetByID(ctx context.Context, id uint) (*OrderDetail, error)
-	Create(ctx context.Context, req *dto.OrderCreateRequest) (*OrderDetail, error)
+	Create(ctx context.Context, req *dto.OrderCreateRequest, actorID uint) (*OrderDetail, error)
 	// Checkout — khách đặt hàng từ storefront (giá tra lại từ DB, trừ tồn kho).
 	Checkout(ctx context.Context, req *dto.CheckoutRequest, userID uint) (*dto.CheckoutResponse, error)
 	// POSCheckout — bán tại quầy: cùng đường tra giá + trừ kho với Checkout, nhưng
 	// đơn sinh ra đã hoàn tất và đã thu tiền. role là vai trò của NGƯỜI ĐANG BÁN,
 	// dùng để chặn mức giảm giá vượt quyền.
-	POSCheckout(ctx context.Context, req *dto.POSCheckoutRequest, role string) (*dto.POSCheckoutResponse, error)
+	POSCheckout(ctx context.Context, req *dto.POSCheckoutRequest, role string, actorID uint) (*dto.POSCheckoutResponse, error)
 	// POSScan — quét mã vạch (hoặc SKU) ở quầy, trả về món hàng kèm giá và tồn.
 	POSScan(ctx context.Context, code string) (*dto.POSScanResponse, error)
 	// POSDoiHang — đổi hàng tại quầy: hàng cũ về kho, hàng mới ra khỏi kho, chênh
@@ -189,6 +239,39 @@ func (s *orderService) List(ctx context.Context, filter domain.OrderFilter) ([]d
 	return s.orderRepo.List(ctx, filter)
 }
 
+// SoDon đi thẳng xuống repository: màn Quản lý đơn hàng đọc một sổ đã dựng sẵn ở
+// tầng SQL, không có luật nghiệp vụ nào để tầng này thêm vào.
+func (s *orderService) SoDon(ctx context.Context, filter domain.OrderFilter) ([]domain.DongSoDon, domain.TongSoDon, error) {
+	return s.orderRepo.SoDon(ctx, filter)
+}
+
+// GhiLuotThu ghi một lượt thu rồi trả về đơn đã cập nhật.
+//
+// Không tự bắn email cho khách như UpdatePayment: một lượt thu lẻ chưa phải là
+// "đơn đã thanh toán", mà báo cho khách hai lần cho một khoản tiền thì lần sau họ
+// không đọc nữa. Thu nốt phần cuối thì repository tự đóng trạng thái, và lượt báo
+// ấy thuộc về đường đánh dấu đã thanh toán.
+func (s *orderService) GhiLuotThu(ctx context.Context, id uint, req *dto.OrderThuTienRequest, actorID uint) (*OrderDetail, error) {
+	p := &domain.OrderPayment{
+		OrderID:       id,
+		Amount:        req.Amount,
+		PaymentMethod: strings.TrimSpace(req.PaymentMethod),
+		Note:          strings.TrimSpace(req.Note),
+		CreatedBy:     nguoiTao(actorID),
+	}
+	if err := s.orderRepo.GhiLuotThu(ctx, p); err != nil {
+		return nil, err
+	}
+
+	o, err := s.orderRepo.FindByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	s.signalOrder(ctx, o)
+
+	return s.detail(ctx, o)
+}
+
 func (s *orderService) GetByID(ctx context.Context, id uint) (*OrderDetail, error) {
 	o, err := s.orderRepo.FindByID(ctx, id)
 	if err != nil {
@@ -246,7 +329,9 @@ func (s *orderService) Checkout(ctx context.Context, req *dto.CheckoutRequest, u
 
 		now := time.Now()
 		o := &domain.Order{
-			Channel:          domain.OrderChannelWeb,
+			Channel: domain.OrderChannelWeb,
+			// Khách tự đặt trên website: người mua cũng chính là người lập đơn.
+			CreatedBy:        nguoiTao(userID),
 			RecipientName:    strings.TrimSpace(req.RecipientName),
 			RecipientPhone:   strings.TrimSpace(req.RecipientPhone),
 			RecipientEmail:   strings.TrimSpace(req.RecipientEmail),
@@ -374,7 +459,7 @@ func (s *orderService) Checkout(ctx context.Context, req *dto.CheckoutRequest, u
 //   - Đơn sinh ra đã completed + paid: không có gì để chờ xác nhận hay để giao.
 //   - Không phí ship, không địa chỉ: hàng trao tay ngay tại quầy.
 //   - Có thể không gắn tài khoản nào (khách lẻ).
-func (s *orderService) POSCheckout(ctx context.Context, req *dto.POSCheckoutRequest, role string) (*dto.POSCheckoutResponse, error) {
+func (s *orderService) POSCheckout(ctx context.Context, req *dto.POSCheckoutRequest, role string, actorID uint) (*dto.POSCheckoutResponse, error) {
 	if len(req.Items) == 0 {
 		return nil, domain.ErrEmptyCart
 	}
@@ -426,6 +511,7 @@ func (s *orderService) POSCheckout(ctx context.Context, req *dto.POSCheckoutRequ
 		now := time.Now()
 		o := &domain.Order{
 			Channel:        domain.OrderChannelPOS,
+			CreatedBy:      nguoiTao(actorID),
 			RecipientName:  strings.TrimSpace(req.CustomerName),
 			RecipientPhone: strings.TrimSpace(req.CustomerPhone),
 			PaymentMethod:  req.PaymentMethod,
@@ -929,24 +1015,10 @@ type statusMail struct {
 
 // statusMails — trạng thái nào đáng báo cho khách và báo bằng câu chữ gì.
 //
-// Cố ý KHÔNG có "processing": đó là bước nội bộ của kho, khách vừa nhận thư "đã
-// xác nhận" mà lại nhận thêm thư "đang chuẩn bị hàng" thì chỉ thành phiền.
+// Chỉ còn ba, vì vòng đời đơn chỉ còn ba (xem orderFlow). Ba thư của các bước
+// giao hàng đã bỏ cùng lúc với các bước ấy: giữ lại là giữ một đoạn văn không
+// bao giờ được gửi.
 var statusMails = map[string]statusMail{
-	domain.OrderStatusConfirmed: {
-		label:    "Đã xác nhận",
-		headline: "Đơn hàng đã được xác nhận",
-		detail:   "Chúng tôi đã xác nhận đơn của bạn và đang chuẩn bị hàng. Bạn sẽ nhận được thông báo tiếp theo khi đơn được giao cho đơn vị vận chuyển.",
-	},
-	domain.OrderStatusShipping: {
-		label:    "Đang giao hàng",
-		headline: "Đơn hàng đang trên đường tới bạn",
-		detail:   "Đơn đã được bàn giao cho đơn vị vận chuyển. Vui lòng để ý điện thoại để shipper liên hệ khi giao hàng.",
-	},
-	domain.OrderStatusDelivered: {
-		label:    "Đã giao hàng",
-		headline: "Đơn hàng đã được giao",
-		detail:   "Cảm ơn bạn đã mua sắm tại cửa hàng. Nếu sản phẩm có bất kỳ vấn đề gì, hãy liên hệ trong vòng 3 ngày để được đổi size hoặc đổi hàng.",
-	},
 	domain.OrderStatusCompleted: {
 		label:    "Hoàn tất",
 		headline: "Đơn hàng đã hoàn tất",
@@ -1363,7 +1435,7 @@ func (s *orderService) shippingFeeFor(ctx context.Context, subtotal float64) flo
 //
 // Kho bị trừ y như đơn khách đặt trên web: cùng một transaction, có khoá biến thể
 // và ghi sổ kho. Thiếu hàng thì trả ErrOutOfStock và không tạo đơn.
-func (s *orderService) Create(ctx context.Context, req *dto.OrderCreateRequest) (*OrderDetail, error) {
+func (s *orderService) Create(ctx context.Context, req *dto.OrderCreateRequest, actorID uint) (*OrderDetail, error) {
 	exists, err := s.orderRepo.UserExists(ctx, req.UserID)
 	if err != nil {
 		return nil, err
@@ -1377,8 +1449,10 @@ func (s *orderService) Create(ctx context.Context, req *dto.OrderCreateRequest) 
 	o := &domain.Order{
 		// Đơn nhân viên đặt hộ khi khách gọi điện vẫn là đơn GIAO HÀNG: có địa chỉ,
 		// có phí ship, thu tiền sau. Khác đơn quầy ở đúng những điểm đó.
-		Channel:          domain.OrderChannelWeb,
-		UserID:           &uid,
+		Channel: domain.OrderChannelWeb,
+		UserID:  &uid,
+		// Người MUA là khách (uid ở trên), người LẬP là nhân viên đang gọi API.
+		CreatedBy:        nguoiTao(actorID),
 		RecipientName:    strings.TrimSpace(req.RecipientName),
 		RecipientPhone:   strings.TrimSpace(req.RecipientPhone),
 		RecipientEmail:   strings.TrimSpace(req.RecipientEmail),
@@ -1677,10 +1751,39 @@ func (s *orderService) detail(ctx context.Context, o *domain.Order) (*OrderDetai
 	if err != nil {
 		return nil, err
 	}
+
+	// Sổ thu tiền của đơn. Đọc hỏng thì coi như chưa ghi lượt nào chứ không làm
+	// hỏng cả hộp chi tiết: thiếu vài dòng lịch sử thu còn xem được đơn, mất cả
+	// đơn thì không.
+	luotThu, err := s.orderRepo.LuotThuCuaDon(ctx, o.ID)
+	if err != nil {
+		luotThu = nil
+	}
+
+	daThu := 0.0
+	for _, p := range luotThu {
+		daThu += p.Amount
+	}
+	// Cùng luật với sổ chứng từ, xem chú thích ở so_don_repository.go: đơn đã
+	// đánh dấu thu đủ (hay đã hoàn tiền) thì coi như thu đủ DÙ SỔ TRỐNG; đơn đã
+	// khép (huỷ / trả hết hàng) thì không còn gì phải thu — hộp chi tiết dựa vào
+	// số này để bày nút Thu tiền.
+	thuDu := o.PaymentStatus == domain.OrderPaymentPaid || o.PaymentStatus == "refunded"
+	if thuDu {
+		daThu = max(daThu, o.TotalAmount)
+	}
+	conNo := 0.0
+	if !thuDu && o.Status != domain.OrderStatusCancelled && o.Status != domain.OrderStatusReturned {
+		conNo = max(o.TotalAmount-daThu, 0)
+	}
+
 	return &OrderDetail{
 		Order:        o,
 		Histories:    histories,
 		NextStatuses: NextOrderStatuses(o.Status),
+		LuotThu:      luotThu,
+		DaThu:        daThu,
+		ConNo:        conNo,
 	}, nil
 }
 

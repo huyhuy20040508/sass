@@ -23,6 +23,25 @@
         ->contains(fn ($v) => $v !== '' && $v !== null && $v !== 0 && $v !== [] && $v !== 'all');
 @endphp
 
+@push('styles')
+    <style>
+        /* Bảng danh sách: chia % CỨNG, tổng đúng 100. Để `table-layout: auto` thì
+           phần trăm chỉ là gợi ý — nội dung dài là bảng tự phình quá khung, tràn
+           ngang và đẩy cột Hành động khỏi màn (đo ở 1366: bảng 1198px trong khung
+           1071px). Bề rộng dưới đây đo thật ở khung 1192px; chữ dài thì cắt "…"
+           (có title). */
+        .list .table-list-container > table { width: 100%; table-layout: fixed; }
+        .list .table-list-container > table td { overflow: hidden; text-overflow: ellipsis; }
+        .list .table-list-container > table th:first-child { width: 3.4%; }
+        .list .table-list-container > table th:nth-child(2) { width: 4%; }
+        .list .table-list-container > table th:nth-child(3) { width: 16%; }
+        .list .table-list-container > table th:nth-child(4) { width: 19%; }
+        .list .table-list-container > table th:nth-child(5) { width: 41%; }
+        .list .table-list-container > table th:nth-child(6) { width: 8%; }
+        .list .table-list-container > table th:last-child { width: 8.6%; }
+    </style>
+@endpush
+
 @section('content')
     <div class="call-to-action-container">
         <div class="wrapper-call-to-action">

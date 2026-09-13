@@ -357,6 +357,30 @@
                             </div>
                         </div>
 
+                        {{-- Lọc theo HẠN NỢ. Bốn mốc này vốn chỉ bấm được ở hàng nút đếm
+                             trên đầu bảng — mà hàng nút ấy đọc như bốn con số thống kê hơn
+                             là bốn cái nút, nên câu hỏi đáng hỏi nhất của một sổ đòi nợ
+                             ("phiếu nào sắp tới hạn") không ai tìm ra chỗ hỏi. Nay nó nằm
+                             đúng chỗ mọi bộ lọc khác nằm.
+
+                             Ô chọn này là bản CHÍNH: hàng nút chỉ đổi giá trị của nó rồi
+                             gọi lọc, để hai chỗ không bao giờ nói hai điều khác nhau. Nó
+                             cũng nằm NGOÀI `.list` nên nạp lại bằng AJAX không thổi bay
+                             lựa chọn đang có. --}}
+                        <div id="filterDue" class="mb-3">
+                            <div class="inner-modal-in-mobile">
+                                <span class="title_search d-none d-lg-block">{{ __('message.remaining_term') }}</span>
+                                <select class="form-control form-select mt-1" id="cn-due">
+                                    @foreach ($C::MOC_HAN as $ma => $chu)
+                                        <option value="{{ $ma }}"
+                                            {{ $filters['due'] === $ma ? 'selected' : '' }}>
+                                            {{ __('message.'.$chu) }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </div>
+                        </div>
+
                         {{-- v2 còn một khối lọc theo khoảng thời gian nhưng ĐÃ COMMENT LẠI
                              bên đó, tuy JS vẫn gửi from_date / to_date lên cho một
                              controller không hề đọc tới. Không bê sang. --}}
@@ -480,7 +504,7 @@
                                             <span class="so-ngay">{{ $soNgay }}</span>
                                         @endif
                                     </td>
-                                    <td class="text-center show_due_date {{ $columns['show_due_date'] ? '' : 'hide' }}">{{ $ngayVN($item['due_date'] ?? '') ?: '-' }}</td>
+                                    <td class="text-center show_due_date {{ $columns['show_due_date'] ? '' : 'hide' }}">{{ $ngayVN($item['due_date'] ?? '') }}</td>
                                     <td class="text-left show_creator {{ $columns['show_creator'] ? '' : 'hide' }}"
                                         title="{{ $item['created_by_name'] ?? '' }}">{{ $item['created_by_name'] ?? '' }}</td>
                                     <td class="text-center action not-export">
@@ -724,11 +748,30 @@
                             <input type="text" class="form-control" id="customer_phone" maxlength="30" autocomplete="off">
                         </div>
 
+                        {{-- HẸN HẠN TRẢ — và đây là ĐƯỜNG HOÀN NGUYÊN.
+                             Trước tệp này, hộp Thanh toán của màn Phiếu mua hàng là chỗ DUY
+                             NHẤT bật được thoả thuận nợ, mà hộp ấy đóng lại ngay khi phiếu
+                             có lượt trả đầu tiên. Bật nhầm một cái là hạn nợ đóng băng vĩnh
+                             viễn: không sửa được ngày, không gỡ được thoả thuận, chỉ còn
+                             cách vào thẳng database.
+
+                             Bỏ tick thì API dọn cả hạn lẫn người đại diện — khoản nợ VẪN
+                             nằm trong sổ (sổ nhận mọi phiếu đã duyệt còn thiếu tiền), chỉ
+                             là không còn ngày phải đòi. --}}
                         <div class="col-md-6 mb-3">
-                            <label class="form-label" for="paid">
-                                {{ __('message.payment_amount') }} <span class="required" style="color:red">*</span>
-                            </label>
+                            <label class="form-label d-block">{{ __('message.due_date') }}</label>
+                            <div class="form-check mb-2">
+                                <input type="checkbox" class="form-check-input" id="cn_co_han">
+                                <label for="cn_co_han" class="ms-2">Hẹn hạn trả</label>
+                            </div>
+                            <input type="text" class="form-control ip-ngay" id="cn_han" readonly
+                                autocomplete="off" placeholder="{{ __('message.due_date') }}">
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label" for="paid">{{ __('message.payment_amount') }}</label>
                             <input type="text" class="form-control" id="paid" inputmode="numeric" autocomplete="off" placeholder="0">
+                            <small class="text-muted">Bỏ trống nếu chỉ sửa thoả thuận nợ.</small>
                         </div>
                         <div class="col-md-6 mb-3">
                             <label class="form-label" for="total_amount">{{ __('message.not_paid') }}</label>
@@ -820,8 +863,10 @@
             const tt = $('.cn-status:checked').map(function () { return this.value; }).get();
             if (tt.length && tt.length < $('.cn-status').length) q.set('status', tt.join(','));
 
-            // Mốc hạn đang bấm. 'all' là mặc định nên không cần nằm trên địa chỉ.
-            const moc = (themVao && themVao.due) || $('.cn-moc-han.active').data('due') || 'all';
+            // Mốc hạn lấy từ Ô CHỌN trong khung lọc, không lấy từ hàng nút: hàng nút
+            // nằm trong `.list` nên mỗi lượt nạp lại là một hàng nút mới, còn ô chọn
+            // thì đứng nguyên. 'all' là mặc định nên không cần nằm trên địa chỉ.
+            const moc = (themVao && themVao.due) || String($('#cn-due').val() || 'all');
             if (moc !== 'all') q.set('due', moc);
 
             // Tham số không có ô trong khung lọc thì chép lại từ URL cũ, không là
@@ -858,12 +903,19 @@
             locLai();
         });
 
+        $(document).on('change', '#cn-due', locLai);
+
+        // Hàng nút đếm là lối tắt của ô chọn, không phải một bộ lọc thứ hai: bấm nút
+        // là ghi vào ô chọn rồi mới lọc. `change.select2` chỉ vẽ lại ô, không bắn
+        // sự kiện change của jQuery nên không gọi locLai hai lần.
         $(document).on('click', '.cn-moc-han', function () {
             const $n = $(this);
             if ($n.hasClass('active')) return;
             $('.cn-moc-han').removeClass('active');
             $n.addClass('active');
-            locLai({ due: String($n.data('due')) });
+            const moc = String($n.data('due'));
+            $('#cn-due').val(moc).trigger('change.select2');
+            locLai({ due: moc });
         });
 
         // Ô Chi nhánh: KHÔNG đi qua locLai(). Đây là chi nhánh đang làm việc của
@@ -1016,15 +1068,21 @@
             $h.attr('data-id', $tr.attr('data-id'));
             $h.attr('data-remaining', conNo);
             $('#total_amount').val(tien(conNo));
-            // Điền sẵn ĐÚNG số còn nợ: trả nốt cho xong là lượt hay gặp nhất, và
-            // người trả một phần thì sửa lại con số vẫn nhanh hơn gõ từ đầu.
-            $('#paid').val(tien(conNo));
+            // ĐỂ TRỐNG, không điền sẵn số còn nợ. Hộp này kiêm hai việc — ghi lượt
+            // trả và sửa thoả thuận nợ — nên điền sẵn là người vào sửa mỗi cái hạn
+            // bấm Lưu một phát thành trả hết tiền.
+            $('#paid').val('');
             $('#payment-method').val('cash');
             $('#payment_at').val(ngayVN(new Date()));
             // Người đại diện lấy từ thoả thuận nợ đang có, sửa được: tới hạn mà
             // bên bán đổi người phụ trách thì đây là chỗ ghi lại số mới.
             $('#customer_name').val($tr.attr('data-contact') || '');
             $('#customer_phone').val($tr.attr('data-phone') || '');
+            // Hạn trả: có ngày thì tick sẵn, không có thì để trống — và người dùng
+            // tự bật/tắt được, đây là đường DUY NHẤT gỡ một thoả thuận nợ đã lỡ bật.
+            const han = $tr.attr('data-due-date') || '';
+            $('#cn_co_han').prop('checked', !!han);
+            $('#cn_han').val(han).prop('disabled', !han);
             $('#note').val('');
             $('#attachment_url').val('');
             $('#attachment').val('');
@@ -1035,6 +1093,32 @@
         $(document).on('click', '.pay-item', function (e) {
             e.stopPropagation();
             moHopTra($(this).closest('.item'));
+        });
+
+        // Bỏ tick thì DỌN luôn ngày: gửi lên một ngày kèm cờ đã tắt là hai thứ
+        // nói ngược nhau, và server dọn cờ xong vẫn còn ngày mồ côi.
+        $(document).on('change', '#cn_co_han', function () {
+            const bat = this.checked;
+            $('#cn_han').prop('disabled', !bat);
+            if (!bat) $('#cn_han').val('');
+        });
+
+        $(document).on('click', '#cn_han', function () {
+            const $o = $(this);
+            if ($o.prop('disabled') || $o.data('daterangepicker')) return;
+
+            $o.daterangepicker({
+                singleDatePicker: true,
+                showDropdowns: true,
+                autoUpdateInput: false,
+                autoApply: true,
+                // Hạn trả là thoả thuận cho TƯƠNG LAI: hẹn lùi về quá khứ thì
+                // khoản nợ sinh ra đã quá hạn, không ai định thế cả.
+                minDate: moment(),
+                locale: V2.lichVN(),
+            }, function (start) {
+                $o.val(start.format('DD-MM-YYYY'));
+            }).trigger('click');
         });
 
         // Bấm Thanh toán từ trong hộp chi tiết: đóng hộp ấy TRƯỚC rồi mới mở hộp
@@ -1091,14 +1175,33 @@
             const so = Number(soTu($('#paid').val()));
 
             if (!id) return;
-            if (!so) { toastr.error('Nhập số tiền trả.'); return; }
-            // Máy chủ chặn lại lần nữa — xem CongNoController::traNo. Chặn ở đây
-            // chỉ để người dùng biết ngay tại ô vừa gõ.
+            // Bỏ trống số tiền = chỉ sửa thoả thuận nợ, không có đồng nào đổi chủ.
+            // Bắt nhập tiền thì người dùng phải ghi một lượt trả giả rồi ghi tiếp
+            // một lượt âm để bù, và sổ thu chi lãnh hai phiếu vô nghĩa.
+            //
+            // Trả quá số nợ thì chặn ngay tại ô vừa gõ; máy chủ vẫn chặn lần nữa,
+            // xem CongNoController::traNo.
             if (so > conNo + 0.005) { toastr.error('Số tiền trả lớn hơn số còn nợ.'); return; }
+
+            // Còn hẹn hạn thì phải đủ ba thứ: ngày, tên và số của người đại diện —
+            // đúng bộ mà API đòi. Thiếu một cái là 422, chặn ở đây để nói rõ hơn.
+            const coHan = $('#cn_co_han').is(':checked');
+            const han = coHan ? String($('#cn_han').val() || '').trim() : '';
+            if (coHan && so <= conNo - 0.005) {
+                if (!han) { toastr.error('Chọn hạn trả, hoặc bỏ tick "Hẹn hạn trả".'); return; }
+                if (!String($('#customer_name').val() || '').trim()
+                    || !String($('#customer_phone').val() || '').trim()) {
+                    toastr.error('Nhập tên và số điện thoại người đại diện.');
+
+                    return;
+                }
+            }
 
             V2.luuHop($h, URL_CN + '/' + id + '/payments', 'POST', {
                 amount: so,
                 payment_method: $('#payment-method').val(),
+                co_han: coHan ? 1 : 0,
+                due_date: han,
                 contact_name: $('#customer_name').val(),
                 contact_phone: $('#customer_phone').val(),
                 payment_attachment: $('#attachment_url').val(),

@@ -166,13 +166,35 @@ type CheckoutVariant struct {
 
 // OrderFilter là tham số lọc/sắp xếp/phân trang khi liệt kê đơn hàng.
 type OrderFilter struct {
-	Keyword       string // mã đơn / tên / SĐT / email người nhận
-	Status        string // all | pending | confirmed | ... | returned
-	PaymentStatus string // all | pending | paid | failed | refunded
-	PaymentMethod string // all | cod | vnpay | momo | bank_transfer | cash
-	// Channel: all | web | pos — nơi đơn phát sinh. Đây là bộ lọc tách được doanh
-	// thu quầy khỏi doanh thu giao hàng, hai thứ có cách vận hành khác hẳn nhau.
+	Keyword string // mã đơn / tên / SĐT / email người nhận
+	// Customer lọc RIÊNG theo người nhận (tên hoặc số điện thoại).
+	//
+	// Có Keyword rồi vẫn cần ô này: khung lọc bày "Mã đơn" và "Khách hàng" thành
+	// hai ô riêng, mà gộp cả hai vào một tham số thì gõ ô sau là ô trước mất tác
+	// dụng. Hai ô cùng bật thì hai điều kiện CHỒNG nhau (AND), đúng như người
+	// dùng chờ đợi khi họ điền cả hai.
+	Customer string
+	// BỐN Ô DƯỚI ĐÂY NHẬN NHIỀU GIÁ TRỊ, ngăn bởi dấu phẩy ("paid,pending").
+	//
+	// Khung lọc của màn Quản lý đơn hàng bày chúng thành dãy checkbox chứ không
+	// phải ô thả xuống, nên "chọn nhiều" mới là cách dùng thường ngày — một ô
+	// chỉ nhận một giá trị buộc người trực đơn lọc lại bốn lượt rồi tự cộng.
+	//
+	// Rỗng hoặc "all" = không lọc.
+	Status        string // pending | confirmed | ... | returned
+	PaymentStatus string // pending | paid | failed | refunded
+	PaymentMethod string // cod | vnpay | momo | bank_transfer | payos | sepay | cash
+	// Channel: web | pos — nơi đơn phát sinh. Đây là bộ lọc tách được doanh thu
+	// quầy khỏi doanh thu giao hàng, hai thứ có cách vận hành khác hẳn nhau.
 	Channel string
+	// CreatedBy lọc theo NGƯỜI LẬP đơn (orders.created_by, xem migration 0065),
+	// cũng nhận nhiều id ngăn bởi dấu phẩy. Đây là đường duy nhất trả lời "hôm
+	// nay bạn này bán được bao nhiêu đơn".
+	CreatedBy string
+	// HoaDonDienTu lọc theo việc đơn ĐÃ XUẤT hoá đơn điện tử hay chưa: "co",
+	// "khong", hoặc cả hai ngăn bởi dấu phẩy (= không lọc, vì mọi đơn đều rơi vào
+	// một trong hai).
+	HoaDonDienTu string
 	// ShopID cắt danh sách theo CHI NHÁNH phát sinh đơn. 0 = không cắt (xem gộp
 	// cả cửa hàng) — chỉ nên dùng ở báo cáo và khi người dùng chủ động chọn.
 	// Handler đặt sẵn theo chi nhánh đang làm việc; không cắt thì người đứng ở
@@ -231,6 +253,20 @@ type RevenueSummary struct {
 // OrderRepository — truy cập bảng orders.
 type OrderRepository interface {
 	List(ctx context.Context, f OrderFilter) ([]Order, int64, error)
+	// SoDon là SỔ CHỨNG TỪ BÁN HÀNG của màn Quản lý đơn hàng: mỗi dòng một chứng
+	// từ, gộp đơn bán và phiếu trả hàng vào cùng một danh sách rồi sắp chung theo
+	// lần đụng tới gần nhất.
+	//
+	// KHÔNG dùng lại List(): List trả về thực thể Order đầy đủ cho storefront, POS
+	// và hộp chi tiết, còn màn này cần một DÒNG BẢNG — đã quy đổi sẵn tiền theo
+	// phương thức, số còn nợ và tên người lập. Ép hai nhu cầu vào một câu truy vấn
+	// thì bên nào cũng phải mang thừa nửa số cột của bên kia.
+	SoDon(ctx context.Context, f OrderFilter) ([]DongSoDon, TongSoDon, error)
+	// GhiLuotThu ghi một lượt thu tiền cho đơn; thu nốt phần còn lại thì đơn tự
+	// sang `paid`. Xem so_don_repository.go.
+	GhiLuotThu(ctx context.Context, p *OrderPayment) error
+	// LuotThuCuaDon liệt kê các lượt thu đã ghi của một đơn.
+	LuotThuCuaDon(ctx context.Context, orderID uint) ([]OrderPayment, error)
 	FindByID(ctx context.Context, id uint) (*Order, error)
 	// Create tạo đơn mới (kèm sản phẩm) trong một transaction, tự sinh mã đơn theo
 	// ID, TRỪ TỒN KHO (khoá biến thể, ghi sổ kho) và ghi mốc lịch sử khởi tạo.
@@ -1186,3 +1222,102 @@ type SettingRepository interface {
 	// cần cả `group` — nhóm do registry của service quyết định.
 	Upsert(ctx context.Context, items []Setting) error
 }
+
+// DongSoDon là MỘT DÒNG của sổ chứng từ bán hàng (màn Quản lý đơn hàng).
+//
+// Đây là dòng bảng, không phải thực thể: mọi con số đã quy đổi sẵn ở tầng SQL để
+// giao diện chỉ việc in ra. Cách này chép theo bản v2 — bên đó câu truy vấn cũng
+// tự tính `have_debt` và trạng thái hiển thị thay vì đẩy phép suy luận ra màn hình,
+// vì cùng một phép suy luận nằm ở hai nơi (bảng và bản xuất Excel) là hai nơi sẽ
+// lệch nhau.
+type DongSoDon struct {
+	// Loai: "don" (đơn bán) | "tra-hang" (phiếu trả). Giao diện đọc nó để biết mở
+	// hộp chi tiết nào và có bày nút thao tác hay không.
+	Loai string `json:"loai"`
+	ID   uint   `json:"id"`
+	Ma   string `json:"ma"`
+	// Kenh của phiếu trả lấy theo ĐƠN GỐC: phiếu trả tự nó không phát sinh ở kênh
+	// nào, nhưng người đọc sổ vẫn cần biết nó trả cho đơn quầy hay đơn giao.
+	Kenh        string `json:"kenh"`
+	KhachHang   string `json:"khach_hang"`
+	SoDienThoai string `json:"so_dien_thoai"`
+
+	TienHang float64 `json:"tien_hang"`
+	GiamGia  float64 `json:"giam_gia"`
+	PhiGiao  float64 `json:"phi_giao"`
+	TongTien float64 `json:"tong_tien"`
+
+	PhuongThuc string `json:"phuong_thuc"`
+	// DaThu là TỔNG số tiền thật đã vào két, mọi phương thức cộng lại. Đơn chưa thu
+	// thì 0 — in nguyên tổng tiền của một đơn còn nợ là báo cáo nói dối.
+	DaThu float64 `json:"da_thu"`
+	// Ba cột tiền của bảng — DaThu chia theo NHÓM phương thức của TỪNG lượt thu,
+	// đúng cách v2 chia theo `cab_debt_details.payment_method` cho đơn công nợ.
+	// Đơn chuyển khoản mà khách trả nốt bằng tiền mặt thì phần ấy nằm ở cột Tiền
+	// mặt, không dồn cả vào cột Chuyển khoản theo phương thức khai trên đơn.
+	//
+	// Phiếu trả: số tiền HOÀN nằm ở cột theo phương thức hoàn, chỉ khi phiếu đã
+	// hoàn tiền thật (v2 cũng bày `total_return` vào cột theo phương thức phiếu).
+	TienMat     float64 `json:"tien_mat"`
+	ChuyenKhoan float64 `json:"chuyen_khoan"`
+	TheVi       float64 `json:"the_vi"`
+	// ConNo là phần CÒN PHẢI THU của đơn đang sống. Đơn đã huỷ, đã trả hàng hay đã
+	// thu đủ (kể cả đã hoàn tiền) luôn là 0 — không ai đi đòi tiền một đơn đã huỷ.
+	ConNo float64 `json:"con_no"`
+	// CoCongNo là cột "Công nợ" của v2 (`have_debt`): đơn đã thu MỘT PHẦN và còn
+	// thiếu. Khác ConNo ở chỗ đơn chưa thu đồng nào KHÔNG tính là nợ — đơn COD
+	// đang giao chưa thu tiền là chuyện thường ngày, không phải khách đang nợ.
+	// Bên v2 cũng vậy: chỉ đơn có sổ `cab_debts` mới ghi "Có".
+	CoCongNo bool `json:"co_cong_no"`
+
+	// TrangThai là trạng thái HIỂN THỊ của sổ, năm giá trị đúng như v2 và không
+	// giá trị nào có sẵn trong database — xem TrangThaiSo* bên dưới.
+	TrangThai string `json:"trang_thai"`
+	NguoiTao  string `json:"nguoi_tao"`
+
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// TongSoDon là hàng TỔNG của sổ chứng từ — cộng trên MỌI dòng khớp bộ lọc, không
+// chỉ trang đang xem. Bản v2 bày hai hàng tổng (trang này / tất cả); hàng "trang
+// này" giao diện tự cộng từ các dòng đang có, hàng "tất cả" thì phải hỏi database.
+//
+// Phiếu trả được cộng DƯƠNG như mọi dòng khác, đúng như v2 (`$merged->sum('total')`).
+type TongSoDon struct {
+	SoDong      int64   `json:"so_dong"`
+	TongTien    float64 `json:"tong_tien"`
+	GiamGia     float64 `json:"giam_gia"`
+	PhiGiao     float64 `json:"phi_giao"`
+	TienMat     float64 `json:"tien_mat"`
+	ChuyenKhoan float64 `json:"chuyen_khoan"`
+	TheVi       float64 `json:"the_vi"`
+}
+
+// Ba NHÓM phương thức tương ứng ba cột tiền của sổ chứng từ. Nguồn DUY NHẤT của
+// phép gom: câu SQL chia cột và bộ lọc phiếu trả theo phương thức đều đọc từ đây.
+//
+// Gồm cả phương thức THU của đơn lẫn phương thức HOÀN của phiếu trả (`ewallet`),
+// vì cùng một cột phải nhận được cả hai.
+var (
+	NhomTienMat     = []string{"cash", "cod"}
+	NhomChuyenKhoan = []string{"bank_transfer", "sepay"}
+	NhomTheVi       = []string{"vnpay", "momo", "payos", "ewallet"}
+)
+
+// Năm trạng thái của SỔ CHỨNG TỪ, chép nguyên bộ của bản v2.
+//
+// Không giá trị nào là một cột trong database: chúng được suy ra mỗi lượt đọc từ
+// `orders.status`, `orders.payment_status` và sổ thu tiền — đúng cách v2 suy từ
+// `payment_status` + `cab_debts` + việc dòng đến từ bảng nào.
+//
+// SÁU BƯỚC GIAO HÀNG (chờ xác nhận → đang giao → đã giao → hoàn tất) KHÔNG có
+// mặt ở đây, vì v2 là quán ăn nên không có chúng. Chúng vẫn còn nguyên trong
+// `orders.status` và hộp chi tiết vẫn in ra; chỉ danh sách là gộp lại theo tiền.
+const (
+	TrangThaiSoDaThanhToan = "paid"
+	TrangThaiSoChuaThu     = "unpaid"
+	TrangThaiSoMotPhan     = "partial"
+	TrangThaiSoTraHang     = "returned"
+	TrangThaiSoDaHuy       = "cancelled"
+)
