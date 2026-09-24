@@ -35,12 +35,15 @@ table.table-supplier.none_mobile td.action a { padding: 0 2px; }
            không mất thông tin nào.
            ☐ 2.5 · STT 3.5 · Mã 8 · Tên 11 · MST 7 · SĐT 7 · Email 6.5 · Địa chỉ 7 · Địa chỉ 2 4.5
            · Trạng thái 7 · Tổng mua 9.5 · Tổng TT 9.5 · Còn nợ 7.5 · Hành động 9.5 = 100 */
+        /* Cột Hành động rộng theo DẢI NÚT: ở 1280 nó chỉ được 87px trong khi bốn nút
+           cần 100px, nên hai nút cuối tràn khỏi ô. Chỗ bù lấy từ Số điện thoại —
+           cột mà NHÃN rộng gấp nhiều lần dãy số bên dưới. */
         table.table-supplier.none_mobile th:first-child { width: 2.65%; }
         table.table-supplier.none_mobile th:nth-child(2) { width: 3.32%; }
         table.table-supplier.none_mobile th.show_code { width: 10.17%; }
         table.table-supplier.none_mobile th.show_name { width: 11.34%; }
         table.table-supplier.none_mobile th.show_tax_code { width: 6.99%; }
-        table.table-supplier.none_mobile th.show_phone { width: 8.75%; }
+        table.table-supplier.none_mobile th.show_phone { width: 7.45%; }
         table.table-supplier.none_mobile th.show_email { width: 3.99%; }
         table.table-supplier.none_mobile th.show_address { width: 4.74%; }
         table.table-supplier.none_mobile th.show_address_2 { width: 5.74%; }
@@ -48,7 +51,7 @@ table.table-supplier.none_mobile td.action a { padding: 0 2px; }
         table.table-supplier.none_mobile th.show_total_purchases { width: 9.33%; }
         table.table-supplier.none_mobile th.show_total_payment { width: 9.83%; }
         table.table-supplier.none_mobile th.show_still_in_debt { width: 7.83%; }
-        table.table-supplier.none_mobile th:last-child { width: 8.83%; }
+        table.table-supplier.none_mobile th:last-child { width: 10.13%; }
 
         /* Hai bảng trong hộp chi tiết: chia cột theo %, vừa khít hộp, không cuộn ngang;
            ô dài cắt "…" (ghi chú có title). Tiêu đề màu #c4c9d7 theo ý chủ tiệm. */

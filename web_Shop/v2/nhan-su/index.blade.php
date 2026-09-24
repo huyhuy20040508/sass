@@ -33,6 +33,13 @@
         table.table-employee.none_mobile th.show_work_shift { width: 8.05%; }
         table.table-employee.none_mobile th.show_status { width: 7.3%; }
         table.table-employee.none_mobile th:last-child { width: 8.3%; }
+        /* Ô Quyền nhân sự chứa NHIỀU nhãn. Ép chúng nằm chung một hàng thì mỗi
+           nhãn bị bóp và chữ TRONG nhãn cụt ngay ("Quản lý" mất 56px ở 1280);
+           cho xuống hàng thì ô chỉ cần rộng bằng nhãn lớn nhất. Chữ trong một
+           nhãn vẫn giữ một dòng. */
+        table.table-employee.none_mobile td.show_type { white-space: normal; }
+        table.table-employee.none_mobile td.show_type .badge { white-space: nowrap; }
+
         table.table-employee.none_mobile td.item-name,
         table.table-employee.none_mobile td.show_branch {
             max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;

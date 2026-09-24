@@ -55,6 +55,10 @@
             padding: 8px;
         }
         table.table-customer.none_mobile td.action a { padding: 0 2px; }
+        /* Cột Hành động rộng theo DẢI BỐN NÚT (112px), không theo nhãn: dưới
+           1440 cột này chỉ được 96px nên nút thứ tư rớt xuống hàng hai. Ba cột
+           góp chỗ đều là cột mà nhãn dài hơn dữ liệu. */
+        table.table-customer.none_mobile td.action { white-space: nowrap; }
         table.table-customer.none_mobile td.la-tien { white-space: nowrap; }
         /* Đo ở khung ~1182px (màn 1536): mọi tiêu đề nằm gọn MỘT DÒNG.
            ☐ 3 · STT 3.5 · Mã 9.5 · Tên 13 · Loại 9 · Nhóm 12 · Tổng mua 10.5
@@ -63,13 +67,13 @@
         table.table-customer.none_mobile th:nth-child(2) { width: 4.28%; }
         table.table-customer.none_mobile th.show_code { width: 10.4%; }
         table.table-customer.none_mobile th.show_name { width: 10.74%; }
-        table.table-customer.none_mobile th.show_type { width: 10.99%; }
-        table.table-customer.none_mobile th.show_customer_group { width: 12.0%; }
+        table.table-customer.none_mobile th.show_type { width: 10.44%; }
+        table.table-customer.none_mobile th.show_customer_group { width: 11.45%; }
         table.table-customer.none_mobile th.show_total_purchases { width: 10.57%; }
-        table.table-customer.none_mobile th.show_total_paid { width: 12.67%; }
+        table.table-customer.none_mobile th.show_total_paid { width: 12.12%; }
         table.table-customer.none_mobile th.show_still_in_debt { width: 5.96%; }
         table.table-customer.none_mobile th.show_phone { width: 9.14%; }
-        table.table-customer.none_mobile th:last-child { width: 9.73%; }
+        table.table-customer.none_mobile th:last-child { width: 11.38%; }
 
         /* Ba bảng trong hộp Chi tiết — cùng khuôn với hộp chi tiết nhà cung cấp. */
         .kh-tab-wrap { overflow-x: auto; }
