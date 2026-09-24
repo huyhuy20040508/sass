@@ -256,6 +256,57 @@ class HangHoaBanLeTest extends TestCase
     }
 
     /**
+     * Sửa hàng đơn thì GIỮ NGUYÊN id biến thể đang có.
+     *
+     * Gửi id 0 là bảo API "biến thể mới": ReplaceVariants xoá mềm dòng cũ rồi
+     * chèn dòng khác, mà tồn kho neo theo variant_id — tồn ở lại với dòng vừa bị
+     * xoá, chi nhánh hiện 0 và quầy báo "Hết hàng" dù kho còn hàng.
+     */
+    public function test_sua_hang_don_giu_nguyen_id_bien_the(): void
+    {
+        $this->fakeApi();
+
+        $this->withSession($this->phienQuanTri())->put('/admin/products/7', [
+            'name' => 'Cáp sạc Type-C',
+            'sku' => 'CSTC-0001',
+            'category_id' => 3,
+            'base_price' => 120000,
+            'variants_loaded' => 1,
+            'variants' => [
+                ['id' => 6, 'name' => '', 'sku' => 'CSTC-0001', 'barcode' => '', 'price' => '', 'cost_price' => '', 'attributes' => []],
+            ],
+        ]);
+
+        Http::assertSent(function ($request) {
+            if (! str_contains($request->url(), '/admin/products/7') || $request->method() !== 'PUT') {
+                return false;
+            }
+            $d = $request->data();
+
+            return count($d['variants'] ?? []) === 1
+                && ($d['variants'][0]['id'] ?? null) === 6;
+        });
+    }
+
+    /**
+     * Hộp thoại KHÔNG gửi cứng id 0 cho hàng đơn.
+     *
+     * Chốt ngay trên đoạn JS vì lỗi nằm ở đó: bảng biến thể của hàng đơn dựng
+     * bằng JS nên không có đường nào khác nhìn thấy con số này.
+     */
+    public function test_hop_thoai_khong_gui_cung_id_0_cho_hang_don(): void
+    {
+        $this->fakeApi();
+
+        $html = $this->withSession($this->phienQuanTri())->get('/admin/products')->getContent();
+
+        $this->assertStringNotContainsString("f['variants[0][id]'] = 0;", $html, 'Hộp thoại đang gửi cứng id 0 — mỗi lượt Lưu sẽ đẻ ra biến thể mới và bỏ lại tồn kho.');
+        $this->assertStringContainsString("f['variants[0][id]'] = bienTheDonId;", $html);
+        // Mở hộp Sửa phải nhặt lại id dòng mặc định đang có.
+        $this->assertStringContainsString('bienTheDonId = Number(', $html);
+    }
+
+    /**
      * Quy tắc chọn nhóm hàng của bản cũ v2: chỉ NHÓM LÁ dưới nhánh "Hàng bán"
      * mới gắn được mặt hàng.
      *
