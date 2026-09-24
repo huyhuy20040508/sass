@@ -14,6 +14,13 @@
         let anh = '';          // đường dẫn ảnh đã tải lên
         let dangSua = 0;       // 0 = tạo mới
         let bienTheCu = [];    // biến thể đang có, để giữ lại id khi lưu
+        // id dòng biến thể mặc định của HÀNG ĐƠN đang sửa. 0 = thêm mới.
+        //
+        // Gửi cứng 0 như trước là bảo API "đây là biến thể mới": ReplaceVariants
+        // xoá mềm dòng cũ rồi chèn dòng khác, mà tồn kho (variant_stocks,
+        // stock_lots) lại neo theo variant_id — nên mỗi lượt Lưu là tồn kho ở lại
+        // với biến thể vừa bị xoá, chi nhánh hiện 0 và quầy báo "Hết hàng".
+        let bienTheDonId = 0;
 
         const soThoi = (v) => String(v == null ? '' : v).replace(/[^\d]/g, '');
         const tien = (v) => (Number(v) || 0).toLocaleString('vi-VN');
@@ -371,6 +378,7 @@
             anh = '';
             dangSua = 0;
             bienTheCu = [];
+            bienTheDonId = 0;
             veBienThe();
         }
 
@@ -468,6 +476,15 @@
                 const don = (p.variants || []).find((v) => !(v.attributes || []).length);
                 if (don) $hop.find('.ip_barcode').val(don.barcode || '');
 
+                // Giữ id dòng mặc định để lượt Lưu cập nhật TẠI CHỖ.
+                //
+                // Hàng đang nhiều biến thể mà người dùng gỡ hết thuộc tính thì
+                // không có dòng nào thiếu tổ hợp: lấy id biến thể mặc định, để tồn
+                // kho của nó theo sang hàng đơn thay vì nằm lại ở dòng bị xoá.
+                bienTheDonId = Number(
+                    (don || (p.variants || []).find((v) => v.is_default) || {}).id || 0
+                );
+
                 veBienThe();
             }
 
@@ -555,7 +572,7 @@
             });
             if (!dsBienThe.length) {
                 // Hàng đơn: một dòng mặc định, tên để trống cho máy chủ hiểu.
-                f['variants[0][id]'] = 0;
+                f['variants[0][id]'] = bienTheDonId;
                 f['variants[0][name]'] = '';
                 f['variants[0][sku]'] = ma;
                 f['variants[0][barcode]'] = $hop.find('.ip_barcode').val().trim();
