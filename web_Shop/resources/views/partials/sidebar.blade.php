@@ -54,9 +54,9 @@
                     'children' => [
                         ['href' => route('admin.products.index'), 'label' => \App\Http\Controllers\ProductController::TITLE_PAGE, 'active' => request()->routeIs('admin.products.*')],
                         ['href' => route('admin.categories.index'), 'label' => 'Nhóm hàng hóa', 'active' => request()->routeIs('admin.categories.*')],
-                        ['href' => route('admin.thuoc-tinh.index'), 'label' => \App\Http\Controllers\ThuocTinhController::TITLE, 'active' => request()->routeIs('admin.thuoc-tinh.*')],
-                        ['href' => route('admin.don-vi-tinh.index'), 'label' => \App\Http\Controllers\DonViTinhController::TITLE, 'active' => request()->routeIs('admin.don-vi-tinh.*')],
-                        ['href' => route('admin.vi-tri.index'), 'label' => \App\Http\Controllers\ViTriController::TITLE, 'active' => request()->routeIs('admin.vi-tri.*')],
+                        ['href' => route('admin.thuoc-tinh.index'), 'label' => \App\Http\Controllers\AttributeController::TITLE, 'active' => request()->routeIs('admin.thuoc-tinh.*')],
+                        ['href' => route('admin.don-vi-tinh.index'), 'label' => \App\Http\Controllers\UnitController::TITLE, 'active' => request()->routeIs('admin.don-vi-tinh.*')],
+                        ['href' => route('admin.vi-tri.index'), 'label' => \App\Http\Controllers\LocationController::TITLE, 'active' => request()->routeIs('admin.vi-tri.*')],
                         ['href' => route('admin.thue.index'), 'label' => 'Thuế', 'active' => request()->routeIs('admin.thue.*')],
                     ],
                 ]] : []),
@@ -113,10 +113,10 @@
                 // tài khoản đăng nhập.
                 ...($canManage ? [
                     [
-                        'href' => route('admin.nhan-su.index'),
-                        'label' => \App\Http\Controllers\NhanSuController::TITLE,
+                        'href' => route('admin.staff.index'),
+                        'label' => \App\Http\Controllers\StaffController::TITLE,
                         'icon' => 'staff',
-                        'active' => request()->routeIs('admin.nhan-su.*'),
+                        'active' => request()->routeIs('admin.staff.*'),
                     ],
                 ] : []),
                 ...($canManage ? [[
@@ -127,31 +127,31 @@
                     'children' => [
                         [
                             'href' => route('admin.ton-kho-chi-nhanh.index'),
-                            'label' => \App\Http\Controllers\TonKhoChiNhanhController::TITLE,
+                            'label' => \App\Http\Controllers\BranchStockController::TITLE,
                             'active' => request()->routeIs('admin.ton-kho-chi-nhanh.*'),
                         ],
                         // Điều chỉnh tồn kho đứng ngay sau Tồn kho: cùng nói về
                         // số tồn, một bên xem một bên nắn lại có duyệt.
                         [
                             'href' => route('admin.dieu-chinh-ton-kho.index'),
-                            'label' => \App\Http\Controllers\DieuChinhTonKhoController::TITLE,
+                            'label' => \App\Http\Controllers\StockAdjustmentController::TITLE,
                             'active' => request()->routeIs('admin.dieu-chinh-ton-kho.*'),
                         ],
                         [
                             'href' => route('admin.phieu-mua-hang.index'),
-                            'label' => \App\Http\Controllers\PhieuMuaHangController::TITLE,
+                            'label' => \App\Http\Controllers\PurchaseOrderController::TITLE,
                             'active' => request()->routeIs('admin.phieu-mua-hang.*'),
                         ],
                         // Chiều trả lại đứng ngay sau phiếu mua: cùng một cặp
                         // chứng từ, đọc menu từ trên xuống là đi đúng thứ tự.
                         [
                             'href' => route('admin.tra-hang-nha-cung-cap.index'),
-                            'label' => \App\Http\Controllers\TraHangNhaCungCapController::TITLE,
+                            'label' => \App\Http\Controllers\SupplierReturnController::TITLE,
                             'active' => request()->routeIs('admin.tra-hang-nha-cung-cap.*'),
                         ],
                         [
                             'href' => route('admin.nha-cung-cap.index'),
-                            'label' => \App\Http\Controllers\NhaCungCapController::TITLE,
+                            'label' => \App\Http\Controllers\SupplierController::TITLE,
                             'active' => request()->routeIs('admin.nha-cung-cap.*'),
                         ],
                     ],
@@ -194,7 +194,7 @@
                         // trang Quy tắc đánh số chứng từ, các trang còn lại làm sau.
                         [
                             'href' => route('admin.thong-so-chung.index'),
-                            'label' => \App\Http\Controllers\ThongSoChungController::TITLE,
+                            'label' => \App\Http\Controllers\ParameterController::TITLE,
                             'active' => request()->routeIs('admin.thong-so-chung.*'),
                         ],
                         // Phân quyền: chọn chi nhánh → nhân viên → tick từng việc.
@@ -202,7 +202,7 @@
                         // dựng bộ khung của tiệm, không phải bán hàng hằng ngày.
                         [
                             'href' => route('admin.phan-quyen.index'),
-                            'label' => \App\Http\Controllers\PhanQuyenController::TITLE,
+                            'label' => \App\Http\Controllers\PermissionController::TITLE,
                             'active' => request()->routeIs('admin.phan-quyen.*'),
                         ],
                         // "Người dùng & vai trò" ĐÃ BỎ KHỎI MENU (17/08/2026).
@@ -223,7 +223,7 @@
                         // bán hàng hằng ngày.
                         [
                             'href' => route('admin.chi-nhanh.index'),
-                            'label' => \App\Http\Controllers\ChiNhanhController::TITLE,
+                            'label' => \App\Http\Controllers\BranchController::TITLE,
                             'active' => request()->routeIs('admin.chi-nhanh.*'),
                         ],
                     ],

@@ -293,7 +293,7 @@ var (
 
 	// --- Ký hợp đồng từ khu điều hành ---
 	//
-	// Nhóm này là bản dịch sang lỗi Go của những câu mà `cmd/thue-bao ky` in ra
+	// Nhóm này là bản dịch sang lỗi Go của những câu mà `cmd/subscriptions ky` in ra
 	// màn hình. Công cụ dòng lệnh có chỗ để giải thích dài; một endpoint thì
 	// không, nên mỗi tình huống phải là một lỗi RIÊNG — người bấm nút cần biết
 	// nên sửa ô nào, chứ "không ký được" thì không sửa được gì.

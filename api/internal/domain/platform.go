@@ -102,7 +102,7 @@ type Subscription struct {
 	// OwnDomain: hợp đồng này có kèm tên miền riêng không — CHÉP từ bảng giá lúc
 	// ký (migration 0013).
 	//
-	// Nơi cấp tên miền (`cmd/ten-mien`) đọc CỘT NÀY. Trước 0013 nó tra ngược về
+	// Nơi cấp tên miền (`cmd/domains`) đọc CỘT NÀY. Trước 0013 nó tra ngược về
 	// `plan_features`, nghĩa là quyền lợi của khách đang trả tiền bị quyết bởi
 	// bảng giá của hôm nay — bỏ tên miền riêng khỏi gói Chuỗi là khách Chuỗi đã
 	// ký mất luôn quyền đó, không lỗi nào nổi lên.
@@ -312,7 +312,7 @@ const (
 	//
 	// ĐÂY LÀ ĐIỀU KHOẢN BÁN HÀNG NẰM TRONG DỮ LIỆU, cố ý không viết thành
 	// `if plan == "chuoi"` trong code: đổi chính sách là sửa một ô trong bảng
-	// giá, không phải sửa code rồi triển khai lại. Nơi ép luật là `cmd/ten-mien`,
+	// giá, không phải sửa code rồi triển khai lại. Nơi ép luật là `cmd/domains`,
 	// đường duy nhất ghi vào sổ tên miền.
 	FeatureOwnDomain = "own_domain"
 )
@@ -554,7 +554,7 @@ type HopDongDayDu struct {
 //
 // DANH SÁCH NÀY CỐ TÌNH NGẮN. Gói, chu kỳ, giá và ba hạn mức KHÔNG có mặt: đó
 // là điều khoản đã ký, và cả hệ thống dựng trên nguyên tắc chúng không đổi (xem
-// Subscription). Bán thêm quyền lợi cho một khách là việc của `cmd/thue-bao`,
+// Subscription). Bán thêm quyền lợi cho một khách là việc của `cmd/subscriptions`,
 // nơi có bảng đối chiếu in ra trước mắt người ký — không phải một ô nhập trên
 // màn hình danh sách.
 //
@@ -769,7 +769,7 @@ type HopDongQuaHan struct {
 // CuaHangMoi là bộ ba thứ cần để dựng một khách hàng mới ở DATA PLANE: cửa hàng,
 // chi nhánh mặc định, và tài khoản quản trị đầu tiên của họ.
 //
-// Đúng thứ `cmd/tao-admin` dựng. Gom thành một struct chứ không phải sáu tham số
+// Đúng thứ `cmd/create-admin` dựng. Gom thành một struct chứ không phải sáu tham số
 // chuỗi liền nhau: sáu tham số cùng kiểu string thì hoán vị nhầm hai cái là lỗi
 // mà trình biên dịch không bắt được, và cái hoán vị đó ghi thẳng xuống database.
 type CuaHangMoi struct {

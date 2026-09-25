@@ -39,7 +39,7 @@
          chỗ mà không trả lời câu hỏi nào.
          Mọi thao tác kho/đơn từ đây trở đi ăn theo chi nhánh đang chọn — xem
          ApiClient::KHOA_CHI_NHANH. --}}
-    @php($cnDangLam = \App\Services\ChiNhanhDangLam::danhSach())
+    @php($cnDangLam = \App\Services\CurrentBranch::danhSach())
     @if(count($cnDangLam['ds']) > 1)
         <form method="POST" action="{{ route('admin.chi-nhanh.dangLam') }}" class="jh-tb-chinhanh" id="jhCnForm">
             @csrf
@@ -143,7 +143,7 @@
                      CHỈ hiện cho người có cửa quản trị. Người chỉ đứng quầy còn đúng
                      nút Đăng xuất — cùng một menu, cùng một luật với thanh trên cùng
                      của quầy, và route cũng đóng lại nên đây không phải là giấu nút. --}}
-                @if(in_array('quan_ly', \App\Http\Middleware\EnsureCuaVao::cuaCuaPhien(), true))
+                @if(in_array('quan_ly', \App\Http\Middleware\EnsureWorkspace::cuaCuaPhien(), true))
                     <a href="{{ route('admin.profile.edit') }}" class="jh-tb-menu__item">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M4.5 20a7.5 7.5 0 0 1 15 0"/><circle cx="12" cy="8" r="4"/>

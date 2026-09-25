@@ -84,10 +84,10 @@ SSH vào VPS rồi:
 ssh root@103.78.2.230
 
 # Tải riêng hai script (lúc này mã nguồn chưa có trên máy)
-curl -fsSL -o 01-cai-may-chu.sh \
-  https://raw.githubusercontent.com/huyhuy20040508/sass/main/deploy/scripts/01-cai-may-chu.sh
+curl -fsSL -o 01-setup-server.sh \
+  https://raw.githubusercontent.com/huyhuy20040508/sass/main/deploy/scripts/01-setup-server.sh
 
-sudo bash 01-cai-may-chu.sh
+sudo bash 01-setup-server.sh
 ```
 
 Script cài: PHP 8.3-FPM (kèm **gd** cho phần thu nhỏ ảnh), MySQL 8, Go 1.25, Composer, certbot, tường lửa; tạo người dùng `selliotech`, **hai** database (`selliotech` cho dữ liệu bán hàng, `selliotech_platform` cho sổ cái nền tảng) và tài khoản MySQL riêng dùng chung cho cả hai.
@@ -101,10 +101,10 @@ Script cài: PHP 8.3-FPM (kèm **gd** cho phần thu nhỏ ảnh), MySQL 8, Go 1
 Mã nguồn chưa có trên máy. Chạy script triển khai một lần cho nó tự tải về — thiếu `.env` thì nó dừng lại và nhắc, chưa đụng gì tới hệ thống:
 
 ```bash
-curl -fsSL -o 02-trien-khai.sh \
-  https://raw.githubusercontent.com/huyhuy20040508/sass/main/deploy/scripts/02-trien-khai.sh
+curl -fsSL -o 02-deploy.sh \
+  https://raw.githubusercontent.com/huyhuy20040508/sass/main/deploy/scripts/02-deploy.sh
 
-sudo bash 02-trien-khai.sh     # sẽ dừng ở bước 2/10 và nhắc thiếu .env
+sudo bash 02-deploy.sh     # sẽ dừng ở bước 2/10 và nhắc thiếu .env
 ```
 
 Giờ tạo ba tệp:
@@ -129,7 +129,7 @@ sudo nano api/.env      # điền DB_PASSWORD (bước 2) và JWT_SECRET (dòng 
 
 ```bash
 cd /var/www/selliotech
-sudo bash deploy/scripts/02-trien-khai.sh
+sudo bash deploy/scripts/02-deploy.sh
 ```
 
 Script làm: build Go API → nạp lược đồ database → `composer install --no-dev` cho hai app Laravel → cache config/route/view → đặt quyền thư mục → cài nginx + systemd → bật sao lưu tự động → khởi động → gọi thử `/health`.
@@ -169,13 +169,13 @@ sudo certbot --nginx \
 
 `--cert-name` gộp bảy tên miền vào **một** chứng chỉ mang tên `selliotech.store`, tách bạch với chứng chỉ của dự án khác trên cùng máy. `--redirect` để `http://` tự chuyển sang `https://`.
 
-**Thêm tên miền vào danh sách là phải chạy lại đúng lệnh này** (kèm `--expand`). Chứng chỉ đang có không tự mọc thêm tên miền, mà bước 7 của `02-trien-khai.sh` chỉ `certbot install` — gắn lại chứng chỉ CÓ SẴN. Tên miền mới thiếu trong chứng chỉ thì trình duyệt báo lỗi bảo mật ngay từ lần mở đầu tiên. `order.selliotech.store` rồi `shop.selliotech.store` đều được thêm theo đúng đường đó.
+**Thêm tên miền vào danh sách là phải chạy lại đúng lệnh này** (kèm `--expand`). Chứng chỉ đang có không tự mọc thêm tên miền, mà bước 7 của `02-deploy.sh` chỉ `certbot install` — gắn lại chứng chỉ CÓ SẴN. Tên miền mới thiếu trong chứng chỉ thì trình duyệt báo lỗi bảo mật ngay từ lần mở đầu tiên. `order.selliotech.store` rồi `shop.selliotech.store` đều được thêm theo đúng đường đó.
 
 **Nếu máy đã có chứng chỉ `selliotech.store` từ lần trước** (hồi đó mới có ba tên miền), certbot sẽ hỏi có mở rộng không — chọn mở rộng, hoặc chạy thẳng với `--expand`. Đừng đặt `--cert-name` khác để xin riêng cho tên miền gốc: hai chứng chỉ cho cùng một zone làm lần gia hạn sau khó lần ra cái nào đang phục vụ cái gì.
 
 Certbot tự chèn phần TLS vào bốn tệp trong `sites-available/` và tự gia hạn bằng timer có sẵn. Kiểm tra timer:
 
-> **Phần TLS đó không nằm trong git.** Bốn tệp `deploy/nginx/*.conf` chỉ có block cổng 80, mà bước 7 của `02-trien-khai.sh` thì chép đè chúng lên `sites-available/` — nên mỗi lượt triển khai xoá sạch phần certbot vừa viết. Chuyện này đã xảy ra thật ngày 11/08/2026: chứng chỉ cấp lúc 14:49, lượt triển khai tối cùng ngày làm site tụt về HTTP mà không có dấu hiệu gì (nginx vẫn chạy, cổng 80 vẫn trả trang, chỉ `https://` là đứt). Script giờ tự chạy `certbot install` ngay sau vòng chép đè để gắn lại chứng chỉ **có sẵn** — không xin cấp mới nên không đụng hạn mức Let's Encrypt. Sau mỗi lần triển khai vẫn nên kiểm một câu:
+> **Phần TLS đó không nằm trong git.** Bốn tệp `deploy/nginx/*.conf` chỉ có block cổng 80, mà bước 7 của `02-deploy.sh` thì chép đè chúng lên `sites-available/` — nên mỗi lượt triển khai xoá sạch phần certbot vừa viết. Chuyện này đã xảy ra thật ngày 11/08/2026: chứng chỉ cấp lúc 14:49, lượt triển khai tối cùng ngày làm site tụt về HTTP mà không có dấu hiệu gì (nginx vẫn chạy, cổng 80 vẫn trả trang, chỉ `https://` là đứt). Script giờ tự chạy `certbot install` ngay sau vòng chép đè để gắn lại chứng chỉ **có sẵn** — không xin cấp mới nên không đụng hạn mức Let's Encrypt. Sau mỗi lần triển khai vẫn nên kiểm một câu:
 >
 > ```bash
 > curl -s -o /dev/null -w '%{http_code}\n' https://api.selliotech.store/api/v1/health   # phải là 200
@@ -194,7 +194,7 @@ Ba tệp `.env` mẫu đã ghi sẵn `https://`, nên nếu bạn không sửa g
 
 ```bash
 cd /var/www/selliotech
-sudo bash deploy/scripts/02-trien-khai.sh
+sudo bash deploy/scripts/02-deploy.sh
 ```
 
 Sau đó bắt buộc kiểm hai thứ hay sai nhất:
@@ -246,7 +246,7 @@ mật khẩu mới và mở khoá tài khoản, không tạo thêm dòng nào.
 
 ## Sao lưu tự động
 
-Chạy **mỗi 12 giờ**, 03:00 và 15:00 giờ Việt Nam (VPS đặt `Asia/Bangkok`, +07, cùng lệch với giờ ta), do systemd timer gọi. Không cần bật gì thêm: `02-trien-khai.sh` cài sẵn ở bước 8, và lần đầu cài nó chạy luôn một lượt.
+Chạy **mỗi 12 giờ**, 03:00 và 15:00 giờ Việt Nam (VPS đặt `Asia/Bangkok`, +07, cùng lệch với giờ ta), do systemd timer gọi. Không cần bật gì thêm: `02-deploy.sh` cài sẵn ở bước 8, và lần đầu cài nó chạy luôn một lượt.
 
 ```bash
 sudo selliotech-sao-luu trang-thai   # lượt gần nhất lúc nào, thành công hay không
@@ -300,7 +300,7 @@ sudo selliotech-phuc-hoi 2026-08-11-1500 --ca-env     # kèm ba tệp .env
 
 Nó dừng API trước khi ghi (nạp database trong lúc API vẫn đang ghi thì kết quả là hỗn hợp hai thời điểm — tệ hơn cả hai bản gốc), **chụp lại hiện trạng** vào `truoc-khi-phuc-hoi-*` rồi mới ghi đè, và đòi gõ đúng chữ `PHUC HOI` để xác nhận. Phục hồi nhầm bản thì quay lại được từ chỗ đó.
 
-Nếu bản sao lưu thuộc mã nguồn cũ hơn bản đang chạy, script nói ra sự lệch đó — lược đồ có thể đã đổi, chạy lại `02-trien-khai.sh` để migrate đưa về khớp.
+Nếu bản sao lưu thuộc mã nguồn cũ hơn bản đang chạy, script nói ra sự lệch đó — lược đồ có thể đã đổi, chạy lại `02-deploy.sh` để migrate đưa về khớp.
 
 ### Ba cách hỏng đã được chặn sẵn
 
@@ -324,7 +324,7 @@ Sao lưu nằm cùng máy cứu được gần hết tai nạn hay xảy ra th�
 Bịt bằng cách kéo về máy cá nhân — cũng không phụ thuộc dịch vụ nào, chỉ dùng `ssh` mà Windows đã có sẵn. Chạy trong **Git Bash trên máy bạn**, không phải trên máy chủ:
 
 ```bash
-bash deploy/scripts/keo-ve-sao-luu.sh "D:/sao-luu-selliotech"
+bash deploy/scripts/fetch-backup.sh "D:/sao-luu-selliotech"
 ```
 
 Mỗi tuần một lần là đủ. Lượt đầu tải cả kho ảnh; các lượt sau chỉ tải phần đổi (ảnh trùng dấu vân tay thì chép ngang từ bản đã có dưới đĩa), nên thường xong trong vài giây. Muốn tự động thì Task Scheduler của Windows — cú pháp ghi ở đầu tệp script.
@@ -353,20 +353,20 @@ không có commit mới:
 
 ```bash
 cd /var/www/selliotech
-sudo bash deploy/scripts/02-trien-khai.sh
+sudo bash deploy/scripts/02-deploy.sh
 ```
 
 Script kéo bản mới từ nhánh `main`, build lại, đổi binary rồi khởi động lại. Nếu build hỏng thì binary đang chạy vẫn nguyên — web không chết trong lúc bạn đi sửa.
 
-### Khi bản cập nhật có sửa chính `02-trien-khai.sh`: chạy HAI lượt
+### Khi bản cập nhật có sửa chính `02-deploy.sh`: chạy HAI lượt
 
 Script tự chép mình ra `/tmp` rồi chạy bản chép, vì bước 1 `git reset --hard` ghi đè chính nó trong lúc bash còn đang đọc dở (lý do đầy đủ ghi ở đầu script). Hệ quả: **lượt chạy nào cũng dùng bản script đang có sẵn trên đĩa, không phải bản vừa kéo về.**
 
 Nên khi commit mới có động vào script triển khai, lượt đầu chỉ kéo bản mới về, lượt hai mới thi hành nó:
 
 ```bash
-sudo bash deploy/scripts/02-trien-khai.sh   # kéo script mới về
-sudo bash deploy/scripts/02-trien-khai.sh   # chạy script mới
+sudo bash deploy/scripts/02-deploy.sh   # kéo script mới về
+sudo bash deploy/scripts/02-deploy.sh   # chạy script mới
 ```
 
 Đây đúng là chỗ đã vấp lúc thêm tên miền gốc. Lượt đầu kéo về `landing_shop/` và `deploy/nginx/selliotech.store.conf`, nhưng vòng lặp cài nginx của **bản script cũ** chỉ biết ba tên miền con nên bỏ qua tệp mới. Cùng lúc đó script vẫn `rm -f /etc/nginx/sites-enabled/default`, thế là tên miền gốc rơi vào block đứng đầu bảng chữ cái — `admin.selliotech.store` — và trả về trang đăng nhập Shop Admin kèm cookie phiên của khu quản trị. Nhìn thì tưởng cấu hình sai, thật ra chỉ là chưa chạy lượt hai.
@@ -393,7 +393,7 @@ Ba job kiểm tra chạy song song, khoảng 3–5 phút:
 | **Shop Admin** | `composer install` → `php artisan test` (PHP 8.3, sqlite in-memory) |
 | **SaaS Admin** | như trên, cho `admin-Selliotech/` |
 
-Xanh hết thì job **Triển khai** SSH vào VPS và chạy `02-trien-khai.sh` — cùng một script vẫn
+Xanh hết thì job **Triển khai** SSH vào VPS và chạy `02-deploy.sh` — cùng một script vẫn
 gõ tay lâu nay. Không có đường triển khai thứ hai để hai bên lệch nhau. Sau đó nó gọi
 `https://api.selliotech.store/api/v1/health` từ ngoài Internet: script chỉ tự kiểm ở
 `127.0.0.1`, nên nginx hỏng hay chứng chỉ đứt thì chỉ lượt kiểm ngoài này thấy.
@@ -488,8 +488,14 @@ giờ được bật.
 Khoá CI bị **ghim sẵn một lệnh duy nhất** trong `/root/.ssh/authorized_keys`:
 
 ```
-command="/bin/bash /var/www/selliotech/deploy/scripts/02-trien-khai.sh",no-agent-forwarding,no-port-forwarding,no-pty,no-user-rc,no-X11-forwarding ssh-ed25519 AAAA... github-actions-selliotech
+command="/bin/bash /var/www/selliotech/deploy/scripts/02-deploy.sh",no-agent-forwarding,no-port-forwarding,no-pty,no-user-rc,no-X11-forwarding ssh-ed25519 AAAA... github-actions-selliotech
 ```
+
+> **Đợt đổi tên tệp sang tiếng Anh (25/09/2026):** script này trước tên là
+> `02-trien-khai.sh`. Dòng `command=` trên máy chủ vẫn ghi tên cũ, nên **sau lần
+> triển khai đầu tiên** kể từ đợt đổi tên (lần đó vẫn chạy được vì bản checkout
+> trên máy chủ còn là commit cũ), phải sửa `/root/.ssh/authorized_keys` sang tên
+> mới — không sửa thì lần triển khai kế tiếp báo "No such file or directory".
 
 Ai lấy được secret đó cũng chỉ bấm được nút triển khai, **không có shell root**. Đây là lý
 do phải có forced command: khoá triển khai luôn là khoá quyền cao nhất trong hệ thống, mà
@@ -506,7 +512,7 @@ gh secret set VPS_SSH_KEY --repo huyhuy20040508/sass < /tmp/ci_deploy
 sudo nano /root/.ssh/authorized_keys
 ```
 
-### Commit có sửa `02-trien-khai.sh` thì phải chạy hai lượt
+### Commit có sửa `02-deploy.sh` thì phải chạy hai lượt
 
 Cùng lý do đã ghi ở phần trên: script chạy trên máy chủ luôn là **bản đang có sẵn trên
 đĩa**, không phải bản vừa kéo về. Lượt CI đầu chỉ mang script mới lên máy.
@@ -528,7 +534,7 @@ gh run view --repo huyhuy20040508/sass --log-failed
 | `gofmt` | Chạy `cd api && gofmt -w .` rồi commit lại |
 | `go test` phần `apitest`/`repository` | Thường là migration mới quên cột, hoặc query thiếu điều kiện tenant |
 | `php artisan test` | Chạy lại y hệt dưới máy: `cd web_Shop && php artisan test` |
-| `Triển khai` | Test đã xanh, tức là **mã nguồn ổn** — hỏng ở máy chủ. SSH vào chạy tay `sudo bash deploy/scripts/02-trien-khai.sh` để thấy nó chết ở bước nào trong 10 bước |
+| `Triển khai` | Test đã xanh, tức là **mã nguồn ổn** — hỏng ở máy chủ. SSH vào chạy tay `sudo bash deploy/scripts/02-deploy.sh` để thấy nó chết ở bước nào trong 10 bước |
 
 Deploy hỏng giữa chừng thì máy chủ vẫn chạy bản cũ: script build ra `api.new` và chỉ đổi
 tên ở bước 9, sau khi mọi bước trước đã qua.
@@ -557,8 +563,8 @@ systemctl list-timers selliotech-sao-luu.timer
 
 | Triệu chứng | Nguyên nhân thường gặp |
 |---|---|
-| Trang trắng / lỗi 500 ở Laravel | `storage/` không ghi được — chạy lại bước 6 của `02-trien-khai.sh` |
-| Sửa `.env` mà không thấy đổi gì | Cache config còn giữ giá trị cũ — chạy lại `02-trien-khai.sh` |
+| Trang trắng / lỗi 500 ở Laravel | `storage/` không ghi được — chạy lại bước 6 của `02-deploy.sh` |
+| Sửa `.env` mà không thấy đổi gì | Cache config còn giữ giá trị cũ — chạy lại `02-deploy.sh` |
 | Đăng nhập được rồi bật ra ngay | `SESSION_SECURE_COOKIE=true` nhưng đang vào bằng `http://` |
 | Đăng nhập báo sai mã cửa hàng / tên đăng nhập | Chưa tạo tài khoản, hoặc gõ nhầm mã — `sudo selliotech-tao-admin` để tạo, kèm `--doi-mat-khau` để đặt lại mật khẩu |
 | Chuông thông báo không tự cập nhật | `API_PUBLIC_URL` sai, hoặc nginx đang đệm `/api/v1/events` |
@@ -574,7 +580,7 @@ systemctl list-timers selliotech-sao-luu.timer
 
 Nói trước để không tưởng nhầm là đã xong xuôi:
 
-- **Sao lưu mới ở mức máy chủ.** Bản chép nằm cùng đĩa với dữ liệu, nên mất cả máy là mất cả hai. Bịt bằng cách chạy `keo-ve-sao-luu.sh` hằng tuần (xem phần "Sao lưu tự động") — nhưng đó là việc chạy tay, không ai nhắc nếu bạn quên.
+- **Sao lưu mới ở mức máy chủ.** Bản chép nằm cùng đĩa với dữ liệu, nên mất cả máy là mất cả hai. Bịt bằng cách chạy `fetch-backup.sh` hằng tuần (xem phần "Sao lưu tự động") — nhưng đó là việc chạy tay, không ai nhắc nếu bạn quên.
 - **Chưa multi-tenant.** Shop Admin trên máy chủ này phục vụ **một** cửa hàng. Bán phần mềm cho khách thứ hai thì phải dựng thêm bản mới, hoặc làm phần tách cửa hàng.
 - **SaaS Admin mới là khung** — đăng nhập và trang tổng quan, chưa quản lý được cửa hàng nào.
 - **Chưa có giám sát.** Máy chủ chết lúc 3 giờ sáng thì không ai biết cho tới khi có người mở trang.

@@ -155,7 +155,7 @@ class ApiClient
      * chỉ nhận về 401 "Chưa xác định được cửa hàng cho yêu cầu này".
      *
      * Tài khoản dùng ở đây nằm trong sổ RIÊNG của nền tảng (`platform_users`),
-     * do `cmd/nguoi-dieu-hanh` tạo trên máy chủ. Tài khoản của một cửa hàng —
+     * do `cmd/operators` tạo trên máy chủ. Tài khoản của một cửa hàng —
      * kể cả super_admin của tiệm đó — không đăng nhập được vào đây.
      */
     public function login(string $email, string $password): Response
@@ -391,7 +391,7 @@ class ApiClient
      *
      * Gói, chu kỳ, giá và ba hạn mức không gửi lên được: chúng đã chốt lúc ký và
      * API không nhận ô nào cho chúng. Bán thêm quyền lợi cho một khách vẫn là
-     * việc của `cmd/thue-bao` trên máy chủ.
+     * việc của `cmd/subscriptions` trên máy chủ.
      *
      * `het_han` chỉ có tác dụng khi hợp đồng đang dùng thử; bỏ trống là giữ
      * nguyên hạn hiện tại.

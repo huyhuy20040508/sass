@@ -126,3 +126,115 @@ func (r *etaxRepository) ThueSuatTheoMatHang(ctx context.Context, ids []uint) (m
 
 	return ra, nil
 }
+
+// DanhSachHoaDon — sổ hoá đơn của màn "Hoá đơn điện tử".
+//
+// Nối sang `orders` để in mã đơn và người mua: tờ hoá đơn không tự chép lại hai
+// thứ ấy (nó giữ nguyên văn payload, nhưng đọc JSON cho từng dòng của một danh
+// sách là quá đắt). LEFT JOIN chứ không JOIN: đơn bị xoá mềm thì tờ hoá đơn
+// VẪN là chứng từ đã nộp cơ quan thuế, không được rơi khỏi sổ.
+//
+// Điều kiện `tenant_id` của hai bảng nối viết thẳng vào ON: plugin tenant chỉ
+// chèn bộ lọc cho bảng chính.
+func (r *etaxRepository) DanhSachHoaDon(ctx context.Context, f domain.HoaDonFilter) ([]domain.DongHoaDon, int64, domain.DemHoaDon, error) {
+	// Hàng nút lọc đếm TRƯỚC khi áp ô trạng thái — đúng như v2: bấm "Lỗi" rồi
+	// thì các nút khác vẫn phải nói mỗi nhóm có bao nhiêu tờ.
+	var dem domain.DemHoaDon
+	err := r.cauHoaDon(ctx, f).Select(`COUNT(*) AS tat_ca,
+		COALESCE(SUM(etax_invoices.status = ?), 0) AS nhap,
+		COALESCE(SUM(etax_invoices.status = ?), 0) AS da_gui,
+		COALESCE(SUM(etax_invoices.status = ?), 0) AS da_phat_hanh,
+		COALESCE(SUM(etax_invoices.status = ?), 0) AS hong`,
+		domain.HoaDonNhap, domain.HoaDonDaGui, domain.HoaDonDaPhatHanh, domain.HoaDonHong).
+		Scan(&dem).Error
+	if err != nil {
+		return nil, 0, domain.DemHoaDon{}, err
+	}
+
+	loc := func() *gorm.DB {
+		return locNhieu(r.cauHoaDon(ctx, f), "etax_invoices.status", f.TrangThai)
+	}
+
+	var tong int64
+	if err := loc().Count(&tong).Error; err != nil {
+		return nil, 0, domain.DemHoaDon{}, err
+	}
+	rows := []domain.DongHoaDon{}
+	if tong == 0 {
+		return rows, 0, dem, nil
+	}
+
+	trang := max(f.Page, 1)
+	soDong := f.PageSize
+	if soDong < 1 {
+		soDong = 20
+	}
+
+	// COALESCE cho mọi cột NULL được: tờ nháp chưa có số, chưa có mã cơ quan
+	// thuế, và đơn đã xoá cứng thì không còn người mua.
+	err = loc().Select(`etax_invoices.id, etax_invoices.order_id, etax_invoices.shop_id,
+			COALESCE(o.order_code, '') AS order_code,
+			etax_invoices.provider, etax_invoices.symbol,
+			COALESCE(etax_invoices.invoice_no, '') AS invoice_no,
+			COALESCE(etax_invoices.invoice_id, '') AS invoice_id,
+			COALESCE(etax_invoices.tax_auth_code, '') AS tax_auth_code,
+			COALESCE(etax_invoices.lookup_code, '') AS lookup_code,
+			etax_invoices.status, etax_invoices.doc_status,
+			etax_invoices.total_amount, etax_invoices.vat_amount,
+			COALESCE(etax_invoices.error, '') AS error,
+			COALESCE(o.recipient_name, '') AS customer_name,
+			COALESCE(o.recipient_email, '') AS customer_email,
+			COALESCE(o.recipient_phone, '') AS customer_phone,
+			COALESCE(nt.full_name, '') AS nguoi_tao,
+			etax_invoices.issued_at, etax_invoices.created_at`).
+		// Mới nhất lên đầu, như v2 (`orderBy('id', 'desc')`).
+		Order("etax_invoices.id DESC").
+		Limit(soDong).
+		Offset((trang - 1) * soDong).
+		Scan(&rows).Error
+	if err != nil {
+		return nil, 0, domain.DemHoaDon{}, err
+	}
+
+	return rows, tong, dem, nil
+}
+
+// cauHoaDon dựng câu GỐC của sổ hoá đơn: hai bảng nối và mọi ô lọc TRỪ trạng
+// thái (ô ấy áp riêng, sau lượt đếm cho hàng nút).
+//
+// Dựng LẠI cho mỗi lượt dùng — một *gorm.DB mang sẵn statement, xài hai lần thì
+// điều kiện của lượt trước dính sang lượt sau.
+func (r *etaxRepository) cauHoaDon(ctx context.Context, f domain.HoaDonFilter) *gorm.DB {
+	q := r.db.WithContext(ctx).Model(&domain.EtaxInvoice{}).
+		Joins("LEFT JOIN orders o ON o.id = etax_invoices.order_id AND o.tenant_id = etax_invoices.tenant_id").
+		Joins("LEFT JOIN users nt ON nt.id = o.created_by AND nt.tenant_id = o.tenant_id")
+
+	if f.KyHieu != "" {
+		q = q.Where("etax_invoices.symbol LIKE ?", "%"+f.KyHieu+"%")
+	}
+	if f.SoHoaDon != "" {
+		q = q.Where("etax_invoices.invoice_no LIKE ?", "%"+f.SoHoaDon+"%")
+	}
+	if f.MaDon != "" {
+		kw := "%" + f.MaDon + "%"
+		q = q.Where("(o.order_code LIKE ? OR etax_invoices.tax_auth_code LIKE ?)", kw, kw)
+	}
+	if f.KhachHang != "" {
+		kw := "%" + f.KhachHang + "%"
+		q = q.Where("(o.recipient_name LIKE ? OR o.recipient_phone LIKE ? OR o.recipient_email LIKE ?)", kw, kw, kw)
+	}
+	q = locNhieu(q, "o.created_by", f.CreatedBy)
+	if f.ShopID > 0 {
+		q = q.Where("etax_invoices.shop_id = ?", f.ShopID)
+	}
+	// Ngày phát hành: tờ chưa được cấp số (nháp, hỏng) thì chưa có ngày ấy — lấy
+	// lúc lập lượt phát hành, không thì bộ lọc ngày làm chúng biến mất.
+	if f.FromDate != "" {
+		q = q.Where("COALESCE(etax_invoices.issued_at, etax_invoices.created_at) >= ?", f.FromDate+" 00:00:00")
+	}
+	if f.ToDate != "" {
+		q = q.Where("COALESCE(etax_invoices.issued_at, etax_invoices.created_at) <= ?", f.ToDate+" 23:59:59")
+	}
+
+	return q
+}

@@ -35,7 +35,7 @@ func TestRegistryTinhNangGoi_KhaiDayDu(t *testing.T) {
 			if d.ChoVoHan {
 				t.Errorf("khoá bật/tắt %q lại nhận %q — hai thứ đó không đi cùng nhau", d.Key, domain.VoHan)
 			}
-			// Khoá bật/tắt PHẢI có mặc định đọc được: nơi ép luật (cmd/ten-mien) đọc
+			// Khoá bật/tắt PHẢI có mặc định đọc được: nơi ép luật (cmd/domains) đọc
 			// "không có dòng" thành TẮT, và màn hình phải nói đúng như vậy.
 			if d.KhongCoDong != "0" && d.KhongCoDong != "1" {
 				t.Errorf("khoá bật/tắt %q có mặc định %q, phải là 0 hoặc 1", d.Key, d.KhongCoDong)

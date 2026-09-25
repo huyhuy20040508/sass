@@ -496,7 +496,7 @@
         .vch-table-wrap::-webkit-scrollbar { height: 11px; }
         .vch-table-wrap::-webkit-scrollbar-thumb { background-color: #dcdcdc; border-radius: 8px; border: 3px solid #fff; }
 
-        .vch-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .vch-table { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 13px; }
         .vch-table thead th {
             text-align: left; padding: 13px 18px; border-bottom: 1px solid #f0f0f0; background: #fafafa;
             font-size: 12px; font-weight: 600; color: #8c8c8c; white-space: nowrap;
@@ -512,15 +512,19 @@
            min-width là thứ giữ cho bảng THOÁNG: không có nó thì cột chỉ rộng đúng
            bằng chữ bên trong, sáu cột cuối dồn hết sang phải và dính vào nhau —
            mắt phải dò xem con số nào thuộc cột nào. */
-        .vch-table th.vch-c-check,  .vch-table td.vch-c-check  { width: 1%; min-width: 46px;  text-align: center; }
-        .vch-table th.vch-c-stt,    .vch-table td.vch-c-stt    { width: 1%; min-width: 58px;  text-align: center; color: #8c8c8c; }
-        .vch-table th.vch-c-code,   .vch-table td.vch-c-code   { width: 100%; max-width: 0; min-width: 210px; overflow: hidden; }
-        .vch-table th.vch-c-off,    .vch-table td.vch-c-off    { width: 1%; min-width: 128px; text-align: right; }
-        .vch-table th.vch-c-used,   .vch-table td.vch-c-used   { width: 1%; min-width: 150px; }
-        .vch-table th.vch-c-time,   .vch-table td.vch-c-time   { width: 1%; min-width: 168px; }
-        .vch-table th.vch-c-state,  .vch-table td.vch-c-state  { width: 1%; min-width: 122px; text-align: center; }
-        .vch-table th.vch-c-switch, .vch-table td.vch-c-switch { width: 1%; min-width: 76px;  text-align: center; }
-        .vch-table th.vch-c-act,    .vch-table td.vch-c-act    { width: 1%; min-width: 126px; text-align: center; }
+        /* Chia % CỨNG, tổng đúng 100 — cùng khuôn các màn v2.
+           Bản trước để mỗi cột một `min-width` rộng tay, cộng lại 1076px trong khi
+           khung nội dung của vỏ mới ở màn 1366 chỉ có 1096px: bảng phình 1178px,
+           cột Thao tác rơi ra ngoài tầm nhìn và phải kéo ngang mới thấy. */
+        .vch-table th.vch-c-check,  .vch-table td.vch-c-check  { width: 4%;  text-align: center; }
+        .vch-table th.vch-c-stt,    .vch-table td.vch-c-stt    { width: 6%;  text-align: center; color: #8c8c8c; }
+        .vch-table th.vch-c-code,   .vch-table td.vch-c-code   { width: 27%; overflow: hidden; }
+        .vch-table th.vch-c-off,    .vch-table td.vch-c-off    { width: 11%; text-align: right; }
+        .vch-table th.vch-c-used,   .vch-table td.vch-c-used   { width: 11%; }
+        .vch-table th.vch-c-time,   .vch-table td.vch-c-time   { width: 13%; }
+        .vch-table th.vch-c-state,  .vch-table td.vch-c-state  { width: 11%; text-align: center; }
+        .vch-table th.vch-c-switch, .vch-table td.vch-c-switch { width: 7%;  text-align: center; }
+        .vch-table th.vch-c-act,    .vch-table td.vch-c-act    { width: 10%; text-align: center; }
 
         .vch-check { width: 15px; height: 15px; cursor: pointer; accent-color: #1890ff; margin: 0; }
         /* Mã dùng font đều nét: người bán hay phải đọc và đọc lại mã cho khách qua
@@ -582,7 +586,7 @@
         .vch-rowbtn.vch-del { color: #ff4d4f; }
         .vch-rowbtn.vch-del:hover { background: #fff1f0; }
 
-        .vch-empty { padding: 48px 12px; text-align: center; color: #8c8c8c; white-space: normal; line-height: 1.7; }
+        .vch-table tbody td.vch-empty { padding: 48px 12px; text-align: center; color: #8c8c8c; white-space: normal; line-height: 1.7; }
 
         .vch-btn-primary:focus-visible, .vch-btn-ghost:focus-visible,
         .vch-search-btn:focus-visible { outline: none; box-shadow: 0 0 0 .25rem rgba(13,110,253,.25); }

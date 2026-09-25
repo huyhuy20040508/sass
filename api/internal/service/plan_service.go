@@ -85,7 +85,7 @@ var planFeatureRegistry = []planFeatureDef{
 		Label: "Tên miền riêng",
 		// Tắt là mặc định, và mặc định đó tốn tiền thật nếu bật nhầm: mỗi tên miền
 		// cấp ra là một bản ghi DNS, một server block nginx và một chứng chỉ phải
-		// gia hạn. Nơi ép luật là `cmd/ten-mien`, không phải màn hình này.
+		// gia hạn. Nơi ép luật là `cmd/domains`, không phải màn hình này.
 		KhongCoDong: "0",
 	},
 }

@@ -54,6 +54,10 @@ type EtaxService interface {
 	BanXML(ctx context.Context, orderID uint) ([]byte, error)
 	// TraCuuMST tra tên và địa chỉ đăng ký của một mã số thuế.
 	TraCuuMST(ctx context.Context, mst string) (*minvoice.ThongTinMST, error)
+
+	// DanhSachHoaDon — sổ hoá đơn của màn "Hoá đơn điện tử". Chỉ đọc sổ trong
+	// database, không gọi ra cổng: đồng bộ trạng thái là lượt bấm riêng.
+	DanhSachHoaDon(ctx context.Context, f domain.HoaDonFilter) ([]domain.DongHoaDon, int64, domain.DemHoaDon, error)
 }
 
 type etaxService struct {
@@ -290,4 +294,9 @@ func coKyHieu(ds []domain.EtaxTemplate, kyHieu string) bool {
 	}
 
 	return false
+}
+
+// DanhSachHoaDon đi thẳng xuống repository: màn danh sách chỉ đọc sổ.
+func (s *etaxService) DanhSachHoaDon(ctx context.Context, f domain.HoaDonFilter) ([]domain.DongHoaDon, int64, domain.DemHoaDon, error) {
+	return s.repo.DanhSachHoaDon(ctx, f)
 }

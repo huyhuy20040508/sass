@@ -21,15 +21,15 @@
     // mọi đường của cả hai module đều bị `admin.khoa` dồn về trang Các gói dịch
     // vụ, nên một nút "sang Thu ngân" chỉ mời người ta bấm rồi quay lại đúng
     // chỗ cũ.
-    if (\App\Services\HanSuDung::daKhoa()) {
+    if (\App\Services\SubscriptionExpiry::daKhoa()) {
         return;
     }
 
     $mdswTone = $tone ?? 'sang';
-    $mdswHienTai = \App\Services\ModuleLamViec::hienTai();
+    $mdswHienTai = \App\Services\WorkspaceModule::hienTai();
     // danhSach() đã lọc theo CỬA của người đang đăng nhập: người chỉ đứng quầy
     // chỉ thấy một mục.
-    $mdswDs = \App\Services\ModuleLamViec::danhSach();
+    $mdswDs = \App\Services\WorkspaceModule::danhSach();
 
     // Không đọc được module nào thì mới bỏ hẳn — không có gì để nói.
     if ($mdswDs === []) {

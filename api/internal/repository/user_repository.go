@@ -53,6 +53,29 @@ func (r *userRepository) FindByID(ctx context.Context, id uint) (*domain.User, e
 	return &u, err
 }
 
+// FindCustomerByPhone — xem domain.UserRepository. So trên CHỮ SỐ vì cùng một
+// số được gõ theo đủ kiểu ("0909 555 123", "0909.555.123"), mà LIKE của ô tìm
+// kiếm thì coi đó là hai số khác nhau. Id nhỏ nhất thắng: hồ sơ lập trước là hồ
+// sơ đã gom lịch sử mua.
+func (r *userRepository) FindCustomerByPhone(ctx context.Context, digits string) (*domain.User, error) {
+	if digits == "" {
+		return nil, domain.ErrNotFound
+	}
+	var u domain.User
+	err := r.db.WithContext(ctx).Model(&domain.User{}).
+		Where("role_id = ?", domain.CustomerRoleID).
+		Where("REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(phone, ' ', ''), '.', ''), '-', ''), '(', ''), ')', '') = ?", digits).
+		Order("id ASC").First(&u).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, domain.ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return &u, nil
+}
+
 func (r *userRepository) FindByEmail(ctx context.Context, email string) (*domain.User, error) {
 	var u domain.User
 	err := r.db.WithContext(ctx).Preload("Role").Where("email = ?", email).First(&u).Error
@@ -149,13 +172,24 @@ func (r *userRepository) ExistsByUsernameExcept(ctx context.Context, username st
 	return count > 0, err
 }
 
+// boNganCach gỡ dấu ngăn cách trong số điện thoại để so khớp — cùng bộ ký tự
+// với phép REPLACE ở FindCustomerByPhone.
+var boNganCach = strings.NewReplacer(" ", "", ".", "", "-", "", "(", "", ")", "")
+
 func (r *userRepository) ListCustomers(ctx context.Context, f domain.CustomerFilter) ([]domain.User, int64, error) {
 	q := r.db.WithContext(ctx).Model(&domain.User{}).Where("role_id = ?", domain.CustomerRoleID)
 
 	if f.Keyword != "" {
 		kw := "%" + f.Keyword + "%"
 		// Bọc trong một Where duy nhất để nhóm OR không "ăn" mất điều kiện role_id.
-		q = q.Where("(full_name LIKE ? OR email LIKE ? OR phone LIKE ?)", kw, kw, kw)
+		// cột phone so khớp sau khi gỡ dẫu cách ở cả 2 phía
+		// cho phép replace mà FindCustomerByPhone đang dùng, để ô tìm kiếm và lượt dò trùng
+		// trùng ở quầy thôi nói hai thứ khác nhau. Hồ sơ cũ đã lỡ lưu
+		// "0909 000 111" vẫn tìm ra bằng "0909000111".
+		kwSo := "%" + boNganCach.Replace(f.Keyword) + "%"
+		q = q.Where("(full_name LIKE ? OR email LIKE ? OR phone LIKE ?"+
+			" OR REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(phone, ' ', ''), '.', ''), '-', ''), '(', ''), ')', '') LIKE ?)",
+			kw, kw, kw, kwSo)
 	}
 
 	if f.Status != "" && f.Status != "all" {

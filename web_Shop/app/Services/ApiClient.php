@@ -45,14 +45,14 @@ class ApiClient
      *
      * Đứng trước phiên, và chỉ sống trong một lượt xử lý. Đây là thứ làm chi
      * nhánh thành chuyện của từng TAB thay vì của cả trình duyệt — xem
-     * middleware ChiNhanhTheoTab.
+     * middleware BranchPerTab.
      *
      * null = request không khai gì, rơi về phiên như cũ.
      */
     protected static ?int $chiNhanhCuaRequest = null;
 
     /**
-     * Ghi chi nhánh của request hiện tại. Chỉ ChiNhanhTheoTab gọi.
+     * Ghi chi nhánh của request hiện tại. Chỉ BranchPerTab gọi.
      *
      * null = request không khai gì. 0 = khai RÕ "xem gộp mọi chi nhánh" — khác
      * hẳn không khai: 0 thắng phiên (tab đang xem gộp không được rơi về chi
@@ -68,7 +68,7 @@ class ApiClient
      *
      * "Chưa chọn" (phiên không có khoá) và "chọn Tất cả" (khoá = 0) cùng làm
      * chiNhanhDangLam() trả 0, nhưng phải xử lý khác nhau: chưa chọn thì
-     * ChiNhanhDangLam ghim chi nhánh đầu tiên vào phiên, còn Tất cả là lựa chọn
+     * CurrentBranch ghim chi nhánh đầu tiên vào phiên, còn Tất cả là lựa chọn
      * của người dùng và phải được giữ nguyên.
      */
     public static function daKhaiChiNhanh(): bool
@@ -230,7 +230,7 @@ class ApiClient
             return;
         }
 
-        session([HanSuDung::KHOA_CO => true]);
+        session([SubscriptionExpiry::KHOA_CO => true]);
     }
 
     /** Thực thi một HTTP request đơn lẻ (token lấy từ session tại thời điểm gọi). */
@@ -302,7 +302,7 @@ class ApiClient
         // refresh token, nên câu trả lời của nó là bản mới nhất về việc còn hạn
         // hay không. Ghi cả khi false: khách vừa gia hạn thì cờ phải rũ được ra,
         // không bắt họ đăng xuất rồi đăng nhập lại mới dùng tiếp được.
-        session([HanSuDung::KHOA_CO => (bool) data_get($data, 'cua_hang_khoa', false)]);
+        session([SubscriptionExpiry::KHOA_CO => (bool) data_get($data, 'cua_hang_khoa', false)]);
 
         // Ghi xuống NGAY, đừng đợi cuối request. Phiên lưu bằng tệp và không khoá
         // đọc-sửa-ghi, nên một request song song của cùng người dùng (tab khác,
@@ -960,6 +960,30 @@ class ApiClient
         return $this->get('/admin/orders/pos/discount-limit');
     }
 
+    /**
+     * Tra khách quen TẠI QUẦY. Khác customers(): đường này mở cho cửa Thu ngân,
+     * còn /admin/customers là khu Khách hàng của chủ tiệm.
+     */
+    public function posKhachHang(array $query = []): Response
+    {
+        return $this->get('/admin/orders/pos/khach-hang', $query);
+    }
+
+    /**
+     * Thêm khách mới tại quầy (tên, số điện thoại, email, địa chỉ). Trùng số điện
+     * thoại thì API trả hồ sơ có sẵn kèm `existed = true` thay vì tạo bản thứ hai.
+     */
+    public function posTaoKhach(array $data): Response
+    {
+        return $this->post('/admin/orders/pos/khach-hang', $data);
+    }
+
+    /** Xuất hoá đơn điện tử cho một đơn QUẦY (nút bấm lại của màn bán hàng). */
+    public function posPhatHanhHoaDon(int $orderID): Response
+    {
+        return $this->post("/admin/orders/pos/{$orderID}/hoa-don-dien-tu", []);
+    }
+
     // ---------- Ca làm việc & sổ quỹ ----------
 
     /** Ca đang mở của chi nhánh đang làm việc. `data` = null nghĩa là chưa mở ca. */
@@ -1301,7 +1325,7 @@ class ApiClient
      * Hồ sơ + tồn + MỌI lô (kể cả "Không xác định" và lô âm) của các mặt hàng tại
      * kho đang làm việc — màn lập phiếu gọi sau khi chọn hàng, như getMenu của v2.
      *
-     * @param int[] $ids id biến thể
+     * @param  int[]  $ids  id biến thể
      */
     public function dieuChinhTonKhoMatHang(array $ids): Response
     {
@@ -1753,6 +1777,15 @@ class ApiClient
     }
 
     /** Hoá đơn điện tử đã phát hành của một đơn. 404 = chưa phát hành. */
+    /**
+     * Sổ hoá đơn điện tử — màn "Hoá đơn điện tử" cạnh Quản lý đơn hàng.
+     * `meta.dem` là số hoá đơn theo trạng thái, đếm trước khi áp ô `status`.
+     */
+    public function soHoaDonDienTu(array $query = []): Response
+    {
+        return $this->get('/admin/etax/hoa-don', $query);
+    }
+
     public function hoaDonCuaDon(int $orderID): Response
     {
         return $this->get("/admin/orders/{$orderID}/etax");
@@ -1881,7 +1914,7 @@ class ApiClient
      *
      * Trả 404 khi máy chủ API chưa nối được sổ nền tảng — nhóm route bên đó
      * không được đăng ký. Nơi gọi phải nói đúng câu đó ra thay vì hiện trang
-     * trống; xem GoiDichVuController.
+     * trống; xem ServicePackageController.
      */
     public function goiDichVu(): Response
     {

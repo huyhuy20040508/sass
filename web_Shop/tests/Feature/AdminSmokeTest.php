@@ -3,7 +3,7 @@
 namespace Tests\Feature;
 
 use App\Services\ApiClient;
-use App\Services\CuaVao;
+use App\Services\Workspace;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Route;
 use Tests\TestCase;
@@ -112,13 +112,13 @@ class AdminSmokeTest extends TestCase
         'admin.dieu-chinh-ton-kho.matHangTheoNhom',
         'admin.dieu-chinh-ton-kho.loHang',
         // Ô "Người nộp" của hộp lập phiếu thu chi gọi bằng fetch, trả JSON.
-        'admin.thu-chi.nguoiNop',
-        // TẠM THỜI — bỏ dòng này đi khi API có đường /admin/thu-chi.
+        'admin.cashbook.nguoiNop',
+        // TẠM THỜI — bỏ dòng này đi khi API có đường /admin/cashbook.
         // Màn Quản lý thu chi đã dựng xong giao diện nhưng API chưa có đường nào
         // trả sổ thu chi, nên lượt xuất tệp không đọc được dữ liệu và quay về kèm
         // câu báo (302) thay vì trả tệp. Đó là cách hỏng ĐÚNG của nó lúc này;
         // trang danh sách vẫn mở được vì nó hiện bảng rỗng kèm câu báo.
-        'admin.thu-chi.export',
+        'admin.cashbook.export',
         // Lịch sử trả nợ của hộp chi tiết công nợ: gọi bằng fetch, trả JSON.
         'admin.cong-no.lichSuTra',
     ];
@@ -169,7 +169,7 @@ class AdminSmokeTest extends TestCase
             $this->markTestSkipped(static::$skipReason);
         }
 
-        // KHÔNG cần nhét sẵn bản chụp "cửa vào": CuaVao tự suy ra từ
+        // KHÔNG cần nhét sẵn bản chụp "cửa vào": Workspace tự suy ra từ
         // `api.user.access_areas` khi phiên chưa có bản chụp nào.
         static::$adminSession = [
             'api.access_token' => $res->json('data.access_token'),
@@ -195,7 +195,7 @@ class AdminSmokeTest extends TestCase
      * có thật, mà cửa hàng một chi nhánh lại không bao giờ thấy nó.
      *
      * Trong các chi nhánh ĐANG MỞ, chọn chi nhánh CÓ CHỨNG TỪ. Chọn bừa cái đầu
-     * tiên (đường ChiNhanhDangLam đi cho phiên chưa chọn gì) thì trên máy có
+     * tiên (đường CurrentBranch đi cho phiên chưa chọn gì) thì trên máy có
      * nhiều chi nhánh, bài kiểm dễ đứng đúng vào kho rỗng: mọi trang chi tiết bị
      * bỏ qua vì "chưa có dữ liệu" và bài vẫn xanh — xanh mà không quét gì cả.
      */
@@ -558,8 +558,8 @@ class AdminSmokeTest extends TestCase
             ]
         );
         // Bản chụp cửa vào trong phiên cũng phải theo, không thì nó thắng.
-        $session[CuaVao::KHOA_CUA] = ['thu_ngan'];
-        $session[CuaVao::KHOA_LUC] = time();
+        $session[Workspace::KHOA_CUA] = ['thu_ngan'];
+        $session[Workspace::KHOA_LUC] = time();
 
         $cam = [
             // Người & cấu hình — đã đóng từ trước.

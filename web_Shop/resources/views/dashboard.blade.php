@@ -730,12 +730,16 @@
                     <p class="db-empty">Chưa có đơn hàng nào.</p>
                 @else
                     <div class="db-table-wrap">
-                        <table class="db-table">
+                        <table class="db-table db-table--orders">
                             <thead>
                                 <tr>
-                                    <th>Mã đơn</th><th>Người nhận</th><th>Khu vực</th>
-                                    <th class="num">Tổng tiền</th><th>Thanh toán</th>
-                                    <th>Trạng thái</th><th class="num">Ngày đặt</th>
+                                    <th class="dbo-c-code">Mã đơn</th>
+                                    <th class="dbo-c-name">Người nhận</th>
+                                    <th class="dbo-c-area">Khu vực</th>
+                                    <th class="num dbo-c-money">Tổng tiền</th>
+                                    <th class="dbo-c-pay">Thanh toán</th>
+                                    <th class="dbo-c-state">Trạng thái</th>
+                                    <th class="num dbo-c-date">Ngày đặt</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -747,17 +751,19 @@
                                                 {{ $o['order_code'] ?? '—' }}
                                             </a>
                                         </td>
-                                        <td class="db-ellip">{{ $o['recipient_name'] ?? '—' }}</td>
-                                        <td class="db-ellip db-muted">{{ ($o['shipping_province'] ?? '') ?: '—' }}</td>
-                                        <td class="num">{{ $money($o['total_amount'] ?? 0) }}</td>
-                                        <td>
+                                        <td class="db-ellip dbo-c-name" title="{{ $o['recipient_name'] ?? '' }}">{{ $o['recipient_name'] ?? '—' }}</td>
+                                        <td class="db-ellip db-muted dbo-c-area" title="{{ $o['shipping_province'] ?? '' }}">{{ ($o['shipping_province'] ?? '') ?: '—' }}</td>
+                                        <td class="num dbo-c-money">{{ $money($o['total_amount'] ?? 0) }}</td>
+                                        {{-- "Chưa thu" và tên phương thức nằm hai dòng: gộp một dòng thì
+                                             "Chưa thu Chuyển khoản" cần 142px, quá nửa chỗ còn lại của thẻ. --}}
+                                        <td class="dbo-c-pay">
                                             <span class="db-paytag {{ $ps === 'paid' ? 'is-paid' : '' }}">
                                                 {{ $ps === 'paid' ? 'Đã thu' : 'Chưa thu' }}
                                             </span>
-                                            <span class="db-muted">{{ $shortMethod($o['payment_method'] ?? '') }}</span>
+                                            <span class="db-muted dbo-method">{{ $shortMethod($o['payment_method'] ?? '') }}</span>
                                         </td>
-                                        <td><span class="db-badge tone-{{ $ORDER_TONES[$st] ?? 'info' }}">{{ $ORDER_STATUSES[$st] ?? $st }}</span></td>
-                                        <td class="num db-muted">
+                                        <td class="dbo-c-state"><span class="db-badge tone-{{ $ORDER_TONES[$st] ?? 'info' }}">{{ $ORDER_STATUSES[$st] ?? $st }}</span></td>
+                                        <td class="num db-muted dbo-c-date">
                                             {{ !empty($o['created_at']) ? \Illuminate\Support\Carbon::parse($o['created_at'])->format('d/m H:i') : '—' }}
                                         </td>
                                     </tr>
@@ -839,10 +845,10 @@
                              đang làm việc. Phải NÓI RA: cùng một mặt hàng có thể sắp hết ở
                              kho này mà đầy ở kho kia, và người đọc cần biết mình đang nhìn
                              kho nào trước khi quyết định nhập thêm. --}}
-                        @php($khoDangXem = \App\Services\ChiNhanhDangLam::ten())
+                        @php($khoDangXem = \App\Services\CurrentBranch::ten())
                         <p class="db-card-sub">
                             Biến thể đang bán còn tối đa {{ $LOW_STOCK }} sản phẩm
-                            @if(count(\App\Services\ChiNhanhDangLam::danhSach()['ds']) > 1)
+                            @if(count(\App\Services\CurrentBranch::danhSach()['ds']) > 1)
                                 · <b>{{ $khoDangXem === null ? 'gộp mọi chi nhánh' : 'kho '.$khoDangXem }}</b>
                             @endif
                         </p>
@@ -1103,6 +1109,24 @@
         .db-table .num { text-align: right; font-variant-numeric: tabular-nums; }
         .db-table th.num { text-align: right; }
         .db-ellip { max-width: 210px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+        /* Bảng "Đơn hàng gần đây" — 7 cột trong một THẺ, không phải cả trang.
+           Thẻ chỉ rộng 677px ở khổ 1366 nên để `auto` là bảng đòi 733px rồi
+           cuộn ngang bên trong thẻ. Riêng bảng này chia phần trăm (đủ 100) và
+           bóp đệm ngang; hai bảng còn lại chỉ 3-4 cột nên vẫn để `auto`. */
+        .db-table--orders { table-layout: fixed; }
+        .db-table--orders th, .db-table--orders td {
+            padding: 9px 7px; overflow: hidden; text-overflow: ellipsis;
+        }
+        .db-table--orders .dbo-c-code  { width: 13%; }
+        .db-table--orders .dbo-c-name  { width: 16%; max-width: none; }
+        .db-table--orders .dbo-c-area  { width: 11%; max-width: none; }
+        .db-table--orders .dbo-c-money { width: 16%; }
+        .db-table--orders .dbo-c-pay   { width: 14%; white-space: normal; }
+        .db-table--orders .dbo-c-state { width: 17%; }
+        .db-table--orders .dbo-c-date  { width: 13%; }
+        .db-table--orders .db-paytag { display: block; margin-right: 0; }
+        .db-table--orders .dbo-method { display: block; overflow: hidden; text-overflow: ellipsis; }
         .db-muted { color: #8c8c8c; }
         .db-code { font-weight: 600; color: #262626; text-decoration: none; }
         .db-code:hover { color: #1890ff; text-decoration: underline; }

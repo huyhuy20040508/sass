@@ -1019,19 +1019,39 @@ type Order struct {
 	// CreatedByName KHÔNG phải cột: repository điền thêm bằng một lượt tra bảng
 	// `users`. Người tạo đã bị xoá thì để rỗng và màn hình in "—", đúng như
 	// ChiNhanh.CreatedByName vẫn làm.
-	CreatedByName    string  `json:"created_by_name" gorm:"-"`
-	VoucherID        *uint   `json:"voucher_id"`
-	RecipientName    string  `json:"recipient_name"`
-	RecipientPhone   string  `json:"recipient_phone"`
-	RecipientEmail   string  `json:"recipient_email"`
+	CreatedByName  string `json:"created_by_name" gorm:"-"`
+	VoucherID      *uint  `json:"voucher_id"`
+	RecipientName  string `json:"recipient_name"`
+	RecipientPhone string `json:"recipient_phone"`
+	RecipientEmail string `json:"recipient_email"`
+	// BuyerTaxCode / BuyerCompany / BuyerAddress là người mua LẤY HOÁ ĐƠN điện tử
+	// (migration 0067). Đơn quầy không có địa chỉ giao, mà hoá đơn cho doanh
+	// nghiệp phải có mã số thuế, tên đơn vị và địa chỉ đăng ký. Rỗng = khách cá
+	// nhân, hoá đơn ghi theo tên và số điện thoại người nhận.
+	BuyerTaxCode     string  `json:"buyer_tax_code"`
+	BuyerCompany     string  `json:"buyer_company"`
+	BuyerAddress     string  `json:"buyer_address"`
 	ShippingProvince string  `json:"shipping_province"`
 	ShippingDistrict string  `json:"shipping_district"`
 	ShippingWard     string  `json:"shipping_ward"`
 	ShippingAddress  string  `json:"shipping_address"`
 	SubtotalAmount   float64 `json:"subtotal_amount"`
 	DiscountAmount   float64 `json:"discount_amount"`
-	ShippingFee      float64 `json:"shipping_fee"`
-	TotalAmount      float64 `json:"total_amount"`
+	// OrderDiscountPercent / OrderDiscountAmount là phần GIẢM TAY trên cả đơn mà
+	// người bán bấm ở quầy. Số tiền này ĐÃ NẰM TRONG DiscountAmount — hai trường
+	// này chỉ tách nguồn để phiếu in nói được đâu là mã giảm giá, đâu là giảm tay.
+	// Percent = 0 mà Amount > 0 nghĩa là người bán gõ số tiền.
+	OrderDiscountPercent float64 `json:"order_discount_percent"`
+	OrderDiscountAmount  float64 `json:"order_discount_amount"`
+	ShippingFee          float64 `json:"shipping_fee"`
+	// SurchargeAmount là PHỤ THU (phí gói quà, ngoài giờ…), cộng thẳng vào tổng và
+	// không chịu thuế — cùng cách hoá đơn điện tử đối xử với phí giao hàng.
+	SurchargeAmount float64 `json:"surcharge_amount"`
+	SurchargeNote   string  `json:"surcharge_note"`
+	// VatAmount là tổng THUẾ SẢN PHẨM đã cộng vào TotalAmount: giá bán là giá chưa
+	// thuế, đúng như hoá đơn điện tử tính. Bằng tổng OrderItem.VatAmount.
+	VatAmount   float64 `json:"vat_amount"`
+	TotalAmount float64 `json:"total_amount"`
 	// AmountTendered / ChangeAmount là tiền khách đưa và tiền thối lại tại quầy.
 	// nil = không thu bằng tiền mặt; 0 = có thu và khách đưa vừa đủ. Hai chuyện
 	// khác nhau, nên không dùng float64 với giá trị 0 cho cả hai.
@@ -1125,7 +1145,13 @@ type OrderItem struct {
 	DiscountAmount  float64 `json:"discount_amount"`
 	Quantity        int     `json:"quantity"`
 	// TotalPrice là số tiền dòng này góp vào đơn: đơn giá × số lượng − phần đã bớt.
-	TotalPrice         float64   `json:"total_price"`
+	TotalPrice float64 `json:"total_price"`
+	// VAT là thuế suất CHỤP LẠI lúc bán (quy ước Product.VAT: số dương là %, -1
+	// KCT, -2 KKKNT). nil = dòng bán trước migration 0067 — hoá đơn phát hành bù
+	// lùi về thuế suất hiện tại của mặt hàng. VatAmount là tiền thuế của dòng,
+	// tính trên TotalPrice sau khi chia phần giảm giá cả đơn về (xem thueCuaDon).
+	VAT                *int      `json:"vat" gorm:"column:vat"`
+	VatAmount          float64   `json:"vat_amount"`
 	CustomPlayerName   string    `json:"custom_player_name"`
 	CustomPlayerNumber string    `json:"custom_player_number"`
 	CreatedAt          time.Time `json:"created_at"`

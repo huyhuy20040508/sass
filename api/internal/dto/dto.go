@@ -1319,6 +1319,44 @@ type POSCheckoutRequest struct {
 	// trên giá tại thời điểm bán — cùng đường với luồng web.
 	VoucherCode string           `json:"voucher_code" binding:"omitempty,max=50"`
 	Items       []POSItemRequest `json:"items" binding:"required,min=1,max=50,dive"`
+
+	// GIẢM TAY TRÊN CẢ ĐƠN — gõ phần trăm HOẶC số tiền. Gửi cả hai thì phần trăm
+	// thắng. Hạn quyền là hạn của giảm từng dòng (Cài đặt → Quầy bán hàng), quy
+	// ra phần trăm của tiền hàng khi người bán gõ số tiền. Server tự tính lại số
+	// tiền và cộng vào discount_amount cùng phần mã giảm giá.
+	OrderDiscountPercent float64 `json:"order_discount_percent" binding:"omitempty,gte=0,lte=100"`
+	OrderDiscountAmount  float64 `json:"order_discount_amount" binding:"omitempty,gte=0,lte=1000000000"`
+	// PHỤ THU — số tiền cộng thêm (không chịu thuế) và lý do in lên phiếu. Màn
+	// hình có thể cho gõ theo %, nhưng gửi lên luôn là số tiền đã quy đổi.
+	SurchargeAmount float64 `json:"surcharge_amount" binding:"omitempty,gte=0,lte=1000000000"`
+	SurchargeNote   string  `json:"surcharge_note" binding:"omitempty,max=255"`
+
+	// NGƯỜI MUA LẤY HOÁ ĐƠN ĐIỆN TỬ. Email là nơi cổng gửi hoá đơn tới; ba ô còn
+	// lại chỉ cần khi người mua là doanh nghiệp.
+	CustomerEmail string `json:"customer_email" binding:"omitempty,email,max=191"`
+	BuyerTaxCode  string `json:"buyer_tax_code" binding:"omitempty,max=20"`
+	BuyerCompany  string `json:"buyer_company" binding:"omitempty,max=255"`
+	BuyerAddress  string `json:"buyer_address" binding:"omitempty,max=255"`
+	// IssueEInvoice = người bán bật "Xuất hoá đơn điện tử" cho lượt này: phát hành
+	// ngay sau khi chốt, kết quả trả về trong `einvoice`. Tắt thì vẫn theo công tắc
+	// "Tự phát hành" của chi nhánh như trước.
+	IssueEInvoice bool `json:"issue_einvoice"`
+
+	// MÃ ĐƠN GIỮ TRƯỚC (POST /orders/pos/ma-don) và chữ ký đi kèm. Chữ ký sai, hết hạn
+	// hoặc mã đã có đơn dùng thì server bỏ qua và cấp mã mới — không từ chối lượt bán.
+	OrderCode      string `json:"order_code" binding:"omitempty,max=50"`
+	OrderCodeToken string `json:"order_code_token" binding:"omitempty,max=200"`
+}
+
+// POSMaDonResponse — mã đơn cấp trước cho hoá đơn đang mở ở quầy.
+//
+// OrderCode rỗng = chi nhánh chưa bật quy tắc mã đơn (Thông số chung → Quy tắc mã):
+// mã mặc định ghép từ id đơn nên chỉ biết được sau khi đơn đã ghi.
+type POSMaDonResponse struct {
+	OrderCode string `json:"order_code"`
+	// Token gửi lại nguyên văn lúc chốt (order_code_token).
+	Token     string     `json:"token,omitempty"`
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 }
 
 // POSItemRequest — một dòng hàng trên màn hình quầy.
@@ -1360,6 +1398,9 @@ type POSScanResponse struct {
 	// đang chạy.
 	Price float64 `json:"price"`
 	Stock int     `json:"stock"`
+	// VAT là thuế suất của mặt hàng (quy ước Product.VAT) — màn quầy dùng để tạm
+	// tính dòng "Thuế sản phẩm" trước khi chốt.
+	VAT int `json:"vat"`
 }
 
 // POSCheckoutResponse — kết quả một lượt bán tại quầy, đủ để in hoá đơn ngay.
@@ -1385,6 +1426,47 @@ type POSCheckoutResponse struct {
 	Status         string   `json:"status"`
 	PaymentStatus  string   `json:"payment_status"`
 	Message        string   `json:"message"`
+
+	// OrderDiscount là phần giảm tay trên cả đơn (đã nằm trong Discount).
+	OrderDiscount float64 `json:"order_discount_amount"`
+	Surcharge     float64 `json:"surcharge_amount"`
+	SurchargeNote string  `json:"surcharge_note,omitempty"`
+	VatAmount     float64 `json:"vat_amount"`
+	// EInvoice chỉ có mặt khi người bán bật "Xuất hoá đơn điện tử" cho lượt này.
+	EInvoice *POSHoaDonKetQua `json:"einvoice,omitempty"`
+}
+
+// POSHoaDonKetQua — kết quả xuất hoá đơn điện tử ngay sau lượt bán.
+//
+// KHÔNG phải lỗi của lượt bán: đơn đã ghi và đã thu tiền. OK = false thì màn
+// hình in Message và mời bấm lại (POST /orders/pos/{id}/hoa-don-dien-tu).
+type POSHoaDonKetQua struct {
+	OK bool `json:"ok"`
+	// Status là trạng thái tờ hoá đơn khi OK (draft|sent|issued).
+	Status  string `json:"status,omitempty"`
+	Message string `json:"message"`
+}
+
+// POSKhachMoiRequest — nút + "Khách mới" ở màn quầy.
+//
+// Gọn hơn CustomerRequest có chủ ý: người đứng quầy chỉ kịp hỏi tên, số điện
+// thoại, cùng lắm là email và địa chỉ. Hồ sơ đủ (nhóm khách, người đại diện…)
+// thì chủ tiệm bổ sung sau ở khu quản trị.
+type POSKhachMoiRequest struct {
+	FullName string `json:"full_name" binding:"required,max=150"`
+	Phone    string `json:"phone" binding:"omitempty,max=20"`
+	Email    string `json:"email" binding:"omitempty,email,max=191"`
+	Address  string `json:"address" binding:"omitempty,max=255"`
+	// CustomerType: 0 cá nhân, 1 doanh nghiệp (khi đó nên có TaxCode).
+	CustomerType uint   `json:"customer_type" binding:"omitempty,oneof=0 1"`
+	TaxCode      string `json:"tax_code" binding:"omitempty,max=20"`
+}
+
+// POSKhachMoiResponse — hồ sơ khách vừa tạo, hoặc hồ sơ CÓ SẴN mang cùng số
+// điện thoại (Existed = true). Cả hai trường hợp màn quầy đều chọn luôn khách đó.
+type POSKhachMoiResponse struct {
+	Customer *CustomerResponse `json:"customer"`
+	Existed  bool              `json:"existed"`
 }
 
 // OrderUpdateRequest — payload admin sửa một đơn hàng CÓ SẴN. Không cho đổi khách
@@ -1937,7 +2019,7 @@ type CuaHangCoSanResponse struct {
 // việc duy nhất ở đây là ghi hợp đồng bên control plane.
 //
 // Giá và ba hạn mức KHÔNG có ô nào — chép từ bảng giá lúc ký, hệt như đường mở
-// tài khoản dùng thử. Thoả thuận riêng vẫn đi qua `cmd/thue-bao ky`, nơi có
+// tài khoản dùng thử. Thoả thuận riêng vẫn đi qua `cmd/subscriptions ky`, nơi có
 // bảng đối chiếu in ra trước mắt người ký.
 type KyHopDongRequest struct {
 	// PlanID là DÒNG bảng giá (gói × chu kỳ), lấy từ GET /platform/plans.
@@ -2010,7 +2092,7 @@ type HopDongChiTietResponse struct {
 //
 // DANH SÁCH Ô CỐ TÌNH NGẮN. Không có gói, chu kỳ, giá hay ba hạn mức: đó là điều
 // khoản đã ký, và cả hệ thống dựng trên nguyên tắc chúng không đổi sau lúc ký.
-// Bán thêm quyền lợi cho một khách là việc của `cmd/thue-bao`, nơi có bảng đối
+// Bán thêm quyền lợi cho một khách là việc của `cmd/subscriptions`, nơi có bảng đối
 // chiếu in ra trước mắt người ký.
 //
 // Mọi ô đều GHI ĐÈ, kể cả khi để trống — form gửi lên trọn bộ, và ô trống nghĩa
@@ -2074,7 +2156,7 @@ type KhachHangMoiChung struct {
 	// của KHÁCH MUA SẮM ở storefront, và quên mật khẩu qua email cũng chỉ có
 	// trong cụm đó — cụm đang tắt mặc định. Cột `users.email` vì thế không phải
 	// một thông tin đăng nhập; nó chỉ là cột NOT NULL của lược đồ, và máy chủ tự
-	// đặt <tên đăng nhập>@<mã cửa hàng>.local đúng như `cmd/tao-admin`.
+	// đặt <tên đăng nhập>@<mã cửa hàng>.local đúng như `cmd/create-admin`.
 	//
 	// Hỏi người bán một địa chỉ email cho ô đó là hỏi một thứ không dùng vào
 	// việc gì, rồi ghi nó xuống như thể khách đăng nhập được bằng nó.
@@ -2159,7 +2241,7 @@ type DangKyResponse struct {
 // bán mà không phải tải lại danh sách.
 //
 // NguonDieuKhoan nói mỗi con số đến từ đâu ("bảng giá" / "bảng giá: không giới
-// hạn"), giống bảng đối chiếu `cmd/thue-bao ky` in ra. Ghi một hợp đồng mà không
+// hạn"), giống bảng đối chiếu `cmd/subscriptions ky` in ra. Ghi một hợp đồng mà không
 // nói được con số ở đâu ra là thứ không ai kiểm lại được.
 type TaoDungThuResponse struct {
 	TenantID    uint   `json:"tenant_id" example:"7"`
@@ -3124,4 +3206,11 @@ type GiaChiNhanhRequest struct {
 	// khai bằng khuyến mãi, không phải bằng bảng giá — ở đây số 0 gần như luôn
 	// là ô để trống rồi bấm Lưu.
 	Price float64 `json:"price" binding:"required,gt=0" example:"25000"`
+}
+
+// HoaDonMeta — `meta` của sổ hoá đơn điện tử: phân trang cộng số hoá đơn theo
+// trạng thái cho hàng nút lọc đầu bảng.
+type HoaDonMeta struct {
+	response.Pagination
+	Dem domain.DemHoaDon `json:"dem"`
 }

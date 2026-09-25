@@ -681,6 +681,18 @@ func New(
 			// trong lúc bán, nên đứng cạnh chính đường bán.
 			q.Dat(quay, http.MethodGet, "/orders/pos/scan", "don-hang.xem", h.Order.POSScan)
 			q.Dat(quay, http.MethodGet, "/orders/pos/discount-limit", "don-hang.xem", h.Order.POSDiscountLimit)
+			// Hoá đơn điện tử cho đơn QUẦY — cùng quyền với bán: người vừa thu tiền là
+			// người khách đứng trước mặt đòi hoá đơn. Đơn kênh khác bị từ chối ở
+			// service; bộ nút phát hành đầy đủ vẫn ở /orders/:id/etax (khu quản trị).
+			q.Dat(quay, http.MethodPost, "/orders/pos/:id/hoa-don-dien-tu", "don-hang.them", h.Order.POSPhatHanhHoaDon)
+			// Giữ trước mã đơn cho hoá đơn đang mở — tab hoá đơn hiện mã như v2 cũ.
+			q.Dat(quay, http.MethodPost, "/orders/pos/ma-don", "don-hang.them", h.Order.POSGiuMaDon)
+			// Khách hàng TẠI QUẦY: tra và thêm khách ngay lúc bán. /customers là khu
+			// Khách hàng của chủ tiệm (nhóm manage) — người chỉ có cửa Thu ngân gõ tìm
+			// khách quen ở đó thì không ra ai. Hai đường này chỉ đọc danh sách và thêm
+			// hồ sơ gọn; sửa, xoá, đặt mật khẩu vẫn đóng.
+			q.Dat(quay, http.MethodGet, "/orders/pos/khach-hang", "don-hang.them", h.Customer.List)
+			q.Dat(quay, http.MethodPost, "/orders/pos/khach-hang", "don-hang.them", h.Customer.TaoTaiQuay)
 			// Đổi hàng: nhận hàng cũ + bán hàng mới + ghi chênh lệch, một giao dịch.
 			q.Dat(quay, http.MethodPost, "/orders/pos/doi-hang", "don-hang.doi-hang", h.Order.POSDoiHang)
 			// Sổ chứng từ của màn Quản lý đơn hàng. Đứng TRƯỚC "/orders/:id" trong
@@ -714,6 +726,10 @@ func New(
 			q.Dat(manage, http.MethodPost, "/orders/:id/etax/adjust", "don-hang.sua", h.ETax.DieuChinh)
 			q.Dat(admin, http.MethodGet, "/orders/:id/etax/pdf", "don-hang.xem", h.ETax.BanIn)
 			q.Dat(admin, http.MethodGet, "/orders/:id/etax/xml", "don-hang.xem", h.ETax.BanXML)
+			// Sổ hoá đơn — màn "Hoá đơn điện tử" đứng cạnh Quản lý đơn hàng. Là
+			// một màn của khu quản lý nên ở `manage`, còn quyền thì theo quyền xem
+			// đơn: mỗi dòng của sổ chỉ là hoá đơn của một đơn mà người ấy vốn xem được.
+			q.Dat(manage, http.MethodGet, "/etax/hoa-don", "don-hang.xem", h.ETax.DanhSach)
 			// Món còn trả được của một đơn — màn hình lập phiếu trả dựng form từ đây.
 			// Đi theo nhóm `manage` cùng chính trang Trả hàng ngay dưới: nhân viên
 			// không lập được phiếu thì cũng không cần cái form đó.

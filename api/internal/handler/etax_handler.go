@@ -1,6 +1,10 @@
 package handler
 
 import (
+	"net/http"
+	"strconv"
+	"strings"
+
 	"github.com/gin-gonic/gin"
 
 	"sass-api/internal/domain"
@@ -239,4 +243,73 @@ func (h *EtaxHandler) PhatHanh(c *gin.Context) {
 		return
 	}
 	response.OKMessage(c, service.MoTaHoaDon(hd), hd)
+}
+
+// DanhSach godoc
+//
+//	@Summary		Sổ hoá đơn điện tử
+//	@Description	Mọi tờ hoá đơn đã phát hành (kể cả nháp và hỏng) của chi nhánh đang làm việc, mới nhất trước.
+//	@Description	`meta.dem` là số hoá đơn theo trạng thái, đếm TRƯỚC khi áp ô `status` — cho hàng nút lọc.
+//	@Description	Chỉ đọc sổ trong database; muốn hỏi lại cổng thì gọi `/orders/{id}/etax/sync`.
+//	@Tags			Admin - Hoá đơn điện tử
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			symbol		query		string	false	"Ký hiệu"
+//	@Param			invoice_no	query		string	false	"Số hoá đơn"
+//	@Param			code		query		string	false	"Mã đơn hàng hoặc mã cơ quan thuế"
+//	@Param			customer	query		string	false	"Tên / SĐT / email người mua"
+//	@Param			status		query		string	false	"draft|sent|issued|failed, ngăn bởi dấu phẩy"
+//	@Param			created_by	query		string	false	"Id người lập đơn, ngăn bởi dấu phẩy"
+//	@Param			from_date	query		string	false	"Từ ngày phát hành (YYYY-MM-DD)"
+//	@Param			to_date		query		string	false	"Đến ngày phát hành (YYYY-MM-DD)"
+//	@Param			page		query		int		false	"Trang (mặc định 1)"
+//	@Param			page_size	query		int		false	"Số dòng/trang (mặc định 20, tối đa 100)"
+//	@Success		200			{object}	response.Body{data=[]domain.DongHoaDon,meta=dto.HoaDonMeta}
+//	@Failure		401			{object}	response.Body
+//	@Failure		403			{object}	response.Body
+//	@Router			/admin/etax/hoa-don [get]
+func (h *EtaxHandler) DanhSach(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 100 {
+		pageSize = 20
+	}
+
+	rows, tong, dem, err := h.svc.DanhSachHoaDon(c.Request.Context(), domain.HoaDonFilter{
+		KyHieu:    strings.TrimSpace(c.Query("symbol")),
+		SoHoaDon:  strings.TrimSpace(c.Query("invoice_no")),
+		MaDon:     strings.TrimSpace(c.Query("code")),
+		KhachHang: strings.TrimSpace(c.Query("customer")),
+		TrangThai: c.Query("status"),
+		CreatedBy: c.Query("created_by"),
+		FromDate:  c.Query("from_date"),
+		ToDate:    c.Query("to_date"),
+		// Cắt theo chi nhánh đang làm việc, cùng luật với sổ đơn hàng: người
+		// đứng ở một quầy không đọc sổ hoá đơn của quầy khác.
+		ShopID:   chiNhanhLoc(c),
+		Page:     page,
+		PageSize: pageSize,
+	})
+	if err != nil {
+		handleServiceError(c, err)
+
+		return
+	}
+
+	c.JSON(http.StatusOK, response.Body{
+		Success: true,
+		Data:    rows,
+		Meta: dto.HoaDonMeta{
+			Pagination: response.Pagination{
+				Page:       page,
+				PageSize:   pageSize,
+				Total:      tong,
+				TotalPages: max(int((tong+int64(pageSize)-1)/int64(pageSize)), 1),
+			},
+			Dem: dem,
+		},
+	})
 }

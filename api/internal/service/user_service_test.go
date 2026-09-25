@@ -145,6 +145,10 @@ func (r *fakeUserRepo) ListCustomers(_ context.Context, _ domain.CustomerFilter)
 	return nil, 0, nil
 }
 
+func (r *fakeUserRepo) FindCustomerByPhone(context.Context, string) (*domain.User, error) {
+	return nil, domain.ErrNotFound
+}
+
 func (r *fakeUserRepo) CustomerStats(_ context.Context) (domain.CustomerStats, error) {
 	return domain.CustomerStats{}, nil
 }

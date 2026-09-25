@@ -55,7 +55,7 @@ khác Shop Admin đã chuyển sang 3 ô — super admin là người của nề
 cửa hàng nào nên không có "mã cửa hàng" để gõ.
 
 Không có tài khoản mặc định (`database/seed.sql` đã tắt). Tạo tài khoản `super_admin`
-đầu tiên bằng `cd api && go run ./cmd/tao-admin`, rồi đăng nhập ở đây bằng chính email
+đầu tiên bằng `cd api && go run ./cmd/create-admin`, rồi đăng nhập ở đây bằng chính email
 mà lệnh đó đặt cho tài khoản — mặc định là `<tên đăng nhập>@<mã cửa hàng>.local`, đổi
 được bằng cờ `--email`.
 

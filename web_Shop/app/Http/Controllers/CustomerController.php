@@ -17,7 +17,7 @@ use Illuminate\Support\Facades\Log;
  */
 class CustomerController extends Controller
 {
-    use \App\Http\Controllers\Concerns\TraLoiHopThoai;
+    use \App\Http\Controllers\Concerns\DialogReply;
 
     // Gọi đúng chữ trên nút ("Tạo"), không gọi tên khác — một hành động, một tên.
     public const EMPTY_TEXT = 'Chưa có khách hàng nào. Bấm "Tạo" để khai khách đầu tiên.';
@@ -86,7 +86,7 @@ class CustomerController extends Controller
 
         // Màn đã chuyển sang khu v2; view cũ ở resources/views/customers giữ lại
         // phòng khi cần đối chiếu, không còn route nào trỏ vào.
-        $view = view('v2::khach-hang.index', [
+        $view = view('v2::customers.index', [
             'list' => array_map([$this, 'veKieuXem'], $customers),
             'filters' => $filters,
             'meta' => $meta,

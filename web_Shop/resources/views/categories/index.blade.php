@@ -328,7 +328,7 @@
             }
             // Bộ mức thuế đang bật ở màn Hàng hóa → Thuế. Hai mã âm là KCT/KKKNT.
             const VAT_RATES = @json($vatRates ?? []);
-            const VAT_LABELS = @json(\App\Support\MucThue::NHAN);
+            const VAT_LABELS = @json(\App\Support\TaxRate::NHAN);
             const vatText = (v) => {
                 const n = Number(v);
                 if (n === -1) return 'KCT';

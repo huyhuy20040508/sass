@@ -85,6 +85,51 @@ func (h *OrderHandler) POSCheckout(c *gin.Context) {
 	response.Created(c, res)
 }
 
+// @Summary		Giữ trước mã đơn cho hoá đơn đang mở ở quầy
+// @Description	Màn quầy gọi khi hoá đơn có món đầu tiên, để tab đổi từ "Hoá đơn N" sang mã đơn như v2 cũ.
+// @Description	Mã cấp từ cùng bộ đếm với lúc chốt đơn; gửi lại `order_code` + `order_code_token` khi chốt thì đơn vào sổ đúng mã này.
+// @Description	`order_code` rỗng = chi nhánh chưa bật quy tắc mã đơn.
+// @Tags			Admin - Orders
+// @Produce		json
+// @Success		200	{object}	response.Body{data=dto.POSMaDonResponse}
+// @Security		BearerAuth
+// @Router			/admin/orders/pos/ma-don [post]
+func (h *OrderHandler) POSGiuMaDon(c *gin.Context) {
+	res, err := h.svc.POSGiuMaDon(c.Request.Context())
+	if err != nil {
+		handleServiceError(c, err)
+
+		return
+	}
+	response.OK(c, res)
+}
+
+// @Summary		Xuất hoá đơn điện tử cho đơn quầy
+// @Description	Nút "Hoá đơn điện tử" của màn quầy — cho lượt bán vừa xong, hoặc bấm lại khi lượt xuất ngay sau khi bán không thành công.
+// @Description	Chỉ nhận đơn kênh `pos`: đơn giao hàng xuất ở màn Đơn hàng của khu quản trị (POST /admin/orders/{id}/etax).
+// @Tags			Admin - Orders
+// @Produce		json
+// @Param			id	path		int	true	"ID đơn quầy"
+// @Success		200	{object}	response.Body{data=domain.EtaxInvoice}
+// @Failure		404	{object}	response.Body	"Không có đơn quầy này"
+// @Failure		409	{object}	response.Body	"Đơn đã có hoá đơn"
+// @Failure		422	{object}	response.Body	"Chi nhánh chưa nối cổng hoặc chưa chọn ký hiệu"
+// @Security		BearerAuth
+// @Router			/admin/orders/pos/{id}/hoa-don-dien-tu [post]
+func (h *OrderHandler) POSPhatHanhHoaDon(c *gin.Context) {
+	id, ok := parseUintParam(c, "id")
+	if !ok {
+		return
+	}
+	hd, err := h.svc.POSPhatHanhHoaDon(c.Request.Context(), id)
+	if err != nil {
+		handleServiceError(c, err)
+
+		return
+	}
+	response.OKMessage(c, service.MoTaHoaDon(hd), hd)
+}
+
 // @Summary		Quét mã vạch tại quầy
 // @Description	Tra MỘT món hàng theo mã vạch in trên sản phẩm, hoặc theo SKU nếu cửa hàng tự in tem — thử mã vạch trước, SKU sau.
 // @Description	Trả về giá bán THẬT (đã trừ khuyến mãi đang chạy) và tồn kho của CHI NHÁNH đang bán, lấy qua đúng đường tra giá của luồng đặt hàng nên con số này bằng con số sẽ thu khi chốt đơn.
