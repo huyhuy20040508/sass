@@ -48,6 +48,183 @@ class EInvoiceTest extends TestCase
         ];
     }
 
+    /**
+     * BẢNG CO THEO NỘI DUNG, CUỘN NGANG TRONG THẺ — y bản gốc.
+     *
+     * Bản gốc (ordertable v2, system/etax-invoice/list.blade.php) để bảng tự co
+     * và bọc trong khung `overflow-x: auto`. Hai lần đi chệch khỏi cách ấy đều
+     * đẻ ra lỗi mà trang vẫn 200, không bài kiểm nào khác bắt được:
+     *
+     *   - `min-width` ép bảng rộng hơn thẻ → cột Hành động rơi ra ngoài màn ở
+     *     khổ 1024–1280.
+     *   - `table-layout: fixed` + chia phần trăm → mười bốn cột `nowrap` thì cột
+     *     nào cũng hụt: hoặc cắt "…" (mã CQT dài gấp ba bề ngang cột, cắt xong
+     *     còn "M1-…" không đối chiếu được với ai) hoặc tràn đè sang ô bên cạnh.
+     */
+    public function test_bang_co_theo_noi_dung_va_cuon_trong_the(): void
+    {
+        Http::fake([
+            '*/admin/etax/hoa-don*' => Http::response($this->soMau()),
+            '*' => Http::response(['data' => []]),
+        ]);
+
+        $html = $this->withSession($this->phienQuanLy())
+            ->get(route('admin.hoa-don-dien-tu.index'))->assertOk()->getContent();
+
+        $dau = strpos($html, 'table.table-hoa-don.none_mobile { width: 100%;');
+        $this->assertNotFalse($dau, 'không thấy khối CSS của bảng');
+        $khoi = substr($html, $dau, strpos($html, '.hd-phu {') - $dau);
+
+        $this->assertStringNotContainsString('table-layout: fixed', $khoi);
+        $this->assertStringNotContainsString('min-width', $khoi);
+        $this->assertStringNotContainsString('text-overflow', $khoi);
+        $this->assertDoesNotMatchRegularExpression('/th[^{]*\{ width: [0-9.]+%/', $khoi,
+            'chia phần trăm là quay lại cách ép bảng vừa khung');
+
+        // Nhãn cột giữ một dòng: bảng cuộn ngang được thì không có cớ bẻ chữ.
+        $this->assertStringContainsString('th { white-space: nowrap; }', $khoi);
+
+        // Khung bọc phải cuộn được, nếu không bảng rộng hơn thẻ sẽ đẩy cả trang.
+        $this->assertMatchesRegularExpression(
+            '/<div class="[^"]*table-responsive[^"]*">\s*<table class="table-hoa-don none_mobile">/',
+            $html,
+            'bảng phải nằm trong khung cuộn ngang'
+        );
+    }
+
+    /**
+     * Ô dài vẫn mang `title`.
+     *
+     * Bảng co theo nội dung nên bình thường không cắt chữ, nhưng người dùng tắt
+     * bớt cột hoặc thu hẹp cửa sổ là cột hẹp lại ngay. Giữ `title` để lúc ấy
+     * vẫn còn đường đọc giá trị đầy đủ, khỏi phải nhớ thêm luật.
+     */
+    public function test_o_dai_deu_co_title(): void
+    {
+        Http::fake([
+            '*/admin/etax/hoa-don*' => Http::response($this->soMau()),
+            '*' => Http::response(['data' => []]),
+        ]);
+
+        $html = $this->withSession($this->phienQuanLy())
+            ->get(route('admin.hoa-don-dien-tu.index'))->assertOk()->getContent();
+
+        foreach (['show_symbol', 'show_invoice_no', 'show_tax_code', 'show_order_code',
+            'show_status', 'show_issued_at', 'show_customer', 'show_email', 'show_vat',
+            'show_total', 'show_creator'] as $cot) {
+            $this->assertMatchesRegularExpression(
+                '/<td class="[^"]*'.$cot.'[^"]*"[^>]*\stitle=/',
+                $html,
+                "cột $cot hẹp lại là mất luôn giá trị đầy đủ nếu không có title"
+            );
+        }
+    }
+
+    /**
+     * PHÂN TRANG — năm mức cỡ trang của v2, và dãy số trang giữ nguyên bộ lọc.
+     *
+     * Ba chỗ từng sai mà trang vẫn 200:
+     *
+     *   1. Ô "Hiển thị" bày 20/50/100 trong khi mọi màn khác (và bản v2) bày
+     *      10/20/30/40/50 — đổi cỡ trang ở màn khác rồi sang đây là con số vừa
+     *      chọn biến mất khỏi danh sách.
+     *   2. Link số trang đánh rơi bộ lọc đang bật → bấm sang trang 2 là thấy
+     *      toàn bộ sổ thay vì phần đang lọc.
+     *   3. Trang đang xem phải gửi `page` sang API, không thì trang nào cũng ra
+     *      cùng một mớ dòng.
+     */
+    public function test_phan_trang_dung_bo_cua_v2(): void
+    {
+        $so = $this->soMau();
+        $so['meta'] = ['page' => 2, 'page_size' => 10, 'total' => 25, 'total_pages' => 3,
+            'dem' => ['tat_ca' => 25, 'issued' => 25, 'sent' => 0, 'draft' => 0, 'failed' => 0]];
+
+        Http::fake([
+            '*/admin/etax/hoa-don*' => Http::response($so),
+            '*' => Http::response(['data' => []]),
+        ]);
+
+        $html = $this->withSession($this->phienQuanLy())
+            ->get(route('admin.hoa-don-dien-tu.index', ['page' => 2, 'status' => 'issued', 'page_size' => 10]))
+            ->assertOk()->getContent();
+
+        // 1. Ô cỡ trang bày đúng năm mức, và mức đang dùng được chọn sẵn.
+        foreach ([10, 20, 30, 40, 50] as $muc) {
+            $this->assertStringContainsString('value="'.$muc.'"', $html, "thiếu mức $muc dòng/trang");
+        }
+        $this->assertStringNotContainsString('value="100"', $html, '100 dòng/trang không thuộc bộ của v2');
+        $this->assertMatchesRegularExpression('/value="10"\s+selected/', $html);
+
+        // 2. Link trang khác giữ nguyên trạng thái đang lọc.
+        //
+        // Blade in `&` thành `&amp;` nên khớp theo dấu phân cách thật của HTML,
+        // không phải dấu `&` trần — bắt theo `&` trần là bài kiểm đỏ vì cách
+        // thoát ký tự chứ không vì link sai.
+        $this->assertMatchesRegularExpression('/href="[^"]*(\?|&amp;)status=issued/', $html);
+        $this->assertMatchesRegularExpression('/href="[^"]*(\?|&amp;)page=3/', $html);
+        $this->assertMatchesRegularExpression('/href="[^"]*(\?|&amp;)page=1/', $html);
+
+        // Trang đang xem không phải một cái link bấm vào chính nó.
+        $this->assertMatchesRegularExpression('/<li class="page-item active"[^>]*>\s*<span class="page-link">2<\/span>/', $html);
+
+        // 3. `page` đi sang API.
+        Http::assertSent(fn ($req) => str_contains($req->url(), '/admin/etax/hoa-don')
+            && str_contains(urldecode($req->url()), 'page=2'));
+    }
+
+    /**
+     * Trang quá số trang thật thì LÙI VỀ TRANG CUỐI, không bày màn trắng.
+     *
+     * Link cũ / nút Back giữ ?page=5 trong khi sổ đã rút còn 2 trang là chuyện
+     * thường. Để nguyên thì API trả 0 dòng, màn nói "Chưa có hoá đơn điện tử
+     * nào" — sai hẳn nghĩa — mà dãy số trang cũng không hiện nên hết đường bấm
+     * quay lại.
+     */
+    public function test_trang_vuot_so_trang_thi_lui_ve_trang_cuoi(): void
+    {
+        $so = $this->soMau();
+        $so['data'] = [];
+        $so['meta'] = ['page' => 9, 'page_size' => 10, 'total' => 25, 'total_pages' => 3, 'dem' => []];
+
+        Http::fake([
+            '*/admin/etax/hoa-don*' => Http::response($so),
+            '*' => Http::response(['data' => []]),
+        ]);
+
+        $this->withSession($this->phienQuanLy())
+            ->get(route('admin.hoa-don-dien-tu.index', ['page' => 9, 'status' => 'issued']))
+            ->assertRedirect(route('admin.hoa-don-dien-tu.index', ['page' => 3, 'status' => 'issued']));
+    }
+
+    /** Sổ RỖNG THẬT thì đứng yên, không quẩn vòng chuyển hướng. */
+    public function test_so_rong_that_thi_khong_chuyen_huong(): void
+    {
+        Http::fake([
+            '*/admin/etax/hoa-don*' => Http::response([
+                'data' => [], 'meta' => ['page' => 4, 'page_size' => 10, 'total' => 0, 'total_pages' => 1, 'dem' => []],
+            ]),
+            '*' => Http::response(['data' => []]),
+        ]);
+
+        $this->withSession($this->phienQuanLy())
+            ->get(route('admin.hoa-don-dien-tu.index', ['page' => 4]))
+            ->assertOk();
+    }
+
+    /** Một trang thì không bày dãy số — dãy chỉ có một nút để bấm vào chính nó. */
+    public function test_mot_trang_thi_khong_bay_day_so(): void
+    {
+        Http::fake([
+            '*/admin/etax/hoa-don*' => Http::response($this->soMau()),
+            '*' => Http::response(['data' => []]),
+        ]);
+
+        $html = $this->withSession($this->phienQuanLy())
+            ->get(route('admin.hoa-don-dien-tu.index'))->assertOk()->getContent();
+
+        $this->assertStringNotContainsString('<ul class="pagination">', $html);
+    }
+
     public function test_trang_in_dung_so_hoa_don(): void
     {
         Http::fake([

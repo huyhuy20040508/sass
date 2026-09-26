@@ -19,6 +19,7 @@ class V2OnlyShell
 {
     /** Màn đã có bản v2 — cho qua. */
     public const DA_CO_V2 = [
+        'admin.dashboard',
         'admin.nha-cung-cap.index',
         'admin.dieu-chinh-ton-kho.index',
         'admin.ton-kho-chi-nhanh.index',
@@ -75,7 +76,6 @@ class V2OnlyShell
         // Phân quyền và Tài khoản đăng nhập: đường DUY NHẤT cấp quyền lẻ cho một
         // tài khoản. Chặn chúng là chủ tiệm không có cách nào sửa quyền nhân viên.
         // Tổng quan — mục đầu tiên của menu, bản cũ vẫn chạy.
-        'admin.dashboard',
         'admin.phan-quyen.index',
         'admin.users.index',
         'admin.returns.index',

@@ -429,6 +429,11 @@ func (r *reportRepository) ByChannel(ctx context.Context, p domain.ReportPeriod)
 	return r.sliceByOrderColumn(ctx, p, "CASE WHEN o.user_id IS NULL THEN 'guest' ELSE 'member' END", 0)
 }
 
+// BySource tách đơn theo NƠI phát sinh: bán tại quầy hay đơn có giao hàng.
+func (r *reportRepository) BySource(ctx context.Context, p domain.ReportPeriod) ([]domain.ReportSlice, error) {
+	return r.sliceByOrderColumn(ctx, p, "COALESCE(NULLIF(o.channel, ''), '"+domain.OrderChannelWeb+"')", 0)
+}
+
 // ---------- Báo cáo sản phẩm ----------
 
 func (r *reportRepository) ProductTotals(ctx context.Context, p domain.ReportPeriod) (domain.ProductReportTotals, error) {

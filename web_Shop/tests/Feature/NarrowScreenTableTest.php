@@ -99,30 +99,25 @@ class NarrowScreenTableTest extends TestCase
     }
 
     /**
-     * Tổng quan — bảng "Đơn hàng gần đây" nằm trong THẺ, không phải cả trang.
+     * Tổng quan — hai bảng "Top …" nằm trong THẺ, không phải cả trang.
      *
-     * Thẻ chỉ rộng 677px ở khổ 1366 nên đây là bảng chật nhất trong các màn.
-     * Hai bảng còn lại của màn này chỉ 3-4 cột, cố ý vẫn để `auto` — vì vậy
-     * luật chỉ áp cho `.db-table--orders` chứ không cho `.db-table`.
+     * Thẻ chỉ rộng chừng 260px ở khổ 1366 nên đây là bảng chật nhất trong các
+     * màn: để `auto` là một tên hàng dài đẩy bảng tràn ra khỏi thẻ.
      */
-    public function test_bang_don_hang_gan_day_fixed_va_du_100(): void
+    public function test_bang_top_cua_tong_quan_fixed_va_du_100(): void
     {
-        $html = $this->trang('/admin/dashboard', [
-            '*/admin/orders*' => Http::response(['data' => [[
-                'order_code' => 'DH000013', 'recipient_name' => 'Khách Test Quầy',
-                'shipping_province' => 'TP Hồ Chí Minh', 'total_amount' => 129074886,
-                'payment_status' => 'pending', 'payment_method' => 'bank_transfer',
-                'status' => 'processing', 'created_at' => '2026-09-25 14:32:00',
-            ]], 'meta' => ['page' => 1, 'page_size' => 8, 'total' => 1, 'total_pages' => 1]]),
-        ]);
+        $html = $this->trang('/admin/dashboard');
 
-        $khoi = $this->khoiCss($html, '.db-table--orders { table-layout: fixed; }', '.db-muted {');
+        $khoi = $this->khoiCss($html, '.db-table { table-layout: fixed;', '</style>');
         $this->assertStringNotContainsString('min-width', $khoi);
 
         $this->assertEqualsWithDelta(100.0, $this->tongPhanTram($html, [
-            'db-table--orders .dbo-c-code', 'db-table--orders .dbo-c-name', 'db-table--orders .dbo-c-area',
-            'db-table--orders .dbo-c-money', 'db-table--orders .dbo-c-pay', 'db-table--orders .dbo-c-state',
-            'db-table--orders .dbo-c-date',
+            'db-table .db-c-stt', 'db-table .db-c-name', 'db-table .db-c-val',
+        ]), 0.01);
+
+        // Bảng chi nhánh in tiền nên chia lại hai cột sau — vẫn phải đủ 100.
+        $this->assertEqualsWithDelta(100.0 - 15.0, $this->tongPhanTram($html, [
+            'db-table--money .db-c-name', 'db-table--money .db-c-val',
         ]), 0.01);
     }
 

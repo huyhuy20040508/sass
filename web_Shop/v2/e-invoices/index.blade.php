@@ -48,46 +48,31 @@
 @push('styles')
     <style>
         /* ---------- BẢNG ----------
-           Mười bốn cột nên bảng có sàn bề rộng; màn hẹp hơn thì cuộn ngang trong
-           khung chứ không bóp chữ lại. Chia % CỨNG, tổng đúng 100. */
-        table.table-hoa-don.none_mobile { width: 100%; min-width: 1040px; table-layout: fixed; }
-        /* Tiêu đề ĐƯỢC xuống dòng. Ép một dòng thì "Ngày phát hành" ngốn 104px
-           trong khi ngày bên dưới chỉ cần 80px, và chỗ ấy lấy đúng vào phần của
-           cột dữ liệu — hai tiêu đề dài là đủ để "Trạng thái CQT" và "Người tạo"
-           cụt thành "…" ở mọi màn dưới 2K. */
-        /* Nhãn ĐƯỢC xuống dòng. 14 nhãn giữ một dòng đòi ~1195px, quá cả khung
-           của màn 1366 (1071px) — ép một dòng là bảng tràn khung. Dải nút ở cột
-           Hành động vẫn một hàng, xem td.action bên dưới. */
-        table.table-hoa-don.none_mobile th { white-space: normal; }
-        /* Cột Hành động rộng theo DẢI NÚT, không theo nhãn: ba nút cần 98px mà
-           nhãn "Hành động" chỉ 66px, nên chia theo nhãn là nút thứ ba rớt xuống
-           hàng hai ở mọi khổ dưới 1536. Chỗ bù lấy từ Khách hàng và Email —
-           hai cột mà nhãn rộng hơn hẳn dữ liệu bên dưới. */
-        table.table-hoa-don.none_mobile td.action { white-space: nowrap; }
+           Làm y bản gốc (ordertable v2, system/etax-invoice/list.blade.php):
+           bảng CO THEO NỘI DUNG và cuộn ngang trong thẻ, không ép `fixed` rồi
+           chia phần trăm.
 
-        /* % đo THẬT trong khung 1100px: mỗi cột lấy đúng bề ngang chữ dài nhất
-           đang nằm trong nó (mã CQT, ngày, số tiền, tên người tạo) cộng đệm hai
-           bên. Bản trước chia đều tay nên cột ngày và cột tiền hụt ~25px, còn
-           "Số hoá đơn" với "Khách hàng" thì thừa. Tổng vẫn đúng 100. */
-        table.table-hoa-don.none_mobile th:first-child { width: 4.02%; }
-        table.table-hoa-don.none_mobile th:nth-child(2) { width: 4.58%; }
-        table.table-hoa-don.none_mobile th.show_symbol { width: 5.23%; }
-        table.table-hoa-don.none_mobile th.show_invoice_no { width: 5.98%; }
-        table.table-hoa-don.none_mobile th.show_tax_code { width: 4.86%; }
-        table.table-hoa-don.none_mobile th.show_order_code { width: 8.22%; }
-        table.table-hoa-don.none_mobile th.show_status { width: 12.9%; }
-        table.table-hoa-don.none_mobile th.show_issued_at { width: 9.35%; }
-        table.table-hoa-don.none_mobile th.show_customer { width: 5.23%; }
-        table.table-hoa-don.none_mobile th.show_email { width: 4.86%; }
-        table.table-hoa-don.none_mobile th.show_vat { width: 7.85%; }
-        table.table-hoa-don.none_mobile th.show_total { width: 8.98%; }
-        table.table-hoa-don.none_mobile th.show_creator { width: 8.22%; }
-        table.table-hoa-don.none_mobile th:last-child { width: 9.72%; }
+           Vì sao bỏ cách chia %: mười bốn cột mà ô nào cũng `nowrap` thì phần
+           trăm nào cũng có cột hụt — hụt thì hoặc cắt "…" (mã CQT dài gấp ba bề
+           ngang cột ở MỌI khổ, cắt xong còn lại "M1-…" chẳng đối chiếu được với
+           ai) hoặc tràn đè sang ô bên. Để bảng tự co thì mỗi cột luôn đúng bề
+           ngang chữ của nó: không cắt chữ nào, không ô nào đè ô nào.
+
+           Màn hẹp thì thanh cuộn ngang của khung `.table-responsive` lo — đúng
+           thứ bản gốc làm bằng `style="overflow-x: auto"`. */
+        table.table-hoa-don.none_mobile { width: 100%; }
+
+        /* Nhãn cột GIỮ MỘT DÒNG. Cho xuống dòng thì "Số hoá đơn" gãy làm ba
+           dòng, hàng tiêu đề cao gấp đôi mà vẫn khó đọc. Bảng đã cuộn ngang
+           được thì chẳng có lý do gì phải bẻ chữ cho vừa. */
+        table.table-hoa-don.none_mobile th { white-space: nowrap; }
+        table.table-hoa-don.none_mobile td.action { white-space: nowrap; }
 
         /* Loại tờ in nhỏ dưới trạng thái ("Bị thay thế"…), và câu lỗi của tờ hỏng. */
         .hd-phu { display: block; font-size: 11.5px; color: #8c8c8c; }
         .hd-ten { display: block; }
         .action .hd-nut { margin: 0 3px; cursor: pointer; }
+
 
         /* HÀNG NÚT TRẠNG THÁI — chép nguyên bộ màu của v2 (nền #E5E9F7, chữ
            #1C3B58, đang chọn nền #6F89BA chữ trắng), cùng bộ với màn Công nợ. */
@@ -274,6 +259,11 @@
 
                     <div class="table-responsive table-border-style">
                         <table class="table-hoa-don none_mobile">
+                            {{-- Hàng nhãn nằm trong <thead> như bản v2: để trần thì trình
+                                 duyệt nhét nó vào <tbody> chung với dữ liệu, và mọi thứ
+                                 đếm "dòng của bảng" (JS chọn tất cả, bản xuất) lại đếm
+                                 luôn cả hàng nhãn. --}}
+                            <thead>
                             <tr>
                                 <th class="text-center not-export"><input class="form-check-input hd-tick-het" type="checkbox"></th>
                                 <th class="text-center">{{ __('message.stt') }}</th>
@@ -290,6 +280,8 @@
                                 <th class="text-left show_creator {{ $an('creator') }}">{{ __('message.creator') }}</th>
                                 <th class="text-center not-export">{{ __('message.action') }}</th>
                             </tr>
+                            </thead>
+                            <tbody>
 
                             @forelse ($hoaDon as $i => $h)
                                 @php
@@ -309,25 +301,26 @@
                                     </td>
                                     <td class="text-center">{{ $stt + $i + 1 }}</td>
                                     <td class="text-left show_symbol {{ $an('symbol') }}" title="{{ $h['symbol'] ?? '' }}">{{ $h['symbol'] ?? '' }}</td>
-                                    <td class="text-left show_invoice_no {{ $an('invoice_no') }}">{{ $h['invoice_no'] ?? '' }}</td>
+                                    <td class="text-left show_invoice_no {{ $an('invoice_no') }}" title="{{ $h['invoice_no'] ?? '' }}">{{ $h['invoice_no'] ?? '' }}</td>
                                     <td class="text-left show_tax_code {{ $an('tax_code') }}" title="{{ $h['tax_auth_code'] ?? '' }}">{{ $h['tax_auth_code'] ?? '' }}</td>
-                                    <td class="text-left show_order_code {{ $an('order_code') }}">{{ $h['order_code'] ?? '' }}</td>
+                                    <td class="text-left show_order_code {{ $an('order_code') }}" title="{{ $h['order_code'] ?? '' }}">{{ $h['order_code'] ?? '' }}</td>
                                     <td class="text-left show_status {{ $an('status') }}"
-                                        title="{{ $tt === 'failed' ? ($h['error'] ?? '') : '' }}">
+                                        title="{{ $tt === 'failed' ? ($h['error'] ?? '') : trim(($C::TRANG_THAI[$tt] ?? $tt).' '.$loaiTo) }}">
                                         <b class="{{ $C::MAU_TRANG_THAI[$tt] ?? '' }}">{{ $C::TRANG_THAI[$tt] ?? $tt }}</b>
                                         @if ($loaiTo !== '')
                                             <span class="hd-phu">{{ $loaiTo }}</span>
                                         @endif
                                     </td>
-                                    <td class="la-so text-center show_issued_at {{ $an('issued_at') }}">{{ $C::ngayPhatHanh($h, 'd-m-Y') }}</td>
-                                    <td class="text-left show_customer {{ $an('customer') }}">
+                                    <td class="la-so text-center show_issued_at {{ $an('issued_at') }}" title="{{ $C::ngayPhatHanh($h, 'd-m-Y') }}">{{ $C::ngayPhatHanh($h, 'd-m-Y') }}</td>
+                                    <td class="text-left show_customer {{ $an('customer') }}"
+                                        title="{{ trim(($h['customer_name'] ?? '').' '.($h['customer_phone'] ?? '')) }}">
                                         <span class="hd-ten">{{ $h['customer_name'] ?? '' }}</span>
                                         <span class="hd-phu">{{ $h['customer_phone'] ?? '' }}</span>
                                     </td>
                                     <td class="text-left show_email {{ $an('email') }}" title="{{ $h['customer_email'] ?? '' }}">{{ $h['customer_email'] ?? '' }}</td>
-                                    <td class="la-so text-right show_vat {{ $an('vat') }}">{{ $tien($h['vat_amount'] ?? 0) }}</td>
-                                    <td class="la-so text-right show_total {{ $an('total') }}">{{ $tien($h['total_amount'] ?? 0) }}</td>
-                                    <td class="text-left show_creator {{ $an('creator') }}">{{ ($h['nguoi_tao'] ?? '') ?: '—' }}</td>
+                                    <td class="la-so text-right show_vat {{ $an('vat') }}" title="{{ $tien($h['vat_amount'] ?? 0) }}">{{ $tien($h['vat_amount'] ?? 0) }}</td>
+                                    <td class="la-so text-right show_total {{ $an('total') }}" title="{{ $tien($h['total_amount'] ?? 0) }}">{{ $tien($h['total_amount'] ?? 0) }}</td>
+                                    <td class="text-left show_creator {{ $an('creator') }}" title="{{ $h['nguoi_tao'] ?? '' }}">{{ ($h['nguoi_tao'] ?? '') ?: '—' }}</td>
                                     <td class="text-center action not-export">
                                         @if ($dongBoDuoc)
                                             <a class="hd-nut hd-dong-bo" title="Đồng bộ trạng thái"><i class="fa fa-sync"></i></a>
@@ -348,6 +341,7 @@
                                     </td>
                                 </tr>
                             @endforelse
+                            </tbody>
                         </table>
 
                         {{-- BẢN THẺ CHO ĐIỆN THOẠI — dưới 992px vỏ v2 giấu hẳn bảng. --}}

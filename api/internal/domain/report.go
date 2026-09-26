@@ -195,6 +195,9 @@ type OrderReport struct {
 	ByProvince []ReportSlice `json:"by_province"` // key = tên tỉnh/thành, đơn nhiều nhất lên trước
 	ByChannel  []ReportSlice `json:"by_channel"`  // key = member | guest
 	ByShipping []ReportSlice `json:"by_shipping"` // key = mã hình thức vận chuyển ("" = chưa khai)
+	// BySource — NƠI đơn phát sinh (web = đơn giao hàng, pos = bán tại quầy).
+	// Khác ByChannel: kia nói khách là ai, đây nói đơn đi vào từ cửa nào.
+	BySource []ReportSlice `json:"by_source"` // key = web | pos
 }
 
 // ---------- 3. Báo cáo sản phẩm ----------
@@ -346,6 +349,7 @@ type ReportRepository interface {
 	ByWeekday(ctx context.Context, p ReportPeriod) ([]ReportSlice, error)
 	ByProvince(ctx context.Context, p ReportPeriod, limit int) ([]ReportSlice, error)
 	ByChannel(ctx context.Context, p ReportPeriod) ([]ReportSlice, error)
+	BySource(ctx context.Context, p ReportPeriod) ([]ReportSlice, error)
 	ByShipping(ctx context.Context, p ReportPeriod) ([]ReportSlice, error)
 
 	ProductTotals(ctx context.Context, p ReportPeriod) (ProductReportTotals, error)
