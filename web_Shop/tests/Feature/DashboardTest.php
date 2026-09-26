@@ -185,7 +185,14 @@ class DashboardTest extends TestCase
     {
         $this->fakeApi();
 
-        $this->assertStringContainsString(__('message.no_shift_selected'), $this->html());
+        // Lấy HTML TRƯỚC rồi mới dịch. Tiếng Việt chỉ được đặt khi lượt gọi đi
+        // qua EnsureAdminAuthenticated; gọi __() trong cùng một dòng thì PHP
+        // tính đối số trước, lúc đó locale vẫn là mặc định của .env — CI chạy
+        // với APP_LOCALE=en mà lang/ chỉ có tiếng Việt, nên __() trả về đúng
+        // cái khoá "message.no_shift_selected" và không khớp trang.
+        $html = $this->html();
+
+        $this->assertStringContainsString(__('message.no_shift_selected'), $html);
     }
 
     /**
