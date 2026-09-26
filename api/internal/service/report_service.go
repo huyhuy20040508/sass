@@ -303,6 +303,14 @@ func (s *reportService) Orders(ctx context.Context, q ReportQuery) (domain.Order
 	if out.ByShipping, err = s.repo.ByShipping(ctx, p); err != nil {
 		return out, err
 	}
+
+	// Hai nguồn cũng luôn có mặt, cùng lý do với hai kênh ở trên.
+	bySource, err := s.repo.BySource(ctx, p)
+	if err != nil {
+		return out, err
+	}
+	out.BySource = fillKeys(bySource, []string{domain.OrderChannelWeb, domain.OrderChannelPOS})
+
 	return out, nil
 }
 

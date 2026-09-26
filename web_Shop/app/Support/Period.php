@@ -31,6 +31,24 @@ class Period
         '30' => ['label' => '30 ngày', 'phrase' => '30 ngày qua', 'days' => 30, 'offset' => 0],
         '90' => ['label' => '90 ngày', 'phrase' => '90 ngày qua', 'days' => 90, 'offset' => 0],
         '365' => ['label' => '12 tháng', 'phrase' => '12 tháng qua', 'days' => 365, 'offset' => 0],
+
+        /*
+           Mốc theo LỊCH, không phải cửa sổ trượt: "tháng này" là từ ngày 1 tới
+           hôm nay, khác hẳn "30 ngày qua". Chủ tiệm đối chiếu sổ sách theo tuần
+           / tháng / quý / năm nên hai họ này phải sống cạnh nhau.
+
+           `unit` là đơn vị lịch, `back` là lùi mấy kỳ (0 = kỳ đang chạy). Kỳ
+           đang chạy cắt ở HÔM NAY chứ không chạy tới cuối kỳ: cộng thêm những
+           ngày chưa tới chỉ làm số trung bình mỗi ngày thành vô nghĩa.
+        */
+        'this-week' => ['label' => 'Tuần này', 'phrase' => 'tuần này', 'unit' => 'week', 'back' => 0],
+        'last-week' => ['label' => 'Tuần trước', 'phrase' => 'tuần trước', 'unit' => 'week', 'back' => 1],
+        'this-month' => ['label' => 'Tháng này', 'phrase' => 'tháng này', 'unit' => 'month', 'back' => 0],
+        'last-month' => ['label' => 'Tháng trước', 'phrase' => 'tháng trước', 'unit' => 'month', 'back' => 1],
+        'this-quarter' => ['label' => 'Quý này', 'phrase' => 'quý này', 'unit' => 'quarter', 'back' => 0],
+        'last-quarter' => ['label' => 'Quý trước', 'phrase' => 'quý trước', 'unit' => 'quarter', 'back' => 1],
+        'this-year' => ['label' => 'Năm nay', 'phrase' => 'năm nay', 'unit' => 'year', 'back' => 0],
+        'last-year' => ['label' => 'Năm trước', 'phrase' => 'năm trước', 'unit' => 'year', 'back' => 1],
     ];
 
     /** Ngày hôm nay theo giờ máy chủ, dạng YYYY-MM-DD. */
@@ -71,11 +89,53 @@ class Period
             return null;
         }
 
+        if (isset($preset['unit'])) {
+            return self::theoLich($preset['unit'], (int) $preset['back']);
+        }
+
         $to = Carbon::today()->subDays($preset['offset']);
 
         return [
             'from' => $to->copy()->subDays($preset['days'] - 1)->format('Y-m-d'),
             'to' => $to->format('Y-m-d'),
+        ];
+    }
+
+    /**
+     * Kỳ theo mốc lịch: đầu tuần/tháng/quý/năm tới cuối kỳ đó.
+     *
+     * Kỳ ĐANG CHẠY dừng ở hôm nay. Kỳ đã qua lấy trọn vẹn.
+     *
+     * @return array{from: string, to: string}
+     */
+    protected static function theoLich(string $unit, int $back): array
+    {
+        $moc = Carbon::today();
+        $moc = match ($unit) {
+            'week' => $moc->subWeeks($back),
+            'month' => $moc->subMonthsNoOverflow($back),
+            'quarter' => $moc->subQuartersNoOverflow($back),
+            default => $moc->subYears($back),
+        };
+
+        $dau = match ($unit) {
+            'week' => $moc->copy()->startOfWeek(Carbon::MONDAY),
+            'month' => $moc->copy()->startOfMonth(),
+            'quarter' => $moc->copy()->startOfQuarter(),
+            default => $moc->copy()->startOfYear(),
+        };
+        $cuoi = match ($unit) {
+            'week' => $moc->copy()->endOfWeek(Carbon::SUNDAY),
+            'month' => $moc->copy()->endOfMonth(),
+            'quarter' => $moc->copy()->endOfQuarter(),
+            default => $moc->copy()->endOfYear(),
+        };
+
+        $homNay = Carbon::today();
+
+        return [
+            'from' => $dau->format('Y-m-d'),
+            'to' => $cuoi->greaterThan($homNay) ? $homNay->format('Y-m-d') : $cuoi->format('Y-m-d'),
         ];
     }
 

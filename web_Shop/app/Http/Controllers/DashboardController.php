@@ -3,362 +3,459 @@
 namespace App\Http\Controllers;
 
 use App\Services\ApiClient;
+use App\Services\CurrentBranch;
 use App\Support\Period;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
 /**
- * DashboardController — trang tổng quan.
+ * DashboardController — màn Tổng quan, dựng lại theo bản v2.
  *
  * Gom số liệu từ nhiều endpoint của Go API. Mỗi khối tự chịu lỗi riêng: một
  * endpoint hỏng chỉ làm khối đó trống chứ không làm trắng cả trang — đây là
  * trang đầu tiên nhân viên nhìn thấy mỗi sáng.
+ *
+ * Trang dựng SẴN ở máy chủ rồi mới trả về, không để trống rồi gọi AJAX lấp vào
+ * như bản gốc: mọi màn v2 khác trong dự án đều lọc bằng tham số trên URL, nên
+ * một màn riêng chạy kiểu khác là hai lối đi cho cùng một việc.
  */
 class DashboardController extends Controller
 {
     /**
-     * Các khoảng thời gian xem được, theo đúng thứ tự nút hiển thị.
+     * Các kỳ xem được, theo đúng thứ tự bày trong khung lọc bên trái.
      *
-     * "Hôm qua" là một NGÀY ĐÃ ĐÓNG SỔ: mở lúc 8h sáng hay 23h đêm đều ra cùng
-     * một con số, nên đây mới là chỗ xem lại kết quả một ngày buôn bán. "Hôm nay"
-     * thì ngược lại, còn chạy tiếp tới nửa đêm.
-     *
-     * Định nghĩa nằm ở \App\Support\Period — dùng chung với nhóm trang Báo cáo để
-     * hai nơi không bao giờ hiểu "hôm qua" thành hai ngày khác nhau.
+     * Hai họ nằm cạnh nhau có chủ ý: cửa sổ trượt ("7 ngày qua") để xem đà bán,
+     * và mốc lịch ("tháng này") để đối chiếu sổ sách. Định nghĩa nằm ở
+     * \App\Support\Period — dùng chung với nhóm trang Báo cáo.
      */
-    public const RANGE_CODES = ['today', 'yesterday', '7', '30', '90'];
+    public const RANGE_CODES = [
+        'today', 'yesterday',
+        'this-week', 'last-week', '7',
+        'this-month', 'last-month', '30',
+        'this-quarter', 'last-quarter',
+        'this-year', 'last-year',
+    ];
 
-    /** Preset mở trang lần đầu. */
-    public const DEFAULT_RANGE = '30';
+    /** Nhóm nút trong khung lọc: tiêu đề => mã kỳ. */
+    public const RANGE_GROUPS = [
+        'Theo ngày' => ['today', 'yesterday'],
+        'Theo tuần' => ['this-week', 'last-week', '7'],
+        'Theo tháng' => ['this-month', 'last-month', '30'],
+        'Theo quý' => ['this-quarter', 'last-quarter'],
+        'Theo năm' => ['this-year', 'last-year'],
+    ];
+
+    /** Mở trang lần đầu: ca đang chạy hôm nay là thứ người ta mở màn này để xem. */
+    public const DEFAULT_RANGE = 'today';
+
+    /** Số dòng của các thẻ "Top …" — bày đúng những lựa chọn bản v2 có. */
+    public const TOP_CHOICES = [3, 5, 10, 15];
+
+    /** Mặc định của từng thẻ Top, theo đúng bản v2. */
+    public const TOP_MAC_DINH = ['products' => 5, 'payment' => 3, 'origin' => 3, 'promo' => 3, 'branch' => 3];
 
     /**
-     * Ngưỡng coi là sắp hết hàng (tính theo từng biến thể) khi không đọc được cấu
-     * hình hệ thống. Mức thật lấy từ khoá `low_stock_threshold` bên API — cùng một
-     * ngưỡng với trang Tồn kho, xem lowStockThreshold().
+     * Số trang phiếu mua hàng (100 phiếu/trang) tối đa được quét.
+     *
+     * Hai ô "Chi phí mua hàng" và "Số lượng nhập kho" phải cộng từ danh sách vì
+     * `/phieu-mua-hang/stats` không nhận khoảng ngày. Chặn ở đây để một kỳ dài
+     * không kéo theo hàng chục lượt gọi; quá ngưỡng thì trang nói thẳng là số
+     * liệu tính trên mẫu chứ không im lặng đưa ra con số thiếu.
      */
-    public const LOW_STOCK = 5;
+    public const MAX_PURCHASE_PAGES = 5;
 
-    /** Số dòng sắp hết hàng hiển thị trên trang — bảng chỉ có chừng đó chỗ. */
-    public const LOW_STOCK_ROWS = 8;
-
-    /** Số trang đơn (100 đơn/trang) tối đa được quét để bóc tách cơ cấu kỳ này.
-     *  Quét hết mọi đơn của 90 ngày có thể là hàng nghìn dòng — chặn ở đây và
-     *  đánh dấu `sampled` để giao diện nói thẳng là số liệu tính trên mẫu. */
-    public const MAX_ORDER_PAGES = 5;
-
-    /** Trạng thái không tính vào doanh thu (khớp cách API tính OrderStats). */
-    protected const DEAD_STATUSES = ['cancelled', 'returned'];
+    /** Phiếu mua chưa duyệt không tính vào tiền hàng đã mua — khớp cách API tính stats. */
+    protected const PURCHASE_DEAD = ['cancelled', 'draft'];
 
     public function __construct(protected ApiClient $api) {}
 
     public function index(Request $request)
     {
-        // Kỳ đang xem luôn quy về một preset: trang này không có lịch chọn ngày,
-        // mọi đường vào đều là một trong các nút ở RANGE_CODES.
-        $range = (string) $request->query('range', self::DEFAULT_RANGE);
-        if (! in_array($range, self::RANGE_CODES, true)) {
-            $range = self::DEFAULT_RANGE;
-        }
-        $window = Period::resolve($range);
-        $days = Period::PRESETS[$range]['days'];
+        $filters = $this->filters($request);
 
-        return view('dashboard', [
-            'user' => session('api.user'),
-            'apiOnline' => $this->apiOnline(),
-            'range' => $range,
-            'days' => $days,
-            'window' => $window,
-            // Câu ghép vào tiêu đề thẻ: "Doanh thu hôm qua", "Doanh thu 30 ngày qua".
-            'periodLabel' => Period::PRESETS[$range]['phrase'],
-            'today' => Period::today(),
-            'orderStats' => $this->orderStats(),
-            'customerStats' => $this->customerStats(),
-            'returnStats' => $this->returnStats(),
-            'revenue' => $this->revenue($window),
-            'breakdown' => $this->breakdown($window),
-            'recentOrders' => $this->recentOrders(),
-            'topProducts' => $this->topProducts(),
-            'topCustomers' => $this->topCustomers(),
-            'lowStock' => $this->lowStock(),
-            // Ngưỡng thật đang áp — view in ra trong phụ đề, không đọc hằng số nữa.
-            'lowStockThreshold' => $this->lowStockThreshold(),
+        $doanhThu = $this->doanhThu($filters);
+        $donHang = $this->donHang($filters);
+        $muaHang = $this->muaHang($filters);
+
+        $tong = $doanhThu['totals'] ?? [];
+        $gop = (float) ($tong['subtotal'] ?? 0) + (float) ($tong['shipping'] ?? 0);
+
+        return view('v2::dashboard.index', [
+            'filters' => $filters,
+            'rangeGroups' => self::RANGE_GROUPS,
+            'rangeLabels' => $this->rangeLabels(),
+            'topChoices' => self::TOP_CHOICES,
+            'chiNhanh' => CurrentBranch::danhSach(),
+
+            // Sáu ô đầu trang. Công thức theo đúng chú giải của bản v2 (xem
+            // message.gross_revenue_formula): gộp là tiền hàng chưa trừ gì, thuần
+            // là gộp trừ giảm giá, còn ước tính đếm cả đơn chưa thu tiền.
+            'kpi' => [
+                'gross' => $gop,
+                'net' => $gop - (float) ($tong['discount'] ?? 0),
+                'estimated' => $this->uocTinh($doanhThu),
+                'orders' => (int) ($tong['orders'] ?? 0),
+                'purchase_cost' => $muaHang['tien'],
+                'purchase_qty' => $muaHang['soLuong'],
+                'purchase_sampled' => $muaHang['catBot'],
+            ],
+
+            'ca' => $this->caHienTai(),
+            'chart' => $this->duLieuBieuDo($doanhThu),
+            'banChay' => $this->banChay($filters),
+            'theoThanhToan' => $this->catLat($doanhThu['by_payment_method'] ?? [], $filters['top_payment']),
+            'theoNguon' => $this->catLat($donHang['by_source'] ?? [], $filters['top_origin']),
+            'theoKhuyenMai' => $this->khuyenMai(),
+            'theoChiNhanh' => $this->catLat($doanhThu['by_shop'] ?? [], $filters['top_branch'], 'label'),
         ]);
     }
 
-    // ---------- Từng khối số liệu ----------
-
-    protected function apiOnline(): bool
-    {
-        try {
-            return $this->api->get('/health')->successful();
-        } catch (\Throwable $e) {
-            return false;
-        }
-    }
-
-    protected function orderStats(): array
-    {
-        return $this->fetch(
-            fn () => $this->api->orderStats(),
-            ['total' => 0, 'pending' => 0, 'processing' => 0, 'shipping' => 0, 'completed' => 0, 'cancelled' => 0, 'revenue' => 0],
-            'order stats'
-        );
-    }
-
-    protected function customerStats(): array
-    {
-        return $this->fetch(
-            fn () => $this->api->customerStats(),
-            ['total' => 0, 'active' => 0, 'inactive' => 0],
-            'customer stats'
-        );
-    }
-
-    protected function returnStats(): array
-    {
-        return $this->fetch(
-            fn () => $this->api->returnStats(),
-            ['total' => 0, 'pending' => 0, 'approved' => 0, 'received' => 0, 'refunded' => 0, 'rejected' => 0, 'cancelled' => 0, 'refunded_amount' => 0],
-            'return stats'
-        );
-    }
+    // ---------- Bộ lọc ----------
 
     /**
-     * Chuỗi doanh thu theo ngày + số liệu kỳ trước để tính mức tăng/giảm.
+     * Kỳ đang xem + số dòng của từng thẻ Top.
      *
-     * Dùng /admin/reports/revenue chứ KHÔNG dùng /admin/orders/revenue: đường cũ
-     * chỉ nhận `days` và luôn kết thúc ở hôm nay, nên không có cách nào diễn đạt
-     * "hôm qua". Đường mới nhận from/to nên mọi preset đều gọi được, và vẫn trả
-     * kèm tổng của kỳ trước như cũ.
+     * Ngày tự chọn thắng preset: gõ tay vào hai ô ngày là người dùng đã nói rõ
+     * mình muốn gì. Khoảng tự chọn trùng đúng một preset thì nút đó vẫn sáng lên
+     * (Period::match lo việc này) để hai cách chọn không mâu thuẫn nhau.
      *
-     * Trả về ĐÚNG hình dạng mà dashboard.blade.php vốn đang đọc (points có khoá
-     * `date`), để phần vẽ biểu đồ không phải sửa theo.
+     * @return array<string, mixed>
      */
-    protected function revenue(array $window): array
+    protected function filters(Request $request): array
     {
-        $empty = ['points' => [], 'total_revenue' => 0, 'total_orders' => 0, 'prev_revenue' => 0, 'prev_orders' => 0];
+        $from = $this->ngay($request->query('from'));
+        $to = $this->ngay($request->query('to'));
 
-        $data = $this->fetch(
-            fn () => $this->api->reportRevenue([
-                'from' => $window['from'],
-                'to' => $window['to'],
-                'group_by' => 'day',
-            ]),
-            [],
-            'revenue series'
-        );
-        if (! $data) {
-            return $empty;
+        if ($from === null || $to === null) {
+            $range = (string) $request->query('range', self::DEFAULT_RANGE);
+            if (! in_array($range, self::RANGE_CODES, true)) {
+                $range = self::DEFAULT_RANGE;
+            }
+            $window = Period::resolve($range);
+            $from = $window['from'];
+            $to = $window['to'];
+        } elseif ($from > $to) {
+            [$from, $to] = [$to, $from];
         }
 
-        return [
-            'points' => array_map(fn ($b) => [
-                'date' => $b['label'] ?? '',
-                'orders' => (int) ($b['orders'] ?? 0),
-                'revenue' => (float) ($b['revenue'] ?? 0),
-            ], $data['buckets'] ?? []),
-            'total_revenue' => (float) ($data['totals']['revenue'] ?? 0),
-            'total_orders' => (int) ($data['totals']['orders'] ?? 0),
-            'prev_revenue' => (float) ($data['prev']['revenue'] ?? 0),
-            'prev_orders' => (int) ($data['prev']['orders'] ?? 0),
-        ];
-    }
-
-    /**
-     * Bóc tách cơ cấu đơn hàng của kỳ đang xem.
-     *
-     * API chỉ trả tổng doanh thu theo ngày, không có mặt cắt theo phương thức
-     * thanh toán / khu vực / khung giờ. Ở đây quét danh sách đơn trong kỳ (tối đa
-     * MAX_ORDER_PAGES × 100 đơn) rồi tự gộp — đủ cho trang tổng quan; khi lượng
-     * đơn lớn hơn thì nên đẩy các phép gộp này xuống API.
-     */
-    protected function breakdown(array $window): array
-    {
         $out = [
-            'scanned' => 0,        // số đơn thực sự đọc được
-            'total' => 0,          // tổng đơn trong kỳ theo API
-            'sampled' => false,    // true = chỉ gộp trên một phần đơn của kỳ
-            'net_orders' => 0,     // đơn còn sống (không huỷ/hoàn)
-            'net_revenue' => 0.0,
-            'aov' => 0.0,
-            'dead_orders' => 0,    // đơn huỷ + hoàn hàng
-            'guest_orders' => 0,   // đơn không gắn tài khoản khách
-            'methods' => [],       // payment_method => [orders, revenue]
-            'unpaid_orders' => 0,  // đơn còn sống nhưng chưa thu tiền
-            'unpaid_amount' => 0.0,
-            'provinces' => [],     // tỉnh/thành => [orders, revenue]
-            'statuses' => [],      // status => số đơn trong kỳ
-            'hours' => array_fill(0, 24, 0),
+            'from' => $from,
+            'to' => $to,
+            'range' => Period::match($from, $to, self::RANGE_CODES),
+            'describe' => Period::describe($from, $to, self::RANGE_CODES),
         ];
 
-        $from = $window['from'];
-        $to = $window['to'];
-
-        $page = 1;
-        $pages = 1;
-        do {
-            try {
-                $res = $this->api->orders([
-                    'from_date' => $from, 'to_date' => $to,
-                    'sort' => 'newest', 'page' => $page, 'page_size' => 100,
-                ]);
-                if (! $res->successful()) {
-                    Log::warning('Dashboard: breakdown failed', ['status' => $res->status()]);
-                    break;
-                }
-            } catch (\Throwable $e) {
-                Log::warning('Dashboard: breakdown failed', ['msg' => $e->getMessage()]);
-                break;
-            }
-
-            $rows = $res->json('data') ?? [];
-            $out['total'] = (int) ($res->json('meta.total') ?? 0);
-            $pages = max(1, (int) ($res->json('meta.total_pages') ?? 1));
-
-            foreach ($rows as $o) {
-                $out['scanned']++;
-                $status = $o['status'] ?? 'pending';
-                $amount = (float) ($o['total_amount'] ?? 0);
-                $out['statuses'][$status] = ($out['statuses'][$status] ?? 0) + 1;
-
-                if (! empty($o['created_at'])) {
-                    $h = (int) \Illuminate\Support\Carbon::parse($o['created_at'])->format('G');
-                    $out['hours'][$h] = ($out['hours'][$h] ?? 0) + 1;
-                }
-
-                if (in_array($status, self::DEAD_STATUSES, true)) {
-                    $out['dead_orders']++;
-                    continue;
-                }
-
-                $out['net_orders']++;
-                $out['net_revenue'] += $amount;
-                if (empty($o['user_id'])) {
-                    $out['guest_orders']++;
-                }
-
-                $method = $o['payment_method'] ?? 'cod';
-                $out['methods'][$method]['orders'] = ($out['methods'][$method]['orders'] ?? 0) + 1;
-                $out['methods'][$method]['revenue'] = ($out['methods'][$method]['revenue'] ?? 0) + $amount;
-
-                if (($o['payment_status'] ?? 'pending') !== 'paid') {
-                    $out['unpaid_orders']++;
-                    $out['unpaid_amount'] += $amount;
-                }
-
-                $province = trim((string) ($o['shipping_province'] ?? ''));
-                if ($province !== '') {
-                    $out['provinces'][$province]['orders'] = ($out['provinces'][$province]['orders'] ?? 0) + 1;
-                    $out['provinces'][$province]['revenue'] = ($out['provinces'][$province]['revenue'] ?? 0) + $amount;
-                }
-            }
-
-            $page++;
-        } while ($page <= $pages && $page <= self::MAX_ORDER_PAGES);
-
-        $out['sampled'] = $out['total'] > $out['scanned'];
-        $out['aov'] = $out['net_orders'] > 0 ? $out['net_revenue'] / $out['net_orders'] : 0.0;
-
-        // Nhiều đơn nhất lên trước — phần đuôi dài không có chỗ trên trang.
-        uasort($out['methods'], fn ($a, $b) => $b['orders'] <=> $a['orders']);
-        uasort($out['provinces'], fn ($a, $b) => $b['orders'] <=> $a['orders']);
-        $out['provinces'] = \array_slice($out['provinces'], 0, 6, true);
+        foreach (self::TOP_MAC_DINH as $khoa => $macDinh) {
+            $n = (int) $request->query('top_'.$khoa, (string) $macDinh);
+            $out['top_'.$khoa] = in_array($n, self::TOP_CHOICES, true) ? $n : $macDinh;
+        }
 
         return $out;
     }
 
-    protected function recentOrders(): array
+    /**
+     * Ngày trên URL, chuẩn hoá về Y-m-d.
+     *
+     * Nhận cả `d-m-Y` vì lịch của vỏ v2 điền ra khuôn ấy, và cả `Y-m-d` để link
+     * chia sẻ / bookmark cũ vẫn mở đúng kỳ. Khuôn lạ trả null để nơi gọi rơi về
+     * preset thay vì dựng ra một kỳ bừa.
+     */
+    protected function ngay(mixed $v): ?string
+    {
+        $s = trim((string) $v);
+
+        if (preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $s) === 1) {
+            return checkdate((int) substr($s, 5, 2), (int) substr($s, 8, 2), (int) substr($s, 0, 4)) ? $s : null;
+        }
+
+        if (preg_match('/^(\d{2})-(\d{2})-(\d{4})$/', $s, $m) === 1) {
+            return checkdate((int) $m[2], (int) $m[1], (int) $m[3]) ? $m[3].'-'.$m[2].'-'.$m[1] : null;
+        }
+
+        return null;
+    }
+
+    /** @return array<string, string> */
+    protected function rangeLabels(): array
+    {
+        $out = [];
+        foreach (self::RANGE_CODES as $code) {
+            $out[$code] = Period::PRESETS[$code]['label'];
+        }
+
+        return $out;
+    }
+
+    // ---------- Từng khối số liệu ----------
+
+    /** @return array<string, mixed> */
+    protected function doanhThu(array $f): array
     {
         return $this->fetch(
-            fn () => $this->api->orders(['page_size' => 8, 'sort' => 'newest']),
+            fn () => $this->api->reportRevenue(['from' => $f['from'], 'to' => $f['to'], 'group_by' => $this->chiaTruc($f)]),
             [],
-            'recent orders'
+            'revenue report'
         );
     }
 
-    /** Top sản phẩm bán chạy — API đã có sẵn kiểu sắp xếp này. */
-    protected function topProducts(): array
+    /** @return array<string, mixed> */
+    protected function donHang(array $f): array
     {
         return $this->fetch(
-            fn () => $this->api->products(['sort' => 'best_selling', 'page_size' => 5, 'all' => 'true']),
+            fn () => $this->api->reportOrders(['from' => $f['from'], 'to' => $f['to']]),
             [],
-            'top products'
-        );
-    }
-
-    /** Khách chi tiêu nhiều nhất — API đã có sẵn kiểu sắp xếp này. */
-    protected function topCustomers(): array
-    {
-        return $this->fetch(
-            fn () => $this->api->customers(['sort' => 'spent_desc', 'page_size' => 5]),
-            [],
-            'top customers'
+            'order report'
         );
     }
 
     /**
-     * Biến thể sắp hết hàng — lấy thẳng từ endpoint tồn kho.
+     * Cách chia trục thời gian của biểu đồ doanh thu.
      *
-     * Endpoint này sắp `stock_asc` trên TOÀN kho nên trang đầu đã đúng là những
-     * biến thể ít hàng nhất, không còn cảnh quét 100 sản phẩm đầu rồi lọc tay và
-     * bỏ sót phần kho phía sau. Hàng hết sạch (tồn 0) cũng nằm trong nhóm này và
-     * lên trước — đó mới là thứ cần nhập gấp.
-     *
-     * Không dùng `stock=low` vì bộ lọc đó chỉ nhận tồn > 0, sẽ rụng mất đúng
-     * những dòng "Hết hàng" mà thẻ này đang hiển thị; sắp xếp tồn tăng dần rồi
-     * cắt ở ngưỡng cho ra cả hai nhóm trong một lần gọi.
-     *
-     * Lấy dư vài dòng vì API mới lọc được trạng thái bán của biến thể, chưa lọc
-     * được của sản phẩm cha: biến thể còn bán nhưng sản phẩm đang ẩn thì loại ở
-     * đây, phần dư bù lại đúng bằng những dòng bị loại đó.
+     * Một năm chia theo ngày là 365 cột chen trong một thẻ rộng chừng 600px —
+     * không đọc được cột nào. Kỳ càng dài thì gộp càng thô.
      */
-    /**
-     * Ngưỡng "sắp hết" đang cấu hình — cùng khoá với trang Tồn kho để hai nơi không
-     * bao giờ cảnh báo lệch nhau. Đọc qua bản cache 5 phút của ApiClient.
-     */
-    protected function lowStockThreshold(): int
+    protected function chiaTruc(array $f): string
     {
-        return $this->api->settingInt('low_stock_threshold', self::LOW_STOCK);
+        $ngay = (strtotime($f['to']) - strtotime($f['from'])) / 86400 + 1;
+
+        return match (true) {
+            $ngay > 120 => 'month',
+            $ngay > 45 => 'week',
+            default => 'day',
+        };
     }
 
-    protected function lowStock(): array
+    /**
+     * Doanh thu ước tính = tiền đơn CHƯA thu + ĐÃ thu.
+     *
+     * Khác doanh thu thuần ở chỗ nó đếm cả đơn công nợ và đơn mới trả một phần:
+     * đây là con số trả lời "kỳ này bán được bao nhiêu", còn thuần trả lời "đã
+     * chắc chắn vào túi bao nhiêu". Đơn hoàn tiền / thu lỗi không tính.
+     */
+    protected function uocTinh(array $doanhThu): float
     {
-        $threshold = $this->lowStockThreshold();
-
-        $items = $this->fetch(
-            fn () => $this->api->inventory([
-                'is_active' => 'true',
-                'sort' => 'stock_asc',
-                'page_size' => self::LOW_STOCK_ROWS * 3,
-            ]),
-            [],
-            'low stock'
-        );
-
-        $rows = [];
-        foreach ($items as $it) {
-            $stock = (int) ($it['stock_quantity'] ?? 0);
-            if ($stock > $threshold) {
-                break; // đã sắp tồn tăng dần — từ đây trở đi không còn gì để cảnh báo
-            }
-            if (! ($it['product_active'] ?? true)) {
-                continue;
-            }
-            $rows[] = [
-                'product' => $it['product_name'] ?? '',
-                'sku' => $it['sku'] ?? '',
-                'variant' => trim((string) ($it['variant_name'] ?? '')),
-                'stock' => $stock,
-            ];
-            if (\count($rows) >= self::LOW_STOCK_ROWS) {
-                break;
+        $tong = 0.0;
+        foreach ($doanhThu['by_payment_status'] ?? [] as $lat) {
+            if (in_array($lat['key'] ?? '', ['pending', 'paid'], true)) {
+                $tong += (float) ($lat['revenue'] ?? 0);
             }
         }
 
-        return $rows;
+        return $tong;
     }
 
-    /** Gọi API, trả về mặc định khi hỏng và ghi log — không ném lỗi ra trang. */
+    /**
+     * Ca đang mở của chi nhánh đang xem, hoặc null khi chưa ai mở ca.
+     *
+     * API trả `data: null` chứ không phải lỗi khi không có ca — đó là trạng thái
+     * bình thường của một tiệm chưa tới giờ bán.
+     */
+    protected function caHienTai(): ?array
+    {
+        $ca = null;
+        try {
+            $res = $this->api->caHienTai();
+            if ($res->successful()) {
+                $ca = $res->json('data');
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Dashboard: current shift failed', ['msg' => $e->getMessage()]);
+        }
+
+        if (! is_array($ca)) {
+            return null;
+        }
+
+        // Ca của API không có "mã ca" riêng như bản v2 — id CHÍNH LÀ thứ hai bên
+        // đối chiếu khi tra lại một lượt trực, nên in thẳng nó thay vì bịa ra
+        // một dãy mã không có trong sổ.
+        //
+        // Tiền mặt là tiền SỔ nói lẽ ra đang có trong két: đầu ca cộng thu trừ
+        // chi. Ca đã chốt thì lấy số đã ký nhận hôm ấy (`expected_cash`).
+        $tienMat = $ca['expected_cash']
+            ?? (float) ($ca['opening_cash'] ?? 0) + (float) ($ca['tong_thu'] ?? 0) - (float) ($ca['tong_chi'] ?? 0);
+
+        // API không phải lúc nào cũng điền `shop_name`; ca đang mở thì luôn là ca
+        // của chi nhánh đang xem, nên lấy tên ở đó còn hơn bày một dấu gạch.
+        $tenCN = (string) ($ca['shop_name'] ?? '');
+        if ($tenCN === '') {
+            $cn = CurrentBranch::danhSach();
+            foreach ($cn['ds'] ?? [] as $b) {
+                if ((int) ($b['id'] ?? 0) === (int) ($ca['shop_id'] ?? 0)) {
+                    $tenCN = (string) ($b['name'] ?? '');
+                    break;
+                }
+            }
+        }
+
+        return [
+            'ma' => '#'.($ca['id'] ?? '—'),
+            'chi_nhanh' => $tenCN,
+            'nguoi_mo' => (string) ($ca['opened_by_name'] ?? ''),
+            'gio_mo' => $ca['opened_at'] ?? null,
+            'gio_dong' => $ca['closed_at'] ?? null,
+            'tien_mat' => (float) $tienMat,
+            'so_don' => (int) ($ca['so_don_tien_mat'] ?? 0),
+        ];
+    }
+
+    /**
+     * Ba đường của biểu đồ "Doanh thu bán hàng": gộp, thuần, chi phí mua hàng.
+     *
+     * Chi phí ở đây là GIÁ VỐN của hàng đã bán (`cost` trong báo cáo), không
+     * phải tiền mua hàng nhập kho — hai thứ khác nhau và chỉ giá vốn mới so
+     * cùng trục với doanh thu của chính những đơn đó.
+     *
+     * @return array<string, mixed>
+     */
+    protected function duLieuBieuDo(array $doanhThu): array
+    {
+        $nhan = [];
+        $gop = [];
+        $thuan = [];
+        $von = [];
+
+        foreach ($doanhThu['buckets'] ?? [] as $b) {
+            $nhan[] = $this->nhanMoc((string) ($b['label'] ?? ''));
+            $g = (float) ($b['subtotal'] ?? 0) + (float) ($b['shipping'] ?? 0);
+            $gop[] = $g;
+            $thuan[] = $g - (float) ($b['discount'] ?? 0);
+            $von[] = (float) ($b['cost'] ?? 0);
+        }
+
+        return ['labels' => $nhan, 'gross' => $gop, 'net' => $thuan, 'cost' => $von];
+    }
+
+    /**
+     * Nhãn một mốc trên trục ngang, gọn lại cho vừa bề ngang thẻ.
+     *
+     * API trả khoá tự mô tả ("2026-09-13", "2026-W38", "2026-09"); in nguyên
+     * dạng ấy thì hai mươi mốc chen nhau thành một vệt chữ xoay nghiêng.
+     */
+    protected function nhanMoc(string $label): string
+    {
+        if (preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $label, $m) === 1) {
+            return $m[3].'/'.$m[2];
+        }
+        if (preg_match('/^(\d{4})-W(\d{1,2})$/', $label, $m) === 1) {
+            return 'T'.(int) $m[2];
+        }
+        if (preg_match('/^(\d{4})-(\d{2})$/', $label, $m) === 1) {
+            return $m[2].'/'.$m[1];
+        }
+
+        return $label;
+    }
+
+    /**
+     * Top mặt hàng bán chạy — xếp theo SỐ LƯỢNG, không theo tiền.
+     *
+     * Thẻ này in cột "Số lượng" nên phải xếp theo đúng cột đang in; xếp theo
+     * doanh thu mà in số lượng thì bảng trông như sắp xếp sai.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    protected function banChay(array $f): array
+    {
+        $bc = $this->fetch(
+            fn () => $this->api->reportProducts(['from' => $f['from'], 'to' => $f['to'], 'sort' => 'units']),
+            [],
+            'product report'
+        );
+
+        $ds = array_values(array_filter(
+            $bc['items'] ?? [],
+            fn ($r) => (int) ($r['units'] ?? 0) > 0
+        ));
+
+        return array_slice($ds, 0, $f['top_products']);
+    }
+
+    /**
+     * Cắt một danh sách "lát" của báo cáo về N dòng nhiều nhất.
+     *
+     * @param  array<int, array<string, mixed>>  $lat
+     * @return array<int, array<string, mixed>>
+     */
+    protected function catLat(array $lat, int $n, string $nhan = 'key'): array
+    {
+        $ds = array_values(array_filter($lat, fn ($r) => (float) ($r['revenue'] ?? 0) != 0.0 || (int) ($r['orders'] ?? 0) > 0));
+        usort($ds, fn ($a, $b) => ($b['revenue'] ?? 0) <=> ($a['revenue'] ?? 0));
+
+        return array_map(
+            fn ($r) => $r + ['nhan' => (string) ($r[$nhan] ?? $r['key'] ?? '')],
+            array_slice($ds, 0, $n)
+        );
+    }
+
+    /**
+     * Top khuyến mại theo số lần dùng.
+     *
+     * API chưa có sổ đếm lượt dùng từng chương trình (`/promotions/stats` chỉ
+     * đếm chương trình theo trạng thái), nên thẻ này bày rỗng và nói rõ lý do
+     * thay vì đưa ra một con số không có nguồn.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    protected function khuyenMai(): array
+    {
+        return [];
+    }
+
+    /**
+     * Tiền mua hàng và số lượng nhập kho trong kỳ.
+     *
+     * Cộng từ danh sách phiếu vì `/phieu-mua-hang/stats` không nhận khoảng ngày.
+     *
+     * @return array{tien: float, soLuong: int, catBot: bool}
+     */
+    protected function muaHang(array $f): array
+    {
+        $tien = 0.0;
+        $soLuong = 0;
+        $catBot = false;
+        $trang = 1;
+        $soTrang = 1;
+
+        try {
+            do {
+                $res = $this->api->phieuMuaHang([
+                    'from_date' => $f['from'],
+                    'to_date' => $f['to'],
+                    'page' => $trang,
+                    'page_size' => 100,
+                ]);
+                if (! $res->successful()) {
+                    break;
+                }
+
+                foreach ($res->json('data') ?? [] as $phieu) {
+                    if (in_array($phieu['status'] ?? '', self::PURCHASE_DEAD, true)) {
+                        continue;
+                    }
+                    $tien += (float) ($phieu['total_amount'] ?? 0);
+                    foreach ($phieu['items'] ?? [] as $dong) {
+                        $soLuong += (int) ($dong['base_quantity'] ?? $dong['quantity'] ?? 0);
+                    }
+                }
+
+                $soTrang = (int) ($res->json('meta.total_pages') ?? 1);
+                $catBot = $soTrang > self::MAX_PURCHASE_PAGES;
+                $trang++;
+            } while ($trang <= $soTrang && $trang <= self::MAX_PURCHASE_PAGES);
+        } catch (\Throwable $e) {
+            Log::warning('Dashboard: purchase orders failed', ['msg' => $e->getMessage()]);
+        }
+
+        return ['tien' => $tien, 'soLuong' => $soLuong, 'catBot' => $catBot];
+    }
+
+    /**
+     * Gọi một endpoint, hỏng thì trả mặc định.
+     *
+     * @param  array<string, mixed>  $default
+     * @return array<string, mixed>
+     */
     protected function fetch(callable $call, array $default, string $what): array
     {
         try {

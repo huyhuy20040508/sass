@@ -69,7 +69,17 @@ class EInvoiceController extends Controller
         'creator' => 'Người tạo',
     ];
 
-    public const PAGE_SIZES = [20, 50, 100];
+    /**
+     * Cỡ trang — ĐÚNG bộ của bản v2 (10/20/30/40/50), không phải 20/50/100.
+     *
+     * Mọi màn danh sách khác trong khu v2 đều bày đúng năm mức này; một màn
+     * lệch bộ là người dùng đổi cỡ trang ở màn khác rồi sang đây thấy con số
+     * mình vừa chọn biến mất khỏi danh sách.
+     */
+    public const PAGE_SIZES = [10, 20, 30, 40, 50];
+
+    /** Mở màn lần đầu: mức nhỏ nhất, như v2 (option đầu tiên của ô). */
+    public const PAGE_SIZE_MAC_DINH = 10;
 
     public function __construct(protected ApiClient $api) {}
 
@@ -92,6 +102,18 @@ class EInvoiceController extends Controller
         } catch (\Throwable $e) {
             Log::error('Load etax invoices failed', ['msg' => $e->getMessage()]);
             $error = 'Không tải được sổ hoá đơn điện tử. Kiểm tra kết nối API.';
+        }
+
+        // TRANG QUÁ SỐ TRANG THẬT thì lùi về trang cuối, không bày màn trắng.
+        //
+        // Xảy ra thường xuyên mà không ai để ý: đang ở trang 5, lọc lại hoặc
+        // xoá bớt hoá đơn là sổ còn 2 trang, link cũ / nút Back vẫn giữ ?page=5.
+        // Lúc ấy API trả 0 dòng và màn nói "Chưa có hoá đơn điện tử nào" — sai
+        // hẳn nghĩa (sổ vẫn có hoá đơn), mà dãy số trang cũng không hiện nên
+        // không còn đường bấm quay lại.
+        $soTrang = max(1, (int) $meta['total_pages']);
+        if ($filters['page'] > $soTrang && (int) $meta['total'] > 0) {
+            return redirect()->to($request->fullUrlWithQuery(['page' => $soTrang]));
         }
 
         $view = view('v2::e-invoices.index', compact('hoaDon', 'filters', 'meta'))
@@ -143,7 +165,7 @@ class EInvoiceController extends Controller
 
     protected function filters(Request $request): array
     {
-        $psize = (int) $request->query('page_size', 20);
+        $psize = (int) $request->query('page_size', self::PAGE_SIZE_MAC_DINH);
         $tt = (string) $request->query('status', 'all');
 
         return [
@@ -157,7 +179,7 @@ class EInvoiceController extends Controller
             'from_date' => $this->ngayLoc($request->query('from_date')),
             'to_date' => $this->ngayLoc($request->query('to_date')),
             'page' => max(1, (int) $request->query('page', 1)),
-            'page_size' => in_array($psize, self::PAGE_SIZES, true) ? $psize : 20,
+            'page_size' => in_array($psize, self::PAGE_SIZES, true) ? $psize : self::PAGE_SIZE_MAC_DINH,
         ];
     }
 
