@@ -14743,7 +14743,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Dựng TRỌN GÓI một khách hàng mới: cửa hàng + chi nhánh mặc định + tài\nkhoản quản trị (data plane), rồi ký hợp đồng dùng thử (control plane).\nBản HTTP của ` + "`" + `cmd/thue-bao ky --dung-thu` + "`" + `, khác một điểm: KHÔNG cho khai\ntay giá và hạn mức — hợp đồng thử chạy đúng theo gói đang bán. Thoả thuận\nriêng vẫn đi qua công cụ dòng lệnh.\nĐiều khoản CHÉP từ bảng giá lúc ký rồi sống độc lập: sửa bảng giá sau đó\nkhông đụng tới khách này. Bảng giá không quy định một hạn mức nào thì lượt\nký bị TỪ CHỐI (422) chứ không đoán hộ con số.\nĐƯỜNG CÔNG KHAI, không cần token: form đăng ký trên trang giới thiệu gọi thẳng vào đây.\nGói do máy chủ chọn (Khởi đầu, chu kỳ tháng) — payload KHÔNG có ` + "`" + `plan_id` + "`" + `, gửi lên cũng bị bỏ qua.\nChặn lạm dụng bằng giới hạn tần suất theo IP ở tầng route và một ô bẫy (` + "`" + `website` + "`" + `) trong form.",
+                "description": "Dựng TRỌN GÓI một khách hàng mới: cửa hàng + chi nhánh mặc định + tài\nkhoản quản trị (data plane), rồi ký hợp đồng dùng thử (control plane).\nBản HTTP của ` + "`" + `cmd/subscriptions ky --dung-thu` + "`" + `, khác một điểm: KHÔNG cho khai\ntay giá và hạn mức — hợp đồng thử chạy đúng theo gói đang bán. Thoả thuận\nriêng vẫn đi qua công cụ dòng lệnh.\nĐiều khoản CHÉP từ bảng giá lúc ký rồi sống độc lập: sửa bảng giá sau đó\nkhông đụng tới khách này. Bảng giá không quy định một hạn mức nào thì lượt\nký bị TỪ CHỐI (422) chứ không đoán hộ con số.\nĐƯỜNG CÔNG KHAI, không cần token: form đăng ký trên trang giới thiệu gọi thẳng vào đây.\nGói do máy chủ chọn (Khởi đầu, chu kỳ tháng) — payload KHÔNG có ` + "`" + `plan_id` + "`" + `, gửi lên cũng bị bỏ qua.\nChặn lạm dụng bằng giới hạn tần suất theo IP ở tầng route và một ô bẫy (` + "`" + `website` + "`" + `) trong form.",
                 "consumes": [
                     "application/json",
                     "application/json"
@@ -15951,7 +15951,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Dựng TRỌN GÓI một khách hàng mới: cửa hàng + chi nhánh mặc định + tài\nkhoản quản trị (data plane), rồi ký hợp đồng dùng thử (control plane).\nBản HTTP của ` + "`" + `cmd/thue-bao ky --dung-thu` + "`" + `, khác một điểm: KHÔNG cho khai\ntay giá và hạn mức — hợp đồng thử chạy đúng theo gói đang bán. Thoả thuận\nriêng vẫn đi qua công cụ dòng lệnh.\nĐiều khoản CHÉP từ bảng giá lúc ký rồi sống độc lập: sửa bảng giá sau đó\nkhông đụng tới khách này. Bảng giá không quy định một hạn mức nào thì lượt\nký bị TỪ CHỐI (422) chứ không đoán hộ con số.\nĐƯỜNG CÔNG KHAI, không cần token: form đăng ký trên trang giới thiệu gọi thẳng vào đây.\nGói do máy chủ chọn (Khởi đầu, chu kỳ tháng) — payload KHÔNG có ` + "`" + `plan_id` + "`" + `, gửi lên cũng bị bỏ qua.\nChặn lạm dụng bằng giới hạn tần suất theo IP ở tầng route và một ô bẫy (` + "`" + `website` + "`" + `) trong form.",
+                "description": "Dựng TRỌN GÓI một khách hàng mới: cửa hàng + chi nhánh mặc định + tài\nkhoản quản trị (data plane), rồi ký hợp đồng dùng thử (control plane).\nBản HTTP của ` + "`" + `cmd/subscriptions ky --dung-thu` + "`" + `, khác một điểm: KHÔNG cho khai\ntay giá và hạn mức — hợp đồng thử chạy đúng theo gói đang bán. Thoả thuận\nriêng vẫn đi qua công cụ dòng lệnh.\nĐiều khoản CHÉP từ bảng giá lúc ký rồi sống độc lập: sửa bảng giá sau đó\nkhông đụng tới khách này. Bảng giá không quy định một hạn mức nào thì lượt\nký bị TỪ CHỐI (422) chứ không đoán hộ con số.\nĐƯỜNG CÔNG KHAI, không cần token: form đăng ký trên trang giới thiệu gọi thẳng vào đây.\nGói do máy chủ chọn (Khởi đầu, chu kỳ tháng) — payload KHÔNG có ` + "`" + `plan_id` + "`" + `, gửi lên cũng bị bỏ qua.\nChặn lạm dụng bằng giới hạn tần suất theo IP ở tầng route và một ô bẫy (` + "`" + `website` + "`" + `) trong form.",
                 "consumes": [
                     "application/json",
                     "application/json"
@@ -16050,7 +16050,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Ghi một hợp đồng ` + "`" + `active` + "`" + ` cho cửa hàng ĐÃ TỒN TẠI. Khác POST /platform/dung-thu\nở chỗ không dựng gì bên database bán hàng — cửa hàng và tài khoản đăng\nnhập đã có sẵn, nên đường này không bắc qua hai database.\nGiá và ba hạn mức CHÉP từ bảng giá lúc ký rồi sống độc lập; không có ô nào\nkhai tay. Thoả thuận riêng vẫn đi qua ` + "`" + `cmd/thue-bao ky` + "`" + `.\n` + "`" + `so_thang` + "`" + ` bỏ trống = một chu kỳ của gói (1 tháng, hoặc 12 nếu gói theo năm).",
+                "description": "Ghi một hợp đồng ` + "`" + `active` + "`" + ` cho cửa hàng ĐÃ TỒN TẠI. Khác POST /platform/dung-thu\nở chỗ không dựng gì bên database bán hàng — cửa hàng và tài khoản đăng\nnhập đã có sẵn, nên đường này không bắc qua hai database.\nGiá và ba hạn mức CHÉP từ bảng giá lúc ký rồi sống độc lập; không có ô nào\nkhai tay. Thoả thuận riêng vẫn đi qua ` + "`" + `cmd/subscriptions ky` + "`" + `.\n` + "`" + `so_thang` + "`" + ` bỏ trống = một chu kỳ của gói (1 tháng, hoặc 12 nếu gói theo năm).",
                 "consumes": [
                     "application/json"
                 ],
@@ -16557,7 +16557,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Sửa THÔNG TIN, không sửa ĐIỀU KHOẢN. Gói, chu kỳ, giá và ba hạn mức\nkhông có ô nào ở đây: chúng đã chốt lúc ký và cả hệ thống dựng trên\nnguyên tắc chúng không đổi. Bán thêm quyền lợi cho một khách vẫn là việc\ncủa ` + "`" + `cmd/thue-bao` + "`" + `.\n` + "`" + `het_han` + "`" + ` chỉ nhận khi hợp đồng đang dùng thử — hạn của kỳ thử là quyết\nđịnh bán hàng, còn hạn của hợp đồng đã trả tiền thì đi đường Gia hạn để\nđường tiền và đường hạn không tách nhau. Bỏ trống = giữ nguyên.\nHợp đồng đã huỷ không sửa được: đó là bản ghi lịch sử.",
+                "description": "Sửa THÔNG TIN, không sửa ĐIỀU KHOẢN. Gói, chu kỳ, giá và ba hạn mức\nkhông có ô nào ở đây: chúng đã chốt lúc ký và cả hệ thống dựng trên\nnguyên tắc chúng không đổi. Bán thêm quyền lợi cho một khách vẫn là việc\ncủa ` + "`" + `cmd/subscriptions` + "`" + `.\n` + "`" + `het_han` + "`" + ` chỉ nhận khi hợp đồng đang dùng thử — hạn của kỳ thử là quyết\nđịnh bán hàng, còn hạn của hợp đồng đã trả tiền thì đi đường Gia hạn để\nđường tiền và đường hạn không tách nhau. Bỏ trống = giữ nguyên.\nHợp đồng đã huỷ không sửa được: đó là bản ghi lịch sử.",
                 "consumes": [
                     "application/json"
                 ],
@@ -16727,7 +16727,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Đẩy hạn thêm ` + "`" + `so_thang` + "`" + ` tháng tính từ GREATEST(ngày hết hạn, hôm nay) —\nhợp đồng đã quá hạn ba tháng mà cộng dồn từ ngày cũ thì khách trả tiền\nxong vẫn còn quá hạn.\nTrạng thái chuyển sang ` + "`" + `active` + "`" + ` và mốc hết dùng thử bị xoá, nên gọi trên\nmột hợp đồng ` + "`" + `trial` + "`" + ` CHÍNH LÀ chuyển khách sang chính thức. Không có\nendpoint riêng cho việc đó: hai việc là một.\nKHÔNG ghi vào sổ thu — tiền vào là ` + "`" + `cmd/thue-bao thu-tien` + "`" + `, việc khác.",
+                "description": "Đẩy hạn thêm ` + "`" + `so_thang` + "`" + ` tháng tính từ GREATEST(ngày hết hạn, hôm nay) —\nhợp đồng đã quá hạn ba tháng mà cộng dồn từ ngày cũ thì khách trả tiền\nxong vẫn còn quá hạn.\nTrạng thái chuyển sang ` + "`" + `active` + "`" + ` và mốc hết dùng thử bị xoá, nên gọi trên\nmột hợp đồng ` + "`" + `trial` + "`" + ` CHÍNH LÀ chuyển khách sang chính thức. Không có\nendpoint riêng cho việc đó: hai việc là một.\nKHÔNG ghi vào sổ thu — tiền vào là ` + "`" + `cmd/subscriptions thu-tien` + "`" + `, việc khác.",
                 "consumes": [
                     "application/json"
                 ],

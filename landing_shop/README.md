@@ -60,7 +60,7 @@ cả hai dạng đã có sẵn trong `styles.css`.
 Không phải làm gì riêng. Trang đã nằm trong bộ triển khai chung:
 
 - Cấu hình nginx: [`deploy/nginx/selliotech.store.conf`](../deploy/nginx/selliotech.store.conf) — nhận cả `selliotech.store` lẫn `www.selliotech.store`, trỏ `root` vào chính thư mục này.
-- Script [`deploy/scripts/02-trien-khai.sh`](../deploy/scripts/02-trien-khai.sh) đặt tệp đó vào `sites-enabled` và gán quyền cùng lượt với ba tên miền kia.
+- Script [`deploy/scripts/02-deploy.sh`](../deploy/scripts/02-deploy.sh) đặt tệp đó vào `sites-enabled` và gán quyền cùng lượt với ba tên miền kia.
 
 Nên cập nhật trang chỉ là đẩy commit rồi chạy lại script triển khai — không có bước build, không phải khởi động lại dịch vụ nào. Các bước DNS và HTTPS xem [`deploy/README.md`](../deploy/README.md).
 

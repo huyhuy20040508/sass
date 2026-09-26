@@ -20,7 +20,7 @@ User=root
 # Sao lưu phải sống sót qua đúng những lúc thư mục ứng dụng có vấn đề: giữa
 # chừng một lượt `git reset --hard`, hoặc sau khi ai đó xoá nhầm /var/www. Đặt
 # script ở chỗ khác thì lịch sao lưu không phụ thuộc vào thứ nó đang bảo vệ.
-# Bước 8 của 02-trien-khai.sh chép tệp sang đây mỗi lần triển khai.
+# Bước 8 của 02-deploy.sh chép tệp sang đây mỗi lần triển khai.
 ExecStart=/usr/local/sbin/selliotech-sao-luu chay
 
 # Nhường tài nguyên cho việc phục vụ khách. Sao lưu chậm hơn vài giây không ai

@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Support\XlsxDon;
+use App\Support\XlsxOrder;
 use Illuminate\Http\Client\Response;
 
 abstract class Controller
@@ -72,7 +72,7 @@ abstract class Controller
      */
     protected function taiXlsx(array $hang, string $ten, string $tenSheet)
     {
-        return response(XlsxDon::noiDung($hang, $tenSheet), 200, [
+        return response(XlsxOrder::noiDung($hang, $tenSheet), 200, [
             'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             'Content-Disposition' => 'attachment; filename="'.$ten.'.xlsx"',
         ]);

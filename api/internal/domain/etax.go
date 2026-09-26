@@ -223,4 +223,71 @@ type EtaxRepository interface {
 	// ThueSuatTheoMatHang tra % thuế của một loạt mặt hàng: khoá là product id,
 	// giá trị theo quy ước Product.VAT (số dương = %, -1 KCT, -2 KKKNT).
 	ThueSuatTheoMatHang(ctx context.Context, ids []uint) (map[uint]int, error)
+
+	// DanhSachHoaDon — sổ hoá đơn của màn "Hoá đơn điện tử": một trang dòng
+	// khớp bộ lọc, tổng số dòng, và số hoá đơn theo từng trạng thái (đếm TRƯỚC
+	// khi áp ô trạng thái, để hàng nút lọc luôn cho biết mỗi nhóm còn bao nhiêu).
+	DanhSachHoaDon(ctx context.Context, f HoaDonFilter) ([]DongHoaDon, int64, DemHoaDon, error)
+}
+
+// HoaDonFilter — bộ lọc màn "Hoá đơn điện tử", đúng bộ ô của v2 (ký hiệu, số
+// hoá đơn, tên khách, mã hoá đơn, ngày phát hành, người tạo, trạng thái).
+type HoaDonFilter struct {
+	KyHieu   string
+	SoHoaDon string
+	// MaDon tìm cả mã đơn hàng lẫn mã cơ quan thuế — ô "Mã hoá đơn" của v2 tra
+	// theo mã in trên tờ hoá đơn, còn người bán thường cầm mã đơn trên tay.
+	MaDon string
+	// KhachHang: tên, số điện thoại hoặc email người mua.
+	KhachHang string
+	// TrangThai: draft | sent | issued | failed, nhiều giá trị ngăn bởi dấu
+	// phẩy. Rỗng hoặc "all" = không lọc.
+	TrangThai string
+	// CreatedBy: id người lập ĐƠN (orders.created_by), ngăn bởi dấu phẩy — v2
+	// in cột "Người tạo" theo nhân viên của đơn, không theo người bấm phát hành.
+	CreatedBy string
+	// FromDate / ToDate (YYYY-MM-DD) theo NGÀY PHÁT HÀNH; tờ chưa được cấp số
+	// thì lấy lúc lập lượt phát hành.
+	FromDate string
+	ToDate   string
+	// ShopID cắt theo chi nhánh phát hành. 0 = cả cửa hàng.
+	ShopID   uint
+	Page     int
+	PageSize int
+}
+
+// DongHoaDon — một dòng của sổ hoá đơn: tờ hoá đơn kèm vài thông tin của đơn
+// hàng mà màn hình phải in ra (mã đơn, người mua, người lập).
+type DongHoaDon struct {
+	ID            uint    `json:"id"`
+	OrderID       uint    `json:"order_id"`
+	ShopID        uint    `json:"shop_id"`
+	OrderCode     string  `json:"order_code"`
+	Provider      string  `json:"provider"`
+	Symbol        string  `json:"symbol"`
+	InvoiceNo     string  `json:"invoice_no"`
+	InvoiceID     string  `json:"invoice_id"`
+	TaxAuthCode   string  `json:"tax_auth_code"`
+	LookupCode    string  `json:"lookup_code"`
+	Status        string  `json:"status"`
+	DocStatus     *int    `json:"doc_status"`
+	TotalAmount   float64 `json:"total_amount"`
+	VatAmount     float64 `json:"vat_amount"`
+	Error         string  `json:"error"`
+	CustomerName  string  `json:"customer_name"`
+	CustomerEmail string  `json:"customer_email"`
+	CustomerPhone string  `json:"customer_phone"`
+	// NguoiTao là tên người lập ĐƠN. Đơn lập trước migration 0065 thì rỗng.
+	NguoiTao  string     `json:"nguoi_tao"`
+	IssuedAt  *time.Time `json:"issued_at"`
+	CreatedAt time.Time  `json:"created_at"`
+}
+
+// DemHoaDon — số hoá đơn theo trạng thái, cho hàng nút lọc đầu bảng.
+type DemHoaDon struct {
+	TatCa      int64 `json:"tat_ca"`
+	Nhap       int64 `json:"draft"`
+	DaGui      int64 `json:"sent"`
+	DaPhatHanh int64 `json:"issued"`
+	Hong       int64 `json:"failed"`
 }

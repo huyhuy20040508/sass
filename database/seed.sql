@@ -5,7 +5,7 @@
 --  nhưng ĐỪNG nạp nó rồi ngồi chờ có tài khoản đăng nhập.
 --
 --  Tạo vai trò + cửa hàng + tài khoản quản trị đầu tiên bằng:
---      cd api && go run ./cmd/tao-admin        (máy cá nhân)
+--      cd api && go run ./cmd/create-admin        (máy cá nhân)
 --      sudo selliotech-tao-admin               (máy chủ thật)
 --
 --  Lý do thay: từ khi đăng nhập bằng 3 ô (mã cửa hàng · tên đăng nhập ·

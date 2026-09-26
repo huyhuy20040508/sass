@@ -34,7 +34,7 @@ cp .env.example .env        # rồi sửa DB_*, JWT_SECRET
 #    go run ./cmd/migrate -nen-tang chay    # lược đồ THỨ HAI: control plane
 #                                           # (selliotech_platform, tệp ở ../database/platform).
 #                                           # Tự tạo database nếu chưa có.
-#    go run ./cmd/tao-admin                 # vai trò + cửa hàng + tài khoản quản trị đầu tiên
+#    go run ./cmd/create-admin                 # vai trò + cửa hàng + tài khoản quản trị đầu tiên
 #    (database/seed.sql đã tắt — nạp nó không tạo ra gì)
 
 # 3. Tải dependency

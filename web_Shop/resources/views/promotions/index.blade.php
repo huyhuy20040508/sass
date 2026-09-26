@@ -502,7 +502,7 @@
         .pmo-table-wrap::-webkit-scrollbar { height: 11px; }
         .pmo-table-wrap::-webkit-scrollbar-thumb { background-color: #dcdcdc; border-radius: 8px; border: 3px solid #fff; }
 
-        .pmo-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .pmo-table { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 13px; }
         .pmo-table thead th {
             text-align: left; padding: 13px 18px; border-bottom: 1px solid #f0f0f0; background: #fafafa;
             font-size: 12px; font-weight: 600; color: #8c8c8c; white-space: nowrap;
@@ -518,15 +518,19 @@
            min-width là thứ giữ cho bảng THOÁNG: không có nó thì cột chỉ rộng đúng
            bằng chữ bên trong, sáu cột cuối dồn hết sang phải và dính vào nhau —
            mắt phải dò xem con số nào thuộc cột nào. */
-        .pmo-table th.pmo-c-check,  .pmo-table td.pmo-c-check  { width: 1%; min-width: 46px;  text-align: center; }
-        .pmo-table th.pmo-c-stt,    .pmo-table td.pmo-c-stt    { width: 1%; min-width: 58px;  text-align: center; color: #8c8c8c; }
-        .pmo-table th.pmo-c-name,   .pmo-table td.pmo-c-name   { width: 100%; max-width: 0; min-width: 240px; overflow: hidden; }
-        .pmo-table th.pmo-c-off,    .pmo-table td.pmo-c-off    { width: 1%; min-width: 118px; text-align: right; }
-        .pmo-table th.pmo-c-scope,  .pmo-table td.pmo-c-scope  { width: 1%; min-width: 158px; }
-        .pmo-table th.pmo-c-time,   .pmo-table td.pmo-c-time   { width: 1%; min-width: 162px; }
-        .pmo-table th.pmo-c-state,  .pmo-table td.pmo-c-state  { width: 1%; min-width: 122px; text-align: center; }
-        .pmo-table th.pmo-c-switch, .pmo-table td.pmo-c-switch { width: 1%; min-width: 76px;  text-align: center; }
-        .pmo-table th.pmo-c-act,    .pmo-table td.pmo-c-act    { width: 1%; min-width: 96px;  text-align: center; }
+        /* Chia % CỨNG, tổng đúng 100 — cùng khuôn các màn v2.
+           Bản trước để mỗi cột một `min-width` rộng tay, cộng lại 1076px trong khi
+           khung nội dung của vỏ mới ở màn 1366 chỉ có 1096px: bảng phình 1178px,
+           cột Thao tác rơi ra ngoài tầm nhìn và phải kéo ngang mới thấy. */
+        .pmo-table th.pmo-c-check,  .pmo-table td.pmo-c-check  { width: 4%;    text-align: center; }
+        .pmo-table th.pmo-c-stt,    .pmo-table td.pmo-c-stt    { width: 6%;    text-align: center; color: #8c8c8c; }
+        .pmo-table th.pmo-c-name,   .pmo-table td.pmo-c-name   { width: 25.5%; overflow: hidden; }
+        .pmo-table th.pmo-c-off,    .pmo-table td.pmo-c-off    { width: 10%;   text-align: right; }
+        .pmo-table th.pmo-c-scope,  .pmo-table td.pmo-c-scope  { width: 13%; }
+        .pmo-table th.pmo-c-time,   .pmo-table td.pmo-c-time   { width: 15%; }
+        .pmo-table th.pmo-c-state,  .pmo-table td.pmo-c-state  { width: 11%;   text-align: center; }
+        .pmo-table th.pmo-c-switch, .pmo-table td.pmo-c-switch { width: 7%;    text-align: center; }
+        .pmo-table th.pmo-c-act,    .pmo-table td.pmo-c-act    { width: 8.5%;  text-align: center; }
 
         .pmo-check { width: 15px; height: 15px; cursor: pointer; accent-color: #1890ff; margin: 0; }
         .pmo-name { display: block; font-weight: 500; color: #262626; overflow: hidden; text-overflow: ellipsis; }
@@ -572,7 +576,7 @@
         .pmo-rowbtn.pmo-del { color: #ff4d4f; }
         .pmo-rowbtn.pmo-del:hover { background: #fff1f0; }
 
-        .pmo-empty { padding: 48px 12px; text-align: center; color: #8c8c8c; white-space: normal; line-height: 1.7; }
+        .pmo-table tbody td.pmo-empty { padding: 48px 12px; text-align: center; color: #8c8c8c; white-space: normal; line-height: 1.7; }
 
         .pmo-btn-primary:focus-visible, .pmo-btn-ghost:focus-visible,
         .pmo-search-btn:focus-visible { outline: none; box-shadow: 0 0 0 .25rem rgba(13,110,253,.25); }

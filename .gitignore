@@ -53,3 +53,8 @@ Thumbs.db
 # không giữ bản nhị phân trong git (mỗi lần sinh lại là một tệp khác hoàn toàn).
 /sass-docx/*.docx
 /sass-docx/~$*
+
+# Cấu hình Claude Code RIÊNG của máy này (hook build lại + restart API dev bằng
+# systemctl) — không áp cho máy khác. .claude/settings.json vẫn commit bình thường.
+/.claude/settings.local.json
+/.claude/hooks/

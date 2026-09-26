@@ -123,7 +123,7 @@ func gieo(t *testing.T, db *gorm.DB, ma string) *cuaHang {
 
 	// --- nhóm quyền ---
 	//
-	// Gieo Y HỆT cmd/quyen làm với cửa hàng thật: hai nhóm mặc định, rồi xếp
+	// Gieo Y HỆT cmd/permissions làm với cửa hàng thật: hai nhóm mặc định, rồi xếp
 	// người vào theo vai trò. Thiếu bước này thì mọi tài khoản trong bộ kiểm
 	// không có quyền nào và cả gói đỏ ở lượt 403 đầu tiên — mà đỏ vì bối cảnh
 	// gieo thiếu, không phải vì chốt sai.

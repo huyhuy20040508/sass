@@ -1,12 +1,12 @@
 <?php
 
-use App\Http\Middleware\ChiHienGiaoDienV2;
-use App\Http\Middleware\ChiNhanhTheoTab;
+use App\Http\Middleware\V2OnlyShell;
+use App\Http\Middleware\BranchPerTab;
 use App\Http\Middleware\EnsureAdminAuthenticated;
-use App\Http\Middleware\EnsureCuaVao;
+use App\Http\Middleware\EnsureWorkspace;
 use App\Http\Middleware\EnsureManagerRole;
-use App\Http\Middleware\GiuLoiNhanKhiGoiNen;
-use App\Http\Middleware\KhoaKhiHetHan;
+use App\Http\Middleware\KeepFlashOnBackgroundCall;
+use App\Http\Middleware\LockWhenExpired;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -38,14 +38,14 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->trustProxies(at: ['127.0.0.1', '::1']);
 
         // Lượt gọi nền (chuông thông báo) không được ăn mất lời nhắn dành cho
-        // trang đang tải — xem GiuLoiNhanKhiGoiNen. Gắn vào cả nhóm `web` chứ
+        // trang đang tải — xem KeepFlashOnBackgroundCall. Gắn vào cả nhóm `web` chứ
         // không vài route: nó phải phủ luôn những lượt gọi nền viết sau này.
         $middleware->web(append: [
-            GiuLoiNhanKhiGoiNen::class,
+            KeepFlashOnBackgroundCall::class,
             // Chi nhánh đang làm việc là chuyện của TỪNG TAB, không phải của cả
-            // trình duyệt — xem ChiNhanhTheoTab. Gắn vào cả nhóm `web` vì nó phải
+            // trình duyệt — xem BranchPerTab. Gắn vào cả nhóm `web` vì nó phải
             // phủ mọi đường: trang, lượt gọi ngầm, và mọi lượt ghi viết sau này.
-            ChiNhanhTheoTab::class,
+            BranchPerTab::class,
         ]);
 
         $middleware->alias([
@@ -53,11 +53,11 @@ return Application::configure(basePath: dirname(__DIR__))
             // Gắn thêm cho các trang quản lý người & cấu hình — nhân viên không vào.
             'admin.manage' => EnsureManagerRole::class,
             // Cửa hàng hết hạn hợp đồng: mọi trang dồn về trang Các gói dịch vụ.
-            'admin.khoa' => KhoaKhiHetHan::class,
+            'admin.khoa' => LockWhenExpired::class,
             // Chặn theo CỬA đã tích trong mục Nhân sự: admin.cua:thu_ngan | :quan_ly.
-            'admin.cua' => EnsureCuaVao::class,
+            'admin.cua' => EnsureWorkspace::class,
             // Đợt chuyển sang giao diện v2: màn chưa dựng lại thì không mở bản cũ.
-            'chi.v2' => ChiHienGiaoDienV2::class,
+            'chi.v2' => V2OnlyShell::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

@@ -10,7 +10,7 @@
     thật và nuốt trọn nửa tệp):
       - quyền hasPermission() của v2  → cờ bool tính sẵn (module chưa dựng = link '#')
       - route v2 (warehouse.index…)   → route của mình hoặc '#'
-      - $branches (Eloquent)          → ChiNhanhDangLam::danhSach()
+      - $branches (Eloquent)          → CurrentBranch::danhSach()
       - Auth::user()->name            → session('api.user')
       - endpoint chuông/hồ sơ/đổi mật khẩu/đổi chi nhánh → endpoint của mình
     Khối menu cũ 950 dòng (d-none toàn phần, "đã chuyển sang menu button mới")
@@ -19,7 +19,7 @@
 @php
     $u = session('api.user');
     $tenDangNhap = trim((string) data_get($u, 'full_name', '')) ?: (string) data_get($u, 'username', 'Admin');
-    $cnDangLam = \App\Services\ChiNhanhDangLam::danhSach();
+    $cnDangLam = \App\Services\CurrentBranch::danhSach();
 
     $tenCuaHang = app(\App\Services\ApiClient::class)->settingString('site_name', config('app.name'));
 
@@ -38,13 +38,13 @@
        ảnh là tự lấy bản mới, không phải xoá cache tay.
     */
     $anhHeader = [
-        'thong-ke' => public_path('images/modules/thong-ke.png'),
+        'report' => public_path('images/modules/report.png'),
         'menu' => public_path('images/modules/menu.png'),
-        'kho' => public_path('images/modules/kho.png'),
-        'thu-chi' => public_path('images/modules/thu-chi.png'),
-        'nhan-su' => public_path('images/modules/nhan-su.png'),
+        'warehouse' => public_path('images/modules/warehouse.png'),
+        'cashbook' => public_path('images/modules/cashbook.png'),
+        'staff' => public_path('images/modules/staff.png'),
         'crm' => public_path('images/modules/crm.png'),
-        'cai-dat' => public_path('images/modules/cai-dat.png'),
+        'settings' => public_path('images/modules/settings.png'),
         'co-vi' => public_path('v2/images/vi.png'),
         'logo' => public_path('images/sellio-logo-full.svg'),
     ];
@@ -57,7 +57,9 @@
     }
 
     $boAnh = \Illuminate\Support\Facades\Cache::remember(
-        'v2.anh-header.'.$moiNhat,
+        // Khoá mang cả TÊN icon, không chỉ mtime: thêm / đổi tên một icon mà bộ
+        // ảnh cũ còn trong cache là $icon() đọc trúng khoá không có -> 500.
+        'v2.anh-header.'.$moiNhat.'.'.md5(implode(',', array_keys($anhHeader))),
         86400,
         function () use ($anhHeader) {
             $ds = [];
@@ -90,7 +92,7 @@
        là link về '#'.
 
        DỰNG XONG MỘT MÀN THÌ LÀM HAI VIỆC:
-         1. thêm tên route vào ChiHienGiaoDienV2::DA_CO_V2
+         1. thêm tên route vào V2OnlyShell::DA_CO_V2
          2. điền route thật vào biến đường dẫn ngay bên dưới (đang để '#')
     */
     $ulDashboardPer = true;
@@ -104,7 +106,7 @@
 
     // Section đang mở — bản gốc dò bằng is_menu_active(đường v2); mình dò theo
     // đường của web_Shop.
-    $isStatisticSection = request()->is('admin/dashboard', 'admin/reports*', 'admin/customers*', 'admin/orders*');
+    $isStatisticSection = request()->is('admin/dashboard', 'admin/reports*', 'admin/customers*', 'admin/orders*', 'admin/hoa-don-dien-tu*');
     $isMenuSection = request()->is('admin/products*', 'admin/categories*', 'admin/taxes*', 'admin/units*', 'admin/attributes*');
     $isWarehouseSection = request()->is('admin/suppliers*', 'admin/inventory-adjustments*', 'admin/purchase-orders*', 'admin/supplier-returns*', 'admin/stock-transfers*', 'admin/inventory*');
     $isCashbookSection = request()->is('admin/cashbook*');
@@ -117,8 +119,8 @@
     $statisticDefaultRoute = route('admin.customers.index');
     $routeUlMenu = route('admin.products.index');
     $routeUlWarehouse = route('admin.nha-cung-cap.index');
-    $routeUlCashbook = route('admin.thu-chi.index');
-    $routeUlEmployee = route('admin.nhan-su.index');
+    $routeUlCashbook = route('admin.cashbook.index');
+    $routeUlEmployee = route('admin.staff.index');
     $routeUlCrm = '#';
     $routeUlSettings = route('admin.chi-nhanh.index');
 
@@ -134,7 +136,7 @@
         ['nhan' => 'Tổng quan', 'route' => null],
         ['nhan' => 'Khách hàng', 'route' => 'admin.customers.index'],
         ['nhan' => 'Quản lý đơn hàng', 'route' => 'admin.orders.index'],
-        ['nhan' => 'Hoá đơn điện tử', 'route' => null],
+        ['nhan' => 'Hoá đơn điện tử', 'route' => 'admin.hoa-don-dien-tu.index'],
         ['nhan' => 'Báo cáo kết ca', 'route' => null],
         ['nhan' => 'Báo cáo cuối ngày', 'route' => null],
     ];
@@ -149,7 +151,7 @@
        Tab trong module KHO — CHỈ bày màn đã dựng.
 
        Khác dãy ô module ở trên: ô module chưa dựng thì đứng yên (href='#'), còn
-       tab ở đây đều trỏ route thật, bấm vào là bị ChiHienGiaoDienV2 đá về Nhà
+       tab ở đây đều trỏ route thật, bấm vào là bị V2OnlyShell đá về Nhà
        cung cấp — trông như bấm nhầm. Nên màn nào chưa dựng thì giấu tab luôn.
 
        Dựng xong màn nào: thêm route vào DA_CO_V2 rồi bật cờ tương ứng ở đây.
@@ -175,8 +177,8 @@
 
     // Nút nhanh trong dropdown ba gạch — mình có hai module: Quản lý & Thu ngân.
     $dashboardPer = true;
-    $mdswDs = \App\Services\HanSuDung::daKhoa() ? [] : \App\Services\ModuleLamViec::danhSach();
-    $cashierMuc = collect($mdswDs)->firstWhere('ma', \App\Services\ModuleLamViec::THU_NGAN);
+    $mdswDs = \App\Services\SubscriptionExpiry::daKhoa() ? [] : \App\Services\WorkspaceModule::danhSach();
+    $cashierMuc = collect($mdswDs)->firstWhere('ma', \App\Services\WorkspaceModule::THU_NGAN);
     $cashierPer = $cashierMuc !== null; // người không có cửa Thu ngân thì giấu nút, như v2 giấu theo quyền
     $routeCashier = $cashierMuc['href'] ?? '#';
 @endphp
@@ -205,7 +207,7 @@
                         @if($ulDashboardPer)
                         <div class="sidebar-item icon-item me-xl-2 {{ $isStatisticSection ? 'active' : '' }}">
                             <a href="{{ $statisticDefaultRoute }}">
-                                <img src="{{ $icon('thong-ke') }}"
+                                <img src="{{ $icon('report') }}"
                                     alt="{{ __('message.statistic') }}">
                                 <p class="text-detail text-uppercase">{{ __('message.statistic') }}</p>
                             </a>
@@ -226,7 +228,7 @@
                         @if($ulWarehousePer)
                             <div class="sidebar-item icon-item me-xl-2 {{ $isWarehouseSection ? 'active' : '' }}">
                                 <a href="{{ $routeUlWarehouse }}">
-                                    <img src="{{ $icon('kho') }}"
+                                    <img src="{{ $icon('warehouse') }}"
                                         alt="{{ __('message.warehouse') }}">
                                     <p class="text-detail text-uppercase">{{ __('message.warehouse') }}</p>
                                 </a>
@@ -237,7 +239,7 @@
                         @if($ulCashbookPer)
                             <div class="sidebar-item icon-item me-xl-2 {{ $isCashbookSection ? 'active' : '' }}">
                                 <a href="{{ $routeUlCashbook }}">
-                                    <img src="{{ $icon('thu-chi') }}"
+                                    <img src="{{ $icon('cashbook') }}"
                                         alt="{{ __('message.cashbook') }}">
                                     <p class="text-detail text-uppercase">{{ __('message.cashbook') }}</p>
                                 </a>
@@ -248,7 +250,7 @@
                         {{-- 5. NHÂN SỰ --}}
                         <div class="sidebar-item icon-item me-xl-2 {{ $isHumanSection ? 'active' : '' }}">
                             <a href="{{ $routeUlEmployee }}">
-                                <img src="{{ $icon('nhan-su') }}" alt="{{ __('message.personnel') }}">
+                                <img src="{{ $icon('staff') }}" alt="{{ __('message.personnel') }}">
                                 <p class="text-detail text-uppercase">{{ __('message.personnel') }}</p>
                             </a>
                         </div>
@@ -269,7 +271,7 @@
                         @if($ulSettingsPer)
                         <div class="sidebar-item icon-item {{ $isSettingSection ? 'active' : '' }}">
                             <a href="{{ $routeUlSettings }}">
-                                <img src="{{ $icon('cai-dat') }}" alt="{{ __('message.setting') }}">
+                                <img src="{{ $icon('settings') }}" alt="{{ __('message.setting') }}">
                                 <p class="text-detail text-uppercase">{{ __('message.setting') }}</p>
                             </a>
                         </div>
@@ -560,8 +562,8 @@
                     {{-- 4. THU CHI --}}
                     @if($ulCashbookPer && $isCashbookSection)
                         @if($incomeExpensePer)
-                            <a href="{{ route('admin.thu-chi.index') }}"
-                                class="sub-nav-btn {{ request()->routeIs('admin.thu-chi.*') ? 'active' : '' }}">
+                            <a href="{{ route('admin.cashbook.index') }}"
+                                class="sub-nav-btn {{ request()->routeIs('admin.cashbook.*') ? 'active' : '' }}">
                                 {{ __('message.income_expense_management') }}
                             </a>
                         @endif
@@ -582,8 +584,8 @@
                     {{-- 5. NHÂN SỰ --}}
                     @if($ulEmployeePer && $isHumanSection)
                         @if($employeePer)
-                            <a href="{{ route('admin.nhan-su.index') }}"
-                                class="sub-nav-btn {{ request()->routeIs('admin.nhan-su.*') ? 'active' : '' }}">
+                            <a href="{{ route('admin.staff.index') }}"
+                                class="sub-nav-btn {{ request()->routeIs('admin.staff.*') ? 'active' : '' }}">
                                 {{ __('message.personnel-list') }}
                             </a>
                         @endif
@@ -611,7 +613,7 @@
                         @if($branchPer)
                             <a href="{{ route('admin.chi-nhanh.index') }}"
                                 class="sub-nav-btn {{ request()->routeIs('admin.chi-nhanh.index') ? 'active' : '' }}">
-                                {{ \App\Http\Controllers\ChiNhanhController::TITLE }}
+                                {{ \App\Http\Controllers\BranchController::TITLE }}
                             </a>
                         @endif
                     @endif

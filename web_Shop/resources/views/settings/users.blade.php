@@ -514,34 +514,38 @@
         .usr-table-wrap::-webkit-scrollbar { height: 11px; }
         .usr-table-wrap::-webkit-scrollbar-thumb { background-color: #dcdcdc; border-radius: 8px; border: 3px solid #fff; }
 
-        .usr-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        /* `fixed` chứ không để `auto`: với `auto` thì phần trăm chỉ là gợi ý, trình
+           duyệt đo nội dung rồi tự nới — khung của vỏ mới chỉ rộng 1136px ở khổ
+           1366 nên bảng phình ra 1190px và cột Thao tác rơi ra ngoài màn. */
+        .usr-table { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 13px; }
         .usr-table thead th {
-            text-align: left; padding: 13px 18px; border-bottom: 1px solid #f0f0f0; background: #fafafa;
+            text-align: left; padding: 13px 12px; border-bottom: 1px solid #f0f0f0; background: #fafafa;
             font-size: 12px; font-weight: 600; color: #8c8c8c; white-space: nowrap;
+            overflow: hidden; text-overflow: ellipsis;
         }
         .usr-table tbody td {
-            padding: 16px 18px; border-bottom: 1px solid #f5f5f5; vertical-align: middle;
-            white-space: nowrap; line-height: 1.5;
+            padding: 16px 12px; border-bottom: 1px solid #f5f5f5; vertical-align: middle;
+            white-space: nowrap; line-height: 1.5; overflow: hidden; text-overflow: ellipsis;
         }
         .usr-table tbody tr:hover { background: #fafcff; }
         .usr-table tbody tr.is-selected, .usr-table tbody tr.is-selected:hover { background: #e6f7ff; }
 
-        /* Mọi cột co vừa nội dung, riêng "Người dùng" hút hết khoảng dư. */
-        .usr-table th.usr-c-check,  .usr-table td.usr-c-check  { width: 1%; text-align: center; }
-        .usr-table th.usr-c-stt,    .usr-table td.usr-c-stt    { width: 1%; text-align: center; color: #8c8c8c; }
-        .usr-table th.usr-c-name,   .usr-table td.usr-c-name   { width: 100%; max-width: 0; min-width: 220px; overflow: hidden; }
-        .usr-table th.usr-c-phone,  .usr-table td.usr-c-phone  { width: 1%; }
-        .usr-table th.usr-c-role,   .usr-table td.usr-c-role   { width: 1%; text-align: center; }
-        .usr-table th.usr-c-status, .usr-table td.usr-c-status { width: 1%; text-align: center; }
-        .usr-table th.usr-c-login,  .usr-table td.usr-c-login  { width: 1%; text-align: center; color: #595959; }
-        .usr-table th.usr-c-date,   .usr-table td.usr-c-date   { width: 1%; text-align: center; color: #595959; }
-        .usr-table th.usr-c-act,    .usr-table td.usr-c-act    { width: 1%; text-align: center; }
+        /* Phần trăm cộng đủ 100 — cùng khuôn với các màn đã port sang vỏ mới. */
+        .usr-table th.usr-c-check,  .usr-table td.usr-c-check  { width: 4%;  text-align: center; }
+        .usr-table th.usr-c-stt,    .usr-table td.usr-c-stt    { width: 5%;  text-align: center; color: #8c8c8c; }
+        .usr-table th.usr-c-name,   .usr-table td.usr-c-name   { width: 16%; }
+        .usr-table th.usr-c-phone,  .usr-table td.usr-c-phone  { width: 11%; }
+        .usr-table th.usr-c-role,   .usr-table td.usr-c-role   { width: 11%; text-align: center; }
+        .usr-table th.usr-c-status, .usr-table td.usr-c-status { width: 13%; text-align: center; }
+        .usr-table th.usr-c-login,  .usr-table td.usr-c-login  { width: 13%; text-align: center; color: #595959; }
+        .usr-table th.usr-c-date,   .usr-table td.usr-c-date   { width: 13%; text-align: center; color: #595959; }
+        .usr-table th.usr-c-act,    .usr-table td.usr-c-act    { width: 14%; text-align: center; }
 
-        /* Bảng vai trò — cột Mô tả hút khoảng dư. */
-        .usr-table th.usr-c-rname,  .usr-table td.usr-c-rname  { width: 1%; }
-        .usr-table th.usr-c-rcode,  .usr-table td.usr-c-rcode  { width: 1%; }
-        .usr-table th.usr-c-rdesc,  .usr-table td.usr-c-rdesc  { width: 100%; max-width: 0; min-width: 220px; overflow: hidden; text-overflow: ellipsis; color: #595959; }
-        .usr-table th.usr-c-rcount, .usr-table td.usr-c-rcount { width: 1%; text-align: center; }
+        /* Bảng vai trò — bộ cột riêng, cũng cộng đủ 100. */
+        .usr-table th.usr-c-rname,  .usr-table td.usr-c-rname  { width: 22%; }
+        .usr-table th.usr-c-rcode,  .usr-table td.usr-c-rcode  { width: 18%; }
+        .usr-table th.usr-c-rdesc,  .usr-table td.usr-c-rdesc  { width: 33%; color: #595959; }
+        .usr-table th.usr-c-rcount, .usr-table td.usr-c-rcount { width: 13%; text-align: center; }
 
         .usr-check { width: 15px; height: 15px; cursor: pointer; accent-color: #1890ff; margin: 0; }
         .usr-muted { color: #bfbfbf; }
@@ -578,9 +582,9 @@
         .usr-c-name[data-edit] { cursor: pointer; }
         .usr-c-name[data-edit]:hover .usr-name { color: #1890ff; text-decoration: underline; }
 
-        .usr-rowacts { display: inline-flex; align-items: center; gap: 6px; }
+        .usr-rowacts { display: inline-flex; align-items: center; gap: 4px; }
         .usr-rowbtn {
-            width: 30px; height: 30px; border: 0; background: none; border-radius: 4px; padding: 0;
+            width: 28px; height: 28px; border: 0; background: none; border-radius: 4px; padding: 0;
             cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
             transition: background .15s, color .15s;
         }

@@ -150,6 +150,61 @@ func (h *CustomerHandler) Create(c *gin.Context) {
 	response.Created(c, res)
 }
 
+// @Summary		Thêm khách mới tại quầy
+// @Description	Nút + "Khách mới" của màn quầy: tên, số điện thoại, email, địa chỉ. Mở cho cửa Thu ngân (quyền bán hàng), không cần quyền khu Khách hàng.
+// @Description	Số điện thoại đã có hồ sơ thì KHÔNG tạo bản thứ hai — trả 200 kèm hồ sơ có sẵn và `existed = true` để quầy chọn luôn khách đó.
+// @Tags			Admin - Orders
+// @Accept			json
+// @Produce		json
+// @Param			body	body		dto.POSKhachMoiRequest	true	"Khách mới"
+// @Success		201		{object}	response.Body{data=dto.POSKhachMoiResponse}
+// @Success		200		{object}	response.Body{data=dto.POSKhachMoiResponse}	"Số điện thoại đã có hồ sơ"
+// @Failure		409		{object}	response.Body	"Email đã có người dùng"
+// @Failure		422		{object}	response.Body
+// @Security		BearerAuth
+// @Router			/admin/orders/pos/khach-hang [post]
+func (h *CustomerHandler) TaoTaiQuay(c *gin.Context) {
+	var req dto.POSKhachMoiRequest
+	if !bindJSON(c, &req) {
+		return
+	}
+	ctx := c.Request.Context()
+
+	// Người đứng quầy hay bấm "Khách mới" cho cả khách quen chỉ vì gõ tìm chưa ra.
+	// Hai hồ sơ cùng một số điện thoại là lịch sử mua và công nợ chia đôi — nên
+	// trùng số thì chọn hồ sơ có sẵn, không tạo thêm.
+	if strings.TrimSpace(req.Phone) != "" {
+		co, err := h.svc.TimTheoSoDienThoai(ctx, req.Phone)
+		if err != nil {
+			response.Error(c, http.StatusInternalServerError, "Lỗi tra khách hàng")
+
+			return
+		}
+		if co != nil {
+			response.OKMessage(c, "Số "+strings.TrimSpace(req.Phone)+" đã có hồ sơ khách "+co.FullName+" — đã chọn khách này.",
+				dto.POSKhachMoiResponse{Customer: co, Existed: true})
+
+			return
+		}
+	}
+
+	res, err := h.svc.Create(ctx, &dto.CustomerRequest{
+		FullName:     req.FullName,
+		Phone:        req.Phone,
+		Email:        req.Email,
+		Address:      req.Address,
+		CustomerType: req.CustomerType,
+		TaxCode:      req.TaxCode,
+		Status:       "active",
+	})
+	if err != nil {
+		respondCustomerError(c, err, "Không thể thêm khách hàng")
+
+		return
+	}
+	response.CreatedMessage(c, "Đã thêm khách "+res.FullName+".", dto.POSKhachMoiResponse{Customer: res})
+}
+
 // @Summary		Cập nhật thông tin khách hàng
 // @Description	Chỉnh sửa họ tên, email, SĐT, giới tính, ngày sinh, địa chỉ & trạng thái tài khoản.
 // @Tags			Admin - Customers

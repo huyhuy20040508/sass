@@ -184,7 +184,7 @@ func TestDangNhapNenTang_EmailHoaVaThuaDauCachVanVaoDuoc(t *testing.T) {
 
 // CHƯA ĐẶT MẬT KHẨU LÀ CHƯA VÀO ĐƯỢC, không phải bỏ qua bước mật khẩu.
 //
-// Trạng thái này có thật và xảy ra thường: `cmd/nguoi-dieu-hanh them` tạo được
+// Trạng thái này có thật và xảy ra thường: `cmd/operators them` tạo được
 // dòng trước khi ai đó đặt mật khẩu. Nếu chỗ so mật khẩu quên nhánh nil thì mọi
 // dòng vừa thêm vào sổ đều mở toang, và mở toang một cách im lặng.
 func TestDangNhapNenTang_ChuaDatMatKhauThiChan(t *testing.T) {

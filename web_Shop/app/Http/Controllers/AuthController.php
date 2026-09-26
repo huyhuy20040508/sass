@@ -3,9 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Services\ApiClient;
-use App\Services\ChiNhanhDangLam;
-use App\Services\HanSuDung;
-use App\Services\ModuleLamViec;
+use App\Services\CurrentBranch;
+use App\Services\SubscriptionExpiry;
+use App\Services\WorkspaceModule;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
@@ -32,7 +32,7 @@ class AuthController extends Controller
     public function showLogin(Request $request)
     {
         if (session('api.access_token')) {
-            return redirect()->to(ModuleLamViec::trangChuCuaPhien());
+            return redirect()->to(WorkspaceModule::trangChuCuaPhien());
         }
 
         return view('auth.login', [
@@ -117,15 +117,15 @@ class AuthController extends Controller
         // API vẫn cấp phiên cho quản trị viên (nhân viên thì bị từ chối ngay ở
         // trên), nhưng phiên đó chỉ đọc được đúng trang Các gói dịch vụ. Cất cờ
         // vào session để middleware `admin.khoa` dồn mọi đường về trang đó —
-        // xem KhoaKhiHetHan.
+        // xem LockWhenExpired.
         //
         // Ghi cả khi FALSE: khách vừa gia hạn xong đăng nhập lại phải rũ được cờ
         // cũ, không thì họ trả tiền rồi vẫn bị giam trong trang gói dịch vụ.
         // Bắt đầu lại từ đầu: phiên trước trên cùng máy có thể để lại mốc cũ của
         // một cửa hàng khác.
-        HanSuDung::quen();
+        SubscriptionExpiry::quen();
         $khoa = (bool) data_get($data, 'cua_hang_khoa', false);
-        session([HanSuDung::KHOA_CO => $khoa]);
+        session([SubscriptionExpiry::KHOA_CO => $khoa]);
 
         if ($khoa) {
             return redirect()->route('admin.goi-dich-vu.index');
@@ -135,18 +135,18 @@ class AuthController extends Controller
         // chi nhánh nào cho tới khi người dùng tự bấm ô chọn ở thanh trên cùng,
         // và trong khoảng đó mọi lượt ghi kho rơi vào một chi nhánh do API đoán.
         // `chi_nhanh_id` là chi nhánh hồ sơ nhân sự của người này được phân về.
-        ChiNhanhDangLam::datLucDangNhap(
+        CurrentBranch::datLucDangNhap(
             ($cn = data_get($data, 'chi_nhanh_id')) === null ? null : (int) $cn
         );
 
-        // ĐI ĐÂU TIẾP: hỏi ModuleLamViec, đừng đoán ở đây.
+        // ĐI ĐÂU TIẾP: hỏi WorkspaceModule, đừng đoán ở đây.
         //
         // Người được giao CẢ HAI khu dừng ở màn chọn cửa vào — họ đăng nhập lúc 7h
         // sáng có thể là để mở ca bán hàng, không phải để xem báo cáo, mà luật cũ
         // luôn thả họ vào khu quản trị rồi bắt tự tìm nút đổi module ở góc phải.
         // Người chỉ có MỘT khu thì vào thẳng, không thấy màn chọn: một màn hình chỉ
         // có đúng một ô để bấm là lấy lại đúng cái click mà lần tách module bỏ đi.
-        $redirect = redirect()->intended(ModuleLamViec::sauKhiDangNhap())
+        $redirect = redirect()->intended(WorkspaceModule::sauKhiDangNhap())
             ->with('success', 'Đăng nhập thành công.');
 
         // Ghi nhớ mã cửa hàng + tên đăng nhập cho lần sau, hoặc xoá nếu bỏ chọn.
@@ -169,7 +169,7 @@ class AuthController extends Controller
         // Cờ khoá và mốc hết hạn nằm NGOÀI khoá 'api' (để sống sót qua lượt forget
         // của ApiClient), nên phải xoá riêng — bỏ sót thì người đăng nhập sau trên
         // cùng máy vẫn bị giam trong trang gói dịch vụ.
-        HanSuDung::quen();
+        SubscriptionExpiry::quen();
         $request->session()->regenerate();
 
         return redirect()->route('login')->with('success', 'Đã đăng xuất.');

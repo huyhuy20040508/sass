@@ -7,7 +7,7 @@
 #     admin-Selliotech — SaaS Admin (Laravel): php artisan test
 #
 # Xong cả ba mà nhánh là main thì job `trien-khai` SSH vào VPS chạy đúng
-# deploy/scripts/02-trien-khai.sh — cùng một script vẫn gõ tay lâu nay, không có
+# deploy/scripts/02-deploy.sh — cùng một script vẫn gõ tay lâu nay, không có
 # đường triển khai thứ hai để hai bên lệch nhau.
 #
 # VÌ SAO PHẢI DỰNG DATABASE THẬT TRONG CI: nhóm test đáng giá nhất của dự án
@@ -171,7 +171,7 @@ jobs:
         # storage/framework/views là mọi test chạm view chết với đúng một câu
         # "Please provide a valid cache path", không nhắc gì tới thư mục.
         #
-        # Bước 5/10 của 02-trien-khai.sh tạo đúng danh sách này trên máy chủ vì
+        # Bước 5/10 của 02-deploy.sh tạo đúng danh sách này trên máy chủ vì
         # cùng một lý do; sửa bên nào thì ngó sang bên kia.
         run: |
           mkdir -p storage/app/private storage/app/public \
@@ -283,7 +283,7 @@ jobs:
           printf '%s\n' "$MAY_QUEN" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
 
-      - name: Chạy 02-trien-khai.sh
+      - name: Chạy 02-deploy.sh
         env:
           MAY_CHU: ${{ secrets.VPS_HOST }}
         # Script tự lo phần còn lại: kéo mã, build Go ra api.new, chạy migration
@@ -298,7 +298,7 @@ jobs:
               -o StrictHostKeyChecking=yes \
               -o ConnectTimeout=20 \
               "root@$MAY_CHU" \
-              'bash /var/www/selliotech/deploy/scripts/02-trien-khai.sh'
+              'bash /var/www/selliotech/deploy/scripts/02-deploy.sh'
 
       - name: Kiểm tra từ ngoài Internet
         # Script đã tự kiểm health ở 127.0.0.1 trước khi báo xong. Lượt kiểm này

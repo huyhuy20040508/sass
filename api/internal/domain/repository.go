@@ -159,6 +159,9 @@ type CheckoutVariant struct {
 	// 0, vì 0 sẽ hiện lên báo cáo thành "lãi 100%".
 	CostPrice *float64
 	Stock     int
+	// VAT là thuế suất hiện tại của sản phẩm cha (quy ước Product.VAT), để CHỤP
+	// vào dòng đơn cùng lúc với giá.
+	VAT int
 	// PromotionName là tên chương trình đã áp cho dòng này (rỗng = không có), chỉ
 	// để hiển thị lại cho khách xem giỏ hàng.
 	PromotionName string
@@ -253,6 +256,9 @@ type RevenueSummary struct {
 // OrderRepository — truy cập bảng orders.
 type OrderRepository interface {
 	List(ctx context.Context, f OrderFilter) ([]Order, int64, error)
+	// GiuMaDon cấp TRƯỚC mã đơn kế tiếp theo quy tắc mã của chi nhánh đang bán, cho
+	// hoá đơn đang mở ở quầy. "" = chi nhánh chưa bật quy tắc mã đơn.
+	GiuMaDon(ctx context.Context) (string, error)
 	// SoDon là SỔ CHỨNG TỪ BÁN HÀNG của màn Quản lý đơn hàng: mỗi dòng một chứng
 	// từ, gộp đơn bán và phiếu trả hàng vào cùng một danh sách rồi sắp chung theo
 	// lần đụng tới gần nhất.
@@ -909,6 +915,9 @@ type UserRepository interface {
 	// Cũng tính cả tài khoản đã xoá mềm vì uq_users_username không loại chúng ra.
 	ExistsByUsernameExcept(ctx context.Context, username string, excludeID uint) (bool, error)
 	ListCustomers(ctx context.Context, filter CustomerFilter) ([]User, int64, error)
+	// FindCustomerByPhone tra KHÁCH HÀNG theo số điện thoại chỉ gồm chữ số, so với
+	// cột phone đã bỏ khoảng trắng / chấm / gạch / ngoặc. ErrNotFound nếu không có.
+	FindCustomerByPhone(ctx context.Context, digits string) (*User, error)
 
 	// CustomerStats đếm khách hàng theo trạng thái (không phụ thuộc bộ lọc).
 	CustomerStats(ctx context.Context) (CustomerStats, error)

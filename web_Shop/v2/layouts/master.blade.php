@@ -424,7 +424,7 @@
     </script>
 
     {{-- Chuông thông báo chạy bằng SSE, dùng lại của khu cũ. --}}
-    @unless(\App\Services\HanSuDung::daKhoa())
+    @unless(\App\Services\SubscriptionExpiry::daKhoa())
         <script src="{{ asset('js/realtime.js') }}?v=5"></script>
     @endunless
 

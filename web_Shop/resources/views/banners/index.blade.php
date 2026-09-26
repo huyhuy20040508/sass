@@ -185,10 +185,11 @@
                                 @if($start === null && $end === null)
                                     <span class="bnr-muted">Chạy liên tục</span>
                                 @else
+                                    {{-- Mỗi mốc là một khối không tách: cho xuống dòng tự do thì
+                                         "25/09/2026 14:32" gãy giữa ngày và giờ. --}}
                                     <span class="bnr-time">
-                                        {{ $start?->format('d/m/Y H:i') ?? 'Từ đầu' }}
-                                        <span class="bnr-muted">→</span>
-                                        {{ $end?->format('d/m/Y H:i') ?? 'Không hạn' }}
+                                        <span class="bnr-moc">{{ $start?->format('d/m/Y H:i') ?? 'Từ đầu' }} <span class="bnr-muted">→</span></span>
+                                        <span class="bnr-moc">{{ $end?->format('d/m/Y H:i') ?? 'Không hạn' }}</span>
                                     </span>
                                 @endif
                             </td>
@@ -435,26 +436,34 @@
         .bnr-table-wrap::-webkit-scrollbar-thumb { background-color: #dcdcdc; border-radius: 8px; border: 3px solid #fff; }
         .bnr-table-wrap::-webkit-scrollbar-thumb:hover { background-color: #b3b3b3; }
 
-        .bnr-table { width: 100%; min-width: 1300px; table-layout: fixed; border-collapse: collapse; font-size: 13px; }
+        /* KHÔNG min-width: khung của vỏ mới chỉ rộng 1136px ở khổ 1366, ép 1300px
+           là cột cuối nằm ngoài màn. Phần trăm bên dưới lo phần chia cột. */
+        .bnr-table { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 13px; }
         .bnr-table thead tr { background: #f0f0f0; color: #262626; }
-        .bnr-table th, .bnr-table td { padding: 14px 22px; vertical-align: middle; white-space: nowrap; line-height: 1.5; }
+        .bnr-table th, .bnr-table td {
+            padding: 14px 14px; vertical-align: middle; white-space: nowrap; line-height: 1.5;
+            overflow: hidden; text-overflow: ellipsis;
+        }
         .bnr-table th { font-weight: 700; text-align: left; }
         .bnr-table tbody tr { border-bottom: 1px solid #f0f0f0; }
         .bnr-table tbody tr:hover { background: #fafafa; }
         .bnr-table tbody tr.is-selected, .bnr-table tbody tr.is-selected:hover { background: #e6f7ff; }
 
-        .bnr-table th.bnr-c-check,  .bnr-table td.bnr-c-check  { width: 3%;  padding-right: 8px; }
+        .bnr-table th.bnr-c-check,  .bnr-table td.bnr-c-check  { width: 4%;  padding-right: 8px; }
         .bnr-table th.bnr-c-order,  .bnr-table td.bnr-c-order  { width: 8%;  text-align: center; }
-        .bnr-table th.bnr-c-name,   .bnr-table td.bnr-c-name   { width: 31%; }
-        .bnr-table th.bnr-c-pos,    .bnr-table td.bnr-c-pos    { width: 13%; text-align: center; }
-        .bnr-table th.bnr-c-time,   .bnr-table td.bnr-c-time   { width: 18%; text-align: center; }
-        .bnr-table th.bnr-c-state,  .bnr-table td.bnr-c-state  { width: 10%; text-align: center; }
+        .bnr-table th.bnr-c-name,   .bnr-table td.bnr-c-name   { width: 26%; }
+        /* Nhãn vị trí dài nhất là "Dải poster giữa trang" — cho xuống dòng chứ
+           không cắt, vì đây là thứ phân biệt banner nằm ở đâu trên trang chủ. */
+        .bnr-table th.bnr-c-pos,    .bnr-table td.bnr-c-pos    { width: 15%; text-align: center; white-space: normal; }
+        .bnr-table th.bnr-c-time,   .bnr-table td.bnr-c-time   { width: 18%; text-align: center; white-space: normal; }
+        .bnr-table th.bnr-c-state,  .bnr-table td.bnr-c-state  { width: 11%; text-align: center; }
         .bnr-table th.bnr-c-status, .bnr-table td.bnr-c-status { width: 8%;  text-align: center; }
-        .bnr-table th.bnr-c-act,    .bnr-table td.bnr-c-act    { width: 9%;  text-align: center; }
+        .bnr-table th.bnr-c-act,    .bnr-table td.bnr-c-act    { width: 10%; text-align: center; }
 
         .bnr-check { width: 16px; height: 16px; cursor: pointer; accent-color: #1890ff; }
         .bnr-muted { color: #bfbfbf; }
-        .bnr-time { font-variant-numeric: tabular-nums; color: #595959; font-size: 12px; }
+        .bnr-time { display: block; font-variant-numeric: tabular-nums; color: #595959; font-size: 12px; }
+        .bnr-moc { white-space: nowrap; }
 
         /* Thứ tự + nút đổi chỗ */
         .bnr-order { display: inline-flex; align-items: center; gap: 8px; }

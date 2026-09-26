@@ -54,8 +54,8 @@ Không có tài khoản mặc định — `database/seed.sql` đã tắt. Tạo 
 đầu tiên bằng công cụ đi kèm API (hỏi lần lượt đúng ba ô của màn hình đăng nhập):
 
 ```bash
-cd api && go run ./cmd/tao-admin
-# hoặc: go run ./cmd/tao-admin --ma-cua-hang quochuy --ten-dang-nhap admin --mat-khau '...'
+cd api && go run ./cmd/create-admin
+# hoặc: go run ./cmd/create-admin --ma-cua-hang quochuy --ten-dang-nhap admin --mat-khau '...'
 ```
 
 Quên mật khẩu thì chạy lại lệnh đó kèm `--doi-mat-khau`. Trên máy chủ thật, lệnh

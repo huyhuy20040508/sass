@@ -30,11 +30,11 @@ class EnsureManagerRole
 
         // Từ migration 0015, cửa vào đọc từ `users.access_areas` — tích gì vào được
         // nấy, nên một tài khoản vai admin mà chủ tiệm bỏ tích "Quản lý" thì không
-        // vào đây nữa. EnsureCuaVao giữ luật đọc đó, kể cả đường lui cho phiên cũ.
+        // vào đây nữa. EnsureWorkspace giữ luật đọc đó, kể cả đường lui cho phiên cũ.
         //
         // Super admin luôn đi qua: đó là tài khoản gốc của cửa hàng, khoá nhầm nó
         // là mất luôn đường vào để sửa (API cũng miễn trừ y như vậy).
-        if ($role === 'super_admin' || in_array('quan_ly', EnsureCuaVao::cuaCuaPhien(), true)) {
+        if ($role === 'super_admin' || in_array('quan_ly', EnsureWorkspace::cuaCuaPhien(), true)) {
             return $next($request);
         }
 

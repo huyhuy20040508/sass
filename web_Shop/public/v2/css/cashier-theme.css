@@ -1,0 +1,25 @@
+/*
+   CHÉP NGUYÊN VĂN khối <style> màu theo cửa hàng ở cuối <body> màn thu ngân
+   table1.klkim.com/v2: nền đen của header, gradient đen → xanh sau hai khu, chữ ô module.
+*/
+div.header{
+        background-color: #000000;
+    }
+    .main-body-container .custom-col-table{
+        background: linear-gradient(to bottom, #000000, #26375a, #2a5293);
+    }
+    .main-menu-inner .icon-item .text-detail{
+        color: #ffffff !important;
+    }
+    .main-menu-inner .icon-item:hover .text-detail,
+    .main-menu-inner .icon-item.active .text-detail{
+        color: #ffffff !important;
+    }
+    .action .profile{
+        color: #ffffff !important;
+    }
+    /* CRM menu background color same as cashier menu background color
+    } */
+    .main-body-container {
+           background: linear-gradient(to bottom, #000000, #26375a, #2a5293);
+    }

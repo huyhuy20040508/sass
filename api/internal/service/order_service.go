@@ -104,6 +104,11 @@ type OrderService interface {
 	POSCheckout(ctx context.Context, req *dto.POSCheckoutRequest, role string, actorID uint) (*dto.POSCheckoutResponse, error)
 	// POSScan — quét mã vạch (hoặc SKU) ở quầy, trả về món hàng kèm giá và tồn.
 	POSScan(ctx context.Context, code string) (*dto.POSScanResponse, error)
+	// POSPhatHanhHoaDon — người bán bấm xuất hoá đơn điện tử cho một đơn QUẦY.
+	POSPhatHanhHoaDon(ctx context.Context, orderID uint) (*domain.EtaxInvoice, error)
+	// POSGiuMaDon — cấp trước mã đơn cho hoá đơn đang mở ở quầy, kèm chữ ký để lượt
+	// chốt dùng lại đúng mã đó. OrderCode rỗng = chi nhánh chưa bật quy tắc mã đơn.
+	POSGiuMaDon(ctx context.Context) (*dto.POSMaDonResponse, error)
 	// POSDoiHang — đổi hàng tại quầy: hàng cũ về kho, hàng mới ra khỏi kho, chênh
 	// lệch thanh toán ngay. Cả ba vế đi trong MỘT giao dịch.
 	POSDoiHang(ctx context.Context, req *dto.DoiHangRequest, role string, actorID uint) (*dto.DoiHangResponse, error)
@@ -138,6 +143,9 @@ type PhatHanhHDDT interface {
 	// TuPhatHanh nuốt mọi lỗi: cổng hoá đơn sập không được phép làm hỏng một
 	// lượt bán đã thu tiền xong.
 	TuPhatHanh(ctx context.Context, orderID uint)
+	// PhatHanh là lượt người bán TỰ BẬT ở quầy — trả lỗi để màn hình nói được vì
+	// sao chưa xuất (chưa nối cổng, chưa chọn ký hiệu, cổng từ chối…).
+	PhatHanh(ctx context.Context, orderID uint) (*domain.EtaxInvoice, error)
 }
 
 type orderService struct {
@@ -164,13 +172,16 @@ type orderService struct {
 	// etax tự phát hành hoá đơn điện tử sau khi đơn quầy thu tiền xong. Có thể
 	// nil (test, hoặc cửa hàng chưa nối cổng).
 	etax PhatHanhHDDT
+	// khoaMaDon ký mã đơn giữ trước ở quầy (POSGiuMaDon). Rỗng = không giữ mã.
+	khoaMaDon []byte
 	// vouchers kiểm mã giảm giá khách nhập tay. Có thể nil (test) — khi nil thì
 	// khách gửi mã lên sẽ bị báo mã không tồn tại thay vì được giảm miễn phí.
 	vouchers VoucherService
 }
 
-func NewOrderService(orderRepo domain.OrderRepository, returnRepo domain.OrderReturnRepository, mail mailer.Mailer, mailCfg config.MailConfig, notify NotificationService, settings SettingService, payments PaymentService, promos PromotionService, vouchers VoucherService, etax PhatHanhHDDT) OrderService {
-	return &orderService{orderRepo: orderRepo, returnRepo: returnRepo, mail: mail, mailCfg: mailCfg, notify: notify, settings: settings, payments: payments, promos: promos, vouchers: vouchers, etax: etax}
+func NewOrderService(orderRepo domain.OrderRepository, returnRepo domain.OrderReturnRepository, mail mailer.Mailer, mailCfg config.MailConfig, notify NotificationService, settings SettingService, payments PaymentService, promos PromotionService, vouchers VoucherService, etax PhatHanhHDDT, khoaMaDon string) OrderService {
+	return &orderService{
+		khoaMaDon: []byte(khoaMaDon), orderRepo: orderRepo, returnRepo: returnRepo, mail: mail, mailCfg: mailCfg, notify: notify, settings: settings, payments: payments, promos: promos, vouchers: vouchers, etax: etax}
 }
 
 // applyVoucher kiểm mã khách nhập rồi ghi khoản giảm + bản chụp mã vào đơn, trả
@@ -514,6 +525,10 @@ func (s *orderService) POSCheckout(ctx context.Context, req *dto.POSCheckoutRequ
 			CreatedBy:      nguoiTao(actorID),
 			RecipientName:  strings.TrimSpace(req.CustomerName),
 			RecipientPhone: strings.TrimSpace(req.CustomerPhone),
+			RecipientEmail: strings.TrimSpace(req.CustomerEmail),
+			BuyerTaxCode:   strings.TrimSpace(req.BuyerTaxCode),
+			BuyerCompany:   strings.TrimSpace(req.BuyerCompany),
+			BuyerAddress:   strings.TrimSpace(req.BuyerAddress),
 			PaymentMethod:  req.PaymentMethod,
 			PaymentStatus:  domain.OrderPaymentPaid,
 			Status:         domain.OrderStatusCompleted,
@@ -529,6 +544,10 @@ func (s *orderService) POSCheckout(ctx context.Context, req *dto.POSCheckoutRequ
 			uid := req.UserID
 			o.UserID = &uid
 		}
+		// Mã đơn đã GIỮ SẴN lúc hoá đơn có món đầu tiên (POSGiuMaDon): chữ ký đúng và còn
+		// hạn thì dùng — mã trên tab là mã vào sổ. Sai hoặc hết hạn thì để trống, repository
+		// cấp mã mới như thường: không vì một cái mã mà từ chối lượt bán.
+		o.OrderCode = maDonGiuHopLe(ctx, s.khoaMaDon, req.OrderCode, req.OrderCodeToken, now)
 
 		items, subtotal, err := buildOrderItems(found, lines)
 		if err != nil {
@@ -545,10 +564,43 @@ func (s *orderService) POSCheckout(ctx context.Context, req *dto.POSCheckoutRequ
 			return nil, nil, err
 		}
 
+		// Giảm tay trên cả đơn đi SAU mã giảm giá và CỘNG DỒN vào DiscountAmount:
+		// báo cáo, sổ đơn và hoá đơn điện tử đều chỉ đọc một cột giảm giá của đơn,
+		// nên không luồng nào phải học thêm khoản giảm thứ hai. Hạn quyền là CÙNG
+		// hạn của giảm từng dòng — kiểm theo vai trò trong token, như ở trên.
+		giamTay, err := giamTayCaDon(req.OrderDiscountPercent, req.OrderDiscountAmount, subtotal, o.DiscountAmount, limit)
+		if err != nil {
+			return nil, nil, err
+		}
+		if giamTay > 0 {
+			if req.OrderDiscountPercent > 0 {
+				o.OrderDiscountPercent = req.OrderDiscountPercent
+			}
+			o.OrderDiscountAmount = giamTay
+			o.DiscountAmount += giamTay
+		}
+
+		// Phụ thu: tròn tới đồng như mọi khoản tiền khác của quầy. Không chịu thuế —
+		// hoá đơn điện tử kê nó thành một dòng KCT, cùng cách với phí giao hàng.
+		o.SurchargeAmount = math.Round(req.SurchargeAmount)
+		if o.SurchargeAmount > 0 {
+			o.SurchargeNote = strings.TrimSpace(req.SurchargeNote)
+		}
+
+		// Thuế sản phẩm: giá bán là giá CHƯA thuế, thuế cộng thêm vào tổng. Tính bằng
+		// ĐÚNG hàm hoá đơn điện tử dùng để kê từng dòng — thiếu bước này thì tờ hoá
+		// đơn xuất ra lớn hơn số khách vừa trả đúng bằng tiền thuế.
+		thueDong, tongThue := thueCuaDon(o, nil)
+		for i := range o.Items {
+			o.Items[i].VatAmount = thueDong[i]
+		}
+		o.VatAmount = tongThue
+
 		total := subtotal - o.DiscountAmount
 		if total < 0 {
 			total = 0
 		}
+		total += o.SurchargeAmount + o.VatAmount
 		o.TotalAmount = total
 
 		// Tiền mặt: đưa thiếu thì KHÔNG bán. Bán rồi ghi "đã thanh toán" khi khách
@@ -583,7 +635,17 @@ func (s *orderService) POSCheckout(ctx context.Context, req *dto.POSCheckoutRequ
 	// tồn còn lại — cảnh báo sắp hết ở đây có giá trị hơn ở bất kỳ luồng nào khác.
 	s.notifyLowStock(ctx, order)
 	// Đơn quầy sinh ra đã thu tiền xong, nên đây chính là "vừa thanh toán".
-	s.tuPhatHanhHoaDon(ctx, order.ID)
+	//
+	// Người bán bật "Xuất hoá đơn điện tử" cho lượt này thì phát hành NGAY và báo
+	// kết quả trong cùng lượt trả lời. Khi đó KHÔNG gọi thêm tuPhatHanhHoaDon: gọi
+	// cả hai là hai lượt gửi cổng cho cùng một đơn. Hỏng thì đơn VẪN bán xong —
+	// tiền đã thu, còn hoá đơn thì bấm lại được ngay ở màn quầy.
+	var hoaDon *dto.POSHoaDonKetQua
+	if req.IssueEInvoice {
+		hoaDon = s.xuatHoaDonTaiQuay(ctx, order.ID)
+	} else {
+		s.tuPhatHanhHoaDon(ctx, order.ID)
+	}
 
 	msg := "Đã bán và thu tiền xong."
 	if order.ChangeAmount != nil {
@@ -611,6 +673,11 @@ func (s *orderService) POSCheckout(ctx context.Context, req *dto.POSCheckoutRequ
 		Status:         order.Status,
 		PaymentStatus:  order.PaymentStatus,
 		Message:        msg,
+		OrderDiscount:  order.OrderDiscountAmount,
+		Surcharge:      order.SurchargeAmount,
+		SurchargeNote:  order.SurchargeNote,
+		VatAmount:      order.VatAmount,
+		EInvoice:       hoaDon,
 	}, nil
 }
 
@@ -669,6 +736,7 @@ func (s *orderService) POSScan(ctx context.Context, code string) (*dto.POSScanRe
 		Thumbnail:        giaCuoi.Thumbnail,
 		Price:            giaCuoi.Price,
 		Stock:            giaCuoi.Stock,
+		VAT:              giaCuoi.VAT,
 	}, nil
 }
 
@@ -1385,11 +1453,14 @@ func buildOrderItems(found map[uint]domain.CheckoutVariant, lines []domain.Check
 			// Giá vốn CHỤP LẠI ngay đây, trong cùng giao dịch đã khoá biến thể: đây
 			// là thời điểm duy nhất biết chắc giá vốn nào đang có hiệu lực cho lượt
 			// bán này.
-			CostPrice:          p.cv.CostPrice,
-			DiscountPercent:    p.giam,
-			DiscountAmount:     giam,
-			Quantity:           p.qty,
-			TotalPrice:         line,
+			CostPrice:       p.cv.CostPrice,
+			DiscountPercent: p.giam,
+			DiscountAmount:  giam,
+			Quantity:        p.qty,
+			TotalPrice:      line,
+			// Thuế suất CHỤP cùng lúc với giá: hoá đơn phát hành cho đơn này về sau
+			// mang đúng mức của lúc bán, không phải mức chủ tiệm vừa sửa hôm nay.
+			VAT:                thueSuatChup(p.cv.VAT),
 			CustomPlayerName:   strings.TrimSpace(p.name),
 			CustomPlayerNumber: strings.TrimSpace(p.num),
 		})
@@ -1824,4 +1895,43 @@ func (s *orderService) tuPhatHanhHoaDon(ctx context.Context, orderID uint) {
 		return
 	}
 	s.etax.TuPhatHanh(ctx, orderID)
+}
+
+// phatHanhHoaDon là lượt xuất hoá đơn người bán tự bấm. nil etax = bản cài không
+// nối hoá đơn điện tử — với người bán thì cũng là "chưa kết nối".
+func (s *orderService) phatHanhHoaDon(ctx context.Context, orderID uint) (*domain.EtaxInvoice, error) {
+	if s.etax == nil {
+		return nil, domain.ErrETaxChuaNoi
+	}
+
+	return s.etax.PhatHanh(ctx, orderID)
+}
+
+// xuatHoaDonTaiQuay xuất hoá đơn ngay sau lượt bán và đổi kết quả thành câu báo.
+// Không bao giờ trả lỗi: đơn đã ghi và đã thu tiền, hoá đơn hỏng không được làm
+// màn quầy báo "bán không thành công".
+func (s *orderService) xuatHoaDonTaiQuay(ctx context.Context, orderID uint) *dto.POSHoaDonKetQua {
+	hd, err := s.phatHanhHoaDon(ctx, orderID)
+	if err != nil {
+		return &dto.POSHoaDonKetQua{Message: "Chưa xuất được hoá đơn điện tử — " + err.Error()}
+	}
+
+	return &dto.POSHoaDonKetQua{OK: true, Status: hd.Status, Message: MoTaHoaDon(hd)}
+}
+
+// POSPhatHanhHoaDon xuất hoá đơn cho một đơn QUẦY — nút bấm lại ở màn quầy.
+//
+// Chỉ nhận kênh pos: đường này mở cho cửa Thu ngân, còn đơn giao hàng thì xuất ở
+// màn Đơn hàng của khu quản trị. Đơn kênh khác trả "không có" chứ không phải
+// "cấm", để người gõ id lần mò không biết được id nào là một đơn có thật.
+func (s *orderService) POSPhatHanhHoaDon(ctx context.Context, orderID uint) (*domain.EtaxInvoice, error) {
+	don, err := s.orderRepo.FindByID(ctx, orderID)
+	if err != nil {
+		return nil, err
+	}
+	if don.Channel != domain.OrderChannelPOS {
+		return nil, domain.ErrNotFound
+	}
+
+	return s.phatHanhHoaDon(ctx, orderID)
 }

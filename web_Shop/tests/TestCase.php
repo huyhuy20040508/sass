@@ -52,7 +52,7 @@ abstract class TestCase extends BaseTestCase
      * màn: mọi khẳng định về nội dung trang đều đỏ với cùng một lý do "302", và
      * lỗi thật của màn ấy chìm nghỉm giữa đám đỏ đó.
      *
-     * Hành vi của chính cổng được gác riêng ở ChiHienGiaoDienV2Test.
+     * Hành vi của chính cổng được gác riêng ở V2OnlyShellTest.
      */
     protected bool $quaCongV2 = false;
 
@@ -65,7 +65,7 @@ abstract class TestCase extends BaseTestCase
         }
 
         if (! $this->quaCongV2) {
-            $this->withoutMiddleware(\App\Http\Middleware\ChiHienGiaoDienV2::class);
+            $this->withoutMiddleware(\App\Http\Middleware\V2OnlyShell::class);
         }
     }
 }

@@ -1,0 +1,170 @@
+/*
+   CHÉP NGUYÊN VĂN khối <style> đầu .wrapper (thanh trên cùng) và khối <style> trong <body>
+   của màn thu ngân table1.klkim.com/v2.
+*/
+
+    tr.order-item {
+        /* height: 50px; */
+    }
+
+    button.btn_confirm_order {
+        min-width: 90px;
+        height: 35px;
+        border: none;
+        opacity: 1;
+        border-radius: 6px;
+        background-color: #1b2c58;
+        font-family: Roboto;
+        font-weight: 500;
+        font-style: Medium;
+        font-size: 16px;
+        line-height: 17.14px;
+        letter-spacing: 0%;
+        text-align: center;
+        vertical-align: middle;
+        color: #ffffff;
+    }
+
+    button.btn_confirm_cancel_order {
+        min-width: 90px;
+        height: 35px;
+        border: none;
+        opacity: 1;
+        border-radius: 6px;
+        background-color: #cd3545;
+        font-family: Roboto;
+        font-weight: 500;
+        font-style: Medium;
+        font-size: 16px;
+        line-height: 17.14px;
+        letter-spacing: 0%;
+        text-align: center;
+        vertical-align: middle;
+        color: #ffffff;
+    }
+
+    .more_name {
+        word-break: break-word;
+        white-space: normal;
+        text-transform: uppercase
+    }
+
+    .top-43 {
+        top: 43% !important;
+    }
+
+    #modalConfirmOrder .box-textarea-cus .char-counter {
+        right: 17px;
+    }
+
+    #modalConfirmOrder .modal-footer .bt {
+        border-radius: 2px !important;
+        width: 100px !important;
+    }
+
+    .dropdown-content {
+        min-height: 120px !important;
+        background-color: #F5F7FA;
+        border-bottom-left-radius: 15px;
+        border-top-left-radius: 15px;
+    }
+
+    .dropdown-content-setting {
+        max-height: 0;
+        opacity: 0;
+        overflow: hidden;
+        transition: max-height 2s ease, opacity 2s ease;
+    }
+
+    .dropdown-content-setting.show {
+        max-height: 500px;
+        opacity: 1;
+        transition: max-height 2s ease, opacity 2s ease;
+    }
+
+    #myDropdown.show {
+        display: block !important;
+    }
+
+    .role-item {
+        width: 150px;
+        height: 75px;
+        border-radius: 15px;
+        background-color: #fff;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        margin: 0 10px;
+    }
+
+    .dropdownContainer {
+        min-width: 348px;
+        height: 201px;
+        padding: 15px 6px 22px 32px;
+        background: #F5F7FA !important;
+        column-gap: 7px;
+        row-gap: 10px;
+    }
+
+    .dropdownContainer .role-item.active {
+        background-color: #FFD37A59;
+        border-radius: 15px;
+        transition: background-color 0.2s ease;
+        cursor: pointer;
+    }
+
+    .main-menu-inner .icon-item {
+        border: 2px solid #284697 !important;
+        transition: border-color 0.3s ease;
+        border-radius: 8px;
+        background-color: transparent !important;
+        align-self: stretch;
+        max-width: 120px;
+    }
+
+    .main-menu-inner .icon-item:hover, .main-menu-inner .icon-item.active {
+        border-color: #F29220 !important;
+    }
+
+    .main-menu-inner .icon-item .text-detail {
+        color: #ffffff !important;
+        /* letter-spacing: -0.75px; */
+    }
+
+    .main-menu-inner .icon-item:hover .text-detail,
+    .main-menu-inner .icon-item.active .text-detail {
+        color: #ffffff !important;
+    }
+    .main-menu-inner .icon-item .count-order-online-confirm{
+        position: absolute;
+        background: #ff8c00;
+        width: 20px;
+        height: 20px;
+        font-size: 10px;
+        top: 3px;
+        right: 3px;
+        color: white;
+        border-radius: 4px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+
+
+/* khối <style> trong <body> của bản gốc */
+
+    .text-notification {
+        font-family: Roboto;
+        font-weight: 700;
+        font-size: 12px;
+        line-height: 100%;
+        letter-spacing: 0%;
+        text-align: center;
+        vertical-align: middle;
+        color: #8B8B8B;
+        display: flex;
+        justify-content: center;
+        padding-top: 20px;
+    }
+

@@ -446,7 +446,7 @@ func main() {
 	// returnRepo để chặn hoàn cả đơn khi đơn đã có phiếu trả hàng riêng.
 	// settingSvc cấp phí vận chuyển, ngưỡng miễn phí ship, hotline và tên cửa hàng.
 	// promotionSvc để giá thu tiền đúng bằng giá khách nhìn thấy ngoài cửa hàng.
-	orderSvc := service.NewOrderService(orderRepo, returnRepo, mailSender, cfg.Mail, notifSvc, settingSvc, paymentSvc, promotionSvc, voucherSvc, etaxSvc)
+	orderSvc := service.NewOrderService(orderRepo, returnRepo, mailSender, cfg.Mail, notifSvc, settingSvc, paymentSvc, promotionSvc, voucherSvc, etaxSvc, cfg.JWT.Secret)
 	returnSvc := service.NewOrderReturnService(returnRepo, notifSvc, settingSvc)
 	inventorySvc := service.NewInventoryService(inventoryRepo)
 	// Yêu cầu khách gửi từ storefront (Liên hệ / Thu mua) + danh sách nhận tin.

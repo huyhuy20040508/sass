@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\ApiClient;
-use App\Support\MucThue;
+use App\Support\TaxRate;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
@@ -17,7 +17,7 @@ use Illuminate\Support\Facades\Log;
  */
 class CategoryController extends Controller
 {
-    use \App\Http\Controllers\Concerns\TraLoiHopThoai;
+    use \App\Http\Controllers\Concerns\DialogReply;
 
     /**
      * Hai nhóm gốc cố định (slug => tên) — khóa: không sửa/xóa/đổi trạng thái.
@@ -48,7 +48,7 @@ class CategoryController extends Controller
         } catch (\Throwable $e) {
             Log::error('Load categories failed', ['msg' => $e->getMessage()]);
 
-            return view('v2::nhom-hang-hoa.index', ['categories' => [], 'vatRates' => MucThue::boMuc($this->api)])
+            return view('v2::product-categories.index', ['categories' => [], 'vatRates' => TaxRate::boMuc($this->api)])
                 ->with('error', 'Không tải được danh sách nhóm hàng hóa. Kiểm tra kết nối API.');
         }
 
@@ -61,9 +61,9 @@ class CategoryController extends Controller
 
         // Màn đã chuyển sang khu v2; view cũ ở resources/views/categories giữ lại
         // phòng khi cần đối chiếu, không còn route nào trỏ vào.
-        return view('v2::nhom-hang-hoa.index', [
+        return view('v2::product-categories.index', [
             'categories' => $categories,
-            'vatRates' => MucThue::boMuc($this->api),
+            'vatRates' => TaxRate::boMuc($this->api),
         ]);
     }
 
@@ -309,7 +309,7 @@ class CategoryController extends Controller
 
     // Mã nhóm KHÔNG sinh ở đây nữa: API đặt mã (theo quy tắc đánh số của cửa
     // hàng, hoặc dải NH0001 nếu chưa bật quy tắc). Hai bên cùng sinh mã là hai
-    // dải số cãi nhau — xem ThongSoChungController.
+    // dải số cãi nhau — xem ParameterController.
 
     /** Lấy một nhóm theo id, null nếu không đọc được. */
     protected function fetch(int $id): ?array

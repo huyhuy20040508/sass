@@ -624,7 +624,7 @@ func (s *authService) LoginShop(ctx context.Context, req dto.ShopLoginRequest) (
 // qua đúng chỗ không được phép đi qua.
 //
 // Nay tra `platform_users` của control plane: sổ riêng, mật khẩu riêng, chỉ ghi
-// được từ máy chủ (`cmd/nguoi-dieu-hanh`), không có đường HTTP nào tự thêm
+// được từ máy chủ (`cmd/operators`), không có đường HTTP nào tự thêm
 // người vào. Bộ lọc tenant không dính dáng gì tới bảng đó, nên cũng không còn
 // câu truy vấn nào phải tắt bộ lọc để chạy — bề mặt nguy hiểm nhất của bản
 // trước biến mất luôn thay vì được canh chừng.

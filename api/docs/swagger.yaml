@@ -17429,7 +17429,7 @@ paths:
       description: |-
         Dựng TRỌN GÓI một khách hàng mới: cửa hàng + chi nhánh mặc định + tài
         khoản quản trị (data plane), rồi ký hợp đồng dùng thử (control plane).
-        Bản HTTP của `cmd/thue-bao ky --dung-thu`, khác một điểm: KHÔNG cho khai
+        Bản HTTP của `cmd/subscriptions ky --dung-thu`, khác một điểm: KHÔNG cho khai
         tay giá và hạn mức — hợp đồng thử chạy đúng theo gói đang bán. Thoả thuận
         riêng vẫn đi qua công cụ dòng lệnh.
         Điều khoản CHÉP từ bảng giá lúc ký rồi sống độc lập: sửa bảng giá sau đó
@@ -18275,7 +18275,7 @@ paths:
       description: |-
         Dựng TRỌN GÓI một khách hàng mới: cửa hàng + chi nhánh mặc định + tài
         khoản quản trị (data plane), rồi ký hợp đồng dùng thử (control plane).
-        Bản HTTP của `cmd/thue-bao ky --dung-thu`, khác một điểm: KHÔNG cho khai
+        Bản HTTP của `cmd/subscriptions ky --dung-thu`, khác một điểm: KHÔNG cho khai
         tay giá và hạn mức — hợp đồng thử chạy đúng theo gói đang bán. Thoả thuận
         riêng vẫn đi qua công cụ dòng lệnh.
         Điều khoản CHÉP từ bảng giá lúc ký rồi sống độc lập: sửa bảng giá sau đó
@@ -18349,7 +18349,7 @@ paths:
         ở chỗ không dựng gì bên database bán hàng — cửa hàng và tài khoản đăng
         nhập đã có sẵn, nên đường này không bắc qua hai database.
         Giá và ba hạn mức CHÉP từ bảng giá lúc ký rồi sống độc lập; không có ô nào
-        khai tay. Thoả thuận riêng vẫn đi qua `cmd/thue-bao ky`.
+        khai tay. Thoả thuận riêng vẫn đi qua `cmd/subscriptions ky`.
         `so_thang` bỏ trống = một chu kỳ của gói (1 tháng, hoặc 12 nếu gói theo năm).
       parameters:
       - description: Cửa hàng và dòng bảng giá
@@ -18696,7 +18696,7 @@ paths:
         Sửa THÔNG TIN, không sửa ĐIỀU KHOẢN. Gói, chu kỳ, giá và ba hạn mức
         không có ô nào ở đây: chúng đã chốt lúc ký và cả hệ thống dựng trên
         nguyên tắc chúng không đổi. Bán thêm quyền lợi cho một khách vẫn là việc
-        của `cmd/thue-bao`.
+        của `cmd/subscriptions`.
         `het_han` chỉ nhận khi hợp đồng đang dùng thử — hạn của kỳ thử là quyết
         định bán hàng, còn hạn của hợp đồng đã trả tiền thì đi đường Gia hạn để
         đường tiền và đường hạn không tách nhau. Bỏ trống = giữ nguyên.
@@ -18819,7 +18819,7 @@ paths:
         Trạng thái chuyển sang `active` và mốc hết dùng thử bị xoá, nên gọi trên
         một hợp đồng `trial` CHÍNH LÀ chuyển khách sang chính thức. Không có
         endpoint riêng cho việc đó: hai việc là một.
-        KHÔNG ghi vào sổ thu — tiền vào là `cmd/thue-bao thu-tien`, việc khác.
+        KHÔNG ghi vào sổ thu — tiền vào là `cmd/subscriptions thu-tien`, việc khác.
       parameters:
       - description: ID hợp đồng
         in: path

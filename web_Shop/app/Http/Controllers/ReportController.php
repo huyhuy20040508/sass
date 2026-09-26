@@ -216,7 +216,7 @@ class ReportController extends Controller
             $columns['show_'.$c] = in_array($c, $cotTat, true) ? 0 : 1;
         }
 
-        $view = view('v2::thong-ke.khach-hang', [
+        $view = view('v2::reports.customer', [
             'page' => 'customers',
             'filters' => $filters,
             'rows' => $rows,

@@ -207,6 +207,11 @@ func (r *productRepository) List(ctx context.Context, f domain.ProductFilter) ([
 	case "best_selling":
 		// Thêm id để thứ tự ổn định khi nhiều sản phẩm cùng lượt bán (VD đều bằng 0).
 		q = q.Order("sold_count DESC, id DESC")
+	case "created_desc":
+		// Nút "Hàng mới" của màn bán hàng: khai sau nằm trên. KHÔNG dùng lại tên
+		// "newest" — trang Hàng hoá đang gửi "newest" và chờ thứ tự người bán tự
+		// xếp (nhánh default), đổi nghĩa nó là xáo lại bảng của họ.
+		q = q.Order("products.created_at DESC, products.id DESC")
 	default:
 		// Mặc định là THỨ TỰ NGƯỜI BÁN TỰ XẾP (bản cũ v2 cũng vậy): số lớn nằm
 		// trên. Thêm id để hai mặt hàng cùng sort không nhảy chỗ giữa hai lượt tải.

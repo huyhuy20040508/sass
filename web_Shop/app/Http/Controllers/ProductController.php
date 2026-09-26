@@ -2,11 +2,11 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Controllers\Concerns\TraLoiHopThoai;
+use App\Http\Controllers\Concerns\DialogReply;
 use App\Services\ApiClient;
-use App\Services\ChiNhanhDangLam;
+use App\Services\CurrentBranch;
 use App\Services\ImageStore;
-use App\Support\MucThue;
+use App\Support\TaxRate;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
@@ -43,7 +43,7 @@ use Illuminate\Validation\Rule;
  */
 class ProductController extends Controller
 {
-    use TraLoiHopThoai;
+    use DialogReply;
 
     /** Nhãn NGẮN cho thanh điều hướng. */
     public const TITLE = 'Hàng hóa';
@@ -119,8 +119,8 @@ class ProductController extends Controller
         'price' => ['price_asc', 'price_desc'],
     ];
 
-    /** Nhãn hai mã KCT / KKKNT — xem App\Support\MucThue. */
-    public const VAT_LABELS = MucThue::NHAN;
+    /** Nhãn hai mã KCT / KKKNT — xem App\Support\TaxRate. */
+    public const VAT_LABELS = TaxRate::NHAN;
 
     public function __construct(protected ApiClient $api) {}
 
@@ -420,7 +420,7 @@ class ProductController extends Controller
             // cộng cả cửa hàng — API cắt theo chi nhánh trên header. Ghi tên kho
             // vào tiêu đề cột: người cầm tệp đi soạn hàng phải biết con số này
             // nói về kho nào, mà tệp thì rời khỏi màn hình rồi.
-            $tenKho = ChiNhanhDangLam::ten();
+            $tenKho = CurrentBranch::ten();
             fputcsv($out, [
                 'Mã SP', 'Mã hàng', 'Tên hàng hóa', 'Nhóm hàng hóa', 'ĐVT', 'Vị trí',
                 'VAT', 'Giá bán', 'Giá vốn',
@@ -965,7 +965,7 @@ class ProductController extends Controller
     /** Nhãn đọc được của một mức thuế: "10%", "KCT", "KKKNT". */
     public static function vatText($vat): string
     {
-        return MucThue::chu($vat);
+        return TaxRate::chu($vat);
     }
 
     /** Tên các chi nhánh quản lý mặt hàng; rỗng = mọi chi nhánh. */
@@ -1115,7 +1115,7 @@ class ProductController extends Controller
 
         // Màn đã chuyển sang khu v2; view cũ ở resources/views/products giữ lại
         // phòng khi cần đối chiếu (và vẫn là nơi đặt style/script dùng chung).
-        return view('v2::hang-hoa.index', [
+        return view('v2::products.index', [
             'products' => json_decode(json_encode($products), true) ?? [],
             'meta' => $meta,
             'filters' => $filters,
@@ -1128,10 +1128,10 @@ class ProductController extends Controller
             'attributes' => $attributes,
             'branches' => $branches,
             'tags' => $tags,
-            'vatRates' => MucThue::boMuc($this->api),
+            'vatRates' => TaxRate::boMuc($this->api),
             // Ô thuế trong hộp thoại chia đôi: chọn LOẠI trước, ô "% VAT" chỉ bày
             // mức của loại ấy — đúng hàng 4-2-2-4 của bản v2 cũ.
-            'loaiThue' => MucThue::loaiThue($this->api),
+            'loaiThue' => TaxRate::loaiThue($this->api),
             'statuses' => self::STATUSES,
             'statusHints' => self::STATUS_HINTS,
             'sorts' => self::SORTS,

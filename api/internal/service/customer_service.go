@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -27,6 +28,9 @@ type CustomerService interface {
 	SetPassword(ctx context.Context, id uint, password string) (*dto.CustomerResponse, error)
 	Delete(ctx context.Context, id uint) error
 	Stats(ctx context.Context) (domain.CustomerStats, error)
+	// TimTheoSoDienThoai trả hồ sơ khách mang số điện thoại này (so trên chữ số),
+	// nil nếu chưa có ai — "chưa có" là câu trả lời, không phải lỗi.
+	TimTheoSoDienThoai(ctx context.Context, phone string) (*dto.CustomerResponse, error)
 }
 
 type customerService struct {
@@ -72,6 +76,52 @@ func (s *customerService) GetByID(ctx context.Context, id uint) (*dto.CustomerRe
 	return s.detail(ctx, u)
 }
 
+func (s *customerService) TimTheoSoDienThoai(ctx context.Context, phone string) (*dto.CustomerResponse, error) {
+	u, err := s.userRepo.FindCustomerByPhone(ctx, chiConSo(phone))
+	if errors.Is(err, domain.ErrNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return s.detail(ctx, u)
+}
+
+// chiConSo bỏ mọi ký tự không phải chữ số: "0909 555 123" và "0909555123" là
+// cùng một số điện thoại.
+func chiConSo(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		if r >= '0' && r <= '9' {
+			b.WriteRune(r)
+		}
+	}
+
+	return b.String()
+}
+
+// chuanHoaSDT gỡ mọi ký tự ngăn cách khỏi số điện thoại TRƯỚC KHI LƯU.
+//
+// Quầy lưu đúng thứ người bán gõ nên hồ sơ nằm trong sổ dưới dạng
+// "0909 000 111", trong khi lượt dò trùng của chính màn quầy lại đi qua
+// chiConSo. Hai đường nói hai thứ khác nhau: quầy báo trùng đúng, còn vào
+// Khách hàng gõ "0909000111" thì LIKE trên cột thô không khớp chữ nào.
+//
+// Giữ dấu "+" đứng đầu: số quốc tế mất dấu ấy là đổi nghĩa (+84 thành 84).
+func chuanHoaSDT(s string) string {
+	s = strings.TrimSpace(s)
+	so := chiConSo(s)
+	if so == "" {
+		return ""
+	}
+	if strings.HasPrefix(s, "+") {
+		return "+" + so
+	}
+
+	return so
+}
+
 func (s *customerService) Create(ctx context.Context, req *dto.CustomerRequest) (*dto.CustomerResponse, error) {
 	// Bỏ trống email thì KHÔNG kiểm trùng: `email = ''` khớp với mọi khách khác
 	// cũng để trống, và lượt khai thứ hai sẽ bị báo "email đã được sử dụng" trong
@@ -100,7 +150,7 @@ func (s *customerService) Create(ctx context.Context, req *dto.CustomerRequest) 
 		RoleID:       domain.CustomerRoleID,
 		FullName:     strings.TrimSpace(req.FullName),
 		Email:        strings.TrimSpace(req.Email),
-		Phone:        strings.TrimSpace(req.Phone),
+		Phone:        chuanHoaSDT(req.Phone),
 		Avatar:       strings.TrimSpace(req.Avatar),
 		Gender:       domain.EnumOrNull(req.Gender),
 		DateOfBirth:  parseDate(req.DateOfBirth),
@@ -149,7 +199,7 @@ func (s *customerService) Update(ctx context.Context, id uint, req *dto.Customer
 
 	u.FullName = strings.TrimSpace(req.FullName)
 	u.Email = email
-	u.Phone = strings.TrimSpace(req.Phone)
+	u.Phone = chuanHoaSDT(req.Phone)
 	u.Avatar = strings.TrimSpace(req.Avatar)
 	u.Gender = domain.EnumOrNull(req.Gender)
 	u.DateOfBirth = parseDate(req.DateOfBirth)

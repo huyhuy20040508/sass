@@ -38,9 +38,9 @@
         $muc_order = [
             ['route' => 'platform.khach-hang-order.nguoi-dung-thu',  'nhan' => 'Người dùng thử'],
             ['route' => 'platform.khach-hang-order.nguoi-chinh-thuc', 'nhan' => 'Người chính thức'],
-            ['route' => 'platform.khach-hang-order.goi-dich-vu',      'nhan' => 'Các gói dịch vụ'],
-            ['route' => 'platform.khach-hang-order.tinh-nang-goi',    'nhan' => 'Tính năng gói'],
-            ['route' => 'platform.khach-hang-order.database',         'nhan' => 'Database'],
+            ['route' => 'platform.customer-orders.service-packages',      'nhan' => 'Các gói dịch vụ'],
+            ['route' => 'platform.customer-orders.package-features',    'nhan' => 'Tính năng gói'],
+            ['route' => 'platform.customer-orders.database',         'nhan' => 'Database'],
         ];
 
         // Nhóm mở sẵn khi đang đứng ở một trang bên trong nó. Người ta vừa bấm
@@ -85,7 +85,7 @@
         {{-- Cài đặt của NHÀ CUNG CẤP: không thuộc phần mềm nào nên đứng ngoài
              nhóm sản phẩm ở trên, và đứng cuối — thứ sửa vài tháng một lần thì
              không tranh chỗ với thứ mở hằng ngày. --}}
-        <a href="{{ route('platform.cai-dat.thanh-toan') }}"
+        <a href="{{ route('platform.settings.payment') }}"
            class="rail-link {{ request()->routeIs('platform.cai-dat.*') ? 'is-current' : '' }}"
            @if (request()->routeIs('platform.cai-dat.*')) aria-current="page" @endif>
             Phương thức thanh toán

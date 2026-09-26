@@ -278,7 +278,7 @@
      Cửa hàng hết hạn thì KHÔNG nạp: mọi đường thông báo lúc đó trả 403, nên
      script chỉ ngồi thử lại và bắn lỗi vào console. Người đang đọc trang gia hạn
      không cần thêm một cái chuông hỏng. --}}
-@unless(\App\Services\HanSuDung::daKhoa())
+@unless(\App\Services\SubscriptionExpiry::daKhoa())
     <script src="{{ asset('js/realtime.js') }}?v=5"></script>
 @endunless
 
@@ -287,11 +287,11 @@
      phải nói ra, chứ không đợi họ bấm đi đâu đó mới biết. Tới giây hết hạn thì
      đưa thẳng sang trang Các gói dịch vụ, nơi có hộp thoại và bảng giá.
 
-     Số giây do MÁY CHỦ tính (xem HanSuDung::giayConLai) nên đồng hồ máy khách
+     Số giây do MÁY CHỦ tính (xem SubscriptionExpiry::giayConLai) nên đồng hồ máy khách
      lệch giờ cũng không ảnh hưởng. Chỉ đặt hẹn khi còn dưới 24 giờ: setTimeout
      không đáng tin với khoảng dài, và tab nào cũng đóng trước đó. --}}
-@php $gdvGiayConLai = \App\Services\HanSuDung::giayConLai(); @endphp
-@if(! \App\Services\HanSuDung::daKhoa() && $gdvGiayConLai !== null && $gdvGiayConLai > 0 && $gdvGiayConLai < 86400)
+@php $gdvGiayConLai = \App\Services\SubscriptionExpiry::giayConLai(); @endphp
+@if(! \App\Services\SubscriptionExpiry::daKhoa() && $gdvGiayConLai !== null && $gdvGiayConLai > 0 && $gdvGiayConLai < 86400)
     <script>
         setTimeout(function () {
             window.location.href = @json(route('admin.goi-dich-vu.index'));

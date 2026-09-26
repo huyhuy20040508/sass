@@ -24,8 +24,12 @@
         $get = fn ($arr, $key) => (float) ($arr[$key] ?? 0);
 
         $catMax = max(1, (float) collect($report['by_category'] ?? [])->max('revenue'));
+        // `label` đọc bằng ?? chứ không đọc thẳng: API trả CÓ `label` cho nhóm
+        // hàng nhưng KHÔNG trả cho biến thể (chỉ có `key`), và đọc thẳng là cả
+        // trang chết với "Undefined array key label" — chính lỗi làm màn này 500
+        // ngay khi cổng v2 thôi chặn nó.
         $catRows = collect($report['by_category'] ?? [])->map(fn ($c) => [
-            'label' => $c['label'] !== '' ? $c['label'] : 'Không rõ danh mục',
+            'label' => ($c['label'] ?? $c['key'] ?? '') !== '' ? ($c['label'] ?? $c['key']) : 'Không rõ danh mục',
             'value' => Chart::money($c['revenue'] ?? 0),
             'extra' => Chart::int($c['units'] ?? 0).' món',
             'ratio' => Chart::share($c['revenue'] ?? 0, $catMax),
@@ -37,7 +41,7 @@
         $sizeMax = max(1, (int) $sizes->max('units'));
         $sizeTotal = $sizes->sum('units');
         $sizeRows = $sizes->map(fn ($s) => [
-            'label' => $s['label'] !== '' ? $s['label'] : 'Hàng đơn (không biến thể)',
+            'label' => ($s['label'] ?? $s['key'] ?? '') !== '' ? ($s['label'] ?? $s['key']) : 'Hàng đơn (không biến thể)',
             'value' => Chart::int($s['units'] ?? 0),
             'extra' => Chart::pct(Chart::share($s['units'] ?? 0, $sizeTotal)),
             'ratio' => Chart::share($s['units'] ?? 0, $sizeMax),

@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Controllers\Concerns\TraLoiHopThoai;
+use App\Http\Controllers\Concerns\DialogReply;
 use App\Services\ApiClient;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Log;
 
 class OrderController extends Controller
 {
-    use TraLoiHopThoai;
+    use DialogReply;
 
     public const TITLE = 'Quản lý đơn hàng';
 
@@ -139,7 +139,7 @@ class OrderController extends Controller
             $error = 'Không tải được danh sách đơn hàng. Kiểm tra kết nối API.';
         }
 
-        $view = view('v2::don-hang.index', compact('orders', 'filters', 'meta'))
+        $view = view('v2::orders.index', compact('orders', 'filters', 'meta'))
             ->with('nhanVien', $this->danhMucNhanVien());
 
         return $error ? $view->with('error', $error) : $view;
@@ -475,6 +475,12 @@ class OrderController extends Controller
         if ($categoryId > 0) {
             $query['category_id'] = $categoryId;
         }
+        // Hai nút "Bán chạy" / "Hàng mới" của màn quầy. Chỉ nhận đúng hai khoá này:
+        // trang tạo đơn không gửi gì thì thứ tự vẫn là thứ tự người bán tự xếp.
+        $sort = (string) $request->query('sort', '');
+        if (in_array($sort, ['best_selling', 'created_desc'], true)) {
+            $query['sort'] = $sort;
+        }
 
         $list = [];
         $meta = [];
@@ -512,6 +518,9 @@ class OrderController extends Controller
                 'thumbnail' => $p['thumbnail'] ?? '',
                 'base_price' => (float) ($p['base_price'] ?? 0),
                 'sale_price' => isset($p['sale_price']) && $p['sale_price'] !== null ? (float) $p['sale_price'] : 0,
+                // Thuế suất (số dương là %, -1 KCT, -2 KKKNT) — quầy tạm tính dòng
+                // "Thuế sản phẩm" trước khi chốt; con số thu thật do API tính.
+                'vat' => (int) ($p['vat'] ?? 0),
                 'variants' => $variants,
             ];
         }, $list);

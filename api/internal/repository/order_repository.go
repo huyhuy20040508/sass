@@ -585,6 +585,7 @@ func loadCheckoutVariants(tx *gorm.DB, lines []domain.CheckoutLine, lock bool) (
 		SalePrice  *float64
 		CostPrice  *float64
 		Thumbnail  string
+		VAT        int
 		IsActive   bool
 	}
 	pids := make([]uint, 0, len(variants))
@@ -594,7 +595,7 @@ func loadCheckoutVariants(tx *gorm.DB, lines []domain.CheckoutLine, lock bool) (
 	var prods []prodRow
 	if len(pids) > 0 {
 		if err := tx.Table("products").
-			Select("id, name, slug, category_id, base_price, sale_price, cost_price, thumbnail, is_active").
+			Select("id, name, slug, category_id, base_price, sale_price, cost_price, thumbnail, vat, is_active").
 			Where("id IN ? AND deleted_at IS NULL", pids).Scan(&prods).Error; err != nil {
 			return nil, err
 		}
@@ -640,6 +641,7 @@ func loadCheckoutVariants(tx *gorm.DB, lines []domain.CheckoutLine, lock bool) (
 			// khuyến mãi mà không phải hỏi lại bảng products.
 			CategoryID: p.CategoryID,
 			Price:      price, CostPrice: cost, Stock: tonChiNhanh[v.ID],
+			VAT: p.VAT,
 		}
 	}
 	return resolved, nil
@@ -703,6 +705,28 @@ func (r *orderRepository) QuoteVariants(ctx context.Context, lines []domain.Chec
 	return loadCheckoutVariants(r.db.WithContext(ctx), lines, false)
 }
 
+// GiuMaDon — xem domain.OrderRepository.
+//
+// Cấp từ ĐÚNG bộ đếm mà lượt chốt đơn dùng (SinhMaTrongTx, loại "don-hang"), trong
+// transaction riêng: số đã cấp là của hoá đơn này, quầy khác không bao giờ nhận lại.
+// Hoá đơn bị huỷ thì số đó bỏ trống — cùng cách v2 cũ, nơi đơn nháp huỷ vẫn giữ mã.
+func (r *orderRepository) GiuMaDon(ctx context.Context) (string, error) {
+	shopID, err := chiNhanhCuaRequest(ctx, r.db)
+	if err != nil {
+		return "", err
+	}
+
+	var ma string
+	err = r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var loi error
+		ma, loi = SinhMaTrongTx(ctx, tx, domain.LoaiDonHang, shopID, daCoMa(ctx, tx, &domain.Order{}, "order_code"))
+
+		return loi
+	})
+
+	return ma, err
+}
+
 // checkoutNote là câu mô tả nguồn gốc đơn, ghi vào sổ kho và mốc lịch sử đầu tiên.
 //
 // Lấy theo channel chứ không nhận từ tầng trên: hai chỗ ghi (bút toán kho và lịch
@@ -753,19 +777,41 @@ func (r *orderRepository) Checkout(
 		// mà bước trừ kho bên dưới đọc, và cả hai cùng lấy từ một chỗ duy nhất.
 		o.ShopID = shopID
 
-		// 5. Tạo đơn — mã tạm trước để lấy ID, rồi đổi thành mã theo ngày + ID
-		o.OrderCode = fmt.Sprintf("TMP%d", time.Now().UnixNano())
-		if err := tx.Create(o).Error; err != nil {
-			return err
+		// 5. Tạo đơn.
+		//
+		// Hoá đơn quầy đã GIỮ SẴN mã (GiuMaDon, service đã kiểm chữ ký) thì dùng đúng mã
+		// đó: mã người bán nhìn trên tab là mã vào sổ. Mã ấy đã có đơn dùng (bấm chốt
+		// lại cùng một hoá đơn) thì rơi về cấp mã mới như mọi đơn khác.
+		giuSan := strings.TrimSpace(o.OrderCode)
+		if giuSan != "" {
+			trung, err := daCoMa(ctx, tx, &domain.Order{}, "order_code")(giuSan)
+			if err != nil {
+				return err
+			}
+			if trung {
+				giuSan = ""
+			}
 		}
-		ma, err := maChungTu(ctx, tx, domain.LoaiDonHang, o.ShopID, &domain.Order{}, "order_code",
-			fmt.Sprintf("DH%s%04d", time.Now().Format("20060102"), o.ID))
-		if err != nil {
-			return err
-		}
-		o.OrderCode = ma
-		if err := tx.Model(o).Update("order_code", o.OrderCode).Error; err != nil {
-			return err
+		if giuSan != "" {
+			o.OrderCode = giuSan
+			if err := tx.Create(o).Error; err != nil {
+				return err
+			}
+		} else {
+			// Mã tạm trước để lấy ID, rồi đổi thành mã theo quy tắc (hoặc ngày + ID).
+			o.OrderCode = fmt.Sprintf("TMP%d", time.Now().UnixNano())
+			if err := tx.Create(o).Error; err != nil {
+				return err
+			}
+			ma, err := maChungTu(ctx, tx, domain.LoaiDonHang, o.ShopID, &domain.Order{}, "order_code",
+				fmt.Sprintf("DH%s%04d", time.Now().Format("20060102"), o.ID))
+			if err != nil {
+				return err
+			}
+			o.OrderCode = ma
+			if err := tx.Model(o).Update("order_code", o.OrderCode).Error; err != nil {
+				return err
+			}
 		}
 
 		// 6. Trừ kho + ghi sổ kho, dùng ID đơn làm tham chiếu (biến thể đã khoá ở bước 2)

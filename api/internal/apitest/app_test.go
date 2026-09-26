@@ -153,7 +153,7 @@ type heThong struct {
 //
 // PHẢI làm ở đây vì bốn dòng đó KHÔNG nằm trong migration nào: `database/seed.sql`
 // đã tắt hẳn, và trên máy thật chúng do `selliotech-tao-admin` nạp lúc dựng cửa
-// hàng đầu tiên (xem napVaiTro trong cmd/tao-admin). Nghĩa là một database vừa
+// hàng đầu tiên (xem napVaiTro trong cmd/create-admin). Nghĩa là một database vừa
 // chạy xong migration vẫn có bảng roles TRỐNG — trong khi middleware phân quyền
 // và mọi lượt gieo người dùng ở đây đều tham chiếu thẳng tới id 1–4.
 //
@@ -168,7 +168,7 @@ type heThong struct {
 func napVaiTroChuan(t *testing.T, db *gorm.DB) {
 	t.Helper()
 
-	// Giữ khớp với vaiTroChuan trong cmd/tao-admin/main.go. Chép lại thay vì
+	// Giữ khớp với vaiTroChuan trong cmd/create-admin/main.go. Chép lại thay vì
 	// dùng chung, đúng như phần nối dây ở dungHeThongVoi: bộ test phải mô tả
 	// được trạng thái nó cần mà không kéo theo một gói lệnh vào đây.
 	vaiTro := []struct {
@@ -355,7 +355,7 @@ func dungHeThongVoi(t *testing.T, banHang, dieuHanh bool) *heThong {
 	etaxSvc := service.NewEtaxService(
 		repository.NewEtaxRepository(db), chiNhanhRepo, orderRepo, bimat.New(""), minvoice.New())
 	paymentSvc := service.NewPaymentService(paymentRepo, orderRepo, payosClient, cfg.PayOS, sepayClient, notifSvc, etaxSvc)
-	orderSvc := service.NewOrderService(orderRepo, returnRepo, mailSender, cfg.Mail, notifSvc, settingSvc, paymentSvc, promotionSvc, voucherSvc, etaxSvc)
+	orderSvc := service.NewOrderService(orderRepo, returnRepo, mailSender, cfg.Mail, notifSvc, settingSvc, paymentSvc, promotionSvc, voucherSvc, etaxSvc, cfg.JWT.Secret)
 	returnSvc := service.NewOrderReturnService(returnRepo, notifSvc, settingSvc)
 	inventorySvc := service.NewInventoryService(inventoryRepo)
 	contactSvc := service.NewContactService(contactRepo, newsletterRepo)

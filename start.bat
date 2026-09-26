@@ -206,7 +206,7 @@ echo    phpMyAdmin  : http://localhost/phpmyadmin  (database: selliotech)
 echo    Landing     : mo truc tiep tep landing_shop\index.html
 echo.
 echo    Dang nhap Shop Admin: 3 o - ma cua hang / ten dang nhap / mat khau
-echo    Chua co tai khoan? cd api ^&^& go run ./cmd/tao-admin
+echo    Chua co tai khoan? cd api ^&^& go run ./cmd/create-admin
 echo ------------------------------------------------------------
 echo.
 echo    [R] Lam moi (tu dong sau 5 giay)

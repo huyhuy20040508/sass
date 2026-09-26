@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 30 30" fill="none">
+    <!-- Vòng mũi tên lịch sử -->
+    <path d="M15 3.5A11.5 11.5 0 1 1 4.6 10" stroke="#F04430" stroke-width="3" fill="none" stroke-linecap="round"/>
+    <path d="M4.6 10L1.4 5.8L8.2 5.4L4.6 10Z" fill="#F04430"/>
+    <!-- Mặt đồng hồ -->
+    <circle cx="15" cy="15" r="8.2" fill="#FABE19" stroke="#F5871E" stroke-width="1.6"/>
+    <!-- Kim -->
+    <path d="M15 10.2V15L18.6 17.2" stroke="#4D4B52" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+</svg>
