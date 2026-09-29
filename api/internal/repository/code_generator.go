@@ -3,6 +3,9 @@ package repository
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -174,4 +177,27 @@ func capSo(ctx context.Context, tx *gorm.DB, shopID uint, docType, bucket string
 	}
 
 	return dem.LastSeq, nil
+}
+
+// maNoiTiep cấp mã NỐI TIẾP theo từng cửa hàng cho những danh mục mã do hệ thống
+// tự đặt (chương trình khuyến mãi KM00001…, đồng giá DG00001…): số lớn nhất đang
+// có dưới tiền tố + 1, đệm 5 chữ số.
+//
+// Unscoped: mã của bản ghi đã xoá mềm vẫn tính — cấp lại một mã đã từng đứng
+// trên chứng từ cũ là hai chương trình khác nhau mang cùng một tên gọi.
+func maNoiTiep(ctx context.Context, db *gorm.DB, model any, tienTo string) (string, error) {
+	var ds []string
+	err := db.WithContext(ctx).Unscoped().Model(model).
+		Where("code REGEXP ?", "^"+tienTo+"[0-9]+$").
+		Order("CHAR_LENGTH(code) DESC, code DESC").Limit(1).
+		Pluck("code", &ds).Error
+	if err != nil {
+		return "", err
+	}
+	so := int64(0)
+	if len(ds) > 0 {
+		so, _ = strconv.ParseInt(strings.TrimPrefix(ds[0], tienTo), 10, 64)
+	}
+
+	return fmt.Sprintf("%s%05d", tienTo, so+1), nil
 }

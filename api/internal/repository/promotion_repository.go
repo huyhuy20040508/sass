@@ -46,9 +46,22 @@ func (r *promotionRepository) List(ctx context.Context, f domain.PromotionFilter
 
 	if kw := strings.TrimSpace(f.Keyword); kw != "" {
 		like := "%" + kw + "%"
-		q = q.Where("name LIKE ? OR description LIKE ?", like, like)
+		q = q.Where("(code LIKE ? OR name LIKE ? OR description LIKE ?)", like, like, like)
 	}
 	q = applyStatus(q, f.Status, now)
+	if f.Active != nil {
+		q = q.Where("is_active = ?", *f.Active)
+	}
+	// Lọc chi nhánh của màn CRM: chạy ở một trong các chi nhánh đã chọn, hoặc
+	// không gán chi nhánh nào (= chạy khắp nơi, nên cũng chạy ở đó).
+	if len(f.ShopIDs) > 0 {
+		q = q.Where(`(
+			EXISTS (SELECT 1 FROM promotion_shops ps WHERE ps.promotion_id = promotions.id
+				AND ps.tenant_id = promotions.tenant_id AND ps.shop_id IN ?)
+			OR NOT EXISTS (SELECT 1 FROM promotion_shops ps2 WHERE ps2.promotion_id = promotions.id
+				AND ps2.tenant_id = promotions.tenant_id)
+		)`, f.ShopIDs)
+	}
 
 	// Lọc theo khoảng ngày = "chương trình có chạy ngày nào trong khoảng này không",
 	// chứ không phải "bắt đầu trong khoảng này": đợt kéo dài cả tháng vẫn phải hiện
@@ -170,8 +183,8 @@ func (r *promotionRepository) Update(ctx context.Context, p *domain.Promotion) e
 		p.Targets = nil
 		// Select tường minh để không ghi đè created_at bằng giá trị rỗng.
 		if err := tx.Model(&domain.Promotion{ID: p.ID}).
-			Select("name", "description", "discount_type", "discount_value",
-				"max_discount_amount", "start_at", "end_at", "is_active").
+			Select("code", "name", "description", "discount_type", "discount_value",
+				"max_discount_amount", "start_at", "end_at", "days_of_week", "is_active").
 			Updates(p).Error; err != nil {
 			return err
 		}
@@ -232,9 +245,24 @@ func (r *promotionRepository) Running(ctx context.Context, at time.Time) ([]doma
 	q = locGanChiNhanh(q, ctx, r.db, "promotion_shops", "promotion_id", "promotions")
 
 	var items []domain.Promotion
-	err := q.Preload("Targets").Find(&items).Error
+	if err := q.Preload("Targets").Find(&items).Error; err != nil {
+		return nil, err
+	}
 
-	return items, err
+	// Luật "thứ trong tuần" cắt ở đây chứ không trong SQL: cột là chuỗi thứ ngăn
+	// bởi dấu phẩy, và danh sách chương trình đang chạy vốn ngắn.
+	chay := items[:0]
+	for _, p := range items {
+		if p.ChayVaoThu(at) {
+			chay = append(chay, p)
+		}
+	}
+
+	return chay, nil
+}
+
+func (r *promotionRepository) MaKeTiep(ctx context.Context) (string, error) {
+	return maNoiTiep(ctx, r.db, &domain.Promotion{}, "KM")
 }
 
 // ReplaceShops đặt lại danh sách chi nhánh của một chương trình.

@@ -20,6 +20,7 @@ const defaultCustomerPassword = "Khachhang@123"
 const dateLayout = "2006-01-02"
 
 type CustomerService interface {
+	DungThanhVien(repo domain.MembershipRepository)
 	List(ctx context.Context, filter domain.CustomerFilter) ([]dto.CustomerResponse, int64, error)
 	GetByID(ctx context.Context, id uint) (*dto.CustomerResponse, error)
 	Create(ctx context.Context, req *dto.CustomerRequest) (*dto.CustomerResponse, error)
@@ -35,6 +36,27 @@ type CustomerService interface {
 
 type customerService struct {
 	userRepo domain.UserRepository
+	// hang tra tên hạng thành viên cho cột Hạng. nil = không bày tên hạng.
+	hang domain.MembershipRepository
+}
+
+// DungThanhVien gắn kho thẻ thành viên để bảng khách in được tên hạng.
+func (s *customerService) DungThanhVien(repo domain.MembershipRepository) { s.hang = repo }
+
+// ganHang điền tên hạng cho các dòng khách đã dựng.
+func (s *customerService) ganHang(ctx context.Context, items []dto.CustomerResponse) {
+	if s.hang == nil || len(items) == 0 {
+		return
+	}
+	ten, err := s.hang.TenHang(ctx)
+	if err != nil {
+		return
+	}
+	for i := range items {
+		if items[i].RankID > 0 {
+			items[i].RankName = ten[items[i].RankID]
+		}
+	}
 }
 
 func NewCustomerService(userRepo domain.UserRepository) CustomerService {
@@ -65,6 +87,7 @@ func (s *customerService) List(ctx context.Context, filter domain.CustomerFilter
 	for i := range users {
 		items = append(items, buildCustomer(&users[i], aggregates[users[i].ID], addresses[users[i].ID]))
 	}
+	s.ganHang(ctx, items)
 	return items, total, nil
 }
 
@@ -274,7 +297,9 @@ func (s *customerService) detail(ctx context.Context, u *domain.User) (*dto.Cust
 	}
 
 	res := buildCustomer(u, aggregates[u.ID], addresses[u.ID])
-	return &res, nil
+	ds := []dto.CustomerResponse{res}
+	s.ganHang(ctx, ds)
+	return &ds[0], nil
 }
 
 func buildCustomer(u *domain.User, agg domain.CustomerAggregate, address string) dto.CustomerResponse {
@@ -294,6 +319,9 @@ func buildCustomer(u *domain.User, agg domain.CustomerAggregate, address string)
 		StillInDebt: agg.TotalDebt,
 		LastOrderAt: formatDateTime(agg.LastOrderAt),
 
+		LastPaymentAmount: agg.LastPaymentAmount,
+		LastPaymentAt:     formatDateTime(agg.LastPaymentAt),
+
 		Code:                u.CustomerCode,
 		CustomerType:        u.CustomerType,
 		CustomerGroupID:     idNhomKhach(u.CustomerGroupID),
@@ -303,6 +331,10 @@ func buildCustomer(u *domain.User, agg domain.CustomerAggregate, address string)
 		RepresentativeName:  string(u.RepresentativeName),
 		RepresentativePhone: string(u.RepresentativePhone),
 		Note:                string(u.CustomerNote),
+
+		TotalPoints: u.TotalPoints,
+		Points:      u.Points,
+		RankID:      idNhomKhach(u.RankID),
 
 		LoginEmail:    u.Email,
 		EmailVerified: u.EmailVerifiedAt != nil,

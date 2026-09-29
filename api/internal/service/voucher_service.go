@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -47,6 +48,10 @@ type VoucherService interface {
 	// Lỗi trả về là lỗi CỤ THỂ (hết hạn / hết lượt / chưa đủ đơn tối thiểu…) để
 	// khách biết nên bỏ mã đi hay mua thêm cho đủ.
 	Check(ctx context.Context, code string, subtotal float64, userID uint, phone string) (*domain.Voucher, float64, error)
+	// CheckDon như Check, kèm tiền hàng theo từng danh mục của đơn (danh mục →
+	// tiền) để mã chỉ giảm cho một số danh mục tính đúng phần được giảm. nil = không
+	// biết (xem trước ở giỏ) — khi đó tính trên cả subtotal.
+	CheckDon(ctx context.Context, code string, subtotal float64, theoDanhMuc map[uint]float64, userID uint, phone string) (*domain.Voucher, float64, error)
 
 	// Available liệt kê các mã ĐẠI TRÀ để gợi ý ngay tại ô nhập mã, kèm sẵn số tiền
 	// mỗi mã giảm được cho giỏ hiện tại.
@@ -149,6 +154,10 @@ func (s *voucherService) Delete(ctx context.Context, id uint) error {
 // ---------- Khách dùng mã ----------
 
 func (s *voucherService) Check(ctx context.Context, code string, subtotal float64, userID uint, phone string) (*domain.Voucher, float64, error) {
+	return s.CheckDon(ctx, code, subtotal, nil, userID, phone)
+}
+
+func (s *voucherService) CheckDon(ctx context.Context, code string, subtotal float64, theoDanhMuc map[uint]float64, userID uint, phone string) (*domain.Voucher, float64, error) {
 	code = strings.ToUpper(strings.TrimSpace(code))
 	if code == "" {
 		return nil, 0, domain.ErrVoucherNotFound
@@ -197,7 +206,32 @@ func (s *voucherService) Check(ctx context.Context, code string, subtotal float6
 		return nil, 0, fmt.Errorf("%w: %s", domain.ErrVoucherMinOrder, formatVND(v.MinOrderAmount-subtotal))
 	}
 
+	// Mã theo danh mục (v2 "Danh mục hàng hóa → Theo danh mục"): đơn tối thiểu vẫn
+	// tính trên cả đơn, nhưng chỉ tiền hàng của các danh mục đó được giảm.
+	if dm := tachDanhMuc(v.CategoryIDs); len(dm) > 0 && theoDanhMuc != nil {
+		duoc := 0.0
+		for id, tien := range theoDanhMuc {
+			if dm[id] {
+				duoc += tien
+			}
+		}
+		if duoc <= 0 {
+			return nil, 0, domain.ErrVoucherNoCategory
+		}
+		return v, v.Discount(duoc), nil
+	}
+
 	return v, v.Discount(subtotal), nil
+}
+
+func tachDanhMuc(csv string) map[uint]bool {
+	out := map[uint]bool{}
+	for _, p := range strings.Split(csv, ",") {
+		if n, err := strconv.ParseUint(strings.TrimSpace(p), 10, 64); err == nil && n > 0 {
+			out[uint(n)] = true
+		}
+	}
+	return out
 }
 
 // publicVoucherLimit chặn số mã gợi ý. Ô nhập mã không phải trang danh mục — hiện

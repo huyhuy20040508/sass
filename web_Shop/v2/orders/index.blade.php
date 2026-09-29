@@ -238,6 +238,11 @@
            chỉ thêm nhịp thở giữa các dòng. */
         #modalOrderDetail .inftt > div { padding: 3px 4px; }
         #modalOrderDetail .dh-nhan-nho { color: #8c8c8c; }
+
+        /* Icon "Xuất HĐĐT" cạnh con mắt — cùng màu và cỡ v2 cho fa-file-invoice. */
+        td.action .xuat-hddt { color: #7083B6; font-size: 16px; margin-right: 8px; cursor: pointer; }
+        #modalXuatHddt .modal-header { background: #425D6D; color: #fff; }
+        #modalXuatHddt .xh-khoi { background: rgba(176, 199, 210, .25); padding: 6px 8px; margin-bottom: 8px; font-weight: bold; }
     </style>
 @endpush
 
@@ -498,7 +503,8 @@
                                     $tt = (string) ($o['trang_thai'] ?? '');
                                 @endphp
                                 <tr class="item {{ $laTra ? 'dong-tra-hang' : '' }}" data-id="{{ $id }}"
-                                    data-loai="{{ $o['loai'] ?? 'don' }}" data-code="{{ $o['ma'] ?? '' }}">
+                                    data-loai="{{ $o['loai'] ?? 'don' }}" data-code="{{ $o['ma'] ?? '' }}"
+                                    data-xuat="{{ ! empty($o['xuat_duoc_hoa_don']) ? 1 : 0 }}">
                                     <td class="text-center">{{ $stt + $i + 1 }}</td>
                                     {{-- Mã là CHỮ TRẦN, không phải liên kết: cửa xem chi tiết là
                                          con mắt ở cột Hành động. Để trần thì bôi đen chép lại được. --}}
@@ -532,7 +538,10 @@
                                     <td class="text-left show_status {{ $columns['show_status'] ? '' : 'hide' }}">
                                         <b class="{{ $mauTrangThai[$tt] ?? '' }}">{{ $C::TRANG_THAI_SO[$tt] ?? '' }}</b>
                                     </td>
-                                    {{-- MỘT nút duy nhất, đúng như v2: con mắt xem chi tiết.
+                                    {{-- Con mắt xem chi tiết, và như v2 thêm icon "Xuất HĐĐT"
+                                         khi đơn xuất được hoá đơn. Có bày hay không là cờ
+                                         `xuat_duoc_hoa_don` API tính theo đúng các chốt của lượt
+                                         phát hành — bày nút rồi bấm vào bị từ chối là bẫy.
 
                                          Dòng PHIẾU TRẢ mở hộp của phiếu trả, bằng class RIÊNG:
                                          hộp đơn hàng đọc `/orders/{id}/detail`, mà id phiếu trả là
@@ -542,6 +551,9 @@
                                         @if ($laTra)
                                             <a class="detail-phieu-tra" type="button" title="{{ __('message.view-detail') }}"><i class="fa fa-eye"></i></a>
                                         @else
+                                            @if (! empty($o['xuat_duoc_hoa_don']))
+                                                <a class="xuat-hddt" type="button" title="Xuất hoá đơn điện tử"><i class="fa-solid fa-file-invoice"></i></a>
+                                            @endif
                                             <a class="detail-item" type="button" title="{{ __('message.view-detail') }}"><i class="fa fa-eye"></i></a>
                                         @endif
                                     </td>
@@ -606,7 +618,8 @@
                                     $laTra = ($o['loai'] ?? 'don') === 'tra-hang';
                                 @endphp
                                 <div class="item {{ $laTra ? 'dong-tra-hang' : '' }}"
-                                    data-id="{{ (int) ($o['id'] ?? 0) }}" data-loai="{{ $o['loai'] ?? 'don' }}">
+                                    data-id="{{ (int) ($o['id'] ?? 0) }}" data-loai="{{ $o['loai'] ?? 'don' }}"
+                                    data-xuat="{{ ! empty($o['xuat_duoc_hoa_don']) ? 1 : 0 }}">
                                     <div class="d-flex flex-column" style="flex: 1">
                                         <span class="fw-semibold">{{ $o['ma'] ?? '' }}</span>
                                         <small class="{{ $mauTrangThai[$tt] ?? '' }}">
@@ -764,17 +777,80 @@
                     </div>
                 </div>
 
-                {{-- Chân hộp có ĐÚNG MỘT nút, và nó chỉ hiện khi đơn CÒN NỢ.
+                {{-- Chân hộp có hai nút, mỗi nút chỉ hiện khi bấm vào là làm được:
+                     "Thu tiền" khi đơn CÒN NỢ, "Xuất HĐĐT" khi đơn đã thu đủ và xuất
+                     được hoá đơn (nút "Phát hành hoá đơn" của v2). Hai điều kiện loại
+                     trừ nhau nên chân hộp không bao giờ bày cả hai.
 
-                     Hộp này vốn chỉ để đọc, nhưng ghi một lượt thu tiền thì phải bấm
-                     ở đâu đó — và đây là chỗ duy nhất người dùng đang nhìn thấy số
-                     "Còn phải thu". Đưa ra cột Hành động thì cột ấy hết là "chỉ xem
-                     chi tiết", mà nút thu tiền đứng cạnh con mắt cũng dễ bấm nhầm.
-
-                     Hoá đơn điện tử vẫn tách ra làm riêng sau, nên nút phát hành của
-                     v2 không dựng ở đây. --}}
+                     Thu tiền đặt ở đây vì đây là chỗ duy nhất người dùng đang nhìn
+                     thấy số "Còn phải thu"; nút thu tiền đứng cạnh con mắt ở cột Hành
+                     động thì dễ bấm nhầm. --}}
                 <div class="modal-footer justify-content-center" id="dh-v-chan" hidden>
                     <button type="button" class="bt btn_green" id="dh-v-thu">Thu tiền</button>
+                    <button type="button" class="bt btn_advanced" id="dh-v-hddt">Xuất HĐĐT</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {{-- ===================== Hộp Xuất hoá đơn điện tử =====================
+         Chép hộp e-invoice của v2 (manager-order/modal-view, nhánh 'e-invoice'):
+         chọn Cá nhân / Doanh nghiệp rồi khai người mua, điền sẵn từ đơn.
+
+         Khác v2 hai chỗ:
+         - Không có ô chi nhánh và ngày phát hành: hoá đơn đi theo chi nhánh
+           của đơn và phát hành ngay hôm nay — cho chọn là cho ghi sai.
+         - Tên người mua ghi vào tên người nhận của đơn (đơn không có cột tên
+           người mua riêng).
+
+         Những gì gõ ở đây được GHI VÀO ĐƠN trước khi phát hành, để lượt bấm
+         lại khi cổng từ chối dùng đúng người mua vừa khai. --}}
+    <div class="modal" id="modalXuatHddt" data-id="">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header py-2 px-3">
+                    <h6 class="modal-title fw-bold">Hoá đơn điện tử - <span id="xh-ma"></span></h6>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Đóng"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="xh-khoi">Thông tin người mua</div>
+                    <div class="d-flex gap-4 mb-3">
+                        <label class="form-check-label d-flex align-items-center gap-2">
+                            <input class="form-check-input m-0" type="radio" name="xh-loai" value="personal" checked> Cá nhân
+                        </label>
+                        <label class="form-check-label d-flex align-items-center gap-2">
+                            <input class="form-check-input m-0" type="radio" name="xh-loai" value="company"> Doanh nghiệp
+                        </label>
+                    </div>
+                    <div class="row g-2">
+                        <div class="col-12 col-md-6">
+                            <label class="form-label mb-1">Tên người mua <span class="text-danger xh-cn">*</span></label>
+                            <input type="text" class="form-control" id="xh-ten" maxlength="255" autocomplete="off">
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label class="form-label mb-1">Email nhận hoá đơn</label>
+                            <input type="email" class="form-control" id="xh-email" maxlength="191" autocomplete="off">
+                        </div>
+                        <div class="col-12 col-md-6 xh-dn">
+                            <label class="form-label mb-1">Mã số thuế <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="xh-mst" maxlength="20" autocomplete="off">
+                        </div>
+                        <div class="col-12 col-md-6 xh-dn">
+                            <label class="form-label mb-1">Tên doanh nghiệp <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="xh-cong-ty" maxlength="255" autocomplete="off">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label mb-1">Địa chỉ <span class="text-danger xh-dn">*</span></label>
+                            <input type="text" class="form-control" id="xh-dia-chi" maxlength="255" autocomplete="off">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer justify-content-center">
+                    <button type="button" class="bt btn_red" data-bs-dismiss="modal">{{ __('message.close') }}</button>
+                    <button type="button" class="bt btn_advanced" id="xh-phat-hanh">
+                        <span class="spinner-border spinner-border-sm d-none" role="status"></span>
+                        Phát hành
+                    </button>
                 </div>
             </div>
         </div>
@@ -1077,7 +1153,7 @@
             $(idChu).text(giaTri || '');
         }
 
-        function veHopChiTiet(o) {
+        function veHopChiTiet(o, xuat) {
             // Hộp Thu tiền mở ra SAU khi hộp này đóng, nên nó không còn đọc được
             // `o` nữa — gửi kèm hai con số nó cần qua data-*.
             $('#modalOrderDetail').attr('data-id', o.id)
@@ -1126,10 +1202,13 @@
 
             veLuotThu(o.luot_thu);
 
-            // Nút Thu tiền chỉ có nghĩa khi đơn còn nợ. Bày nó trên một đơn đã thu
-            // đủ thì bấm vào chỉ nhận lỗi từ API — bẫy người dùng.
-            $('#dh-v-chan').prop('hidden', conNo <= 0);
-            $('#dh-v-thu').prop('disabled', false);
+            // Mỗi nút chỉ hiện khi bấm vào là làm được — bày nút rồi nhận lỗi từ
+            // API là bẫy người dùng.
+            const xuatDuoc = Boolean(xuat);
+            $('#dh-v-thu').toggle(conNo > 0).prop('disabled', false);
+            $('#dh-v-hddt').toggle(xuatDuoc);
+            $('#dh-v-chan').prop('hidden', conNo <= 0 && !xuatDuoc);
+            $('#modalOrderDetail').data('don', o);
 
             dongCoDieuKien('#dh-v-voucher-wrap', '#dh-v-voucher', o.voucher_code);
             dongCoDieuKien('#dh-v-note-wrap', '#dh-v-note', o.note);
@@ -1180,17 +1259,126 @@
         });
 
         $(document).on('click', '.detail-item', function () {
-            const id = $(this).data('id') || $(this).closest('.item').data('id');
+            const $dong = $(this).closest('.item');
+            const id = $(this).data('id') || $dong.data('id');
             if (!id) return;
+            // Cờ của dòng sổ nói chi nhánh đã nối cổng chưa — thứ hộp chi tiết
+            // không tự biết được; hoá đơn đi kèm chi tiết thì nói đơn đã có tờ chưa.
+            const xuat = Number($dong.data('xuat')) === 1;
 
-            fetch(URL_DH + '/' + id + '/detail', { headers: { Accept: 'application/json' }, credentials: 'same-origin' })
+            taiDon(id)
+                .then(function (d) { veHopChiTiet(d.data || {}, xuat && !coHoaDonHieuLuc(d.etax)); })
+                .catch(function () { toastr.error('Không tải được chi tiết đơn hàng.'); });
+        });
+
+        // ---------- Xuất hoá đơn điện tử ----------
+        // Tờ HỎNG không tính: API cho phát hành lại đúng trường hợp đó.
+        const coHoaDonHieuLuc = (hd) => Boolean(hd && hd.status && hd.status !== 'failed');
+
+        function taiDon(id) {
+            return fetch(URL_DH + '/' + id + '/detail', { headers: { Accept: 'application/json' }, credentials: 'same-origin' })
                 .then(function (r) {
                     if (!r.ok) throw new Error('HTTP ' + r.status);
 
                     return r.json();
+                });
+        }
+
+        function doiLoaiNguoiMua() {
+            const dn = $('input[name="xh-loai"]:checked').val() === 'company';
+            $('#modalXuatHddt .xh-dn').toggle(dn);
+            $('#modalXuatHddt .xh-cn').toggle(!dn);
+        }
+        $(document).on('change', 'input[name="xh-loai"]', doiLoaiNguoiMua);
+
+        function moHopXuat(o) {
+            const diaChi = o.buyer_address || [o.shipping_address, o.shipping_ward, o.shipping_district, o.shipping_province]
+                .filter(Boolean).join(', ');
+            $('#modalXuatHddt').attr('data-id', o.id);
+            $('#xh-ma').text(o.order_code || '');
+            // Đơn đã khai MST (thường là ô "Hoá đơn điện tử" ở quầy) thì mở sẵn
+            // ở Doanh nghiệp — khỏi bắt người dùng chọn lại điều đơn đã nói.
+            $('input[name="xh-loai"][value="' + (o.buyer_tax_code ? 'company' : 'personal') + '"]').prop('checked', true);
+            $('#xh-ten').val(o.recipient_name || '');
+            $('#xh-email').val(o.recipient_email || '');
+            $('#xh-mst').val(o.buyer_tax_code || '');
+            $('#xh-cong-ty').val(o.buyer_company || '');
+            $('#xh-dia-chi').val(diaChi);
+            $('#xh-phat-hanh').prop('disabled', false).find('.spinner-border').addClass('d-none');
+            doiLoaiNguoiMua();
+            $('#modalXuatHddt').modal('show');
+        }
+
+        $(document).on('click', '.xuat-hddt', function () {
+            const id = $(this).closest('.item').data('id');
+            if (!id) return;
+
+            taiDon(id)
+                .then(function (d) {
+                    if (coHoaDonHieuLuc(d.etax)) {
+                        toastr.warning('Đơn này đã có hoá đơn điện tử.');
+                        V2.napLai(location.href, false);
+
+                        return;
+                    }
+                    moHopXuat(d.data || {});
                 })
-                .then(function (d) { veHopChiTiet(d.data || {}); })
                 .catch(function () { toastr.error('Không tải được chi tiết đơn hàng.'); });
+        });
+
+        $(document).on('click', '#dh-v-hddt', function () {
+            const o = $('#modalOrderDetail').data('don');
+            if (!o) return;
+            $('#modalOrderDetail').modal('hide');
+            moHopXuat(o);
+        });
+
+        $(document).on('click', '#xh-phat-hanh', function () {
+            const $nut = $(this);
+            const id = $('#modalXuatHddt').attr('data-id');
+            if (!id || $nut.prop('disabled')) return;
+
+            const loai = $('input[name="xh-loai"]:checked').val();
+            const duLieu = {
+                buyer_type: loai,
+                buyer_name: String($('#xh-ten').val() || '').trim(),
+                email: String($('#xh-email').val() || '').trim(),
+                buyer_address: String($('#xh-dia-chi').val() || '').trim(),
+            };
+            if (loai === 'personal' && !duLieu.buyer_name) {
+                toastr.error('Nhập tên người mua.');
+
+                return;
+            }
+            if (loai === 'company') {
+                duLieu.buyer_tax_code = String($('#xh-mst').val() || '').trim();
+                duLieu.buyer_company = String($('#xh-cong-ty').val() || '').trim();
+                if (!duLieu.buyer_tax_code || !duLieu.buyer_company || !duLieu.buyer_address) {
+                    toastr.error('Doanh nghiệp cần đủ mã số thuế, tên doanh nghiệp và địa chỉ.');
+
+                    return;
+                }
+            }
+
+            $nut.prop('disabled', true).find('.spinner-border').removeClass('d-none');
+            // $.ajax mang sẵn CSRF và chi nhánh của tab (xem $.ajaxSetup ở vỏ).
+            $.ajax({
+                url: URL_DH + '/' + id + '/etax',
+                method: 'POST',
+                data: duLieu,
+                headers: { Accept: 'application/json' },
+            })
+                .done(function (r) {
+                    toastr.success((r && r.message) || 'Đã phát hành hoá đơn.');
+                    $('#modalXuatHddt').modal('hide');
+                    V2.napLai(location.href, false);
+                })
+                // Hỏng thì GIỮ hộp lại và in nguyên câu của API: "chưa chọn ký
+                // hiệu", "đã phát hành rồi" là những việc phải làm khác nhau.
+                .fail(function (xhr) {
+                    toastr.error((xhr.responseJSON && xhr.responseJSON.message) || 'Phát hành hoá đơn không thành công.');
+                })
+                .always(function () { $nut.prop('disabled', false).find('.spinner-border').addClass('d-none'); });
         });
 
         // ================= Hộp xem phiếu trả =================

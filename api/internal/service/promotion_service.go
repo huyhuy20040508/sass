@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"strconv"
 	"strings"
 	"time"
 
@@ -90,6 +91,10 @@ func (s *promotionService) Create(ctx context.Context, req dto.PromotionRequest)
 	if err != nil {
 		return nil, err
 	}
+	// Mã do HỆ THỐNG cấp, nối tiếp theo cửa hàng — người dùng không gõ mã.
+	if p.Code, err = s.repo.MaKeTiep(ctx); err != nil {
+		return nil, err
+	}
 	if err := s.repo.Create(ctx, p); err != nil {
 		return nil, err
 	}
@@ -161,6 +166,7 @@ func buildPromotion(p *domain.Promotion, req dto.PromotionRequest) (*domain.Prom
 		return nil, domain.ErrPromotionNoScope
 	}
 
+	p.DaysOfWeek = ghepThu(req.DaysOfWeek)
 	p.Name = strings.TrimSpace(req.Name)
 	p.Description = strings.TrimSpace(req.Description)
 	p.DiscountType = req.DiscountType
@@ -177,6 +183,40 @@ func buildPromotion(p *domain.Promotion, req dto.PromotionRequest) (*domain.Prom
 	p.IsActive = boolOrDefault(req.IsActive, true)
 	p.Targets = targets
 	return p, nil
+}
+
+// ghepThu gộp các thứ thành chuỗi "1,2,5" đã sắp và bỏ trùng. Đủ bảy thứ thì
+// trả rỗng: "mọi ngày" chỉ có một cách viết, để lọc và so sánh khỏi lệch.
+func ghepThu(ds []int) string {
+	co := [8]bool{}
+	for _, d := range ds {
+		if d >= 1 && d <= 7 {
+			co[d] = true
+		}
+	}
+	out := []string{}
+	for d := 1; d <= 7; d++ {
+		if co[d] {
+			out = append(out, strconv.Itoa(d))
+		}
+	}
+	if len(out) == 7 {
+		return ""
+	}
+
+	return strings.Join(out, ",")
+}
+
+// tachThu là chiều ngược của ghepThu, cho phản hồi API.
+func tachThu(s string) []int {
+	out := []int{}
+	for _, d := range strings.Split(s, ",") {
+		if n, err := strconv.Atoi(strings.TrimSpace(d)); err == nil && n >= 1 && n <= 7 {
+			out = append(out, n)
+		}
+	}
+
+	return out
 }
 
 // buildTargets gộp ba danh sách id thành các dòng phạm vi, bỏ id 0 và id trùng.
@@ -200,6 +240,8 @@ func buildTargets(req dto.PromotionRequest) []domain.PromotionTarget {
 func (s *promotionService) toResponse(ctx context.Context, p *domain.Promotion) dto.PromotionResponse {
 	res := dto.PromotionResponse{
 		ID:                p.ID,
+		Code:              p.Code,
+		DaysOfWeek:        tachThu(p.DaysOfWeek),
 		Name:              p.Name,
 		Description:       p.Description,
 		DiscountType:      p.DiscountType,

@@ -1,6 +1,9 @@
 package handler
 
 import (
+	"strconv"
+	"strings"
+
 	"github.com/gin-gonic/gin"
 
 	"sass-api/internal/domain"
@@ -30,6 +33,8 @@ func NewPromotionHandler(svc service.PromotionService) *PromotionHandler {
 //	@Param			from_date	query		string	false	"Từ ngày (YYYY-MM-DD) — chương trình có chạy trong khoảng"
 //	@Param			to_date		query		string	false	"Đến ngày (YYYY-MM-DD)"
 //	@Param			sort		query		string	false	"newest|oldest|start_asc|start_desc|name_asc"
+//	@Param			active		query		string	false	"1 = đang bật, 0 = đang tắt"
+//	@Param			shop_ids	query		string	false	"Id chi nhánh, ngăn bởi dấu phẩy — chương trình chạy ở một trong số đó"
 //	@Param			page		query		int		false	"Trang (mặc định 1)"
 //	@Param			page_size	query		int		false	"Số item/trang (mặc định 20, tối đa 100)"
 //	@Success		200			{object}	response.Body{data=[]dto.PromotionResponse}
@@ -50,6 +55,19 @@ func (h *PromotionHandler) List(c *gin.Context) {
 	}
 	if f.PageSize < 1 || f.PageSize > 100 {
 		f.PageSize = 20
+	}
+	switch c.Query("active") {
+	case "1", "true":
+		bat := true
+		f.Active = &bat
+	case "0", "false":
+		tat := false
+		f.Active = &tat
+	}
+	for _, v := range strings.Split(c.Query("shop_ids"), ",") {
+		if n, err := strconv.ParseUint(strings.TrimSpace(v), 10, 64); err == nil && n > 0 {
+			f.ShopIDs = append(f.ShopIDs, uint(n))
+		}
 	}
 
 	items, total, err := h.svc.List(c.Request.Context(), f)

@@ -52,9 +52,12 @@
          data-customer-create-url="{{ route('thu-ngan.ban-hang.taoKhach') }}"
          data-einvoice-url="{{ route('thu-ngan.ban-hang.hoaDon', ['id' => 0]) }}"
          data-scan-url="{{ route('thu-ngan.ban-hang.scan') }}"
+         data-dong-gia-url="{{ route('thu-ngan.ban-hang.dongGia') }}"
+         data-khuyen-mai-url="{{ route('thu-ngan.ban-hang.khuyenMai') }}"
          data-store-url="{{ route('thu-ngan.ban-hang.store') }}"
          data-receipt-url="{{ route('thu-ngan.ban-hang.phieu', ['id' => 0]) }}"
          data-discount-limit="{{ $hanMucGiam }}"
+         data-thanh-vien="{{ json_encode($thanhVien ?? ['ranks' => [], 'money_per_point' => 0]) }}"
          data-nguoi-ban="{{ $nguoiBan }}"
          data-ten-tiem="{{ $tenTiem }}"
          data-empty-img="{{ asset('v2/images/icons/emptyCart.svg') }}"></div>
@@ -156,6 +159,18 @@
                     <span class="button-notice-mark" id="posHddtMark" style="display: none;"></span>
                 </button>
             </div>
+            {{-- Nút "Khuyến mãi" của quầy v2: chọn chương trình khuyến mại đơn đủ điều kiện. --}}
+            <button class="btn btn-option ms-1" id="posKhuyenMai" type="button" title="Khuyến mãi" style="height: 35px; background: #D9D9D9; min-width: fit-content;">
+                <i class="fa-solid fa-gift" style="color:#183556"></i>
+                <span class="ms-2 w-auto text-center">Khuyến mãi</span>
+                <span class="button-notice-mark" id="posKhuyenMaiMark" style="display: none;"></span>
+            </button>
+            {{-- Nút "Đồng giá" của quầy v2: chọn chương trình đồng giá giỏ đủ điều kiện. --}}
+            <button class="btn btn-option ms-1" id="posDongGia" type="button" title="Đồng giá" style="height: 35px; background: #D9D9D9; min-width: fit-content;">
+                <i class="fa-solid fa-tags" style="color:#183556"></i>
+                <span class="ms-2 w-auto text-center">Đồng giá</span>
+                <span class="button-notice-mark" id="posDongGiaMark" style="display: none;"></span>
+            </button>
             <div class="position-relative d-inline-block">
                 <button type="button" class="iconButton toggle-options btn-extraOptions" data-bs-toggle="collapse" data-bs-target="#extraOptions" aria-expanded="false" aria-controls="extraOptions" title="Thêm">
                     <img src="{{ asset('v2/images/icons/dot.svg') }}" width="17" height="4" alt="">
@@ -392,6 +407,29 @@
                     <label class="form-label" for="posVoucher">Mã giảm giá khách đưa</label>
                     <input type="text" class="form-control text-uppercase" id="posVoucher" autocomplete="off" maxlength="50" placeholder="VD: GIAM10">
                     <p class="text-secondary mt-2 mb-0" style="font-size: 12.5px">Mức giảm của mã được API tính và trừ lúc chốt đơn.</p>
+                    {{-- Thẻ thành viên — như hộp giảm giá của v2: giảm theo hạng tự tính khi đã
+                         chọn khách quen; ô "Điểm" đổi điểm còn dùng ra tiền. --}}
+                    <div id="posTvKhoi" hidden>
+                        <hr>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span>Giảm giá thành viên <b id="posTvHang"></b></span>
+                            <b id="posTvGiam">0 đ</b>
+                        </div>
+                        <div class="mt-3" id="posTvDiemKhoi">
+                            <div class="d-flex justify-content-between align-items-center gap-2">
+                                <span>Điểm</span>
+                                <div class="d-flex align-items-center gap-2 ms-auto">
+                                    <div class="form-check mb-0">
+                                        <input class="form-check-input" type="checkbox" id="posTvDungHet">
+                                        <label class="form-check-label" for="posTvDungHet" style="font-size: 13px">Dùng tất cả điểm</label>
+                                    </div>
+                                    <input type="text" class="form-control" id="posTvDiem" inputmode="numeric" autocomplete="off" value="0" style="max-width: 100px">
+                                </div>
+                                <b id="posTvDiemTien" class="text-nowrap">0 đ</b>
+                            </div>
+                            <small class="text-muted" id="posTvConLai"></small>
+                        </div>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
@@ -503,6 +541,49 @@
 
     {{-- Nhóm nào được hiện trên hàng nút (nút phễu của bản gốc). Nhớ theo MÁY:
          mỗi quầy bán một nhóm khác nhau, mà cùng một người có thể đứng hai quầy. --}}
+    {{-- KHUYẾN MẠI ĐỒNG GIÁ — hộp #modalFixedPrice của quầy v2: chỉ bày chương trình
+         giỏ ĐỦ điều kiện, tick một hoặc nhiều rồi Áp dụng. --}}
+    <div class="modal fade" id="posDongGiaBox" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Khuyến mại đồng giá</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-2">Đơn hàng đủ điều kiện áp dụng các chương trình khuyến mãi dưới đây.</p>
+                    <div class="alert alert-danger py-2">Lưu ý: Chọn <strong>một hoặc nhiều</strong> chương trình để áp dụng</div>
+                    <div class="row g-2" id="posDongGiaDS"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
+                    <button type="button" class="btn btn-primary" id="posDongGiaApDung">Áp dụng</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {{-- CHƯƠNG TRÌNH KHUYẾN MẠI — hộp "Khuyến mãi" của quầy v2. --}}
+    <div class="modal fade" id="posKhuyenMaiBox" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Khuyến mãi</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-2">Đơn hàng đủ điều kiện áp dụng các chương trình khuyến mãi dưới đây.</p>
+                    <div class="alert alert-danger py-2">Lưu ý: Chọn <strong>một hoặc nhiều</strong> chương trình để áp dụng</div>
+                    <div class="row g-2" id="posKhuyenMaiDS"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
+                    <button type="button" class="btn btn-primary" id="posKhuyenMaiApDung">Áp dụng</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="modal fade" id="posNhomBox" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
             <div class="modal-content">
@@ -584,6 +665,8 @@
 
     /* Ô chọn khách: markup select2 của bản gốc (CSS select2 đã nạp), JS của mình lo phần bấm. */
     #posCusBtn { cursor: pointer; }
+    #posTvKhoi .form-check { display: flex; align-items: center; gap: 6px; padding-left: 0; }
+    #posTvKhoi .form-check-input { margin: 0; }
     #posCusBtn.is-khach .select2-selection__rendered { color: #000084; font-weight: 600; }
     /* Danh sách khách quen: ô tìm ở trên, kết quả ở dưới. z-index 1000: tiêu đề bảng hàng dính trên nóc (999). */
     .pos-ac-menu { position: absolute; z-index: 1000; left: 0; right: 0; bottom: calc(100% + 2px); border: 1px solid #dee2e6; border-radius: 6px; background: #fff; box-shadow: rgba(0,0,0,.16) 0 1px 4px; }
@@ -637,6 +720,19 @@
     /* Nút Hoá đơn điện tử đang BẬT cho hoá đơn này: nền xanh nhạt + chấm như nút Ghi chú. */
     #cashier-list-select .electronic_invoice { position: relative; }
     #cashier-list-select .electronic_invoice.is-bat { background: #cfe3ff !important; box-shadow: inset 0 0 0 1px #0151B4; }
+    /* Màn dưới 1600px: hai nút Khuyến mãi / Đồng giá chỉ còn biểu tượng (chữ ở title),
+       không thì ô chọn khách bên phải bị bóp còn vài chữ. */
+    @media (max-width: 1599.98px) {
+        #cashier-list-select #posKhuyenMai > span.ms-2,
+        #cashier-list-select #posDongGia > span.ms-2 { display: none; }
+    }
+    #cashier-list-select #posDongGia.is-bat,
+    #cashier-list-select #posKhuyenMai.is-bat { background: #cfe3ff !important; box-shadow: inset 0 0 0 1px #0151B4; }
+    /* Thẻ chương trình trong hộp Đồng giá — đang chọn thì nền #599FBD, chữ trắng đậm, như quầy v2. */
+    .the-dong-gia { display: flex; gap: 10px; align-items: flex-start; width: 100%; padding: 10px 12px; border: 1px solid #dee2e6; border-radius: 10px; cursor: pointer; }
+    .the-dong-gia input { margin-top: 4px; }
+    .the-dong-gia.chon { background: #599FBD; color: #fff; font-weight: 700; border-color: #599FBD; }
+    .list-order tr.dong-qua { background: #f6fbf4; }
     #posDoneHddtCau { font-weight: 600; }
     #posHddtO { transition: opacity .15s; }
 
@@ -702,6 +798,13 @@
         giamDon: { kieu: 'percent', gt: 0 },
         phuThu: { kieu: 'amount', gt: 0, ghiChu: '' },
         hddt: { bat: false, mst: '', cty: '', diaChi: '', email: '' },
+        // Đồng giá: chương trình đang chọn + bản xem trước API trả (giá từng món,
+        // hàng tặng). Chỉ để HIỂN THỊ — lúc chốt API tính lại từ đầu.
+        dongGia: { chon: [], gia: {}, qua: [] },
+        // Chương trình khuyến mại: đang chọn + số API trả (giảm, hàng tặng).
+        khuyenMai: { chon: [], giam: 0, theo: [], qua: [] },
+        // Thẻ thành viên của khách quen đang chọn: hạng, điểm còn dùng, điểm muốn đổi.
+        tv: { hang: 0, diem: 0, dung: 0 },
     });
     const duKhoi = (h) => { const m = khoiMoi(); Object.keys(m).forEach((k) => { h[k] = Object.assign(m[k], h[k] || {}); }); return h; };
     const hdMoi = () => duKhoi({
@@ -832,7 +935,12 @@
         $('posCusNhan').title = $('posCusNhan').textContent;
         $('posCusBtn').classList.toggle('is-khach', !!(ten || sdt));
     }
-    const datKhach = (ten, sdt, cusId) => { Object.assign(cur(), { ten: ten || '', sdt: sdt || '', cusId: cusId || '' }); luu(); veKhach(); };
+    const datKhach = (ten, sdt, cusId, k) => {
+        Object.assign(cur(), { ten: ten || '', sdt: sdt || '', cusId: cusId || '' });
+        // Đổi khách là bỏ số điểm đang định đổi của khách trước.
+        cur().tv = { hang: Number(k?.rank_id) || 0, diem: Number(k?.points) || 0, dung: 0 };
+        luu(); veKhach(); capNhatTien();
+    };
 
     // Cặp nút VNĐ / % của bản gốc (dùng cho giảm cả đơn và phụ thu).
     const datKieu = (boc, kieu) => $(boc).querySelectorAll('[data-kieu]').forEach((b) => b.classList.toggle('active', b.dataset.kieu === kieu));
@@ -844,9 +952,12 @@
     // là phép lịch sự — API chặn thật, kể cả khi gõ số tiền.
     let kieuGiam = 'percent';
     $('posGiamRow').addEventListener('click', () => {
+        if (dangDongGia()) { nhac('Không thể chọn khuyến mãi khi đã dùng đồng giá!'); return; }
         const h = cur();
         $('posVoucher').value = h.voucher;
         if (CO_GIAM_DON) { kieuGiam = h.giamDon.kieu; datKieu('posGiamKieu', kieuGiam); $('posGiamDon').value = hienNhap(h.giamDon.gt, kieuGiam); }
+        $('posTvDiem').value = h.tv.dung || 0; $('posTvDungHet').checked = false;
+        veThanhVien();
         hop('posGiamBox').show();
     });
     $('posGiamBox').addEventListener('shown.bs.modal', () => (CO_GIAM_DON ? $('posGiamDon') : $('posVoucher')).focus());
@@ -873,6 +984,7 @@
             }
             h.giamDon = { kieu: kieuGiam, gt: kieuGiam === 'percent' ? Math.min(100, gt) : gt };
         }
+        h.tv.dung = diemNhap();
         h.voucher = $('posVoucher').value.trim().toUpperCase(); luu(); capNhatTien(); hop('posGiamBox').hide();
     });
     $('posNote').addEventListener('input', (e) => {
@@ -925,7 +1037,7 @@
         const b = e.target.closest('.pos-ac-item');
         if (!b) return;
         const k = khachGoiY[Number(b.dataset.i)];
-        if (k) datKhach(k.name || k.full_name || '', k.phone || '', String(k.id || '')); else datKhach('', '', '');
+        if (k) datKhach(k.name || k.full_name || '', k.phone || '', String(k.id || ''), k); else datKhach('', '', '');
         moChonKhach(false); $('posSearch').focus();
     });
     // Nút + cam: khách mới. Tích "Lưu" (mặc định) thì tạo hồ sơ qua API rồi chọn luôn khách đó —
@@ -957,7 +1069,7 @@
             const j = await r.json().catch(() => ({}));
             if (!r.ok) { loiKhach((j.errors ? Object.values(j.errors)[0]?.[0] : '') || j.message || 'Không lưu được khách hàng.'); return; }
             const k = (j.data || {}).customer || {};
-            datKhach(k.name || ten, k.phone || sdt, String(k.id || ''));
+            datKhach(k.name || ten, k.phone || sdt, String(k.id || ''), k);
             // Email của hồ sơ là nơi nhận hoá đơn điện tử nếu người bán bật xuất cho lượt này.
             if (k.email && !cur().hddt.email) { cur().hddt.email = k.email; luu(); }
             hop('posKhachBox').hide();
@@ -1157,9 +1269,56 @@
     /* =====================================================================
      * HÀNG TRONG HOÁ ĐƠN
      * ===================================================================== */
-    const giaSauBot = (d) => d.gia * (1 - (d.giam || 0) / 100);
+    // Giá bán của dòng: giá đồng giá nếu dòng đang được chương trình phủ, không thì giá thường.
+    const dangDongGia = () => cur().dongGia.chon.length > 0;
+    const dangKhuyenMai = () => cur().khuyenMai.chon.length > 0;
+    // Hàng tặng của cả đồng giá lẫn chương trình khuyến mại — cùng hiện dưới giỏ.
+    const quaHienThi = () => [...cur().dongGia.qua, ...cur().khuyenMai.qua];
+    const giamKM = () => Math.max(0, Math.min(Number(cur().khuyenMai.giam) || 0, tienHang() - giamDon()));
+
+    // THẺ THÀNH VIÊN — tính trước như hộp giảm giá của v2; lúc chốt API tính lại
+    // trên điểm thật (không đủ điểm thì từ chối). Giảm theo hạng tính trên tiền
+    // hàng, điểm đổi kẹp trong số điểm còn và phần tiền còn phải trả.
+    const TV = (() => { try { return JSON.parse(D.thanhVien || '{}'); } catch (e) { return {}; } })();
+    const TV_MOI_DIEM = Number(TV.money_per_point) || 0;
+    const hangCua = (h) => (TV.ranks || []).find((r) => Number(r.id) === Number(h.tv.hang));
+    function giamHang() {
+        const h = cur(), r = h.cusId ? hangCua(h) : null, th = tienHang(), gt = Number(r?.discount_value) || 0;
+        if (!r || th <= 0 || gt <= 0) return 0;
+        if (!r.apply_all_order_values) {
+            if (r.min_order_value != null && th < Number(r.min_order_value)) return 0;
+            if (Number(r.max_order_value) > 0 && th > Number(r.max_order_value)) return 0;
+        }
+        const g = Math.round(Math.min(r.discount_type === 'percent' ? th * Math.min(100, gt) / 100 : gt, th));
+        return Math.max(0, Math.min(g, th - giamDon() - giamKM()));
+    }
+    const conTruocDiem = () => Math.max(0, tienHang() - giamDon() - giamKM() - giamHang());
+    function diemDung(muon) {
+        const h = cur();
+        if (!h.cusId || TV_MOI_DIEM <= 0) return 0;
+        const m = muon === undefined ? (Number(h.tv.dung) || 0) : muon;
+        return Math.max(0, Math.min(m, Number(h.tv.diem) || 0, Math.floor(conTruocDiem() / TV_MOI_DIEM)));
+    }
+    const tienDiem = (muon) => Math.min(Math.round(diemDung(muon) * TV_MOI_DIEM), conTruocDiem());
+    const diemNhap = () => ($('posTvDungHet').checked ? diemDung(Infinity) : diemDung(soTien($('posTvDiem').value)));
+    function veThanhVien() {
+        const h = cur(), r = hangCua(h);
+        $('posTvKhoi').hidden = !h.cusId || (!r && TV_MOI_DIEM <= 0);
+        $('posTvHang').textContent = r ? r.name : '(chưa có hạng)';
+        $('posTvGiam').textContent = so(giamHang()) + ' đ';
+        $('posTvDiemKhoi').hidden = TV_MOI_DIEM <= 0;
+        $('posTvDungHet').disabled = !(Number(h.tv.diem) > 0);
+        const d = diemNhap();
+        if ($('posTvDungHet').checked) $('posTvDiem').value = d;
+        $('posTvDiemTien').textContent = so(tienDiem(d)) + ' đ';
+        $('posTvConLai').textContent = `Còn ${so(Number(h.tv.diem) || 0)} điểm · 1 điểm = ${so(TV_MOI_DIEM)} đ`;
+    }
+    $('posTvDiem').addEventListener('input', (e) => { e.target.value = String(soTien(e.target.value) || 0); $('posTvDungHet').checked = false; veThanhVien(); });
+    $('posTvDungHet').addEventListener('change', veThanhVien);
+    const giaBan = (d) => (cur().dongGia.gia[d.id] ?? d.gia);
+    const giaSauBot = (d) => giaBan(d) * (1 - (d.giam || 0) / 100);
     // Cùng công thức với API (buildOrderItems): bớt = làm tròn(giá × SL × %), rồi mới trừ.
-    const thanhTien = (d) => d.gia * d.sl - Math.round(d.gia * d.sl * (d.giam || 0) / 100);
+    const thanhTien = (d) => giaBan(d) * d.sl - Math.round(giaBan(d) * d.sl * (d.giam || 0) / 100);
 
     function them(m) {
         if (!m.id) return;
@@ -1172,7 +1331,7 @@
         else g.push({ id: m.id, ten: m.ten, opt: m.opt, gia: m.gia, ton: m.ton, sl: 1, giam: 0, vat: m.vat || 0 });
         vuaThem = m.id;
         baoLoi('');
-        luu(); veTab(); veGio(); capNhatTien();
+        luu(); veTab(); veGio(); capNhatTien(); tinhLaiDongGia(); tinhLaiKhuyenMai();
     }
 
     function veGio() {
@@ -1200,17 +1359,24 @@
                 </div>
             </td>
             <td class="fw-bold price" style="vertical-align: top;">
-                <div class="d-flex justify-content-center align-items-center gap-1">${so(giaSauBot(d))}${HAN_MUC > 0 ? `<i class="fas fa-edit color-1a234a mo-giam" data-mo-giam role="button" title="Bớt giá món này"></i>` : ''}</div>
+                <div class="d-flex justify-content-center align-items-center gap-1">${so(giaSauBot(d))}${HAN_MUC > 0 && !dangDongGia() ? `<i class="fas fa-edit color-1a234a mo-giam" data-mo-giam role="button" title="Bớt giá món này"></i>` : ''}</div>
                 ${d.giam > 0 ? `<span class="gia-goc">${so(d.gia)} · bớt ${d.giam}%</span>` : ''}
+                ${cur().dongGia.gia[d.id] !== undefined && cur().dongGia.gia[d.id] !== d.gia ? `<span class="gia-goc">${so(d.gia)} · đồng giá</span>` : ''}
                 ${HAN_MUC > 0 ? `<div class="cum-giam" ${d.giam > 0 ? '' : 'hidden'}><input class="form-control o-giam" inputmode="decimal" value="${d.giam || ''}" placeholder="0" data-giam aria-label="Bớt phần trăm">%</div>` : ''}
             </td>
             <td class="amount" style="vertical-align: top;"><p class="sale-price-item">${so(thanhTien(d))} đ</p></td>
             <td><a href="#" class="text-decoration-none delete_order" data-xoa title="Bỏ món"><i class="fa-solid fa-xmark"></i></a></td>
+        </tr>`).join('') + quaHienThi().map((q) => `<tr class="order-item align-baseline d-flex dong-qua">
+            <td class="text-left"><h5 class="mb-1 name-menu">${esc(q.name)} <span class="badge bg-success">Tặng</span></h5></td>
+            <td style="vertical-align: top;" class="text-center">${q.quantity}</td>
+            <td class="fw-bold price" style="vertical-align: top;">0</td>
+            <td class="amount" style="vertical-align: top;"><p class="sale-price-item">0 đ</p></td>
+            <td></td>
         </tr>`).join('');
         vuaThem = null;
     }
 
-    function sauKhiSuaGio() { luu(); veTab(); veGio(); capNhatTien(); }
+    function sauKhiSuaGio() { luu(); veTab(); veGio(); capNhatTien(); tinhLaiDongGia(); tinhLaiKhuyenMai(); }
     $('posCart').addEventListener('click', (e) => {
         const tr = e.target.closest('tr[data-i]');
         if (!tr) return;
@@ -1310,7 +1476,8 @@
         const w = window.open('', '_blank', 'width=420,height=680');
         if (!w) { nhac('Trình duyệt chặn cửa sổ in — cho phép cửa sổ bật lên rồi bấm lại.'); return; }
         const dong = g.map((d) => `<div class="mon"><div>${esc(d.ten)}${d.opt ? ` (${esc(d.opt)})` : ''}</div>`
-            + `<div class="dong thut"><span>${d.sl} × ${so(giaSauBot(d))}</span><span>${so(thanhTien(d))}</span></div></div>`).join('');
+            + `<div class="dong thut"><span>${d.sl} × ${so(giaSauBot(d))}</span><span>${so(thanhTien(d))}</span></div></div>`).join('')
+            + quaHienThi().map((q) => `<div class="mon"><div>${esc(q.name)} (Tặng)</div><div class="dong thut"><span>${q.quantity} × 0</span><span>0</span></div></div>`).join('');
         const luc = new Date().toLocaleString('vi-VN', { hour12: false });
         w.document.write(`<!DOCTYPE html><html lang="vi"><head><meta charset="utf-8"><title>Phiếu tạm tính</title><style>`
             + `@page{size:80mm auto;margin:0}*{box-sizing:border-box}body{width:76mm;margin:0 auto;padding:4mm 2mm 8mm;font-family:"Cascadia Mono",Consolas,"DejaVu Sans Mono",monospace;font-size:12px;line-height:1.45;color:#000}`
@@ -1319,6 +1486,7 @@
             + `<div class="giua" style="font-weight:700">PHIẾU TẠM TÍNH</div><div class="dong"><span>${esc(nhanHd(cur()))}</span><span>${luc}</span></div><div class="ke"></div>${dong}<div class="ke"></div>`
             + `<div class="dong"><span>Tiền hàng</span><span>${so(tamTinh())}</span></div>${botMon() > 0 ? `<div class="dong"><span>Bớt theo món</span><span>-${so(botMon())}</span></div>` : ''}`
             + `${giamDon() > 0 ? `<div class="dong"><span>Giảm cả đơn</span><span>-${so(giamDon())}</span></div>` : ''}`
+            + cur().khuyenMai.theo.filter((c) => c.giam > 0).map((c) => `<div class="dong"><span>KM: ${esc(c.name)}</span><span>-${so(c.giam)}</span></div>`).join('')
             + `${phuThu() > 0 ? `<div class="dong"><span>Phụ thu${cur().phuThu.ghiChu ? ': ' + esc(cur().phuThu.ghiChu) : ''}</span><span>${so(phuThu())}</span></div>` : ''}`
             + `${thue() > 0 ? `<div class="dong"><span>Thuế sản phẩm</span><span>${so(thue())}</span></div>` : ''}`
             + `<div class="dong tong"><span>TỔNG CỘNG</span><span>${so(phaiTra())}</span></div><div class="giua" style="margin-top:8px">(Chưa thanh toán)</div>`
@@ -1327,11 +1495,146 @@
     });
 
     /* =====================================================================
+     * ĐỒNG GIÁ — nút "Đồng giá": hỏi API chương trình giỏ đủ điều kiện, tick rồi
+     * Áp dụng. Đơn đồng giá không dùng thêm giảm tay / mã giảm giá (như v2).
+     * ===================================================================== */
+    async function hoiDongGia(chon) {
+        const r = await fetch(D.dongGiaUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': CSRF },
+            body: JSON.stringify({ items: gio().map((d) => ({ product_variant_id: d.id, quantity: d.sl })), fixed_price_ids: chon }),
+        });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(j.message || 'Không tính được đồng giá.');
+        return j.data || { chuong_trinh: [], gia: [], qua: [] };
+    }
+    function ganDongGia(chon, kq) {
+        const coDu = new Set((kq.chuong_trinh || []).map((c) => c.id));
+        const giu = chon.filter((id) => coDu.has(id));
+        cur().dongGia = {
+            chon: giu,
+            gia: giu.length ? Object.fromEntries((kq.gia || []).map((g) => [g.product_variant_id, Number(g.price)])) : {},
+            qua: giu.length ? (kq.qua || []) : [],
+        };
+        luu(); veGio(); capNhatTien();
+        return giu.length < chon.length;
+    }
+    let henDongGia = null;
+    // Giỏ đổi thì giá đồng giá và hàng tặng có thể đổi theo (đủ / hết ngưỡng) — hỏi lại.
+    function tinhLaiDongGia() {
+        if (!dangDongGia()) return;
+        clearTimeout(henDongGia);
+        const chon = cur().dongGia.chon.slice();
+        henDongGia = setTimeout(async () => {
+            try {
+                if (!gio().length) { ganDongGia([], {}); return; }
+                if (ganDongGia(chon, await hoiDongGia(chon))) nhac('Giỏ không còn đủ điều kiện một chương trình đồng giá — đã bỏ chương trình đó.');
+            } catch (e) { nhac(e.message); }
+        }, 250);
+    }
+    let dsDongGia = [];
+    $('posDongGia').addEventListener('click', async () => {
+        const h = cur();
+        if (!h.gio.length) { nhac('Chưa có sản phẩm nào trong giỏ.'); return; }
+        if (dangKhuyenMai() || h.voucher.trim() || giamDon() > 0 || h.gio.some((d) => d.giam > 0)) {
+            nhac('Không thể dùng đồng giá khi đã sử dụng khuyến mãi — bỏ chương trình khuyến mãi, mã giảm giá và giảm tay trước.');
+            return;
+        }
+        try {
+            const kq = await hoiDongGia(h.dongGia.chon);
+            dsDongGia = kq.chuong_trinh || [];
+            if (!dsDongGia.length) { nhac('Đơn hàng chưa đủ điều kiện áp dụng chương trình đồng giá nào.'); ganDongGia([], {}); return; }
+            $('posDongGiaDS').innerHTML = dsDongGia.map((c) => `<div class="col-6">
+                <label class="the-dong-gia ${h.dongGia.chon.includes(c.id) ? 'chon' : ''}">
+                    <input type="checkbox" value="${c.id}" ${h.dongGia.chon.includes(c.id) ? 'checked' : ''}>
+                    <span><b>${esc(c.code)}</b><br>${esc(c.name)}</span>
+                </label></div>`).join('');
+            hop('posDongGiaBox').show();
+        } catch (e) { nhac(e.message); }
+    });
+    $('posDongGiaDS').addEventListener('change', (e) => {
+        const l = e.target.closest('.the-dong-gia');
+        if (l) l.classList.toggle('chon', e.target.checked);
+    });
+    $('posDongGiaApDung').addEventListener('click', async () => {
+        const chon = [...$('posDongGiaDS').querySelectorAll('input:checked')].map((i) => Number(i.value));
+        try {
+            ganDongGia(chon, chon.length ? await hoiDongGia(chon) : {});
+            hop('posDongGiaBox').hide();
+        } catch (e) { nhac(e.message); }
+    });
+
+    /* =====================================================================
+     * CHƯƠNG TRÌNH KHUYẾN MẠI — nút "Khuyến mãi": hỏi API chương trình đơn đủ
+     * điều kiện, tick một hoặc nhiều rồi Áp dụng. Cộng dồn với mã giảm giá và
+     * giảm tay; KHÔNG dùng cùng đồng giá (như v2).
+     * ===================================================================== */
+    async function hoiKhuyenMai(chon) {
+        const r = await fetch(D.khuyenMaiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': CSRF },
+            body: JSON.stringify({ items: gio().map((d) => ({ product_variant_id: d.id, quantity: d.sl })), program_ids: chon }),
+        });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(j.message || 'Không tính được khuyến mãi.');
+        return j.data || { chuong_trinh: [], giam: 0, theo_chuong_trinh: [], qua: [] };
+    }
+    function ganKhuyenMai(chon, kq) {
+        const coDu = new Set((kq.chuong_trinh || []).map((c) => c.id));
+        const giu = chon.filter((id) => coDu.has(id));
+        cur().khuyenMai = giu.length
+            ? { chon: giu, giam: Number(kq.giam) || 0, theo: kq.theo_chuong_trinh || [], qua: kq.qua || [] }
+            : { chon: [], giam: 0, theo: [], qua: [] };
+        luu(); veGio(); capNhatTien();
+        return giu.length < chon.length;
+    }
+    let henKhuyenMai = null;
+    // Giỏ đổi thì bậc đạt được có thể đổi (lên / xuống / hết) — hỏi lại như v2 áp lại lúc lưu món.
+    function tinhLaiKhuyenMai() {
+        if (!dangKhuyenMai()) return;
+        clearTimeout(henKhuyenMai);
+        const chon = cur().khuyenMai.chon.slice();
+        henKhuyenMai = setTimeout(async () => {
+            try {
+                if (!gio().length) { ganKhuyenMai([], {}); return; }
+                if (ganKhuyenMai(chon, await hoiKhuyenMai(chon))) nhac('Đơn không còn đủ điều kiện một chương trình khuyến mãi — đã bỏ chương trình đó.');
+            } catch (e) { nhac(e.message); }
+        }, 250);
+    }
+    $('posKhuyenMai').addEventListener('click', async () => {
+        const h = cur();
+        if (!h.gio.length) { nhac('Chưa có sản phẩm nào trong giỏ.'); return; }
+        if (dangDongGia()) { nhac('Không thể chọn khuyến mãi khi đã dùng đồng giá!'); return; }
+        try {
+            const kq = await hoiKhuyenMai(h.khuyenMai.chon);
+            const ds = kq.chuong_trinh || [];
+            if (!ds.length) { nhac('Đơn hàng chưa đủ điều kiện áp dụng chương trình khuyến mãi nào.'); ganKhuyenMai([], {}); return; }
+            $('posKhuyenMaiDS').innerHTML = ds.map((c) => `<div class="col-6">
+                <label class="the-dong-gia ${h.khuyenMai.chon.includes(c.id) ? 'chon' : ''}">
+                    <input type="checkbox" value="${c.id}" ${h.khuyenMai.chon.includes(c.id) ? 'checked' : ''}>
+                    <span><b>${esc(c.code)}</b><br>${esc(c.name)}</span>
+                </label></div>`).join('');
+            hop('posKhuyenMaiBox').show();
+        } catch (e) { nhac(e.message); }
+    });
+    $('posKhuyenMaiDS').addEventListener('change', (e) => {
+        const l = e.target.closest('.the-dong-gia');
+        if (l) l.classList.toggle('chon', e.target.checked);
+    });
+    $('posKhuyenMaiApDung').addEventListener('click', async () => {
+        const chon = [...$('posKhuyenMaiDS').querySelectorAll('input:checked')].map((i) => Number(i.value));
+        try {
+            ganKhuyenMai(chon, chon.length ? await hoiKhuyenMai(chon) : {});
+            hop('posKhuyenMaiBox').hide();
+        } catch (e) { nhac(e.message); }
+    });
+
+    /* =====================================================================
      * TIỀN
      * ===================================================================== */
     const tongSl = () => gio().reduce((t, d) => t + d.sl, 0);
-    const tamTinh = () => gio().reduce((t, d) => t + d.gia * d.sl, 0);
-    const botMon = () => gio().reduce((t, d) => t + (d.gia * d.sl - thanhTien(d)), 0);
+    const tamTinh = () => gio().reduce((t, d) => t + giaBan(d) * d.sl, 0);
+    const botMon = () => gio().reduce((t, d) => t + (giaBan(d) * d.sl - thanhTien(d)), 0);
     // Tiền hàng SAU bớt từng món — nền của giảm cả đơn, phụ thu theo % và thuế (API gọi là subtotal).
     const tienHang = () => gio().reduce((t, d) => t + thanhTien(d), 0);
     function giamDon() {
@@ -1348,7 +1651,7 @@
     // tỉ trọng (đồng lẻ dồn dòng cuối), rồi thuế trên phần còn lại. Mã giảm giá chưa biết số tiền nên
     // chưa trừ ở đây — con số thu thật là con số API trả sau khi chốt.
     function thue() {
-        const g = gio(), goc = tienHang(), tong = Math.min(giamDon(), goc);
+        const g = gio(), goc = tienHang(), tong = Math.min(giamDon() + giamKM() + giamHang() + tienDiem(), goc);
         let daChia = 0, cong = 0;
         g.forEach((d, i) => {
             let chia = 0;
@@ -1361,7 +1664,7 @@
         });
         return cong;
     }
-    const phaiTra = () => Math.max(0, tienHang() - giamDon()) + phuThu() + thue();
+    const phaiTra = () => Math.max(0, tienHang() - giamDon() - giamKM() - giamHang() - tienDiem()) + phuThu() + thue();
 
     function chonHinhThuc(m, luuLai = true) {
         const nut = $('posPayTabs').querySelector(`[data-method="${m}"]`) || $('posPayTabs').querySelector('[data-method]');
@@ -1374,7 +1677,7 @@
     $('posPayTabs').addEventListener('click', (e) => { const b = e.target.closest('[data-method]'); if (b) chonHinhThuc(b.dataset.method); });
 
     function capNhatTien() {
-        const tong = phaiTra(), bot = botMon(), gd = giamDon(), cut = bot + gd, dua = soTien($('posTendered').value), coHang = gio().length > 0, tienMat = hinhThuc === 'cash';
+        const tong = phaiTra(), bot = botMon(), gd = giamDon(), km = giamKM(), tv = giamHang() + tienDiem(), cut = bot + gd + km + tv, dua = soTien($('posTendered').value), coHang = gio().length > 0, tienMat = hinhThuc === 'cash';
         const h = cur(), ma = h.voucher.trim(), pt = phuThu();
         $('posQty').textContent = tongSl();
         $('posGross').textContent = so(tamTinh()) + ' đ';
@@ -1383,12 +1686,19 @@
             bot > 0 ? 'bớt theo món' : '',
             gd > 0 ? (h.giamDon.kieu === 'percent' ? `cả đơn ${String(h.giamDon.gt).replace('.', ',')}%` : 'cả đơn') : '',
             ma ? 'mã ' + ma : '',
+            km > 0 ? 'khuyến mãi' : '',
+            giamHang() > 0 ? 'hạng thành viên' : '',
+            tienDiem() > 0 ? `${so(diemDung())} điểm` : '',
         ].filter(Boolean).join(', ');
         $('posPhuThu').textContent = so(pt) + ' đ';
         $('posPhuThuTen').textContent = pt > 0 ? (h.phuThu.ghiChu || '') : '';
         $('posThue').textContent = so(thue()) + ' đ';
         $('posHddt').classList.toggle('is-bat', !!h.hddt.bat);
         $('posHddtMark').style.display = h.hddt.bat ? 'inline-block' : 'none';
+        $('posDongGia').classList.toggle('is-bat', dangDongGia());
+        $('posDongGiaMark').style.display = dangDongGia() ? 'inline-block' : 'none';
+        $('posKhuyenMai').classList.toggle('is-bat', dangKhuyenMai());
+        $('posKhuyenMaiMark').style.display = dangKhuyenMai() ? 'inline-block' : 'none';
         $('posTotal').textContent = so(tong) + ' đ';
         $('posSubmit').disabled = !coHang || dangGui;
         $('posTamTinh').disabled = !coHang;
@@ -1451,6 +1761,9 @@
             items: h.gio.map((d) => ({ product_variant_id: d.id, quantity: d.sl, discount_percent: d.giam || 0 })),
         };
         if (h.cusId) payload.user_id = Number(h.cusId);
+        if (h.dongGia.chon.length) payload.fixed_price_ids = h.dongGia.chon;
+        if (h.khuyenMai.chon.length) payload.promotion_program_ids = h.khuyenMai.chon;
+        if (h.cusId && diemDung() > 0) payload.use_points = diemDung();
         if (hinhThuc === 'cash' && dua > 0) payload.amount_tendered = dua;
         // Giảm cả đơn: gửi ĐÚNG kiểu người bán gõ — % thì API tự tính tiền và kiểm hạn quyền trên %.
         if (giamDon() > 0) {

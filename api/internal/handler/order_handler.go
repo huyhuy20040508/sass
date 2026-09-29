@@ -123,7 +123,7 @@ func (h *OrderHandler) POSPhatHanhHoaDon(c *gin.Context) {
 	}
 	hd, err := h.svc.POSPhatHanhHoaDon(c.Request.Context(), id)
 	if err != nil {
-		handleServiceError(c, err)
+		loiHoaDon(c, err)
 
 		return
 	}
@@ -864,7 +864,18 @@ func respondOrderError(c *gin.Context, err error, fallback string) {
 		return
 	}
 
+	var theoO *service.LoiTheoO
+	if errors.As(err, &theoO) {
+		response.ValidationError(c, theoO.Fields)
+
+		return
+	}
+
 	switch {
+	case errors.Is(err, domain.ErrKhongDuDiem):
+		response.Error(c, http.StatusUnprocessableEntity, err.Error())
+	case errors.Is(err, domain.ErrDongGiaKhongGopKM), errors.Is(err, domain.ErrKMKhongGopDongGia):
+		response.Error(c, http.StatusBadRequest, err.Error())
 	case errors.Is(err, domain.ErrNotFound):
 		response.Error(c, http.StatusNotFound, "Không tìm thấy đơn hàng")
 	case errors.Is(err, domain.ErrInvalidStatus):

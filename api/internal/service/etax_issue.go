@@ -12,6 +12,7 @@ import (
 	"go.uber.org/zap"
 
 	"sass-api/internal/domain"
+	"sass-api/internal/dto"
 	"sass-api/pkg/logger"
 )
 
@@ -58,6 +59,12 @@ func (s *etaxService) XemHoaDon(ctx context.Context, orderID uint) (*domain.Etax
 // không phải kiểm tra dữ liệu: đơn có thật, đã thu tiền, chi nhánh đã nối cổng
 // và đã chọn ký hiệu, và đơn chưa từng có hoá đơn.
 func (s *etaxService) PhatHanh(ctx context.Context, orderID uint) (*domain.EtaxInvoice, error) {
+	// Người gọi bỏ về giữa chừng (PHP hết giờ chờ, trình duyệt đóng tab) KHÔNG
+	// được cắt ngang lượt này: cổng có thể đã nhận hoá đơn rồi, cắt ở đó thì
+	// bên mình không ghi được cả dấu vết lẫn kết quả. Mỗi lượt gọi cổng đã có
+	// hạn giờ riêng của client M-Invoice nên việc này không treo mãi.
+	ctx = context.WithoutCancel(ctx)
+
 	don, err := s.donHang.FindByID(ctx, orderID)
 	if err != nil {
 		return nil, err
@@ -158,6 +165,70 @@ func (s *etaxService) PhatHanh(ctx context.Context, orderID uint) (*domain.EtaxI
 	return ghi, nil
 }
 
+// PhatHanhKemNguoiMua là nút "Xuất HĐĐT" có hộp nhập người mua: ghi người mua
+// vào ĐƠN trước rồi mới phát hành, để tờ hoá đơn, lượt bấm lại khi cổng từ chối
+// và đơn hàng cùng nói một người mua.
+//
+// Hai chốt "đã thu tiền" và "chưa có hoá đơn" được hỏi TRƯỚC khi ghi: sửa người
+// mua của một đơn đã có hoá đơn là làm đơn lệch với tờ đã nộp cơ quan thuế.
+func (s *etaxService) PhatHanhKemNguoiMua(ctx context.Context, orderID uint, req *dto.EtaxPhatHanhRequest) (*domain.EtaxInvoice, error) {
+	ten := strings.TrimSpace(req.TenNguoiMua)
+	mst := strings.TrimSpace(req.BuyerTaxCode)
+	congTy := strings.TrimSpace(req.BuyerCompany)
+	diaChi := strings.TrimSpace(req.BuyerAddress)
+	if req.LoaiNguoiMua == "company" {
+		thieu := map[string]string{}
+		if mst == "" {
+			thieu["buyer_tax_code"] = "Nhập mã số thuế của doanh nghiệp"
+		}
+		if congTy == "" {
+			thieu["buyer_company"] = "Nhập tên doanh nghiệp"
+		}
+		if diaChi == "" {
+			thieu["buyer_address"] = "Nhập địa chỉ đăng ký của doanh nghiệp"
+		}
+		if len(thieu) > 0 {
+			return nil, loiO(thieu)
+		}
+	} else {
+		if ten == "" {
+			return nil, loiO(map[string]string{"buyer_name": "Nhập tên người mua"})
+		}
+		// Khách cá nhân: xoá dấu doanh nghiệp còn sót từ lần khai trước, không thì
+		// tờ hoá đơn vẫn mang tên công ty người dùng vừa bỏ chọn.
+		mst, congTy = "", ""
+	}
+
+	cu, err := s.repo.HoaDonTheoDon(ctx, orderID)
+	if err != nil && !errors.Is(err, domain.ErrNotFound) {
+		return nil, err
+	}
+	if cu != nil && cu.Status != domain.HoaDonHong {
+		return nil, domain.ErrHoaDonDaPhatHanh
+	}
+
+	_, err = s.donHang.LockAndUpdate(ctx, orderID, func(o *domain.Order) (*domain.OrderStatusHistory, []string, *domain.StockRelease, error) {
+		if o.PaymentStatus != domain.OrderPaymentPaid {
+			return nil, nil, nil, domain.ErrDonChuaThuTien
+		}
+		o.RecipientEmail = strings.TrimSpace(req.Email)
+		o.BuyerTaxCode, o.BuyerCompany, o.BuyerAddress = mst, congTy, diaChi
+		cot := []string{"recipient_email", "buyer_tax_code", "buyer_company", "buyer_address"}
+		// Doanh nghiệp để trống tên thì giữ tên đang có — đừng xoá người nhận hàng.
+		if ten != "" {
+			o.RecipientName = ten
+			cot = append(cot, "recipient_name")
+		}
+
+		return nil, cot, nil, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return s.PhatHanh(ctx, orderID)
+}
+
 // TuPhatHanh là đường cho hai chỗ ĐƠN VỪA THU TIỀN gọi tới.
 //
 // Nuốt mọi lỗi và chỉ ghi nhật ký, CÓ CHỦ Ý: cổng HĐĐT sập không được phép làm
@@ -232,7 +303,7 @@ func (s *etaxService) dungHoaDon(
 		d := map[string]any{
 			"tchat":                     "1",
 			"stt_rec0":                  i + 1,
-			"inv_itemCode":              it.VariantSKU,
+			"inv_itemCode":              maHangHoaDon(it.VariantSKU),
 			"inv_itemName":              ten,
 			"inv_unitCode":              "",
 			"inv_quantity":              it.Quantity,
@@ -418,6 +489,22 @@ func maThue(muc int) string {
 	}
 
 	return strconv.Itoa(muc)
+}
+
+// maHangToiDa là độ dài mã hàng cổng M-Invoice nhận ("Mã hàng phải có chiều dài
+// tối đa là 50") — quá một ký tự là cổng từ chối CẢ tờ hoá đơn.
+const maHangToiDa = 50
+
+// maHangHoaDon cắt SKU biến thể về đúng giới hạn của cổng. SKU biến thể là mã gốc
+// nối thêm tên các thuộc tính, nên cắt đuôi vẫn giữ nguyên mã gốc ở đầu — đủ để
+// tra ngược về mặt hàng. Cắt theo ký tự chứ không theo byte: SKU có thể mang dấu.
+func maHangHoaDon(sku string) string {
+	r := []rune(strings.TrimSpace(sku))
+	if len(r) <= maHangToiDa {
+		return string(r)
+	}
+
+	return strings.TrimRight(string(r[:maHangToiDa]), "-")
 }
 
 // lamTron về đồng: hoá đơn không có đơn vị nhỏ hơn, và để lẻ thì tổng của các

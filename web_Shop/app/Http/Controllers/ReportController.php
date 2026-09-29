@@ -282,8 +282,8 @@ class ReportController extends Controller
         ];
     }
 
-    /** Sáu mốc nhanh của v2 quy về khoảng ngày cụ thể. */
-    protected function khoangKyNhanh(string $ma): array
+    /** Sáu mốc nhanh của v2 quy về khoảng ngày cụ thể. Báo cáo kết ca dùng chung. */
+    public static function khoangKyNhanh(string $ma): array
     {
         $homNay = Carbon::today();
 

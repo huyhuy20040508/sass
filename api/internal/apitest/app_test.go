@@ -347,6 +347,7 @@ func dungHeThongVoi(t *testing.T, banHang, dieuHanh bool) *heThong {
 	promotionSvc := service.NewPromotionService(promotionRepo, categoryRepo)
 	voucherSvc := service.NewVoucherService(voucherRepo)
 	customerSvc := service.NewCustomerService(userRepo)
+	customerSvc.DungThanhVien(repository.NewMembershipRepository(db))
 	userSvc := service.NewUserService(userRepo, roleRepo, hanMucSvc)
 	hub := realtime.NewHub()
 	notifSvc := service.NewNotificationService(notifRepo, hub)
@@ -355,7 +356,11 @@ func dungHeThongVoi(t *testing.T, banHang, dieuHanh bool) *heThong {
 	etaxSvc := service.NewEtaxService(
 		repository.NewEtaxRepository(db), chiNhanhRepo, orderRepo, bimat.New(""), minvoice.New())
 	paymentSvc := service.NewPaymentService(paymentRepo, orderRepo, payosClient, cfg.PayOS, sepayClient, notifSvc, etaxSvc)
-	orderSvc := service.NewOrderService(orderRepo, returnRepo, mailSender, cfg.Mail, notifSvc, settingSvc, paymentSvc, promotionSvc, voucherSvc, etaxSvc, cfg.JWT.Secret)
+	fixedPriceRepo := repository.NewFixedPriceRepository(db)
+	dongGiaSvc := service.NewFixedPriceService(fixedPriceRepo, categoryRepo, orderRepo)
+	khuyenMaiSvc := service.NewPromotionProgramService(repository.NewPromotionProgramRepository(db), fixedPriceRepo, categoryRepo, orderRepo)
+	orderSvc := service.NewOrderService(orderRepo, returnRepo, mailSender, cfg.Mail, notifSvc, settingSvc, paymentSvc, promotionSvc, voucherSvc, etaxSvc, dongGiaSvc, khuyenMaiSvc, cfg.JWT.Secret)
+	orderSvc.DungThanhVien(repository.NewMembershipRepository(db))
 	returnSvc := service.NewOrderReturnService(returnRepo, notifSvc, settingSvc)
 	inventorySvc := service.NewInventoryService(inventoryRepo)
 	contactSvc := service.NewContactService(contactRepo, newsletterRepo)
@@ -406,6 +411,10 @@ func dungHeThongVoi(t *testing.T, banHang, dieuHanh bool) *heThong {
 			Banner:    handler.NewBannerHandler(bannerSvc),
 			Report:    handler.NewReportHandler(reportSvc),
 			Promo:     handler.NewPromotionHandler(promotionSvc),
+			DongGia:   handler.NewFixedPriceHandler(dongGiaSvc),
+			KhuyenMai: handler.NewPromotionProgramHandler(khuyenMaiSvc),
+			Voucher2:  handler.NewVoucherProgramHandler(service.NewVoucherProgramService(repository.NewVoucherProgramRepository(db))),
+			ThanhVien: handler.NewMembershipHandler(service.NewMembershipService(repository.NewMembershipRepository(db), userRepo)),
 			Voucher:   handler.NewVoucherHandler(voucherSvc),
 			Contact:   handler.NewContactHandler(contactSvc),
 			Plan:      planHandler,

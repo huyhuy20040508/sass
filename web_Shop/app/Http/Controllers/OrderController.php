@@ -29,6 +29,25 @@ class OrderController extends Controller
         'status' => 'Trạng thái',
     ];
 
+    /**
+     * Cột của CRM → Danh sách đơn hàng (khuôn crm/orders của v2): hai cột khách
+     * đứng đầu, bỏ cột Khách hàng gộp tên + SĐT. Còn lại như COT_BANG.
+     */
+    public const COT_CRM = [
+        'customer_code' => 'Mã khách hàng',
+        'customer_name' => 'Tên khách hàng',
+        'code' => 'Mã đơn',
+        'time' => 'Thời gian',
+        'discount' => 'Giảm giá',
+        'shipping_fee' => 'Phí giao',
+        'cash' => 'Tiền mặt',
+        'transfer' => 'Chuyển khoản',
+        'online' => 'Thẻ/Ví',
+        'debt' => 'Công nợ',
+        'total' => 'Tổng tiền',
+        'status' => 'Trạng thái',
+    ];
+
     public const STATUSES = [
         'pending' => 'Chờ xác nhận', 'confirmed' => 'Đã xác nhận',
         'processing' => 'Đang chuẩn bị', 'shipping' => 'Đang giao',
@@ -118,6 +137,20 @@ class OrderController extends Controller
 
     public function index(Request $request)
     {
+        return $this->soDon($request, 'v2::orders.index');
+    }
+
+    /**
+     * CRM → Danh sách đơn hàng — cùng sổ chứng từ, cùng bộ lọc với Quản lý đơn
+     * hàng; chỉ khác bảng (xem COT_CRM). Trang riêng, view riêng.
+     */
+    public function crm(Request $request)
+    {
+        return $this->soDon($request, 'v2::crm.orders.index');
+    }
+
+    protected function soDon(Request $request, string $khuon)
+    {
         $filters = $this->filters($request);
         $orders = [];
         $meta = ['page' => $filters['page'], 'page_size' => $filters['page_size'], 'total' => 0, 'total_pages' => 1];
@@ -139,7 +172,7 @@ class OrderController extends Controller
             $error = 'Không tải được danh sách đơn hàng. Kiểm tra kết nối API.';
         }
 
-        $view = view('v2::orders.index', compact('orders', 'filters', 'meta'))
+        $view = view($khuon, compact('orders', 'filters', 'meta'))
             ->with('nhanVien', $this->danhMucNhanVien());
 
         return $error ? $view->with('error', $error) : $view;
@@ -210,10 +243,21 @@ class OrderController extends Controller
      * của API ra nguyên văn: "chưa nối cổng", "chưa chọn ký hiệu" và "đã phát
      * hành rồi" là ba việc phải làm khác hẳn nhau.
      */
-    public function phatHanhHoaDon(int $id)
+    public function phatHanhHoaDon(Request $request, int $id)
     {
+        // Hộp "Xuất HĐĐT" gửi kèm người mua; nút phát hành lại ở sổ hoá đơn thì
+        // không gửi gì. Luật "doanh nghiệp phải đủ MST, tên, địa chỉ" nằm ở API.
+        $nguoiMua = $request->has('buyer_type') ? $request->validate([
+            'buyer_type' => ['required', 'in:personal,company'],
+            'buyer_name' => ['nullable', 'string', 'max:255'],
+            'email' => ['nullable', 'email', 'max:191'],
+            'buyer_tax_code' => ['nullable', 'string', 'max:20'],
+            'buyer_company' => ['nullable', 'string', 'max:255'],
+            'buyer_address' => ['nullable', 'string', 'max:255'],
+        ]) : [];
+
         try {
-            $res = $this->api->phatHanhHoaDon($id);
+            $res = $this->api->phatHanhHoaDon($id, array_map(fn ($v) => (string) $v, $nguoiMua));
         } catch (\Throwable $e) {
             Log::error('Issue etax invoice failed', ['id' => $id, 'msg' => $e->getMessage()]);
 

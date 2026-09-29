@@ -22,7 +22,9 @@ func (r *userRepository) Create(ctx context.Context, u *domain.User) error {
 }
 
 func (r *userRepository) Update(ctx context.Context, u *domain.User) error {
-	return translateUserErr(r.db.WithContext(ctx).Save(u).Error)
+	// Điểm và hạng chỉ đổi qua sổ điểm (đơn hàng, bảng hạng) — Save cả dòng từ một
+	// bản đọc cũ sẽ ghi đè số điểm quầy vừa cộng / trừ trong lúc đó.
+	return translateUserErr(r.db.WithContext(ctx).Omit("total_points", "points", "rank_id").Save(u).Error)
 }
 
 // translateUserErr đổi lỗi DB thô sang lỗi nghiệp vụ để handler trả mã HTTP thân thiện
@@ -210,11 +212,26 @@ func (r *userRepository) ListCustomers(ctx context.Context, f domain.CustomerFil
 		q = q.Where("customer_group_id = ?", f.GroupID)
 	}
 
+	q = locKhachCRM(q, f)
+
 	var total int64
 	if err := q.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
+	// Bốn cột số của màn CRM sắp được hai chiều. `id DESC` đứng sau làm khoá phụ:
+	// hai khách cùng số đơn mà thứ tự đổi giữa hai lượt tải là một khách bị lặp
+	// ở trang 1 và biến mất ở trang 2.
+	sapXep := map[string]string{
+		"spent_desc":  "(" + spentSubQuery + ") DESC",
+		"spent_asc":   "(" + spentSubQuery + ") ASC",
+		"orders_desc": "(" + ordersSubQuery + ") DESC",
+		"orders_asc":  "(" + ordersSubQuery + ") ASC",
+		"paid_desc":   "(" + paidSubQuery + ") DESC",
+		"paid_asc":    "(" + paidSubQuery + ") ASC",
+		"debt_desc":   "(" + debtSubQuery + ") DESC",
+		"debt_asc":    "(" + debtSubQuery + ") ASC",
+	}
 	switch f.Sort {
 	case "oldest":
 		q = q.Order("id ASC")
@@ -222,10 +239,12 @@ func (r *userRepository) ListCustomers(ctx context.Context, f domain.CustomerFil
 		q = q.Order("full_name ASC")
 	case "name_desc":
 		q = q.Order("full_name DESC")
-	case "spent_desc":
-		q = q.Order("(" + spentSubQuery + ") DESC")
 	default:
-		q = q.Order("id DESC")
+		if thu, co := sapXep[f.Sort]; co {
+			q = q.Order(thu).Order("id DESC")
+		} else {
+			q = q.Order("id DESC")
+		}
 	}
 
 	page := f.Page
@@ -352,6 +371,91 @@ func (r *userRepository) CountActiveByRole(ctx context.Context, roleID, excludeI
 const spentSubQuery = `SELECT COALESCE(SUM(o.total_amount), 0) FROM orders o
 	WHERE o.user_id = users.id AND o.deleted_at IS NULL AND o.status NOT IN ('cancelled', 'returned')`
 
+// Ba câu con cho cột sắp xếp của màn CRM — cùng tập đơn và cùng cách tính với
+// AggregateCustomerOrders, để thứ tự khớp đúng con số in trên bảng.
+const (
+	donHopLe = `FROM orders o WHERE o.user_id = users.id AND o.deleted_at IS NULL
+		AND o.status NOT IN ('cancelled', 'returned')`
+	ordersSubQuery = `SELECT COUNT(*) ` + donHopLe
+	paidSubQuery   = `SELECT COALESCE(SUM(CASE WHEN o.payment_status = 'paid' THEN o.total_amount ELSE 0 END), 0) ` + donHopLe
+	debtSubQuery   = `SELECT GREATEST(COALESCE(SUM(CASE WHEN o.payment_status = 'paid' THEN 0 ELSE o.total_amount END), 0), 0) ` + donHopLe
+	lastTxSubQuery = `SELECT MAX(o.created_at) ` + donHopLe
+)
+
+// locKhachCRM áp các ô lọc của màn CRM → Khách hàng.
+func locKhachCRM(q *gorm.DB, f domain.CustomerFilter) *gorm.DB {
+	if f.Genders != nil {
+		dk := []string{}
+		args := []any{}
+		for _, g := range f.Genders {
+			switch g {
+			case "male", "female":
+				dk = append(dk, "gender = ?")
+				args = append(args, g)
+			case "other":
+				dk = append(dk, "(gender = 'other' OR gender IS NULL OR gender = '')")
+			}
+		}
+		if len(dk) == 0 {
+			return q.Where("1 = 0")
+		}
+		q = q.Where("("+strings.Join(dk, " OR ")+")", args...)
+	}
+
+	if f.CreatedFrom != nil {
+		q = q.Where("users.created_at >= ?", f.CreatedFrom.Format("2006-01-02")+" 00:00:00")
+	}
+	if f.CreatedTo != nil {
+		q = q.Where("users.created_at <= ?", f.CreatedTo.Format("2006-01-02")+" 23:59:59")
+	}
+
+	if dc := strings.TrimSpace(f.Address); dc != "" {
+		// `tenant_id` khai thẳng trong câu con: plugin lọc cửa hàng chỉ chèn điều
+		// kiện cho bảng chính.
+		kw := "%" + dc + "%"
+		q = q.Where(`EXISTS (SELECT 1 FROM user_addresses a
+			WHERE a.user_id = users.id AND a.tenant_id = users.tenant_id
+				AND CONCAT_WS(', ', a.address_line, a.ward, a.district, a.province) LIKE ?)`, kw)
+	}
+
+	// Tuổi tròn: đủ X tuổi ⇔ sinh trước hoặc đúng ngày này X năm trước.
+	homNay := time.Now()
+	if f.AgeFrom != nil {
+		q = q.Where("date_of_birth <= ?", homNay.AddDate(-*f.AgeFrom, 0, 0).Format("2006-01-02"))
+	}
+	if f.AgeTo != nil {
+		q = q.Where("date_of_birth > ?", homNay.AddDate(-(*f.AgeTo+1), 0, 0).Format("2006-01-02"))
+	}
+
+	if f.BirthdayFrom != "" && f.BirthdayTo != "" {
+		const md = "DATE_FORMAT(date_of_birth, '%m%d')"
+		if f.BirthdayFrom <= f.BirthdayTo {
+			q = q.Where(md+" BETWEEN ? AND ?", f.BirthdayFrom, f.BirthdayTo)
+		} else {
+			q = q.Where("("+md+" >= ? OR "+md+" <= ?)", f.BirthdayFrom, f.BirthdayTo)
+		}
+	}
+
+	if f.PointFrom != nil {
+		q = q.Where("total_points >= ?", *f.PointFrom)
+	}
+	if f.PointTo != nil {
+		q = q.Where("total_points <= ?", *f.PointTo)
+	}
+	if f.RankID > 0 {
+		q = q.Where("rank_id = ?", f.RankID)
+	}
+
+	if f.LastTxFrom != nil {
+		q = q.Where("("+lastTxSubQuery+") >= ?", f.LastTxFrom.Format("2006-01-02")+" 00:00:00")
+	}
+	if f.LastTxTo != nil {
+		q = q.Where("("+lastTxSubQuery+") <= ?", f.LastTxTo.Format("2006-01-02")+" 23:59:59")
+	}
+
+	return q
+}
+
 func (r *userRepository) CustomerStats(ctx context.Context) (domain.CustomerStats, error) {
 	var rows []struct {
 		Status string
@@ -413,6 +517,11 @@ func (r *userRepository) AggregateCustomerOrders(ctx context.Context, userIDs []
 		return out, err
 	}
 
+	lanThu, err := r.lanThuCuoi(ctx, userIDs)
+	if err != nil {
+		return out, err
+	}
+
 	for _, row := range rows {
 		// Kẹp sàn 0: đơn hoàn tiền một phần có thể cho paid > spent trong vài
 		// nghiệp vụ, mà "còn nợ âm" thì không đọc ra nghĩa gì.
@@ -428,7 +537,64 @@ func (r *userRepository) AggregateCustomerOrders(ctx context.Context, userIDs []
 			TotalDebt:   debt,
 			LastOrderAt: row.LastOrderAt,
 		}
+		if lt, co := lanThu[row.UserID]; co {
+			a := out[row.UserID]
+			a.LastPaymentAmount, a.LastPaymentAt = lt.soTien, &lt.luc
+			out[row.UserID] = a
+		}
 	}
+	return out, nil
+}
+
+type luotThu struct {
+	soTien float64
+	luc    time.Time
+}
+
+// lanThuCuoi — lượt thu tiền GẦN NHẤT của từng khách.
+//
+// Hai nguồn, lấy cái mới hơn: sổ `order_payments`, và đơn đã thu đủ mà sổ
+// không có dòng nào (bán tại quầy và vài đường thu khác chưa ghi sổ — xem
+// daThuDu ở order_number_repository). Chỉ đọc sổ thì khách mua ở quầy hôm qua
+// hiện "chưa thanh toán bao giờ".
+func (r *userRepository) lanThuCuoi(ctx context.Context, userIDs []uint) (map[uint]luotThu, error) {
+	type dong struct {
+		UserID uint
+		SoTien float64
+		Luc    time.Time
+	}
+	conSong := []string{domain.OrderStatusCancelled, domain.OrderStatusReturned}
+
+	// Hai câu GORM chứ không một câu UNION viết tay: bộ lọc tenant chỉ tự chèn
+	// điều kiện cho bảng chính của một câu dựng bằng GORM.
+	var trongSo []dong
+	err := r.db.WithContext(ctx).Model(&domain.OrderPayment{}).
+		Select("orders.user_id AS user_id, order_payments.amount AS so_tien, order_payments.paid_at AS luc").
+		Joins("JOIN orders ON orders.id = order_payments.order_id AND orders.tenant_id = order_payments.tenant_id").
+		Where("orders.user_id IN ? AND orders.deleted_at IS NULL AND orders.status NOT IN ?", userIDs, conSong).
+		Scan(&trongSo).Error
+	if err != nil {
+		return nil, err
+	}
+
+	var ngoaiSo []dong
+	err = r.db.WithContext(ctx).Model(&domain.Order{}).
+		Select("user_id, total_amount AS so_tien, created_at AS luc").
+		Where("user_id IN ? AND payment_status = ? AND status NOT IN ?", userIDs, domain.OrderPaymentPaid, conSong).
+		Where(`NOT EXISTS (SELECT 1 FROM order_payments p
+			WHERE p.order_id = orders.id AND p.tenant_id = orders.tenant_id AND p.deleted_at IS NULL)`).
+		Scan(&ngoaiSo).Error
+	if err != nil {
+		return nil, err
+	}
+
+	out := make(map[uint]luotThu, len(userIDs))
+	for _, d := range append(trongSo, ngoaiSo...) {
+		if cu, co := out[d.UserID]; !co || d.Luc.After(cu.luc) {
+			out[d.UserID] = luotThu{soTien: d.SoTien, luc: d.Luc}
+		}
+	}
+
 	return out, nil
 }
 

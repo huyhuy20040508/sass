@@ -155,6 +155,8 @@ var (
 	// Đơn chưa đạt mức tối thiểu. Lỗi này được bọc kèm số tiền còn thiếu để khách
 	// biết phải mua thêm bao nhiêu.
 	ErrVoucherMinOrder = errors.New("đơn hàng chưa đạt giá trị tối thiểu của mã")
+	// Mã chỉ giảm cho một số danh mục mà đơn không có món nào thuộc chúng.
+	ErrVoucherNoCategory = errors.New("mã giảm giá không áp dụng cho hàng trong đơn")
 
 	// Đặt hàng từ storefront
 	ErrVariantNotFound = errors.New("sản phẩm không còn bán hoặc đã đổi phiên bản")

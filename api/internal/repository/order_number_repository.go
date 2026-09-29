@@ -207,6 +207,7 @@ func (r *orderRepository) cauDonBan(ctx context.Context, f domain.OrderFilter) *
 		// vào ON: plugin chỉ chèn bộ lọc cho bảng chính, bảng nối thì không —
 		// thiếu dòng này là một ngày nào đó id trùng sẽ kéo tên của cửa hàng khác.
 		Joins("LEFT JOIN users nt ON nt.id = orders.created_by AND nt.tenant_id = orders.tenant_id").
+		Joins("LEFT JOIN users kh ON kh.id = orders.user_id AND kh.tenant_id = orders.tenant_id").
 		Joins(cauLuotThu).
 		Select(`'don' AS loai,
 			orders.id AS id,
@@ -214,6 +215,7 @@ func (r *orderRepository) cauDonBan(ctx context.Context, f domain.OrderFilter) *
 			orders.channel AS kenh,
 			orders.recipient_name AS khach_hang,
 			orders.recipient_phone AS so_dien_thoai,
+			COALESCE(kh.customer_code, '') AS ma_khach,
 			orders.subtotal_amount AS tien_hang,
 			orders.discount_amount AS giam_gia,
 			orders.shipping_fee AS phi_giao,
@@ -233,6 +235,7 @@ func (r *orderRepository) cauDonBan(ctx context.Context, f domain.OrderFilter) *
 				ELSE 0 END AS con_no,
 			CASE WHEN ` + donConSong + ` AND NOT (` + daThuDu + `) AND COALESCE(tt.da_thu, 0) > 0
 				THEN 1 ELSE 0 END AS co_cong_no,
+			CASE WHEN ` + xuatDuocHoaDon + ` THEN 1 ELSE 0 END AS xuat_duoc_hoa_don,
 			` + trangThaiDon + ` AS trang_thai,
 			COALESCE(nt.full_name, '') AS nguoi_tao,
 			orders.created_at AS created_at,
@@ -275,6 +278,7 @@ func (r *orderRepository) cauPhieuTra(ctx context.Context, f domain.OrderFilter)
 		// không còn gì để đối chiếu (v2: `whereHas('order')`).
 		Joins("JOIN orders dg ON dg.id = order_returns.order_id AND dg.tenant_id = order_returns.tenant_id AND dg.deleted_at IS NULL").
 		Joins("LEFT JOIN users nt ON nt.id = order_returns.handled_by AND nt.tenant_id = order_returns.tenant_id").
+		Joins("LEFT JOIN users kh ON kh.id = dg.user_id AND kh.tenant_id = dg.tenant_id").
 		// Tiền hàng, giảm giá và phí giao của phiếu trả là 0 như dòng trả hàng của v2:
 		// cộng khoản khấu trừ của phiếu vào cột "Giảm giá" là hàng tổng dưới chân
 		// bảng lẫn một thứ không phải khuyến mãi vào tổng khuyến mãi.
@@ -284,6 +288,7 @@ func (r *orderRepository) cauPhieuTra(ctx context.Context, f domain.OrderFilter)
 			COALESCE(dg.channel, '') AS kenh,
 			COALESCE(dg.recipient_name, '') AS khach_hang,
 			COALESCE(dg.recipient_phone, '') AS so_dien_thoai,
+			COALESCE(kh.customer_code, '') AS ma_khach,
 			0 AS tien_hang,
 			0 AS giam_gia,
 			0 AS phi_giao,
@@ -295,6 +300,7 @@ func (r *orderRepository) cauPhieuTra(ctx context.Context, f domain.OrderFilter)
 			` + cotTienPhieuTra(domain.NhomTheVi) + ` AS the_vi,
 			0 AS con_no,
 			0 AS co_cong_no,
+			0 AS xuat_duoc_hoa_don,
 			'` + domain.TrangThaiSoTraHang + `' AS trang_thai,
 			COALESCE(nt.full_name, '') AS nguoi_tao,
 			order_returns.created_at AS created_at,
@@ -423,6 +429,25 @@ const coHoaDon = `EXISTS (
 	SELECT 1 FROM etax_invoices e
 	WHERE e.order_id = orders.id AND e.tenant_id = orders.tenant_id
 )`
+
+// xuatDuocHoaDon là điều kiện hiện nút "Xuất HĐĐT" trên dòng sổ — đúng các chốt
+// của etaxService.PhatHanh (đã thu đủ, chi nhánh đã nối cổng và chọn ký hiệu, chưa
+// có tờ nào còn hiệu lực) cộng thêm "đơn chưa khép" như nút của v2. Tính ở đây
+// thay vì hỏi cổng cho từng dòng: bày nút trên một đơn API sẽ từ chối là bẫy.
+//
+// Tờ HỎNG không tính là đã có: PhatHanh cho bấm lại đúng trường hợp này.
+var xuatDuocHoaDon = `orders.payment_status = '` + domain.OrderPaymentPaid + `'
+	AND ` + donConSong + `
+	AND EXISTS (
+		SELECT 1 FROM etax_connections k
+		WHERE k.shop_id = orders.shop_id AND k.tenant_id = orders.tenant_id
+			AND COALESCE(TRIM(k.template_symbol), '') <> ''
+	)
+	AND NOT EXISTS (
+		SELECT 1 FROM etax_invoices e
+		WHERE e.order_id = orders.id AND e.tenant_id = orders.tenant_id
+			AND e.status <> '` + domain.HoaDonHong + `'
+	)`
 
 // locHoaDonDienTu lọc theo ô "HĐĐT: Có / Không".
 //

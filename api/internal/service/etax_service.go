@@ -35,6 +35,8 @@ type EtaxService interface {
 	XemHoaDon(ctx context.Context, orderID uint) (*domain.EtaxInvoice, error)
 	// PhatHanh xuất hoá đơn cho một đơn hàng — xem etax_phat_hanh.go.
 	PhatHanh(ctx context.Context, orderID uint) (*domain.EtaxInvoice, error)
+	// PhatHanhKemNguoiMua ghi người mua vào đơn rồi mới phát hành.
+	PhatHanhKemNguoiMua(ctx context.Context, orderID uint, req *dto.EtaxPhatHanhRequest) (*domain.EtaxInvoice, error)
 	// TuPhatHanh là đường cho chỗ ĐƠN VỪA THU TIỀN gọi tới; nuốt mọi lỗi.
 	TuPhatHanh(ctx context.Context, orderID uint)
 

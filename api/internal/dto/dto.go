@@ -252,6 +252,9 @@ type PromotionRequest struct {
 	StartAt           string   `json:"start_at" binding:"required,datetime=2006-01-02T15:04" example:"2026-08-10T08:00"`
 	EndAt             string   `json:"end_at" binding:"required,datetime=2006-01-02T15:04" example:"2026-09-01T23:59"`
 	IsActive          *bool    `json:"is_active"`
+	// DaysOfWeek: các thứ chương trình chạy, 1 = Thứ Hai … 7 = Chủ Nhật. Bỏ trống
+	// = mọi ngày.
+	DaysOfWeek []int `json:"days_of_week" binding:"omitempty,dive,min=1,max=7"`
 	// Hai danh sách phạm vi. Phải có ít nhất một id ở một trong hai — chương trình
 	// không phạm vi thì không giảm cho ai, tạo ra chỉ để nằm đó gây hiểu nhầm.
 	ProductIDs  []uint `json:"product_ids"`
@@ -269,7 +272,10 @@ type PromotionStatusRequest struct {
 // PromotionResponse là chương trình kèm phạm vi đã tách sẵn thành hai danh sách id
 // và mấy thông tin suy ra sẵn cho giao diện.
 type PromotionResponse struct {
-	ID                uint     `json:"id"`
+	ID   uint   `json:"id"`
+	Code string `json:"code"`
+	// DaysOfWeek rỗng = mọi ngày.
+	DaysOfWeek        []int    `json:"days_of_week"`
 	Name              string   `json:"name"`
 	Description       string   `json:"description"`
 	DiscountType      string   `json:"discount_type"`
@@ -721,6 +727,23 @@ type EtaxThayTheRequest struct {
 	LyDo string `json:"ly_do" binding:"required,max=250" example:"Sai thông tin người mua"`
 	// SoVanBan là số biên bản thoả thuận với khách, nếu hai bên có lập.
 	SoVanBan string `json:"so_van_ban" binding:"omitempty,max=250" example:"BBTT00001"`
+}
+
+// EtaxPhatHanhRequest — người mua ghi lên hoá đơn, gửi kèm nút "Xuất HĐĐT" của
+// màn Quản lý đơn hàng (hộp nhập của v2). Không gửi thân = phát hành theo đúng
+// thông tin đang nằm trên đơn, như trước.
+//
+// Tên người mua ghi vào `recipient_name` của đơn — đơn không có cột tên người mua
+// riêng, và hoá đơn vẫn lấy tên từ đó. Bắt buộc với khách cá nhân (hoá đơn cá
+// nhân không có tên thì không biết của ai), không bắt buộc với doanh nghiệp.
+type EtaxPhatHanhRequest struct {
+	LoaiNguoiMua string `json:"buyer_type" binding:"required,oneof=personal company" example:"company"`
+	TenNguoiMua  string `json:"buyer_name" binding:"omitempty,max=255" example:"Nguyễn Văn A"`
+	Email        string `json:"email" binding:"omitempty,email,max=191" example:"ketoan@example.com"`
+	// Ba ô dưới đây bắt buộc khi buyer_type=company — kiểm ở service.
+	BuyerTaxCode string `json:"buyer_tax_code" binding:"omitempty,max=20" example:"0101234567"`
+	BuyerCompany string `json:"buyer_company" binding:"omitempty,max=255" example:"Công ty TNHH ABC"`
+	BuyerAddress string `json:"buyer_address" binding:"omitempty,max=255" example:"1 Tràng Tiền, Hà Nội"`
 }
 
 // EtaxDieuChinhRequest — điều chỉnh tờ hoá đơn hiện tại.
@@ -1346,6 +1369,18 @@ type POSCheckoutRequest struct {
 	// hoặc mã đã có đơn dùng thì server bỏ qua và cấp mã mới — không từ chối lượt bán.
 	OrderCode      string `json:"order_code" binding:"omitempty,max=50"`
 	OrderCodeToken string `json:"order_code_token" binding:"omitempty,max=200"`
+
+	// FixedPriceIDs: chương trình ĐỒNG GIÁ thu ngân đã chọn (nút "Đồng giá").
+	// Máy chủ tự tính lại giá và hàng tặng; đơn dùng đồng giá thì không nhận thêm
+	// voucher hay giảm tay — như quầy của v2.
+	FixedPriceIDs []uint `json:"fixed_price_ids" binding:"omitempty,max=20"`
+	// PromotionProgramIDs: CHƯƠNG TRÌNH KHUYẾN MẠI thu ngân đã chọn (nút "Khuyến
+	// mãi"). Cộng dồn được với voucher và giảm tay, KHÔNG dùng cùng đồng giá (v2).
+	PromotionProgramIDs []uint `json:"promotion_program_ids" binding:"omitempty,max=20"`
+	// UsePoints: số điểm khách muốn đổi ra tiền (ô "Điểm" của v2). Chỉ có nghĩa
+	// khi đơn gắn khách (user_id). Máy chủ kẹp về số điểm khách đang có và số tiền
+	// còn phải trả.
+	UsePoints uint `json:"use_points" binding:"omitempty,max=100000000"`
 }
 
 // POSMaDonResponse — mã đơn cấp trước cho hoá đơn đang mở ở quầy.
@@ -1429,6 +1464,14 @@ type POSCheckoutResponse struct {
 
 	// OrderDiscount là phần giảm tay trên cả đơn (đã nằm trong Discount).
 	OrderDiscount float64 `json:"order_discount_amount"`
+	// PromotionDiscount: phần chương trình khuyến mại giảm (đã nằm trong Discount).
+	PromotionDiscount float64 `json:"promotion_discount"`
+	// Thẻ thành viên: giảm theo hạng, điểm đã đổi / tiền đổi được (cả hai đã nằm
+	// trong Discount), và điểm khách được cộng từ đơn này.
+	RankDiscount  float64 `json:"rank_discount"`
+	PointsUsed    uint    `json:"points_used"`
+	PointsAmount  float64 `json:"points_amount"`
+	PointsEarned  uint    `json:"points_earned"`
 	Surcharge     float64 `json:"surcharge_amount"`
 	SurchargeNote string  `json:"surcharge_note,omitempty"`
 	VatAmount     float64 `json:"vat_amount"`
@@ -1584,6 +1627,10 @@ type CustomerResponse struct {
 	TotalPaid   float64 `json:"total_paid"`
 	StillInDebt float64 `json:"still_in_debt"`
 	LastOrderAt string  `json:"last_order_at"`
+	// Lượt thu tiền gần nhất (cột "Thanh toán gần nhất" của CRM). Rỗng / 0 =
+	// khách chưa trả đồng nào.
+	LastPaymentAmount float64 `json:"last_payment_amount"`
+	LastPaymentAt     string  `json:"last_payment_at"`
 
 	// ----- Hồ sơ khách theo khuôn v2 -----
 	Code            string `json:"customer_code" example:"cus-00432"`
@@ -1596,6 +1643,13 @@ type CustomerResponse struct {
 	RepresentativeName  string `json:"representative_name"`
 	RepresentativePhone string `json:"representative_phone"`
 	Note                string `json:"customer_note"`
+
+	// ----- Thẻ thành viên (migration 0072) -----
+	// TotalPoints: điểm tích luỹ (quyết định hạng); Points: điểm còn đổi được.
+	TotalPoints uint   `json:"total_points"`
+	Points      uint   `json:"points"`
+	RankID      uint   `json:"rank_id"`
+	RankName    string `json:"rank_name"`
 
 	// ----- Tài khoản đăng nhập storefront -----
 	// LoginEmail là tên đăng nhập (chính là email); rỗng nghĩa là chưa thể đăng nhập.
@@ -3213,4 +3267,275 @@ type GiaChiNhanhRequest struct {
 type HoaDonMeta struct {
 	response.Pagination
 	Dem domain.DemHoaDon `json:"dem"`
+}
+
+// ---------- Khuyến mại đồng giá (CRM, khuôn v2) ----------
+
+// FixedPriceRequest — tạo / sửa một chương trình đồng giá. Gửi TRỌN bộ dòng:
+// lượt lưu thay toàn bộ dòng và hàng tặng cũ.
+type FixedPriceRequest struct {
+	Name        string `json:"name" binding:"required,max=255"`
+	Description string `json:"description" binding:"omitempty,max=255"`
+	// Type 1 = theo nhóm hàng (danh mục, kèm con), 2 = theo sản phẩm.
+	Type     uint8 `json:"type" binding:"required,oneof=1 2"`
+	Status   *bool `json:"status"`
+	Approved bool  `json:"approved"`
+	// NoTimeLimit = không giới hạn thời gian; khi đó bỏ qua hai ô ngày.
+	NoTimeLimit bool   `json:"no_time_limit"`
+	StartDate   string `json:"start_date" binding:"omitempty,datetime=2006-01-02"`
+	EndDate     string `json:"end_date" binding:"omitempty,datetime=2006-01-02"`
+	// DaysOfWeek 1 = Thứ Hai … 7 = CN, ít nhất một thứ (như v2).
+	DaysOfWeek []int  `json:"days_of_week" binding:"required,min=1,dive,min=1,max=7"`
+	AllShops   bool   `json:"all_shops"`
+	ShopIDs    []uint `json:"shop_ids"`
+
+	Details []FixedPriceDetailRequest `json:"details" binding:"required,min=1,max=200,dive"`
+}
+
+type FixedPriceDetailRequest struct {
+	// ObjectID: id danh mục (type 1) hoặc id sản phẩm (type 2).
+	ObjectID uint                    `json:"object_id" binding:"required"`
+	Quantity int                     `json:"quantity" binding:"required,min=1,max=100000"`
+	Price    float64                 `json:"price" binding:"gte=0,lte=1000000000"`
+	Gifts    []FixedPriceGiftRequest `json:"gifts" binding:"omitempty,max=20,dive"`
+}
+
+type FixedPriceGiftRequest struct {
+	ProductVariantID uint `json:"product_variant_id" binding:"required"`
+	Quantity         int  `json:"quantity" binding:"required,min=1,max=1000"`
+}
+
+type FixedPriceStatusRequest struct {
+	Status *bool `json:"status" binding:"required"`
+}
+
+// FixedPriceResponse — chương trình kèm tên đối tượng và tên hàng tặng đã tra
+// sẵn, để màn CRM in bảng dòng mà không phải hỏi thêm.
+type FixedPriceResponse struct {
+	ID          uint   `json:"id"`
+	Code        string `json:"code"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Type        uint8  `json:"type"`
+	Status      bool   `json:"status"`
+	Approved    bool   `json:"approved"`
+	NoTimeLimit bool   `json:"no_time_limit"`
+	StartDate   string `json:"start_date"`
+	EndDate     string `json:"end_date"`
+	DaysOfWeek  []int  `json:"days_of_week"`
+	AllShops    bool   `json:"all_shops"`
+	ShopIDs     []uint `json:"shop_ids"`
+
+	Details   []FixedPriceDetailResponse `json:"details"`
+	CreatedAt string                     `json:"created_at"`
+}
+
+type FixedPriceDetailResponse struct {
+	ID         uint                     `json:"id"`
+	ObjectID   uint                     `json:"object_id"`
+	ObjectName string                   `json:"object_name"`
+	Quantity   int                      `json:"quantity"`
+	Price      float64                  `json:"price"`
+	Gifts      []FixedPriceGiftResponse `json:"gifts"`
+}
+
+type FixedPriceGiftResponse struct {
+	ProductVariantID uint   `json:"product_variant_id"`
+	Name             string `json:"name"`
+	Quantity         int    `json:"quantity"`
+}
+
+// ---------- Đồng giá tại quầy ----------
+
+// POSDongGiaRequest — quầy hỏi: với giỏ này, chương trình đồng giá nào đủ điều
+// kiện, và nếu chọn các chương trình ChonIDs thì giá từng món và hàng tặng ra sao.
+type POSDongGiaRequest struct {
+	Items   []POSDongGiaItem `json:"items" binding:"max=50,dive"`
+	ChonIDs []uint           `json:"fixed_price_ids"`
+}
+
+type POSDongGiaItem struct {
+	ProductVariantID uint `json:"product_variant_id" binding:"required"`
+	Quantity         int  `json:"quantity" binding:"required,min=1,max=99"`
+}
+
+type POSDongGiaResponse struct {
+	// ChuongTrinh: CHỈ những chương trình giỏ này đủ điều kiện (như v2).
+	ChuongTrinh []POSDongGiaChuongTrinh `json:"chuong_trinh"`
+	// Gia: giá đồng giá của các món bị chương trình đang chọn phủ tới.
+	Gia []POSDongGiaGia `json:"gia"`
+	// Qua: hàng tặng kèm các dòng đang được áp.
+	Qua []POSDongGiaQua `json:"qua"`
+}
+
+type POSDongGiaChuongTrinh struct {
+	ID   uint   `json:"id"`
+	Code string `json:"code"`
+	Name string `json:"name"`
+	Type uint8  `json:"type"`
+}
+
+type POSDongGiaGia struct {
+	ProductVariantID uint    `json:"product_variant_id"`
+	Price            float64 `json:"price"`
+}
+
+type POSDongGiaQua struct {
+	ProductVariantID uint    `json:"product_variant_id"`
+	Name             string  `json:"name"`
+	Quantity         int     `json:"quantity"`
+	Price            float64 `json:"price"`
+}
+
+// ---------- Chương trình khuyến mại (CRM, khuôn v2) ----------
+
+// PromotionProgramRequest — tạo / sửa. Mã do hệ thống cấp; gửi TRỌN bộ bậc.
+type PromotionProgramRequest struct {
+	Name        string `json:"name" binding:"required,max=100"`
+	Description string `json:"description" binding:"omitempty,max=255"`
+	// Type 0 phiếu bán hàng (tổng tiền), 2 nhóm hàng, 3 danh sách hàng.
+	Type        uint8                           `json:"type" binding:"oneof=0 2 3"`
+	Status      *bool                           `json:"status"`
+	Approved    bool                            `json:"approved"`
+	NoTimeLimit bool                            `json:"no_time_limit"`
+	StartDate   string                          `json:"start_date" binding:"omitempty,datetime=2006-01-02"`
+	EndDate     string                          `json:"end_date" binding:"omitempty,datetime=2006-01-02"`
+	DaysOfWeek  []int                           `json:"days_of_week" binding:"required,min=1,dive,min=1,max=7"`
+	AllShops    bool                            `json:"all_shops"`
+	ShopIDs     []uint                          `json:"shop_ids"`
+	Details     []PromotionProgramDetailRequest `json:"details" binding:"required,min=1,max=100,dive"`
+}
+
+type PromotionProgramDetailRequest struct {
+	// TotalApply: type 0 — tổng tiền hàng tối thiểu.
+	TotalApply float64 `json:"total_apply" binding:"gte=0,lte=100000000000"`
+	// ObjectID + Quantity: type 2 (danh mục) / type 3 (sản phẩm).
+	ObjectID uint `json:"object_id"`
+	Quantity int  `json:"quantity" binding:"gte=0,lte=100000"`
+	// Formality 0 = %, 1 = tiền.
+	Formality uint8                         `json:"formality" binding:"oneof=0 1"`
+	Value     float64                       `json:"value" binding:"gt=0,lte=100000000000"`
+	MaxValue  float64                       `json:"max_value" binding:"gte=0,lte=100000000000"`
+	Gifts     []PromotionProgramGiftRequest `json:"gifts" binding:"omitempty,max=20,dive"`
+}
+
+type PromotionProgramGiftRequest struct {
+	ProductVariantID uint `json:"product_variant_id" binding:"required"`
+	Quantity         int  `json:"quantity" binding:"required,min=1,max=1000"`
+}
+
+type PromotionProgramStatusRequest struct {
+	Status *bool `json:"status" binding:"required"`
+}
+
+type PromotionProgramResponse struct {
+	ID          uint                             `json:"id"`
+	Code        string                           `json:"code"`
+	Name        string                           `json:"name"`
+	Description string                           `json:"description"`
+	Type        uint8                            `json:"type"`
+	Status      bool                             `json:"status"`
+	Approved    bool                             `json:"approved"`
+	NoTimeLimit bool                             `json:"no_time_limit"`
+	StartDate   string                           `json:"start_date"`
+	EndDate     string                           `json:"end_date"`
+	DaysOfWeek  []int                            `json:"days_of_week"`
+	AllShops    bool                             `json:"all_shops"`
+	ShopIDs     []uint                           `json:"shop_ids"`
+	Used        int                              `json:"used"`
+	Details     []PromotionProgramDetailResponse `json:"details"`
+	CreatedAt   string                           `json:"created_at"`
+}
+
+type PromotionProgramDetailResponse struct {
+	ID         uint                     `json:"id"`
+	TotalApply float64                  `json:"total_apply"`
+	ObjectID   uint                     `json:"object_id"`
+	ObjectName string                   `json:"object_name"`
+	Quantity   int                      `json:"quantity"`
+	Formality  uint8                    `json:"formality"`
+	Value      float64                  `json:"value"`
+	MaxValue   float64                  `json:"max_value"`
+	Gifts      []FixedPriceGiftResponse `json:"gifts"`
+}
+
+// POSKhuyenMaiRequest — quầy hỏi chương trình khuyến mại giỏ này đủ điều kiện,
+// và nếu chọn ChonIDs thì giảm bao nhiêu, tặng gì.
+type POSKhuyenMaiRequest struct {
+	Items   []POSDongGiaItem `json:"items" binding:"max=50,dive"`
+	ChonIDs []uint           `json:"program_ids"`
+}
+
+type POSKhuyenMaiResponse struct {
+	ChuongTrinh []POSDongGiaChuongTrinh `json:"chuong_trinh"`
+	// Giam: tổng tiền chương trình giảm; TheoChuongTrinh: từng chương trình.
+	Giam            float64            `json:"giam"`
+	TheoChuongTrinh []POSKhuyenMaiDong `json:"theo_chuong_trinh"`
+	Qua             []POSDongGiaQua    `json:"qua"`
+}
+
+type POSKhuyenMaiDong struct {
+	ID   uint    `json:"id"`
+	Name string  `json:"name"`
+	Giam float64 `json:"giam"`
+}
+
+// VoucherProgramRequest — tạo / sửa một chương trình Voucher/Coupon (khuôn
+// pmt_voucher_coupon của v2). Release = bấm "Phát hành": lưu rồi sinh đủ mã.
+type VoucherProgramRequest struct {
+	Name        string `json:"name" binding:"required,max=255"`
+	Description string `json:"description" binding:"omitempty,max=255"`
+	// DiscountType percentage = Coupon (%), fixed = Voucher (tiền).
+	DiscountType      string   `json:"discount_type" binding:"required,oneof=percentage fixed"`
+	DiscountValue     float64  `json:"discount_value" binding:"gt=0,lte=1000000000"`
+	MaxDiscountAmount *float64 `json:"max_discount_amount" binding:"omitempty,gte=0,lte=1000000000"`
+	MinOrderAmount    *float64 `json:"min_order_amount" binding:"required,gte=0,lte=1000000000"`
+	AllShops          bool     `json:"all_shops"`
+	ShopIDs           []uint   `json:"shop_ids"`
+	AllCategories     bool     `json:"all_categories"`
+	CategoryIDs       []uint   `json:"category_ids"`
+	NoTimeLimit       bool     `json:"no_time_limit"`
+	StartDate         string   `json:"start_date" binding:"omitempty,datetime=2006-01-02"`
+	EndDate           string   `json:"end_date" binding:"omitempty,datetime=2006-01-02"`
+	Prefix            string   `json:"prefix" binding:"max=20"`
+	Suffix            string   `json:"suffix" binding:"max=20"`
+	Quantity          int      `json:"quantity" binding:"required,min=1,max=200"`
+	UsageLimit        int      `json:"usage_limit" binding:"required,min=1,max=1000000"`
+	Release           bool     `json:"release"`
+}
+
+type VoucherCodeStatusRequest struct {
+	IsActive *bool `json:"is_active" binding:"required"`
+}
+
+// MembershipRankRequest — thêm / sửa một hạng thành viên (khuôn v2).
+type MembershipRankRequest struct {
+	Name string `json:"name" binding:"required,max=100"`
+	// Point: điểm tích luỹ tối thiểu để đạt hạng.
+	Point uint `json:"point" binding:"required,min=1,max=1000000000"`
+	// DiscountType money = giảm tiền, percent = giảm %.
+	DiscountType  string  `json:"discount_type" binding:"required,oneof=money percent"`
+	DiscountValue float64 `json:"discount_value" binding:"gte=0,lte=1000000000"`
+	Status        *bool   `json:"status"`
+	// ApplyAllOrderValues = false thì chỉ đơn có tiền hàng trong [min, max].
+	ApplyAllOrderValues bool     `json:"apply_all_order_values"`
+	MinOrderValue       *float64 `json:"min_order_value" binding:"omitempty,gte=0"`
+	MaxOrderValue       *float64 `json:"max_order_value" binding:"omitempty,gte=0"`
+}
+
+type MembershipRankStatusRequest struct {
+	Status *bool `json:"status" binding:"required"`
+}
+
+type MembershipRankDeleteRequest struct {
+	IDs []uint `json:"ids" binding:"required,min=1,max=100"`
+}
+
+// PointConversionRequest — lưu một khối quy đổi: earn "Money đ = Point điểm",
+// redeem "Point điểm = Money đ".
+type PointConversionRequest struct {
+	Kind    string  `json:"kind" binding:"required,oneof=earn redeem"`
+	Money   float64 `json:"money" binding:"gte=0,lte=1000000000"`
+	Point   uint    `json:"point" binding:"max=1000000000"`
+	Enabled bool    `json:"enabled"`
 }

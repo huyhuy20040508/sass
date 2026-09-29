@@ -1,6 +1,7 @@
 package service
 
 import (
+	"strings"
 	"testing"
 
 	"sass-api/internal/domain"
@@ -207,5 +208,21 @@ func TestCoTheSuaChiKhiDaCoMaCoQuanThue(t *testing.T) {
 	hd := &domain.EtaxInvoice{Status: domain.HoaDonDaPhatHanh, TaxAuthCode: "M1-26-X"}
 	if err := coTheSua(hd); err != nil {
 		t.Fatalf("tờ đã cấp mã phải sửa được, nhận %v", err)
+	}
+}
+
+// Cổng M-Invoice từ chối cả tờ khi mã hàng dài quá 50 ký tự — SKU biến thể nối
+// tên thuộc tính rất dễ vượt.
+func TestMaHangHoaDon_CatVe50KyTu(t *testing.T) {
+	dai := "HH000001-24-THANG-MOI-100%-(NGUYEN-SEAL)-IOS-8GB-512GB"
+	got := maHangHoaDon(dai)
+	if n := len([]rune(got)); n > 50 || !strings.HasPrefix(dai, got) {
+		t.Fatalf("mã hàng phải là phần đầu của SKU và tối đa 50 ký tự, đang là %q (%d)", got, n)
+	}
+	if maHangHoaDon("HH000003") != "HH000003" {
+		t.Fatal("mã ngắn phải giữ nguyên")
+	}
+	if n := len([]rune(maHangHoaDon(strings.Repeat("Á", 60)))); n != 50 {
+		t.Fatalf("phải cắt theo ký tự, không theo byte: còn %d", n)
 	}
 }
