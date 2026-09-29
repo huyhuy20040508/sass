@@ -140,7 +140,7 @@
         ['nhan' => 'Khách hàng', 'route' => 'admin.customers.index'],
         ['nhan' => 'Quản lý đơn hàng', 'route' => 'admin.orders.index'],
         ['nhan' => 'Hoá đơn điện tử', 'route' => 'admin.hoa-don-dien-tu.index'],
-        ['nhan' => 'Báo cáo kết ca', 'route' => 'admin.shift-report.index'],
+        ['nhan' => 'Báo cáo kết ca', 'route' => null],
         ['nhan' => 'Báo cáo cuối ngày', 'route' => null],
     ];
 

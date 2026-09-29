@@ -31,7 +31,6 @@ use App\Http\Controllers\VoucherCouponController;
 use App\Http\Controllers\MembershipController;
 use App\Http\Controllers\PromotionProgramController;
 use App\Http\Controllers\ReportController;
-use App\Http\Controllers\ShiftReportController;
 use App\Http\Controllers\ReturnController;
 use App\Http\Controllers\SettingController;
 use App\Http\Controllers\ParameterController;
@@ -337,8 +336,6 @@ Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:quan_ly', 'chi.v2'])->
         Route::get('/hoa-don-dien-tu/export', [EInvoiceController::class, 'export'])->name('hoa-don-dien-tu.export');
 
         // Báo cáo kết ca — tab Thống kê, phơi doanh thu và tiền két từng ca.
-        Route::get('/shift-report', [ShiftReportController::class, 'index'])->name('shift-report.index');
-        Route::get('/shift-report/export', [ShiftReportController::class, 'export'])->name('shift-report.export');
     });
 
     // --- Trả hàng, kho và mua vào: nhân viên (staff) KHÔNG vào ---
