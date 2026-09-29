@@ -71,7 +71,33 @@ type CustomerFilter struct {
 	// "lấy tất" — hai chuyện đó là lát cắt RỖNG và nil.
 	Types []uint
 	// GroupID = 0 nghĩa là không cắt theo nhóm khách hàng.
-	GroupID  uint
+	GroupID uint
+
+	// ----- Khung lọc của màn CRM → Khách hàng -----
+	// Genders: nil = không cắt; lát cắt rỗng = bỏ tick hết → bảng rỗng (như Types).
+	// "other" gồm cả khách chưa khai giới tính — v2 cũng dồn họ vào ô "Khác".
+	Genders []string
+	// CreatedFrom / CreatedTo: ngày tạo hồ sơ, tính trọn ngày cuối.
+	CreatedFrom *time.Time
+	CreatedTo   *time.Time
+	// Address so khớp một phần với bất kỳ địa chỉ nào của khách.
+	Address string
+	// AgeFrom / AgeTo: tuổi tròn tính tới hôm nay. Bật một trong hai thì khách
+	// chưa khai ngày sinh rơi khỏi bảng — không có tuổi để so.
+	AgeFrom *int
+	AgeTo   *int
+	// BirthdayFrom / BirthdayTo: cửa sổ SINH NHẬT theo tháng-ngày ("MMDD"), bỏ
+	// qua năm sinh. From > To nghĩa là cửa sổ vắt qua năm mới (28/12 → 05/01).
+	BirthdayFrom string
+	BirthdayTo   string
+	// LastTxFrom / LastTxTo: đơn GẦN NHẤT của khách rơi vào khoảng này.
+	LastTxFrom *time.Time
+	LastTxTo   *time.Time
+	// PointFrom / PointTo: điểm tích luỹ; RankID: hạng thành viên (0 = mọi hạng).
+	PointFrom *int
+	PointTo   *int
+	RankID    uint
+
 	Page     int
 	PageSize int
 }
@@ -107,6 +133,9 @@ type CustomerAggregate struct {
 	TotalPaid   float64
 	TotalDebt   float64
 	LastOrderAt *time.Time
+	// Lượt thu tiền gần nhất: số tiền và lúc tiền vào — xem LastPayments.
+	LastPaymentAmount float64
+	LastPaymentAt     *time.Time
 }
 
 // CustomerStats — đếm khách hàng theo trạng thái tài khoản (active | inactive).
@@ -1105,7 +1134,13 @@ type BannerRepository interface {
 
 // PromotionFilter là tham số lọc/phân trang khi liệt kê chương trình khuyến mãi.
 type PromotionFilter struct {
-	Keyword string // tên chương trình
+	Keyword string // mã hoặc tên chương trình
+	// Active: nil = không lọc; true = đang bật; false = đang tắt (cột is_active,
+	// ô "Trạng thái Hoạt động / Không hoạt động" của màn CRM).
+	Active *bool
+	// ShopIDs: chỉ lấy chương trình chạy ở ít nhất một chi nhánh trong danh sách
+	// (chương trình không gán chi nhánh nào = chạy khắp nơi, luôn khớp).
+	ShopIDs []uint
 	// Status: all | running (đang chạy) | scheduled (chưa tới ngày) | ended (đã hết)
 	// | paused (bị tắt tay). Bốn nhóm này là câu hỏi thật của người bán, không phải
 	// chỉ đọc cột is_active.
@@ -1140,6 +1175,8 @@ type PromotionRepository interface {
 	// ReplaceShops đặt lại những chi nhánh chương trình này chạy. RỖNG = mọi chi
 	// nhánh, cùng quy ước với bảng product_shops — xem migration 0053.
 	ReplaceShops(ctx context.Context, promotionID uint, shopIDs []uint) error
+	// MaKeTiep: mã chương trình tiếp theo của cửa hàng (KM00001, KM00002…).
+	MaKeTiep(ctx context.Context) (string, error)
 	// Running trả về các chương trình đang chạy tại thời điểm at, kèm phạm vi.
 	// Đây là truy vấn nằm trên đường đi của MỌI lần khách xem hàng nên phải gọn.
 	Running(ctx context.Context, at time.Time) ([]Promotion, error)
@@ -1250,6 +1287,9 @@ type DongSoDon struct {
 	Kenh        string `json:"kenh"`
 	KhachHang   string `json:"khach_hang"`
 	SoDienThoai string `json:"so_dien_thoai"`
+	// MaKhach là mã hồ sơ khách (users.customer_code) của đơn — cột đầu của màn
+	// CRM → Danh sách đơn hàng. Rỗng = khách vãng lai, đơn không gắn hồ sơ nào.
+	MaKhach string `json:"ma_khach"`
 
 	TienHang float64 `json:"tien_hang"`
 	GiamGia  float64 `json:"giam_gia"`
@@ -1278,6 +1318,9 @@ type DongSoDon struct {
 	// đang giao chưa thu tiền là chuyện thường ngày, không phải khách đang nợ.
 	// Bên v2 cũng vậy: chỉ đơn có sổ `cab_debts` mới ghi "Có".
 	CoCongNo bool `json:"co_cong_no"`
+	// XuatDuocHoaDon: bấm "Xuất HĐĐT" lúc này thì API nhận — xem xuatDuocHoaDon
+	// ở repository. Phiếu trả luôn false.
+	XuatDuocHoaDon bool `json:"xuat_duoc_hoa_don"`
 
 	// TrangThai là trạng thái HIỂN THỊ của sổ, năm giá trị đúng như v2 và không
 	// giá trị nào có sẵn trong database — xem TrangThaiSo* bên dưới.

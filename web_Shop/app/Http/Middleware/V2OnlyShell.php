@@ -37,6 +37,13 @@ class V2OnlyShell
         'admin.cashbook.index',
         'admin.cong-no.index',
         'admin.customers.index',
+        'admin.crm.customers.index',
+        'admin.crm.orders.index',
+        'admin.crm.promotions.index',
+        'admin.crm.promotions.dongGia',
+        'admin.crm.promotions.voucher',
+        'admin.crm.membership.index',
+        'admin.crm.membership.detail',
         'admin.orders.index',
         'admin.hoa-don-dien-tu.index',
         // Thống kê → Khách hàng dựng bằng v2::reports.khach-hang từ lâu, chỉ là
@@ -112,6 +119,8 @@ class V2OnlyShell
         'admin.customers.',      // xuất CSV / mẫu nhập / chi tiết / sổ đơn của khách / ảnh
         'admin.orders.',         // xuất CSV / chi tiết một đơn / bản in đơn, tem / hoá đơn điện tử
         'admin.hoa-don-dien-tu.', // xuất CSV sổ hoá đơn
+        'admin.crm.promotions.export', // xuất Excel chương trình khuyến mãi
+        'admin.voucher-coupon.',  // xuất Excel / danh sách mã / lịch sử một mã (Voucher/Coupon)
         // Xuất tệp / gọi ngầm của các màn vừa mở ở CON_BAN_CU. Chặn chúng là nút
         // Xuất Excel trên chính mấy màn ấy ném người dùng về Khách hàng.
         'admin.banners.',

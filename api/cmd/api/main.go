@@ -423,6 +423,7 @@ func main() {
 	// nhập mã lúc thanh toán chưa nối vào luồng đặt hàng.
 	voucherSvc := service.NewVoucherService(voucherRepo)
 	customerSvc := service.NewCustomerService(userRepo)
+	customerSvc.DungThanhVien(repository.NewMembershipRepository(db))
 	// Nhóm khách hàng — bảng tra của màn Khách hàng (migration 0061).
 	nhomKhachSvc := service.NewCustomerGroupService(repository.NewCustomerGroupRepository(db))
 	// Tài khoản nội bộ (quản trị & nhân viên) + vai trò — dùng chung userRepo với
@@ -446,7 +447,11 @@ func main() {
 	// returnRepo để chặn hoàn cả đơn khi đơn đã có phiếu trả hàng riêng.
 	// settingSvc cấp phí vận chuyển, ngưỡng miễn phí ship, hotline và tên cửa hàng.
 	// promotionSvc để giá thu tiền đúng bằng giá khách nhìn thấy ngoài cửa hàng.
-	orderSvc := service.NewOrderService(orderRepo, returnRepo, mailSender, cfg.Mail, notifSvc, settingSvc, paymentSvc, promotionSvc, voucherSvc, etaxSvc, cfg.JWT.Secret)
+	fixedPriceRepo := repository.NewFixedPriceRepository(db)
+	dongGiaSvc := service.NewFixedPriceService(fixedPriceRepo, categoryRepo, orderRepo)
+	khuyenMaiSvc := service.NewPromotionProgramService(repository.NewPromotionProgramRepository(db), fixedPriceRepo, categoryRepo, orderRepo)
+	orderSvc := service.NewOrderService(orderRepo, returnRepo, mailSender, cfg.Mail, notifSvc, settingSvc, paymentSvc, promotionSvc, voucherSvc, etaxSvc, dongGiaSvc, khuyenMaiSvc, cfg.JWT.Secret)
+	orderSvc.DungThanhVien(repository.NewMembershipRepository(db))
 	returnSvc := service.NewOrderReturnService(returnRepo, notifSvc, settingSvc)
 	inventorySvc := service.NewInventoryService(inventoryRepo)
 	// Yêu cầu khách gửi từ storefront (Liên hệ / Thu mua) + danh sách nhận tin.
@@ -503,6 +508,10 @@ func main() {
 		Banner:    handler.NewBannerHandler(bannerSvc),
 		Report:    handler.NewReportHandler(reportSvc),
 		Promo:     handler.NewPromotionHandler(promotionSvc),
+		DongGia:   handler.NewFixedPriceHandler(dongGiaSvc),
+		KhuyenMai: handler.NewPromotionProgramHandler(khuyenMaiSvc),
+		Voucher2:  handler.NewVoucherProgramHandler(service.NewVoucherProgramService(repository.NewVoucherProgramRepository(db))),
+		ThanhVien: handler.NewMembershipHandler(service.NewMembershipService(repository.NewMembershipRepository(db), userRepo)),
 		Voucher:   handler.NewVoucherHandler(voucherSvc),
 		Contact:   handler.NewContactHandler(contactSvc),
 		Plan:      planHandler,

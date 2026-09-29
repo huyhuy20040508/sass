@@ -841,6 +841,12 @@ func (r *orderRepository) Checkout(
 			}
 		}
 
+		// 6b'. Thẻ thành viên: trừ điểm khách đổi, rồi cộng điểm nếu đơn đã thu
+		// tiền xong (đơn quầy). Trong cùng giao dịch: không đủ điểm là cả đơn dừng.
+		if err := diemKhiChotDon(tx, o); err != nil {
+			return err
+		}
+
 		// 6c. Tiền mặt vào két — ghi sổ quỹ TRONG CÙNG giao dịch với đơn.
 		//
 		// Chỉ đơn quầy đã thu tiền mặt: chuyển khoản không đi qua két, còn đơn giao
@@ -1003,6 +1009,9 @@ func (r *orderRepository) LockAndUpdate(ctx context.Context, id uint, apply func
 		// khách trả hàng thì trừ lại).
 		if o.Status != fromStatus {
 			if err := syncSoldCount(tx, &o, fromStatus, o.Status); err != nil {
+				return err
+			}
+			if err := diemKhiDoiTrangThai(tx, &o, fromStatus); err != nil {
 				return err
 			}
 		}

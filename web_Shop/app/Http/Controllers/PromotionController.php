@@ -29,7 +29,10 @@ use Illuminate\Validation\ValidationException;
  */
 class PromotionController extends Controller
 {
+    use \App\Http\Controllers\Concerns\DialogReply;
+
     public const TITLE = 'Khuyến mãi';
+
 
     /** Trạng thái thực tế, khớp `promotionStatus` bên API. */
     public const STATUSES = [
@@ -270,6 +273,8 @@ class PromotionController extends Controller
     protected function validated(Request $request): array
     {
         $validated = $request->validate([
+            'days_of_week' => ['nullable', 'array'],
+            'days_of_week.*' => ['integer', 'between:1,7'],
             'name' => ['required', 'string', 'max:150'],
             'description' => ['nullable', 'string', 'max:255'],
             'discount_type' => ['required', 'in:'.implode(',', array_keys(self::DISCOUNT_TYPES))],
@@ -312,6 +317,8 @@ class PromotionController extends Controller
             ->map(fn ($v) => (int) $v)->filter()->unique()->values()->all();
 
         return [
+            // Mã chương trình do API tự cấp (KM00001…), không gửi. Thứ trống = mọi ngày.
+            'days_of_week' => collect($validated['days_of_week'] ?? [])->map(fn ($v) => (int) $v)->unique()->values()->all(),
             'name' => $validated['name'],
             'description' => (string) ($validated['description'] ?? ''),
             'discount_type' => $validated['discount_type'],
@@ -319,7 +326,7 @@ class PromotionController extends Controller
             // Trần giảm chỉ có nghĩa khi giảm theo %. Gửi kèm ở kiểu "giảm số tiền"
             // là để lại một con số nằm im trong database rồi có người tưởng nó đang
             // có tác dụng.
-            'max_discount_amount' => $percent && $validated['max_discount_amount'] !== null
+            'max_discount_amount' => $percent && ($validated['max_discount_amount'] ?? null) !== null
                 ? (float) $validated['max_discount_amount']
                 : null,
             'start_at' => $validated['start_at'],
@@ -442,10 +449,24 @@ class PromotionController extends Controller
     {
         try {
             $res = $call();
+        } catch (ValidationException $e) {
+            // Lỗi nhập liệu phải về đúng ô đang sai, không được nuốt thành câu
+            // "không kết nối được API" như mọi lỗi khác.
+            throw $e;
         } catch (\Throwable $e) {
             Log::error('Promotion API call failed', ['msg' => $e->getMessage()]);
 
-            return $this->backToList($request)->with('error', 'Không kết nối được API. Vui lòng thử lại.');
+            return $request->expectsJson()
+                ? $this->traLoiHopThoai($request, false, 'Không kết nối được API. Vui lòng thử lại.')
+                : $this->backToList($request)->with('error', 'Không kết nối được API. Vui lòng thử lại.');
+        }
+
+        // Hộp thoại của màn CRM gọi bằng AJAX: trả {success, message} để hộp tự
+        // đóng hay giữ lại. Màn cũ gửi form thường thì vẫn chuyển hướng như trước.
+        if ($request->expectsJson()) {
+            return $res->successful()
+                ? $this->traLoiHopThoai($request, true, $success)
+                : $this->traLoiHopThoai($request, false, $this->cauLoiApi($res, 'Thao tác không thành công.'), null, $res->status());
         }
 
         if ($res->successful()) {

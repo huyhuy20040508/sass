@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"bytes"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -218,27 +220,48 @@ func (h *EtaxHandler) HoaDon(c *gin.Context) {
 //
 //	@Summary		Phát hành hoá đơn cho một đơn hàng
 //	@Description	Chi nhánh của đơn phải đã kết nối cổng HĐĐT và đã chọn ký hiệu.
+//	@Description	Gửi thân `EtaxPhatHanhRequest` = ghi người mua (email, MST, tên và địa chỉ doanh nghiệp) vào đơn rồi mới phát hành; không gửi thân = dùng người mua đang có trên đơn.
 //	@Description	Công tắc "Tự phát hành" quyết định lưu nháp hay ký luôn.
 //	@Description	Mỗi đơn phát hành ĐÚNG MỘT hoá đơn; bấm lại chỉ được khi lượt trước hỏng.
 //	@Tags			Admin - Hoá đơn điện tử
 //	@Produce		json
 //	@Security		BearerAuth
-//	@Param			id	path		int	true	"ID đơn hàng"
-//	@Success		200	{object}	response.Body{data=domain.EtaxInvoice}
-//	@Failure		401	{object}	response.Body
-//	@Failure		403	{object}	response.Body
-//	@Failure		404	{object}	response.Body
-//	@Failure		409	{object}	response.Body
-//	@Failure		422	{object}	response.Body
+//	@Accept			json
+//	@Param			id		path		int							true	"ID đơn hàng"
+//	@Param			body	body		dto.EtaxPhatHanhRequest	false	"Người mua ghi lên hoá đơn"
+//	@Success		200		{object}	response.Body{data=domain.EtaxInvoice}
+//	@Failure		401		{object}	response.Body
+//	@Failure		403		{object}	response.Body
+//	@Failure		404		{object}	response.Body
+//	@Failure		409		{object}	response.Body
+//	@Failure		422		{object}	response.Body
+//	@Failure		502		{object}	response.Body	"Cổng HĐĐT từ chối — message là câu của cổng"
 //	@Router			/admin/orders/{id}/etax [post]
 func (h *EtaxHandler) PhatHanh(c *gin.Context) {
 	id, ok := parseUintParam(c, "id")
 	if !ok {
 		return
 	}
-	hd, err := h.svc.PhatHanh(c.Request.Context(), id)
+	// Thân rỗng (hoặc "[]" / "{}" mà client HTTP hay gửi thay cho rỗng) = phát
+	// hành theo người mua đang có trên đơn — đường của sổ hoá đơn và nút bấm lại.
+	tho, _ := c.GetRawData()
+	var hd *domain.EtaxInvoice
+	var err error
+	switch strings.TrimSpace(string(tho)) {
+	case "", "[]", "{}", "null":
+		hd, err = h.svc.PhatHanh(c.Request.Context(), id)
+	default:
+		c.Request.Body = io.NopCloser(bytes.NewReader(tho))
+		var req dto.EtaxPhatHanhRequest
+		if !bindJSON(c, &req) {
+			return
+		}
+		hd, err = h.svc.PhatHanhKemNguoiMua(c.Request.Context(), id, &req)
+	}
 	if err != nil {
-		handleServiceError(c, err)
+		// Câu của cổng ("Mã hàng phải có chiều dài tối đa là 50") là thứ nói được
+		// phải sửa gì — không nuốt thành "Đã có lỗi xảy ra".
+		loiHoaDon(c, err)
 
 		return
 	}

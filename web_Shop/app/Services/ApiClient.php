@@ -87,6 +87,23 @@ class ApiClient
         return self::$chiNhanhCuaRequest ?? (int) session(self::KHOA_CHI_NHANH, 0);
     }
 
+    /**
+     * Bản sao chờ API lâu hơn — cho các lượt đi qua cổng hoá đơn điện tử: API
+     * phải gọi M-Invoice (có khi hai ba lượt: đăng nhập lại, ký, tra mã), mà cổng
+     * chậm là chuyện thường. Chờ 15 giây như mọi đường khác thì PHP bỏ về và
+     * người dùng nhận 502 trong khi hoá đơn vẫn đang được phát hành.
+     *
+     * 55 giây: dưới mức 60 giây nginx chờ PHP-FPM, để người dùng nhận câu báo lỗi
+     * của mình chứ không phải trang 504 của nginx.
+     */
+    public function choLau(int $giay = 55): static
+    {
+        $ban = clone $this;
+        $ban->timeout = max($this->timeout, $giay);
+
+        return $ban;
+    }
+
     public function request(string|false|null $token = null): PendingRequest
     {
         $req = Http::baseUrl($this->baseUrl)
@@ -676,6 +693,187 @@ class ApiClient
         return $this->put("/admin/promotions/{$id}/status", ['is_active' => $isActive]);
     }
 
+    // ---------- Chương trình khuyến mại (CRM, khuôn v2) ----------
+
+    public function chuongTrinhKM(array $query = []): Response
+    {
+        return $this->get('/admin/chuong-trinh-khuyen-mai', $query);
+    }
+
+    public function maChuongTrinhKM(): Response
+    {
+        return $this->get('/admin/chuong-trinh-khuyen-mai/ma');
+    }
+
+    public function taoChuongTrinhKM(array $data): Response
+    {
+        return $this->post('/admin/chuong-trinh-khuyen-mai', $data);
+    }
+
+    public function suaChuongTrinhKM(int $id, array $data): Response
+    {
+        return $this->put("/admin/chuong-trinh-khuyen-mai/{$id}", $data);
+    }
+
+    public function nhanBanChuongTrinhKM(int $id): Response
+    {
+        return $this->post("/admin/chuong-trinh-khuyen-mai/{$id}/nhan-ban", []);
+    }
+
+    public function batTatChuongTrinhKM(int $id, bool $on): Response
+    {
+        return $this->put("/admin/chuong-trinh-khuyen-mai/{$id}/status", ['status' => $on]);
+    }
+
+    public function huyDuyetChuongTrinhKM(int $id): Response
+    {
+        return $this->post("/admin/chuong-trinh-khuyen-mai/{$id}/huy-duyet", []);
+    }
+
+    public function xoaChuongTrinhKM(int $id): Response
+    {
+        return $this->delete("/admin/chuong-trinh-khuyen-mai/{$id}");
+    }
+
+    /** Quầy: chương trình khuyến mại giỏ đủ điều kiện + số giảm khi chọn. */
+    public function posKhuyenMai(array $data): Response
+    {
+        return $this->post('/admin/orders/pos/khuyen-mai', $data);
+    }
+
+    // ---------- Khuyến mại đồng giá (CRM) ----------
+
+    public function dongGia(array $query = []): Response
+    {
+        return $this->get('/admin/dong-gia', $query);
+    }
+
+    public function maDongGia(): Response
+    {
+        return $this->get('/admin/dong-gia/ma');
+    }
+
+    // ---- CRM → Voucher/Coupon (chương trình phát nhiều mã) ----
+
+    public function voucherCoupon(array $query = []): Response
+    {
+        return $this->get('/admin/voucher-coupon', $query);
+    }
+
+    public function taoVoucherCoupon(array $data): Response
+    {
+        return $this->post('/admin/voucher-coupon', $data);
+    }
+
+    public function suaVoucherCoupon(int $id, array $data): Response
+    {
+        return $this->put("/admin/voucher-coupon/{$id}", $data);
+    }
+
+    public function xoaVoucherCoupon(int $id): Response
+    {
+        return $this->delete("/admin/voucher-coupon/{$id}");
+    }
+
+    public function maVoucherCoupon(int $id, array $query = []): Response
+    {
+        return $this->get("/admin/voucher-coupon/{$id}/ma", $query);
+    }
+
+    public function batTatMaVoucher(int $id, bool $on): Response
+    {
+        return $this->put("/admin/voucher-coupon-ma/{$id}/status", ['is_active' => $on]);
+    }
+
+    public function lichSuMaVoucher(int $id): Response
+    {
+        return $this->get("/admin/voucher-coupon-ma/{$id}/lich-su");
+    }
+
+    // ---- CRM → Thẻ thành viên (hạng, quy đổi điểm) ----
+
+    public function theThanhVien(): Response
+    {
+        return $this->get('/admin/the-thanh-vien');
+    }
+
+    public function hangThanhVien(int $id): Response
+    {
+        return $this->get("/admin/the-thanh-vien/{$id}");
+    }
+
+    public function khachCuaHang(int $id, array $query = []): Response
+    {
+        return $this->get("/admin/the-thanh-vien/{$id}/khach", $query);
+    }
+
+    public function taoHangThanhVien(array $data): Response
+    {
+        return $this->post('/admin/the-thanh-vien', $data);
+    }
+
+    public function suaHangThanhVien(int $id, array $data): Response
+    {
+        return $this->put("/admin/the-thanh-vien/{$id}", $data);
+    }
+
+    public function batTatHangThanhVien(int $id, bool $on): Response
+    {
+        return $this->put("/admin/the-thanh-vien/{$id}/status", ['status' => $on]);
+    }
+
+    public function xoaHangThanhVien(array $ids): Response
+    {
+        return $this->post('/admin/the-thanh-vien/xoa', ['ids' => $ids]);
+    }
+
+    public function luuQuyDoiDiem(array $data): Response
+    {
+        return $this->put('/admin/the-thanh-vien/quy-doi', $data);
+    }
+
+    public function posThanhVien(): Response
+    {
+        return $this->get('/admin/orders/pos/thanh-vien');
+    }
+
+    public function taoDongGia(array $data): Response
+    {
+        return $this->post('/admin/dong-gia', $data);
+    }
+
+    public function suaDongGia(int $id, array $data): Response
+    {
+        return $this->put("/admin/dong-gia/{$id}", $data);
+    }
+
+    public function batTatDongGia(int $id, bool $on): Response
+    {
+        return $this->put("/admin/dong-gia/{$id}/status", ['status' => $on]);
+    }
+
+    public function huyDuyetDongGia(int $id): Response
+    {
+        return $this->post("/admin/dong-gia/{$id}/huy-duyet", []);
+    }
+
+    public function xoaDongGia(int $id): Response
+    {
+        return $this->delete("/admin/dong-gia/{$id}");
+    }
+
+    /** Quầy: chương trình đồng giá giỏ đủ điều kiện + giá khi chọn. */
+    public function posDongGia(array $data): Response
+    {
+        return $this->post('/admin/orders/pos/dong-gia', $data);
+    }
+
+    /** Một chương trình khuyến mãi — nút Nhân bản đọc bản gốc qua đây. */
+    public function promotion(int $id): Response
+    {
+        return $this->get("/admin/promotions/{$id}");
+    }
+
     public function deletePromotion(int $id): Response
     {
         return $this->delete("/admin/promotions/{$id}");
@@ -940,7 +1138,9 @@ class ApiClient
      */
     public function posCheckout(array $payload): Response
     {
-        return $this->post('/admin/orders/pos', $payload);
+        // Chờ lâu: bật "Xuất hoá đơn" hay "Tự phát hành" thì API gọi cổng HĐĐT
+        // ngay trong lượt bán. Cắt ở 15 giây là đơn đã bán xong mà màn báo lỗi.
+        return $this->choLau()->post('/admin/orders/pos', $payload);
     }
 
     /** Quét một mã vạch (hoặc SKU) — trả món hàng kèm giá đã trừ khuyến mãi và tồn chi nhánh. */
@@ -981,7 +1181,7 @@ class ApiClient
     /** Xuất hoá đơn điện tử cho một đơn QUẦY (nút bấm lại của màn bán hàng). */
     public function posPhatHanhHoaDon(int $orderID): Response
     {
-        return $this->post("/admin/orders/pos/{$orderID}/hoa-don-dien-tu", []);
+        return $this->choLau()->post("/admin/orders/pos/{$orderID}/hoa-don-dien-tu", []);
     }
 
     // ---------- Ca làm việc & sổ quỹ ----------
@@ -1791,34 +1991,37 @@ class ApiClient
         return $this->get("/admin/orders/{$orderID}/etax");
     }
 
-    /** Phát hành hoá đơn cho một đơn hàng. */
-    public function phatHanhHoaDon(int $orderID): Response
+    /**
+     * Phát hành hoá đơn cho một đơn hàng. `$nguoiMua` rỗng = dùng người mua đang
+     * có trên đơn; có thì API ghi nó vào đơn trước khi phát hành.
+     */
+    public function phatHanhHoaDon(int $orderID, array $nguoiMua = []): Response
     {
-        return $this->post("/admin/orders/{$orderID}/etax", []);
+        return $this->choLau()->post("/admin/orders/{$orderID}/etax", $nguoiMua);
     }
 
     /** Ký tờ nháp rồi gửi cơ quan thuế. Chỉ chạy với chữ ký số mềm. */
     public function kyHoaDon(int $orderID): Response
     {
-        return $this->post("/admin/orders/{$orderID}/etax/sign", []);
+        return $this->choLau()->post("/admin/orders/{$orderID}/etax/sign", []);
     }
 
     /** Hỏi lại cổng xem cơ quan thuế đã cấp mã chưa. */
     public function dongBoHoaDon(int $orderID): Response
     {
-        return $this->post("/admin/orders/{$orderID}/etax/sync", []);
+        return $this->choLau()->post("/admin/orders/{$orderID}/etax/sync", []);
     }
 
     /** Xuất một tờ THAY CHO tờ hiện tại, dựng lại từ đơn hàng hôm nay. */
     public function thayTheHoaDon(int $orderID, array $data): Response
     {
-        return $this->post("/admin/orders/{$orderID}/etax/replace", $data);
+        return $this->choLau()->post("/admin/orders/{$orderID}/etax/replace", $data);
     }
 
     /** Điều chỉnh tờ hiện tại; không gửi `dong` = điều chỉnh về 0. */
     public function dieuChinhHoaDon(int $orderID, array $data): Response
     {
-        return $this->post("/admin/orders/{$orderID}/etax/adjust", $data);
+        return $this->choLau()->post("/admin/orders/{$orderID}/etax/adjust", $data);
     }
 
     /** Bản PDF của hoá đơn. Trả về tệp, không phải JSON. */
@@ -1901,6 +2104,15 @@ class ApiClient
     public function reportCustomers(array $query = []): Response
     {
         return $this->get('/admin/reports/customers', $query);
+    }
+
+    /**
+     * Báo cáo kết ca: mỗi dòng một ca, kèm doanh thu theo hình thức và đối chiếu két.
+     * $query: from, to (YYYY-MM-DD), shop_id, user_id, keyword, page, page_size.
+     */
+    public function reportShifts(array $query = []): Response
+    {
+        return $this->get('/admin/reports/shifts', $query);
     }
 
     // ---------- Gói dịch vụ của cửa hàng ----------

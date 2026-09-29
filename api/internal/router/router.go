@@ -103,8 +103,16 @@ type Handlers struct {
 	Banner  *handler.BannerHandler
 	Report  *handler.ReportHandler
 	Promo   *handler.PromotionHandler
-	Voucher *handler.VoucherHandler
-	Contact *handler.ContactHandler
+	// DongGia — CRM → Khuyến mại đồng giá và đường xem trước ở quầy.
+	DongGia *handler.FixedPriceHandler
+	// KhuyenMai — CRM → Chương trình khuyến mại (khuôn v2) và xem trước ở quầy.
+	KhuyenMai *handler.PromotionProgramHandler
+	// Voucher2 — CRM → Voucher/Coupon (khuôn v2): chương trình phát ra nhiều mã.
+	Voucher2 *handler.VoucherProgramHandler
+	// ThanhVien — CRM → Thẻ thành viên: hạng, quy đổi điểm, khách theo hạng.
+	ThanhVien *handler.MembershipHandler
+	Voucher   *handler.VoucherHandler
+	Contact   *handler.ContactHandler
 	// Plan phục vụ KHU ĐIỀU HÀNH NỀN TẢNG (danh mục phần mềm, bảng giá, tính
 	// năng gói). nil = chưa dựng control plane; cả nhóm /platform không được
 	// đăng ký.
@@ -607,6 +615,43 @@ func New(
 			q.Dat(manage, http.MethodPut, "/promotions/:id", "khuyen-mai.sua", h.Promo.Update)
 			q.Dat(manage, http.MethodPut, "/promotions/:id/status", "khuyen-mai.sua", h.Promo.UpdateStatus)
 			q.Dat(manage, http.MethodDelete, "/promotions/:id", "khuyen-mai.xoa", h.Promo.Delete)
+			// Khuyến mại đồng giá — cùng quyền với khuyến mãi (v2 để chung một màn).
+			q.Dat(manage, http.MethodGet, "/dong-gia", "khuyen-mai.xem", h.DongGia.List)
+			q.Dat(manage, http.MethodGet, "/dong-gia/ma", "khuyen-mai.xem", h.DongGia.Codes)
+			q.Dat(manage, http.MethodPost, "/dong-gia", "khuyen-mai.them", h.DongGia.Create)
+			q.Dat(manage, http.MethodGet, "/dong-gia/:id", "khuyen-mai.xem", h.DongGia.Get)
+			q.Dat(manage, http.MethodPut, "/dong-gia/:id", "khuyen-mai.sua", h.DongGia.Update)
+			q.Dat(manage, http.MethodPut, "/dong-gia/:id/status", "khuyen-mai.sua", h.DongGia.Status)
+			q.Dat(manage, http.MethodPost, "/dong-gia/:id/huy-duyet", "khuyen-mai.sua", h.DongGia.HuyDuyet)
+			q.Dat(manage, http.MethodDelete, "/dong-gia/:id", "khuyen-mai.xoa", h.DongGia.Delete)
+			// Chương trình khuyến mại (khuôn v2) — cùng quyền khuyến mãi.
+			q.Dat(manage, http.MethodGet, "/chuong-trinh-khuyen-mai", "khuyen-mai.xem", h.KhuyenMai.List)
+			q.Dat(manage, http.MethodGet, "/chuong-trinh-khuyen-mai/ma", "khuyen-mai.xem", h.KhuyenMai.Codes)
+			q.Dat(manage, http.MethodPost, "/chuong-trinh-khuyen-mai", "khuyen-mai.them", h.KhuyenMai.Create)
+			q.Dat(manage, http.MethodGet, "/chuong-trinh-khuyen-mai/:id", "khuyen-mai.xem", h.KhuyenMai.Get)
+			q.Dat(manage, http.MethodPut, "/chuong-trinh-khuyen-mai/:id", "khuyen-mai.sua", h.KhuyenMai.Update)
+			q.Dat(manage, http.MethodPost, "/chuong-trinh-khuyen-mai/:id/nhan-ban", "khuyen-mai.them", h.KhuyenMai.Duplicate)
+			q.Dat(manage, http.MethodPut, "/chuong-trinh-khuyen-mai/:id/status", "khuyen-mai.sua", h.KhuyenMai.Status)
+			q.Dat(manage, http.MethodPost, "/chuong-trinh-khuyen-mai/:id/huy-duyet", "khuyen-mai.sua", h.KhuyenMai.HuyDuyet)
+			q.Dat(manage, http.MethodDelete, "/chuong-trinh-khuyen-mai/:id", "khuyen-mai.xoa", h.KhuyenMai.Delete)
+
+			q.Dat(manage, http.MethodGet, "/voucher-coupon", "khuyen-mai.xem", h.Voucher2.List)
+			q.Dat(manage, http.MethodPost, "/voucher-coupon", "khuyen-mai.them", h.Voucher2.Create)
+			q.Dat(manage, http.MethodGet, "/voucher-coupon/:id", "khuyen-mai.xem", h.Voucher2.Get)
+			q.Dat(manage, http.MethodPut, "/voucher-coupon/:id", "khuyen-mai.sua", h.Voucher2.Update)
+			q.Dat(manage, http.MethodDelete, "/voucher-coupon/:id", "khuyen-mai.xoa", h.Voucher2.Delete)
+			q.Dat(manage, http.MethodGet, "/voucher-coupon/:id/ma", "khuyen-mai.xem", h.Voucher2.Codes)
+			q.Dat(manage, http.MethodPut, "/voucher-coupon-ma/:id/status", "khuyen-mai.sua", h.Voucher2.CodeStatus)
+			q.Dat(manage, http.MethodGet, "/voucher-coupon-ma/:id/lich-su", "khuyen-mai.xem", h.Voucher2.CodeUses)
+
+			q.Dat(manage, http.MethodGet, "/the-thanh-vien", "khuyen-mai.xem", h.ThanhVien.List)
+			q.Dat(manage, http.MethodPost, "/the-thanh-vien", "khuyen-mai.them", h.ThanhVien.Create)
+			q.Dat(manage, http.MethodPost, "/the-thanh-vien/xoa", "khuyen-mai.xoa", h.ThanhVien.Delete)
+			q.Dat(manage, http.MethodPut, "/the-thanh-vien/quy-doi", "khuyen-mai.sua", h.ThanhVien.Conversion)
+			q.Dat(manage, http.MethodGet, "/the-thanh-vien/:id", "khuyen-mai.xem", h.ThanhVien.Get)
+			q.Dat(manage, http.MethodPut, "/the-thanh-vien/:id", "khuyen-mai.sua", h.ThanhVien.Update)
+			q.Dat(manage, http.MethodPut, "/the-thanh-vien/:id/status", "khuyen-mai.sua", h.ThanhVien.Status)
+			q.Dat(manage, http.MethodGet, "/the-thanh-vien/:id/khach", "khuyen-mai.xem", h.ThanhVien.Members)
 
 			// Voucher — mã khách tự nhập lúc thanh toán, giảm trên tổng đơn. Cùng
 			// tầng quyền với khuyến mãi vì cũng là tiền ra khỏi cửa hàng.
@@ -681,6 +726,11 @@ func New(
 			// trong lúc bán, nên đứng cạnh chính đường bán.
 			q.Dat(quay, http.MethodGet, "/orders/pos/scan", "don-hang.xem", h.Order.POSScan)
 			q.Dat(quay, http.MethodGet, "/orders/pos/discount-limit", "don-hang.xem", h.Order.POSDiscountLimit)
+			// Đồng giá: nút "Đồng giá" hỏi chương trình đủ điều kiện và giá sau khi
+			// chọn — cùng quyền với bán, người đứng quầy là người bấm.
+			q.Dat(quay, http.MethodPost, "/orders/pos/dong-gia", "don-hang.them", h.DongGia.POSXemTruoc)
+			// Nút "Khuyến mãi": chương trình đủ điều kiện + số giảm khi chọn.
+			q.Dat(quay, http.MethodPost, "/orders/pos/khuyen-mai", "don-hang.them", h.KhuyenMai.POSXemTruoc)
 			// Hoá đơn điện tử cho đơn QUẦY — cùng quyền với bán: người vừa thu tiền là
 			// người khách đứng trước mặt đòi hoá đơn. Đơn kênh khác bị từ chối ở
 			// service; bộ nút phát hành đầy đủ vẫn ở /orders/:id/etax (khu quản trị).
@@ -692,6 +742,7 @@ func New(
 			// khách quen ở đó thì không ra ai. Hai đường này chỉ đọc danh sách và thêm
 			// hồ sơ gọn; sửa, xoá, đặt mật khẩu vẫn đóng.
 			q.Dat(quay, http.MethodGet, "/orders/pos/khach-hang", "don-hang.them", h.Customer.List)
+			q.Dat(quay, http.MethodGet, "/orders/pos/thanh-vien", "don-hang.them", h.ThanhVien.POS)
 			q.Dat(quay, http.MethodPost, "/orders/pos/khach-hang", "don-hang.them", h.Customer.TaoTaiQuay)
 			// Đổi hàng: nhận hàng cũ + bán hàng mới + ghi chênh lệch, một giao dịch.
 			q.Dat(quay, http.MethodPost, "/orders/pos/doi-hang", "don-hang.doi-hang", h.Order.POSDoiHang)

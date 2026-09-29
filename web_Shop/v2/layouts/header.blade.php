@@ -39,6 +39,7 @@
     */
     $anhHeader = [
         'report' => public_path('images/modules/report.png'),
+        'reports' => public_path('images/modules/reports.png'),
         'menu' => public_path('images/modules/menu.png'),
         'warehouse' => public_path('images/modules/warehouse.png'),
         'cashbook' => public_path('images/modules/cashbook.png'),
@@ -96,6 +97,7 @@
          2. điền route thật vào biến đường dẫn ngay bên dưới (đang để '#')
     */
     $ulDashboardPer = true;
+    $ulReportPer = true;
     $ulMenuPer = true;
     $ulWarehousePer = true;
     $ulCashbookPer = true;
@@ -106,22 +108,23 @@
 
     // Section đang mở — bản gốc dò bằng is_menu_active(đường v2); mình dò theo
     // đường của web_Shop.
-    $isStatisticSection = request()->is('admin/dashboard', 'admin/reports*', 'admin/customers*', 'admin/orders*', 'admin/hoa-don-dien-tu*');
+    $isStatisticSection = request()->is('admin/dashboard', 'admin/customers*', 'admin/orders*', 'admin/hoa-don-dien-tu*', 'admin/shift-report*');
+    $isReportSection = request()->is('admin/reports*');
     $isMenuSection = request()->is('admin/products*', 'admin/categories*', 'admin/taxes*', 'admin/units*', 'admin/attributes*');
     $isWarehouseSection = request()->is('admin/suppliers*', 'admin/inventory-adjustments*', 'admin/purchase-orders*', 'admin/supplier-returns*', 'admin/stock-transfers*', 'admin/inventory*');
     $isCashbookSection = request()->is('admin/cashbook*');
     $isHumanSection = request()->is('admin/staff*');
-    // CRM chưa có màn nào: Khách hàng nằm ở module THỐNG KÊ, đúng như v2.
-    $isCrmSection = false;
+    $isCrmSection = request()->is('admin/crm*');
     $isSettingSection = request()->is('admin/settings*', 'admin/branches*');
 
     // Đường vào từng module. Bật cờ ở trên rồi thì thay '#' bằng route thật.
     $statisticDefaultRoute = route('admin.customers.index');
+    $routeUlReport = route('admin.reports.customers');
     $routeUlMenu = route('admin.products.index');
     $routeUlWarehouse = route('admin.nha-cung-cap.index');
     $routeUlCashbook = route('admin.cashbook.index');
     $routeUlEmployee = route('admin.staff.index');
-    $routeUlCrm = '#';
+    $routeUlCrm = route('admin.crm.customers.index');
     $routeUlSettings = route('admin.chi-nhanh.index');
 
     // Tab trong module CÀI ĐẶT — cùng luật: màn nào chưa dựng thì giấu.
@@ -141,6 +144,30 @@
         ['nhan' => 'Báo cáo cuối ngày', 'route' => null],
     ];
 
+    // Tab của module BÁO CÁO. Doanh thu / Đơn hàng / Hàng hoá còn là trang khu
+    // cũ (V2OnlyShell::CON_BAN_CU) — trỏ vào là rơi khỏi vỏ v2, nên làm mờ như
+    // màn chưa dựng; port xong trang nào thì điền route vào đây.
+    $tabBaoCao = [
+        ['nhan' => 'Doanh thu', 'route' => null],
+        ['nhan' => 'Đơn hàng', 'route' => null],
+        ['nhan' => 'Hàng hoá', 'route' => null],
+        ['nhan' => 'Khách hàng', 'route' => 'admin.reports.customers'],
+    ];
+
+    // Tab của module CRM theo bản v2 (config/permission.php của v2), BỎ "Nhóm
+    // khách hàng" theo yêu cầu chủ tiệm 28/09/2026 — nhóm khách vẫn thêm nhanh
+    // được ở hộp Thêm/Sửa khách. Cùng luật với Thống kê: màn chưa dựng thì bày
+    // ra nhưng làm mờ.
+    $tabCrm = [
+        ['nhan' => 'Tổng quan', 'route' => null],
+        ['nhan' => 'Danh sách khách hàng', 'route' => 'admin.crm.customers.index'],
+        ['nhan' => 'Danh sách đơn hàng', 'route' => 'admin.crm.orders.index'],
+        // 'sang': tab sáng cho mọi trang con (Chương trình khuyến mại / Đồng giá).
+        ['nhan' => 'Chương trình khuyến mãi', 'route' => 'admin.crm.promotions.index', 'sang' => 'admin.crm.promotions.*'],
+        ['nhan' => 'Báo cáo chương trình khuyến mại', 'route' => null],
+        ['nhan' => 'Thẻ thành viên', 'route' => 'admin.crm.membership.index', 'sang' => 'admin.crm.membership.*'],
+        ['nhan' => 'Đánh giá', 'route' => null],
+    ];
 
     // Tab trong module THU CHI — cùng luật: màn nào chưa dựng thì giấu.
     $incomeExpensePer = true;           // Quản lý thu chi — ĐÃ CÓ
@@ -263,6 +290,16 @@
                                 <a href="{{ $routeUlCrm }}">
                                     <img src="{{ $icon('crm') }}" alt="CRM">
                                     <p class="text-detail text-uppercase">CRM</p>
+                                </a>
+                            </div>
+                        @endif
+
+                        {{-- BÁO CÁO --}}
+                        @if($ulReportPer)
+                            <div class="sidebar-item icon-item me-xl-2 {{ $isReportSection ? 'active' : '' }}">
+                                <a href="{{ $routeUlReport }}">
+                                    <img src="{{ $icon('reports') }}" alt="Báo cáo">
+                                    <p class="text-detail text-uppercase">Báo cáo</p>
                                 </a>
                             </div>
                         @endif
@@ -598,6 +635,38 @@
                             @if($tab['route'])
                                 <a href="{{ route($tab['route']) }}"
                                     class="sub-nav-btn {{ request()->routeIs($tab['route']) ? 'active' : '' }}">
+                                    {{ $tab['nhan'] }}
+                                </a>
+                            @else
+                                <a class="sub-nav-btn" href="#" title="Màn này chưa dựng"
+                                    style="opacity: .45; cursor: not-allowed;"
+                                    onclick="return false;">{{ $tab['nhan'] }}</a>
+                            @endif
+                        @endforeach
+                    @endif
+
+                    {{-- BÁO CÁO — trang chưa có bản v2 thì làm mờ. --}}
+                    @if($ulReportPer && $isReportSection)
+                        @foreach($tabBaoCao as $tab)
+                            @if($tab['route'])
+                                <a href="{{ route($tab['route']) }}"
+                                    class="sub-nav-btn {{ request()->routeIs($tab['route']) ? 'active' : '' }}">
+                                    {{ $tab['nhan'] }}
+                                </a>
+                            @else
+                                <a class="sub-nav-btn" href="#" title="Màn này chưa dựng"
+                                    style="opacity: .45; cursor: not-allowed;"
+                                    onclick="return false;">{{ $tab['nhan'] }}</a>
+                            @endif
+                        @endforeach
+                    @endif
+
+                    {{-- 6. CRM — tab của v2 (bỏ Nhóm khách hàng), màn chưa dựng thì làm mờ. --}}
+                    @if($ulCrmPer && $isCrmSection)
+                        @foreach($tabCrm as $tab)
+                            @if($tab['route'])
+                                <a href="{{ route($tab['route']) }}"
+                                    class="sub-nav-btn {{ request()->routeIs($tab['sang'] ?? $tab['route']) ? 'active' : '' }}">
                                     {{ $tab['nhan'] }}
                                 </a>
                             @else

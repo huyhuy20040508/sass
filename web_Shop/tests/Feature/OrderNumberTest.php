@@ -68,4 +68,52 @@ class OrderNumberTest extends TestCase
         $this->assertSame(1, substr_count($html, 'class="detail-phieu-tra"'));
         $this->assertSame(2, substr_count($html, 'class="detail-item"'));
     }
+
+    /** Icon "Xuất HĐĐT" chỉ bày ở dòng API bật `xuat_duoc_hoa_don`. */
+    public function test_nut_xuat_hddt_theo_co_cua_api(): void
+    {
+        Http::fake([
+            '*/admin/orders/so-don*' => Http::response([
+                'data' => [
+                    ['loai' => 'don', 'id' => 21, 'ma' => 'DH021', 'kenh' => 'pos', 'tong_tien' => 100000,
+                        'trang_thai' => 'paid', 'xuat_duoc_hoa_don' => true],
+                    ['loai' => 'don', 'id' => 22, 'ma' => 'DH022', 'kenh' => 'web', 'tong_tien' => 100000,
+                        'trang_thai' => 'paid', 'xuat_duoc_hoa_don' => false],
+                ],
+                'meta' => ['page' => 1, 'page_size' => 20, 'total' => 2, 'total_pages' => 1],
+            ]),
+            '*' => Http::response(['data' => []]),
+        ]);
+
+        $html = $this->withSession($this->phienQuanTri())
+            ->get(route('admin.orders.index'))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertSame(1, substr_count($html, 'class="xuat-hddt"'));
+        $this->assertStringContainsString('id="modalXuatHddt"', $html);
+    }
+
+    /** Hộp Xuất HĐĐT gửi người mua lên API; nút không kèm gì thì thân vẫn rỗng. */
+    public function test_phat_hanh_gui_kem_nguoi_mua(): void
+    {
+        Http::fake([
+            '*/admin/orders/21/etax' => Http::response(['message' => 'Đã phát hành hoá đơn.', 'data' => ['status' => 'sent']]),
+        ]);
+
+        $this->withSession($this->phienQuanTri())
+            ->postJson(route('admin.orders.phatHanhHoaDon', 21), [
+                'buyer_type' => 'company', 'email' => 'ketoan@example.com',
+                'buyer_tax_code' => '0101234567', 'buyer_company' => 'Công ty X', 'buyer_address' => '1 Tràng Tiền',
+            ])
+            ->assertOk()
+            ->assertJsonPath('message', 'Đã phát hành hoá đơn.');
+
+        Http::assertSent(fn ($req) => str_ends_with($req->url(), '/admin/orders/21/etax')
+            && $req['buyer_type'] === 'company' && $req['buyer_tax_code'] === '0101234567');
+
+        $this->withSession($this->phienQuanTri())
+            ->postJson(route('admin.orders.phatHanhHoaDon', 21), ['buyer_type' => 'khac'])
+            ->assertStatus(422);
+    }
 }

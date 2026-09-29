@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql/driver"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -389,6 +390,11 @@ type User struct {
 	RepresentativeName  StringOrNull `json:"representative_name" gorm:"column:representative_name"`
 	RepresentativePhone StringOrNull `json:"representative_phone" gorm:"column:representative_phone"`
 	CustomerNote        StringOrNull `json:"customer_note" gorm:"column:customer_note"`
+	// Thẻ thành viên (migration 0072): điểm tích luỹ trọn đời (quyết định hạng),
+	// điểm còn dùng được, và hạng hiện tại.
+	TotalPoints uint  `json:"total_points"`
+	Points      uint  `json:"points"`
+	RankID      *uint `json:"rank_id"`
 
 	Status          string         `json:"status"`
 	EmailVerifiedAt *time.Time     `json:"email_verified_at"`
@@ -812,12 +818,18 @@ type CartItem struct {
 type Voucher struct {
 	ID uint `json:"id" gorm:"primaryKey"`
 	TenantOwned
-	Code              string     `json:"code"`
-	Description       string     `json:"description"`
-	DiscountType      string     `json:"discount_type"`
-	DiscountValue     float64    `json:"discount_value"`
-	MaxDiscountAmount *float64   `json:"max_discount_amount"`
-	MinOrderAmount    float64    `json:"min_order_amount"`
+	// ProgramID: mã do chương trình Voucher/Coupon phát ra (migration 0071); nil =
+	// mã lẻ tạo ở màn Mã giảm giá.
+	ProgramID         *uint    `json:"program_id"`
+	Code              string   `json:"code"`
+	Description       string   `json:"description"`
+	DiscountType      string   `json:"discount_type"`
+	DiscountValue     float64  `json:"discount_value"`
+	MaxDiscountAmount *float64 `json:"max_discount_amount"`
+	MinOrderAmount    float64  `json:"min_order_amount"`
+	// CategoryIDs "3,7,12": chỉ tiền hàng thuộc các danh mục này được giảm. Rỗng =
+	// mọi danh mục.
+	CategoryIDs       string     `json:"category_ids"`
 	UsageLimit        *uint      `json:"usage_limit"`
 	UsageLimitPerUser *uint      `json:"usage_limit_per_user"`
 	UsedCount         uint       `json:"used_count"`
@@ -921,17 +933,23 @@ const (
 type Promotion struct {
 	ID uint `json:"id" gorm:"primaryKey"`
 	TenantOwned
+	// Code là mã chương trình (chữ và số, không trùng trong cửa hàng) — màn CRM
+	// của v2 in nó ở cột đầu và cho tìm theo nó. Xem migration 0068.
+	Code         string `json:"code"`
 	Name         string `json:"name"`
 	Description  string `json:"description"`
 	DiscountType string `json:"discount_type"`
 	// DiscountValue là % (khi type=percentage) hoặc số tiền giảm trên MỖI sản phẩm.
 	DiscountValue float64 `json:"discount_value"`
 	// MaxDiscountAmount chỉ có nghĩa khi giảm theo %: "giảm 30% nhưng tối đa 200k".
-	MaxDiscountAmount *float64          `json:"max_discount_amount"`
-	StartAt           time.Time         `json:"start_at"`
-	EndAt             time.Time         `json:"end_at"`
-	IsActive          bool              `json:"is_active"`
-	Targets           []PromotionTarget `json:"targets,omitempty" gorm:"foreignKey:PromotionID"`
+	MaxDiscountAmount *float64  `json:"max_discount_amount"`
+	StartAt           time.Time `json:"start_at"`
+	EndAt             time.Time `json:"end_at"`
+	// DaysOfWeek: thứ trong tuần chương trình chạy, "1,2,3,4,5" theo ISO (1 = Thứ
+	// Hai … 7 = Chủ Nhật). RỖNG = mọi ngày.
+	DaysOfWeek string            `json:"days_of_week"`
+	IsActive   bool              `json:"is_active"`
+	Targets    []PromotionTarget `json:"targets,omitempty" gorm:"foreignKey:PromotionID"`
 	// Shops là những chi nhánh chương trình này CHẠY. RỖNG = mọi chi nhánh, chứ
 	// không phải "không chi nhánh nào" — cùng quy ước với Product.Shops, xem
 	// bảng promotion_shops ở migration 0053.
@@ -945,9 +963,29 @@ type Promotion struct {
 	DeletedAt gorm.DeletedAt `json:"-" gorm:"index"`
 }
 
-// Running cho biết chương trình có đang chạy tại thời điểm at hay không.
+// Running cho biết chương trình có đang chạy tại thời điểm at hay không — kể cả
+// luật "thứ trong tuần".
 func (p Promotion) Running(at time.Time) bool {
-	return p.IsActive && !at.Before(p.StartAt) && !at.After(p.EndAt)
+	return p.IsActive && !at.Before(p.StartAt) && !at.After(p.EndAt) && p.ChayVaoThu(at)
+}
+
+// ChayVaoThu cho biết ngày của at có nằm trong các thứ chương trình chạy không.
+// DaysOfWeek rỗng = mọi ngày.
+func (p Promotion) ChayVaoThu(at time.Time) bool {
+	if strings.TrimSpace(p.DaysOfWeek) == "" {
+		return true
+	}
+	thu := int(at.Weekday())
+	if thu == 0 {
+		thu = 7 // Chủ Nhật là 7 theo ISO, còn time.Weekday đếm nó là 0.
+	}
+	for _, d := range strings.Split(p.DaysOfWeek, ",") {
+		if strings.TrimSpace(d) == strconv.Itoa(thu) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // Discount tính số tiền giảm cho một sản phẩm đang bán ở giá price.
@@ -1037,6 +1075,17 @@ type Order struct {
 	ShippingAddress  string  `json:"shipping_address"`
 	SubtotalAmount   float64 `json:"subtotal_amount"`
 	DiscountAmount   float64 `json:"discount_amount"`
+	// PromotionDiscount: phần của DiscountAmount do CHƯƠNG TRÌNH KHUYẾN MẠI (chọn ở
+	// quầy) giảm; PromotionDetailIDs: các bậc đã áp, "12,15". Xem migration 0070.
+	PromotionDiscount  float64 `json:"promotion_discount"`
+	PromotionDetailIDs string  `json:"promotion_detail_ids"`
+	// Thẻ thành viên (migration 0072): RankDiscount là tiền giảm theo hạng,
+	// PointsAmount là tiền đổi từ PointsUsed điểm — cả hai đã nằm trong
+	// DiscountAmount. PointsEarned: điểm khách được cộng từ đơn này.
+	RankDiscount float64 `json:"rank_discount"`
+	PointsUsed   uint    `json:"points_used"`
+	PointsAmount float64 `json:"points_amount"`
+	PointsEarned uint    `json:"points_earned"`
 	// OrderDiscountPercent / OrderDiscountAmount là phần GIẢM TAY trên cả đơn mà
 	// người bán bấm ở quầy. Số tiền này ĐÃ NẰM TRONG DiscountAmount — hai trường
 	// này chỉ tách nguồn để phiếu in nói được đâu là mã giảm giá, đâu là giảm tay.
@@ -1150,12 +1199,18 @@ type OrderItem struct {
 	// KCT, -2 KKKNT). nil = dòng bán trước migration 0067 — hoá đơn phát hành bù
 	// lùi về thuế suất hiện tại của mặt hàng. VatAmount là tiền thuế của dòng,
 	// tính trên TotalPrice sau khi chia phần giảm giá cả đơn về (xem thueCuaDon).
-	VAT                *int      `json:"vat" gorm:"column:vat"`
-	VatAmount          float64   `json:"vat_amount"`
-	CustomPlayerName   string    `json:"custom_player_name"`
-	CustomPlayerNumber string    `json:"custom_player_number"`
-	CreatedAt          time.Time `json:"created_at"`
-	UpdatedAt          time.Time `json:"updated_at"`
+	VAT                *int    `json:"vat" gorm:"column:vat"`
+	VatAmount          float64 `json:"vat_amount"`
+	CustomPlayerName   string  `json:"custom_player_name"`
+	CustomPlayerNumber string  `json:"custom_player_number"`
+	// IsGift = dòng HÀNG TẶNG của khuyến mại đồng giá (giá 0, vẫn trừ kho).
+	// FixedPriceDetailID = dòng được tính giá / tặng theo dòng đồng giá nào.
+	IsGift             bool  `json:"is_gift"`
+	FixedPriceDetailID *uint `json:"fixed_price_detail_id"`
+	// PromotionDetailID: dòng HÀNG TẶNG thuộc bậc chương trình khuyến mại nào.
+	PromotionDetailID *uint     `json:"promotion_detail_id"`
+	CreatedAt         time.Time `json:"created_at"`
+	UpdatedAt         time.Time `json:"updated_at"`
 }
 
 // TableName: bảng trong schema là số ít (order_status_history), khác quy ước

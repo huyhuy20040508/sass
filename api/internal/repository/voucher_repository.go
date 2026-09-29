@@ -58,7 +58,9 @@ func applyVoucherStatus(q *gorm.DB, status string, now time.Time) *gorm.DB {
 
 func (r *voucherRepository) List(ctx context.Context, f domain.VoucherFilter) ([]domain.Voucher, int64, error) {
 	now := time.Now()
-	q := r.db.WithContext(ctx).Model(&domain.Voucher{})
+	// Mã do chương trình Voucher/Coupon phát ra (tới 200 mã một lượt) quản lý ở
+	// màn CRM của chúng, không đổ vào danh sách mã lẻ.
+	q := r.db.WithContext(ctx).Model(&domain.Voucher{}).Where("program_id IS NULL")
 	q = locGanChiNhanh(q, ctx, r.db, "voucher_shops", "voucher_id", "vouchers")
 
 	if kw := strings.TrimSpace(f.Keyword); kw != "" {
@@ -130,7 +132,7 @@ func (r *voucherRepository) Stats(ctx context.Context) (domain.VoucherStats, err
 		UsedUp    int64
 		Paused    int64
 	}
-	err := r.db.WithContext(ctx).Model(&domain.Voucher{}).
+	err := r.db.WithContext(ctx).Model(&domain.Voucher{}).Where("program_id IS NULL").
 		Select(`COUNT(*) AS total,
 			SUM(CASE WHEN `+vNotEnded+` AND `+vNotUsedUp+` AND is_active = 1 AND `+vStarted+` THEN 1 ELSE 0 END) AS running,
 			SUM(CASE WHEN `+vNotEnded+` AND `+vNotUsedUp+` AND is_active = 1 AND `+vNotYet+` THEN 1 ELSE 0 END) AS scheduled,

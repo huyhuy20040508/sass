@@ -41,7 +41,26 @@ class PosController extends Controller
         return view('v2::pos.sale', [
             'hanMucGiam' => $this->hanMucGiam(),
             'nhomHang' => $this->nhomHang(),
+            'thanhVien' => $this->thanhVien(),
         ]);
+    }
+
+    /**
+     * Hạng đang bật + số tiền mỗi điểm — màn quầy tính trước giảm theo hạng và
+     * đổi điểm. Hỏng thì coi như chưa có thẻ thành viên: lúc chốt API vẫn tính.
+     */
+    protected function thanhVien(): array
+    {
+        try {
+            $res = $this->api->posThanhVien();
+            if ($res->successful()) {
+                return ['ranks' => $res->json('data.ranks') ?? [], 'money_per_point' => (float) ($res->json('data.money_per_point') ?? 0)];
+            }
+        } catch (\Throwable $e) {
+            Log::info('Thu ngan: doc the thanh vien that bai', ['msg' => $e->getMessage()]);
+        }
+
+        return ['ranks' => [], 'money_per_point' => 0];
     }
 
     /**
@@ -87,6 +106,13 @@ class PosController extends Controller
             'buyer_company' => 'nullable|string|max:255',
             'buyer_address' => 'nullable|string|max:255',
             'issue_einvoice' => 'nullable|boolean',
+            // Chương trình đồng giá thu ngân đã chọn — API tính lại giá + hàng tặng.
+            'fixed_price_ids' => 'nullable|array|max:20',
+            'fixed_price_ids.*' => 'integer|min:1',
+            // Chương trình khuyến mại thu ngân đã chọn — API tính lại số giảm + hàng tặng.
+            'promotion_program_ids' => 'nullable|array|max:20',
+            'promotion_program_ids.*' => 'integer|min:1',
+            'use_points' => 'nullable|integer|min:0',
             // Mã đơn đã giữ trước + chữ ký. API tự kiểm chữ ký; sai thì cấp mã mới.
         ], [
             'items.required' => 'Chưa có sản phẩm nào trong giỏ.',
@@ -136,7 +162,63 @@ class PosController extends Controller
         if ($request->boolean('issue_einvoice')) {
             $payload['issue_einvoice'] = true;
         }
+        if (! empty($data['fixed_price_ids'])) {
+            $payload['fixed_price_ids'] = array_values(array_unique(array_map('intval', $data['fixed_price_ids'])));
+        }
+        if (! empty($data['promotion_program_ids'])) {
+            $payload['promotion_program_ids'] = array_values(array_unique(array_map('intval', $data['promotion_program_ids'])));
+        }
+        // Điểm đổi ra tiền chỉ có nghĩa khi đơn gắn khách quen.
+        if (! empty($data['user_id']) && (int) ($data['use_points'] ?? 0) > 0) {
+            $payload['use_points'] = (int) $data['use_points'];
+        }
         return $this->jsonTuApi(fn () => $this->api->posCheckout($payload), 'Không hoàn tất được lượt bán.');
+    }
+
+    /**
+     * Nút "Khuyến mãi": chương trình khuyến mại giỏ này đủ điều kiện, và nếu chọn
+     * thì giảm bao nhiêu, tặng gì. Chỉ để HIỂN THỊ — lúc chốt API tính lại.
+     */
+    public function khuyenMai(Request $request)
+    {
+        $data = $request->validate([
+            'items' => 'nullable|array|max:50',
+            'items.*.product_variant_id' => 'required|integer|min:1',
+            'items.*.quantity' => 'required|integer|min:1|max:99',
+            'program_ids' => 'nullable|array|max:20',
+            'program_ids.*' => 'integer|min:1',
+        ]);
+
+        return $this->jsonTuApi(fn () => $this->api->posKhuyenMai([
+            'items' => array_map(fn ($it) => [
+                'product_variant_id' => (int) $it['product_variant_id'],
+                'quantity' => (int) $it['quantity'],
+            ], $data['items'] ?? []),
+            'program_ids' => array_values(array_map('intval', $data['program_ids'] ?? [])),
+        ]), 'Không tính được khuyến mãi.');
+    }
+
+    /**
+     * Nút "Đồng giá": chương trình giỏ này đủ điều kiện, và nếu chọn thì giá từng
+     * món + hàng tặng ra sao. Chỉ để HIỂN THỊ — lúc chốt API tính lại từ đầu.
+     */
+    public function dongGia(Request $request)
+    {
+        $data = $request->validate([
+            'items' => 'nullable|array|max:50',
+            'items.*.product_variant_id' => 'required|integer|min:1',
+            'items.*.quantity' => 'required|integer|min:1|max:99',
+            'fixed_price_ids' => 'nullable|array|max:20',
+            'fixed_price_ids.*' => 'integer|min:1',
+        ]);
+
+        return $this->jsonTuApi(fn () => $this->api->posDongGia([
+            'items' => array_map(fn ($it) => [
+                'product_variant_id' => (int) $it['product_variant_id'],
+                'quantity' => (int) $it['quantity'],
+            ], $data['items'] ?? []),
+            'fixed_price_ids' => array_values(array_map('intval', $data['fixed_price_ids'] ?? [])),
+        ]), 'Không tính được đồng giá.');
     }
 
     /**
@@ -234,6 +316,10 @@ class PosController extends Controller
             'email' => (string) ($c['email'] ?? ''),
             'address' => (string) ($c['address'] ?? ''),
             'tax_code' => (string) ($c['tax_code'] ?? ''),
+            // Thẻ thành viên: hạng hiện tại và điểm còn đổi được.
+            'rank_id' => (int) ($c['rank_id'] ?? 0),
+            'rank_name' => (string) ($c['rank_name'] ?? ''),
+            'points' => (int) ($c['points'] ?? 0),
         ];
     }
 

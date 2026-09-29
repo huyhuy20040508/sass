@@ -88,6 +88,8 @@ type OrderDetail struct {
 }
 
 type OrderService interface {
+	// DungThanhVien gắn kho thẻ thành viên — gọi một lần lúc dựng ứng dụng.
+	DungThanhVien(repo domain.MembershipRepository)
 	List(ctx context.Context, filter domain.OrderFilter) ([]domain.Order, int64, error)
 	// SoDon — sổ chứng từ cho màn Quản lý đơn hàng (đơn bán + phiếu trả, đã quy
 	// đổi sẵn thành dòng bảng). Xem repository.SoDon.
@@ -177,11 +179,22 @@ type orderService struct {
 	// vouchers kiểm mã giảm giá khách nhập tay. Có thể nil (test) — khi nil thì
 	// khách gửi mã lên sẽ bị báo mã không tồn tại thay vì được giảm miễn phí.
 	vouchers VoucherService
+	// dongGia tính khuyến mại đồng giá thu ngân chọn ở quầy. Có thể nil (test) —
+	// khi nil thì lượt bán gửi fixed_price_ids lên chỉ tính giá thường.
+	dongGia FixedPriceService
+	// khuyenMai tính CHƯƠNG TRÌNH KHUYẾN MẠI thu ngân chọn ở quầy. Có thể nil (test).
+	khuyenMai PromotionProgramService
+	// thanhVien: hạng và quy đổi điểm cho giảm theo hạng / đổi điểm ở quầy. Có thể
+	// nil (test) — khi nil thì đơn quầy không giảm theo hạng, không đổi điểm.
+	thanhVien domain.MembershipRepository
 }
 
-func NewOrderService(orderRepo domain.OrderRepository, returnRepo domain.OrderReturnRepository, mail mailer.Mailer, mailCfg config.MailConfig, notify NotificationService, settings SettingService, payments PaymentService, promos PromotionService, vouchers VoucherService, etax PhatHanhHDDT, khoaMaDon string) OrderService {
+// DungThanhVien gắn kho thẻ thành viên (giảm theo hạng, đổi điểm ở quầy).
+func (s *orderService) DungThanhVien(repo domain.MembershipRepository) { s.thanhVien = repo }
+
+func NewOrderService(orderRepo domain.OrderRepository, returnRepo domain.OrderReturnRepository, mail mailer.Mailer, mailCfg config.MailConfig, notify NotificationService, settings SettingService, payments PaymentService, promos PromotionService, vouchers VoucherService, etax PhatHanhHDDT, dongGia FixedPriceService, khuyenMai PromotionProgramService, khoaMaDon string) OrderService {
 	return &orderService{
-		khoaMaDon: []byte(khoaMaDon), orderRepo: orderRepo, returnRepo: returnRepo, mail: mail, mailCfg: mailCfg, notify: notify, settings: settings, payments: payments, promos: promos, vouchers: vouchers, etax: etax}
+		khoaMaDon: []byte(khoaMaDon), orderRepo: orderRepo, returnRepo: returnRepo, mail: mail, mailCfg: mailCfg, notify: notify, settings: settings, payments: payments, promos: promos, vouchers: vouchers, etax: etax, dongGia: dongGia, khuyenMai: khuyenMai}
 }
 
 // applyVoucher kiểm mã khách nhập rồi ghi khoản giảm + bản chụp mã vào đơn, trả
@@ -191,7 +204,7 @@ func NewOrderService(orderRepo domain.OrderRepository, returnRepo domain.OrderRe
 // hỏng thì BÁO LỖI và cả đơn dừng lại — cố tình không "âm thầm bỏ mã đi rồi vẫn
 // đặt": khách bấm đặt khi đang nhìn con số đã giảm, tính tiền khác đi mà không nói
 // là trừ tiền sai so với thứ họ đồng ý trả.
-func (s *orderService) applyVoucher(ctx context.Context, code string, o *domain.Order, subtotal float64, userID uint, phone string) (*domain.VoucherClaim, error) {
+func (s *orderService) applyVoucher(ctx context.Context, code string, o *domain.Order, subtotal float64, found map[uint]domain.CheckoutVariant, userID uint, phone string) (*domain.VoucherClaim, error) {
 	code = strings.ToUpper(strings.TrimSpace(code))
 	if code == "" {
 		return nil, nil
@@ -200,7 +213,7 @@ func (s *orderService) applyVoucher(ctx context.Context, code string, o *domain.
 		return nil, domain.ErrVoucherNotFound
 	}
 
-	v, discount, err := s.vouchers.Check(ctx, code, subtotal, userID, phone)
+	v, discount, err := s.vouchers.CheckDon(ctx, code, subtotal, tienTheoDanhMuc(o.Items, found), userID, phone)
 	if err != nil {
 		return nil, err
 	}
@@ -225,6 +238,19 @@ func (s *orderService) applyVoucher(ctx context.Context, code string, o *domain.
 		claim.UserID = &uid
 	}
 	return claim, nil
+}
+
+// tienTheoDanhMuc gom tiền hàng của đơn theo danh mục — cho mã chỉ giảm một số
+// danh mục (Voucher/Coupon "Theo danh mục"). Dòng hàng tặng 0đ không góp gì.
+func tienTheoDanhMuc(items []domain.OrderItem, found map[uint]domain.CheckoutVariant) map[uint]float64 {
+	out := map[uint]float64{}
+	for _, it := range items {
+		if it.ProductVariantID == nil {
+			continue
+		}
+		out[found[*it.ProductVariantID].CategoryID] += it.TotalPrice
+	}
+	return out
 }
 
 // applyPromotions trừ khuyến mãi đang chạy vào giá các dòng hàng sắp tính tiền.
@@ -369,7 +395,7 @@ func (s *orderService) Checkout(ctx context.Context, req *dto.CheckoutRequest, u
 		// giá đã khoá — không tin con số trình duyệt gửi lên. Cùng lý do với khuyến
 		// mãi ở đầu hàm: giữa lúc khách xem giỏ và lúc bấm đặt, mã có thể vừa hết
 		// hạn, hết lượt, hoặc giỏ đổi làm đơn tụt xuống dưới mức tối thiểu.
-		claim, err := s.applyVoucher(ctx, req.VoucherCode, o, subtotal, userID, o.RecipientPhone)
+		claim, err := s.applyVoucher(ctx, req.VoucherCode, o, subtotal, found, userID, o.RecipientPhone)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -516,8 +542,83 @@ func (s *orderService) POSCheckout(ctx context.Context, req *dto.POSCheckoutRequ
 		})
 	}
 
-	order, err := s.orderRepo.Checkout(ctx, lines, func(found map[uint]domain.CheckoutVariant) (*domain.Order, *domain.VoucherClaim, error) {
-		s.applyPromotions(ctx, found)
+	// ĐỒNG GIÁ: đơn dùng đồng giá thì không cộng thêm voucher hay giảm tay (luật
+	// quầy của v2). Hàng tặng phải được khoá cùng hàng bán trong giao dịch để trừ
+	// kho đúng, nên danh sách khoá = hàng bán + biến thể hàng tặng.
+	dungDongGia := len(req.FixedPriceIDs) > 0 && s.dongGia != nil
+	khoa := lines
+	if dungDongGia {
+		if strings.TrimSpace(req.VoucherCode) != "" || req.OrderDiscountPercent > 0 || req.OrderDiscountAmount > 0 {
+			return nil, domain.ErrDongGiaKhongGopKM
+		}
+		for _, l := range lines {
+			if l.DiscountPercent > 0 {
+				return nil, domain.ErrDongGiaKhongGopKM
+			}
+		}
+		qua, err := s.dongGia.QuaCanKhoa(ctx, req.FixedPriceIDs)
+		if err != nil {
+			return nil, err
+		}
+		khoa = append(make([]domain.CheckoutLine, 0, len(lines)+len(qua)), lines...)
+		for _, vid := range qua {
+			khoa = append(khoa, domain.CheckoutLine{VariantID: vid})
+		}
+	}
+
+	// CHƯƠNG TRÌNH KHUYẾN MẠI: cộng dồn được với voucher và giảm tay, nhưng không
+	// dùng cùng đồng giá (v2 chặn hai chiều). Hàng tặng cũng phải được khoá.
+	dungKM := len(req.PromotionProgramIDs) > 0 && s.khuyenMai != nil
+	var kmDaDung []uint
+	if dungKM {
+		if len(req.FixedPriceIDs) > 0 {
+			return nil, domain.ErrKMKhongGopDongGia
+		}
+		qua, err := s.khuyenMai.QuaCanKhoa(ctx, req.PromotionProgramIDs)
+		if err != nil {
+			return nil, err
+		}
+		if len(qua) > 0 {
+			khoa = append(make([]domain.CheckoutLine, 0, len(lines)+len(qua)), lines...)
+			for _, vid := range qua {
+				khoa = append(khoa, domain.CheckoutLine{VariantID: vid})
+			}
+		}
+	}
+
+	// Điểm và hạng của khách đọc TRƯỚC giao dịch: chỉ để tính tiền. Số điểm thật
+	// được kiểm lại dưới khoá dòng lúc trừ (repository) — hai máy quầy cùng tiêu
+	// điểm của một khách thì máy sau bị từ chối chứ không làm điểm âm.
+	var khach *domain.KhachDiem
+	var cauHinh *domain.PointConversion
+	if req.UserID > 0 && s.thanhVien != nil {
+		k, err := s.thanhVien.KhachDiem(ctx, req.UserID)
+		if err != nil {
+			return nil, err
+		}
+		c, err := s.thanhVien.Conversion(ctx)
+		if err != nil {
+			return nil, err
+		}
+		khach, cauHinh = k, c
+	}
+
+	order, err := s.orderRepo.Checkout(ctx, khoa, func(found map[uint]domain.CheckoutVariant) (*domain.Order, *domain.VoucherClaim, error) {
+		var dongGia *KetQuaDongGia
+		if dungDongGia {
+			kq, err := s.dongGia.ApDung(ctx, req.FixedPriceIDs, found, lines)
+			if err != nil {
+				return nil, nil, err
+			}
+			if len(kq.Gia) > 0 || len(kq.Qua) > 0 {
+				dongGia = kq
+			}
+		}
+		// Đồng giá và khuyến mãi thường KHÔNG cộng dồn: đơn đã đồng giá thì bỏ
+		// hẳn khuyến mãi thường, kể cả cho món không thuộc chương trình — như v2.
+		if dongGia == nil {
+			s.applyPromotions(ctx, found)
+		}
 
 		now := time.Now()
 		o := &domain.Order{
@@ -553,13 +654,18 @@ func (s *orderService) POSCheckout(ctx context.Context, req *dto.POSCheckoutRequ
 		if err != nil {
 			return nil, nil, err
 		}
+		if dongGia != nil {
+			if items, err = themDongGia(items, found, dongGia); err != nil {
+				return nil, nil, err
+			}
+		}
 
 		o.Items = items
 		o.SubtotalAmount = subtotal
 		// Không có phí ship: hàng không đi đâu cả.
 		o.ShippingFee = 0
 
-		claim, err := s.applyVoucher(ctx, req.VoucherCode, o, subtotal, req.UserID, o.RecipientPhone)
+		claim, err := s.applyVoucher(ctx, req.VoucherCode, o, subtotal, found, req.UserID, o.RecipientPhone)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -578,6 +684,41 @@ func (s *orderService) POSCheckout(ctx context.Context, req *dto.POSCheckoutRequ
 			}
 			o.OrderDiscountAmount = giamTay
 			o.DiscountAmount += giamTay
+		}
+
+		// Chương trình khuyến mại: tính trên tiền hàng (như v2), CỘNG DỒN vào
+		// DiscountAmount — nhưng tổng giảm không vượt tiền hàng.
+		if dungKM {
+			km, err := s.khuyenMai.ApDung(ctx, req.PromotionProgramIDs, found, lines)
+			if err != nil {
+				return nil, nil, err
+			}
+			if km.Giam > 0 || len(km.Qua) > 0 {
+				giam := math.Min(km.Giam, math.Max(0, subtotal-o.DiscountAmount))
+				o.PromotionDiscount = giam
+				o.DiscountAmount += giam
+				ids := make([]string, 0, len(km.BacDaApDung))
+				for _, id := range km.BacDaApDung {
+					ids = append(ids, strconv.FormatUint(uint64(id), 10))
+				}
+				o.PromotionDetailIDs = strings.Join(ids, ",")
+				if o.Items, err = themQua(o.Items, found, km.Qua, func(it *domain.OrderItem, d uint) { it.PromotionDetailID = &d }); err != nil {
+					return nil, nil, err
+				}
+				kmDaDung = kmDaDung[:0]
+				for _, c := range km.TheoChuongTrinh {
+					kmDaDung = append(kmDaDung, c.ID)
+				}
+			}
+		}
+
+		// Thẻ thành viên — đi SAU mọi khoản giảm khác như hộp giảm giá của v2: giảm
+		// theo hạng tính trên tiền hàng, rồi điểm đổi ra tiền, kẹp trong phần còn
+		// phải trả. Điểm bị trừ thật ở repository, trong cùng giao dịch này.
+		if khach != nil {
+			if err := apDungThanhVien(o, subtotal, khach, cauHinh, req.UsePoints); err != nil {
+				return nil, nil, err
+			}
 		}
 
 		// Phụ thu: tròn tới đồng như mọi khoản tiền khác của quầy. Không chịu thuế —
@@ -623,6 +764,11 @@ func (s *orderService) POSCheckout(ctx context.Context, req *dto.POSCheckoutRequ
 	if err != nil {
 		return nil, err
 	}
+	// Lượt dùng của chương trình khuyến mại (+1 mỗi đơn, như v2). Ngoài giao dịch:
+	// đếm hỏng không được làm hỏng một lượt bán đã thu tiền.
+	if len(kmDaDung) > 0 {
+		_ = s.khuyenMai.TangLuotDung(ctx, kmDaDung)
+	}
 
 	// Không gửi email (đơn quầy không hỏi địa chỉ thư) và không đẩy thông báo vào
 	// chuông của admin: đơn này do chính người đang đứng ở quầy vừa tạo. Chỉ bắn
@@ -660,24 +806,29 @@ func (s *orderService) POSCheckout(ctx context.Context, req *dto.POSCheckoutRequ
 	}
 
 	return &dto.POSCheckoutResponse{
-		OrderID:        order.ID,
-		OrderCode:      order.OrderCode,
-		Subtotal:       order.SubtotalAmount,
-		LineDiscount:   botTungMon,
-		Discount:       order.DiscountAmount,
-		VoucherCode:    order.VoucherCode,
-		Total:          order.TotalAmount,
-		AmountTendered: order.AmountTendered,
-		ChangeAmount:   order.ChangeAmount,
-		PaymentMethod:  order.PaymentMethod,
-		Status:         order.Status,
-		PaymentStatus:  order.PaymentStatus,
-		Message:        msg,
-		OrderDiscount:  order.OrderDiscountAmount,
-		Surcharge:      order.SurchargeAmount,
-		SurchargeNote:  order.SurchargeNote,
-		VatAmount:      order.VatAmount,
-		EInvoice:       hoaDon,
+		OrderID:           order.ID,
+		OrderCode:         order.OrderCode,
+		Subtotal:          order.SubtotalAmount,
+		LineDiscount:      botTungMon,
+		Discount:          order.DiscountAmount,
+		VoucherCode:       order.VoucherCode,
+		Total:             order.TotalAmount,
+		AmountTendered:    order.AmountTendered,
+		ChangeAmount:      order.ChangeAmount,
+		PaymentMethod:     order.PaymentMethod,
+		Status:            order.Status,
+		PaymentStatus:     order.PaymentStatus,
+		Message:           msg,
+		OrderDiscount:     order.OrderDiscountAmount,
+		PromotionDiscount: order.PromotionDiscount,
+		RankDiscount:      order.RankDiscount,
+		PointsUsed:        order.PointsUsed,
+		PointsAmount:      order.PointsAmount,
+		PointsEarned:      order.PointsEarned,
+		Surcharge:         order.SurchargeAmount,
+		SurchargeNote:     order.SurchargeNote,
+		VatAmount:         order.VatAmount,
+		EInvoice:          hoaDon,
 	}, nil
 }
 
@@ -1468,6 +1619,66 @@ func buildOrderItems(found map[uint]domain.CheckoutVariant, lines []domain.Check
 	return items, subtotal, nil
 }
 
+// themQua thêm các dòng HÀNG TẶNG giá 0 ở cuối đơn; gan ghi dấu bậc / dòng
+// chương trình vào từng dòng tặng. Hàng tặng vẫn trừ kho: tồn phải đủ cho CẢ
+// phần bán lẫn phần tặng của cùng một biến thể.
+func themQua(items []domain.OrderItem, found map[uint]domain.CheckoutVariant, qua []QuaDongGia, gan func(*domain.OrderItem, uint)) ([]domain.OrderItem, error) {
+	daDung := map[uint]int{}
+	for _, it := range items {
+		if it.ProductVariantID != nil {
+			daDung[*it.ProductVariantID] += it.Quantity
+		}
+	}
+	for _, q := range qua {
+		cv, ok := found[q.VariantID]
+		if !ok {
+			return nil, fmt.Errorf("%w: hàng tặng đã ngừng bán", domain.ErrVariantNotFound)
+		}
+		daDung[q.VariantID] += q.Quantity
+		if cv.Stock < daDung[q.VariantID] {
+			return nil, fmt.Errorf("%w: %s — hàng tặng (còn %d)", domain.ErrOutOfStock, cv.ProductName, cv.Stock)
+		}
+		pid, vid := cv.ProductID, cv.VariantID
+		it := domain.OrderItem{
+			ProductID:        &pid,
+			ProductVariantID: &vid,
+			ProductName:      cv.ProductName,
+			VariantSKU:       cv.SKU,
+			VariantName:      cv.VariantName,
+			Thumbnail:        cv.Thumbnail,
+			CostPrice:        cv.CostPrice,
+			Quantity:         q.Quantity,
+			VAT:              thueSuatChup(cv.VAT),
+			IsGift:           true,
+		}
+		gan(&it, q.DetailID)
+		items = append(items, it)
+	}
+
+	return items, nil
+}
+
+// themDongGia ghi dấu dòng đồng giá lên các dòng bán bị phủ, rồi thêm các dòng
+// HÀNG TẶNG giá 0 ở CUỐI đơn (chiaGiamGia dồn phần lẻ vào dòng cuối — dòng 0đ
+// đứng cuối mà nhận phần lẻ âm thì thành giá âm; đơn đồng giá không có giảm đơn
+// nhưng cứ để đúng chỗ cho chắc).
+//
+// Hàng tặng vẫn trừ kho: tồn phải đủ cho CẢ phần bán lẫn phần tặng của cùng
+// một biến thể.
+func themDongGia(items []domain.OrderItem, found map[uint]domain.CheckoutVariant, kq *KetQuaDongGia) ([]domain.OrderItem, error) {
+	for i := range items {
+		if items[i].ProductVariantID == nil {
+			continue
+		}
+		if g, ok := kq.Gia[*items[i].ProductVariantID]; ok {
+			d := g.DetailID
+			items[i].FixedPriceDetailID = &d
+		}
+	}
+
+	return themQua(items, found, kq.Qua, func(it *domain.OrderItem, d uint) { it.FixedPriceDetailID = &d })
+}
+
 // matchVariant tìm biến thể đã tra được ứng với một dòng giỏ hàng.
 func matchVariant(found map[uint]domain.CheckoutVariant, l domain.CheckoutLine) (domain.CheckoutVariant, bool) {
 	if l.VariantID > 0 {
@@ -1934,4 +2145,44 @@ func (s *orderService) POSPhatHanhHoaDon(ctx context.Context, orderID uint) (*do
 	}
 
 	return s.phatHanhHoaDon(ctx, orderID)
+}
+
+// apDungThanhVien cộng giảm theo hạng và tiền đổi điểm vào đơn quầy.
+//
+// Như hộp giảm giá của v2: hạng tính trên TIỀN HÀNG (xét khoảng giá trị đơn của
+// hạng); điểm đổi kẹp về số điểm khách có và số tiền còn phải trả sau mọi khoản
+// giảm — dư thì chỉ lấy đủ, không đổi thừa điểm ra tiền không dùng tới.
+func apDungThanhVien(o *domain.Order, subtotal float64, k *domain.KhachDiem, c *domain.PointConversion, dungDiem uint) error {
+	conPhaiTra := math.Max(0, subtotal-o.DiscountAmount)
+	if k.Rank != nil {
+		giam := math.Min(k.Rank.GiamCho(subtotal), conPhaiTra)
+		if giam > 0 {
+			o.RankDiscount = giam
+			o.DiscountAmount += giam
+			conPhaiTra -= giam
+		}
+	}
+	if dungDiem == 0 {
+		return nil
+	}
+	moiDiem := c.TienMoiDiem()
+	if moiDiem <= 0 {
+		return loiO(map[string]string{"use_points": "Cửa hàng chưa bật đổi điểm ra tiền."})
+	}
+	if dungDiem > k.Points {
+		return domain.ErrKhongDuDiem
+	}
+	diem := dungDiem
+	if toiDa := uint(math.Floor(conPhaiTra / moiDiem)); diem > toiDa {
+		diem = toiDa
+	}
+	if diem == 0 {
+		return nil
+	}
+	tien := math.Min(math.Round(float64(diem)*moiDiem), conPhaiTra)
+	o.PointsUsed = diem
+	o.PointsAmount = tien
+	o.DiscountAmount += tien
+
+	return nil
 }

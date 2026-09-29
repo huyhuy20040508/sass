@@ -26,6 +26,10 @@ use App\Http\Controllers\PurchaseOrderController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\PromotionController;
+use App\Http\Controllers\FixedPriceController;
+use App\Http\Controllers\VoucherCouponController;
+use App\Http\Controllers\MembershipController;
+use App\Http\Controllers\PromotionProgramController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\ReturnController;
 use App\Http\Controllers\SettingController;
@@ -251,6 +255,40 @@ Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:quan_ly', 'chi.v2'])->
         Route::put('/promotions/{id}/toggle-status', [PromotionController::class, 'toggleStatus'])->whereNumber('id')->name('promotions.toggleStatus');
         Route::put('/promotions/{id}', [PromotionController::class, 'update'])->whereNumber('id')->name('promotions.update');
         Route::delete('/promotions/{id}', [PromotionController::class, 'destroy'])->whereNumber('id')->name('promotions.destroy');
+        // CRM → Chương trình khuyến mãi → tab "Chương trình khuyến mại": khuôn
+        // crm/promotion-program của v2 (bậc, hàng tặng, Lưu tạm / Duyệt). Khác
+        // /promotions ở trên — giảm giá TỰ ÁP lên giá sản phẩm, chạy cả website.
+        Route::get('/crm/promotions', [PromotionProgramController::class, 'index'])->name('crm.promotions.index');
+        Route::get('/crm/promotions/export', [PromotionProgramController::class, 'export'])->name('crm.promotions.export');
+        Route::post('/promotion-programs', [PromotionProgramController::class, 'store'])->name('ctkm.store');
+        Route::put('/promotion-programs/{id}', [PromotionProgramController::class, 'update'])->whereNumber('id')->name('ctkm.update');
+        Route::post('/promotion-programs/{id}/duplicate', [PromotionProgramController::class, 'duplicate'])->whereNumber('id')->name('ctkm.duplicate');
+        Route::put('/promotion-programs/{id}/status', [PromotionProgramController::class, 'status'])->whereNumber('id')->name('ctkm.status');
+        Route::post('/promotion-programs/{id}/cancel-approve', [PromotionProgramController::class, 'huyDuyet'])->whereNumber('id')->name('ctkm.huyDuyet');
+        Route::delete('/promotion-programs/{id}', [PromotionProgramController::class, 'destroy'])->whereNumber('id')->name('ctkm.destroy');
+        // Tab "Khuyến mại đồng giá" của cùng màn (khuôn crm/fixed-price của v2).
+        Route::get('/crm/promotions/fixed-price', [FixedPriceController::class, 'index'])->name('crm.promotions.dongGia');
+        Route::post('/fixed-prices', [FixedPriceController::class, 'store'])->name('dong-gia.store');
+        Route::put('/fixed-prices/{id}', [FixedPriceController::class, 'update'])->whereNumber('id')->name('dong-gia.update');
+        Route::put('/fixed-prices/{id}/status', [FixedPriceController::class, 'status'])->whereNumber('id')->name('dong-gia.status');
+        Route::post('/fixed-prices/{id}/cancel-approve', [FixedPriceController::class, 'huyDuyet'])->whereNumber('id')->name('dong-gia.huyDuyet');
+        Route::delete('/fixed-prices/{id}', [FixedPriceController::class, 'destroy'])->whereNumber('id')->name('dong-gia.destroy');
+        // Tab "Voucher/Coupon" của cùng màn (khuôn crm/voucher-coupon của v2).
+        Route::get('/crm/promotions/voucher-coupon', [VoucherCouponController::class, 'index'])->name('crm.promotions.voucher');
+        Route::get('/voucher-coupons/export', [VoucherCouponController::class, 'export'])->name('voucher-coupon.export');
+        Route::post('/voucher-coupons', [VoucherCouponController::class, 'store'])->name('voucher-coupon.store');
+        Route::put('/voucher-coupons/{id}', [VoucherCouponController::class, 'update'])->whereNumber('id')->name('voucher-coupon.update');
+        Route::delete('/voucher-coupons/{id}', [VoucherCouponController::class, 'destroy'])->whereNumber('id')->name('voucher-coupon.destroy');
+        Route::get('/voucher-coupons/{id}/codes', [VoucherCouponController::class, 'codes'])->whereNumber('id')->name('voucher-coupon.codes');
+        Route::put('/voucher-codes/{id}/status', [VoucherCouponController::class, 'codeStatus'])->whereNumber('id')->name('voucher-coupon.codeStatus');
+        Route::get('/voucher-codes/{id}/history', [VoucherCouponController::class, 'codeHistory'])->whereNumber('id')->name('voucher-coupon.codeHistory');
+        // CRM → Thẻ thành viên (khuôn crm/membership-rank của v2).
+        Route::get('/crm/membership', [MembershipController::class, 'index'])->name('crm.membership.index');
+        Route::get('/crm/membership/{id}', [MembershipController::class, 'detail'])->whereNumber('id')->name('crm.membership.detail');
+        Route::post('/membership-ranks', [MembershipController::class, 'store'])->name('membership.store');
+        Route::put('/membership-ranks/{id}', [MembershipController::class, 'update'])->whereNumber('id')->name('membership.update');
+        Route::post('/membership-ranks/delete', [MembershipController::class, 'destroy'])->name('membership.destroy');
+        Route::put('/membership-ranks/conversion', [MembershipController::class, 'conversion'])->name('membership.conversion');
 
         // Voucher — mã khách tự nhập lúc thanh toán, giảm trên tổng đơn.
         Route::get('/vouchers', [VoucherController::class, 'index'])->name('vouchers.index');
@@ -264,6 +302,9 @@ Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:quan_ly', 'chi.v2'])->
 
     // Đơn hàng
     Route::get('/orders', [OrderController::class, 'index'])->name('orders.index');
+    // CRM → Danh sách đơn hàng: trang riêng, cùng sổ đơn; thu tiền / HĐĐT / chi
+    // tiết đi chung các đường /orders/{id}/… bên dưới.
+    Route::get('/crm/orders', [OrderController::class, 'crm'])->name('crm.orders.index');
     Route::get('/orders/export', [OrderController::class, 'export'])->name('orders.export');
     // In hàng loạt (?ids=1,2,3) — đặt trước route {id} để không bị nuốt.
     Route::get('/orders/print', [OrderController::class, 'print'])->name('orders.printBatch');
@@ -293,6 +334,8 @@ Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:quan_ly', 'chi.v2'])->
     Route::middleware('admin.manage')->group(function () {
         Route::get('/hoa-don-dien-tu', [EInvoiceController::class, 'index'])->name('hoa-don-dien-tu.index');
         Route::get('/hoa-don-dien-tu/export', [EInvoiceController::class, 'export'])->name('hoa-don-dien-tu.export');
+
+        // Báo cáo kết ca — tab Thống kê, phơi doanh thu và tiền két từng ca.
     });
 
     // --- Trả hàng, kho và mua vào: nhân viên (staff) KHÔNG vào ---
@@ -581,6 +624,9 @@ Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:quan_ly', 'chi.v2'])->
 
         // Khách hàng
         Route::get('/customers', [CustomerController::class, 'index'])->name('customers.index');
+        // CRM → Danh sách khách hàng: cùng dữ liệu, khung lọc và bảng theo khuôn
+        // crm/customers của v2. Thêm/Sửa/Xoá đi chung các đường /customers dưới đây.
+        Route::get('/crm/customers', [CustomerController::class, 'crm'])->name('crm.customers.index');
         Route::get('/customers/export', [CustomerController::class, 'export'])->name('customers.export');
         Route::get('/customers/import-template', [CustomerController::class, 'importTemplate'])->name('customers.importTemplate');
         Route::get('/customers/{id}/detail', [CustomerController::class, 'detail'])->name('customers.detail');
@@ -656,6 +702,10 @@ Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:thu_ngan'])->prefix('c
     Route::post('/sales', [PosController::class, 'store'])->name('ban-hang.store');
     // /scan đứng TRƯỚC /{id}/receipt để không bị hiểu là một id.
     Route::get('/sales/scan', [PosController::class, 'scan'])->name('ban-hang.scan');
+    // Nút "Đồng giá": chương trình giỏ đủ điều kiện + giá khi chọn (trả JSON).
+    Route::post('/sales/fixed-price', [PosController::class, 'dongGia'])->name('ban-hang.dongGia');
+    // Nút "Khuyến mãi": chương trình khuyến mại giỏ đủ điều kiện + số giảm (JSON).
+    Route::post('/sales/promotion', [PosController::class, 'khuyenMai'])->name('ban-hang.khuyenMai');
     // Khách tại quầy: tra khách quen và thêm khách mới. KHÔNG dùng lại
     // admin.orders.searchCustomers: đường đó hỏi khu Khách hàng của chủ tiệm, người
     // chỉ có cửa Thu ngân gõ tìm ở đó thì không ra ai.

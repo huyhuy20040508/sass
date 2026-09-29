@@ -91,6 +91,8 @@ func voucherUseError(c *gin.Context, err error) bool {
 		response.Error(c, 422, "Mã giảm giá đã hết lượt sử dụng")
 	case errors.Is(err, domain.ErrVoucherUserLimitReached):
 		response.Error(c, 422, "Bạn đã dùng hết số lượt của mã này")
+	case errors.Is(err, domain.ErrVoucherNoCategory):
+		response.Error(c, 422, "Mã giảm giá không áp dụng cho hàng trong đơn")
 	case errors.Is(err, domain.ErrVoucherMinOrder):
 		// err đã kèm số tiền còn thiếu
 		response.Error(c, 422, "Đơn hàng chưa đủ điều kiện dùng mã — cần mua thêm "+
@@ -137,6 +139,14 @@ func handleServiceError(c *gin.Context, err error) {
 	}
 
 	switch {
+	case errors.Is(err, domain.ErrKMDangDung), errors.Is(err, domain.ErrVCDaPhatHanh):
+		response.Error(c, 409, err.Error())
+	case errors.Is(err, domain.ErrVCHetMa):
+		response.Error(c, 422, err.Error())
+	case errors.Is(err, domain.ErrFixedPriceDaDuyet):
+		response.Error(c, 409, err.Error())
+	case errors.Is(err, domain.ErrFixedPriceTrung), errors.Is(err, domain.ErrDongGiaKhongGopKM):
+		response.Error(c, 422, err.Error())
 	case errors.Is(err, domain.ErrNotFound):
 		response.Error(c, 404, "Không tìm thấy dữ liệu")
 	case errors.Is(err, domain.ErrEmailExists):

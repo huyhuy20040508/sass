@@ -41,6 +41,20 @@ class CustomerController extends Controller
         'spent_desc' => 'Chi tiêu nhiều nhất',
     ];
 
+    /**
+     * Bốn cột sắp được của màn CRM (bấm tiêu đề cột) → khoá `sort` của API.
+     * Tên cột giữ đúng `sort_by` của v2 để link cũ còn dùng được.
+     */
+    public const SAP_XEP_CRM = [
+        'orders_count' => 'orders',
+        'total_purchases' => 'spent',
+        'total_paid' => 'paid',
+        'total_debt' => 'debt',
+    ];
+
+    /** Mốc nhanh của hai khối "Sinh nhật gần nhất" và "Giao dịch lần cuối". */
+    public const MOC_NGAY = [7 => '7 ngày', 14 => '14 ngày', 30 => '30 ngày'];
+
     // Năm mức của v2, cũng là mức mọi màn v2 khác bên mình đang dùng.
     public const PAGE_SIZES = [10, 20, 30, 40, 50];
 
@@ -55,18 +69,32 @@ class CustomerController extends Controller
      */
     public function index(Request $request)
     {
+        return $this->danhSach($request, false);
+    }
+
+    /**
+     * CRM → Danh sách khách hàng — khuôn `crm/customers` của v2.
+     *
+     * Cùng dữ liệu và cùng các nút Thêm/Sửa/Xoá với màn Thống kê → Khách hàng
+     * (v2 cũng cho hai màn dùng chung một endpoint); khác ở khung lọc chín khối
+     * và bảng hướng về chăm sóc khách: số đơn, lần thanh toán gần nhất, sắp xếp
+     * theo tiền.
+     */
+    public function crm(Request $request)
+    {
+        return $this->danhSach($request, true);
+    }
+
+    protected function danhSach(Request $request, bool $laCrm)
+    {
         $filters = $this->filters($request);
         $customers = [];
         $meta = ['page' => $filters['page'], 'page_size' => $filters['page_size'], 'total' => 0, 'total_pages' => 1];
         $error = null;
 
-        // Ba ô lọc chưa có dữ liệu để đối chiếu: điểm, hạng thành viên, loại khách.
-        // Chưa ai có điểm và chưa có hạng nào, còn mọi khách đang là Cá nhân — nên
-        // ba điều kiện này chỉ có thể ra bảng RỖNG. Trả rỗng ngay, đừng bày một
-        // danh sách không đúng bộ lọc người dùng vừa bật.
-        $khongTheKhop = ($filters['point_from'] !== '' && (float) $filters['point_from'] > 0)
-            || $filters['rank'] !== ''
-            || ! in_array('0', $filters['type'], true);
+        // Loại khách: mọi khách đang là Cá nhân — bỏ tick "Cá nhân" chỉ có thể ra
+        // bảng RỖNG, trả rỗng ngay. Điểm và hạng lọc thật ở API (thẻ thành viên).
+        $khongTheKhop = ! in_array('0', $filters['type'], true);
 
         if (! $khongTheKhop) {
             try {
@@ -86,16 +114,15 @@ class CustomerController extends Controller
 
         // Màn đã chuyển sang khu v2; view cũ ở resources/views/customers giữ lại
         // phòng khi cần đối chiếu, không còn route nào trỏ vào.
-        $view = view('v2::customers.index', [
+        $view = view($laCrm ? 'v2::crm.customers.index' : 'v2::customers.index', [
             'list' => array_map([$this, 'veKieuXem'], $customers),
             'filters' => $filters,
             'meta' => $meta,
             // Hai danh sách riêng: nhóm cá nhân và nhóm doanh nghiệp.
             'nhomCaNhan' => $this->nhomKhach(0),
             'nhomDoanhNghiep' => $this->nhomKhach(1),
-            // Hạng thành viên chưa có bảng nào ở API — ô lọc vẫn bày để giữ đúng
-            // khuôn v2, chỉ là mới có mỗi dòng "Tất cả".
-            'ranks' => [],
+            'ranks' => $this->hangThanhVien(),
+            'laCrm' => $laCrm,
         ]);
 
         return $error ? $view->with('error', $error) : $view;
@@ -122,8 +149,10 @@ class CustomerController extends Controller
         $c['cccd'] = (string) ($c['citizen_id'] ?? '');
         $c['total_paid'] = (float) ($c['total_paid'] ?? 0);
         $c['still_in_debt'] = (float) ($c['still_in_debt'] ?? 0);
-        // Điểm tích luỹ chưa có module nào sinh ra — xem migration 0061.
-        $c['remaining_score'] = 0;
+        // Thẻ thành viên (migration 0072): điểm còn dùng được và hạng hiện tại.
+        $c['remaining_score'] = (int) ($c['points'] ?? 0);
+        $c['total_score'] = (int) ($c['total_points'] ?? 0);
+        $c['rank_name'] = (string) ($c['rank_name'] ?? '');
 
         return $c;
     }
@@ -508,6 +537,8 @@ class CustomerController extends Controller
         ));
 
         $so = fn (string $ten) => trim((string) $request->query($ten, ''));
+        // Ngày nhận đúng dạng Y-m-d (ô ẩn của lịch gửi lên), còn lại coi như trống.
+        $ngay = fn (string $ten) => preg_match('/^\d{4}-\d{2}-\d{2}$/', $so($ten)) ? $so($ten) : '';
 
         return [
             'keyword' => trim((string) $request->query('keyword', '')),
@@ -522,6 +553,27 @@ class CustomerController extends Controller
             'point_from' => $so('point_from'),
             'point_to' => $so('point_to'),
             'rank' => $so('rank'),
+
+            // Khung lọc của màn CRM. Màn Thống kê không gửi các ô này nên chúng
+            // rỗng và không cắt gì.
+            'gender' => $request->has('gender')
+                ? array_values(array_intersect(array_map('strval', (array) $request->query('gender')), array_keys(self::GENDERS)))
+                : array_keys(self::GENDERS),
+            'created_from' => $ngay('created_from'),
+            'created_to' => $ngay('created_to'),
+            'address' => $so('address'),
+            'age_from' => ctype_digit($so('age_from')) ? $so('age_from') : '',
+            'age_to' => ctype_digit($so('age_to')) ? $so('age_to') : '',
+            'birthday_mode' => $request->query('birthday_mode') === 'custom' ? 'custom' : 'preset',
+            'birthday_preset' => isset(self::MOC_NGAY[(int) $so('birthday_preset')]) ? $so('birthday_preset') : '',
+            'birthday_from' => $ngay('birthday_from'),
+            'birthday_to' => $ngay('birthday_to'),
+            'last_tx_mode' => $request->query('last_tx_mode') === 'custom' ? 'custom' : 'preset',
+            'last_tx_preset' => isset(self::MOC_NGAY[(int) $so('last_tx_preset')]) ? $so('last_tx_preset') : '',
+            'last_tx_from' => $ngay('last_tx_from'),
+            'last_tx_to' => $ngay('last_tx_to'),
+            'sort_by' => isset(self::SAP_XEP_CRM[$so('sort_by')]) ? $so('sort_by') : '',
+            'sort_dir' => $so('sort_dir') === 'asc' ? 'asc' : 'desc',
         ];
     }
 
@@ -580,6 +632,18 @@ class CustomerController extends Controller
     }
 
     /** Chỉ mấy tham số API thật sự hiểu — bỏ ba ô lọc của khuôn v2 còn chờ nối. */
+    /** Hạng thành viên cho ô lọc "Hạng thành viên". Hỏng thì chỉ còn "Tất cả". */
+    protected function hangThanhVien(): array
+    {
+        try {
+            $res = $this->api->theThanhVien();
+
+            return $res->successful() ? ($res->json('data.ranks') ?? []) : [];
+        } catch (\Throwable $e) {
+            return [];
+        }
+    }
+
     protected function apiQuery(array $filters): array
     {
         $q = array_intersect_key($filters, array_flip([
@@ -592,6 +656,34 @@ class CustomerController extends Controller
         // đó là "bỏ tick cả hai loại" → API trả bảng rỗng.
         if (isset($filters['type'])) {
             $q['types'] = implode(',', $filters['type']);
+        }
+
+        // ----- Màn CRM -----
+        // Giới tính: tick đủ ba là không cắt; bỏ tick hết là bảng rỗng (`genders=`).
+        if (isset($filters['gender']) && count($filters['gender']) < count(self::GENDERS)) {
+            $q['genders'] = implode(',', $filters['gender']);
+        }
+        if (($filters['rank'] ?? '') !== '') {
+            $q['rank_id'] = $filters['rank'];
+        }
+        foreach (['created_from', 'created_to', 'address', 'age_from', 'age_to', 'point_from', 'point_to'] as $k) {
+            if (($filters[$k] ?? '') !== '') {
+                $q[$k] = $filters[$k];
+            }
+        }
+        // Hai khối có hai lối (mốc nhanh / tự chọn): chỉ gửi lối đang bật.
+        foreach (['birthday' => 'birthday_days', 'last_tx' => 'last_tx_days'] as $khoi => $moc) {
+            if (($filters[$khoi.'_mode'] ?? '') === 'custom') {
+                if (($filters[$khoi.'_from'] ?? '') !== '' && ($filters[$khoi.'_to'] ?? '') !== '') {
+                    $q[$khoi.'_from'] = $filters[$khoi.'_from'];
+                    $q[$khoi.'_to'] = $filters[$khoi.'_to'];
+                }
+            } elseif (($filters[$khoi.'_preset'] ?? '') !== '') {
+                $q[$moc] = $filters[$khoi.'_preset'];
+            }
+        }
+        if (($filters['sort_by'] ?? '') !== '') {
+            $q['sort'] = self::SAP_XEP_CRM[$filters['sort_by']].'_'.$filters['sort_dir'];
         }
 
         return $q;

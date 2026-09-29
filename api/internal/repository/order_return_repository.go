@@ -626,6 +626,9 @@ func recordRefund(tx *gorm.DB, rt *domain.OrderReturn) error {
 	if err := tx.First(&o, rt.OrderID).Error; err != nil {
 		return err
 	}
+	if err := diemKhiTraHang(tx, &o, rt.RefundAmount); err != nil {
+		return err
+	}
 
 	now := time.Now()
 	// payments.provider là enum của các cổng THANH TOÁN, không có "tiền mặt" hay

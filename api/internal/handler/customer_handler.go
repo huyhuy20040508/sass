@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -30,7 +31,19 @@ func NewCustomerHandler(svc service.CustomerService) *CustomerHandler {
 // @Param			keyword		query		string	false	"Tìm theo tên/email/sđt"
 // @Param			status		query		string	false	"all|active|inactive"
 // @Param			gender		query		string	false	"all|male|female|other"
-// @Param			sort		query		string	false	"newest|oldest|name_asc|name_desc|spent_desc"
+// @Param			sort		query		string	false	"newest|oldest|name_asc|name_desc|spent_desc|spent_asc|orders_desc|orders_asc|paid_desc|paid_asc|debt_desc|debt_asc"
+// @Param			genders			query	string	false	"male,female,other — gửi rỗng là bảng rỗng; other gồm cả khách chưa khai"
+// @Param			created_from	query	string	false	"Ngày tạo từ (YYYY-MM-DD)"
+// @Param			created_to		query	string	false	"Ngày tạo đến (YYYY-MM-DD)"
+// @Param			address			query	string	false	"Một phần địa chỉ"
+// @Param			age_from		query	int		false	"Tuổi từ"
+// @Param			age_to			query	int		false	"Tuổi đến"
+// @Param			birthday_days	query	int		false	"Sinh nhật trong N ngày tới, tính cả hôm nay"
+// @Param			birthday_from	query	string	false	"Sinh nhật từ ngày (YYYY-MM-DD, chỉ xét tháng-ngày)"
+// @Param			birthday_to		query	string	false	"Sinh nhật đến ngày (YYYY-MM-DD, chỉ xét tháng-ngày)"
+// @Param			last_tx_days	query	int		false	"Đơn gần nhất trong N ngày qua"
+// @Param			last_tx_from	query	string	false	"Đơn gần nhất từ ngày (YYYY-MM-DD)"
+// @Param			last_tx_to		query	string	false	"Đơn gần nhất đến ngày (YYYY-MM-DD)"
 // @Param			page		query		int		false	"Trang (mặc định 1)"
 // @Param			page_size	query		int		false	"Số item/trang (mặc định 10)"
 // @Success		200			{object}	response.Body{data=[]dto.CustomerResponse,meta=response.Pagination}
@@ -60,6 +73,7 @@ func (h *CustomerHandler) List(c *gin.Context) {
 	if id, err := strconv.ParseUint(c.Query("group_id"), 10, 64); err == nil && id > 0 {
 		filter.GroupID = uint(id)
 	}
+	locCRM(c, &filter, time.Now())
 
 	items, total, err := h.svc.List(c.Request.Context(), filter)
 	if err != nil {
@@ -350,6 +364,73 @@ func respondCustomerError(c *gin.Context, err error, fallback string) {
 		response.Error(c, http.StatusConflict, "Email đã được sử dụng")
 	default:
 		response.Error(c, http.StatusInternalServerError, fallback)
+	}
+}
+
+// locCRM đọc khung lọc của màn CRM → Khách hàng vào filter. `homNay` đưa vào
+// làm tham số để bài kiểm chốt được ngày.
+//
+// Hai ô "N ngày" là lối tắt của cùng khoảng ngày — có cả hai thì khoảng tự chọn
+// thắng, vì màn hình chỉ bật một lối mỗi lần.
+func locCRM(c *gin.Context, f *domain.CustomerFilter, homNay time.Time) {
+	if raw, co := c.GetQuery("genders"); co {
+		f.Genders = []string{}
+		for _, g := range strings.Split(raw, ",") {
+			if g = strings.TrimSpace(g); g != "" {
+				f.Genders = append(f.Genders, g)
+			}
+		}
+	}
+
+	ngay := func(ten string) *time.Time {
+		t, err := time.ParseInLocation("2006-01-02", strings.TrimSpace(c.Query(ten)), homNay.Location())
+		if err != nil {
+			return nil
+		}
+
+		return &t
+	}
+	so := func(ten string) *int {
+		n, err := strconv.Atoi(strings.TrimSpace(c.Query(ten)))
+		if err != nil || n < 0 {
+			return nil
+		}
+
+		return &n
+	}
+
+	f.CreatedFrom, f.CreatedTo = ngay("created_from"), ngay("created_to")
+	f.Address = strings.TrimSpace(c.Query("address"))
+	f.AgeFrom, f.AgeTo = so("age_from"), so("age_to")
+
+	// Sinh nhật: chỉ xét tháng-ngày. Khoảng dài từ một năm trở lên thì mọi ngày
+	// sinh đều rơi vào — chỉ còn là "đã khai ngày sinh".
+	tu, den := ngay("birthday_from"), ngay("birthday_to")
+	if tu == nil && den == nil {
+		if n := so("birthday_days"); n != nil && *n > 0 {
+			a, b := homNay, homNay.AddDate(0, 0, *n)
+			tu, den = &a, &b
+		}
+	}
+	if tu != nil && den != nil && !den.Before(*tu) {
+		if den.Sub(*tu) >= 365*24*time.Hour {
+			f.BirthdayFrom, f.BirthdayTo = "0101", "1231"
+		} else {
+			f.BirthdayFrom, f.BirthdayTo = tu.Format("0102"), den.Format("0102")
+		}
+	}
+
+	f.PointFrom, f.PointTo = so("point_from"), so("point_to")
+	if n := so("rank_id"); n != nil {
+		f.RankID = uint(*n)
+	}
+
+	f.LastTxFrom, f.LastTxTo = ngay("last_tx_from"), ngay("last_tx_to")
+	if f.LastTxFrom == nil && f.LastTxTo == nil {
+		if n := so("last_tx_days"); n != nil && *n > 0 {
+			a, b := homNay.AddDate(0, 0, -*n), homNay
+			f.LastTxFrom, f.LastTxTo = &a, &b
+		}
 	}
 }
 
