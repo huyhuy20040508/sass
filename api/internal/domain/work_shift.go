@@ -67,7 +67,10 @@ type CaLamViec struct {
 	ExpectedCash *float64 `json:"expected_cash"`
 	Difference   *float64 `json:"difference"`
 
+	// Note là ghi chú lúc MỞ ca, CloseNote là ghi chú lúc ĐÓNG ca — hai cột
+	// riêng từ migration 0073, trước đó đóng ca ghi đè lên Note.
 	Note      string    `json:"note"`
+	CloseNote string    `json:"close_note"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 
@@ -182,4 +185,8 @@ type CaLamViecRepository interface {
 	SoQuyNgoaiCa(ctx context.Context, shopID uint, tu, den time.Time) ([]SoQuy, error)
 	// GhiTay ghi một khoản thu/chi do người trực nhập, tự gắn vào ca đang mở.
 	GhiTay(ctx context.Context, e *SoQuy) error
+
+	// BaoCaoKetCa trả MỘT TRANG ca khớp bộ lọc (mới trước), tổng số ca khớp và
+	// số cộng của TẤT CẢ ca khớp — xem shift_report.go.
+	BaoCaoKetCa(ctx context.Context, f BaoCaoCaFilter) ([]BaoCaoCaDong, int64, BaoCaoCaTong, error)
 }

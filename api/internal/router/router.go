@@ -1046,6 +1046,17 @@ func New(
 			q.Dat(manage, http.MethodGet, "/reports/orders", "bao-cao.xem", h.Report.Orders)
 			q.Dat(manage, http.MethodGet, "/reports/products", "bao-cao.xem", h.Report.Products)
 			q.Dat(manage, http.MethodGet, "/reports/customers", "bao-cao.xem", h.Report.Customers)
+			q.Dat(manage, http.MethodGet, "/reports/summary", "bao-cao.xem", h.Report.Summary)
+			q.Dat(manage, http.MethodGet, "/reports/sales", "bao-cao.xem", h.Report.Sales)
+			q.Dat(manage, http.MethodGet, "/reports/sales/orders", "bao-cao.xem", h.Report.SalesOrders)
+			q.Dat(manage, http.MethodGet, "/reports/goods", "bao-cao.xem", h.Report.Goods)
+			q.Dat(manage, http.MethodGet, "/reports/goods/orders", "bao-cao.xem", h.Report.GoodsOrders)
+			q.Dat(manage, http.MethodGet, "/reports/profit", "bao-cao.xem", h.Report.Profit)
+			q.Dat(manage, http.MethodGet, "/reports/staff", "bao-cao.xem", h.Report.Staff)
+			q.Dat(manage, http.MethodGet, "/reports/employees", "bao-cao.xem", h.Report.Employees)
+			// Báo cáo kết ca nằm ở cụm ca làm việc (cùng repository với ca & sổ
+			// quỹ) nhưng chung quyền với nhóm báo cáo: nó phơi doanh thu từng ca.
+			q.Dat(manage, http.MethodGet, "/reports/shifts", "bao-cao.xem", h.Ca.BaoCaoKetCa)
 
 			// Bắn thông báo thử — công cụ chẩn đoán lúc cài đặt, KHÔNG mở ở
 			// production: nó tạo dữ liệu thật trong bảng notifications.

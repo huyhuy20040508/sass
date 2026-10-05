@@ -41,7 +41,12 @@ type ReportPeriod struct {
 	//
 	// Trước khi có trường này, báo cáo không biết chi nhánh là gì: quyền
 	// `bao-cao.xem` cấp cho quản lý một kho là họ thấy doanh thu toàn công ty.
-	ShopID uint
+	ShopID  uint
+	Channel string
+
+	// PaymentMethods giới hạn theo hình thức thanh toán của đơn (orders.payment_method).
+	// nil = mọi hình thức. Chỉ báo cáo doanh thu dùng tới (ô "Phương thức thanh toán").
+	PaymentMethods []string
 }
 
 // Days trả số ngày của kỳ (tối thiểu 1).
@@ -56,7 +61,10 @@ func (p ReportPeriod) Days() int {
 // Prev trả kỳ liền trước, CÙNG ĐỘ DÀI, kết thúc ngay trước kỳ này.
 func (p ReportPeriod) Prev() ReportPeriod {
 	n := p.Days()
-	return ReportPeriod{From: p.From.AddDate(0, 0, -n), To: p.From, ShopID: p.ShopID}
+	return ReportPeriod{
+		From: p.From.AddDate(0, 0, -n), To: p.From,
+		ShopID: p.ShopID, Channel: p.Channel, PaymentMethods: p.PaymentMethods,
+	}
 }
 
 // FromDate / ToDate trả hai đầu kỳ ở dạng YYYY-MM-DD để in ra API.
@@ -272,13 +280,16 @@ type CustomerReportTotals struct {
 	NewBuyers int64 `json:"new_buyers"` // lần mua ĐẦU TIÊN rơi vào kỳ này
 	Returning int64 `json:"returning"`  // đã từng mua trước kỳ này
 	// Registered là số tài khoản đăng ký mới trong kỳ, kể cả người chưa mua gì.
-	Registered      int64   `json:"registered"`
-	Orders          int64   `json:"orders"`
-	Revenue         float64 `json:"revenue"`
-	MemberOrders    int64   `json:"member_orders"`
-	MemberRevenue   float64 `json:"member_revenue"`
-	GuestOrders     int64   `json:"guest_orders"`
-	GuestRevenue    float64 `json:"guest_revenue"`
+	Registered    int64   `json:"registered"`
+	Orders        int64   `json:"orders"`
+	Revenue       float64 `json:"revenue"`
+	MemberOrders  int64   `json:"member_orders"`
+	MemberRevenue float64 `json:"member_revenue"`
+	GuestOrders   int64   `json:"guest_orders"`
+	GuestRevenue  float64 `json:"guest_revenue"`
+	// GuestPaid — phần khách vãng lai ĐÃ trả (đơn payment_status = paid), để
+	// dòng "Bán cho người tiêu dùng" có cột Thanh toán / Công nợ như khách quen.
+	GuestPaid       float64 `json:"guest_paid"`
 	RevenuePerBuyer float64 `json:"revenue_per_buyer"`
 	OrdersPerBuyer  float64 `json:"orders_per_buyer"`
 	RepeatRate      float64 `json:"repeat_rate"` // % khách quay lại trên tổng khách có tài khoản đã mua
@@ -286,17 +297,33 @@ type CustomerReportTotals struct {
 
 // CustomerReportRow — một khách trong bảng xếp hạng chi tiêu.
 type CustomerReportRow struct {
-	UserID  uint    `json:"user_id"`
-	Name    string  `json:"name"`
-	Email   string  `json:"email"`
-	Phone   string  `json:"phone"`
-	Orders  int64   `json:"orders"`
-	Units   int64   `json:"units"`
-	Revenue float64 `json:"revenue"`
-	AOV     float64 `json:"aov"`
+	UserID uint   `json:"user_id"`
+	Name   string `json:"name"`
+	Email  string `json:"email"`
+	Phone  string `json:"phone"`
+	// Hồ sơ khách bên CRM, để bảng báo cáo cuối ngày in thẳng ra.
+	CustomerCode string  `json:"customer_code"`
+	GroupName    string  `json:"group_name"`
+	RankName     string  `json:"rank_name"`
+	Points       int64   `json:"points"` // điểm tích luỹ trọn đời (users.total_points)
+	Orders       int64   `json:"orders"`
+	Units        int64   `json:"units"`
+	Revenue      float64 `json:"revenue"`
+	AOV          float64 `json:"aov"`
+	// Paid là tiền các đơn ĐÃ THU trong kỳ, Debt = Revenue − Paid (không âm) —
+	// cùng quy ước với cột "Còn nợ" của CRM (AggregateCustomerOrders).
+	Paid float64 `json:"paid"`
+	Debt float64 `json:"debt"`
 	// IsNew = kỳ này là lần đầu khách mua hàng.
 	IsNew       bool       `json:"is_new"`
 	LastOrderAt *time.Time `json:"last_order_at"`
+}
+
+// CustomerRowFilter — lọc bảng khách của báo cáo khách hàng.
+type CustomerRowFilter struct {
+	GroupID uint   // 0 = mọi nhóm
+	UserID  uint   // > 0: chỉ đúng một khách (ô "--Khách hàng--" của v2)
+	Keyword string // tìm theo tên / mã khách / số điện thoại
 }
 
 // CustomerBucket — một mốc thời gian của báo cáo khách hàng.
@@ -359,7 +386,35 @@ type ReportRepository interface {
 	UnsoldProducts(ctx context.Context, p ReportPeriod) (int64, error)
 
 	CustomerTotals(ctx context.Context, p ReportPeriod) (CustomerReportTotals, error)
-	TopCustomers(ctx context.Context, p ReportPeriod, limit int) ([]CustomerReportRow, error)
+	TopCustomers(ctx context.Context, p ReportPeriod, limit int, f CustomerRowFilter) ([]CustomerReportRow, error)
 	CustomerBuckets(ctx context.Context, p ReportPeriod, groupBy string) (map[string]CustomerBucket, error)
 	Registrations(ctx context.Context, p ReportPeriod) (int64, error)
+
+	// Báo cáo tổng hợp
+	ItemKinds(ctx context.Context, p ReportPeriod) (int64, error)
+	CashbookTotals(ctx context.Context, p ReportPeriod) (SummaryCashbook, error)
+	ReturnTotals(ctx context.Context, p ReportPeriod) (SummaryReturns, error)
+
+	// Báo cáo doanh thu — xem sales_report.go.
+	SalesDays(ctx context.Context, p ReportPeriod) ([]SalesDay, error)
+	ReturnsByDay(ctx context.Context, p ReportPeriod) (map[string]float64, error)
+	ByMonth(ctx context.Context, p ReportPeriod) ([]ReportSlice, error)
+	SalesOrders(ctx context.Context, p ReportPeriod) ([]SalesOrderRow, error)
+
+	// Báo cáo hàng hoá — xem goods_report.go.
+	CategoryTree(ctx context.Context) ([]Category, error)
+	GoodsRows(ctx context.Context, p ReportPeriod, f GoodsFilter) ([]GoodsRow, error)
+	GoodsUnitsBy(ctx context.Context, p ReportPeriod, f GoodsFilter, column string) ([]ReportSlice, error)
+	GoodsWeekday(ctx context.Context, p ReportPeriod, f GoodsFilter, productIDs []uint) (map[uint][7]int64, error)
+	GoodsOrders(ctx context.Context, p ReportPeriod, productID uint) ([]GoodsOrderRow, error)
+
+	// Báo cáo chi phí&lợi nhuan
+	ProfitRows(ctx context.Context, p ReportPeriod, f GoodsFilter) ([]ProfitRow, error)
+	ProfitUnsold(ctx context.Context, p ReportPeriod, f GoodsFilter) ([]ProfitRow, error)
+	ProfitBuckets(ctx context.Context, p ReportPeriod, f GoodsFilter, groupBy string) (map[string]ProfitBucket, error)
+
+	// Báo cáo ca — xem staff_report.go
+	StaffShiftRows(ctx context.Context, p ReportPeriod, f StaffReportFilter) ([]StaffShiftRow, error)
+	//  Báo cáo nhân viên (hoa hồng) — xem employee_report.go
+	EmployeeOrders(ctx context.Context, p ReportPeriod, f StaffReportFilter) ([]EmployeeOrder, error)
 }

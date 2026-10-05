@@ -31,6 +31,13 @@ use App\Http\Controllers\VoucherCouponController;
 use App\Http\Controllers\MembershipController;
 use App\Http\Controllers\PromotionProgramController;
 use App\Http\Controllers\ReportController;
+use App\Http\Controllers\ShiftReportController;
+use App\Http\Controllers\SummaryReportController;
+use App\Http\Controllers\GoodsReportController;
+use App\Http\Controllers\ProfitReportController;
+use App\Http\Controllers\StaffReportController;
+use App\Http\Controllers\EmployeeReportController;
+use App\Http\Controllers\SalesReportController;
 use App\Http\Controllers\ReturnController;
 use App\Http\Controllers\SettingController;
 use App\Http\Controllers\ParameterController;
@@ -336,6 +343,8 @@ Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:quan_ly', 'chi.v2'])->
         Route::get('/hoa-don-dien-tu/export', [EInvoiceController::class, 'export'])->name('hoa-don-dien-tu.export');
 
         // Báo cáo kết ca — tab Thống kê, phơi doanh thu và tiền két từng ca.
+        Route::get('/shift-report', [ShiftReportController::class, 'index'])->name('shift-report.index');
+        Route::get('/shift-report/export', [ShiftReportController::class, 'export'])->name('shift-report.export');
     });
 
     // --- Trả hàng, kho và mua vào: nhân viên (staff) KHÔNG vào ---
@@ -671,6 +680,14 @@ Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:quan_ly', 'chi.v2'])->
         Route::get('/reports/orders', [ReportController::class, 'orders'])->name('reports.orders');
         Route::get('/reports/products', [ReportController::class, 'products'])->name('reports.products');
         Route::get('/reports/customers', [ReportController::class, 'customers'])->name('reports.customers');
+        Route::get('/reports/summary', [SummaryReportController::class, 'index'])->name('reports.summary');
+        Route::get('/reports/sales', [SalesReportController::class, 'index'])->name('reports.sales');
+        Route::get('/reports/sales/orders', [SalesReportController::class, 'orders'])->name('reports.sales.orders');
+        Route::get('/reports/goods', [GoodsReportController::class, 'index'])->name('reports.goods');
+        Route::get('/reports/goods/orders', [GoodsReportController::class, 'orders'])->name('reports.goods.orders');
+        Route::get('/reports/profit', [ProfitReportController::class, 'index'])->name('reports.profit');
+        Route::get('/reports/staff', [StaffReportController::class, 'index'])->name('reports.staff');
+        Route::get('/reports/employees', [EmployeeReportController::class, 'index'])->name('reports.employees');
     });
 });
 

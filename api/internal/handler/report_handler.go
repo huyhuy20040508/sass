@@ -125,13 +125,27 @@ func (h *ReportHandler) Products(c *gin.Context) {
 // @Param			to			query		string	false	"Ngày cuối kỳ (YYYY-MM-DD)"
 // @Param			group_by	query		string	false	"Cách chia trục thời gian"	Enums(day, week, month)
 // @Param			limit		query		int		false	"Số dòng của bảng xếp hạng chi tiêu (mặc định 20, tối đa 100)"
+// @Param			customer_group_id	query	int		false	"Chỉ khách thuộc nhóm này (bảng xếp hạng)"
+// @Param			user_id		query		int		false	"Chỉ đúng một khách (bảng xếp hạng)"
+// @Param			keyword		query		string	false	"Tìm khách theo tên / mã / số điện thoại (bảng xếp hạng)"
+// @Param			channel		query		string	false	"Nguồn đơn; bỏ trống = mọi nguồn"	Enums(pos, web)
 // @Success		200			{object}	response.Body{data=domain.CustomerReport}
 // @Failure		401			{object}	response.Body
 // @Failure		500			{object}	response.Body
 // @Security		BearerAuth
 // @Router			/admin/reports/customers [get]
 func (h *ReportHandler) Customers(c *gin.Context) {
-	res, err := h.svc.Customers(c.Request.Context(), reportQuery(c))
+	q := reportQuery(c)
+	q.Channel = c.Query("channel")
+	q.Keyword = c.Query("keyword")
+	if id, err := strconv.ParseUint(c.Query("customer_group_id"), 10, 64); err == nil {
+		q.CustomerGroupID = uint(id)
+	}
+	if id, err := strconv.ParseUint(c.Query("user_id"), 10, 64); err == nil {
+		q.CustomerID = uint(id)
+	}
+
+	res, err := h.svc.Customers(c.Request.Context(), q)
 	if err != nil {
 		response.Error(c, http.StatusInternalServerError, "Lỗi thống kê khách hàng")
 		return

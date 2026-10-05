@@ -26,6 +26,8 @@ type CaLamViecService interface {
 	ChiTiet(ctx context.Context, id uint) (*dto.CaChiTietResponse, error)
 	// GhiTay ghi một khoản thu/chi tiền mặt do người trực nhập.
 	GhiTay(ctx context.Context, req dto.GhiSoQuyRequest, actorID uint) (*domain.SoQuy, error)
+	// BaoCaoKetCa — báo cáo kết ca: một trang ca, tổng số ca và dòng tổng cả kỳ.
+	BaoCaoKetCa(ctx context.Context, q BaoCaoCaQuery) ([]domain.BaoCaoCaDong, int64, domain.BaoCaoCaTong, error)
 }
 
 type caLamViecService struct {

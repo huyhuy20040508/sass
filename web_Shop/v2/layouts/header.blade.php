@@ -108,8 +108,8 @@
 
     // Section đang mở — bản gốc dò bằng is_menu_active(đường v2); mình dò theo
     // đường của web_Shop.
-    $isStatisticSection = request()->is('admin/dashboard', 'admin/customers*', 'admin/orders*', 'admin/hoa-don-dien-tu*', 'admin/shift-report*');
-    $isReportSection = request()->is('admin/reports*');
+    $isStatisticSection = request()->is('admin/dashboard', 'admin/customers*', 'admin/orders*', 'admin/hoa-don-dien-tu*');
+    $isReportSection = request()->is('admin/reports*', 'admin/shift-report*');
     $isMenuSection = request()->is('admin/products*', 'admin/categories*', 'admin/taxes*', 'admin/units*', 'admin/attributes*');
     $isWarehouseSection = request()->is('admin/suppliers*', 'admin/inventory-adjustments*', 'admin/purchase-orders*', 'admin/supplier-returns*', 'admin/stock-transfers*', 'admin/inventory*');
     $isCashbookSection = request()->is('admin/cashbook*');
@@ -119,7 +119,7 @@
 
     // Đường vào từng module. Bật cờ ở trên rồi thì thay '#' bằng route thật.
     $statisticDefaultRoute = route('admin.customers.index');
-    $routeUlReport = route('admin.reports.customers');
+    $routeUlReport = route('admin.reports.summary');
     $routeUlMenu = route('admin.products.index');
     $routeUlWarehouse = route('admin.nha-cung-cap.index');
     $routeUlCashbook = route('admin.cashbook.index');
@@ -133,25 +133,25 @@
     // Tab trong module NHÂN SỰ.
     $employeePer = true;                // Danh sách nhân sự — ĐÃ CÓ
 
-    // Sáu tab của module THỐNG KÊ, đúng bản v2. Màn nào chưa dựng thì bày ra
-    // nhưng làm mờ — bấm vào rồi bị đá đi chỗ khác thì tưởng bấm nhầm.
+    // Tab của module THỐNG KÊ theo bản v2, trừ "Báo cáo kết ca" — chủ tiệm chuyển
+    // sang module BÁO CÁO (29/09/2026). Màn nào chưa dựng thì bày ra nhưng làm
+    // mờ — bấm vào rồi bị đá đi chỗ khác thì tưởng bấm nhầm.
     $tabThongKe = [
         ['nhan' => 'Tổng quan', 'route' => null],
         ['nhan' => 'Khách hàng', 'route' => 'admin.customers.index'],
         ['nhan' => 'Quản lý đơn hàng', 'route' => 'admin.orders.index'],
         ['nhan' => 'Hoá đơn điện tử', 'route' => 'admin.hoa-don-dien-tu.index'],
-        ['nhan' => 'Báo cáo kết ca', 'route' => null],
         ['nhan' => 'Báo cáo cuối ngày', 'route' => null],
     ];
 
-    // Tab của module BÁO CÁO. Doanh thu / Đơn hàng / Hàng hoá còn là trang khu
-    // cũ (V2OnlyShell::CON_BAN_CU) — trỏ vào là rơi khỏi vỏ v2, nên làm mờ như
-    // màn chưa dựng; port xong trang nào thì điền route vào đây.
+    // Tab của module BÁO CÁO. Doanh thu / Đơn hàng / Hàng hoá (trang khu cũ)
+    // chủ tiệm bỏ khỏi dãy tab (29/09/2026) — route vẫn còn, chỉ không bày ra.
     $tabBaoCao = [
-        ['nhan' => 'Doanh thu', 'route' => null],
-        ['nhan' => 'Đơn hàng', 'route' => null],
-        ['nhan' => 'Hàng hoá', 'route' => null],
-        ['nhan' => 'Khách hàng', 'route' => 'admin.reports.customers'],
+        ['nhan' => 'Báo cáo tổng hợp', 'route' => 'admin.reports.summary'],
+        // Mở vào tab đầu (Doanh thu) như v2; sáng cho mọi tab trong trang.
+        ['nhan' => 'Báo cáo cuối ngày', 'route' => 'admin.reports.sales',
+            'sang' => ['admin.reports.sales', 'admin.reports.goods', 'admin.reports.profit', 'admin.reports.staff', 'admin.reports.employees', 'admin.reports.customers']],
+        ['nhan' => 'Báo cáo kết ca', 'route' => 'admin.shift-report.index'],
     ];
 
     // Tab của module CRM theo bản v2 (config/permission.php của v2), BỎ "Nhóm
@@ -650,7 +650,7 @@
                         @foreach($tabBaoCao as $tab)
                             @if($tab['route'])
                                 <a href="{{ route($tab['route']) }}"
-                                    class="sub-nav-btn {{ request()->routeIs($tab['route']) ? 'active' : '' }}">
+                                    class="sub-nav-btn {{ request()->routeIs(...(array) ($tab['sang'] ?? $tab['route'])) ? 'active' : '' }}">
                                     {{ $tab['nhan'] }}
                                 </a>
                             @else

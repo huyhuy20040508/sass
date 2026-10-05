@@ -23,6 +23,19 @@ type ReportService interface {
 	Orders(ctx context.Context, q ReportQuery) (domain.OrderReport, error)
 	Products(ctx context.Context, q ReportQuery) (domain.ProductReport, error)
 	Customers(ctx context.Context, q ReportQuery) (domain.CustomerReport, error)
+	Summary(ctx context.Context, q ReportQuery) (domain.SummaryReport, error)
+	// Sales / SalesOrders — báo cáo doanh thu, xem sales_report_service.go.
+	Sales(ctx context.Context, q ReportQuery) (domain.SalesReport, error)
+	SalesOrders(ctx context.Context, q ReportQuery) ([]domain.SalesOrderRow, error)
+	// Goods / GoodsOrders — báo cáo hàng hoá, xem goods_report_service.go.
+	Goods(ctx context.Context, q ReportQuery) (domain.GoodsReport, error)
+	GoodsOrders(ctx context.Context, q ReportQuery) ([]domain.GoodsOrderRow, error)
+	// Profit — báo cáo chi phí & lợi nhuận, xem profit_report_service.go
+	Profit(ctx context.Context, q ReportQuery) (domain.ProfitReport, error)
+	//  Staff — báo cáo ca, xem staff_report_service.go
+	Staff(ctx context.Context, q ReportQuery) (domain.StaffReport, error)
+	// Employees — báo cáo nhân viên (hoa hồng), xem employee_report_service.go
+	Employees(ctx context.Context, q ReportQuery) (domain.EmployeeReport, error)
 }
 
 // ReportQuery — tham số thô lấy từ query string, chưa kiểm tra gì.
@@ -36,6 +49,36 @@ type ReportQuery struct {
 
 	// ShopID giới hạn báo cáo trong một chi nhánh. 0 = cả cửa hàng.
 	ShopID uint
+
+	Date    string
+	Channel string
+
+	// Ba bộ lọc của bảng khách (báo cáo khách hàng).
+	CustomerGroupID uint
+	CustomerID      uint
+	Keyword         string
+
+	// Methods — ô "Phương thức thanh toán" của báo cáo doanh thu, dạng
+	// "cash,bank_transfer,card,auto_qr". Rỗng = mọi hình thức.
+	Methods string
+
+	// Báo cáo hàng hoá: nhóm hàng (gồm nhóm con), một mặt hàng, và số món của
+	// biểu đồ theo thứ. Top bán chạy dùng Limit (5/10/15) và Sort (asc/desc).
+	CategoryID uint
+	ProductID  uint
+	TopWeekday int
+	Area       string
+	StaffID    uint
+}
+
+// nguonDon nhận pos | web, giá trị khác coi như "mọi nguồn" — trang XEM, tham
+// số lạ không đáng một lỗi.
+func nguonDon(v string) string {
+	v = strings.TrimSpace(v)
+	if v == domain.OrderChannelPOS || v == domain.OrderChannelWeb {
+		return v
+	}
+	return ""
 }
 
 // Ràng buộc khoảng xem. Trên 731 ngày (2 năm) thì biểu đồ theo ngày có hơn 700
@@ -359,6 +402,8 @@ func (s *reportService) Products(ctx context.Context, q ReportQuery) (domain.Pro
 
 func (s *reportService) Customers(ctx context.Context, q ReportQuery) (domain.CustomerReport, error) {
 	p, groupBy, limit := s.normalize(q)
+	// Nguồn đơn áp cho CẢ báo cáo: số tổng và bảng khách cùng một phạm vi.
+	p.Channel = nguonDon(q.Channel)
 	prev := p.Prev()
 
 	out := domain.CustomerReport{
@@ -374,7 +419,8 @@ func (s *reportService) Customers(ctx context.Context, q ReportQuery) (domain.Cu
 	if out.Prev, err = s.repo.CustomerTotals(ctx, prev); err != nil {
 		return out, err
 	}
-	if out.Top, err = s.repo.TopCustomers(ctx, p, limit); err != nil {
+	loc := domain.CustomerRowFilter{GroupID: q.CustomerGroupID, UserID: q.CustomerID, Keyword: q.Keyword}
+	if out.Top, err = s.repo.TopCustomers(ctx, p, limit, loc); err != nil {
 		return out, err
 	}
 	if out.ByProvince, err = s.repo.ByProvince(ctx, p, reportProvinceTop); err != nil {

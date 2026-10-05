@@ -3269,6 +3269,12 @@ type HoaDonMeta struct {
 	Dem domain.DemHoaDon `json:"dem"`
 }
 
+// BaoCaoCaMeta — `meta` của báo cáo kết ca: phân trang cộng dòng tổng cả kỳ.
+type BaoCaoCaMeta struct {
+	response.Pagination
+	Tong domain.BaoCaoCaTong `json:"tong"`
+}
+
 // ---------- Khuyến mại đồng giá (CRM, khuôn v2) ----------
 
 // FixedPriceRequest — tạo / sửa một chương trình đồng giá. Gửi TRỌN bộ dòng:
