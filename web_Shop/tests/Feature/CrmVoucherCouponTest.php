@@ -93,4 +93,54 @@ class CrmVoucherCouponTest extends TestCase
 
         Http::assertSent(fn ($r) => str_contains($r->url(), '/admin/voucher-coupon/4/ma') && $r['keyword'] === 'KMZ');
     }
+
+    /**
+     * Nút ghi "Xuất Excel" thì tệp phải là .xlsx THẬT.
+     *
+     * Trước đây nút ấy tải về voucher-coupon-*.csv kiểu text/csv — nhãn nói một
+     * đằng, tệp một nẻo. Bài canh đuôi tệp, kiểu nội dung và chữ ký zip; thêm
+     * hai cột số phải ghi kiểu SỐ để người nhận cộng được, và cột "Giá trị" phải
+     * giữ nguyên CHỮ vì nó trộn "10%" với "11.000 đ" tuỳ dòng.
+     */
+    public function test_xuat_la_xlsx_that_va_ghi_so_kieu_so(): void
+    {
+        Http::fake([
+            '*/admin/voucher-coupon*' => Http::response(['data' => [$this->mau()],
+                'meta' => ['page' => 1, 'page_size' => 100, 'total' => 1, 'total_pages' => 1]]),
+            '*/admin/chi-nhanh*' => Http::response(['data' => [['id' => 2, 'code' => 'Q7', 'name' => 'Kho Quận 7']]]),
+            '*' => Http::response(['data' => []]),
+        ]);
+
+        $res = $this->withSession($this->phien())
+            ->get(route('admin.voucher-coupon.export', ['statuses' => [2]]))->assertOk();
+
+        $this->assertStringContainsString('.xlsx', (string) $res->headers->get('Content-Disposition'));
+        $this->assertStringNotContainsString('.csv', (string) $res->headers->get('Content-Disposition'));
+        $this->assertSame('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            $res->headers->get('Content-Type'));
+        $this->assertSame('PK', substr($res->getContent(), 0, 2), 'Tệp không phải xlsx (zip).');
+
+        $tep = tempnam(sys_get_temp_dir(), 'xlsx');
+        file_put_contents($tep, $res->getContent());
+        $zip = new \ZipArchive;
+        $this->assertTrue($zip->open($tep), 'không mở được tệp xuất như zip');
+        $sheet = (string) $zip->getFromName('xl/worksheets/sheet1.xml');
+        $zip->close();
+        unlink($tep);
+
+        $this->assertStringContainsString('Mã chương trình', $sheet);
+        $this->assertStringContainsString('VC00004', $sheet);
+        // Chi nhánh in theo MÃ như trên bảng, không phải tên dài.
+        $this->assertStringContainsString('>Q7<', $sheet);
+        // "Áp dụng cho hóa đơn trên" và "Số lượng" là SỐ, không phải chữ đã chấm nghìn.
+        $this->assertStringContainsString('<v>2000000</v>', $sheet);
+        $this->assertStringContainsString('<v>10</v>', $sheet);
+        $this->assertStringNotContainsString('2,000,000', $sheet);
+        // Cột Giá trị vẫn là chữ, giữ nguyên dấu %.
+        $this->assertStringContainsString('10%', $sheet);
+
+        // Bộ lọc đang xem đi theo sang API, không rơi mất ở giữa.
+        Http::assertSent(fn ($r) => str_contains($r->url(), '/admin/voucher-coupon')
+            && str_contains($r->url(), 'statuses=2'));
+    }
 }

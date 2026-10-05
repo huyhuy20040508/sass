@@ -104,25 +104,32 @@ class ShiftReportController extends Controller
         return $error ? $view->with('error', $error) : $view;
     }
 
-    /** Xuất đúng bộ lọc đang bật, đủ 19 cột như bảng — nút "Xuất Excel" của v2. */
+    /**
+     * Xuất đúng bộ lọc đang bật, đủ 19 cột như bảng — nút "Xuất Excel" của v2.
+     *
+     * .xlsx THẬT, không phải CSV đội tên: nút ghi "Xuất Excel" mà tệp là
+     * bao-cao-ket-ca-*.csv kiểu text/csv. Cùng đường taiXlsx() với Nhân sự,
+     * Nhà cung cấp, Thu chi, Công nợ, Phiếu mua hàng.
+     *
+     * Chín cột tiền ghi kiểu SỐ nên người nhận bôi đen là cộng được — báo cáo
+     * kết ca sống bằng việc cộng và đối chiếu két, mà CSV thì cột nào cũng là
+     * chữ. Ca CHƯA ĐÓNG vẫn để trống ba cột đối chiếu két như trên bảng: ô
+     * trống đọc ra "chưa đếm", còn số 0 đọc ra "két khớp".
+     */
     public function export(Request $request)
     {
         $filters = $this->filters($request);
         $rows = array_map([$this, 'dong'], $this->docHet($filters));
-        $ten = 'bao-cao-ket-ca-'.$filters['from_date'].'-den-'.$filters['to_date'].'.csv';
 
-        return response()->streamDownload(function () use ($rows) {
-            $out = fopen('php://output', 'w');
-            fwrite($out, "\xEF\xBB\xBF");
-            fputcsv($out, array_merge(['STT'], array_values(self::COT_BANG)));
-            foreach ($rows as $i => $r) {
-                fputcsv($out, array_merge([$i + 1], array_map(
-                    fn ($k) => $k === 'close_time' && $r['dang_mo'] ? 'Đang mở' : $r[$k],
-                    array_keys(self::COT_BANG)
-                )));
-            }
-            fclose($out);
-        }, $ten, ['Content-Type' => 'text/csv; charset=UTF-8']);
+        $hang = [array_merge(['STT'], array_values(self::COT_BANG))];
+        foreach ($rows as $i => $r) {
+            $hang[] = array_merge([$i + 1], array_map(
+                fn ($k) => $k === 'close_time' && $r['dang_mo'] ? 'Đang mở' : $r[$k],
+                array_keys(self::COT_BANG)
+            ));
+        }
+
+        return $this->taiXlsx($hang, 'bao-cao-ket-ca-'.$filters['from_date'].'-den-'.$filters['to_date'], 'Bao cao ket ca');
     }
 
     /**

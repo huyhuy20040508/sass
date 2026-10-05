@@ -33,6 +33,63 @@ class CrmPromotionTest extends TestCase
         ];
     }
 
+    /**
+     * API TỪ CHỐI VÌ THIẾU QUYỀN thì màn phải nói đúng chuyện đó.
+     *
+     * Trước đây mọi lượt gọi hỏng đều rơi vào một nhánh: để danh sách rỗng rồi
+     * vẽ tiếp. Người vai Quản lý chưa được giao quyền khuyến mại mở màn này sẽ
+     * đọc "Chưa có chương trình nào", tưởng cửa hàng chưa lập cái nào, bấm "Tạo
+     * mới" rồi ăn thêm một lỗi 403 nữa.
+     *
+     * Ba tab của màn Khuyến mại kiểm chung một bài: cùng một khuôn, sửa một tab
+     * quên hai tab kia là chuyện đã suýt xảy ra.
+     */
+    public function test_thieu_quyen_thi_noi_dung_va_giau_nut(): void
+    {
+        // So theo MARKUP CỦA NÚT, không so theo chữ: chữ "Tạo mới" còn nằm trong
+        // tiêu đề hộp thoại, bắt theo chữ là bài kiểm đỏ vì hộp thoại chứ không
+        // vì nút.
+        $tab = [
+            ['admin.crm.promotions.index', 'quyền xem chương trình khuyến mại',
+                ['bt btn_green add-item', 'btn-export']],
+            ['admin.crm.promotions.dongGia', 'quyền xem khuyến mại đồng giá',
+                ['bt btn_green add-item']],
+            ['admin.crm.promotions.voucher', 'quyền xem voucher / coupon',
+                ['bt btn_green add-voucher', 'btn-export']],
+        ];
+
+        foreach ($tab as [$ten, $cau, $nut]) {
+            Http::fake([
+                '*/admin/chuong-trinh-khuyen-mai*' => Http::response(['message' => 'Bạn không được giao việc này', 'errors' => ['ma' => 'THIEU_QUYEN']], 403),
+                '*/admin/dong-gia*' => Http::response(['message' => 'Bạn không được giao việc này'], 403),
+                '*/admin/voucher*' => Http::response(['message' => 'Bạn không được giao việc này'], 403),
+                '*' => Http::response(['data' => []]),
+            ]);
+
+            $html = $this->withSession($this->phien())->get(route($ten))->assertOk()->getContent();
+
+            $this->assertStringContainsString($cau, $html, "$ten: phải nói rõ là thiếu quyền");
+            $this->assertStringNotContainsString('Bấm "Tạo', $html, "$ten: không được mời bấm Tạo khi đang bị chặn");
+            $this->assertStringNotContainsString('Chưa có chương trình', $html, "$ten: không được nói là chưa có dữ liệu");
+            foreach ($nut as $n) {
+                $this->assertStringNotContainsString($n, $html, "$ten: phải giấu nút $n");
+            }
+        }
+    }
+
+    /** Sổ RỖNG THẬT thì vẫn nói "chưa có", và nút Tạo vẫn còn. */
+    public function test_so_rong_that_van_moi_tao_moi(): void
+    {
+        Http::fake(['*' => Http::response(['data' => [], 'meta' => ['page' => 1, 'page_size' => 10, 'total' => 0, 'total_pages' => 1]])]);
+
+        $html = $this->withSession($this->phien())
+            ->get(route('admin.crm.promotions.index'))->assertOk()->getContent();
+
+        $this->assertStringContainsString('Không có chương trình khuyến mại nào.', $html);
+        $this->assertStringContainsString('Tạo mới', $html);
+        $this->assertStringNotContainsString('chưa được giao quyền', $html);
+    }
+
     public function test_bang_bam_v2(): void
     {
         Http::fake([

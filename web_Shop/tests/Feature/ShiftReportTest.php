@@ -219,11 +219,83 @@ class ShiftReportTest extends TestCase
             '*' => Http::response(['data' => []]),
         ]);
 
-        $csv = $this->withSession($this->phien())->get('/admin/shift-report/export?range=thisMonth')
-            ->assertOk()->streamedContent();
+        $sheet = $this->sheetXuat('/admin/shift-report/export?range=thisMonth');
 
-        $this->assertStringContainsString('"Mã nhân sự","Tên nhân sự","Giờ mở ca"', $csv);
-        $this->assertStringContainsString('Ca trang 1', $csv);
-        $this->assertStringContainsString('Ca trang 2', $csv);
+        $this->assertStringContainsString('Mã nhân sự', $sheet);
+        $this->assertStringContainsString('Ca trang 1', $sheet);
+        $this->assertStringContainsString('Ca trang 2', $sheet);
+    }
+
+    /**
+     * Nút ghi "Xuất Excel" thì tệp phải là .xlsx THẬT.
+     *
+     * Trước đây nút ấy tải về bao-cao-ket-ca-*.csv kiểu text/csv: nhãn nói một
+     * đằng, tệp một nẻo. Bài này canh ba thứ mà CSV không có — đuôi tệp, kiểu
+     * nội dung, và chữ ký zip ở hai byte đầu.
+     */
+    public function test_xuat_la_xlsx_that_khong_phai_csv_doi_ten(): void
+    {
+        $this->fakeApi();
+
+        $res = $this->withSession($this->phien())
+            ->get('/admin/shift-report/export?range=thisMonth')->assertOk();
+
+        $this->assertStringContainsString('.xlsx', (string) $res->headers->get('Content-Disposition'));
+        $this->assertStringNotContainsString('.csv', (string) $res->headers->get('Content-Disposition'));
+        $this->assertSame('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            $res->headers->get('Content-Type'));
+        $this->assertSame('PK', substr($res->getContent(), 0, 2), 'Tệp không phải xlsx (zip).');
+    }
+
+    /**
+     * Cột tiền ghi kiểu SỐ, và ca chưa đóng vẫn để trống phần đối chiếu két.
+     *
+     * Đây là lý do đổi sang .xlsx chứ không chỉ đổi nhãn nút: báo cáo kết ca sống
+     * bằng việc cộng và đối chiếu, mà trong CSV cột nào cũng là chữ nên người
+     * nhận bôi đen không ra tổng nào.
+     *
+     * Vế thứ hai giữ đúng quy ước của bảng: ca còn mở chưa ai đếm két, ô trống
+     * đọc ra "chưa đếm" còn số 0 đọc ra "két khớp" — hai chuyện khác nhau.
+     */
+    public function test_xuat_ghi_tien_kieu_so_va_ca_dang_mo_de_trong(): void
+    {
+        $this->fakeApi();
+
+        $sheet = $this->sheetXuat('/admin/shift-report/export?range=thisMonth');
+
+        // Ca đã đóng: tiền là <v>số</v>, không phải chữ "3.250.000" hay "3,250,000".
+        $this->assertMatchesRegularExpression('/<c r="[A-Z]+2"><v>3250000<\/v><\/c>/', $sheet);
+        $this->assertStringContainsString('<v>-50000</v>', $sheet);
+        $this->assertStringNotContainsString('3,250,000', $sheet);
+        $this->assertStringNotContainsString('3.250.000', $sheet);
+        // Số đơn cũng là số.
+        $this->assertStringContainsString('<v>42</v>', $sheet);
+
+        // Ca còn mở (hàng 3): "Đang mở" ở cột Giờ đóng ca; ba cột đối chiếu két —
+        // Tiền mặt cuối ca (L), Giao tiền mặt (M), Số tiền chênh lệch (N) — là ô
+        // TRỐNG, không phải <v>0</v>.
+        $this->assertStringContainsString('Đang mở', $sheet);
+        foreach (['L', 'M', 'N'] as $cot) {
+            $this->assertMatchesRegularExpression(
+                '/<c r="'.$cot.'3"[^>]*><is><t[^>]*><\/t><\/is><\/c>/', $sheet,
+                'cột '.$cot.' của ca còn mở phải trống, không được in 0'
+            );
+        }
+    }
+
+    /** sheet1.xml của tệp .xlsx mà một đường xuất trả về. */
+    protected function sheetXuat(string $duong): string
+    {
+        $noiDung = $this->withSession($this->phien())->get($duong)->assertOk()->getContent();
+
+        $tep = tempnam(sys_get_temp_dir(), 'xlsx');
+        file_put_contents($tep, $noiDung);
+        $zip = new \ZipArchive;
+        $this->assertTrue($zip->open($tep), 'không mở được tệp xuất như zip');
+        $sheet = (string) $zip->getFromName('xl/worksheets/sheet1.xml');
+        $zip->close();
+        unlink($tep);
+
+        return $sheet;
     }
 }

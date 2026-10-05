@@ -23,12 +23,28 @@
     $C = \App\Http\Controllers\EInvoiceController::class;
 
     // Cột đang tắt nằm ở ?hide= — giữ được sau khi đổi trang mà không cần bảng riêng.
-    $cotTat = array_filter(explode(',', (string) request()->query('hide', '')));
+    //
+    // VẮNG hẳn tham số = lần đầu vào màn, lấy bộ tắt sẵn. CÓ tham số (kể cả
+    // rỗng) = người dùng đã tự chọn, nghe theo họ. Phân biệt hai trường hợp này
+    // mới bật lại được đủ mười bốn cột: nếu coi `hide=` rỗng là "chưa chọn gì"
+    // thì bật hết xong nạp lại trang là bốn cột kia tắt lại ngay.
+    $cotTat = request()->has('hide')
+        ? array_filter(explode(',', (string) request()->query('hide', '')))
+        : $C::COT_MAC_DINH_TAT;
     $columns = [];
     foreach (array_keys($C::COT_BANG) as $c) {
         $columns['show_'.$c] = in_array($c, $cotTat, true) ? 0 : 1;
     }
     $an = fn ($c) => $columns['show_'.$c] ? '' : 'hide';
+
+    // Bề rộng tối thiểu của bảng = tổng bề rộng tối thiểu của CÁC CỘT ĐANG BẬT.
+    // Mười cột mặc định cộng lại vẫn nhỏ hơn khung nên bảng chia phần trăm như
+    // thường; bật thêm tới mức quá khung thì bảng rộng ra và cuộn trong thẻ.
+    $rongToiThieu = $C::COT_RONG_TOI_THIEU['_tick'] + $C::COT_RONG_TOI_THIEU['_stt']
+        + $C::COT_RONG_TOI_THIEU['_action'];
+    foreach ($C::COT_BANG as $c => $chu) {
+        $rongToiThieu += $columns['show_'.$c] ? $C::COT_RONG_TOI_THIEU[$c] : 0;
+    }
 
     $stt = ($meta['page'] - 1) * $meta['page_size'];
     $tien = fn ($n) => number_format((float) $n, 0, ',', '.');
@@ -48,25 +64,78 @@
 @push('styles')
     <style>
         /* ---------- BẢNG ----------
-           Làm y bản gốc (ordertable v2, system/etax-invoice/list.blade.php):
-           bảng CO THEO NỘI DUNG và cuộn ngang trong thẻ, không ép `fixed` rồi
-           chia phần trăm.
+           Chia % CỨNG, tổng đúng 100, để bảng luôn vừa khung thẻ — không cuộn
+           ngang, cột Hành động không rơi ra ngoài màn.
 
-           Vì sao bỏ cách chia %: mười bốn cột mà ô nào cũng `nowrap` thì phần
-           trăm nào cũng có cột hụt — hụt thì hoặc cắt "…" (mã CQT dài gấp ba bề
-           ngang cột ở MỌI khổ, cắt xong còn lại "M1-…" chẳng đối chiếu được với
-           ai) hoặc tràn đè sang ô bên. Để bảng tự co thì mỗi cột luôn đúng bề
-           ngang chữ của nó: không cắt chữ nào, không ô nào đè ô nào.
+           Vì sao không để bảng tự co như bản gốc: bản gốc cho cuộn ngang, mà
+           mười bốn cột cần ~1445px trong khi khung khổ 1366 chỉ có 1071px —
+           tức là lúc nào cũng phải kéo mới thấy hai cột cuối. Thay vào đó bốn
+           cột phụ TẮT SẴN (xem COT_MAC_DINH_TAT), mười cột còn lại vừa khung.
+           Tắt cột nào thì phần trăm của nó được trình duyệt chia lại cho các
+           cột còn lại, nên bật thêm cột vẫn không vỡ bảng. */
+        table.table-hoa-don.none_mobile { width: 100%; table-layout: fixed; }
 
-           Màn hẹp thì thanh cuộn ngang của khung `.table-responsive` lo — đúng
-           thứ bản gốc làm bằng `style="overflow-x: auto"`. */
-        table.table-hoa-don.none_mobile { width: 100%; }
+        /* NHÃN CỘT MỘT DÒNG. Bề rộng bên dưới đã cấp đủ cho nhãn dài nhất của
+           từng cột; để nhãn gãy đôi ("Số hoá / đơn") là hàng tiêu đề cao gấp
+           đôi mà vẫn khó đọc. */
+        table.table-hoa-don.none_mobile th {
+            white-space: nowrap; font-size: 13.5px; font-weight: 600; line-height: 20px;
+            padding: 6px 10px; vertical-align: middle;
+        }
 
-        /* Nhãn cột GIỮ MỘT DÒNG. Cho xuống dòng thì "Số hoá đơn" gãy làm ba
-           dòng, hàng tiêu đề cao gấp đôi mà vẫn khó đọc. Bảng đã cuộn ngang
-           được thì chẳng có lý do gì phải bẻ chữ cho vừa. */
-        table.table-hoa-don.none_mobile th { white-space: nowrap; }
+        /* KHÔNG cắt chữ bằng "…": chữ quá dài thì XUỐNG DÒNG, ô cao lên chứ
+           không nuốt mất chữ. Cột nào cũng đã được cấp đủ bề ngang cho dữ liệu
+           thật nên đây chỉ là van an toàn.
+
+           Số tiền, ngày và dải nút thì `nowrap`: số gãy giữa chừng đọc thành số
+           khác, còn nút rớt xuống hàng hai là mất nút bấm. */
+        table.table-hoa-don.none_mobile td {
+            white-space: normal; word-break: break-word; vertical-align: middle;
+            padding: 8px 10px;
+        }
+        table.table-hoa-don.none_mobile td.la-so,
         table.table-hoa-don.none_mobile td.action { white-space: nowrap; }
+
+        /* % SUY RA TỪ bề rộng tối thiểu khai ở COT_RONG_TOI_THIEU (px chia cho
+           tổng 1450px của cả mười bốn cột). Một nguồn duy nhất: sửa bề rộng tối
+           thiểu của cột nào thì sửa luôn % của cột đó, hai chỗ không lệch nhau.
+           Nhờ vậy ngay ở bề rộng nhỏ nhất bảng có thể nhận, mỗi cột vẫn đủ chỗ
+           cho chữ dài nhất của nó — tức là không ô nào phải xuống dòng.
+
+           Mã CQT ăn nhiều nhất vì chuỗi thật dài 194px ("M1-26-UNSWC-…"). */
+        /* Ô tick chỉ chứa một ô vuông 16px — đệm 10px mỗi bên ăn hết chỗ của nó. */
+        table.table-hoa-don.none_mobile th:first-child,
+        table.table-hoa-don.none_mobile td:first-child { padding-left: 4px; padding-right: 4px; }
+        table.table-hoa-don.none_mobile th:first-child { width: 2.07%; }
+        table.table-hoa-don.none_mobile th:nth-child(2) { width: 2.76%; }
+        table.table-hoa-don.none_mobile th.show_symbol { width: 5.86%; }
+        table.table-hoa-don.none_mobile th.show_invoice_no { width: 5.86%; }
+        table.table-hoa-don.none_mobile th.show_tax_code { width: 14.14%; }
+        table.table-hoa-don.none_mobile th.show_order_code { width: 5.86%; }
+        table.table-hoa-don.none_mobile th.show_status { width: 7.24%; }
+        table.table-hoa-don.none_mobile th.show_issued_at { width: 7.93%; }
+        table.table-hoa-don.none_mobile th.show_customer { width: 8.97%; }
+        table.table-hoa-don.none_mobile th.show_email { width: 12.41%; }
+        table.table-hoa-don.none_mobile th.show_vat { width: 5.86%; }
+        table.table-hoa-don.none_mobile th.show_total { width: 6.90%; }
+        table.table-hoa-don.none_mobile th.show_creator { width: 6.55%; }
+        table.table-hoa-don.none_mobile th:last-child { width: 7.59%; }
+
+        /* DƯỚI 1536px: nén chữ và đệm một nhịp — cùng cách đã làm ở màn Khách
+           hàng. Khung khổ 1440 chỉ rộng hơn khổ 1366 đúng 61px, giữ nguyên cỡ
+           chữ là cột nào cũng chớm hụt, mà hụt ở đây nghĩa là chữ xuống dòng. */
+        @media (max-width: 1535px) {
+            table.table-hoa-don.none_mobile th,
+            table.table-hoa-don.none_mobile td { font-size: 12.5px; padding: 6px 5px; }
+            .action .hd-nut { margin: 0 1px; }
+        }
+
+        /* BẬT NHIỀU CỘT thì nén chữ ở MỌI khổ. Lúc ấy bảng đã rộng hơn khung và
+           đang cuộn ngang; để chữ cỡ lớn thì nhãn đòi thêm ~100px nữa và lại
+           chen lên nhau. Máy chủ gắn lớp này theo số cột đang bật. */
+        table.table-hoa-don.hd-nen th,
+        table.table-hoa-don.hd-nen td { font-size: 12.5px; padding: 6px 5px; }
+        table.table-hoa-don.hd-nen .hd-nut { margin: 0 1px; }
 
         /* Loại tờ in nhỏ dưới trạng thái ("Bị thay thế"…), và câu lỗi của tờ hỏng. */
         .hd-phu { display: block; font-size: 11.5px; color: #8c8c8c; }
@@ -113,9 +182,19 @@
             font-size: 14px; font-weight: 600; padding: 6px 10px; margin: 0 0 6px;
             background: #b0c7d240; border-radius: 4px;
         }
-        #modalHoaDon table.bang-hang { width: 100%; }
+        /* Bảng hàng trong hộp chi tiết: chia % để luôn vừa cột bên trái của hộp.
+           Để `auto` thì một tên hàng dài đẩy bảng rộng hơn cột chứa nó (đo được
+           tràn 115px), và người xem phải kéo ngang BÊN TRONG hộp thoại. */
+        #modalHoaDon table.bang-hang { width: 100%; table-layout: fixed; }
         #modalHoaDon table.bang-hang th { background: #e9ecef; padding: .5rem; white-space: nowrap; font-size: 12.5px; }
         #modalHoaDon table.bang-hang td { padding: .5rem; vertical-align: middle; }
+        /* Chỉ tên hàng được xuống dòng — ba cột số giữ một dòng. */
+        #modalHoaDon table.bang-hang td:not(:nth-child(2)) { white-space: nowrap; }
+        #modalHoaDon table.bang-hang th:nth-child(1) { width: 8%; }
+        #modalHoaDon table.bang-hang th:nth-child(2) { width: 44%; }
+        #modalHoaDon table.bang-hang th:nth-child(3) { width: 12%; }
+        #modalHoaDon table.bang-hang th:nth-child(4) { width: 18%; }
+        #modalHoaDon table.bang-hang th:nth-child(5) { width: 18%; }
         #modalHoaDon .hd-tong > div { display: flex; justify-content: space-between; padding: 3px 4px; }
         #modalHoaDon .hd-loi { background: #fff1f0; color: #cf1322; border-radius: 4px; padding: 8px 10px; }
     </style>
@@ -258,7 +337,8 @@
                     </div>
 
                     <div class="table-responsive table-border-style">
-                        <table class="table-hoa-don none_mobile">
+                        <table class="table-hoa-don none_mobile {{ $rongToiThieu > 1100 ? 'hd-nen' : '' }}"
+                            style="min-width: {{ $rongToiThieu }}px">
                             {{-- Hàng nhãn nằm trong <thead> như bản v2: để trần thì trình
                                  duyệt nhét nó vào <tbody> chung với dữ liệu, và mọi thứ
                                  đếm "dòng của bảng" (JS chọn tất cả, bản xuất) lại đếm
@@ -334,7 +414,9 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="14" class="text-center py-4">
+                                    {{-- colspan theo số cột ĐANG BẬT: để cứng 14 thì tắt bớt
+                                         cột là dòng này thừa ô, kẻ bảng lệch hẳn sang phải. --}}
+                                    <td colspan="{{ 3 + count(array_filter($columns)) }}" class="text-center py-4">
                                         {{ $coLoc
                                             ? 'Không có hoá đơn nào khớp bộ lọc đang bật.'
                                             : 'Chưa có hoá đơn điện tử nào. Hoá đơn hiện ở đây khi một đơn được phát hành hoá đơn — tự động lúc thu tiền, hoặc bấm phát hành ở quầy.' }}
@@ -520,7 +602,9 @@
             // Trạng thái đang chọn, cột ẩn và cỡ trang chép lại từ URL cũ.
             const cu = new URLSearchParams(location.search);
             ['status', 'hide', 'page_size'].forEach(function (ten) {
-                if (cu.get(ten)) q.set(ten, cu.get(ten));
+                // `hide=` rỗng vẫn phải mang theo — nó mang nghĩa "bật hết cột",
+                // khác hẳn với không có tham số.
+                if (cu.has(ten) && (cu.get(ten) || ten === 'hide')) q.set(ten, cu.get(ten));
             });
             $.each(thayDoi || {}, function (k, v) { v ? q.set(k, v) : q.delete(k); });
 
@@ -545,7 +629,9 @@
             const tat = $('.show_col').filter(function (i, el) { return !el.checked; })
                 .map(function (i, el) { return $(el).data('col'); }).get();
             const q = new URLSearchParams(location.search);
-            tat.length ? q.set('hide', tat.join(',')) : q.delete('hide');
+            // LUÔN gửi `hide`, kể cả khi rỗng: vắng tham số nghĩa là "chưa chọn
+            // gì" và máy chủ lấy bộ tắt sẵn, nên bật hết cột xong lại tắt về cũ.
+            q.set('hide', tat.join(','));
             V2.napLai(location.pathname + '?' + q);
         }
         $(document).on('change', '.show_col', apDungCot);

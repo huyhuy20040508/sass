@@ -31,7 +31,9 @@
     };
 @endphp
 
-<table class="table-striped table-customer table-crm none_mobile">
+{{-- `--kh-rong` = sàn bề rộng tính theo đúng những cột đang bật (xem index).
+     Để ở biến CSS vì luật nén chữ dưới 1536px cần hạ sàn này theo tỉ lệ. --}}
+<table class="table-striped table-customer table-crm none_mobile" style="--kh-rong: {{ $rongToiThieu }}px">
     <thead>
     <tr class="header-table-list">
         <th class="text-center not-export"><input class="form-check-input item-select-all" type="checkbox"></th>
@@ -99,7 +101,12 @@
         </tr>
     @empty
         <tr>
-            <td colspan="13" class="text-center py-4">
+            {{-- colspan theo số cột ĐANG BẬT (2 cột cố định + cột bật/tắt có
+                 bề rộng thật; `customer_group` là nhãn dưới tên, không phải cột).
+                 Để cứng 13 thì tắt bớt cột là dòng này thừa ô, kẻ bảng lệch hẳn. --}}
+            <td colspan="{{ 2 + collect($columns)->filter()->keys()
+                ->filter(fn ($k) => $k !== 'show_customer_group')->count() }}"
+                class="text-center py-4">
                 {{ $hasFilter ? 'Không có khách hàng nào khớp bộ lọc đang bật.' : $C::EMPTY_TEXT }}
             </td>
         </tr>

@@ -163,3 +163,25 @@ func TestChuongTrinhKhuyenMai_V2(t *testing.T) {
 		t.Fatalf("khuyến mãi cùng đồng giá phải bị chặn 400, đang là %d\n%s", gop.ma, catBot(gop.than))
 	}
 }
+
+// TestChuongTrinhKhuyenMai_PhanTramQua100 — "%" quá 100 bị chặn 422, không lặng
+// lẽ hạ về 100; đúng 100 vẫn lưu được.
+func TestChuongTrinhKhuyenMai_PhanTramQua100(t *testing.T) {
+	h := dungHeThong(t)
+	a, _ := haiCuaHang(t, h)
+	goc := "/api/v1/admin/chuong-trinh-khuyen-mai"
+
+	r := h.goi(t, a.token, http.MethodPost, goc, ctkmThan(a, "Qua100", 3, false, []map[string]any{
+		{"object_id": a.sanPham, "quantity": 1, "formality": 0, "value": 150, "max_value": 3000},
+	}))
+	if r.ma != http.StatusUnprocessableEntity || !strings.Contains(r.than, "không được quá 100") {
+		t.Fatalf("giá trị 150%% phải bị chặn 422, đang là %d\n%s", r.ma, catBot(r.than))
+	}
+
+	r = h.goi(t, a.token, http.MethodPost, goc, ctkmThan(a, "Dung100", 3, false, []map[string]any{
+		{"object_id": a.sanPham, "quantity": 1, "formality": 0, "value": 100, "max_value": 3000},
+	}))
+	if r.ma != http.StatusCreated {
+		t.Fatalf("giá trị đúng 100%% phải tạo được, đang là %d\n%s", r.ma, catBot(r.than))
+	}
+}

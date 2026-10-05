@@ -19,10 +19,25 @@
     $C = \App\Http\Controllers\OrderController::class;
 
     // Cột đang tắt nằm ở ?hide= — giữ được sau khi đổi trang mà không cần bảng riêng.
-    $cotTat = array_filter(explode(',', (string) request()->query('hide', '')));
+    //
+    // VẮNG hẳn tham số = lần đầu vào màn, lấy bộ tắt sẵn; CÓ tham số (kể cả
+    // rỗng) = người dùng đã tự chọn thì nghe theo họ. Không phân biệt hai cái
+    // này thì bật hết cột xong nạp lại trang là ba cột kia tắt về như cũ.
+    $cotTat = request()->has('hide')
+        ? array_filter(explode(',', (string) request()->query('hide', '')))
+        : $C::COT_CRM_MAC_DINH_TAT;
     $columns = [];
     foreach (array_keys($C::COT_CRM) as $c) {
         $columns['show_'.$c] = in_array($c, $cotTat, true) ? 0 : 1;
+    }
+
+    // Sàn bề rộng của bảng = tổng bề rộng tối thiểu của CÁC CỘT ĐANG BẬT. Bộ
+    // mặc định cộng lại 1088px nên vừa khung từ khổ 1440 trở lên; hai khổ hẹp
+    // hơn do luật nén chữ lo nốt. Bật thêm cột quá chỗ thì bảng cuộn trong thẻ.
+    $RONG = $C::COT_CRM_RONG_TOI_THIEU;
+    $rongToiThieu = $RONG['_stt'] + $RONG['_action'];
+    foreach (array_keys($C::COT_CRM) as $c) {
+        $rongToiThieu += $columns['show_'.$c] ? ($RONG[$c] ?? 0) : 0;
     }
 
     $stt = ($meta['page'] - 1) * $meta['page_size'];
@@ -53,19 +68,43 @@
     <style>
         /* ---------- BẢNG ----------
            KHÔNG XUỐNG DÒNG: tiêu đề và mọi ô nằm một dòng (chủ tiệm chốt
-           28/09/2026). Bảng để `table-layout: auto` — cột tự rộng bằng thứ dài
-           nhất trong nó, không chia % cố định. Không đủ chỗ thì
-           `.table-responsive` cho cuộn ngang, còn hơn gãy chữ. */
-        table.table-don-hang.none_mobile { width: 100%; table-layout: auto; }
+           28/09/2026).
+
+           Bề rộng cột chia theo % SUY TỪ COT_CRM_RONG_TOI_THIEU (px chia tổng
+           1296px) — một nguồn duy nhất với sàn `--dh-rong`, nên ở đúng bề rộng
+           nhỏ nhất bảng nhận, mỗi cột vẫn đủ chỗ cho chữ dài nhất của nó.
+
+           `auto` đã thử và hỏng kiểu nhảy cóc: bảng tự co theo nội dung nên cỡ
+           chữ đổi một nhịp là bề rộng nhảy theo — vừa khung ở 1366 (đang nén
+           chữ) và 1920 (khung đủ rộng) nhưng thừa 84–137px ở 1440/1536/1600. */
+        table.table-don-hang.none_mobile {
+            width: 100%; table-layout: fixed; min-width: var(--dh-rong, 0);
+        }
+        table.table-don-hang.none_mobile th:first-child { width: 3.24%; }
+        table.table-don-hang.none_mobile th.show_customer_code { width: 8.72%; }
+        table.table-don-hang.none_mobile th.show_customer_name { width: 12.73%; }
+        table.table-don-hang.none_mobile th.show_code { width: 9.72%; }
+        table.table-don-hang.none_mobile th.show_time { width: 7.41%; }
+        table.table-don-hang.none_mobile th.show_discount { width: 6.64%; }
+        table.table-don-hang.none_mobile th.show_shipping_fee { width: 4.94%; }
+        table.table-don-hang.none_mobile th.show_cash { width: 6.64%; }
+        table.table-don-hang.none_mobile th.show_transfer { width: 8.26%; }
+        table.table-don-hang.none_mobile th.show_online { width: 4.48%; }
+        table.table-don-hang.none_mobile th.show_debt { width: 5.32%; }
+        table.table-don-hang.none_mobile th.show_total { width: 7.25%; }
+        table.table-don-hang.none_mobile th.show_status { width: 8.18%; }
+        table.table-don-hang.none_mobile th:last-child { width: 6.47%; }
         table.table-don-hang.none_mobile th,
         table.table-don-hang.none_mobile td {
             white-space: nowrap; vertical-align: middle; padding: 6px 8px; font-size: 13px;
         }
-        /* Màn dưới 1440 (khung ~1060px ở 1366): nén chữ và đệm ô để 14 cột vừa
-           khung mà không phải cuộn ngang. */
-        @media (max-width: 1439.98px) {
+        /* DƯỚI 1536px: nén chữ và đệm, đồng thời hạ luôn sàn bề rộng theo tỉ lệ
+           chữ co lại. Chỉ nén chữ mà quên hạ sàn thì bảng vẫn rộng như cũ và
+           cuộn ngang vô cớ ở khổ hẹp. */
+        @media (max-width: 1535.98px) {
             table.table-don-hang.none_mobile th,
             table.table-don-hang.none_mobile td { font-size: 11.5px; padding: 6px 3px; }
+            table.table-don-hang.none_mobile { min-width: calc(var(--dh-rong, 0) * 0.84); }
         }
 
         /* ---------- KHUNG LỌC: SIẾT KHOẢNG CÁCH ----------
@@ -171,11 +210,37 @@
         #modalOrderDetail .modal-dialog { max-width: 1100px; }
         #modalOrderDetail .modal-content { animation: none !important; }
         /* Bảng hàng: v2 để `.order-section th` nền #e9ecef, đệm .5rem. */
-        #modalOrderDetail table.bang-hang { width: 100%; }
-        #modalOrderDetail table.bang-hang th {
+        /* Bảng hàng trong hộp chi tiết VÀ hộp phiếu trả (cùng class `bang-hang`,
+           khác id hộp) — khai theo `.modal` để hai hộp dùng chung một luật, khỏi
+           sửa một chỗ quên chỗ kia.
+
+           Chia % để LUÔN vừa cột trái của hộp.
+           Để `auto` thì một tên hàng dài (biến thể nhiều thuộc tính, ví dụ
+           "Iphone 16 pro max · 24 tháng · …") đẩy bảng rộng 842px trong khung
+           716px — hai cột cuối "Số lượng" và "Thành tiền" bị cắt, người xem
+           không biết đơn bán mấy cái và bao nhiêu tiền.
+
+           Chỉ cột Hàng hoá được xuống dòng (chữ tự do, dài tuỳ biến thể); bốn
+           cột còn lại giữ một dòng vì đều là số. */
+        .modal table.bang-hang { width: 100%; table-layout: fixed; }
+        .modal table.bang-hang th:nth-child(1) { width: 7%; }
+        .modal table.bang-hang th:nth-child(2) { width: 45%; }
+        .modal table.bang-hang th:nth-child(3) { width: 17%; }
+        .modal table.bang-hang th:nth-child(4) { width: 12%; }
+        .modal table.bang-hang th:nth-child(5) { width: 19%; }
+        .modal table.bang-hang td:not(:nth-child(2)) { white-space: nowrap; }
+        /* Tên hàng + dòng SKU dưới nó phải ĐƯỢC xuống dòng, kể cả ngắt giữa từ:
+           chuỗi "HH000001-24-THANG-MOI-100%..." là một từ dài không có chỗ ngắt
+           tự nhiên, mà `nowrap` thì khai ở luật chung của hộp nên phải nói rõ
+           lại ở đây. Không cho ngắt là nó thò ra ngoài ô, cắt mất hai cột cuối. */
+        .modal table.bang-hang td:nth-child(2),
+        .modal table.bang-hang td:nth-child(2) .dh-nhan-nho {
+            white-space: normal; overflow-wrap: anywhere;
+        }
+        .modal table.bang-hang th {
             background: #e9ecef; padding: .5rem; white-space: nowrap; font-size: 12.5px;
         }
-        #modalOrderDetail table.bang-hang td { padding: .5rem; vertical-align: middle; }
+        .modal table.bang-hang td { padding: .5rem; vertical-align: middle; }
         /* Khối thanh toán bên phải — v2 xếp bằng d-flex justify-content-between,
            chỉ thêm nhịp thở giữa các dòng. */
         #modalOrderDetail .inftt > div { padding: 3px 4px; }
@@ -421,7 +486,13 @@
 
                 <div class="list scrollDiv">
                     <div class="table-responsive table-border-style">
-                        <table class="table-don-hang none_mobile">
+                        {{-- `--dh-rong` = sàn bề rộng theo đúng cột đang bật, tính ở
+                             khối PHP đầu tệp; luật nén chữ hạ sàn này theo tỉ lệ. --}}
+                        <table class="table-don-hang none_mobile" style="--dh-rong: {{ $rongToiThieu }}px">
+                            {{-- Hàng nhãn trong <thead>: để trần thì trình duyệt nhét nó
+                                 vào <tbody> chung với dữ liệu, mọi thứ đếm "dòng của
+                                 bảng" lại đếm luôn cả hàng nhãn. --}}
+                            <thead>
                             <tr>
                                 <th class="text-center">{{ __('message.stt') }}</th>
                                 <th class="text-left show_customer_code {{ $columns['show_customer_code'] ? '' : 'hide' }}">{{ __('message.customer-code') }}</th>
@@ -438,6 +509,8 @@
                                 <th class="text-left show_status {{ $columns['show_status'] ? '' : 'hide' }}">{{ __('message.status') }}</th>
                                 <th class="text-center not-export">{{ __('message.action') }}</th>
                             </tr>
+                            </thead>
+                            <tbody>
 
                             @forelse ($orders as $i => $o)
                                 @php
@@ -504,7 +577,10 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="14" class="text-center py-4">
+                                    {{-- colspan theo số cột ĐANG BẬT (STT + Hành động + cột
+                                         bật/tắt). Để cứng 14 thì tắt bớt cột là dòng này
+                                         thừa ô, kẻ bảng lệch hẳn sang phải. --}}
+                                    <td colspan="{{ 2 + count(array_filter($columns)) }}" class="text-center py-4">
                                         {{ $coLoc
                                             ? 'Không có đơn hàng nào khớp bộ lọc đang bật.'
                                             : 'Chưa có đơn hàng nào. Đơn sẽ hiện ở đây khi khách đặt trên website hoặc khi thu ngân bán tại quầy.' }}
@@ -547,6 +623,7 @@
                                     </tr>
                                 @endforeach
                             @endif
+                            </tbody>
                         </table>
 
                         {{-- BẢN THẺ CHO ĐIỆN THOẠI. Dưới 992px vỏ v2 giấu hẳn bảng, không có
@@ -1012,7 +1089,9 @@
             const tat = $('.show_col').filter(function (i, el) { return !el.checked; })
                 .map(function (i, el) { return $(el).data('col').replace('show_', ''); }).get();
             const q = new URLSearchParams(location.search);
-            tat.length ? q.set('hide', tat.join(',')) : q.delete('hide');
+            // LUÔN gửi `hide`, kể cả rỗng: vắng tham số nghĩa là "chưa chọn gì"
+            // và máy chủ lấy bộ tắt sẵn, nên bật hết cột xong lại tắt về cũ.
+            q.set('hide', tat.join(','));
             V2.napLai(location.pathname + '?' + q);
         }
         $(document).on('change', '.show_col', apDungCot);

@@ -70,6 +70,43 @@ class EInvoiceController extends Controller
     ];
 
     /**
+     * Cột TẮT SẴN lúc mở màn.
+     *
+     * Mười bốn cột không thể cùng nằm trong khung 1071px (khổ 1366) mà vẫn giữ
+     * mỗi ô một dòng — đã đo: cần ~1445px. Bày hết thì hoặc bảng tràn khung
+     * (cột Hành động rơi khỏi màn), hoặc phải cắt chữ / bẻ dòng, cả hai đều là
+     * thứ đang phải sửa.
+     *
+     * Bốn cột này tắt trước vì chúng trả lời câu hỏi PHỤ: khách là ai, email
+     * nào, thuế bao nhiêu, ai lập — đều xem được trong hộp chi tiết. Bảy cột để
+     * lại là bộ tối thiểu tra cứu một tờ hoá đơn (ký hiệu, số, mã CQT, mã đơn,
+     * trạng thái, ngày phát hành, tổng tiền).
+     *
+     * Vẫn bật lại được bất cứ lúc nào ở menu chọn cột, và lựa chọn ấy theo URL
+     * nên giữ nguyên khi đổi trang hay gửi link cho người khác.
+     */
+    public const COT_MAC_DINH_TAT = ['customer', 'email', 'vat', 'creator'];
+
+    /**
+     * Bề rộng TỐI THIỂU của từng cột (px) — đo bề ngang thật của nhãn và của
+     * dữ liệu dài nhất trong cột đó, cộng đệm.
+     *
+     * Dùng để tính `min-width` cho bảng theo ĐÚNG những cột đang bật: bật mười
+     * cột mặc định thì tổng ~935px, nằm gọn trong khung nên bảng chia phần trăm
+     * như thường. Người dùng bật thêm tới mức quá khung thì bảng rộng ra và
+     * cuộn ngang trong thẻ — thà kéo còn hơn bóp cho chữ chen lên nhau.
+     *
+     * Hai khoá cố định (`_tick`, `_stt`) không nằm trong menu chọn cột nên
+     * tách riêng khỏi COT_BANG.
+     */
+    public const COT_RONG_TOI_THIEU = [
+        '_tick' => 30, '_stt' => 40,
+        'symbol' => 85, 'invoice_no' => 85, 'tax_code' => 205, 'order_code' => 85,
+        'status' => 105, 'issued_at' => 115, 'customer' => 130, 'email' => 180,
+        'vat' => 85, 'total' => 100, 'creator' => 95, '_action' => 110,
+    ];
+
+    /**
      * Cỡ trang — ĐÚNG bộ của bản v2 (10/20/30/40/50), không phải 20/50/100.
      *
      * Mọi màn danh sách khác trong khu v2 đều bày đúng năm mức này; một màn

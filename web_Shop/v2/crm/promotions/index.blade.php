@@ -157,10 +157,14 @@
                 <div class="content_midd_title">
                     <h1 class="tieu-de-trang">Danh sách các chương trình khuyến mại</h1>
                     <div class="btn_top_content d-flex align-items-center gap-2">
-                        <a type="button" class="bt btn_green add-item">Tạo mới</a>
-                        <a class="btn btn-sm d-flex align-items-center btn-export" href="{{ route('admin.crm.promotions.export', request()->query()) }}">
-                            <i class="fa-solid fa-file-export my-auto mx-1"></i> Xuất Excel
-                        </a>
+                        {{-- Thiếu quyền thì GIẤU hẳn hai nút này: bày ra rồi bấm vào
+                             lại ăn thêm một lỗi 403 nữa là bắt người dùng tự dò. --}}
+                        @unless ($thieuQuyen ?? false)
+                            <a type="button" class="bt btn_green add-item">Tạo mới</a>
+                            <a class="btn btn-sm d-flex align-items-center btn-export" href="{{ route('admin.crm.promotions.export', request()->query()) }}">
+                                <i class="fa-solid fa-file-export my-auto mx-1"></i> Xuất Excel
+                            </a>
+                        @endunless
                         <div class="dropup">
                             <button type="button" class="btn active dropbtn setting-col">
                                 <i class="fa fa-sliders" aria-hidden="true"></i>
@@ -224,7 +228,16 @@
                                         </td>
                                     </tr>
                                 @empty
-                                    <tr><td colspan="9" class="text-center py-4">Không có chương trình khuyến mại nào.</td></tr>
+                                    {{-- Bị CHẶN khác với CHƯA CÓ: nói đúng cái đang xảy ra,
+                                         kèm chỗ đi xin quyền. --}}
+                                    <tr><td colspan="9" class="text-center py-4">
+                                        @if ($thieuQuyen ?? false)
+                                            Bạn chưa được giao quyền xem chương trình khuyến mại.
+                                            Nhờ chủ tiệm mở quyền ở màn Phân quyền.
+                                        @else
+                                            Không có chương trình khuyến mại nào.
+                                        @endif
+                                    </td></tr>
                                 @endforelse
                             </tbody>
                         </table>
@@ -615,7 +628,10 @@
         $('#km-bac').on('input', '.format-money', function () {
             const $tr = $(this).closest('tr');
             let v = chuSo(this.value).slice(0, 12);
-            if ($(this).hasClass('km-gia-tri') && $tr.find('.km-hinh-thuc').val() === '0' && Number(v) > 100) v = '100';
+            if ($(this).hasClass('km-gia-tri') && $tr.find('.km-hinh-thuc').val() === '0' && Number(v) > 100) {
+                v = '100';
+                toastr.warning('Mức giảm theo % tối đa là 100');
+            }
             this.value = v === '' ? '' : soPhay(v);
             if ($(this).hasClass('km-gia-tri') && $tr.find('.km-hinh-thuc').val() === '1') $tr.find('.km-toi-da').val(this.value);
         });
@@ -623,7 +639,10 @@
         $('#km-bac').on('change', '.km-hinh-thuc', function () {
             const $tr = $(this).closest('tr'), tien = this.value === '1';
             $tr.find('.km-toi-da').prop('disabled', tien).val(tien ? $tr.find('.km-gia-tri').val() : '');
-            if (!tien && Number(chuSo($tr.find('.km-gia-tri').val())) > 100) $tr.find('.km-gia-tri').val('100');
+            if (!tien && Number(chuSo($tr.find('.km-gia-tri').val())) > 100) {
+                $tr.find('.km-gia-tri').val('100');
+                toastr.warning('Mức giảm theo % tối đa là 100');
+            }
         });
         $('#km-bac').on('click', '.km-luu-dong', function () {
             const $tr = $(this).closest('tr'), l = loai();

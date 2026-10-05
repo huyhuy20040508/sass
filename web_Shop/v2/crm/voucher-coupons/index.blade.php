@@ -121,10 +121,13 @@
                 <div class="content_midd_title">
                     <h1 class="tieu-de-trang">Danh sách chương trình</h1>
                     <div class="btn_top_content d-flex align-items-center gap-2">
-                        <a type="button" class="bt btn_green add-voucher">Tạo</a>
-                        <a class="btn btn-sm d-flex align-items-center btn-export" href="{{ route('admin.voucher-coupon.export', request()->query()) }}">
-                            <i class="fa-solid fa-file-export my-auto mx-1"></i> Xuất Excel
-                        </a>
+                        {{-- Thiếu quyền thì giấu hai nút này. --}}
+                        @unless ($thieuQuyen ?? false)
+                            <a type="button" class="bt btn_green add-voucher">Tạo</a>
+                            <a class="btn btn-sm d-flex align-items-center btn-export" href="{{ route('admin.voucher-coupon.export', request()->query()) }}">
+                                <i class="fa-solid fa-file-export my-auto mx-1"></i> Xuất Excel
+                            </a>
+                        @endunless
                         <div class="dropup">
                             <button type="button" class="btn active dropbtn setting-col">
                                 <i class="fa fa-sliders" aria-hidden="true"></i>
@@ -202,7 +205,14 @@
                                     </tr>
                                 @empty
                                     <tr>
-                                        <td colspan="14" class="text-center py-4">Chưa có chương trình voucher/coupon nào. Bấm "Tạo" để lập chương trình đầu tiên.</td>
+                                        <td colspan="14" class="text-center py-4">
+                                            @if ($thieuQuyen ?? false)
+                                                Bạn chưa được giao quyền xem voucher / coupon.
+                                                Nhờ chủ tiệm mở quyền ở màn Phân quyền.
+                                            @else
+                                                Chưa có chương trình voucher/coupon nào. Bấm "Tạo" để lập chương trình đầu tiên.
+                                            @endif
+                                        </td>
                                     </tr>
                                 @endforelse
                             </tbody>

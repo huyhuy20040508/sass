@@ -197,6 +197,33 @@ func (h *OrderHandler) POSDiscountLimit(c *gin.Context) {
 	})
 }
 
+// POSXemTruocVoucher godoc
+//
+// @Summary		Xem trước mã giảm giá tại quầy
+// @Description	Gõ mã vào giỏ NÀY thì trừ bao nhiêu. Tính bằng ĐÚNG mạch của lượt chốt đơn (tra giá hiện tại → trừ khuyến mãi đang chạy → cộng tiền hàng → kiểm mã), nên số bày ở quầy và số ghi vào đơn không lệch nhau.
+// @Description	KHÔNG trừ kho, KHÔNG tiêu lượt dùng mã, KHÔNG sinh đơn. Mã hỏng thì trả đúng câu lỗi như lúc chốt.
+// @Tags			Admin - Orders
+// @Accept			json
+// @Produce		json
+// @Param			body	body		dto.POSVoucherRequest	true	"Giỏ hàng + mã"
+// @Success		200		{object}	response.Body{data=dto.POSVoucherResponse}
+// @Failure		422		{object}	response.Body
+// @Security		BearerAuth
+// @Router			/admin/orders/pos/voucher [post]
+func (h *OrderHandler) POSXemTruocVoucher(c *gin.Context) {
+	var req dto.POSVoucherRequest
+	if !bindJSON(c, &req) {
+		return
+	}
+	res, err := h.svc.POSXemTruocVoucher(c.Request.Context(), req)
+	if err != nil {
+		respondOrderError(c, err, "Không kiểm được mã giảm giá")
+
+		return
+	}
+	response.OK(c, res)
+}
+
 // @Summary		Sửa đơn hàng
 // @Description	Sửa thông tin người nhận, địa chỉ giao, phương thức thanh toán, phí ship, giảm giá, ghi chú và DANH SÁCH SẢN PHẨM của một đơn có sẵn. Không đổi khách hàng, mã đơn, trạng thái hay tình trạng thanh toán ở đây. Server tính lại tiền hàng & tổng tiền, đồng thời CHỈNH TỒN KHO theo đúng phần chênh: tăng số lượng thì trừ thêm, giảm hoặc bỏ sản phẩm thì hoàn lại kho (ghi bút toán `adjustment` vào sổ kho); thiếu hàng cho phần tăng thêm thì trả 400. Chỉ sửa được khi đơn còn ở giai đoạn đầu (chờ xác nhận / đã xác nhận / đang chuẩn bị).
 // @Tags			Admin - Orders

@@ -104,6 +104,13 @@ type OrderService interface {
 	// đơn sinh ra đã hoàn tất và đã thu tiền. role là vai trò của NGƯỜI ĐANG BÁN,
 	// dùng để chặn mức giảm giá vượt quyền.
 	POSCheckout(ctx context.Context, req *dto.POSCheckoutRequest, role string, actorID uint) (*dto.POSCheckoutResponse, error)
+	// POSXemTruocVoucher — quầy gõ mã giảm giá thì trừ bao nhiêu vào giỏ NÀY.
+	//
+	// Có đường riêng vì tới lúc bấm "Thanh toán" mới biết số giảm là quá muộn:
+	// màn hình đang bày một con số, thu tiền theo con số khác, và máy tính tiền
+	// thừa theo con số sai. Dùng ĐÚNG mạch tính của POSCheckout nên hai nơi
+	// không bao giờ ra hai kết quả.
+	POSXemTruocVoucher(ctx context.Context, req dto.POSVoucherRequest) (*dto.POSVoucherResponse, error)
 	// POSScan — quét mã vạch (hoặc SKU) ở quầy, trả về món hàng kèm giá và tồn.
 	POSScan(ctx context.Context, code string) (*dto.POSScanResponse, error)
 	// POSPhatHanhHoaDon — người bán bấm xuất hoá đơn điện tử cho một đơn QUẦY.
@@ -865,6 +872,50 @@ func (s *orderService) POSDiscountLimit(ctx context.Context, role string) float6
 // Đây là đường thay cho việc gõ tên hàng: nhanh hơn, và quan trọng hơn là không
 // chọn nhầm — hai chiếc áo cùng tên khác size trông giống hệt nhau trên danh
 // sách gợi ý, còn mã vạch thì chỉ trỏ vào đúng một biến thể.
+// POSXemTruocVoucher — xem trước số tiền mã giảm giá trừ được cho giỏ ở quầy.
+//
+// Đi lại ĐÚNG ba bước đầu của POSCheckout: tra giá hiện tại (QuoteVariants),
+// trừ khuyến mãi đang chạy vào giá dòng (applyPromotions), cộng tiền hàng
+// (buildOrderItems) rồi hỏi cùng một hàm kiểm mã. Chép lại ba bước này thay vì
+// gọi thẳng POSCheckout vì xem trước KHÔNG được trừ kho, không được tiêu lượt
+// dùng mã và không được sinh đơn.
+//
+// Đơn dùng ĐỒNG GIÁ không cộng thêm mã giảm giá (luật của v2, xem POSCheckout),
+// nên ở đây cũng không nhận `fixed_price_ids` — quầy đang chạy đồng giá thì ô
+// nhập mã không gửi lên.
+func (s *orderService) POSXemTruocVoucher(ctx context.Context, req dto.POSVoucherRequest) (*dto.POSVoucherResponse, error) {
+	if len(req.Items) == 0 {
+		return nil, domain.ErrEmptyCart
+	}
+
+	lines := make([]domain.CheckoutLine, 0, len(req.Items))
+	for _, it := range req.Items {
+		lines = append(lines, domain.CheckoutLine{VariantID: it.ProductVariantID, Quantity: it.Quantity})
+	}
+
+	found, err := s.orderRepo.QuoteVariants(ctx, lines)
+	if err != nil {
+		return nil, err
+	}
+	s.applyPromotions(ctx, found)
+
+	items, subtotal, err := buildOrderItems(found, lines)
+	if err != nil {
+		return nil, err
+	}
+
+	if s.vouchers == nil {
+		return nil, domain.ErrVoucherNotFound
+	}
+	v, giam, err := s.vouchers.CheckDon(ctx, req.Code, subtotal, tienTheoDanhMuc(items, found), 0, req.Phone)
+	if err != nil {
+		return nil, err
+	}
+
+	// Mã không có tên riêng — mô tả là thứ gần nhất để quầy đọc ra "mã này là gì".
+	return &dto.POSVoucherResponse{Code: v.Code, Name: v.Description, Giam: giam}, nil
+}
+
 func (s *orderService) POSScan(ctx context.Context, code string) (*dto.POSScanResponse, error) {
 	cv, err := s.orderRepo.ScanVariant(ctx, code)
 	if err != nil {

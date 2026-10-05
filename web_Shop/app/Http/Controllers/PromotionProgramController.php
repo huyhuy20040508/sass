@@ -17,6 +17,8 @@ use Illuminate\Support\Facades\Log;
  */
 class PromotionProgramController extends Controller
 {
+    use Concerns\BaoThieuQuyen;
+
     use \App\Http\Controllers\Concerns\DialogReply;
 
     /** Loại khuyến mại — 1 "Số lượng khách hàng" của v2 bỏ vì quầy shop không nhập số khách. */
@@ -46,6 +48,7 @@ class PromotionProgramController extends Controller
         $list = [];
         $meta = ['page' => $filters['page'], 'page_size' => $filters['page_size'], 'total' => 0, 'total_pages' => 1];
         $error = null;
+        $thieuQuyen = false;
 
         // Bỏ chọn hết trạng thái = không trạng thái nào → bảng rỗng (không hỏi API).
         if ($filters['statuses'] !== []) {
@@ -55,7 +58,10 @@ class PromotionProgramController extends Controller
                     $list = $res->json('data') ?? [];
                     $meta = array_merge($meta, $res->json('meta') ?? []);
                 } else {
-                    $error = $res->json('message') ?: 'Không tải được danh sách chương trình khuyến mại.';
+                    // 403 KHÁC "chưa có dữ liệu": bày bảng rỗng kèm câu "chưa có
+                    // chương trình nào" là nói sai chuyện đang xảy ra.
+                    ['thieuQuyen' => $thieuQuyen, 'error' => $error] =
+                        $this->doLoiDanhSach($res, 'chương trình khuyến mại');
                 }
             } catch (\Throwable $e) {
                 Log::error('Load promotion programs failed', ['msg' => $e->getMessage()]);
@@ -71,6 +77,8 @@ class PromotionProgramController extends Controller
             'danhMuc' => $this->mang(fn () => $this->api->categories(true)),
             'sanPham' => $this->sanPham(),
             'maCT' => $this->mang(fn () => $this->api->maChuongTrinhKM()),
+            // View dùng cờ này để đổi câu của dòng rỗng và giấu nút Tạo / Xuất.
+            'thieuQuyen' => $thieuQuyen,
         ]);
 
         return $error ? $view->with('error', $error) : $view;

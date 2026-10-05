@@ -48,6 +48,32 @@ class OrderController extends Controller
         'status' => 'Trạng thái',
     ];
 
+    /**
+     * Màn CRM → Danh sách đơn hàng: cột TẮT SẴN lúc mở màn.
+     *
+     * Mười bốn cột để một dòng (luật "không xuống dòng, không cắt chữ") cần
+     * 1296px, trong khi khung khổ 1600 chỉ có 1266px — bày hết là cột Hành
+     * động nằm ngoài màn ở mọi khổ dưới 1920.
+     *
+     * Ba cột này tắt trước vì chúng tách nhỏ một con số đã có sẵn: Tổng tiền
+     * vẫn hiện, còn giảm giá / phí giao / thẻ-ví chỉ cần khi soát riêng từng
+     * khoản, mà lúc ấy mở hộp chi tiết đơn là thấy đủ.
+     */
+    public const COT_CRM_MAC_DINH_TAT = ['discount', 'shipping_fee', 'online'];
+
+    /**
+     * Bề rộng tối thiểu từng cột (px) — ĐO THẬT ở cỡ chữ đầy đủ 13px.
+     *
+     * Dùng cho hai việc nên không được lệch nhau: tính sàn bề rộng của bảng
+     * theo đúng cột đang bật, và suy ra % của từng cột (px chia tổng 1296).
+     */
+    public const COT_CRM_RONG_TOI_THIEU = [
+        '_stt' => 42, 'customer_code' => 113, 'customer_name' => 165, 'code' => 126,
+        'time' => 96, 'discount' => 86, 'shipping_fee' => 64, 'cash' => 86,
+        'transfer' => 107, 'online' => 58, 'debt' => 69, 'total' => 94,
+        'status' => 106, '_action' => 84,
+    ];
+
     public const STATUSES = [
         'pending' => 'Chờ xác nhận', 'confirmed' => 'Đã xác nhận',
         'processing' => 'Đang chuẩn bị', 'shipping' => 'Đang giao',
@@ -131,7 +157,17 @@ class OrderController extends Controller
         'total_desc' => 'Giá trị cao nhất', 'total_asc' => 'Giá trị thấp nhất',
     ];
 
-    public const PAGE_SIZES = [20, 50, 100];
+    /**
+     * Cỡ trang — ĐÚNG bộ của bản v2 (10/20/30/40/50), không phải 20/50/100.
+     *
+     * Mọi màn danh sách khác trong khu v2 đều bày đúng năm mức này; một màn
+     * lệch bộ là người dùng chọn cỡ trang ở màn khác rồi sang đây thấy con số
+     * mình vừa chọn biến mất khỏi danh sách.
+     */
+    public const PAGE_SIZES = [10, 20, 30, 40, 50];
+
+    /** Mở màn lần đầu: giữ nguyên 20 dòng như cũ để không đổi thói quen. */
+    public const PAGE_SIZE_MAC_DINH = 20;
 
     public function __construct(protected ApiClient $api) {}
 
@@ -766,7 +802,7 @@ class OrderController extends Controller
     protected function filters(Request $request): array
     {
         $so = (string) $request->query('sort', array_key_first(self::SORTS));
-        $psize = (int) $request->query('page_size', 20);
+        $psize = (int) $request->query('page_size', self::PAGE_SIZE_MAC_DINH);
 
         // Tick ĐỦ bảy phương thức = không lọc, đúng như v2 (isAllPaymentTypesSelected).
         // Gửi nguyên bảy giá trị thì API vẫn lọc — và gạt mất phiếu trả hoàn "none"
@@ -793,7 +829,7 @@ class OrderController extends Controller
             'to_date' => $this->ngayLoc($request->query('to_date')),
             'sort' => isset(self::SORTS[$so]) ? $so : array_key_first(self::SORTS),
             'page' => max(1, (int) $request->query('page', 1)),
-            'page_size' => in_array($psize, self::PAGE_SIZES, true) ? $psize : 20,
+            'page_size' => in_array($psize, self::PAGE_SIZES, true) ? $psize : self::PAGE_SIZE_MAC_DINH,
         ];
     }
 
