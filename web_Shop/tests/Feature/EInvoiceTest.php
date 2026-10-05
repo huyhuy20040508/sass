@@ -49,19 +49,22 @@ class EInvoiceTest extends TestCase
     }
 
     /**
-     * BẢNG CO THEO NỘI DUNG, CUỘN NGANG TRONG THẺ — y bản gốc.
+     * BẢNG VỪA KHUNG THẺ, KHÔNG CẮT CHỮ, KHÔNG BẺ DÒNG NHÃN.
      *
-     * Bản gốc (ordertable v2, system/etax-invoice/list.blade.php) để bảng tự co
-     * và bọc trong khung `overflow-x: auto`. Hai lần đi chệch khỏi cách ấy đều
-     * đẻ ra lỗi mà trang vẫn 200, không bài kiểm nào khác bắt được:
+     * Mười bốn cột cần ~1450px mà khung khổ 1366 chỉ có 1071px. Ba cách chữa
+     * đều đã thử và đều sai một kiểu:
      *
-     *   - `min-width` ép bảng rộng hơn thẻ → cột Hành động rơi ra ngoài màn ở
-     *     khổ 1024–1280.
-     *   - `table-layout: fixed` + chia phần trăm → mười bốn cột `nowrap` thì cột
-     *     nào cũng hụt: hoặc cắt "…" (mã CQT dài gấp ba bề ngang cột, cắt xong
-     *     còn "M1-…" không đối chiếu được với ai) hoặc tràn đè sang ô bên cạnh.
+     *   - `min-width` cứng → bảng tràn khung, cột Hành động rơi khỏi màn.
+     *   - để bảng tự co + cuộn ngang → lúc nào cũng phải kéo mới thấy hai cột
+     *     cuối (28/09 đo được tràn 394px ở khổ 1366).
+     *   - cắt "…" → mất chữ, mà luật của dự án cấm cắt lẫn bẻ dòng.
+     *
+     * Cách đang dùng: bốn cột phụ TẮT SẴN, mười cột còn lại chia % đủ 100 nên
+     * vừa khít khung. Bật thêm cột thì bảng rộng ra theo `min-width` tính từ
+     * đúng những cột đang bật và cuộn trong thẻ — người dùng tự chọn nhiều hơn
+     * chỗ có thì kéo, còn hơn bóp cho chữ chen lên nhau.
      */
-    public function test_bang_co_theo_noi_dung_va_cuon_trong_the(): void
+    public function test_bang_vua_khung_va_khong_cat_chu(): void
     {
         Http::fake([
             '*/admin/etax/hoa-don*' => Http::response($this->soMau()),
@@ -75,21 +78,117 @@ class EInvoiceTest extends TestCase
         $this->assertNotFalse($dau, 'không thấy khối CSS của bảng');
         $khoi = substr($html, $dau, strpos($html, '.hd-phu {') - $dau);
 
-        $this->assertStringNotContainsString('table-layout: fixed', $khoi);
-        $this->assertStringNotContainsString('min-width', $khoi);
+        $this->assertStringContainsString('table-layout: fixed', $khoi);
+        // Cấm cắt chữ dưới mọi hình thức.
         $this->assertStringNotContainsString('text-overflow', $khoi);
-        $this->assertDoesNotMatchRegularExpression('/th[^{]*\{ width: [0-9.]+%/', $khoi,
-            'chia phần trăm là quay lại cách ép bảng vừa khung');
+        $this->assertStringNotContainsString('line-clamp', $khoi);
+        // Nhãn cột một dòng; ô dữ liệu thà xuống dòng chứ không bị nuốt mất chữ.
+        $this->assertMatchesRegularExpression('/none_mobile th \{[^}]*white-space: nowrap/s', $khoi);
+        $this->assertMatchesRegularExpression('/none_mobile td \{[^}]*white-space: normal/s', $khoi);
 
-        // Nhãn cột giữ một dòng: bảng cuộn ngang được thì không có cớ bẻ chữ.
-        $this->assertStringContainsString('th { white-space: nowrap; }', $khoi);
+        // Phần trăm phải cộng đủ 100 — thiếu thì bảng không lấp hết khung, thừa
+        // thì tràn ra ngoài.
+        preg_match_all('/none_mobile th[^{]*\{ width: ([0-9.]+)%/', $khoi, $m);
+        $this->assertCount(14, $m[1], 'phải khai đủ 14 cột');
+        $this->assertEqualsWithDelta(100.0, array_sum(array_map('floatval', $m[1])), 0.01);
+    }
 
-        // Khung bọc phải cuộn được, nếu không bảng rộng hơn thẻ sẽ đẩy cả trang.
-        $this->assertMatchesRegularExpression(
-            '/<div class="[^"]*table-responsive[^"]*">\s*<table class="table-hoa-don none_mobile">/',
-            $html,
-            'bảng phải nằm trong khung cuộn ngang'
+    /**
+     * Bốn cột phụ tắt sẵn, và `min-width` tính theo ĐÚNG cột đang bật.
+     *
+     * Tính theo số cột đang bật mới đúng: để một con số cứng thì lúc tắt bớt
+     * cột bảng vẫn rộng như cũ và lại cuộn ngang vô cớ.
+     */
+    public function test_cot_phu_tat_san_va_min_width_theo_cot_dang_bat(): void
+    {
+        Http::fake([
+            '*/admin/etax/hoa-don*' => Http::response($this->soMau()),
+            '*' => Http::response(['data' => []]),
+        ]);
+
+        $C = \App\Http\Controllers\EInvoiceController::class;
+        $url = route('admin.hoa-don-dien-tu.index');
+
+        // Lần đầu vào màn: bốn cột phụ mang lớp `hide`.
+        $html = $this->withSession($this->phienQuanLy())->get($url)->assertOk()->getContent();
+        foreach ($C::COT_MAC_DINH_TAT as $cot) {
+            $this->assertMatchesRegularExpression('/<th class="[^"]*show_'.$cot.' hide"/', $html, "cột $cot phải tắt sẵn");
+        }
+        $this->assertDoesNotMatchRegularExpression('/<th class="[^"]*show_tax_code\s+hide"/', $html, 'Mã CQT phải bật sẵn');
+
+        $rongMacDinh = array_sum($C::COT_RONG_TOI_THIEU)
+            - array_sum(array_map(fn ($c) => $C::COT_RONG_TOI_THIEU[$c], $C::COT_MAC_DINH_TAT));
+        $this->assertStringContainsString('min-width: '.$rongMacDinh.'px', $html);
+        // Vừa khung thẻ khổ 1366 (1071px) — đây là điều kiện để không cuộn ngang.
+        $this->assertLessThan(1071, $rongMacDinh);
+
+        // `hide=` RỖNG = người dùng bật hết: không được quay về bộ tắt sẵn.
+        $html = $this->withSession($this->phienQuanLy())->get($url.'?hide=')->assertOk()->getContent();
+        $this->assertStringNotContainsString(' hide"', $html, 'bật hết cột mà vẫn còn cột bị tắt');
+        $this->assertStringContainsString('min-width: '.array_sum($C::COT_RONG_TOI_THIEU).'px', $html);
+
+        // Tắt tay một cột: nghe theo người dùng, và min-width hụt đúng cột đó.
+        $html = $this->withSession($this->phienQuanLy())->get($url.'?hide=total')->assertOk()->getContent();
+        $this->assertMatchesRegularExpression('/<th class="[^"]*show_total hide"/', $html);
+        $this->assertMatchesRegularExpression('/<th class="[^"]*show_customer\s*"/', $html, 'cột khác phải bật lại');
+        $this->assertStringContainsString(
+            'min-width: '.(array_sum($C::COT_RONG_TOI_THIEU) - $C::COT_RONG_TOI_THIEU['total']).'px',
+            $html
         );
+    }
+
+    /**
+     * Dòng "không có hoá đơn" trải đúng SỐ CỘT ĐANG BẬT.
+     *
+     * Để cứng colspan=14 thì tắt bớt cột là dòng này thừa ô, kẻ bảng lệch hẳn
+     * sang phải — lỗi chỉ lộ ra khi vừa tắt cột vừa lọc không ra kết quả.
+     */
+    public function test_dong_rong_trai_dung_so_cot_dang_bat(): void
+    {
+        Http::fake([
+            '*/admin/etax/hoa-don*' => Http::response(['data' => [], 'meta' => ['page' => 1, 'page_size' => 10, 'total' => 0, 'total_pages' => 1, 'dem' => []]]),
+            '*' => Http::response(['data' => []]),
+        ]);
+
+        $url = route('admin.hoa-don-dien-tu.index');
+        $C = \App\Http\Controllers\EInvoiceController::class;
+        $soCotBang = count($C::COT_BANG);
+
+        // Mặc định: 3 cột cố định + (tổng cột bật/tắt − số cột tắt sẵn).
+        $html = $this->withSession($this->phienQuanLy())->get($url)->assertOk()->getContent();
+        $this->assertStringContainsString('colspan="'.(3 + $soCotBang - count($C::COT_MAC_DINH_TAT)).'"', $html);
+
+        // Bật hết.
+        $html = $this->withSession($this->phienQuanLy())->get($url.'?hide=')->assertOk()->getContent();
+        $this->assertStringContainsString('colspan="'.(3 + $soCotBang).'"', $html);
+
+        // Tắt thêm một cột nữa.
+        $html = $this->withSession($this->phienQuanLy())->get($url.'?hide=total,email')->assertOk()->getContent();
+        $this->assertStringContainsString('colspan="'.(3 + $soCotBang - 2).'"', $html);
+    }
+
+    /**
+     * Bảng hàng TRONG hộp chi tiết cũng phải vừa cột chứa nó.
+     *
+     * Hộp thoại hay bị bỏ quên vì phải mở ra mới thấy: để `auto` thì một tên
+     * hàng dài đẩy bảng rộng hơn cột bên trái của hộp và người xem phải kéo
+     * ngang ngay bên trong hộp thoại.
+     */
+    public function test_bang_hang_trong_hop_chi_tiet_vua_cot(): void
+    {
+        Http::fake([
+            '*/admin/etax/hoa-don*' => Http::response($this->soMau()),
+            '*' => Http::response(['data' => []]),
+        ]);
+
+        $html = $this->withSession($this->phienQuanLy())
+            ->get(route('admin.hoa-don-dien-tu.index'))->assertOk()->getContent();
+
+        $this->assertStringContainsString('#modalHoaDon table.bang-hang { width: 100%; table-layout: fixed; }', $html);
+
+        preg_match_all('/#modalHoaDon table\.bang-hang th:nth-child\(\d\) \{ width: ([0-9.]+)%/', $html, $m);
+        $this->assertCount(5, $m[1], 'bảng hàng phải khai đủ 5 cột');
+        $this->assertEqualsWithDelta(100.0, array_sum(array_map('floatval', $m[1])), 0.01);
     }
 
     /**

@@ -139,7 +139,10 @@
                 <div class="content_midd_title">
                     <h1 class="tieu-de-trang">Danh sách các chương trình khuyến mại đồng giá</h1>
                     <div class="btn_top_content">
-                        <a type="button" class="bt btn_green add-item">Tạo mới</a>
+                        {{-- Thiếu quyền thì giấu nút: bày ra rồi bấm lại ăn thêm 403. --}}
+                        @unless ($thieuQuyen ?? false)
+                            <a type="button" class="bt btn_green add-item">Tạo mới</a>
+                        @endunless
                     </div>
                 </div>
 
@@ -153,7 +156,11 @@
                                     <th class="text-left">Tên chương trình</th>
                                     <th class="text-center">{{ __('message.status') }}</th>
                                     <th class="text-left">Duyệt</th>
-                                    <th class="text-center">{{ __('message.status') }}</th>
+                                    {{-- Cột công tắc: bản v2 gốc đặt tên là "Trạng thái" y hệt cột
+                                         chữ bên trái, nên bảng có HAI cột cùng tên cho cùng một
+                                         trường — nhìn không biết cột nào là cột nào. Đổi tên theo
+                                         việc nó làm: cột kia NÓI trạng thái, cột này BẬT/TẮT. --}}
+                                    <th class="text-center">Bật/Tắt</th>
                                     <th class="text-right">{{ __('message.from_date') }}</th>
                                     <th class="text-right">{{ __('message.to_date') }}</th>
                                     <th class="text-left">{{ __('message.branch') }}</th>
@@ -195,7 +202,12 @@
                                 @empty
                                     <tr>
                                         <td colspan="10" class="text-center py-4">
-                                            {{ $coLoc ? 'Không có chương trình nào khớp bộ lọc đang bật.' : 'Chưa có chương trình đồng giá nào. Bấm "Tạo mới" để lập chương trình đầu tiên.' }}
+                                            @if ($thieuQuyen ?? false)
+                                                Bạn chưa được giao quyền xem khuyến mại đồng giá.
+                                                Nhờ chủ tiệm mở quyền ở màn Phân quyền.
+                                            @else
+                                                {{ $coLoc ? 'Không có chương trình nào khớp bộ lọc đang bật.' : 'Chưa có chương trình đồng giá nào. Bấm "Tạo mới" để lập chương trình đầu tiên.' }}
+                                            @endif
                                         </td>
                                     </tr>
                                 @endforelse

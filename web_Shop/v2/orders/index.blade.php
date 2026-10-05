@@ -229,11 +229,37 @@
         #modalOrderDetail .modal-dialog { max-width: 1100px; }
         #modalOrderDetail .modal-content { animation: none !important; }
         /* Bảng hàng: v2 để `.order-section th` nền #e9ecef, đệm .5rem. */
-        #modalOrderDetail table.bang-hang { width: 100%; }
-        #modalOrderDetail table.bang-hang th {
+        /* Bảng hàng trong hộp chi tiết VÀ hộp phiếu trả (cùng class `bang-hang`,
+           khác id hộp) — khai theo `.modal` để hai hộp dùng chung một luật, khỏi
+           sửa một chỗ quên chỗ kia.
+
+           Chia % để LUÔN vừa cột trái của hộp.
+           Để `auto` thì một tên hàng dài (biến thể nhiều thuộc tính, ví dụ
+           "Iphone 16 pro max · 24 tháng · …") đẩy bảng rộng 842px trong khung
+           716px — hai cột cuối "Số lượng" và "Thành tiền" bị cắt, người xem
+           không biết đơn bán mấy cái và bao nhiêu tiền.
+
+           Chỉ cột Hàng hoá được xuống dòng (chữ tự do, dài tuỳ biến thể); bốn
+           cột còn lại giữ một dòng vì đều là số. */
+        .modal table.bang-hang { width: 100%; table-layout: fixed; }
+        .modal table.bang-hang th:nth-child(1) { width: 7%; }
+        .modal table.bang-hang th:nth-child(2) { width: 45%; }
+        .modal table.bang-hang th:nth-child(3) { width: 17%; }
+        .modal table.bang-hang th:nth-child(4) { width: 12%; }
+        .modal table.bang-hang th:nth-child(5) { width: 19%; }
+        .modal table.bang-hang td:not(:nth-child(2)) { white-space: nowrap; }
+        /* Tên hàng + dòng SKU dưới nó phải ĐƯỢC xuống dòng, kể cả ngắt giữa từ:
+           chuỗi "HH000001-24-THANG-MOI-100%..." là một từ dài không có chỗ ngắt
+           tự nhiên, mà `nowrap` thì khai ở luật chung của hộp nên phải nói rõ
+           lại ở đây. Không cho ngắt là nó thò ra ngoài ô, cắt mất hai cột cuối. */
+        .modal table.bang-hang td:nth-child(2),
+        .modal table.bang-hang td:nth-child(2) .dh-nhan-nho {
+            white-space: normal; overflow-wrap: anywhere;
+        }
+        .modal table.bang-hang th {
             background: #e9ecef; padding: .5rem; white-space: nowrap; font-size: 12.5px;
         }
-        #modalOrderDetail table.bang-hang td { padding: .5rem; vertical-align: middle; }
+        .modal table.bang-hang td { padding: .5rem; vertical-align: middle; }
         /* Khối thanh toán bên phải — v2 xếp bằng d-flex justify-content-between,
            chỉ thêm nhịp thở giữa các dòng. */
         #modalOrderDetail .inftt > div { padding: 3px 4px; }

@@ -32,6 +32,37 @@ class CrmFixedPriceTest extends TestCase
         ];
     }
 
+    /**
+     * Hai cột cùng tên "Trạng thái" thì không ai biết cột nào là cột nào.
+     *
+     * Bản v2 gốc đặt cả cột CHỮ ("Hoạt động / Ngừng hoạt động") lẫn cột CÔNG TẮC
+     * của cùng trường `status` là `message.status`. Giữ cả hai cột vì mỗi cột
+     * một việc — cột kia NÓI trạng thái, cột này BẬT/TẮT — nhưng tên phải khác
+     * nhau.
+     */
+    public function test_cot_cong_tac_khong_trung_ten_voi_cot_trang_thai(): void
+    {
+        Http::fake([
+            '*/admin/dong-gia/ma' => Http::response(['data' => ['DGTET']]),
+            '*/admin/dong-gia*' => Http::response(['data' => [$this->mau()], 'meta' => ['page' => 1, 'page_size' => 10, 'total' => 1, 'total_pages' => 1]]),
+            '*/admin/chi-nhanh*' => Http::response(['data' => [['id' => 2, 'code' => 'Q7', 'name' => 'Kho Quận 7']]]),
+            '*' => Http::response(['data' => []]),
+        ]);
+
+        $html = $this->withSession($this->phien())
+            ->get(route('admin.crm.promotions.dongGia'))->assertOk()->getContent();
+
+        $dau = strpos($html, '<thead>');
+        $hang = substr($html, $dau, strpos($html, '</thead>', $dau) - $dau);
+
+        preg_match_all('/<th[^>]*>\s*([^<]+?)\s*<\/th>/', $hang, $m);
+        $nhan = array_map('trim', $m[1]);
+
+        $this->assertSame(array_unique($nhan), $nhan, 'hàng tiêu đề có hai cột trùng tên: '.implode(' | ', $nhan));
+        $this->assertContains('Bật/Tắt', $nhan);
+        $this->assertContains(__('message.status'), $nhan);
+    }
+
     public function test_tab_dong_gia_bay_bang_nhu_v2(): void
     {
         Http::fake([

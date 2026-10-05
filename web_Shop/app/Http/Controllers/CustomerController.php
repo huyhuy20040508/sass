@@ -58,6 +58,34 @@ class CustomerController extends Controller
     // Năm mức của v2, cũng là mức mọi màn v2 khác bên mình đang dùng.
     public const PAGE_SIZES = [10, 20, 30, 40, 50];
 
+    /**
+     * Màn CRM → Khách hàng: cột TẮT SẴN lúc mở màn.
+     *
+     * Mười ba cột để một dòng (luật "không xuống dòng, không cắt chữ") cần
+     * 1521px, trong khi khung khổ 1280 chỉ có 999px và khổ 1536 có 1212px —
+     * tức là bày hết thì cột Hành động nằm ngoài màn ở mọi khổ dưới 1920.
+     *
+     * Ba cột tiền này tắt trước vì chúng là số liệu TRA CỨU SÂU, xem trong hộp
+     * chi tiết của khách là đủ; còn "Tổng mua hàng" giữ lại vì đó là con số
+     * chủ tiệm nhìn để xếp hạng khách. Bật lại bất cứ lúc nào ở menu chọn cột.
+     */
+    public const COT_CRM_MAC_DINH_TAT = ['total_paid', 'still_in_debt', 'last_payment'];
+
+    /**
+     * Bề rộng tối thiểu từng cột (px) — ĐO THẬT ở cỡ chữ đầy đủ 13,5px.
+     *
+     * Dùng cho hai việc, nên không được lệch nhau: tính `min-width` của bảng
+     * theo đúng cột đang bật, và suy ra % của từng cột (px chia tổng). Nhờ vậy
+     * ở bề rộng nhỏ nhất mà bảng nhận, mỗi cột vẫn đủ chỗ cho chữ dài nhất —
+     * không ô nào phải xuống dòng hay bị cắt.
+     */
+    public const COT_CRM_RONG_TOI_THIEU = [
+        '_tick' => 36, '_stt' => 50,
+        'code' => 128, 'name' => 132, 'phone' => 113, 'address' => 192, 'type' => 137,
+        'orders_count' => 82, 'total_purchases' => 142, 'total_paid' => 170,
+        'still_in_debt' => 83, 'last_payment' => 141, 'action' => 115,
+    ];
+
     public function __construct(protected ApiClient $api) {}
 
     /**

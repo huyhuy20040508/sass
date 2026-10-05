@@ -723,6 +723,7 @@ Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:thu_ngan'])->prefix('c
     Route::post('/sales/fixed-price', [PosController::class, 'dongGia'])->name('ban-hang.dongGia');
     // Nút "Khuyến mãi": chương trình khuyến mại giỏ đủ điều kiện + số giảm (JSON).
     Route::post('/sales/promotion', [PosController::class, 'khuyenMai'])->name('ban-hang.khuyenMai');
+    Route::post('/sales/voucher', [PosController::class, 'voucher'])->name('ban-hang.voucher');
     // Khách tại quầy: tra khách quen và thêm khách mới. KHÔNG dùng lại
     // admin.orders.searchCustomers: đường đó hỏi khu Khách hàng của chủ tiệm, người
     // chỉ có cửa Thu ngân gõ tìm ở đó thì không ra ai.

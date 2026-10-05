@@ -199,6 +199,33 @@ class PosController extends Controller
     }
 
     /**
+     * Ô "Mã giảm giá": gõ mã rồi Áp dụng thì trừ bao nhiêu vào giỏ NÀY.
+     *
+     * KHÔNG phải chỉ để hiển thị cho đẹp như hai nút kia: trước đây quầy nhận mã
+     * mà không hỏi gì, màn hình vẫn bày tổng chưa trừ, tới lúc chốt API mới trừ
+     * — đơn ghi một số, khách trả một số, và máy tính tiền thừa theo số sai.
+     */
+    public function voucher(Request $request)
+    {
+        $data = $request->validate([
+            'items' => 'required|array|min:1|max:50',
+            'items.*.product_variant_id' => 'required|integer|min:1',
+            'items.*.quantity' => 'required|integer|min:1|max:99',
+            'code' => 'required|string|max:50',
+            'phone' => 'nullable|string|max:20',
+        ]);
+
+        return $this->jsonTuApi(fn () => $this->api->posVoucher([
+            'items' => array_map(fn ($it) => [
+                'product_variant_id' => (int) $it['product_variant_id'],
+                'quantity' => (int) $it['quantity'],
+            ], $data['items']),
+            'code' => strtoupper(trim($data['code'])),
+            'phone' => trim((string) ($data['phone'] ?? '')),
+        ]), 'Không kiểm được mã giảm giá.');
+    }
+
+    /**
      * Nút "Đồng giá": chương trình giỏ này đủ điều kiện, và nếu chọn thì giá từng
      * món + hàng tặng ra sao. Chỉ để HIỂN THỊ — lúc chốt API tính lại từ đầu.
      */

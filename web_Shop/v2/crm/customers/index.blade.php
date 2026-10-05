@@ -40,7 +40,29 @@
            sai). Vì vậy bảng để `table-layout: auto`: mỗi cột tự rộng bằng thứ dài
            nhất trong nó, không chia % cố định nữa. Màn hẹp không đủ chỗ thì khung
            `.table-responsive` cho cuộn ngang — cuộn còn hơn gãy chữ. */
-        table.table-customer.none_mobile { width: 100%; table-layout: auto; }
+        /* Bề rộng cột chia theo % SUY TỪ COT_CRM_RONG_TOI_THIEU (px chia tổng
+           1521px), nên ở đúng bề rộng nhỏ nhất bảng nhận, mỗi cột vẫn đủ chỗ
+           cho chữ dài nhất của nó — một nguồn duy nhất, không lệch hai chỗ.
+
+           `auto` đã thử và hỏng kiểu nhảy cóc: bảng tự co theo nội dung nên cỡ
+           chữ đổi một nhịp là bề rộng nhảy theo — vừa khung ở 1366 (nén chữ)
+           và 1920 (khung đủ rộng) nhưng thừa 182–214px ở 1440/1536/1600. */
+        table.table-customer.none_mobile {
+            width: 100%; table-layout: fixed; min-width: var(--kh-rong, 0);
+        }
+        table.table-customer.none_mobile th:nth-child(1) { width: 2.37%; }
+        table.table-customer.none_mobile th:nth-child(2) { width: 3.29%; }
+        table.table-customer.none_mobile th.show_code { width: 8.42%; }
+        table.table-customer.none_mobile th.show_name { width: 8.68%; }
+        table.table-customer.none_mobile th.show_phone { width: 7.43%; }
+        table.table-customer.none_mobile th.show_address { width: 12.62%; }
+        table.table-customer.none_mobile th.show_type { width: 9.01%; }
+        table.table-customer.none_mobile th.show_orders_count { width: 5.39%; }
+        table.table-customer.none_mobile th.show_total_purchases { width: 9.34%; }
+        table.table-customer.none_mobile th.show_total_paid { width: 11.18%; }
+        table.table-customer.none_mobile th.show_still_in_debt { width: 5.46%; }
+        table.table-customer.none_mobile th.show_last_payment { width: 9.27%; }
+        table.table-customer.none_mobile th.show_action { width: 7.54%; }
         table.table-customer.none_mobile th,
         table.table-customer.none_mobile td { white-space: nowrap; vertical-align: middle; }
         table.table-customer.none_mobile th {
@@ -54,11 +76,15 @@
            khác — kể cả tên khách — nằm một dòng. */
         table.table-crm.none_mobile td.show_address { white-space: normal; min-width: 180px; max-width: 280px; }
         table.table-crm .kh-nhan { font-size: .7rem; font-weight: 500; }
-        /* Màn dưới 1440 (khung bảng ~1060px ở 1366): nén chữ 12px và đệm ô thay vì
-           để chữ xuống dòng hay đẩy cột Hành động ra ngoài màn. */
-        @media (max-width: 1439.98px) {
+        /* DƯỚI 1536px: nén chữ và đệm, đồng thời hạ luôn sàn bề rộng của bảng
+           theo đúng tỉ lệ chữ co lại (~0,7). Khung khổ 1440 chỉ rộng 1132px
+           trong khi bộ cột mặc định ở cỡ chữ đầy đủ cần 1127px — sát quá, mà
+           khổ 1366 (1071px) thì không đủ. Chỉ nén chữ mà quên hạ sàn thì bảng
+           vẫn rộng như cũ và cuộn ngang vô cớ. */
+        @media (max-width: 1535.98px) {
             table.table-customer.none_mobile th,
             table.table-customer.none_mobile td { font-size: 12px; padding: 6px 3px; }
+            table.table-customer.none_mobile { min-width: calc(var(--kh-rong, 0) * 0.8); }
             table.table-crm.none_mobile td.show_address { min-width: 110px; max-width: 160px; }
         }
 
@@ -159,10 +185,18 @@
 
     // v2 để trạng thái cột trong bảng user_selected_columns; ở đây lấy từ query
     // để giữ được sau khi tải lại mà không cần bảng riêng.
-    $cotTat = array_filter(explode(',', (string) request()->query('hide', '')));
+    // VẮNG hẳn tham số = lần đầu vào màn, lấy bộ tắt sẵn; CÓ tham số (kể cả
+    // rỗng) = người dùng đã tự chọn thì nghe theo họ. Không phân biệt hai cái
+    // này thì bật hết cột xong nạp lại trang là ba cột tiền tắt về như cũ.
+    $cotTat = request()->has('hide')
+        ? array_filter(explode(',', (string) request()->query('hide', '')))
+        : \App\Http\Controllers\CustomerController::COT_CRM_MAC_DINH_TAT;
     $columns = [];
     // Chỉ liệt kê cột BẢNG THẬT SỰ CÓ. v2 để sót vài ô tick không còn cột nào
     // (nhóm, email, ghi chú) — chép cả thì tick xong không thấy gì đổi.
+    // `customer_group` KHÔNG phải một cột — nó là nhãn nhóm nằm dưới tên khách,
+    // nhưng vẫn bật/tắt chung ở menu chọn cột, nên phải có mặt trong danh sách
+    // này. Nó không góp bề rộng nào (xem $rongToiThieu bên dưới).
     $danhSachCot = ['code', 'name', 'type', 'orders_count', 'customer_group', 'total_purchases',
         'total_paid', 'still_in_debt', 'last_payment', 'phone', 'address', 'action'];
     // v2 gộp Địa chỉ + SĐT vào một cột hai dòng; tách hai cột để tiêu đề và ô
@@ -170,6 +204,16 @@
     foreach ($danhSachCot as $c) {
         $columns['show_'.$c] = in_array($c, $cotTat, true) ? 0 : 1;
     }
+    // Bề rộng tối thiểu của bảng = tổng bề rộng tối thiểu của CÁC CỘT ĐANG BẬT.
+    // Bộ mặc định cộng lại 1127px nên vừa khung từ khổ 1440 trở lên, và nén chữ
+    // lo nốt hai khổ hẹp hơn. Bật thêm cột thì bảng rộng ra và cuộn trong thẻ —
+    // người dùng tự chọn nhiều hơn chỗ có thì kéo, còn hơn bóp cho chữ chen nhau.
+    $RONG = \App\Http\Controllers\CustomerController::COT_CRM_RONG_TOI_THIEU;
+    $rongToiThieu = $RONG['_tick'] + $RONG['_stt'];
+    foreach ($danhSachCot as $c) {
+        $rongToiThieu += ($columns['show_'.$c] ?? 0) ? ($RONG[$c] ?? 0) : 0;
+    }
+
     $convertMessage = [
         'show_code' => 'customer-code', 'show_name' => 'customer-name',
         'show_type' => 'customer_type', 'show_customer_group' => 'customer_group',
@@ -822,7 +866,9 @@
             const tat = $('.show_col').filter((i, el) => !el.checked)
                 .map((i, el) => $(el).data('col').replace('show_', '')).get();
             const q = new URLSearchParams(location.search);
-            tat.length ? q.set('hide', tat.join(',')) : q.delete('hide');
+            // LUÔN gửi `hide`, kể cả rỗng: vắng tham số nghĩa là "chưa chọn gì"
+            // và máy chủ lấy bộ tắt sẵn, nên bật hết cột xong lại tắt về cũ.
+            q.set('hide', tat.join(','));
             V2.napLai(location.pathname + '?' + q);
         }
         $(document).on('change', '.show_col', apDungCot);
@@ -865,7 +911,9 @@
 
             const cu = new URLSearchParams(location.search);
             ['hide', 'page_size', 'sort_by', 'sort_dir'].forEach((ten) => {
-                if (cu.get(ten)) q.set(ten, cu.get(ten));
+                // `hide=` rỗng vẫn phải mang theo — nó mang nghĩa "bật hết cột",
+                // khác hẳn với không có tham số (lấy bộ tắt sẵn).
+                if (cu.has(ten) && (cu.get(ten) || ten === 'hide')) q.set(ten, cu.get(ten));
             });
 
             // Cố ý không mang `page` theo: lọc lại thì trang 5 của bộ lọc cũ vô nghĩa.

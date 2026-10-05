@@ -736,6 +736,17 @@ class ApiClient
     }
 
     /** Quầy: chương trình khuyến mại giỏ đủ điều kiện + số giảm khi chọn. */
+    /**
+     * Quầy xem trước mã giảm giá: gõ mã vào giỏ này thì trừ bao nhiêu.
+     *
+     * Cùng mạch tính với lượt chốt đơn nên con số bày ra ở quầy đúng bằng con số
+     * ghi vào đơn — trước đây quầy không hỏi gì nên màn hình và đơn lệch nhau.
+     */
+    public function posVoucher(array $data): Response
+    {
+        return $this->post('/admin/orders/pos/voucher', $data);
+    }
+
     public function posKhuyenMai(array $data): Response
     {
         return $this->post('/admin/orders/pos/khuyen-mai', $data);

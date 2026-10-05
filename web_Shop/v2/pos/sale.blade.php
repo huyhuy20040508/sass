@@ -54,6 +54,7 @@
          data-scan-url="{{ route('thu-ngan.ban-hang.scan') }}"
          data-dong-gia-url="{{ route('thu-ngan.ban-hang.dongGia') }}"
          data-khuyen-mai-url="{{ route('thu-ngan.ban-hang.khuyenMai') }}"
+         data-voucher-url="{{ route('thu-ngan.ban-hang.voucher') }}"
          data-store-url="{{ route('thu-ngan.ban-hang.store') }}"
          data-receipt-url="{{ route('thu-ngan.ban-hang.phieu', ['id' => 0]) }}"
          data-discount-limit="{{ $hanMucGiam }}"
@@ -809,7 +810,7 @@
     const duKhoi = (h) => { const m = khoiMoi(); Object.keys(m).forEach((k) => { h[k] = Object.assign(m[k], h[k] || {}); }); return h; };
     const hdMoi = () => duKhoi({
         id: 'hd' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-        so: soTrong(), luc: Date.now(), gio: [], ten: '', sdt: '', cusId: '', voucher: '', ghiChu: '', hinhThuc: 'cash', dua: '',
+        so: soTrong(), luc: Date.now(), gio: [], ten: '', sdt: '', cusId: '', voucher: '', voucherGiam: 0, ghiChu: '', hinhThuc: 'cash', dua: '',
     });
     const nhanHd = (h) => `Hoá đơn ${h.so}`;
     const cur = () => hd.ds.find((h) => h.id === hd.dang) || hd.ds[0];
@@ -985,7 +986,11 @@
             h.giamDon = { kieu: kieuGiam, gt: kieuGiam === 'percent' ? Math.min(100, gt) : gt };
         }
         h.tv.dung = diemNhap();
-        h.voucher = $('posVoucher').value.trim().toUpperCase(); luu(); capNhatTien(); hop('posGiamBox').hide();
+        const maMoi = $('posVoucher').value.trim().toUpperCase();
+        luu(); capNhatTien(); hop('posGiamBox').hide();
+        // Hỏi API số tiền mã trừ được rồi mới vẽ lại tổng — đóng hộp trước cho
+        // thao tác mượt, con số cập nhật ngay sau đó.
+        apMaGiam(maMoi);
     });
     $('posNote').addEventListener('input', (e) => {
         cur().ghiChu = e.target.value; luu();
@@ -1275,6 +1280,9 @@
     // Hàng tặng của cả đồng giá lẫn chương trình khuyến mại — cùng hiện dưới giỏ.
     const quaHienThi = () => [...cur().dongGia.qua, ...cur().khuyenMai.qua];
     const giamKM = () => Math.max(0, Math.min(Number(cur().khuyenMai.giam) || 0, tienHang() - giamDon()));
+    // Mã giảm giá: số do API tính cho đúng giỏ này (xem apMaGiam). Chặn trần ở
+    // tiền hàng như API làm — tổng giảm không bao giờ vượt tiền hàng.
+    const giamMa = () => Math.max(0, Math.min(Number(cur().voucherGiam) || 0, tienHang()));
 
     // THẺ THÀNH VIÊN — tính trước như hộp giảm giá của v2; lúc chốt API tính lại
     // trên điểm thật (không đủ điểm thì từ chối). Giảm theo hạng tính trên tiền
@@ -1308,12 +1316,24 @@
         $('posTvGiam').textContent = so(giamHang()) + ' đ';
         $('posTvDiemKhoi').hidden = TV_MOI_DIEM <= 0;
         $('posTvDungHet').disabled = !(Number(h.tv.diem) > 0);
+        // Ô Điểm luôn bày SỐ ĐIỂM THẬT SỰ DÙNG ĐƯỢC, không phải số vừa gõ.
+        //
+        // Trước đây gõ 999999 thì ô giữ nguyên 999999 trong khi tiền bên cạnh đã kẹp
+        // đúng và đơn cũng lưu đúng — nhưng thu ngân đọc ô, và sẽ nói với khách là
+        // đổi được 999999 điểm. Kẹp ở đây chứ không ở trình xử lý gõ vì hàm này còn
+        // chạy lúc MỞ hộp: bỏ bớt hàng rồi mở lại, số điểm dùng được tụt xuống thì ô
+        // cũng phải tụt theo.
+        //
+        // Chỉ ghi khi chữ khác đi — gán lại đúng chuỗi cũ là đẩy con trỏ về cuối ô
+        // giữa lúc người ta đang sửa.
         const d = diemNhap();
-        if ($('posTvDungHet').checked) $('posTvDiem').value = d;
+        if ($('posTvDiem').value !== String(d)) $('posTvDiem').value = String(d);
         $('posTvDiemTien').textContent = so(tienDiem(d)) + ' đ';
         $('posTvConLai').textContent = `Còn ${so(Number(h.tv.diem) || 0)} điểm · 1 điểm = ${so(TV_MOI_DIEM)} đ`;
     }
-    $('posTvDiem').addEventListener('input', (e) => { e.target.value = String(soTien(e.target.value) || 0); $('posTvDungHet').checked = false; veThanhVien(); });
+    // Không tự dọn chữ ở đây nữa: veThanhVien() đã ghi lại ô bằng số dùng được, mà
+    // số ấy luôn là chữ số — dọn hai lượt chỉ tổ hai nơi cùng sửa một ô.
+    $('posTvDiem').addEventListener('input', () => { $('posTvDungHet').checked = false; veThanhVien(); });
     $('posTvDungHet').addEventListener('change', veThanhVien);
     const giaBan = (d) => (cur().dongGia.gia[d.id] ?? d.gia);
     const giaSauBot = (d) => giaBan(d) * (1 - (d.giam || 0) / 100);
@@ -1331,7 +1351,7 @@
         else g.push({ id: m.id, ten: m.ten, opt: m.opt, gia: m.gia, ton: m.ton, sl: 1, giam: 0, vat: m.vat || 0 });
         vuaThem = m.id;
         baoLoi('');
-        luu(); veTab(); veGio(); capNhatTien(); tinhLaiDongGia(); tinhLaiKhuyenMai();
+        luu(); veTab(); veGio(); capNhatTien(); tinhLaiDongGia(); tinhLaiKhuyenMai(); tinhLaiMaGiam();
     }
 
     function veGio() {
@@ -1376,7 +1396,7 @@
         vuaThem = null;
     }
 
-    function sauKhiSuaGio() { luu(); veTab(); veGio(); capNhatTien(); tinhLaiDongGia(); tinhLaiKhuyenMai(); }
+    function sauKhiSuaGio() { luu(); veTab(); veGio(); capNhatTien(); tinhLaiDongGia(); tinhLaiKhuyenMai(); tinhLaiMaGiam(); }
     $('posCart').addEventListener('click', (e) => {
         const tr = e.target.closest('tr[data-i]');
         if (!tr) return;
@@ -1588,6 +1608,57 @@
         luu(); veGio(); capNhatTien();
         return giu.length < chon.length;
     }
+    /* =====================================================================
+     * MÃ GIẢM GIÁ — hỏi API NGAY lúc Áp dụng, không đợi tới lúc chốt.
+     *
+     * Trước đây quầy nhận mã mà không hỏi gì: màn hình vẫn bày tổng chưa trừ,
+     * tới lúc chốt API mới trừ. Đơn ghi một số, khách trả một số, và với tiền
+     * mặt thì máy tính tiền thừa theo số sai — thối nhầm đúng bằng phần chênh.
+     * ===================================================================== */
+    async function hoiMaGiam(ma) {
+        const r = await fetch(D.voucherUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': CSRF },
+            body: JSON.stringify({
+                items: gio().map((d) => ({ product_variant_id: d.id, quantity: d.sl })),
+                code: ma,
+                // Hạn mức "mỗi khách N lượt" nhận ra khách vãng lai bằng số điện thoại.
+                phone: (cur().sdt || '').trim(),
+            }),
+        });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(j.message || 'Không kiểm được mã giảm giá.');
+        return Number((j.data || {}).giam) || 0;
+    }
+
+    /**
+     * Gắn mã vào hoá đơn đang mở. Mã hỏng thì BỎ HẲN mã chứ không giữ lại:
+     * giữ một mã mà lúc chốt API sẽ từ chối là hẹn người bán một lỗi nữa ở
+     * đúng lúc khách đang đứng chờ trả tiền.
+     */
+    async function apMaGiam(ma) {
+        const h = cur();
+        if (!ma) { h.voucher = ''; h.voucherGiam = 0; luu(); capNhatTien(); return; }
+        if (!gio().length) { h.voucher = ''; h.voucherGiam = 0; luu(); capNhatTien(); nhac('Chưa có sản phẩm nào trong giỏ.'); return; }
+        try {
+            const giam = await hoiMaGiam(ma);
+            h.voucher = ma; h.voucherGiam = giam;
+        } catch (e) {
+            h.voucher = ''; h.voucherGiam = 0;
+            nhac(e.message);
+        }
+        luu(); capNhatTien();
+    }
+
+    let henMaGiam = null;
+    /** Giỏ đổi thì số tiền giảm đổi theo (mã % tính trên tiền hàng, mã có mức tối thiểu có thể rớt). */
+    function tinhLaiMaGiam() {
+        const ma = (cur().voucher || '').trim();
+        if (!ma) return;
+        clearTimeout(henMaGiam);
+        henMaGiam = setTimeout(() => { apMaGiam(ma); }, 250);
+    }
+
     let henKhuyenMai = null;
     // Giỏ đổi thì bậc đạt được có thể đổi (lên / xuống / hết) — hỏi lại như v2 áp lại lúc lưu món.
     function tinhLaiKhuyenMai() {
@@ -1648,10 +1719,14 @@
         return Math.max(0, p.kieu === 'percent' ? Math.round(tienHang() * gt / 100) : Math.round(gt));
     }
     // Thuế sản phẩm TẠM TÍNH theo đúng cách API tính (thueCuaDon): chia giảm cả đơn về từng dòng theo
-    // tỉ trọng (đồng lẻ dồn dòng cuối), rồi thuế trên phần còn lại. Mã giảm giá chưa biết số tiền nên
-    // chưa trừ ở đây — con số thu thật là con số API trả sau khi chốt.
+    // tỉ trọng (đồng lẻ dồn dòng cuối), rồi thuế trên phần còn lại.
+    //
+    // MÃ GIẢM GIÁ nằm trong nền tính thuế: nó cũng là một khoản giảm trên tiền
+    // hàng nên kéo thuế xuống theo. Bỏ sót nó thì không chỉ thiếu phần giảm mà
+    // thiếu cả phần thuế của phần giảm ấy — ca lỗi 28 triệu, mã 2% lệch
+    // 616.000 đ chứ không phải 560.000 đ.
     function thue() {
-        const g = gio(), goc = tienHang(), tong = Math.min(giamDon() + giamKM() + giamHang() + tienDiem(), goc);
+        const g = gio(), goc = tienHang(), tong = Math.min(giamDon() + giamKM() + giamMa() + giamHang() + tienDiem(), goc);
         let daChia = 0, cong = 0;
         g.forEach((d, i) => {
             let chia = 0;
@@ -1664,7 +1739,7 @@
         });
         return cong;
     }
-    const phaiTra = () => Math.max(0, tienHang() - giamDon() - giamKM() - giamHang() - tienDiem()) + phuThu() + thue();
+    const phaiTra = () => Math.max(0, tienHang() - giamDon() - giamKM() - giamMa() - giamHang() - tienDiem()) + phuThu() + thue();
 
     function chonHinhThuc(m, luuLai = true) {
         const nut = $('posPayTabs').querySelector(`[data-method="${m}"]`) || $('posPayTabs').querySelector('[data-method]');
@@ -1677,7 +1752,7 @@
     $('posPayTabs').addEventListener('click', (e) => { const b = e.target.closest('[data-method]'); if (b) chonHinhThuc(b.dataset.method); });
 
     function capNhatTien() {
-        const tong = phaiTra(), bot = botMon(), gd = giamDon(), km = giamKM(), tv = giamHang() + tienDiem(), cut = bot + gd + km + tv, dua = soTien($('posTendered').value), coHang = gio().length > 0, tienMat = hinhThuc === 'cash';
+        const tong = phaiTra(), bot = botMon(), gd = giamDon(), km = giamKM(), gm = giamMa(), tv = giamHang() + tienDiem(), cut = bot + gd + km + gm + tv, dua = soTien($('posTendered').value), coHang = gio().length > 0, tienMat = hinhThuc === 'cash';
         const h = cur(), ma = h.voucher.trim(), pt = phuThu();
         $('posQty').textContent = tongSl();
         $('posGross').textContent = so(tamTinh()) + ' đ';
@@ -1685,7 +1760,7 @@
         $('posGiamTen').textContent = [
             bot > 0 ? 'bớt theo món' : '',
             gd > 0 ? (h.giamDon.kieu === 'percent' ? `cả đơn ${String(h.giamDon.gt).replace('.', ',')}%` : 'cả đơn') : '',
-            ma ? 'mã ' + ma : '',
+            ma ? `mã ${ma}${gm > 0 ? ' −' + so(gm) + ' đ' : ''}` : '',
             km > 0 ? 'khuyến mãi' : '',
             giamHang() > 0 ? 'hạng thành viên' : '',
             tienDiem() > 0 ? `${so(diemDung())} điểm` : '',

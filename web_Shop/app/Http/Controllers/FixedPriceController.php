@@ -17,6 +17,8 @@ use Illuminate\Support\Facades\Log;
  */
 class FixedPriceController extends Controller
 {
+    use Concerns\BaoThieuQuyen;
+
     use \App\Http\Controllers\Concerns\DialogReply;
 
     public const LOAI = [1 => 'Nhóm hàng', 2 => 'Danh sách hàng'];
@@ -31,6 +33,7 @@ class FixedPriceController extends Controller
         $list = [];
         $meta = ['page' => $filters['page'], 'page_size' => $filters['page_size'], 'total' => 0, 'total_pages' => 1];
         $error = null;
+        $thieuQuyen = false;
 
         try {
             $res = $this->api->dongGia(array_filter([
@@ -45,7 +48,8 @@ class FixedPriceController extends Controller
                 $list = $res->json('data') ?? [];
                 $meta = array_merge($meta, $res->json('meta') ?? []);
             } else {
-                $error = $res->json('message') ?: 'Không tải được danh sách đồng giá.';
+                ['thieuQuyen' => $thieuQuyen, 'error' => $error] =
+                    $this->doLoiDanhSach($res, 'khuyến mại đồng giá');
             }
         } catch (\Throwable $e) {
             Log::error('Load fixed prices failed', ['msg' => $e->getMessage()]);
@@ -60,6 +64,7 @@ class FixedPriceController extends Controller
             'danhMuc' => $this->danhMuc(),
             'sanPham' => $this->sanPham(),
             'maCT' => $this->maCT(),
+            'thieuQuyen' => $thieuQuyen,
         ]);
 
         return $error ? $view->with('error', $error) : $view;

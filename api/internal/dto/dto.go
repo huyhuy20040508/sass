@@ -3486,6 +3486,25 @@ type POSKhuyenMaiDong struct {
 	Giam float64 `json:"giam"`
 }
 
+// POSVoucherRequest — quầy hỏi "gõ mã này vào giỏ này thì giảm bao nhiêu".
+//
+// Có `phone` vì hạn mức "mỗi khách N lượt" nhận ra khách vãng lai bằng số điện
+// thoại; quầy đã chọn khách thì gửi lên, chưa chọn thì để trống như lúc chốt.
+type POSVoucherRequest struct {
+	Items []POSDongGiaItem `json:"items" binding:"max=50,dive"`
+	Code  string           `json:"code" binding:"required,max=50"`
+	Phone string           `json:"phone" binding:"omitempty,max=20"`
+}
+
+// POSVoucherResponse — số giảm để quầy trừ NGAY vào tổng, trước khi thu tiền.
+type POSVoucherResponse struct {
+	Code string `json:"code"`
+	Name string `json:"name"`
+	// Giam tính bằng ĐÚNG hàm lúc chốt đơn dùng (VoucherService.CheckDon), nên
+	// con số bày ra ở quầy và con số ghi vào đơn không bao giờ lệch nhau.
+	Giam float64 `json:"giam"`
+}
+
 // VoucherProgramRequest — tạo / sửa một chương trình Voucher/Coupon (khuôn
 // pmt_voucher_coupon của v2). Release = bấm "Phát hành": lưu rồi sinh đủ mã.
 type VoucherProgramRequest struct {

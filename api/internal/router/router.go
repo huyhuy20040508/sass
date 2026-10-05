@@ -731,6 +731,9 @@ func New(
 			q.Dat(quay, http.MethodPost, "/orders/pos/dong-gia", "don-hang.them", h.DongGia.POSXemTruoc)
 			// Nút "Khuyến mãi": chương trình đủ điều kiện + số giảm khi chọn.
 			q.Dat(quay, http.MethodPost, "/orders/pos/khuyen-mai", "don-hang.them", h.KhuyenMai.POSXemTruoc)
+			// Mã giảm giá cũng phải xem trước được như đồng giá / khuyến mãi: quầy
+			// gõ mã là thấy ngay số trừ, không chờ tới lúc bấm thanh toán.
+			q.Dat(quay, http.MethodPost, "/orders/pos/voucher", "don-hang.them", h.Order.POSXemTruocVoucher)
 			// Hoá đơn điện tử cho đơn QUẦY — cùng quyền với bán: người vừa thu tiền là
 			// người khách đứng trước mặt đòi hoá đơn. Đơn kênh khác bị từ chối ở
 			// service; bộ nút phát hành đầy đủ vẫn ở /orders/:id/etax (khu quản trị).

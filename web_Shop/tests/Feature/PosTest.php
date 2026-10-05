@@ -56,6 +56,66 @@ class PosTest extends TestCase
     // ------------------------------------------------------------ chốt đơn (POST /cashier/sales)
 
     /** Điều quan trọng nhất: KHÔNG gửi tên/giá lên, dù trình duyệt có gửi kèm. */
+    /**
+     * Ô mã giảm giá ở quầy phải HỎI API ngay, không đợi tới lúc chốt.
+     *
+     * Ca lỗi 05/10: giỏ 28.000.000 + VAT 10% hiện 30.800.000, gõ mã 2% rồi Áp
+     * dụng thì màn hình vẫn 30.800.000 và dòng giảm vẫn 0 đ. Chốt xong đơn ghi
+     * giảm 560.000, VAT 2.744.000, thực thu 30.184.000 — lệch 616.000 đ so với
+     * số đã hiện, và tiền thối tính theo số sai.
+     */
+    public function test_ma_giam_gia_hoi_api_ngay_khi_ap_dung(): void
+    {
+        Http::fake([
+            '*/admin/orders/pos/voucher' => Http::response(['data' => ['code' => '20E3DSS10', 'name' => 'test', 'giam' => 560000]]),
+            '*' => Http::response(['data' => []]),
+        ]);
+
+        $this->withSession($this->phien())
+            ->postJson(route('thu-ngan.ban-hang.voucher'), [
+                'items' => [['product_variant_id' => 1, 'quantity' => 1]],
+                'code' => ' 20e3dss10 ',
+                'phone' => '0909123456',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.giam', 560000);
+
+        // Mã viết hoa và cắt khoảng trắng trước khi sang API — cùng cách API chuẩn hoá.
+        Http::assertSent(fn ($req) => str_contains($req->url(), '/admin/orders/pos/voucher')
+            && $req['code'] === '20E3DSS10'
+            && $req['phone'] === '0909123456'
+            && $req['items'] === [['product_variant_id' => 1, 'quantity' => 1]]);
+    }
+
+    /** Mã hỏng thì trả nguyên câu lỗi của API để quầy bỏ mã, không nuốt đi. */
+    public function test_ma_hong_tra_nguyen_cau_loi(): void
+    {
+        Http::fake([
+            '*/admin/orders/pos/voucher' => Http::response(['message' => 'Mã giảm giá không còn hiệu lực'], 422),
+            '*' => Http::response(['data' => []]),
+        ]);
+
+        $this->withSession($this->phien())
+            ->postJson(route('thu-ngan.ban-hang.voucher'), [
+                'items' => [['product_variant_id' => 1, 'quantity' => 1]],
+                'code' => 'SAIBET',
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Mã giảm giá không còn hiệu lực');
+    }
+
+    /** Giỏ rỗng thì chặn ngay tại Laravel, khỏi làm phiền API. */
+    public function test_gio_rong_thi_chan_ngay(): void
+    {
+        Http::fake(['*' => Http::response(['data' => []])]);
+
+        $this->withSession($this->phien())
+            ->postJson(route('thu-ngan.ban-hang.voucher'), ['items' => [], 'code' => 'ABC'])
+            ->assertStatus(422);
+
+        Http::assertNotSent(fn ($req) => str_contains($req->url(), '/admin/orders/pos/voucher'));
+    }
+
     public function test_khong_gui_gia_len_api(): void
     {
         Http::fake(['*/admin/orders/pos' => Http::response($this->banXong(), 201)]);
@@ -545,5 +605,37 @@ class PosTest extends TestCase
     public function test_khong_con_duong_xin_ma(): void
     {
         $this->assertFalse(app('router')->has('thu-ngan.ban-hang.maDon'));
+    }
+
+    /**
+     * Ô "Điểm" phải được VẼ LẠI bằng số điểm thật sự dùng được.
+     *
+     * Gõ 999999 vào ô điểm thì tiền bên cạnh vẫn kẹp đúng và đơn cũng lưu đúng —
+     * nhưng ô giữ nguyên 999999, mà thu ngân đọc ô chứ không đọc API, rồi nói với
+     * khách là đổi được 999999 điểm.
+     *
+     * Việc kẹp nằm trong veThanhVien() chứ không trong trình xử lý gõ, vì hàm ấy
+     * còn chạy lúc MỞ hộp: bỏ bớt hàng khiến số điểm dùng được tụt xuống thì ô
+     * cũng phải tụt theo. Bài canh đúng chỗ đó — gỡ dòng ghi lại ô đi là đỏ.
+     */
+    public function test_o_diem_ve_lai_theo_so_diem_dung_duoc(): void
+    {
+        $js = file_get_contents(resource_path('../v2/pos/sale.blade.php'));
+
+        $dau = strpos($js, 'function veThanhVien()');
+        $this->assertNotFalse($dau, 'không tìm thấy veThanhVien()');
+        $than = substr($js, $dau, strpos($js, "\n    }", $dau) - $dau);
+
+        $this->assertStringContainsString('diemNhap()', $than, 'veThanhVien phải lấy số điểm đã kẹp');
+        $this->assertMatchesRegularExpression('/\$\(.posTvDiem.\)\.value = /', $than,
+            'veThanhVien phải ghi lại ô Điểm, nếu không ô sẽ giữ nguyên số vừa gõ');
+
+        // Và ghi lại KHÔNG ĐIỀU KIỆN. Bản hỏng cũng có dòng ghi vào ô, nhưng chỉ
+        // chạy khi ô tick "Dùng tất cả điểm" đang bật — nên gõ tay 999999 thì ô
+        // không ai sửa. Thiếu vế này là bài test xanh trên chính bản hỏng.
+        $this->assertDoesNotMatchRegularExpression(
+            '/posTvDungHet.\)\.checked\)\s*\$\(.posTvDiem.\)\.value/', $than,
+            'ô Điểm chỉ được ghi lại khi tick "Dùng tất cả điểm" — gõ tay sẽ không được kẹp'
+        );
     }
 }

@@ -18,6 +18,8 @@ use Illuminate\Support\Facades\Log;
  */
 class VoucherCouponController extends Controller
 {
+    use Concerns\BaoThieuQuyen;
+
     use \App\Http\Controllers\Concerns\DialogReply;
 
     /** Ô chọn cột của v2 — cột => [nhãn, bật sẵn]. */
@@ -46,6 +48,7 @@ class VoucherCouponController extends Controller
         $list = [];
         $meta = ['page' => $filters['page'], 'page_size' => 10, 'total' => 0, 'total_pages' => 1];
         $error = null;
+        $thieuQuyen = false;
 
         try {
             $res = $this->api->voucherCoupon($this->query($filters));
@@ -53,7 +56,8 @@ class VoucherCouponController extends Controller
                 $list = $res->json('data') ?? [];
                 $meta = array_merge($meta, $res->json('meta') ?? []);
             } else {
-                $error = $res->json('message') ?: 'Không tải được danh sách voucher/coupon.';
+                ['thieuQuyen' => $thieuQuyen, 'error' => $error] =
+                    $this->doLoiDanhSach($res, 'voucher / coupon');
             }
         } catch (\Throwable $e) {
             Log::error('Load voucher programs failed', ['msg' => $e->getMessage()]);
@@ -67,6 +71,7 @@ class VoucherCouponController extends Controller
             'columns' => $this->cot($request),
             'chiNhanh' => $this->mang(fn () => $this->api->chiNhanh(true)),
             'danhMuc' => $this->mang(fn () => $this->api->categories(true)),
+            'thieuQuyen' => $thieuQuyen,
         ]);
 
         return $error ? $view->with('error', $error) : $view;
@@ -109,6 +114,17 @@ class VoucherCouponController extends Controller
         return $this->json(fn () => $this->api->lichSuMaVoucher($id));
     }
 
+    /**
+     * Xuất danh sách chương trình đang lọc ra .xlsx.
+     *
+     * .xlsx THẬT, không phải CSV đội tên nút "Xuất Excel": nút ghi "Xuất Excel"
+     * mà tệp tải về là voucher-coupon-*.csv kiểu text/csv — nhãn nói một đằng,
+     * tệp một nẻo. Đi cùng đường taiXlsx() của Nhân sự, Nhà cung cấp, Thu chi,
+     * Công nợ, Phiếu mua hàng.
+     *
+     * Hai cột tiền và số lượng ghi kiểu SỐ chứ không phải chữ đã chấm nghìn, nhờ
+     * vậy người nhận cộng được ngay — đúng cái CSV không làm được.
+     */
     public function export(Request $request)
     {
         $filters = $this->filters($request);
@@ -128,21 +144,30 @@ class VoucherCouponController extends Controller
         }
         $ma = collect($this->mang(fn () => $this->api->chiNhanh(true)))->mapWithKeys(fn ($c) => [$c['id'] => ($c['code'] ?? '') ?: ($c['name'] ?? '')])->all();
 
-        return response()->streamDownload(function () use ($rows, $ma) {
-            $f = fopen('php://output', 'w');
-            fprintf($f, chr(0xEF).chr(0xBB).chr(0xBF));
-            fputcsv($f, ['STT', 'Mã chương trình', 'Tên chương trình', 'Mô tả chương trình', 'Áp dụng cho hóa đơn trên', 'Chi nhánh',
-                'Số lượng', 'Hình thức', 'Giá trị (%, $)', 'Trạng thái', 'Từ ngày', 'Đến ngày', 'Người tạo']);
-            foreach ($rows as $i => $p) {
-                fputcsv($f, [
-                    $i + 1, $p['code'], $p['name'], $p['description'] ?? '', number_format((float) $p['min_order_amount']),
-                    ! empty($p['all_shops']) ? collect($ma)->implode(', ') : collect($p['shop_ids'] ?? [])->map(fn ($id) => $ma[$id] ?? '#'.$id)->implode(', '),
-                    $p['quantity'], self::hinhThuc($p), self::giaTri($p), self::TRANG_THAI[$p['status']] ?? '',
-                    self::ngay($p, 'start_date'), self::ngay($p, 'end_date'), $p['created_by_name'] ?? '',
-                ]);
-            }
-            fclose($f);
-        }, 'voucher-coupon-'.date('YmdHis').'.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
+        $hang = [['STT', 'Mã chương trình', 'Tên chương trình', 'Mô tả chương trình', 'Áp dụng cho hóa đơn trên', 'Chi nhánh',
+            'Số lượng', 'Hình thức', 'Giá trị (%, $)', 'Trạng thái', 'Từ ngày', 'Đến ngày', 'Người tạo']];
+
+        foreach ($rows as $i => $p) {
+            $hang[] = [
+                $i + 1,
+                (string) ($p['code'] ?? ''),
+                (string) ($p['name'] ?? ''),
+                (string) ($p['description'] ?? ''),
+                (float) ($p['min_order_amount'] ?? 0),
+                ! empty($p['all_shops']) ? collect($ma)->implode(', ') : collect($p['shop_ids'] ?? [])->map(fn ($id) => $ma[$id] ?? '#'.$id)->implode(', '),
+                (int) ($p['quantity'] ?? 0),
+                self::hinhThuc($p),
+                // Giá trị để kiểu CHỮ: cột này trộn "10%" với "11.000 đ" tuỳ dòng,
+                // ghi kiểu số thì mất đơn vị và 10% nằm cạnh 11000 đọc thành vô lý.
+                self::giaTri($p),
+                self::TRANG_THAI[$p['status']] ?? '',
+                self::ngay($p, 'start_date'),
+                self::ngay($p, 'end_date'),
+                (string) ($p['created_by_name'] ?? ''),
+            ];
+        }
+
+        return $this->taiXlsx($hang, 'voucher-coupon-'.date('Ymd-His'), 'Voucher coupon');
     }
 
     public static function hinhThuc(array $p): string
