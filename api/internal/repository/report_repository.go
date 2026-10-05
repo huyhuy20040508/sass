@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -68,6 +69,14 @@ func (r *reportRepository) allOrders(ctx context.Context, p domain.ReportPeriod)
 	// mới, sản phẩm chưa bán, đăng ký mới) tự lo phần của mình, xem tại chỗ.
 	if p.ShopID > 0 {
 		q = q.Where("o.shop_id = ?", p.ShopID)
+	}
+
+	// nguồn đơn quầy và web
+	if p.Channel != "" {
+		q = q.Where("o.channel = ?", p.Channel)
+	}
+	if p.PaymentMethods != nil {
+		q = q.Where("o.payment_method IN ?", p.PaymentMethods)
 	}
 
 	return q
@@ -670,6 +679,7 @@ func (r *reportRepository) CustomerTotals(ctx context.Context, p domain.ReportPe
 		MemberRevenue float64
 		GuestOrders   int64
 		GuestRevenue  float64
+		GuestPaid     float64
 	}
 	err := r.orders(ctx, p).
 		Select(`COUNT(*) AS orders,
@@ -678,7 +688,9 @@ func (r *reportRepository) CustomerTotals(ctx context.Context, p domain.ReportPe
 			SUM(CASE WHEN o.user_id IS NULL THEN 0 ELSE 1 END) AS member_orders,
 			COALESCE(SUM(CASE WHEN o.user_id IS NULL THEN 0 ELSE o.total_amount END), 0) AS member_revenue,
 			SUM(CASE WHEN o.user_id IS NULL THEN 1 ELSE 0 END) AS guest_orders,
-			COALESCE(SUM(CASE WHEN o.user_id IS NULL THEN o.total_amount ELSE 0 END), 0) AS guest_revenue`).
+			COALESCE(SUM(CASE WHEN o.user_id IS NULL THEN o.total_amount ELSE 0 END), 0) AS guest_revenue,
+			COALESCE(SUM(CASE WHEN o.user_id IS NULL AND o.payment_status = ? THEN o.total_amount ELSE 0 END), 0) AS guest_paid`,
+			domain.OrderPaymentPaid).
 		Scan(&row).Error
 	if err != nil {
 		return out, err
@@ -704,6 +716,7 @@ func (r *reportRepository) CustomerTotals(ctx context.Context, p domain.ReportPe
 		MemberRevenue: row.MemberRevenue,
 		GuestOrders:   row.GuestOrders,
 		GuestRevenue:  row.GuestRevenue,
+		GuestPaid:     row.GuestPaid,
 	}
 	if out.Buyers > 0 {
 		out.RevenuePerBuyer = out.MemberRevenue / float64(out.Buyers)
@@ -759,34 +772,57 @@ func (r *reportRepository) Registrations(ctx context.Context, p domain.ReportPer
 	return total, err
 }
 
-func (r *reportRepository) TopCustomers(ctx context.Context, p domain.ReportPeriod, limit int) ([]domain.CustomerReportRow, error) {
+func (r *reportRepository) TopCustomers(ctx context.Context, p domain.ReportPeriod, limit int, f domain.CustomerRowFilter) ([]domain.CustomerReportRow, error) {
 	if limit <= 0 {
 		limit = 20
 	}
 
 	var rows []struct {
-		UserID      uint
-		Name        string
-		Email       string
-		Phone       string
-		Orders      int64
-		Revenue     float64
-		LastOrderAt *time.Time
-		IsNew       bool
+		UserID       uint
+		Name         string
+		Email        string
+		Phone        string
+		CustomerCode string
+		GroupName    string
+		RankName     string
+		Points       int64
+		Orders       int64
+		Revenue      float64
+		Paid         float64
+		LastOrderAt  *time.Time
+		IsNew        bool
 	}
-	err := r.orders(ctx, p).
+	q := r.orders(ctx, p).
 		Joins("JOIN users u ON u.id = o.user_id").
 		Where("o.user_id IS NOT NULL").
 		Joins("LEFT JOIN (?) AS f ON f.user_id = o.user_id", r.firstOrders(ctx, p.ShopID)).
-		Select(`u.id AS user_id,
+		// Nhóm và hạng nối theo khoá chính của hồ sơ khách — một khách một dòng.
+		Joins("LEFT JOIN customer_groups cg ON cg.id = u.customer_group_id").
+		Joins("LEFT JOIN membership_ranks mr ON mr.id = u.rank_id")
+	if f.GroupID > 0 {
+		q = q.Where("u.customer_group_id = ?", f.GroupID)
+	}
+	if f.UserID > 0 {
+		q = q.Where("u.id = ?", f.UserID)
+	}
+	if kw := strings.TrimSpace(f.Keyword); kw != "" {
+		like := "%" + kw + "%"
+		q = q.Where("u.full_name LIKE ? OR u.customer_code LIKE ? OR u.phone LIKE ?", like, like, like)
+	}
+	err := q.Select(`u.id AS user_id,
 			u.full_name AS name,
 			u.email AS email,
 			COALESCE(u.phone, '') AS phone,
+			COALESCE(u.customer_code, '') AS customer_code,
+			COALESCE(cg.name, '') AS group_name,
+			COALESCE(mr.name, '') AS rank_name,
+			COALESCE(u.total_points, 0) AS points,
 			COUNT(*) AS orders,
 			COALESCE(SUM(o.total_amount), 0) AS revenue,
+			COALESCE(SUM(CASE WHEN o.payment_status = ? THEN o.total_amount ELSE 0 END), 0) AS paid,
 			MAX(o.created_at) AS last_order_at,
-			MAX(CASE WHEN f.first_at >= ? THEN 1 ELSE 0 END) AS is_new`, p.From).
-		Group("u.id, u.full_name, u.email, u.phone").
+			MAX(CASE WHEN f.first_at >= ? THEN 1 ELSE 0 END) AS is_new`, domain.OrderPaymentPaid, p.From).
+		Group("u.id, u.full_name, u.email, u.phone, u.customer_code, cg.name, mr.name, u.total_points").
 		Order("revenue DESC").
 		Limit(limit).
 		Scan(&rows).Error
@@ -805,7 +841,9 @@ func (r *reportRepository) TopCustomers(ctx context.Context, p domain.ReportPeri
 	for _, row := range rows {
 		item := domain.CustomerReportRow{
 			UserID: row.UserID, Name: row.Name, Email: row.Email, Phone: row.Phone,
+			CustomerCode: row.CustomerCode, GroupName: row.GroupName, RankName: row.RankName, Points: row.Points,
 			Orders: row.Orders, Revenue: row.Revenue, Units: units[row.UserID], IsNew: row.IsNew,
+			Paid: row.Paid, Debt: max(row.Revenue-row.Paid, 0),
 		}
 		if row.LastOrderAt != nil {
 			t := *row.LastOrderAt

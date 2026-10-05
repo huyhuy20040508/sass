@@ -2107,6 +2107,74 @@ class ApiClient
     }
 
     /**
+     * Báo cáo doanh thu: mỗi ngày một dòng tiền + số liệu bốn biểu đồ.
+     * $query: from, to (YYYY-MM-DD), shop_id, channel, methods (cash,bank_transfer,card,auto_qr).
+     */
+    public function reportSales(array $query = []): Response
+    {
+        return $this->get('/admin/reports/sales', $query);
+    }
+
+    /** Hoá đơn của một ngày (hộp chi tiết của báo cáo doanh thu). $query: date + bộ lọc như reportSales. */
+    public function reportSalesOrders(array $query = []): Response
+    {
+        return $this->get('/admin/reports/sales/orders', $query);
+    }
+
+    /**
+     * Báo cáo hàng hoá (tab Hàng hóa của Báo cáo cuối ngày): mỗi mặt hàng một dòng
+     * + số liệu bốn biểu đồ. $query: from, to, shop_id, channel, category_id,
+     * product_id, keyword, top, sort, top_weekday.
+     */
+    public function reportGoods(array $query = []): Response
+    {
+        return $this->get('/admin/reports/goods', $query);
+    }
+
+    /** Hoá đơn có bán một mặt hàng (hộp chi tiết của báo cáo hàng hoá). $query: product_id + bộ lọc như reportGoods. */
+    public function reportGoodsOrders(array $query = []): Response
+    {
+        return $this->get('/admin/reports/goods/orders', $query);
+    }
+
+    /**
+     * Báo cáo chi phí & lợi nhuận (tab của Báo cáo cuối ngày): mỗi mặt hàng một
+     * dòng + biểu đồ theo mốc. $query: from, to, shop_id, channel, category_id,
+     * product_id, keyword, group_by.
+     */
+    public function reportProfit(array $query = []): Response
+    {
+        return $this->get('/admin/reports/profit', $query);
+    }
+
+    /**
+     * Báo cáo ca (tab của Báo cáo cuối ngày): doanh thu theo ngày × ca × nhân
+     * viên + theo nhân viên. $query: from, to, shop_id, channel, area, user_id, keyword.
+     */
+    public function reportStaff(array $query = []): Response
+    {
+        return $this->get('/admin/reports/staff', $query);
+    }
+
+    /**
+     * Báo cáo nhân viên — hoa hồng (tab của Báo cáo cuối ngày): mỗi nhân viên một
+     * dòng kèm từng đơn. $query như reportStaff.
+     */
+    public function reportEmployees(array $query = []): Response
+    {
+        return $this->get('/admin/reports/employees', $query);
+    }
+
+    /**
+     * Báo cáo tổng hợp của một ngày: thu chi, bán hàng theo hình thức, hàng bán,
+     * hàng trả, doanh thu theo giờ. $query: date (YYYY-MM-DD), shop_id, channel.
+     */
+    public function reportSummary(array $query = []): Response
+    {
+        return $this->get('/admin/reports/summary', $query);
+    }
+
+    /**
      * Báo cáo kết ca: mỗi dòng một ca, kèm doanh thu theo hình thức và đối chiếu két.
      * $query: from, to (YYYY-MM-DD), shop_id, user_id, keyword, page, page_size.
      */

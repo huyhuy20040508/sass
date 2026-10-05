@@ -130,12 +130,11 @@ func (r *caLamViecRepository) DongCa(
 		ca.CountedCash = &countedCash
 		ca.ExpectedCash = &expected
 		ca.Difference = &diff
-		if n := strings.TrimSpace(note); n != "" {
-			ca.Note = n
-		}
+		// Ghi chú đóng ca vào cột riêng, không đè ghi chú lúc mở (migration 0073).
+		ca.CloseNote = strings.TrimSpace(note)
 
 		if err := tx.Model(&ca).
-			Select("ClosedAt", "ClosedBy", "CountedCash", "ExpectedCash", "Difference", "Note").
+			Select("ClosedAt", "ClosedBy", "CountedCash", "ExpectedCash", "Difference", "CloseNote").
 			Updates(&ca).Error; err != nil {
 			return err
 		}

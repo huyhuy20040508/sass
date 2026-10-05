@@ -60,19 +60,31 @@ class ReportController extends Controller
     public const LIMITS = [10, 20, 50, 100];
 
     /**
-     * Chín tab của module Thống kê — đúng `$reportTypes` của v2, kể cả tab mình
-     * chưa dựng. Giá trị là khoá ngôn ngữ, y như bản gốc.
+     * Dãy tab trong trang Báo cáo cuối ngày — `$reportTypes` của v2, nhãn đúng chữ
+     * bản đang chạy. Bỏ ba tab:
+     *   - "Báo cáo tổng hợp": chủ tiệm tách thành trang riêng trong module Báo
+     *     cáo (29/09/2026);
+     *   - "Doanh thu theo bàn": v2 cũng giấu với cửa hàng bán lẻ (isShop());
+     *   - "Báo cáo hoa hồng": chủ tiệm cho ẩn (04/10/2026) — bên mình chưa có
+     *     chương trình hoa hồng theo món, hoa hồng xem ở "Báo cáo nhân viên".
      */
     public const TAB_THONG_KE = [
-        'total' => 'report_summary',
-        'sales' => 'revenue_report',
-        'products' => 'report_products',
-        'table' => 'revenue_by_table',
-        'expense' => 'expense_report',
-        'employee' => 'report_employee',
-        'customer' => 'report_customer',
-        'commission' => 'commission_report',
-        'commissionEmployee' => 'commission-employee-report',
+        'sales' => 'Báo cáo doanh thu',
+        'products' => 'Báo cáo hàng hóa',
+        'expense' => 'Báo cáo chi phí & lợi nhuận',
+        'employee' => 'Báo cáo ca',
+        'customer' => 'Báo cáo khách hàng',
+        'commissionEmployee' => 'Báo cáo nhân viên',
+    ];
+
+    /** Tab trong trang đã dựng và route của nó; tab khác bày mờ. */
+    public const TAB_ROUTE = [
+        'sales' => 'admin.reports.sales',
+        'products' => 'admin.reports.goods',
+        'expense' => 'admin.reports.profit',
+        'employee' => 'admin.reports.staff',
+        'commissionEmployee' => 'admin.reports.employees',
+        'customer' => 'admin.reports.customers',
     ];
 
     /**
@@ -90,22 +102,31 @@ class ReportController extends Controller
         'lastMonth' => 'Tháng trước',
     ];
 
-    /** Mười cột của bảng Thống kê → Khách hàng, đúng thứ tự bản v2. */
+    /** Mười cột của bảng Báo cáo cuối ngày → Khách hàng, đúng thứ tự và nhãn bản v2. */
     public const COT_KHACH = [
         'code' => 'Mã khách hàng',
         'name' => 'Tên khách hàng',
-        'name_group' => 'Nhóm khách hàng',
+        'name_group' => 'Tên nhóm',
         'rank' => 'Hạng',
-        'total_expense' => 'Tổng chi tiêu',
-        'price_avg' => 'Giá trị trung bình',
-        'accumulated_points' => 'Điểm tích luỹ',
-        'payment' => 'Đã thanh toán',
-        'debt' => 'Còn nợ',
+        'total_expense' => 'Tổng chi',
+        'price_avg' => 'Giá trị TB',
+        'accumulated_points' => 'Điểm tích lũy',
+        'payment' => 'Thanh toán',
+        'debt' => 'Công nợ',
         'total_order' => 'Tổng số đơn',
     ];
 
-    /** Cột bấm được để sắp xếp — chỉ những cột có SỐ để so. */
-    public const SAP_XEP_KHACH = ['total_expense', 'price_avg', 'payment', 'total_order'];
+    /** Cột bấm được để sắp xếp — như v2, cột nào cũng sắp được. */
+    public const SAP_XEP_KHACH = [
+        'code', 'name', 'name_group', 'rank', 'total_expense', 'price_avg',
+        'accumulated_points', 'payment', 'debt', 'total_order',
+    ];
+
+    /** Bảng khách bày tối đa bao nhiêu dòng — trần của API, v2 không phân trang tab này. */
+    public const SO_DONG_KHACH = 100;
+
+    /** Nguồn đơn của ô lọc — v2 có Tại bàn / Mang về / Online; bên mình là quầy và web. */
+    public const NGUON_DON = ['pos' => 'Tại quầy', 'web' => 'Online'];
 
     /** Thứ trong tuần — API trả key "1".."7" với 1 = Thứ Hai. */
     public const WEEKDAYS = [
@@ -170,7 +191,7 @@ class ReportController extends Controller
     }
 
     /**
-     * Thống kê → Khách hàng, dựng theo tab `customer` của báo cáo v2
+     * Báo cáo cuối ngày → Khách hàng, dựng theo tab `customer` của báo cáo v2
      * (report/end-day/customer): bảng 10 cột gộp theo từng khách trong kỳ.
      *
      * API trả `top` — bảng xếp hạng chi tiêu đã cắt sẵn theo `limit`; ở đây chỉ
@@ -185,13 +206,17 @@ class ReportController extends Controller
         $error = null;
 
         try {
-            $res = $this->api->reportCustomers([
+            $res = $this->api->reportCustomers(array_filter([
                 'from' => $filters['from_date'],
                 'to' => $filters['to_date'],
                 'shop_id' => $filters['shop_id'],
                 'group_by' => $filters['group_by'],
                 'limit' => $filters['limit'],
-            ]);
+                'customer_group_id' => $filters['customer_group_id'],
+                'user_id' => $filters['user_id'],
+                'keyword' => $filters['keyword'],
+                'channel' => $filters['channel'],
+            ], fn ($v) => $v !== '' && $v !== null));
             if ($res->successful()) {
                 $bao = $res->json('data') ?? [];
             } else {
@@ -204,15 +229,17 @@ class ReportController extends Controller
         }
 
         $rows = $this->dongKhach($bao['top'] ?? [], $filters);
+        $khachLe = $this->dongKhachLe($bao['totals'] ?? [], $filters);
 
         if ($request->query('xuat') === 'excel') {
-            return $this->xuatKhach($rows, $filters);
+            return $this->xuatKhach(array_merge($khachLe ? [$khachLe] : [], $rows), $filters);
         }
 
         // Cột đang tắt nằm ở ?hide=, giữ được sau khi đổi bộ lọc.
         $cotTat = array_filter(explode(',', (string) $request->query('hide', '')));
         $columns = [];
-        foreach (array_keys(self::COT_KHACH) as $c) {
+        // STT cũng tắt được như v2 (`show_stt`).
+        foreach (array_merge(['stt'], array_keys(self::COT_KHACH)) as $c) {
             $columns['show_'.$c] = in_array($c, $cotTat, true) ? 0 : 1;
         }
 
@@ -220,26 +247,55 @@ class ReportController extends Controller
             'page' => 'customers',
             'filters' => $filters,
             'rows' => $rows,
-            'tong' => $this->tongKhach($rows),
+            'khachLe' => $khachLe,
+            'tong' => $this->tongKhach(array_merge($khachLe ? [$khachLe] : [], $rows)),
             'columns' => $columns,
             'chiNhanh' => $this->chiNhanhChoLoc(),
+            'nhomKhach' => $this->nhomKhachChoLoc(),
+            'dsKhach' => $this->khachChoLoc(),
         ]);
 
         return $error ? $view->with('error', $error) : $view;
     }
 
     /**
-     * Bộ lọc của riêng trang Thống kê → Khách hàng.
+     * Sắp bảng theo một cột. Cột chữ so theo bảng chữ tiếng Việt: so byte thì
+     * "Áo" đứng sau "Nón".
+     */
+    public static function sapXepDong(array $dong, string $cot, string $chieu, array $cotChu): array
+    {
+        if ($cot === '') {
+            return $dong;
+        }
+        $huong = $chieu === 'asc' ? 1 : -1;
+        $vn = in_array($cot, $cotChu, true) ? new \Collator('vi_VN') : null;
+        $vn?->setAttribute(\Collator::NUMERIC_COLLATION, \Collator::ON);
+        usort($dong, fn ($a, $b) => $huong * ($vn
+            ? $vn->compare((string) ($a[$cot] ?? ''), (string) ($b[$cot] ?? ''))
+            : (($a[$cot] ?? 0) <=> ($b[$cot] ?? 0))));
+
+        return $dong;
+    }
+
+    /**
+     * Bộ lọc CHUNG của mọi tab trong trang Báo cáo cuối ngày: kỳ (sáu mốc nhanh
+     * hoặc Tuỳ chỉnh), chi nhánh, nguồn đơn. Tab nào cần thêm ô lọc riêng thì
+     * cộng thêm vào kết quả này (xem locKhach, SalesReportController::filters).
      *
      * Không dùng chung `filters()` với ba trang báo cáo cũ vì khối Thời gian ở
      * đây là sáu mốc tuần/tháng của v2, không phải 7/30/90/365 ngày.
      */
-    protected function locKhach(Request $request): array
+    public static function locCuoiNgay(Request $request): array
     {
+        // Ô ngày của v2 gửi dd-mm-yyyy; link cũ còn yyyy-mm-dd. Nhận cả hai.
         $doc = function (?string $v): ?Carbon {
             $v = trim((string) $v);
             try {
-                return $v === '' ? null : Carbon::createFromFormat('Y-m-d', $v)->startOfDay();
+                if (preg_match('/^\d{2}-\d{2}-\d{4}$/', $v)) {
+                    return Carbon::createFromFormat('d-m-Y', $v)->startOfDay();
+                }
+
+                return preg_match('/^\d{4}-\d{2}-\d{2}$/', $v) ? Carbon::createFromFormat('Y-m-d', $v)->startOfDay() : null;
             } catch (\Throwable $e) {
                 return null;
             }
@@ -255,7 +311,7 @@ class ReportController extends Controller
             if (! isset(self::KY_NHANH[$ma])) {
                 $ma = 'today';
             }
-            [$from, $to] = $this->khoangKyNhanh($ma);
+            [$from, $to] = self::khoangKyNhanh($ma);
             $quick = $ma;
         }
         if ($from->gt($to)) {
@@ -263,7 +319,7 @@ class ReportController extends Controller
         }
 
         $shop = $request->query('shop_id');
-        $limit = (int) $request->query('limit', 20);
+        $nguon = (string) $request->query('channel', '');
 
         return [
             'from_date' => $from->format('Y-m-d'),
@@ -272,18 +328,44 @@ class ReportController extends Controller
             'days' => (int) $from->diffInDays($to) + 1,
             'quick' => $quick,
             'shop_id' => $shop === null || $shop === '' ? '' : (string) (int) $shop,
-            'limit' => in_array($limit, self::LIMITS, true) ? $limit : 20,
-            'group_by' => 'day',
-            'keyword' => trim((string) $request->query('keyword', '')),
-            'sort_field' => in_array($request->query('sort_field'), self::SAP_XEP_KHACH, true)
-                ? (string) $request->query('sort_field')
-                : '',
+            'channel' => isset(self::NGUON_DON[$nguon]) ? $nguon : '',
             'sort_type' => $request->query('sort_type') === 'asc' ? 'asc' : 'desc',
         ];
     }
 
-    /** Sáu mốc nhanh của v2 quy về khoảng ngày cụ thể. */
-    protected function khoangKyNhanh(string $ma): array
+    /**
+     * Chữ trong hộp kỳ bên phải tiêu đề, đúng khuôn v2:
+     * "Ngày 01-05-2026 00:00 / 10-05-2026 23:59 · (Chi nhánh)".
+     */
+    public static function kyChu(array $filters, array $chiNhanh): string
+    {
+        $cn = $filters['shop_id'] !== ''
+            ? $filters['shop_id']
+            : (string) (\App\Services\CurrentBranch::danhSach()['dangChon'] ?? '');
+        $ten = $cn === '0' ? 'Tất cả chi nhánh' : (collect($chiNhanh)->firstWhere('id', (int) $cn)['name'] ?? '');
+        $ngay = fn ($s) => Carbon::parse($s)->format('d-m-Y');
+
+        return 'Ngày '.$ngay($filters['from_date']).' 00:00 / '.$ngay($filters['to_date']).' 23:59'
+            .($ten !== '' ? ' · ('.$ten.')' : '');
+    }
+
+    /** Bộ lọc của tab Khách hàng: phần chung cộng nhóm / một khách / từ khoá. */
+    protected function locKhach(Request $request): array
+    {
+        return self::locCuoiNgay($request) + [
+            'limit' => self::SO_DONG_KHACH,
+            'group_by' => 'day',
+            'keyword' => trim((string) $request->query('keyword', '')),
+            'customer_group_id' => max(0, (int) $request->query('customer_group_id', 0)) ?: '',
+            'user_id' => max(0, (int) $request->query('user_id', 0)) ?: '',
+            'sort_field' => in_array($request->query('sort_field'), self::SAP_XEP_KHACH, true)
+                ? (string) $request->query('sort_field')
+                : '',
+        ];
+    }
+
+    /** Sáu mốc nhanh của v2 quy về khoảng ngày cụ thể. Báo cáo kết ca dùng chung. */
+    public static function khoangKyNhanh(string $ma): array
     {
         $homNay = Carbon::today();
 
@@ -306,31 +388,25 @@ class ReportController extends Controller
     /**
      * Đổi `top` của API sang đúng 10 cột của bảng v2.
      *
-     * Bốn cột chưa có sổ để lấy số (nhóm, hạng, điểm) thì để trống — không suy ra
-     * từ cột khác. Riêng "đã thanh toán / còn nợ": bên mình CHƯA có sổ nợ khách,
-     * mọi đơn vào doanh thu đều là đơn đã thu, nên đã trả = tổng chi tiêu và còn
-     * nợ = 0. Có sổ nợ khách rồi thì sửa lại hai dòng này.
+     * Lọc nhóm / từ khoá / nguồn đơn đều làm ở API — lọc ở đây thì chỉ lọc được
+     * trong số dòng API đã cắt theo `limit`, khách khớp mà nằm ngoài top là mất.
+     * Mã khách lấy đúng mã trên hồ sơ CRM; khách chưa có mã thì để trống.
      */
     protected function dongKhach(array $top, array $filters): array
     {
         $rows = [];
         foreach ($top as $r) {
             $ten = (string) ($r['name'] ?? '');
-            if ($filters['keyword'] !== '' && mb_stripos($ten, $filters['keyword']) === false) {
-                continue;
-            }
-
-            $chiTieu = (float) ($r['revenue'] ?? 0);
             $rows[] = [
-                'code' => 'KH'.str_pad((string) ($r['user_id'] ?? 0), 6, '0', STR_PAD_LEFT),
+                'code' => (string) ($r['customer_code'] ?? ''),
                 'name' => $ten !== '' ? $ten : __('message.retail_customer'),
-                'name_group' => '',
-                'rank' => '',
-                'total_expense' => $chiTieu,
+                'name_group' => (string) ($r['group_name'] ?? ''),
+                'rank' => (string) ($r['rank_name'] ?? ''),
+                'total_expense' => (float) ($r['revenue'] ?? 0),
                 'price_avg' => (float) ($r['aov'] ?? 0),
-                'accumulated_points' => 0,
-                'payment' => $chiTieu,
-                'debt' => 0,
+                'accumulated_points' => (int) ($r['points'] ?? 0),
+                'payment' => (float) ($r['paid'] ?? 0),
+                'debt' => (float) ($r['debt'] ?? 0),
                 'total_order' => (int) ($r['orders'] ?? 0),
             ];
         }
@@ -342,6 +418,35 @@ class ReportController extends Controller
         }
 
         return $rows;
+    }
+
+    /**
+     * Dòng "Bán cho người tiêu dùng" của v2 — gộp mọi đơn khách vãng lai (không
+     * gắn khách). Chỉ bày khi KHÔNG lọc theo nhóm, theo khách hay theo tên: khách
+     * lẻ không thuộc nhóm nào, cũng không có tên để khớp.
+     */
+    protected function dongKhachLe(array $tong, array $filters): ?array
+    {
+        $don = (int) ($tong['guest_orders'] ?? 0);
+        if ($don === 0 || $filters['customer_group_id'] !== '' || $filters['user_id'] !== '' || $filters['keyword'] !== '') {
+            return null;
+        }
+
+        $tien = (float) ($tong['guest_revenue'] ?? 0);
+        $daTra = (float) ($tong['guest_paid'] ?? 0);
+
+        return [
+            'code' => '',
+            'name' => 'Bán cho người tiêu dùng',
+            'name_group' => '',
+            'rank' => '',
+            'total_expense' => $tien,
+            'price_avg' => $tien / $don,
+            'accumulated_points' => 0,
+            'payment' => $daTra,
+            'debt' => max($tien - $daTra, 0),
+            'total_order' => $don,
+        ];
     }
 
     /** Dòng tổng cuối bảng — cộng đúng phần đang bày. */
@@ -526,6 +631,33 @@ class ReportController extends Controller
             'error' => $error,
             'chiNhanh' => $this->chiNhanhChoLoc(),
         ]);
+    }
+
+    /**
+     * Khách cho ô "--Khách hàng--" (chọn một khách). API danh sách khách trả tối
+     * đa 100 khách một trang — đủ cho ô chọn có tìm kiếm của một cửa hàng nhỏ.
+     */
+    protected function khachChoLoc(): array
+    {
+        try {
+            $res = $this->api->customers(['page_size' => 100]);
+
+            return $res->successful() ? ($res->json('data') ?? []) : [];
+        } catch (\Throwable $e) {
+            return [];
+        }
+    }
+
+    /** Nhóm khách cho ô lọc của trang Khách hàng. Hỏng thì trả rỗng — mất một ô lọc còn hơn mất cả trang. */
+    protected function nhomKhachChoLoc(): array
+    {
+        try {
+            $res = $this->api->nhomKhachHang(true);
+
+            return $res->successful() ? ($res->json('data') ?? []) : [];
+        } catch (\Throwable $e) {
+            return [];
+        }
     }
 
     /**
