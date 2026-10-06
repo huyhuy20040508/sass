@@ -190,7 +190,14 @@
                 <div class="card-body">
                     <div class="d-flex flex-column flex-sm-row justify-content-sm-between align-items-sm-center">
                         <div>
-                            <h1 class="fw-bold tieu-de-trang mb-0">Báo cáo doanh thu</h1>
+                            {{-- Tên lấy theo TAB ĐANG MỞ. Trước đây ghi cứng "Báo cáo
+                                 doanh thu" — tên của tab đầu tiên — nên mọi tab khác đều
+                                 bày sai tên mình, dù dãy tab bên dưới sáng đúng chỗ.
+
+                                 Không đặt giá trị lùi: thiếu $tabDangXem thì phải đỏ ngay
+                                 chứ không được âm thầm bày lại tên tab đầu, vì đó đúng là
+                                 cái lỗi này. --}}
+                            <h1 class="fw-bold tieu-de-trang mb-0">{{ $CR::TAB_THONG_KE[$tabDangXem] }}</h1>
                             <div class="text-sm text-secondary mt-2">Tổng hợp doanh thu, chi phí &amp; hàng hóa trong ngày làm việc.</div>
                         </div>
                         <div id="header_title_info" class="p-2 px-3 my-2 my-sm-0 text-center">{{ $CR::kyChu($filters, $chiNhanh) }}</div>

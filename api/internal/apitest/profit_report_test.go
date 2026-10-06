@@ -238,3 +238,59 @@ func TestBaoCaoLoiNhuan_KhongLanCuaHang(t *testing.T) {
 		t.Fatalf("B thấy mặt hàng của A")
 	}
 }
+
+// TestBaoCaoLoiNhuan_TruGiamGiaDon — giảm giá cả đơn (hạng thẻ, đổi điểm,
+// voucher, giảm tay) chia về từng dòng theo tỷ lệ tiền dòng rồi mới tính lãi;
+// biểu đồ cộng lại vẫn bằng dòng tổng.
+func TestBaoCaoLoiNhuan_TruGiamGiaDon(t *testing.T) {
+	h := dungHeThong(t)
+	a, _ := haiCuaHang(t, h)
+	hom := homNayDT()
+	ctx := tenant.WithID(context.Background(), a.id)
+	now := time.Now()
+
+	// Một đơn hai món 600.000 + 400.000, giảm cả đơn 100.000 (10%).
+	spA := gieoHangCoVon(t, h, a, "gd-a", 0, 600000, 0)
+	spB := gieoHangCoVon(t, h, a, "gd-b", 0, 400000, 0)
+	don := &domain.Order{
+		ShopID: a.chiNhanh, OrderCode: "ln-gd-" + a.vet, Channel: domain.OrderChannelPOS,
+		SubtotalAmount: 1000000, DiscountAmount: 100000, TotalAmount: 900000,
+		PaymentMethod: domain.PaymentMethodCash, PaymentStatus: domain.OrderPaymentPaid,
+		Status: domain.OrderStatusCompleted, PlacedAt: &now,
+	}
+	tao(t, h.db, ctx, don)
+	for _, d := range []struct {
+		id       uint
+		ten      string
+		gia, von float64
+	}{
+		{spA, "Hàng gd-a " + a.vet, 600000, 500000},
+		{spB, "Hàng gd-b " + a.vet, 400000, 380000},
+	} {
+		id := d.id
+		tao(t, h.db, ctx, &domain.OrderItem{
+			OrderID: don.ID, ProductID: &id, ProductName: d.ten,
+			UnitPrice: d.gia, Quantity: 1, TotalPrice: d.gia, CostPrice: conTro(d.von),
+		})
+	}
+
+	bc := docLoiNhuan(t, h, a, hom, hom, "")
+	ra, _ := dongLNCua(bc, spA)
+	rb, _ := dongLNCua(bc, spB)
+	// A: 600.000 − 60.000 = 540.000, vốn 500.000 → lãi 40.000.
+	if ra.Revenue != 540000 || ra.Profit != 40000 {
+		t.Errorf("hàng A phải bán 540000 / lãi 40000, đang là %+v", ra)
+	}
+	// B: 400.000 − 40.000 = 360.000, vốn 380.000 → LỖ 20.000 (chưa trừ giảm thì báo lãi 20.000).
+	if rb.Revenue != 360000 || rb.Profit != -20000 {
+		t.Errorf("hàng B phải bán 360000 / lỗ 20000, đang là %+v", rb)
+	}
+
+	var thu float64
+	for _, m := range bc.Chart {
+		thu += m.Revenue
+	}
+	if math.Abs(thu-bc.Totals.Revenue) > 0.01 {
+		t.Errorf("biểu đồ cộng lại %v phải bằng dòng tổng %v", thu, bc.Totals.Revenue)
+	}
+}

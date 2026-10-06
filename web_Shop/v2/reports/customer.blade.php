@@ -8,6 +8,12 @@
        - ô tìm tên/mã + Xuất Excel + chọn cột; bảng 11 cột có sắp xếp, dòng
          "Bán cho người tiêu dùng" đứng đầu, chân bảng "Tổng cộng" nền vàng.
 
+     Dòng "Bán cho người tiêu dùng" GHIM ĐẦU BẢNG, không chạy theo sắp xếp — nó
+     gộp mọi đơn khách vãng lai chứ không phải một khách, thả vào sắp chung thì
+     nó thành "khách mua nhiều nhất". Nhưng ghim mà không nói thì người xem chỉ
+     thấy một bảng sắp sai, nên dòng ấy có nền riêng, nhãn "(tổng khách lẻ)", và
+     khi đang sắp xếp thì dưới bảng có một câu nói rõ.
+
      Hai chỗ khác v2:
        - Ô "Giá trị TB" ở chân bảng là tổng chi / tổng đơn. Bản gốc cộng dồn giá
          trị TB của từng dòng — con số đó không có nghĩa gì.
@@ -37,6 +43,17 @@
 
     $cacDong = array_merge($khachLe ? [$khachLe] : [], $rows);
 @endphp
+
+@push('styles')
+    <style>
+        /* Dòng gộp khách lẻ: nền riêng để đọc ra ngay đây không phải một khách.
+           Khác hẳn vàng của chân bảng (tfoot) — hai thứ khác nhau, đừng cho
+           giống nhau. */
+        table.bang-khach tr.kh-gop td { background: #eef4fb; font-style: italic; }
+        table.bang-khach tr.kh-gop .kh-gop-nhan { color: #5a6b7d; font-size: 12.5px; font-style: normal; }
+        .kh-ghim-chu { margin: 6px 0 0; font-size: 12.5px; color: #8a6d3b; }
+    </style>
+@endpush
 
 @push('nut-loc-them')
     @include('v2::partials.filter-button-mobile', [
@@ -125,10 +142,13 @@
                                     {{-- Dòng khách lẻ ("Bán cho người tiêu dùng") đứng đầu như v2, không
                                          chạy theo sắp xếp — nó không phải một khách. --}}
                                     @forelse ($cacDong as $i => $r)
-                                        <tr class="item">
+                                        {{-- $cacDong ghép khách lẻ vào đầu ngay phía trên, nên
+                                             dòng 0 là dòng gộp khi có khách lẻ. --}}
+                                        @php $laGop = $khachLe && $i === 0; @endphp
+                                        <tr class="item {{ $laGop ? 'kh-gop' : '' }}">
                                             <td class="show_stt {{ $an('stt') }}">{{ $i + 1 }}</td>
                                             <td class="text-left show_code {{ $an('code') }}">{{ $r['code'] !== '' ? $r['code'] : '-' }}</td>
-                                            <td class="text-left show_name {{ $an('name') }}">{{ $r['name'] }}</td>
+                                            <td class="text-left show_name {{ $an('name') }}">{{ $r['name'] }}@if ($laGop) <span class="kh-gop-nhan">(tổng khách lẻ)</span>@endif</td>
                                             <td class="text-left show_name_group {{ $an('name_group') }}">{{ $r['name_group'] }}</td>
                                             <td class="text-left show_rank {{ $an('rank') }}">{{ $r['rank'] }}</td>
                                             <td class="text-right show_total_expense {{ $an('total_expense') }}">{{ $tien($r['total_expense']) }}</td>
@@ -160,6 +180,11 @@
                                     </tfoot>
                                 @endif
                             </table>
+                            {{-- Chỉ nói khi ĐANG sắp xếp: lúc ấy người xem mới thấy một dòng
+                                 nằm sai chỗ và tưởng cả bảng sắp hỏng. --}}
+                            @if ($khachLe && $filters['sort_field'] !== '')
+                                <p class="kh-ghim-chu">Dòng "Bán cho người tiêu dùng" gộp mọi đơn khách vãng lai nên luôn đứng đầu, không theo sắp xếp.</p>
+                            @endif
                         </div>
                     </div>
 @endsection

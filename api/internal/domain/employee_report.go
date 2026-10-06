@@ -16,10 +16,12 @@ import "time"
 //     (returnStatuses) của chính các đơn ấy.
 //   - Doanh thu tính hoa hồng = Tổng doanh thu (VAT) − Tổng tiền trả hàng, không
 //     âm: hàng khách trả lại thì nhân viên không ăn hoa hồng phần đó.
-//   - Hoa hồng = doanh thu tính hoa hồng × tỉ lệ % trên hồ sơ nhân sự
-//     (employees.commission_rate). Bên mình chưa có chương trình hoa hồng theo
-//     món như v2 — một người một tỉ lệ. Tỉ lệ là mức HIỆN TẠI của hồ sơ, sửa tỉ
-//     lệ thì báo cáo kỳ cũ tính lại theo mức mới
+//   - Hoa hồng = doanh thu tính hoa hồng × tỉ lệ % của người lập CHỤP vào đơn
+//     lúc tạo đơn (orders.staff_commission_rate, migration 0074): sửa tỉ lệ
+//     hay xoá hồ sơ về sau không đổi hoa hồng đã tính. Đơn không có bản chụp
+//     mới lùi về tỉ lệ hiện tại trên hồ sơ. Bên mình chưa có chương trình hoa
+//     hồng theo món như v2 — một người một tỉ lệ; trong kỳ người đó đổi tỉ lệ
+//     thì cột tỉ lệ của dòng hiện mức của đơn mới nhất.
 
 // EmployeeOrder — một đơn của nhân viên (hộp chi tiết)
 type EmployeeOrder struct {

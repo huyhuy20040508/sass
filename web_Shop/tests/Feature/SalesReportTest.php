@@ -153,10 +153,45 @@ class SalesReportTest extends TestCase
         $this->assertMatchesRegularExpression('#id="show-chart"\s+checked#', $html);
         $this->assertStringNotContainsString('id="show-chart" disabled', $html);
         $this->assertStringContainsString('"thang":[{"key":"5","orders":4,"revenue":3806770}]', $html);
-        $this->assertStringContainsString('Doanh thu theo tháng (<span class="text-success">3.806.770 VND</span>)', $html);
+        $this->assertStringContainsString('Doanh thu (VAT) theo tháng (<span class="text-success">3.806.770 VND</span>)', $html);
         // Dạng Biểu đồ: khung biểu đồ hiện, bảng ẩn.
         $this->assertMatchesRegularExpression('#<div class="row\s*" data-dang="chart">#', $html);
         $this->assertMatchesRegularExpression('#class="table-responsive d-none" data-dang="table"#', $html);
+    }
+
+    /**
+     * Bốn biểu đồ vẽ tiền ĐÃ GỒM VAT, nên nhãn phải nói ra điều đó.
+     *
+     * Cột 29/09 của "Doanh thu theo ngày" là 37.884.000 trong khi cột "Tổng Doanh
+     * Thu" của bảng ghi 34.440.000 — hai chỗ cùng tên "Doanh thu" mà hai số, người
+     * xem đối chiếu chỉ biết là một trong hai sai. Khu báo cáo này gọi tên nhất
+     * quán: "Doanh thu" là chưa thuế, "Doanh thu (VAT)" là đã gồm.
+     *
+     * Vế thứ hai mới là vế giữ cho nhãn khỏi nói dối về sau: số liệu đẩy sang biểu
+     * đồ phải cộng ra ĐÚNG tổng revenue_vat chứ không phải revenue. Ai đổi nguồn số
+     * mà quên nhãn (hoặc ngược lại) là bài này đỏ.
+     */
+    public function test_nhan_bieu_do_khop_voi_so_tien_dang_ve(): void
+    {
+        $this->fakeApi();
+
+        $html = $this->trang('/admin/reports/sales?show=chart');
+
+        foreach (['ngày', 'giờ', 'thứ', 'tháng'] as $moc) {
+            $this->assertStringContainsString('Doanh thu (VAT) theo '.$moc, $html);
+        }
+        // Và không còn nhãn trần "Doanh thu theo …" nào.
+        $this->assertDoesNotMatchRegularExpression('/chart-title">Doanh thu theo /', $html);
+
+        // Số đang vẽ cộng lại đúng bằng tổng CÓ VAT, không phải tổng chưa VAT.
+        preg_match('#<script type="application/json" id="dt-du-lieu">(.*?)</script>#s', $html, $m);
+        $this->assertNotEmpty($m, 'không thấy dữ liệu biểu đồ');
+        $du = json_decode(html_entity_decode($m[1], ENT_QUOTES), true);
+
+        $tong = $this->baoMau()['data']['totals'];
+        $dangVe = (float) array_sum(array_column($du['ngay'], 'revenue'));
+        $this->assertSame((float) $tong['revenue_vat'], $dangVe);
+        $this->assertNotSame((float) $tong['revenue'], $dangVe);
     }
 
     public function test_hop_chi_tiet_ngay(): void

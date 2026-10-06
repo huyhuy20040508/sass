@@ -1054,6 +1054,13 @@ type Order struct {
 	// việc — `orders` không trỏ sang `work_shifts`, mà hai người cùng một ca thì
 	// suy ra cũng chỉ là tung đồng xu.
 	CreatedBy *uint `json:"created_by"`
+	// Hồ sơ nhân sự của người lập, chụp lúc tạo đơn (migration 0074): hoa hồng
+	// là tiền lương đã trả, sửa tỉ lệ hay xoá hồ sơ về sau không được đổi theo.
+	// nil = người lập không có hồ sơ lúc đó. Không ra JSON — khách xem đơn của
+	// mình không cần biết tỉ lệ hoa hồng của người bán.
+	StaffCode           *string  `json:"-"`
+	StaffName           *string  `json:"-"`
+	StaffCommissionRate *float64 `json:"-"`
 	// CreatedByName KHÔNG phải cột: repository điền thêm bằng một lượt tra bảng
 	// `users`. Người tạo đã bị xoá thì để rỗng và màn hình in "—", đúng như
 	// ChiNhanh.CreatedByName vẫn làm.

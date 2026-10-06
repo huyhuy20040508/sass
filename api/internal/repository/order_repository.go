@@ -452,6 +452,23 @@ func (r *orderRepository) UserExists(ctx context.Context, id uint) (bool, error)
 	return count > 0, err
 }
 
+// chupNhanSuLapDon chụp mã, tên và tỉ lệ hoa hồng trên hồ sơ nhân sự của người
+// lập vào đơn. Báo cáo hoa hồng đọc bản chụp: sửa tỉ lệ hay xoá hồ sơ về sau
+// không được làm đổi tiền hoa hồng của đơn đã bán.
+func chupNhanSuLapDon(tx *gorm.DB, o *domain.Order) error {
+	if o.CreatedBy == nil {
+		return nil
+	}
+	var nv domain.NhanVien
+	err := tx.Select("code", "full_name", "commission_rate").
+		Where("user_id = ?", *o.CreatedBy).Limit(1).Find(&nv).Error
+	if err != nil || nv.Code == "" {
+		return err
+	}
+	o.StaffCode, o.StaffName, o.StaffCommissionRate = &nv.Code, &nv.FullName, &nv.CommissionRate
+	return nil
+}
+
 // Create tạo đơn (kèm items) trong một transaction. Mã đơn tạm dùng thời gian để
 // tránh đụng ràng buộc UNIQUE khi insert, sau đó đổi thành mã hiển thị theo ID.
 // Kho bị trừ ngay trong transaction này — thiếu hàng thì cả đơn bị huỷ bỏ.
@@ -471,6 +488,9 @@ func (r *orderRepository) Create(ctx context.Context, o *domain.Order) error {
 	}
 
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := chupNhanSuLapDon(tx, o); err != nil {
+			return err
+		}
 		o.OrderCode = fmt.Sprintf("TMP%d", time.Now().UnixNano())
 		if err := tx.Create(o).Error; err != nil {
 			return err
@@ -776,6 +796,9 @@ func (r *orderRepository) Checkout(
 		// Gán ở đây chứ không để service tự khai: chi nhánh bán đơn phải là ĐÚNG cái
 		// mà bước trừ kho bên dưới đọc, và cả hai cùng lấy từ một chỗ duy nhất.
 		o.ShopID = shopID
+		if err := chupNhanSuLapDon(tx, o); err != nil {
+			return err
+		}
 
 		// 5. Tạo đơn.
 		//

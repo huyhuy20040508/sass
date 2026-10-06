@@ -179,13 +179,23 @@
                 </table>
             </div>
 
-            {{-- Bốn biểu đồ của tab revenue (v2), cùng màu nền từng khung. --}}
+            {{-- Bốn biểu đồ của tab revenue (v2), cùng màu nền từng khung.
+
+                 Nhãn có "(VAT)" vì cột vẽ ra là SUM(orders.total_amount) — tiền ĐÃ
+                 gồm thuế (xem Buckets bên API). Khu báo cáo này gọi tên nhất quán:
+                 "Doanh thu" là chưa thuế, "Doanh thu (VAT)" là đã gồm. Nhãn cũ ghi
+                 "Doanh thu theo ngày" nên cột 29/09 ra 37.884.000 trong khi cột
+                 "Tổng Doanh Thu" của bảng ghi 34.440.000 — hai chỗ cùng tên mà hai
+                 số, người xem đối chiếu chỉ biết là một trong hai sai.
+
+                 Sửa nhãn chứ không đổi số vẽ: con số trong tiêu đề vốn đã là
+                 $tong['revenue_vat'], đúng bằng tổng các cột. --}}
             <div class="row {{ $dangBieuDo ? '' : 'd-none' }}" data-dang="chart">
                 @foreach ([
-                    ['dtNgay', 'Doanh thu theo ngày', 'rgba(255, 244, 244, 1)'],
-                    ['dtGio', 'Doanh thu theo giờ', 'rgba(255, 251, 235, 1)'],
-                    ['dtThu', 'Doanh thu theo thứ', 'rgba(255, 244, 251, 1)'],
-                    ['dtThang', 'Doanh thu theo tháng', 'rgba(244, 240, 255, 1)'],
+                    ['dtNgay', 'Doanh thu (VAT) theo ngày', 'rgba(255, 244, 244, 1)'],
+                    ['dtGio', 'Doanh thu (VAT) theo giờ', 'rgba(255, 251, 235, 1)'],
+                    ['dtThu', 'Doanh thu (VAT) theo thứ', 'rgba(255, 244, 251, 1)'],
+                    ['dtThang', 'Doanh thu (VAT) theo tháng', 'rgba(244, 240, 255, 1)'],
                 ] as [$id, $tieuDe, $nen])
                     <div class="col-12 col-xxl-6 mb-4">
                         <div class="chart-container dt-the">

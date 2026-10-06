@@ -3,7 +3,8 @@ package domain
 // ---------- Báo cáo chi phí & lợi nhuận ----------
 //
 // Cùng quy ước với tab Hàng hoá: đơn còn hiệu lực, mốc là created_at.
-//   - Tổng giá bán = SUM(order_items.total_price), chưa thuế.
+//   - Tổng giá bán = tiền dòng hàng SAU giảm giá cả đơn (chia theo tỷ lệ tiền
+//     dòng), chưa thuế.
 //   - Tổng giá vốn = SUM(costExpr × số lượng).
 //   - Lợi nhuận = giá bán − giá vốn, CÓ THỂ ÂM (bán lỗ).
 //   - Biên lợi nhuận (%) = lợi nhuận / giá bán × 100; giá bán 0 thì 0.

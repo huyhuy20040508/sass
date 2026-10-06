@@ -63,13 +63,15 @@ func (s *reportService) Goods(ctx context.Context, q ReportQuery) (domain.GoodsR
 		out.Totals.Cong(r)
 	}
 
-	// Top bán chạy xếp theo tiền; asc = N món bán ít tiền nhất.
+	// Top bán chạy xếp theo SỐ LƯỢNG — cùng cách hiểu với bảng và biểu đồ theo
+	// thứ; bằng số lượng thì món nhiều tiền đứng trước. asc = N món bán ít nhất.
 	top := slices.Clone(all)
 	slices.SortStableFunc(top, func(a, b domain.GoodsRow) int {
+		c := cmp.Or(cmp.Compare(b.Quantity, a.Quantity), cmp.Compare(b.Total, a.Total))
 		if q.Sort == "asc" {
-			return cmp.Compare(a.Total, b.Total)
+			return -c
 		}
-		return cmp.Compare(b.Total, a.Total)
+		return c
 	})
 	out.Top = top[:min(soTop(q.Limit), len(top))]
 
