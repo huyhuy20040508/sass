@@ -26,6 +26,10 @@ type SummaryCashbook struct {
 	ExpenseCount int64   `json:"expense_count"`
 	Income       float64 `json:"income"`
 	Expense      float64 `json:"expense"`
+	// Phần TIỀN MẶT của Income / Expense — thẻ "Quỹ tiền mặt" đọc hai số này:
+	// phiếu chuyển khoản không đi qua két.
+	CashIncome  float64 `json:"cash_income"`
+	CashExpense float64 `json:"cash_expense"`
 }
 
 // SummaryReturns — hàng khách trả lại trong ngày. Chỉ tính phiếu đã NHẬN HÀNG

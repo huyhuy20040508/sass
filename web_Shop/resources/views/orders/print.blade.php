@@ -106,7 +106,12 @@
         .inv-sum { margin-top: 8px; margin-left: auto; width: 62%; font-size: 12.5px; }
         .inv-sum div { display: flex; justify-content: space-between; padding: 3px 0; }
         .inv-sum .is-total { border-top: 1.5px solid #111; margin-top: 4px; padding-top: 6px; font-size: 15px; font-weight: 700; }
+        /* Dòng kê chi tiết của "Giảm giá": display:block (không flex như các dòng
+           khác) để nó là MỘT câu chạy dài chứ không phải một cặp nhãn - số tiền,
+           nhờ vậy khách không nhầm nó là một khoản trừ nữa. */
+        .inv-sum .is-sub { display: block; padding: 0 0 2px 10px; font-size: 11px; color: #555; }
         .inv-words { font-size: 12px; font-style: italic; color: #333; margin-top: 6px; }
+        .inv-points { font-size: 12px; color: #333; margin-top: 3px; }
 
         .inv-note { font-size: 12px; color: #333; background: #f8f9fa; border: 1px dashed #bbb; padding: 6px 8px; margin-top: 8px; }
 
@@ -252,15 +257,78 @@
                 </tbody>
             </table>
 
+            @php
+                // Khối tổng phải CỘNG RA ĐÚNG dòng "Tổng thanh toán" — khách cầm phiếu
+                // về cộng lại, lệch một dòng là mất lòng tin vào cả tờ phiếu. Mạch tính
+                // của đơn (order_service.go, POSCheckout) là:
+                //     tổng = max(0, tiền hàng − giảm giá) + phí vận chuyển + phụ thu + thuế
+                // Phiếu cũ in bốn dòng rồi nhảy thẳng sang tổng, bỏ hẳn thuế và phụ thu:
+                // DH000024 in "Tiền hàng 22.000.000 · Giảm 0 · Phí 0" mà Tổng thanh toán
+                // 24.200.000 — thiếu đúng 2.200.000 tiền thuế khách đã trả, mà không dòng
+                // nào trên phiếu nói là mình đã trả thuế.
+                $sub = (float) ($o['subtotal_amount'] ?? 0);
+                // Giảm nhiều hơn tiền hàng thì API chỉ trừ tới 0 (clamp). In nguyên con số
+                // to hơn sẽ khiến khách cộng ra số âm, nên in đúng phần ĐÃ trừ.
+                $giam = min((float) ($o['discount_amount'] ?? 0), $sub);
+                $phuThu = (float) ($o['surcharge_amount'] ?? 0);
+                $thue = (float) ($o['vat_amount'] ?? 0);
+                $diemDung = (int) ($o['points_used'] ?? 0);
+                $diemCong = (int) ($o['points_earned'] ?? 0);
+
+                // "Giảm giá" gộp nhiều nguồn vào một con số. Khách quen nhìn −9.560.000
+                // không biết đâu là giảm theo hạng thẻ, đâu là điểm mình vừa đổi, nên kê
+                // từng nguồn ra. Các khoản này ĐÃ nằm trong Giảm giá, không trừ lần nữa.
+                $pt = (float) ($o['order_discount_percent'] ?? 0);
+                $khoan = [
+                    'khuyến mãi' => (float) ($o['promotion_discount'] ?? 0),
+                    $pt > 0 ? 'giảm trên đơn '.rtrim(rtrim(number_format($pt, 2, ',', '.'), '0'), ',').'%' : 'giảm trên đơn'
+                        => (float) ($o['order_discount_amount'] ?? 0),
+                    'hạng thẻ thành viên' => (float) ($o['rank_discount'] ?? 0),
+                    'điểm đã dùng ('.number_format($diemDung, 0, ',', '.').' điểm)' => (float) ($o['points_amount'] ?? 0),
+                ];
+                // Phần giảm chưa khoản nào nhận là của mã giảm giá: API trả mã nhưng
+                // không trả riêng số tiền mã ấy giảm.
+                $chuaRo = $giam - array_sum($khoan);
+                if ($chuaRo >= 1 && ($o['voucher_code'] ?? '') !== '') {
+                    $khoan['mã '.$o['voucher_code']] = $chuaRo;
+                    $chuaRo = 0;
+                }
+
+                $nguon = [];
+                foreach ($khoan as $nhan => $tien) {
+                    if ($tien > 0) {
+                        $nguon[] = $nhan.' '.$money($tien);
+                    }
+                }
+                // Kê mà không khớp đủ số Giảm giá thì THÔI kê: một dòng "trong đó" cộng
+                // không ra con số ở trên còn khó hiểu hơn là không có dòng nào.
+                if ($chuaRo >= 1) {
+                    $nguon = [];
+                }
+            @endphp
             <div class="inv-sum">
-                <div><span>Tiền hàng</span><span>{{ $money($o['subtotal_amount'] ?? 0) }}</span></div>
-                @if((float) ($o['discount_amount'] ?? 0) > 0)
-                    <div><span>Giảm giá</span><span>-{{ $money($o['discount_amount']) }}</span></div>
+                <div><span>Tiền hàng</span><span>{{ $money($sub) }}</span></div>
+                @if($giam > 0)
+                    <div><span>Giảm giá</span><span>-{{ $money($giam) }}</span></div>
+                    @if(count($nguon))
+                        <div class="is-sub">Trong đó: {{ implode(' · ', $nguon) }}</div>
+                    @endif
                 @endif
                 <div><span>Phí vận chuyển</span><span>{{ $money($o['shipping_fee'] ?? 0) }}</span></div>
+                @if($phuThu != 0)
+                    <div><span>Phụ thu{{ ($o['surcharge_note'] ?? '') !== '' ? ' ('.$o['surcharge_note'].')' : '' }}</span><span>{{ $money($phuThu) }}</span></div>
+                @endif
+                @if($thue != 0)
+                    <div><span>Thuế VAT</span><span>{{ $money($thue) }}</span></div>
+                @endif
                 <div class="is-total"><span>Tổng thanh toán</span><span>{{ $money($o['total_amount'] ?? 0) }}</span></div>
             </div>
             <p class="inv-words">Bằng chữ: {{ $docSo((int) round((float) ($o['total_amount'] ?? 0))) }}.</p>
+            {{-- Điểm tích luỹ đứng NGOÀI khối tổng: nó là điểm, không phải tiền, để
+                 lẫn vào cột tiền là mời khách cộng nhầm. --}}
+            @if($diemCong > 0)
+                <p class="inv-points">Điểm tích luỹ từ đơn này: <b>{{ number_format($diemCong, 0, ',', '.') }}</b> điểm.</p>
+            @endif
         </div>
 
         @if(!empty($o['note']))

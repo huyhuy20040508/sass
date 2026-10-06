@@ -50,7 +50,10 @@
                 <div class="content_midd_title d-flex flex-column flex-lg-row align-items-lg-start align-items-xl-center">
                     <h1 class="tieu-de-trang text-nowrap">Giảm giá theo xếp hạng</h1>
                     <div class="d-flex flex-wrap align-items-center justify-content-lg-end gap-3 w-100">
-                        <div class="d-flex flex-wrap align-items-center gap-4">
+                        {{-- Hai nhãn quy đổi gói trong một khối CÓ ID: lưu xong thì
+                             V2.napLai thay luôn khối này bằng bản máy chủ vừa trả
+                             (xem V2.KHOI ở cuối tệp). --}}
+                        <div class="d-flex flex-wrap align-items-center gap-4" id="tv-khoi-quy-doi">
                             <a class="tv-quy-doi mo-quy-doi" data-kind="earn">
                                 <span>Quy đổi tiền ra điểm: {{ number_format((float) ($conversion['earn_money'] ?? 0)) }}đ = {{ number_format((int) ($conversion['earn_point'] ?? 0)) }} điểm</span>
                                 <i class="fa fa-pencil"></i>
@@ -228,7 +231,20 @@
         const URL_TV_TAO = @json(route('admin.membership.store'));
         const URL_TV_XOA = @json(route('admin.membership.destroy'));
         const URL_TV_QD = @json(route('admin.membership.conversion'));
-        const QD = @json($conversion);
+
+        // Lưu quy đổi xong, V2.luuHop gọi V2.napLai — mà napLai chỉ thay mấy khối
+        // DANH SÁCH, nên bảng hạng mới ngay còn hai nhãn ở hàng tiêu đề vẫn là chữ
+        // cũ ("0đ = 0 điểm"). Người dùng đọc nhãn, tưởng chưa lưu, bấm Lưu lại
+        // mấy lượt nữa.
+        //
+        // Khai thêm khối hai nhãn vào danh sách cần thay, thay vì tự viết lại chữ
+        // bằng JS theo số vừa gửi: số bày ra khi ấy là số MÁY CHỦ đã ghi, nên
+        // không có cửa cho nhãn nói một đằng còn dữ liệu một nẻo. Ô tick "Áp dụng
+        // quy đổi điểm" nằm trong khối này nên cũng tự về đúng trạng thái đã lưu.
+        //
+        // Đẩy trong hàm ready vì master dựng V2.KHOI ở đoạn SAU @stack('scripts') —
+        // đọc ngay tại đây thì V2 còn chưa có.
+        $(function () { V2.KHOI.push('#tv-khoi-quy-doi'); });
 
         let TV = docDong();
         function docDong() {
