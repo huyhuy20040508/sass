@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Http\Client\Pool;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -104,9 +105,9 @@ class ApiClient
         return $ban;
     }
 
-    public function request(string|false|null $token = null): PendingRequest
+    public function request(string|false|null $token = null, ?PendingRequest $nen = null): PendingRequest
     {
-        $req = Http::baseUrl($this->baseUrl)
+        $req = ($nen ?? Http::withOptions([]))->baseUrl($this->baseUrl)
             ->timeout($this->timeout)
             ->acceptJson()
             ->asJson();
@@ -150,6 +151,40 @@ class ApiClient
     public function get(string $uri, array $query = []): Response
     {
         return $this->send('GET', $uri, $query);
+    }
+
+    /**
+     * Nhiều lượt GET chạy CÙNG LÚC, cho màn gom số liệu từ nhiều endpoint.
+     *
+     * Lượt nào ăn 401 thì gọi lại qua send() để được làm mới token như mọi lượt
+     * khác — chạy song song mà bỏ qua bước đó thì token vừa hết hạn là cả màn
+     * trống trơn trong khi màn bên cạnh vẫn chạy.
+     *
+     * @param  array<string, array{0: string, 1?: array<string, mixed>}>  $calls  khoá => [uri, query]
+     * @return array<string, Response|\Throwable>
+     */
+    public function getMany(array $calls): array
+    {
+        if ($calls === []) {
+            return [];
+        }
+
+        $kq = Http::pool(function (Pool $pool) use ($calls) {
+            foreach ($calls as $khoa => $call) {
+                $this->request(null, $pool->as((string) $khoa))->get($call[0], $call[1] ?? []);
+            }
+        });
+
+        foreach ($calls as $khoa => $call) {
+            $res = $kq[$khoa] ?? null;
+            if ($res instanceof Response && $res->status() === 401) {
+                $kq[$khoa] = $this->get($call[0], $call[1] ?? []);
+            } elseif ($res instanceof Response) {
+                $this->ghiNhanKhoaCuaHang($res);
+            }
+        }
+
+        return $kq;
     }
 
     public function post(string $uri, array $data = []): Response

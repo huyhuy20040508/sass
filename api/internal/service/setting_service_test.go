@@ -443,3 +443,34 @@ func TestSettingTatHetKeCaSePayBiChan(t *testing.T) {
 		t.Fatalf("lỗi phải chỉ cả ô SePay, nhận: %v", ve.Fields)
 	}
 }
+
+// Mục tiêu doanh thu tháng: chưa đặt thì đọc ra 0, lưu được số hợp lệ, chặn số
+// âm / chữ / vượt trần, và không lộ ra storefront (doanh thu là số liệu nội bộ).
+func TestSettingMucTieuDoanhThuThang(t *testing.T) {
+	svc := NewSettingService(newFakeSettingRepo())
+	ctx := ctxShop()
+
+	res, err := svc.List(ctx, SettingGroupDashboard)
+	if err != nil {
+		t.Fatalf("List nhóm dashboard lỗi: %v", err)
+	}
+	if got, ok := res.Values[SettingMonthlyRevenueGoal]; !ok || got != "0" {
+		t.Fatalf("chưa đặt mục tiêu thì phải đọc ra \"0\", nhận %q (có khoá: %v)", got, ok)
+	}
+
+	for _, sai := range []string{"-1", "abc", "1000000000001", ""} {
+		if _, err := svc.Update(ctx, map[string]string{SettingMonthlyRevenueGoal: sai}); err == nil {
+			t.Errorf("mục tiêu %q phải bị từ chối", sai)
+		}
+	}
+
+	if _, err := svc.Update(ctx, map[string]string{SettingMonthlyRevenueGoal: "100000000"}); err != nil {
+		t.Fatalf("mục tiêu 100.000.000 phải lưu được: %v", err)
+	}
+	if got := svc.Float(ctx, SettingMonthlyRevenueGoal); got != 100000000 {
+		t.Fatalf("đọc lại phải ra 100000000, nhận %v", got)
+	}
+	if _, ok := svc.Public(ctx)[SettingMonthlyRevenueGoal]; ok {
+		t.Fatal("mục tiêu doanh thu không được lộ ra storefront")
+	}
+}

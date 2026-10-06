@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Support\Period;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -81,7 +82,6 @@ class DashboardTest extends TestCase
                 ],
             ]]),
 
-            '*/admin/ca-lam-viec/hien-tai*' => Http::response(['data' => null]),
             '*' => Http::response(['data' => []]),
         ]);
     }
@@ -94,19 +94,21 @@ class DashboardTest extends TestCase
     /**
      * Ba công thức tiền của sáu ô đầu trang.
      *
-     * Gộp = tiền hàng + phụ thu (chưa trừ gì). Thuần = gộp trừ giảm giá. Ước
-     * tính = đơn chưa thu + đã thu, KHÔNG gồm đơn đã hoàn tiền.
+     * Gộp = tiền hàng + phụ thu (chưa trừ gì). Thuần = gộp trừ giảm giá. Lợi
+     * nhuận gộp lấy thẳng `profit` của API, biên lãi = lợi nhuận / thuần.
      */
     public function test_ba_o_doanh_thu_tinh_dung_cong_thuc(): void
     {
-        $this->fakeApi(['subtotal' => 148_213_100, 'shipping' => 1_000_000, 'discount' => 66_600]);
+        $this->fakeApi(['subtotal' => 148_213_100, 'shipping' => 1_000_000, 'discount' => 66_600, 'profit' => 77_000_000]);
 
         $html = $this->html();
 
         $this->assertStringContainsString('149.213.100', $html, 'Doanh thu gộp = tiền hàng + phụ thu');
         $this->assertStringContainsString('149.146.500', $html, 'Doanh thu thuần = gộp − giảm giá');
-        // 150.000.000 + 3.274.886, KHÔNG cộng 9.000.000 của đơn đã hoàn tiền.
-        $this->assertStringContainsString('153.274.886', $html, 'Ước tính = chưa thu + đã thu');
+        $this->assertStringContainsString('77.000.000', $html, 'Lợi nhuận gộp lấy từ API');
+        // 77.000.000 / 149.146.500 = 51,63%
+        $this->assertStringContainsString('Biên lãi 51,6%', $html);
+        $this->assertStringContainsString('Giảm giá −66.600', $html);
     }
 
     /** Phiếu nháp và phiếu huỷ không phải tiền đã mua — API cũng tính vậy. */
@@ -155,6 +157,60 @@ class DashboardTest extends TestCase
         $this->assertSame(date('Y-m-t', strtotime($thangTruoc['from'])), $thangTruoc['to']);
     }
 
+    /**
+     * Bấm nút kỳ nào thì nút ĐÓ sáng, kể cả khi hai kỳ trùng khoảng nhau.
+     *
+     * Trang từng không sáng theo ?range= mà dò ngược từ cặp ngày, rồi trúng
+     * preset đứng trước trong danh sách. Đầu tháng 10, "quý này" và "tháng này"
+     * cùng là 01/10 → hôm nay, nên bấm "Quý này" lại thấy "Tháng này" sáng và
+     * người bấm tưởng nút không ăn. Tháng 1 thì "Năm nay" dính y vậy.
+     *
+     * Giờ chốt ở 06/10/2026 — đúng ngày lỗi được báo — để hai kỳ chắc chắn trùng
+     * khoảng; không chốt giờ thì bài này chỉ đỏ vào mấy ngày đầu quý.
+     */
+    public function test_bam_ky_nao_thi_sang_dung_nut_do(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-10-06 09:00:00'));
+
+        try {
+            // Tiền đề của bài: hai kỳ này đang là CÙNG một khoảng ngày.
+            $this->assertSame(Period::resolve('this-month'), Period::resolve('this-quarter'));
+
+            foreach (['this-quarter', 'this-month', 'this-year'] as $ma) {
+                $this->fakeApi();
+                $html = $this->html('/admin/dashboard?range='.$ma);
+
+                $this->assertMatchesRegularExpression(
+                    '/id="db-range-'.$ma.'"[^>]*\s+checked/', $html, 'bấm '.$ma.' mà nút đó không sáng');
+                // Và chỉ MỘT nút sáng.
+                $this->assertSame(1, preg_match_all('/class="form-check-input m-0 db-range"[^>]*checked/', $html));
+            }
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
+    /**
+     * Gõ ngày tự chọn thì vẫn dò theo ngày — trùng preset nào thì nút ấy sáng.
+     *
+     * Đây là vế còn lại của cùng một quy tắc: URL có range thì tin range, không
+     * có thì mới dò. Bỏ vế này là quay về chuyện hai cách chọn mâu thuẫn nhau.
+     */
+    public function test_go_ngay_tu_chon_thi_van_do_theo_ngay(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-10-06 09:00:00'));
+
+        try {
+            $thang = Period::resolve('this-month');
+            $this->fakeApi();
+            $html = $this->html('/admin/dashboard?from='.$thang['from'].'&to='.$thang['to']);
+
+            $this->assertMatchesRegularExpression('/id="db-range-this-month"[^>]*\s+checked/', $html);
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
     /** Kỳ trên URL đi thẳng vào lượt gọi API, không phải mỗi khối tự tính lấy. */
     public function test_ky_tren_url_di_vao_moi_loi_goi(): void
     {
@@ -199,16 +255,20 @@ class DashboardTest extends TestCase
      * Ca đang mở: tiền mặt là tiền SỔ nói lẽ ra đang có trong két.
      *
      * Đầu ca cộng thu trừ chi — không phải chỉ lấy tiền đầu ca, mà cũng không
-     * phải tổng thu của cả ngày.
+     * phải tổng thu của cả ngày. Danh sách ca không kèm tổng thu/chi nên số
+     * phải lấy từ chi tiết từng ca.
      */
     public function test_ca_dang_mo_in_tien_mat_theo_so(): void
     {
         $this->fakeApi([], [
-            '*/admin/ca-lam-viec/hien-tai*' => Http::response(['data' => [
-                'id' => 12, 'shop_id' => 2, 'shop_name' => 'Chi nhánh 1',
+            '*/admin/ca-lam-viec/12*' => Http::response(['data' => ['ca' => [
+                'id' => 12, 'shop_id' => 2,
                 'opened_by_name' => 'Chị Lan', 'opened_at' => '2026-09-26 08:30:00',
                 'opening_cash' => 500_000, 'tong_thu' => 3_000_000, 'tong_chi' => 200_000,
                 'closed_at' => null, 'so_don_tien_mat' => 6,
+            ]]]),
+            '*/admin/ca-lam-viec*' => Http::response(['data' => [
+                ['id' => 12, 'shop_id' => 2, 'opened_by_name' => 'Chị Lan', 'opening_cash' => 500_000, 'tong_thu' => 0, 'tong_chi' => 0],
             ]]),
         ]);
 
@@ -218,6 +278,66 @@ class DashboardTest extends TestCase
         $this->assertStringContainsString('#12', $html);
         $this->assertStringContainsString('3.300.000', $html, 'Tiền mặt = đầu ca + thu − chi');
         $this->assertStringContainsString(__('message.open'), $html);
+        Http::assertSent(fn ($req) => str_contains($req->url(), 'ca-lam-viec?')
+            && str_contains($req->url(), 'status=dang_mo') && str_contains($req->url(), 'shop_id=0'));
+    }
+
+    /** Xem "Tất cả" thì mỗi chi nhánh có ca mở là một dòng, như v2. */
+    public function test_tat_ca_chi_nhanh_liet_ke_moi_ca_mo(): void
+    {
+        $this->fakeApi([], [
+            '*/admin/ca-lam-viec/12*' => Http::response(['data' => ['ca' => ['id' => 12, 'shop_id' => 2, 'opened_by_name' => 'Chị Lan', 'opening_cash' => 100_000]]]),
+            '*/admin/ca-lam-viec/15*' => Http::response(['data' => ['ca' => ['id' => 15, 'shop_id' => 3, 'opened_by_name' => 'Anh Tú', 'opening_cash' => 200_000]]]),
+            '*/admin/ca-lam-viec*' => Http::response(['data' => [['id' => 12, 'shop_id' => 2], ['id' => 15, 'shop_id' => 3]]]),
+        ]);
+
+        $html = $this->html();
+
+        $this->assertStringContainsString('Chị Lan', $html);
+        $this->assertStringContainsString('Anh Tú', $html);
+        $this->assertSame(2, substr_count($html, 'list-history-shift active'));
+    }
+
+    /**
+     * Chi nhánh là bộ lọc riêng của màn: mặc định gộp cả cửa hàng (shop_id=0),
+     * chọn một chi nhánh thì MỌI lượt gọi số liệu đều mang id đó, còn id lạ thì
+     * lùi về "Tất cả" chứ không gửi bừa lên API.
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('chiNhanhTrenUrl')]
+    public function test_chi_nhanh_di_vao_moi_loi_goi(string $q, string $shop): void
+    {
+        $dsChiNhanh = Http::response(['data' => [['id' => 2, 'name' => 'Chi nhánh 1'], ['id' => 3, 'name' => 'Chi nhánh 2']]]);
+        $this->fakeApi([], ['*/admin/chi-nhanh*' => $dsChiNhanh]);
+
+        $html = $this->html('/admin/dashboard'.$q);
+
+        foreach (['reports/revenue', 'reports/orders', 'reports/products', 'phieu-mua-hang', 'ca-lam-viec?'] as $d) {
+            Http::assertSent(fn ($req) => str_contains($req->url(), $d) && str_contains($req->url(), 'shop_id='.$shop));
+        }
+        $this->assertMatchesRegularExpression('#<option value="'.$shop.'"\s+selected#', $html);
+    }
+
+    public static function chiNhanhTrenUrl(): array
+    {
+        return [
+            'mặc định Tất cả' => ['', '0'],
+            'một chi nhánh' => ['?branch=3', '3'],
+            'id không có' => ['?branch=99', '0'],
+            'chữ' => ['?branch=abc', '0'],
+        ];
+    }
+
+    /** Tab Thống kê: Tổng quan bấm được và đứng đầu, "Báo cáo cuối ngày" đã chuyển sang module Báo cáo. */
+    public function test_tab_thong_ke(): void
+    {
+        $this->fakeApi();
+
+        $html = $this->html();
+
+        preg_match_all('#class="sub-nav-btn[^"]*"[^>]*>\s*([^<]+?)\s*</a>#u', $html, $tab);
+        $this->assertSame(['Tổng quan', 'Khách hàng', 'Quản lý đơn hàng', 'Hoá đơn điện tử'], $tab[1]);
+        $this->assertMatchesRegularExpression('#admin/dashboard"\s+class="sub-nav-btn active"#', $html);
+        $this->assertMatchesRegularExpression('#icon-item me-xl-2 active">\s*<a href="[^"]*/admin/dashboard"#', $html);
     }
 
     /**
@@ -255,5 +375,316 @@ class DashboardTest extends TestCase
 
         $this->assertStringContainsString(__('message.overview'), $html);
         $this->assertStringContainsString(__('message.gross-revenue'), $html);
+    }
+    /** Fake báo cáo doanh thu với totals + prev tuỳ ý, phần còn lại như fakeApi. */
+    protected function fakeKyTruoc(array $nay, array $truoc): void
+    {
+        $this->fakeApi([], [
+            '*/admin/reports/revenue*' => Http::response(['data' => [
+                'buckets' => [], 'by_payment_method' => [], 'by_payment_status' => [], 'by_shop' => [],
+                'prev_from' => '2026-08-02', 'prev_to' => '2026-08-31',
+                'totals' => $nay + ['subtotal' => 0, 'shipping' => 0, 'discount' => 0, 'orders' => 0, 'profit' => 0],
+                'prev' => $truoc + ['subtotal' => 0, 'shipping' => 0, 'discount' => 0, 'orders' => 0, 'profit' => 0],
+            ]]),
+        ]);
+    }
+
+    /**
+     * So kỳ trước: tăng in ▲ xanh, giảm in ▼ đỏ, kỳ trước bằng 0 in "Mới" chứ
+     * không chia cho 0 ra một phần trăm bịa.
+     */
+    public function test_so_voi_ky_truoc(): void
+    {
+        $this->fakeKyTruoc(
+            ['subtotal' => 120_000, 'profit' => 30_000, 'orders' => 9],
+            ['subtotal' => 100_000, 'profit' => 40_000, 'orders' => 0],
+        );
+
+        $html = $this->html();
+
+        $this->assertStringContainsString('▲ 20% so với kỳ trước', $html, 'Gộp 100k → 120k');
+        $this->assertStringContainsString('▼ 25% so với kỳ trước', $html, 'Lợi nhuận 40k → 30k');
+        $this->assertStringContainsString('▲ Mới · kỳ trước 0', $html, 'Đơn 0 → 9');
+        $this->assertStringContainsString('Kỳ trước: 02/08 – 31/08/2026', $html);
+    }
+
+    /** Cả hai kỳ đều 0 thì không in dòng so sánh nào. */
+    public function test_khong_ban_gi_thi_khong_so_sanh(): void
+    {
+        $this->fakeKyTruoc([], []);
+
+        $html = $this->html();
+
+        $this->assertStringNotContainsString('so với kỳ trước', $html);
+        $this->assertStringNotContainsString('▲ Mới', $html);
+    }
+
+    /**
+     * Nút Ngày / Tuần / Tháng đi thẳng vào `group_by`; không chọn thì kỳ dài tự
+     * gộp thô hơn, còn giá trị lạ lùi về cách tự chọn chứ không gửi bừa lên API.
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('chiaTrucTrenUrl')]
+    public function test_chia_truc(string $q, string $nhom): void
+    {
+        $this->fakeApi();
+
+        $html = $this->html('/admin/dashboard'.$q);
+
+        Http::assertSent(fn ($req) => str_contains($req->url(), 'reports/revenue') && str_contains($req->url(), 'group_by='.$nhom));
+        $this->assertMatchesRegularExpression('#group='.$nhom.'"\s+class="is-active"#', $html);
+    }
+
+    public static function chiaTrucTrenUrl(): array
+    {
+        return [
+            'mặc định hôm nay' => ['', 'day'],
+            'năm nay tự gộp tháng' => ['?range=this-year&group=', 'month'],
+            'chọn tuần' => ['?range=this-month&group=week', 'week'],
+            'giá trị lạ' => ['?range=today&group=abc', 'day'],
+        ];
+    }
+
+    /**
+     * Mỗi cột mang khoảng ngày của nó, cắt trong kỳ đang xem: tuần bắt đầu
+     * trước ngày đầu kỳ thì danh sách đơn cũng chỉ mở từ ngày đầu kỳ.
+     */
+    public function test_cot_bieu_do_mang_khoang_ngay(): void
+    {
+        $this->fakeApi([], [
+            '*/admin/reports/revenue*' => Http::response(['data' => [
+                'buckets' => [
+                    ['label' => '2026-W37', 'subtotal' => 100_000],
+                    ['label' => '2026-W38', 'subtotal' => 200_000],
+                ],
+                'totals' => [], 'prev' => [],
+            ]]),
+        ]);
+
+        $html = $this->html('/admin/dashboard?from=10-09-2026&to=15-09-2026&group=week');
+
+        // Tuần 37 là 07/09 – 13/09, cắt còn 10/09 – 13/09; tuần 38 là 14/09 – 20/09, cắt còn 14/09 – 15/09.
+        $this->assertStringContainsString('"ranges":[["10-09-2026","13-09-2026"],["14-09-2026","15-09-2026"]]', $html);
+    }
+
+    /** Ô KPI là đường vào màn chi tiết, mang đúng kỳ đang xem. */
+    public function test_o_kpi_mo_man_chi_tiet_dung_ky(): void
+    {
+        $this->fakeApi();
+
+        $html = $this->html('/admin/dashboard?from=01-09-2026&to=15-09-2026');
+
+        $this->assertStringContainsString('/admin/orders?from_date=01-09-2026&amp;to_date=15-09-2026', $html);
+        $this->assertStringContainsString('/admin/reports/sales?from_date=01-09-2026&amp;to_date=15-09-2026', $html);
+        $this->assertStringContainsString('/admin/reports/profit?from_date=01-09-2026&amp;to_date=15-09-2026', $html);
+        // Tên hàng bán chạy mở báo cáo hàng hoá của chính mặt hàng đó.
+        $this->assertStringContainsString('/admin/reports/goods?from_date=01-09-2026&amp;to_date=15-09-2026&amp;product_id=4', $html);
+    }
+
+    /**
+     * Giờ cao điểm: trục luôn phủ 7h–22h, đơn ngoài khung thì nới trục ra chứ
+     * không giấu; giờ đông nhất được gọi tên.
+     */
+    public function test_gio_cao_diem(): void
+    {
+        $this->fakeApi([], [
+            '*/admin/reports/orders*' => Http::response(['data' => [
+                'by_source' => [],
+                'by_hour' => [['key' => '5', 'orders' => 2], ['key' => '20', 'orders' => 4], ['key' => '9', 'orders' => 0]],
+            ]]),
+        ]);
+
+        $html = $this->html();
+
+        $this->assertStringContainsString('đông nhất 20h', $html);
+        $this->assertStringContainsString('title="5h: 2 đơn"', $html, 'Trục nới tới 5h vì có đơn lúc 5h');
+        $this->assertStringContainsString('title="22h: 0 đơn"', $html);
+        $this->assertStringNotContainsString('title="4h:', $html);
+    }
+
+    /** Ca mở quá 24 giờ chưa chốt thì vào thẻ "Cần chú ý"; ca vừa mở thì không. */
+    public function test_canh_bao_ca_mo_qua_lau(): void
+    {
+        $ca = fn (int $id, string $moLuc) => Http::response(['data' => ['ca' => [
+            'id' => $id, 'shop_id' => 2, 'shop_name' => 'Quầy '.$id, 'opened_at' => $moLuc, 'opening_cash' => 0,
+        ]]]);
+        $this->fakeApi([], [
+            '*/admin/ca-lam-viec/12*' => $ca(12, date('Y-m-d H:i:s', strtotime('-3 days -1 hour'))),
+            '*/admin/ca-lam-viec/15*' => $ca(15, date('Y-m-d H:i:s', strtotime('-2 hours'))),
+            '*/admin/ca-lam-viec*' => Http::response(['data' => [['id' => 12], ['id' => 15]]]),
+        ]);
+
+        $html = $this->html();
+
+        $this->assertStringContainsString('Ca #12 ở Quầy 12 đã mở 3 ngày chưa chốt', $html);
+        $this->assertStringNotContainsString('Ca #15 ở', $html);
+    }
+
+    public function test_khong_co_gi_can_chu_y(): void
+    {
+        $this->fakeApi();
+
+        $this->assertStringContainsString('Không có việc gì cần chú ý.', $this->html());
+    }
+
+    /**
+     * Phiếu mua nhiều trang: các trang sau gọi thêm (song song) và cộng đủ, chặn
+     * ở MAX_PURCHASE_PAGES.
+     */
+    public function test_phieu_mua_nhieu_trang_cong_du(): void
+    {
+        $this->fakeApi([], [
+            '*/admin/phieu-mua-hang*' => function ($req) {
+                $trang = (int) ($req->data()['page'] ?? 1);
+
+                return Http::response([
+                    'data' => [['status' => 'approved', 'total_amount' => 1_000_000 * $trang, 'items' => [['base_quantity' => $trang]]]],
+                    'meta' => ['total_pages' => 3],
+                ]);
+            },
+        ]);
+
+        $html = $this->html();
+
+        // 1 + 2 + 3 triệu, 1 + 2 + 3 món.
+        $this->assertStringContainsString('6.000.000', $html);
+        foreach ([1, 2, 3] as $t) {
+            Http::assertSent(fn ($req) => str_contains($req->url(), 'phieu-mua-hang') && ($req->data()['page'] ?? null) == $t);
+        }
+    }
+
+    /** API chưa khai khoá mục tiêu thì không bày thanh mục tiêu. */
+    public function test_muc_tieu_an_khi_api_chua_co_khoa(): void
+    {
+        $this->fakeApi([], ['*/admin/settings*' => Http::response(['data' => ['values' => ['site_name' => 'X']]])]);
+
+        $this->assertStringNotContainsString('Mục tiêu doanh thu tháng', $this->html('/admin/dashboard?range=this-month'));
+    }
+
+    /**
+     * Có khoá thì thanh mục tiêu hiện khi xem trọn một tháng, so với doanh thu
+     * THUẦN; xem tuần / khoảng lệch tháng thì không.
+     */
+    public function test_muc_tieu_khi_xem_tron_thang(): void
+    {
+        $this->fakeApi([], ['*/admin/settings*' => Http::response(['data' => ['values' => ['monthly_revenue_goal' => '200000000']]])]);
+
+        $html = $this->html('/admin/dashboard?from=01-09-2026&to=30-09-2026');
+
+        $this->assertStringContainsString('Mục tiêu doanh thu tháng 09/2026', $html);
+        // Thuần 148.146.500 / 200.000.000 = 74,07%
+        $this->assertStringContainsString('74,1%', $html);
+        $this->assertStringContainsString('Còn thiếu 51.853.500 đ', $html);
+
+        $this->assertStringNotContainsString('Mục tiêu doanh thu tháng', $this->html('/admin/dashboard?from=05-09-2026&to=30-09-2026'));
+        $this->assertStringNotContainsString('Mục tiêu doanh thu tháng', $this->html('/admin/dashboard?range=7'));
+    }
+
+    public function test_muc_tieu_chua_dat_thi_moi_dat(): void
+    {
+        $this->fakeApi([], ['*/admin/settings*' => Http::response(['data' => ['values' => ['monthly_revenue_goal' => '0']]])]);
+
+        $html = $this->html('/admin/dashboard?range=this-month');
+
+        $this->assertStringContainsString('Chưa đặt mục tiêu', $html);
+        $this->assertStringContainsString('Đặt mục tiêu', $html);
+    }
+
+    /** Lưu mục tiêu: bỏ dấu chấm ngăn nghìn, ghi qua PUT /settings. */
+    public function test_luu_muc_tieu(): void
+    {
+        Http::fake(['*/admin/settings*' => Http::response(['data' => ['values' => []]])]);
+
+        $this->withSession($this->phien())->from('/admin/dashboard?range=this-month')
+            ->post('/admin/dashboard/muc-tieu', ['muc_tieu' => '250.000.000'])
+            ->assertRedirect('/admin/dashboard?range=this-month')
+            ->assertSessionHas('success');
+
+        Http::assertSent(fn ($req) => $req->method() === 'PUT' && str_contains($req->url(), '/admin/settings')
+            && $req->data() === ['items' => ['monthly_revenue_goal' => '250000000']]);
+    }
+
+    /**
+     * Ô trống KHÔNG được hiểu thành "bỏ mục tiêu".
+     *
+     * Đặt 100.000.000 xong bấm "Sửa mục tiêu", gõ "abc" rồi Lưu: JS lọc sạch chữ
+     * nên ô thành rỗng, controller ép (int)'' = 0, mà 0 nghĩa là chưa đặt — màn
+     * báo XANH "Đã lưu mục tiêu doanh thu tháng" rồi xoá sạch mục tiêu cũ. Câu
+     * báo nói ngược hẳn điều vừa xảy ra.
+     *
+     * Vế quan trọng nhất của bài: KHÔNG lượt gọi PUT nào được bắn đi. Chỉ kiểm
+     * câu báo thì vẫn lọt trường hợp ghi đè 0 rồi mới báo lỗi.
+     */
+    public function test_o_trong_khong_xoa_muc_tieu_cu(): void
+    {
+        foreach (['', 'abc', '   '] as $go) {
+            Http::fake(['*/admin/settings*' => Http::response(['data' => ['values' => []]])]);
+
+            $this->withSession($this->phien())->from('/admin/dashboard')
+                ->post('/admin/dashboard/muc-tieu', ['muc_tieu' => $go])
+                ->assertRedirect('/admin/dashboard')
+                ->assertSessionHas('error', 'Nhập số tiền mục tiêu.');
+
+            Http::assertNotSent(fn ($req) => $req->method() === 'PUT');
+        }
+    }
+
+    /** Gõ 0 cũng là bỏ mục tiêu, nhưng bằng một cách không ai đọc ra được ý ấy. */
+    public function test_go_khong_thi_bat_khai_bang_nut_bo(): void
+    {
+        Http::fake(['*/admin/settings*' => Http::response(['data' => ['values' => []]])]);
+
+        $this->withSession($this->phien())->from('/admin/dashboard')
+            ->post('/admin/dashboard/muc-tieu', ['muc_tieu' => '0'])
+            ->assertRedirect('/admin/dashboard')
+            ->assertSessionHas('error', 'Mục tiêu phải lớn hơn 0. Muốn bỏ thì bấm "Bỏ mục tiêu".');
+
+        Http::assertNotSent(fn ($req) => $req->method() === 'PUT');
+    }
+
+    /** Bỏ mục tiêu bằng NÚT RIÊNG thì ghi 0 thật, và câu báo nói đúng việc vừa làm. */
+    public function test_nut_bo_muc_tieu_ghi_khong(): void
+    {
+        Http::fake(['*/admin/settings*' => Http::response(['data' => ['values' => []]])]);
+
+        $this->withSession($this->phien())->from('/admin/dashboard')
+            ->post('/admin/dashboard/muc-tieu', ['muc_tieu' => '', 'bo_muc_tieu' => '1'])
+            ->assertRedirect('/admin/dashboard')
+            ->assertSessionHas('success', 'Đã bỏ mục tiêu doanh thu tháng.');
+
+        Http::assertSent(fn ($req) => $req->method() === 'PUT' && str_contains($req->url(), '/admin/settings')
+            && $req->data() === ['items' => ['monthly_revenue_goal' => '0']]);
+    }
+
+    /**
+     * Nút "Bỏ mục tiêu" chỉ hiện khi ĐANG có mục tiêu để bỏ.
+     *
+     * Hai vế tách thành hai bài chứ không gộp: cài đặt được cache 5 phút theo
+     * khoá có kèm mã cửa hàng, nên đọc hai lần trong CÙNG một bài thì lần sau
+     * vẫn ra số của lần trước — bài sẽ xanh vì nhầm chứ không vì đúng.
+     */
+    public function test_da_dat_muc_tieu_thi_co_nut_bo(): void
+    {
+        $this->fakeApi([], ['*/admin/settings*' => Http::response(['data' => ['values' => ['monthly_revenue_goal' => '200000000']]])]);
+
+        $this->assertStringContainsString('Bỏ mục tiêu', $this->html('/admin/dashboard?range=this-month'));
+    }
+
+    /** Chưa đặt thì không có gì để bỏ — đừng bày nút. */
+    public function test_chua_dat_muc_tieu_thi_khong_co_nut_bo(): void
+    {
+        $this->fakeApi([], ['*/admin/settings*' => Http::response(['data' => ['values' => ['monthly_revenue_goal' => '0']]])]);
+
+        $this->assertStringNotContainsString('Bỏ mục tiêu', $this->html('/admin/dashboard?range=this-month'));
+    }
+
+    /** API từ chối (thiếu quyền, khoá chưa khai) thì nói lại câu của API. */
+    public function test_luu_muc_tieu_bi_tu_choi(): void
+    {
+        Http::fake(['*/admin/settings*' => Http::response(['message' => 'Bạn không có quyền sửa cấu hình'], 403)]);
+
+        $this->withSession($this->phien())->from('/admin/dashboard')
+            ->post('/admin/dashboard/muc-tieu', ['muc_tieu' => '1000'])
+            ->assertRedirect('/admin/dashboard')
+            ->assertSessionHas('error', 'Bạn không có quyền sửa cấu hình');
     }
 }

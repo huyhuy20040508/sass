@@ -144,6 +144,7 @@ Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:quan_ly', 'chi.v2'])->
     // màn khác thì người dùng tưởng bấm nhầm, và không có gì thay thế được trang
     // này. Bản cũ vẫn chạy, nên trả nó về cho tới khi có bản v2.
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    Route::post('/dashboard/muc-tieu', [DashboardController::class, 'mucTieuLuu'])->name('dashboard.muc-tieu');
 
     // Tài khoản của tôi — hồ sơ + mật khẩu của chính người đang đăng nhập.
     //

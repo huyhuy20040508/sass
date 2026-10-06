@@ -99,26 +99,32 @@ class NarrowScreenTableTest extends TestCase
     }
 
     /**
-     * Tổng quan — hai bảng "Top …" nằm trong THẺ, không phải cả trang.
+     * Tổng quan — bảng "Top hàng bán" nằm trong THẺ, không phải cả trang.
      *
-     * Thẻ chỉ rộng chừng 260px ở khổ 1366 nên đây là bảng chật nhất trong các
-     * màn: để `auto` là một tên hàng dài đẩy bảng tràn ra khỏi thẻ.
+     * Thẻ chỉ rộng 242-276px ở khổ 1280-1440 nên đây là bảng chật nhất trong các
+     * màn. Bản đầu chọn `fixed` + ba cột phần trăm vì sợ một tên hàng dài đẩy
+     * bảng tràn ra khỏi thẻ — nhưng cái giá là `text-overflow: ellipsis`, và
+     * "laptop asus gamming" bị cắt thành "laptop asus gam…" ở cả ba khổ ấy.
+     *
+     * Luật đã chốt cho mọi bảng v2 là: ô dữ liệu nằm MỘT DÒNG, KHÔNG "…", hẹp
+     * quá thì cho kéo ngang. Nên nay cột tên co theo chữ, và khung
+     * .table-responsive của thẻ lo phần kéo ngang — bảng không tràn ra ngoài
+     * thẻ, nó cuộn trong thẻ.
+     *
+     * Vẫn giữ vế CẤM `min-width` của bài cũ: min-width ép cuộn ngang ở MỌI khổ,
+     * kể cả khổ rộng vốn thừa chỗ.
      */
-    public function test_bang_top_cua_tong_quan_fixed_va_du_100(): void
+    public function test_bang_top_cua_tong_quan_khong_cat_chu(): void
     {
         $html = $this->trang('/admin/dashboard');
 
-        $khoi = $this->khoiCss($html, '.db-table { table-layout: fixed;', '</style>');
+        $khoi = $this->khoiCss($html, '.db-table { table-layout: auto;', '</style>');
         $this->assertStringNotContainsString('min-width', $khoi);
+        $this->assertStringNotContainsString('text-overflow', $khoi);
+        $this->assertStringContainsString('white-space: nowrap', $khoi);
 
-        $this->assertEqualsWithDelta(100.0, $this->tongPhanTram($html, [
-            'db-table .db-c-stt', 'db-table .db-c-name', 'db-table .db-c-val',
-        ]), 0.01);
-
-        // Bảng chi nhánh in tiền nên chia lại hai cột sau — vẫn phải đủ 100.
-        $this->assertEqualsWithDelta(100.0 - 15.0, $this->tongPhanTram($html, [
-            'db-table--money .db-c-name', 'db-table--money .db-c-val',
-        ]), 0.01);
+        // Cột tên KHÔNG khai bề rộng: nó ăn phần còn lại và không hẹp hơn chữ.
+        $this->assertDoesNotMatchRegularExpression('/\.db-table \.db-c-name[^{}]*\{[^{}]*width:/', $html);
     }
 
     /** Banner — trước đây ép min-width 1300px, tức tràn ở cả 1366 lẫn 1440. */

@@ -118,7 +118,7 @@
     $isSettingSection = request()->is('admin/settings*', 'admin/branches*');
 
     // Đường vào từng module. Bật cờ ở trên rồi thì thay '#' bằng route thật.
-    $statisticDefaultRoute = route('admin.customers.index');
+    $statisticDefaultRoute = route('admin.dashboard');
     $routeUlReport = route('admin.reports.summary');
     $routeUlMenu = route('admin.products.index');
     $routeUlWarehouse = route('admin.nha-cung-cap.index');
@@ -133,15 +133,15 @@
     // Tab trong module NHÂN SỰ.
     $employeePer = true;                // Danh sách nhân sự — ĐÃ CÓ
 
-    // Tab của module THỐNG KÊ theo bản v2, trừ "Báo cáo kết ca" — chủ tiệm chuyển
-    // sang module BÁO CÁO (29/09/2026). Màn nào chưa dựng thì bày ra nhưng làm
-    // mờ — bấm vào rồi bị đá đi chỗ khác thì tưởng bấm nhầm.
+    // Tab của module THỐNG KÊ theo bản v2, trừ "Báo cáo kết ca" (29/09/2026) và
+    // "Báo cáo cuối ngày" (06/10/2026) — chủ tiệm chuyển cả hai sang module BÁO CÁO.
+    // Màn nào chưa dựng thì bày ra nhưng làm mờ — bấm vào rồi bị đá đi chỗ khác
+    // thì tưởng bấm nhầm.
     $tabThongKe = [
-        ['nhan' => 'Tổng quan', 'route' => null],
+        ['nhan' => 'Tổng quan', 'route' => 'admin.dashboard'],
         ['nhan' => 'Khách hàng', 'route' => 'admin.customers.index'],
         ['nhan' => 'Quản lý đơn hàng', 'route' => 'admin.orders.index'],
         ['nhan' => 'Hoá đơn điện tử', 'route' => 'admin.hoa-don-dien-tu.index'],
-        ['nhan' => 'Báo cáo cuối ngày', 'route' => null],
     ];
 
     // Tab của module BÁO CÁO. Doanh thu / Đơn hàng / Hàng hoá (trang khu cũ)
@@ -628,8 +628,8 @@
                         @endif
                     @endif
 
-                    {{-- 1. THỐNG KÊ — sáu tab, đúng bản v2. Tab của màn chưa dựng
-                         vẫn bày ra nhưng làm mờ và không bấm được. --}}
+                    {{-- 1. THỐNG KÊ — tab của màn chưa dựng vẫn bày ra nhưng làm mờ
+                         và không bấm được. --}}
                     @if($ulDashboardPer && $isStatisticSection)
                         @foreach($tabThongKe as $tab)
                             @if($tab['route'])
