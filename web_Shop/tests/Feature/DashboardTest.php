@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Support\Period;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -154,6 +155,60 @@ class DashboardTest extends TestCase
         // Kỳ đã qua thì lấy trọn vẹn.
         $thangTruoc = Period::resolve('last-month');
         $this->assertSame(date('Y-m-t', strtotime($thangTruoc['from'])), $thangTruoc['to']);
+    }
+
+    /**
+     * Bấm nút kỳ nào thì nút ĐÓ sáng, kể cả khi hai kỳ trùng khoảng nhau.
+     *
+     * Trang từng không sáng theo ?range= mà dò ngược từ cặp ngày, rồi trúng
+     * preset đứng trước trong danh sách. Đầu tháng 10, "quý này" và "tháng này"
+     * cùng là 01/10 → hôm nay, nên bấm "Quý này" lại thấy "Tháng này" sáng và
+     * người bấm tưởng nút không ăn. Tháng 1 thì "Năm nay" dính y vậy.
+     *
+     * Giờ chốt ở 06/10/2026 — đúng ngày lỗi được báo — để hai kỳ chắc chắn trùng
+     * khoảng; không chốt giờ thì bài này chỉ đỏ vào mấy ngày đầu quý.
+     */
+    public function test_bam_ky_nao_thi_sang_dung_nut_do(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-10-06 09:00:00'));
+
+        try {
+            // Tiền đề của bài: hai kỳ này đang là CÙNG một khoảng ngày.
+            $this->assertSame(Period::resolve('this-month'), Period::resolve('this-quarter'));
+
+            foreach (['this-quarter', 'this-month', 'this-year'] as $ma) {
+                $this->fakeApi();
+                $html = $this->html('/admin/dashboard?range='.$ma);
+
+                $this->assertMatchesRegularExpression(
+                    '/id="db-range-'.$ma.'"[^>]*\s+checked/', $html, 'bấm '.$ma.' mà nút đó không sáng');
+                // Và chỉ MỘT nút sáng.
+                $this->assertSame(1, preg_match_all('/class="form-check-input m-0 db-range"[^>]*checked/', $html));
+            }
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
+    /**
+     * Gõ ngày tự chọn thì vẫn dò theo ngày — trùng preset nào thì nút ấy sáng.
+     *
+     * Đây là vế còn lại của cùng một quy tắc: URL có range thì tin range, không
+     * có thì mới dò. Bỏ vế này là quay về chuyện hai cách chọn mâu thuẫn nhau.
+     */
+    public function test_go_ngay_tu_chon_thi_van_do_theo_ngay(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-10-06 09:00:00'));
+
+        try {
+            $thang = Period::resolve('this-month');
+            $this->fakeApi();
+            $html = $this->html('/admin/dashboard?from='.$thang['from'].'&to='.$thang['to']);
+
+            $this->assertMatchesRegularExpression('/id="db-range-this-month"[^>]*\s+checked/', $html);
+        } finally {
+            Carbon::setTestNow();
+        }
     }
 
     /** Kỳ trên URL đi thẳng vào lượt gọi API, không phải mỗi khối tự tính lấy. */
@@ -546,6 +601,80 @@ class DashboardTest extends TestCase
 
         Http::assertSent(fn ($req) => $req->method() === 'PUT' && str_contains($req->url(), '/admin/settings')
             && $req->data() === ['items' => ['monthly_revenue_goal' => '250000000']]);
+    }
+
+    /**
+     * Ô trống KHÔNG được hiểu thành "bỏ mục tiêu".
+     *
+     * Đặt 100.000.000 xong bấm "Sửa mục tiêu", gõ "abc" rồi Lưu: JS lọc sạch chữ
+     * nên ô thành rỗng, controller ép (int)'' = 0, mà 0 nghĩa là chưa đặt — màn
+     * báo XANH "Đã lưu mục tiêu doanh thu tháng" rồi xoá sạch mục tiêu cũ. Câu
+     * báo nói ngược hẳn điều vừa xảy ra.
+     *
+     * Vế quan trọng nhất của bài: KHÔNG lượt gọi PUT nào được bắn đi. Chỉ kiểm
+     * câu báo thì vẫn lọt trường hợp ghi đè 0 rồi mới báo lỗi.
+     */
+    public function test_o_trong_khong_xoa_muc_tieu_cu(): void
+    {
+        foreach (['', 'abc', '   '] as $go) {
+            Http::fake(['*/admin/settings*' => Http::response(['data' => ['values' => []]])]);
+
+            $this->withSession($this->phien())->from('/admin/dashboard')
+                ->post('/admin/dashboard/muc-tieu', ['muc_tieu' => $go])
+                ->assertRedirect('/admin/dashboard')
+                ->assertSessionHas('error', 'Nhập số tiền mục tiêu.');
+
+            Http::assertNotSent(fn ($req) => $req->method() === 'PUT');
+        }
+    }
+
+    /** Gõ 0 cũng là bỏ mục tiêu, nhưng bằng một cách không ai đọc ra được ý ấy. */
+    public function test_go_khong_thi_bat_khai_bang_nut_bo(): void
+    {
+        Http::fake(['*/admin/settings*' => Http::response(['data' => ['values' => []]])]);
+
+        $this->withSession($this->phien())->from('/admin/dashboard')
+            ->post('/admin/dashboard/muc-tieu', ['muc_tieu' => '0'])
+            ->assertRedirect('/admin/dashboard')
+            ->assertSessionHas('error', 'Mục tiêu phải lớn hơn 0. Muốn bỏ thì bấm "Bỏ mục tiêu".');
+
+        Http::assertNotSent(fn ($req) => $req->method() === 'PUT');
+    }
+
+    /** Bỏ mục tiêu bằng NÚT RIÊNG thì ghi 0 thật, và câu báo nói đúng việc vừa làm. */
+    public function test_nut_bo_muc_tieu_ghi_khong(): void
+    {
+        Http::fake(['*/admin/settings*' => Http::response(['data' => ['values' => []]])]);
+
+        $this->withSession($this->phien())->from('/admin/dashboard')
+            ->post('/admin/dashboard/muc-tieu', ['muc_tieu' => '', 'bo_muc_tieu' => '1'])
+            ->assertRedirect('/admin/dashboard')
+            ->assertSessionHas('success', 'Đã bỏ mục tiêu doanh thu tháng.');
+
+        Http::assertSent(fn ($req) => $req->method() === 'PUT' && str_contains($req->url(), '/admin/settings')
+            && $req->data() === ['items' => ['monthly_revenue_goal' => '0']]);
+    }
+
+    /**
+     * Nút "Bỏ mục tiêu" chỉ hiện khi ĐANG có mục tiêu để bỏ.
+     *
+     * Hai vế tách thành hai bài chứ không gộp: cài đặt được cache 5 phút theo
+     * khoá có kèm mã cửa hàng, nên đọc hai lần trong CÙNG một bài thì lần sau
+     * vẫn ra số của lần trước — bài sẽ xanh vì nhầm chứ không vì đúng.
+     */
+    public function test_da_dat_muc_tieu_thi_co_nut_bo(): void
+    {
+        $this->fakeApi([], ['*/admin/settings*' => Http::response(['data' => ['values' => ['monthly_revenue_goal' => '200000000']]])]);
+
+        $this->assertStringContainsString('Bỏ mục tiêu', $this->html('/admin/dashboard?range=this-month'));
+    }
+
+    /** Chưa đặt thì không có gì để bỏ — đừng bày nút. */
+    public function test_chua_dat_muc_tieu_thi_khong_co_nut_bo(): void
+    {
+        $this->fakeApi([], ['*/admin/settings*' => Http::response(['data' => ['values' => ['monthly_revenue_goal' => '0']]])]);
+
+        $this->assertStringNotContainsString('Bỏ mục tiêu', $this->html('/admin/dashboard?range=this-month'));
     }
 
     /** API từ chối (thiếu quyền, khoá chưa khai) thì nói lại câu của API. */

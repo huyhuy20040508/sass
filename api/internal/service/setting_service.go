@@ -62,6 +62,9 @@ const (
 	// cửa hàng nhận tiền bằng cách nào, còn đây là NGƯỜI BÁN được phép làm gì:
 	// hai câu hỏi khác nhau, và người trả lời chúng cũng thường là hai người.
 	SettingGroupPOS = "pos"
+	// SettingGroupDashboard — khoá chỉ đặt từ màn Tổng quan, không có trang cấu
+	// hình riêng: gộp vào nhóm khác thì trang của nhóm đó mọc thêm ô lạ.
+	SettingGroupDashboard = "dashboard"
 )
 
 // Tên các khoá cấu hình. Nơi tiêu thụ tham chiếu hằng số này chứ không viết chuỗi
@@ -100,6 +103,7 @@ const (
 	SettingTaxDirect            = "tax_direct"
 	SettingLotIssueMethod       = "lot_issue_method"
 	SettingBlockExpiredStock    = "block_expired_stock"
+	SettingMonthlyRevenueGoal   = "monthly_revenue_goal"
 )
 
 // Thứ tự rút lô khi xuất kho — bản v2 gọi là thông số `inventory_valuation`.
@@ -348,6 +352,16 @@ var settingRegistry = []settingDef{
 		Key: SettingStaffDefaultPassword, Group: SettingGroupPOS, Type: SettingTypeText,
 		Label:   "Mật khẩu mặc định cấp cho nhân viên",
 		Default: "", Max: 72,
+	},
+
+	// ----- Tổng quan -----
+	// Mục tiêu doanh thu THUẦN của một tháng, đặt bằng nút trên màn Tổng quan.
+	// 0 = chưa đặt (màn hình ghi "Chưa đặt mục tiêu"). Trần 1 nghìn tỷ để gõ thừa
+	// vài chữ số bị chặn ngay lúc lưu thay vì thanh tiến độ đứng mãi ở 0%.
+	{
+		Key: SettingMonthlyRevenueGoal, Group: SettingGroupDashboard, Type: SettingTypeNumber,
+		Label: "Mục tiêu doanh thu tháng", Default: "0",
+		Required: true, MaxNum: 1_000_000_000_000,
 	},
 }
 

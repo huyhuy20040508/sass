@@ -315,6 +315,13 @@
                             <input type="text" inputmode="numeric" class="form-control form-control-sm" id="db-goal-input"
                                 name="muc_tieu" value="{{ $mucTieu['muc_tieu'] > 0 ? $tien($mucTieu['muc_tieu']) : '' }}">
                             <button type="submit" class="btn btn-sm btn-primary">Lưu</button>
+                            {{-- Bỏ mục tiêu là NÚT RIÊNG, không phải hệ quả của ô rỗng:
+                                 ô rỗng có thể chỉ là người dùng xoá đi định gõ lại. Chỉ
+                                 hiện khi đang có mục tiêu để bỏ. --}}
+                            @if ($mucTieu['muc_tieu'] > 0)
+                                <button type="submit" name="bo_muc_tieu" value="1"
+                                    class="btn btn-sm btn-outline-danger">Bỏ mục tiêu</button>
+                            @endif
                         </form>
                     </div>
                 @endif
@@ -609,13 +616,19 @@
         .db-top-scroll { max-height: 290px; min-height: 250px; overflow-y: auto; }
         /* Bảng trong thẻ hẹp (thẻ chỉ rộng ~260px ở khổ 1366): chia phần trăm đủ
            100 và cắt "…" ở cột tên, KHÔNG để `auto` tự nới rồi tràn ra ngoài thẻ. */
-        .db-table { table-layout: fixed; width: 100%; }
+        /* Cột tên hàng CO THEO CHỮ, không cắt bớt.
+           Trước đây bảng dùng table-layout: fixed + cột tên 50% + text-overflow:
+           ellipsis, nên ở 1280-1440px thẻ chỉ rộng 242-276px và "laptop asus
+           gamming" bị cắt thành "laptop asus gam…". Trái luật đã chốt cho mọi
+           bảng v2: ô dữ liệu nằm một dòng, KHÔNG "…".
+           Nay: STT và cột số co sát nội dung, tên lấy phần còn lại và không bao
+           giờ hẹp hơn chữ của nó. Thẻ hẹp hơn bảng thì khung .table-responsive
+           cho kéo ngang — cùng cách đã làm ở Hoá đơn điện tử và cụm CRM. */
+        .db-table { table-layout: auto; width: 100%; }
         .db-table th, .db-table td { white-space: nowrap; vertical-align: middle; padding: 7px 6px; font-size: 13px; }
-        .db-table td { overflow: hidden; text-overflow: ellipsis; }
         .db-table th { font-size: 11px; padding-left: 4px; padding-right: 4px; }
-        .db-table .db-c-stt { width: 15%; }
-        .db-table .db-c-name { width: 50%; }
-        .db-table .db-c-val { width: 35%; }
+        /* width:1% + nowrap = co sát nội dung; cột tên không khai, ăn phần còn lại. */
+        .db-table .db-c-stt, .db-table .db-c-val { width: 1%; }
         .db-table tbody tr:nth-child(even) { background: #fafbfd; }
         .db-table a { color: #0f172a; text-decoration: none; }
         .db-table a:hover { color: #1d4ed8; text-decoration: underline; }

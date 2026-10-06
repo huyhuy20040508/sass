@@ -134,10 +134,33 @@ class DashboardController extends Controller
      *
      * Ghi qua PUT /settings như màn Cài đặt, nên quyền là quyền sửa cấu hình
      * (`cau-hinh.sua`) — API trả 403 thì nói lại đúng câu của nó.
+     *
+     * ĐẶT và BỎ là hai ý định khác nhau, đi hai đường khác nhau. Trước đây ô
+     * trống (hoặc gõ chữ, vì JS lọc sạch chữ nên ô thành rỗng) rơi về 0, mà 0
+     * nghĩa là "chưa đặt" — màn báo xanh "Đã lưu" rồi xoá sạch mục tiêu cũ.
+     * Người dùng không hề muốn bỏ, và câu báo còn nói ngược lại điều vừa xảy ra.
+     *
+     * Nên: không có chữ số nào thì KHÔNG ghi gì cả, giữ nguyên số cũ và nói
+     * thiếu gì. Muốn bỏ thì bấm nút "Bỏ mục tiêu" — nút ấy gửi `bo_muc_tieu`,
+     * là lời khai rõ ràng chứ không phải hệ quả của một ô rỗng.
      */
     public function mucTieuLuu(Request $request)
     {
-        $so = (int) preg_replace('/\D/', '', (string) $request->input('muc_tieu', ''));
+        $boMucTieu = $request->boolean('bo_muc_tieu');
+        $chuSo = preg_replace('/\D/', '', (string) $request->input('muc_tieu', ''));
+
+        if (! $boMucTieu) {
+            if ($chuSo === '') {
+                return back()->with('error', 'Nhập số tiền mục tiêu.');
+            }
+            // Gõ 0 cũng là bỏ mục tiêu, nhưng bằng một cách không ai đọc ra được
+            // ý ấy — bắt khai bằng nút cho rõ.
+            if ((int) $chuSo === 0) {
+                return back()->with('error', 'Mục tiêu phải lớn hơn 0. Muốn bỏ thì bấm "Bỏ mục tiêu".');
+            }
+        }
+
+        $so = $boMucTieu ? 0 : (int) $chuSo;
 
         try {
             $res = $this->api->updateSettings([self::GOAL_KEY => (string) $so]);
@@ -153,7 +176,7 @@ class DashboardController extends Controller
 
         Cache::forget(ApiClient::khoaCacheSettings());
 
-        return back()->with('success', 'Đã lưu mục tiêu doanh thu tháng.');
+        return back()->with('success', $boMucTieu ? 'Đã bỏ mục tiêu doanh thu tháng.' : 'Đã lưu mục tiêu doanh thu tháng.');
     }
 
     // ---------- Bộ lọc ----------
@@ -178,11 +201,15 @@ class DashboardController extends Controller
         $from = $this->ngay($request->query('from'));
         $to = $this->ngay($request->query('to'));
 
+        // Mã kỳ người dùng BẤM, giữ nguyên để sáng đúng nút đó.
+        $maKy = null;
+
         if ($from === null || $to === null) {
             $range = (string) $request->query('range', self::DEFAULT_RANGE);
             if (! in_array($range, self::RANGE_CODES, true)) {
                 $range = self::DEFAULT_RANGE;
             }
+            $maKy = $range;
             $window = Period::resolve($range);
             $from = $window['from'];
             $to = $window['to'];
@@ -199,7 +226,15 @@ class DashboardController extends Controller
             'from' => $from,
             'to' => $to,
             'branch' => $coThat ? $branch : 0,
-            'range' => Period::match($from, $to, self::RANGE_CODES),
+            // Bấm nút thì sáng ĐÚNG nút đã bấm; chỉ dò theo ngày khi người dùng gõ
+            // ngày tự chọn.
+            //
+            // Vì sao không dò cho cả hai: nhiều preset trùng khoảng nhau tuỳ thời
+            // điểm, và Period::match trả về preset ĐỨNG TRƯỚC trong danh sách. Đầu
+            // tháng 10, "quý này" và "tháng này" cùng là 01/10 → hôm nay, nên bấm
+            // "Quý này" lại thấy "Tháng này" sáng — người bấm tưởng nút không ăn.
+            // Tháng 1 thì "Năm nay" cũng vậy.
+            'range' => $maKy ?? Period::match($from, $to, self::RANGE_CODES),
             'describe' => Period::describe($from, $to, self::RANGE_CODES),
             'group' => isset(self::GROUPS[$group]) ? $group : $this->chiaTruc($from, $to),
         ];
