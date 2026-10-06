@@ -199,8 +199,8 @@ class GoodsReportTest extends TestCase
 
         $this->assertMatchesRegularExpression('#id="show-chart"\s+checked#', $html);
         $this->assertStringContainsString('"thu":[{"product_id":80,"name":"Matcha Latte","data":[0,4,0,0,8,0,0]}]', $html);
-        // Tiêu đề top = cộng tiền các món trong top.
-        $this->assertStringContainsString('Top hàng hóa bán chạy (<span class="text-success">156.750 VND</span>)', $html);
+        // Tiêu đề top = cộng số lượng các món trong top.
+        $this->assertStringContainsString('Top hàng hóa bán chạy (<span class="text-success">14 sp</span>)', $html);
         $this->assertStringContainsString('<option value="10" selected>Top 10</option>', $html);
         $this->assertMatchesRegularExpression('#<div class="row\s*" data-dang="chart">#', $html);
     }

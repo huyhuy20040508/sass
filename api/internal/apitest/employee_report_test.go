@@ -222,3 +222,40 @@ func TestBaoCaoNhanVien_KhongLanCuaHang(t *testing.T) {
 		t.Fatalf("A bán mà báo cáo nhân viên của B đổi: trước %+v, sau %+v", bTruoc.Totals, bSau.Totals)
 	}
 }
+
+// TestBaoCaoNhanVien_TiLeChupVaoDon — hoa hồng đọc tỉ lệ CHỤP lúc bán: sửa tỉ
+// lệ hay xoá hồ sơ thì đơn đã bán không đổi; đơn bán sau đó mới ăn mức mới.
+func TestBaoCaoNhanVien_TiLeChupVaoDon(t *testing.T) {
+	h := dungHeThong(t)
+	a, _ := haiCuaHang(t, h)
+	gieoHoSoHoaHong(t, h, a, a.quanTri, "NVQT", 10)
+	moCa(t, h, a, 0)
+	ctx := tenant.WithID(context.Background(), a.id)
+
+	banQuay(t, h, a, "cash", 2) // 180.000 lúc tỉ lệ 10% → 18.000
+
+	if err := h.db.WithContext(ctx).Model(&domain.NhanVien{}).Where("user_id = ?", a.quanTri).
+		Update("commission_rate", 5).Error; err != nil {
+		t.Fatal(err)
+	}
+	r, _ := dongCuaNguoi(docBaoCaoNVHH(t, h, a, ""), a.quanTri)
+	if r.Commission != 18000 || r.CommissionRate != 10 {
+		t.Errorf("sửa hồ sơ xuống 5%% thì đơn đã bán vẫn 10%% / 18000, đang là %v%% / %v", r.CommissionRate, r.Commission)
+	}
+
+	banQuay(t, h, a, "cash", 1) // 90.000 lúc tỉ lệ 5% → 4.500
+	r, _ = dongCuaNguoi(docBaoCaoNVHH(t, h, a, ""), a.quanTri)
+	if r.Commission != 22500 || r.CommissionRate != 5 {
+		t.Errorf("đơn bán sau khi sửa ăn 5%%: tổng 18000 + 4500 = 22500, tỉ lệ dòng theo đơn mới nhất (5), đang là %v / %v%%",
+			r.Commission, r.CommissionRate)
+	}
+
+	if err := h.db.WithContext(ctx).Where("user_id = ?", a.quanTri).Delete(&domain.NhanVien{}).Error; err != nil {
+		t.Fatal(err)
+	}
+	r, co := dongCuaNguoi(docBaoCaoNVHH(t, h, a, ""), a.quanTri)
+	if !co || r.Commission != 22500 || r.EmployeeCode != "NVQT-"+a.vet || r.Name != "Hồ sơ NVQT" {
+		t.Errorf("xoá hồ sơ thì mã / tên / hoa hồng vẫn theo bản chụp (NVQT-%s / Hồ sơ NVQT / 22500), đang là %q / %q / %v",
+			a.vet, r.EmployeeCode, r.Name, r.Commission)
+	}
+}

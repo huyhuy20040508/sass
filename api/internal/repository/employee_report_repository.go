@@ -14,6 +14,9 @@ import (
 // hàng đếm bằng câu riêng, nối thẳng order_items / order_returns vào câu đơn là
 // mỗi đơn nhân lên theo số dòng và tiền đội lên.
 //
+// Mã, tên, tỉ lệ đọc bản CHỤP trên đơn (migration 0074); đơn không có bản chụp
+// (người lập không có hồ sơ lúc bán) mới lùi về hồ sơ hiện tại.
+//
 // users (người lập, người mua) và employees nối theo khoá chính / khoá duy nhất
 // (uq_employees_user) từ dòng đơn đã lọc theo cửa hàng — không nhân dòng, không
 // kéo dữ liệu cửa hàng khác vào.
@@ -44,15 +47,16 @@ func (r *reportRepository) EmployeeOrders(ctx context.Context, p domain.ReportPe
 	if kw := strings.TrimSpace(f.Keyword); kw != "" {
 		// Ô tìm của v2: "theo nhân viên, hoá đơn".
 		like := "%" + kw + "%"
-		q = q.Where("(e.code LIKE ? OR e.full_name LIKE ? OR u.full_name LIKE ? OR o.order_code LIKE ?)", like, like, like, like)
+		q = q.Where("(o.staff_code LIKE ? OR o.staff_name LIKE ? OR e.code LIKE ? OR e.full_name LIKE ? OR u.full_name LIKE ? OR o.order_code LIKE ?)",
+			like, like, like, like, like, like)
 	}
 
 	var rows []domain.EmployeeOrder
 	err := q.Select(`o.id, o.order_code AS code, o.created_at,
 			u.id AS user_id,
-			COALESCE(e.code, '') AS employee_code,
-			COALESCE(NULLIF(e.full_name, ''), u.full_name, '') AS name,
-			COALESCE(e.commission_rate, 0) AS rate,
+			COALESCE(o.staff_code, e.code, '') AS employee_code,
+			COALESCE(NULLIF(o.staff_name, ''), NULLIF(e.full_name, ''), u.full_name, '') AS name,
+			COALESCE(o.staff_commission_rate, e.commission_rate, 0) AS rate,
 			COALESCE(NULLIF(c.full_name, ''), o.recipient_name, '') AS customer_name,
 			o.total_amount - o.vat_amount AS revenue,
 			o.total_amount AS revenue_vat`).

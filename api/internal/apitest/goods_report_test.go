@@ -199,7 +199,7 @@ func TestBaoCaoHangHoa_SoLieu(t *testing.T) {
 	}
 }
 
-// TestBaoCaoHangHoa_VATVaTop — thuế của dòng vào cột VAT; top xếp theo tiền hai chiều.
+// TestBaoCaoHangHoa_VATVaTop — thuế của dòng vào cột VAT; top xếp theo số lượng hai chiều.
 func TestBaoCaoHangHoa_VATVaTop(t *testing.T) {
 	h := dungHeThong(t)
 	a, _ := haiCuaHang(t, h)
@@ -215,14 +215,14 @@ func TestBaoCaoHangHoa_VATVaTop(t *testing.T) {
 		t.Fatalf("top mặc định 5 món, đang có %d", len(bc.Top))
 	}
 	for i := 1; i < len(bc.Top); i++ {
-		if bc.Top[i].Total > bc.Top[i-1].Total {
-			t.Errorf("top desc phải giảm dần theo tiền: %+v", bc.Top)
+		if bc.Top[i].Quantity > bc.Top[i-1].Quantity {
+			t.Errorf("top desc phải giảm dần theo số lượng: %+v", bc.Top)
 		}
 	}
 	tang := docHangHoa(t, h, a, "&sort=asc&top=10")
 	for i := 1; i < len(tang.Top); i++ {
-		if tang.Top[i].Total < tang.Top[i-1].Total {
-			t.Errorf("top asc phải tăng dần theo tiền: %+v", tang.Top)
+		if tang.Top[i].Quantity < tang.Top[i-1].Quantity {
+			t.Errorf("top asc phải tăng dần theo số lượng: %+v", tang.Top)
 		}
 	}
 	if len(tang.Top) != min(10, len(tang.Rows)) {
@@ -323,5 +323,31 @@ func TestBaoCaoHangHoa_KhongLanCuaHang(t *testing.T) {
 	}
 	if ds := docHoaDonHH(t, h, b, a.sanPham, "&shop_id=0"); len(ds) != 0 {
 		t.Fatalf("B mở được hoá đơn của mặt hàng bên A: %+v", ds)
+	}
+}
+
+// TestBaoCaoHangHoa_TopTheoSoLuong — "bán chạy" là bán NHIỀU CÁI: món rẻ bán 3
+// cái phải đứng trên món đắt bán 2 cái, và top trùng đúng đầu bảng.
+func TestBaoCaoHangHoa_TopTheoSoLuong(t *testing.T) {
+	h := dungHeThong(t)
+	a, _ := haiCuaHang(t, h)
+	nhieu := gieoHangCoVon(t, h, a, "top-nhieu", 3, 10000, 0) // 3 cái, 30.000
+	dat := gieoHangCoVon(t, h, a, "top-dat", 2, 500000, 0)    // 2 cái, 1.000.000
+
+	viTri := func(ds []dongHH, id uint) int {
+		for i, r := range ds {
+			if r.ProductID == id {
+				return i
+			}
+		}
+		return -1
+	}
+
+	bc := docHangHoa(t, h, a, "&top=15")
+	if n, d := viTri(bc.Top, nhieu), viTri(bc.Top, dat); n < 0 || d < 0 || n > d {
+		t.Errorf("món 3 cái phải đứng trên món 2 cái trong top, đang ở vị trí %d / %d", n, d)
+	}
+	if fmt.Sprint(bc.Top) != fmt.Sprint(bc.Rows[:len(bc.Top)]) {
+		t.Errorf("top desc phải trùng đầu bảng\ntop:  %+v\nbảng: %+v", bc.Top, bc.Rows[:len(bc.Top)])
 	}
 }

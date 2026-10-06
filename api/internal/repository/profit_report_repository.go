@@ -9,7 +9,13 @@ import (
 // ---------- Báo cáo chi phí & lợi nhuận ----------
 //
 // Dùng chung goodsItems với tab Hàng hoá: cùng tập dòng hàng, cùng ba ô lọc,
-// nên cột Số lượng và Tổng giá bán của hai tab luôn khớp nhau.
+// nên cột Số lượng của hai tab luôn khớp nhau. Tổng giá bán thì KHÁC: ở đây đã
+// trừ giảm giá cả đơn, tab Hàng hoá thì chưa.
+
+// netLineExpr — tiền dòng hàng SAU khi chia giảm giá cả đơn (hạng thẻ, đổi
+// điểm, voucher, giảm tay — gộp sẵn ở o.discount_amount) theo tỷ lệ tiền dòng.
+// o.subtotal_amount = SUM(oi.total_price) của đơn nên các dòng chia vừa đủ.
+const netLineExpr = "(oi.total_price - CASE WHEN o.subtotal_amount > 0 THEN o.discount_amount * oi.total_price / o.subtotal_amount ELSE 0 END)"
 
 // ProfitRows gộp dòng hàng theo MẶT HÀNG: bán bao nhiêu, tiền bán, tiền vốn.
 // Lãi và biên lãi do service tính (ProfitRow.TinhBien).
@@ -22,7 +28,7 @@ func (r *reportRepository) ProfitRows(ctx context.Context, p domain.ReportPeriod
 			COALESCE(MAX(p.name), MAX(oi.product_name), '') AS name,
 			COALESCE(MAX(c.name), '') AS category_name,
 			COALESCE(SUM(oi.quantity), 0) AS quantity,
-			COALESCE(SUM(oi.total_price), 0) AS revenue,
+			COALESCE(SUM(` + netLineExpr + `), 0) AS revenue,
 			COALESCE(SUM(` + costExpr + ` * oi.quantity), 0) AS cost`).
 		// Hàng đã xoá hẳn (product_id NULL) gộp theo tên lúc bán, như tab Hàng hoá.
 		Group("oi.product_id, CASE WHEN oi.product_id IS NULL THEN oi.product_name END").
@@ -75,7 +81,7 @@ func (r *reportRepository) ProfitBuckets(ctx context.Context, p domain.ReportPer
 	var rows []domain.ProfitBucket
 	err := r.goodsItems(ctx, p, f).
 		Select(expr + ` AS ` + "`key`" + `,
-			COALESCE(SUM(oi.total_price), 0) AS revenue,
+			COALESCE(SUM(` + netLineExpr + `), 0) AS revenue,
 			COALESCE(SUM(` + costExpr + ` * oi.quantity), 0) AS cost`).
 		Group(expr).
 		Scan(&rows).Error

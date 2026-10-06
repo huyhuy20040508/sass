@@ -7,7 +7,7 @@
          nhóm, và chỉ còn hàng của nhóm đó — như v2);
        - Danh sách: ô tìm tên/mã, mỗi MẶT HÀNG một dòng, 5 cột có sắp xếp, chân
          bảng "Tổng cộng" nền vàng; bấm vào mã → hộp "Chi tiết hàng hóa";
-       - Biểu đồ: top bán chạy theo tiền (Top 5/10/15, đảo chiều được), số lượng
+       - Biểu đồ: top bán chạy theo số lượng (Top 5/10/15, đảo chiều được), số lượng
          theo giờ, theo thứ (từng món bán nhiều nhất), theo tháng.
 
      Khác v2:
@@ -35,7 +35,7 @@
             .'"><i class="fa-solid '.$icon.'"></i></a>';
     };
 
-    $tongTop = collect($bieuDo['top'])->sum('total');
+    $tongTop = collect($bieuDo['top'])->sum('quantity');
 @endphp
 
 @push('styles')
@@ -159,7 +159,7 @@
                 <div class="col-12 col-xxl-6 mb-4">
                     <div class="chart-container dt-the">
                         <div class="dt-dau">
-                            <div class="chart-title">Top hàng hóa bán chạy (<span class="text-success">{{ $tien($tongTop) }} VND</span>)</div>
+                            <div class="chart-title">Top hàng hóa bán chạy (<span class="text-success">{{ $tien($tongTop) }} sp</span>)</div>
                             <div class="px-3 py-2 dt-vien hh-top">
                                 <input type="hidden" name="top_sort" value="{{ $filters['top_sort'] }}" data-loc>
                                 <button type="button" class="hh-dao" id="hhDaoTop"
@@ -300,11 +300,11 @@
                 ve('hhTop', {
                     type: 'bar',
                     data: { labels: top.map((r) => r.name), datasets: [{
-                        data: top.map((r) => r.total), backgroundColor: 'rgba(214, 226, 105, 0.85)', borderRadius: 4,
+                        data: top.map((r) => r.quantity), backgroundColor: 'rgba(214, 226, 105, 0.85)', borderRadius: 4,
                     }] },
                     options: Object.assign(khungSo(tien), {
                         plugins: { legend: { display: false }, tooltip: { callbacks: {
-                            label: (x) => `${tien(x.parsed.y)} đ · ${tien(top[x.dataIndex].quantity)} sp`,
+                            label: (x) => `${tien(x.parsed.y)} sp · ${tien(top[x.dataIndex].total)} đ`,
                         } } },
                     }),
                 });

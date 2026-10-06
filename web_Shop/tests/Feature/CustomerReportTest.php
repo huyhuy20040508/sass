@@ -150,6 +150,50 @@ class CustomerReportTest extends TestCase
         $this->assertMatchesRegularExpression('#show_total_order\s*">6</th>#', $chan);
     }
 
+    /**
+     * Sắp xếp: dòng khách lẻ GHIM ĐẦU, và phải nói ra là nó ghim.
+     *
+     * Sắp "Tổng chi" tăng dần ra thứ tự 270.000 → 130.000 → 300.000 trông như
+     * bảng sắp hỏng, trong khi phần khách có hồ sơ đã đúng chiều. Dòng đầu là
+     * TỔNG của mọi đơn khách vãng lai chứ không phải một khách, thả vào sắp
+     * chung thì nó thành "khách mua nhiều nhất" — nên vẫn ghim, nhưng phải bày
+     * cho thấy nó là dòng gộp và không theo sắp xếp.
+     */
+    public function test_dong_khach_le_ghim_dau_va_noi_ro_khi_sap_xep(): void
+    {
+        $this->fakeApi();
+
+        $html = $this->trang('/admin/reports/customers?sort_field=total_expense&sort_type=asc');
+
+        // Vẫn đứng đầu, và phần khách có hồ sơ đi đúng chiều tăng.
+        $thuTu = [];
+        // \s sau show_name: không có thì dính luôn cột show_name_group.
+        preg_match_all('/<td class="text-left show_name\s[^"]*">([^<]+)/', $html, $m);
+        foreach ($m[1] as $ten) {
+            $thuTu[] = trim($ten);
+        }
+        $this->assertSame(['Bán cho người tiêu dùng', 'kh 01', 'Duy Hoàng'], $thuTu);
+
+        // Dòng gộp có dấu riêng: lớp nền + nhãn ngay cạnh tên.
+        $this->assertMatchesRegularExpression('/<tr class="item kh-gop\s*">/', $html);
+        $this->assertStringContainsString('(tổng khách lẻ)', $html);
+
+        // Và nói thẳng là nó không theo sắp xếp.
+        $this->assertStringContainsString('luôn đứng đầu, không theo sắp xếp', $html);
+    }
+
+    /** Chưa sắp xếp thì không in câu giải thích — chẳng có gì để hiểu nhầm. */
+    public function test_chua_sap_xep_thi_khong_in_cau_giai_thich(): void
+    {
+        $this->fakeApi();
+
+        $html = $this->trang();
+
+        $this->assertStringNotContainsString('không theo sắp xếp', $html);
+        // Nhãn dòng gộp thì vẫn có: nó nói dòng ấy là cái gì, không dính sắp xếp.
+        $this->assertStringContainsString('(tổng khách lẻ)', $html);
+    }
+
     public function test_loc_mot_khach_thi_an_dong_khach_le(): void
     {
         $this->fakeApi();
