@@ -71,7 +71,8 @@ class DashboardController extends Controller
 
     public function index(Request $request)
     {
-        $filters = $this->filters($request);
+        $chiNhanh = CurrentBranch::danhSach();
+        $filters = $this->filters($request, $chiNhanh['ds']);
 
         $doanhThu = $this->doanhThu($filters);
         $donHang = $this->donHang($filters);
@@ -85,7 +86,7 @@ class DashboardController extends Controller
             'rangeGroups' => self::RANGE_GROUPS,
             'rangeLabels' => $this->rangeLabels(),
             'topChoices' => self::TOP_CHOICES,
-            'chiNhanh' => CurrentBranch::danhSach(),
+            'chiNhanh' => $chiNhanh,
 
             // Sáu ô đầu trang. Công thức theo đúng chú giải của bản v2 (xem
             // message.gross_revenue_formula): gộp là tiền hàng chưa trừ gì, thuần
@@ -100,7 +101,7 @@ class DashboardController extends Controller
                 'purchase_sampled' => $muaHang['catBot'],
             ],
 
-            'ca' => $this->caHienTai(),
+            'caMo' => $this->caDangMo($filters, $chiNhanh['ds']),
             'chart' => $this->duLieuBieuDo($doanhThu),
             'banChay' => $this->banChay($filters),
             'theoThanhToan' => $this->catLat($doanhThu['by_payment_method'] ?? [], $filters['top_payment']),
@@ -113,15 +114,21 @@ class DashboardController extends Controller
     // ---------- Bộ lọc ----------
 
     /**
-     * Kỳ đang xem + số dòng của từng thẻ Top.
+     * Kỳ đang xem, chi nhánh đang xem + số dòng của từng thẻ Top.
      *
      * Ngày tự chọn thắng preset: gõ tay vào hai ô ngày là người dùng đã nói rõ
      * mình muốn gì. Khoảng tự chọn trùng đúng một preset thì nút đó vẫn sáng lên
      * (Period::match lo việc này) để hai cách chọn không mâu thuẫn nhau.
      *
+     * Chi nhánh là bộ lọc RIÊNG của màn này, không phải chi nhánh làm việc của
+     * tab như ở Thu chi / Đơn hàng: màn chỉ đọc, nên xem gộp cả cửa hàng (mặc
+     * định, như v2) không gây ghi nhầm kho — chủ tiệm chốt 06/10/2026. Nhân
+     * viên bị ghim chi nhánh gửi gì lên thì API vẫn ép về chi nhánh của họ.
+     *
+     * @param  array<int, array<string, mixed>>  $dsChiNhanh
      * @return array<string, mixed>
      */
-    protected function filters(Request $request): array
+    protected function filters(Request $request, array $dsChiNhanh = []): array
     {
         $from = $this->ngay($request->query('from'));
         $to = $this->ngay($request->query('to'));
@@ -138,9 +145,13 @@ class DashboardController extends Controller
             [$from, $to] = [$to, $from];
         }
 
+        $branch = (int) $request->query('branch', '0');
+        $coThat = collect($dsChiNhanh)->contains(fn ($cn) => (int) ($cn['id'] ?? 0) === $branch);
+
         $out = [
             'from' => $from,
             'to' => $to,
+            'branch' => $coThat ? $branch : 0,
             'range' => Period::match($from, $to, self::RANGE_CODES),
             'describe' => Period::describe($from, $to, self::RANGE_CODES),
         ];
@@ -192,7 +203,7 @@ class DashboardController extends Controller
     protected function doanhThu(array $f): array
     {
         return $this->fetch(
-            fn () => $this->api->reportRevenue(['from' => $f['from'], 'to' => $f['to'], 'group_by' => $this->chiaTruc($f)]),
+            fn () => $this->api->reportRevenue(['from' => $f['from'], 'to' => $f['to'], 'shop_id' => $f['branch'], 'group_by' => $this->chiaTruc($f)]),
             [],
             'revenue report'
         );
@@ -202,7 +213,7 @@ class DashboardController extends Controller
     protected function donHang(array $f): array
     {
         return $this->fetch(
-            fn () => $this->api->reportOrders(['from' => $f['from'], 'to' => $f['to']]),
+            fn () => $this->api->reportOrders(['from' => $f['from'], 'to' => $f['to'], 'shop_id' => $f['branch']]),
             [],
             'order report'
         );
@@ -245,58 +256,48 @@ class DashboardController extends Controller
     }
 
     /**
-     * Ca đang mở của chi nhánh đang xem, hoặc null khi chưa ai mở ca.
+     * Các ca đang mở trong phạm vi chi nhánh đang xem — "Tất cả" thì mỗi chi
+     * nhánh có ca mở là một dòng, như danh sách ca của v2.
      *
-     * API trả `data: null` chứ không phải lỗi khi không có ca — đó là trạng thái
-     * bình thường của một tiệm chưa tới giờ bán.
+     * Danh sách ca không kèm tổng thu/chi (chỉ chi tiết từng ca mới cộng sổ quỹ),
+     * nên phải gọi thêm một lượt mỗi ca. Số lượt bị chặn bởi luật một chi nhánh
+     * chỉ một ca mở.
+     *
+     * @param  array<int, array<string, mixed>>  $dsChiNhanh
+     * @return array<int, array<string, mixed>>
      */
-    protected function caHienTai(): ?array
+    protected function caDangMo(array $f, array $dsChiNhanh): array
     {
-        $ca = null;
-        try {
-            $res = $this->api->caHienTai();
-            if ($res->successful()) {
-                $ca = $res->json('data');
-            }
-        } catch (\Throwable $e) {
-            Log::warning('Dashboard: current shift failed', ['msg' => $e->getMessage()]);
+        $ten = [];
+        foreach ($dsChiNhanh as $cn) {
+            $ten[(int) ($cn['id'] ?? 0)] = (string) ($cn['name'] ?? '');
         }
 
-        if (! is_array($ca)) {
-            return null;
+        $dsCa = $this->fetch(
+            fn () => $this->api->caLamViec(['status' => 'dang_mo', 'shop_id' => $f['branch'], 'page_size' => 100]),
+            [],
+            'open shifts'
+        );
+
+        $out = [];
+        foreach ($dsCa as $ca) {
+            $chiTiet = $this->fetch(fn () => $this->api->caChiTiet((int) ($ca['id'] ?? 0)), [], 'shift detail');
+            $ca = ($chiTiet['ca'] ?? null) ?: $ca;
+
+            // Ca của API không có "mã ca" riêng như bản v2 — id CHÍNH LÀ thứ hai
+            // bên đối chiếu khi tra lại một lượt trực, nên in thẳng nó.
+            $out[] = [
+                'ma' => '#'.($ca['id'] ?? '—'),
+                'chi_nhanh' => (string) (($ca['shop_name'] ?? '') ?: ($ten[(int) ($ca['shop_id'] ?? 0)] ?? '')),
+                'nguoi_mo' => (string) ($ca['opened_by_name'] ?? ''),
+                'gio_mo' => $ca['opened_at'] ?? null,
+                // Tiền SỔ nói lẽ ra đang có trong két: đầu ca cộng thu trừ chi.
+                'tien_mat' => (float) ($ca['opening_cash'] ?? 0) + (float) ($ca['tong_thu'] ?? 0) - (float) ($ca['tong_chi'] ?? 0),
+                'so_don' => (int) ($ca['so_don_tien_mat'] ?? 0),
+            ];
         }
 
-        // Ca của API không có "mã ca" riêng như bản v2 — id CHÍNH LÀ thứ hai bên
-        // đối chiếu khi tra lại một lượt trực, nên in thẳng nó thay vì bịa ra
-        // một dãy mã không có trong sổ.
-        //
-        // Tiền mặt là tiền SỔ nói lẽ ra đang có trong két: đầu ca cộng thu trừ
-        // chi. Ca đã chốt thì lấy số đã ký nhận hôm ấy (`expected_cash`).
-        $tienMat = $ca['expected_cash']
-            ?? (float) ($ca['opening_cash'] ?? 0) + (float) ($ca['tong_thu'] ?? 0) - (float) ($ca['tong_chi'] ?? 0);
-
-        // API không phải lúc nào cũng điền `shop_name`; ca đang mở thì luôn là ca
-        // của chi nhánh đang xem, nên lấy tên ở đó còn hơn bày một dấu gạch.
-        $tenCN = (string) ($ca['shop_name'] ?? '');
-        if ($tenCN === '') {
-            $cn = CurrentBranch::danhSach();
-            foreach ($cn['ds'] ?? [] as $b) {
-                if ((int) ($b['id'] ?? 0) === (int) ($ca['shop_id'] ?? 0)) {
-                    $tenCN = (string) ($b['name'] ?? '');
-                    break;
-                }
-            }
-        }
-
-        return [
-            'ma' => '#'.($ca['id'] ?? '—'),
-            'chi_nhanh' => $tenCN,
-            'nguoi_mo' => (string) ($ca['opened_by_name'] ?? ''),
-            'gio_mo' => $ca['opened_at'] ?? null,
-            'gio_dong' => $ca['closed_at'] ?? null,
-            'tien_mat' => (float) $tienMat,
-            'so_don' => (int) ($ca['so_don_tien_mat'] ?? 0),
-        ];
+        return $out;
     }
 
     /**
@@ -358,7 +359,7 @@ class DashboardController extends Controller
     protected function banChay(array $f): array
     {
         $bc = $this->fetch(
-            fn () => $this->api->reportProducts(['from' => $f['from'], 'to' => $f['to'], 'sort' => 'units']),
+            fn () => $this->api->reportProducts(['from' => $f['from'], 'to' => $f['to'], 'shop_id' => $f['branch'], 'sort' => 'units']),
             [],
             'product report'
         );
@@ -422,6 +423,7 @@ class DashboardController extends Controller
                 $res = $this->api->phieuMuaHang([
                     'from_date' => $f['from'],
                     'to_date' => $f['to'],
+                    'shop_id' => $f['branch'],
                     'page' => $trang,
                     'page_size' => 100,
                 ]);

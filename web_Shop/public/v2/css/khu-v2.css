@@ -434,3 +434,12 @@ select.select2:not(.select2-hidden-accessible) {
     height: 32px;
     visibility: hidden;
 }
+
+/* Bootstrap để con trỏ mũi tên cho ô chọn, radio/checkbox và nhãn của chúng —
+   bấm được mà không hiện bàn tay thì người dùng tưởng là chữ chết. */
+.form-check-input:not(:disabled),
+.form-check-input:not(:disabled) ~ .form-check-label,
+select.form-select:not(:disabled),
+select.form-control:not(:disabled) {
+    cursor: pointer;
+}

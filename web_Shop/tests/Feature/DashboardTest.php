@@ -81,7 +81,6 @@ class DashboardTest extends TestCase
                 ],
             ]]),
 
-            '*/admin/ca-lam-viec/hien-tai*' => Http::response(['data' => null]),
             '*' => Http::response(['data' => []]),
         ]);
     }
@@ -199,16 +198,20 @@ class DashboardTest extends TestCase
      * Ca đang mở: tiền mặt là tiền SỔ nói lẽ ra đang có trong két.
      *
      * Đầu ca cộng thu trừ chi — không phải chỉ lấy tiền đầu ca, mà cũng không
-     * phải tổng thu của cả ngày.
+     * phải tổng thu của cả ngày. Danh sách ca không kèm tổng thu/chi nên số
+     * phải lấy từ chi tiết từng ca.
      */
     public function test_ca_dang_mo_in_tien_mat_theo_so(): void
     {
         $this->fakeApi([], [
-            '*/admin/ca-lam-viec/hien-tai*' => Http::response(['data' => [
-                'id' => 12, 'shop_id' => 2, 'shop_name' => 'Chi nhánh 1',
+            '*/admin/ca-lam-viec/12*' => Http::response(['data' => ['ca' => [
+                'id' => 12, 'shop_id' => 2,
                 'opened_by_name' => 'Chị Lan', 'opened_at' => '2026-09-26 08:30:00',
                 'opening_cash' => 500_000, 'tong_thu' => 3_000_000, 'tong_chi' => 200_000,
                 'closed_at' => null, 'so_don_tien_mat' => 6,
+            ]]]),
+            '*/admin/ca-lam-viec*' => Http::response(['data' => [
+                ['id' => 12, 'shop_id' => 2, 'opened_by_name' => 'Chị Lan', 'opening_cash' => 500_000, 'tong_thu' => 0, 'tong_chi' => 0],
             ]]),
         ]);
 
@@ -218,6 +221,66 @@ class DashboardTest extends TestCase
         $this->assertStringContainsString('#12', $html);
         $this->assertStringContainsString('3.300.000', $html, 'Tiền mặt = đầu ca + thu − chi');
         $this->assertStringContainsString(__('message.open'), $html);
+        Http::assertSent(fn ($req) => str_contains($req->url(), 'ca-lam-viec?')
+            && str_contains($req->url(), 'status=dang_mo') && str_contains($req->url(), 'shop_id=0'));
+    }
+
+    /** Xem "Tất cả" thì mỗi chi nhánh có ca mở là một dòng, như v2. */
+    public function test_tat_ca_chi_nhanh_liet_ke_moi_ca_mo(): void
+    {
+        $this->fakeApi([], [
+            '*/admin/ca-lam-viec/12*' => Http::response(['data' => ['ca' => ['id' => 12, 'shop_id' => 2, 'opened_by_name' => 'Chị Lan', 'opening_cash' => 100_000]]]),
+            '*/admin/ca-lam-viec/15*' => Http::response(['data' => ['ca' => ['id' => 15, 'shop_id' => 3, 'opened_by_name' => 'Anh Tú', 'opening_cash' => 200_000]]]),
+            '*/admin/ca-lam-viec*' => Http::response(['data' => [['id' => 12, 'shop_id' => 2], ['id' => 15, 'shop_id' => 3]]]),
+        ]);
+
+        $html = $this->html();
+
+        $this->assertStringContainsString('Chị Lan', $html);
+        $this->assertStringContainsString('Anh Tú', $html);
+        $this->assertSame(2, substr_count($html, 'list-history-shift active'));
+    }
+
+    /**
+     * Chi nhánh là bộ lọc riêng của màn: mặc định gộp cả cửa hàng (shop_id=0),
+     * chọn một chi nhánh thì MỌI lượt gọi số liệu đều mang id đó, còn id lạ thì
+     * lùi về "Tất cả" chứ không gửi bừa lên API.
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('chiNhanhTrenUrl')]
+    public function test_chi_nhanh_di_vao_moi_loi_goi(string $q, string $shop): void
+    {
+        $dsChiNhanh = Http::response(['data' => [['id' => 2, 'name' => 'Chi nhánh 1'], ['id' => 3, 'name' => 'Chi nhánh 2']]]);
+        $this->fakeApi([], ['*/admin/chi-nhanh*' => $dsChiNhanh]);
+
+        $html = $this->html('/admin/dashboard'.$q);
+
+        foreach (['reports/revenue', 'reports/orders', 'reports/products', 'phieu-mua-hang', 'ca-lam-viec?'] as $d) {
+            Http::assertSent(fn ($req) => str_contains($req->url(), $d) && str_contains($req->url(), 'shop_id='.$shop));
+        }
+        $this->assertMatchesRegularExpression('#<option value="'.$shop.'"\s+selected#', $html);
+    }
+
+    public static function chiNhanhTrenUrl(): array
+    {
+        return [
+            'mặc định Tất cả' => ['', '0'],
+            'một chi nhánh' => ['?branch=3', '3'],
+            'id không có' => ['?branch=99', '0'],
+            'chữ' => ['?branch=abc', '0'],
+        ];
+    }
+
+    /** Tab Thống kê: Tổng quan bấm được và đứng đầu, "Báo cáo cuối ngày" đã chuyển sang module Báo cáo. */
+    public function test_tab_thong_ke(): void
+    {
+        $this->fakeApi();
+
+        $html = $this->html();
+
+        preg_match_all('#class="sub-nav-btn[^"]*"[^>]*>\s*([^<]+?)\s*</a>#u', $html, $tab);
+        $this->assertSame(['Tổng quan', 'Khách hàng', 'Quản lý đơn hàng', 'Hoá đơn điện tử'], $tab[1]);
+        $this->assertMatchesRegularExpression('#admin/dashboard"\s+class="sub-nav-btn active"#', $html);
+        $this->assertMatchesRegularExpression('#icon-item me-xl-2 active">\s*<a href="[^"]*/admin/dashboard"#', $html);
     }
 
     /**

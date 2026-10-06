@@ -65,19 +65,19 @@
     <div class="row">
         {{-- ====================== KHUNG LỌC BÊN TRÁI ====================== --}}
         <div class="col-12 col-md-2 pe-lg-0 fillter-box-container">
-            {{-- CHI NHÁNH — không phải bộ lọc riêng mà là chi nhánh đang làm việc
-                 của TAB này, cùng thứ dropdown ba gạch trên thanh đầu trang đổi.
-                 Cửa hàng một chi nhánh thì không bày: ô một lựa chọn không lọc
-                 được gì (xem màn Thu chi, cùng lý do). --}}
+            {{-- CHI NHÁNH — bộ lọc riêng của màn này (xem DashboardController::filters),
+                 KHÔNG đổi chi nhánh làm việc của tab. Cửa hàng một chi nhánh thì
+                 không bày: ô một lựa chọn không lọc được gì. --}}
             @if (count($chiNhanh['ds']) > 1)
                 <div id="branchDashboardTarget" class="fillter-box">
                     <div class="card inner-modal-in-mobile">
                         <div class="card-header header_search">{{ __('message.branch') }}</div>
                         <div class="card-body px-2">
                             <select class="form-control form-select w-100" id="db-branch">
+                                <option value="0" {{ $filters['branch'] === 0 ? 'selected' : '' }}>{{ __('message.all') }}</option>
                                 @foreach ($chiNhanh['ds'] as $cn)
                                     <option value="{{ $cn['id'] }}"
-                                        {{ (int) $chiNhanh['dangChon'] === (int) $cn['id'] ? 'selected' : '' }}>
+                                        {{ $filters['branch'] === (int) $cn['id'] ? 'selected' : '' }}>
                                         {{ $cn['name'] }}
                                     </option>
                                 @endforeach
@@ -95,6 +95,7 @@
                              Hai ô ngày và nhóm nút loại trừ nhau — gửi kèm cả hai thì
                              controller không biết người dùng vừa đổi cái nào. --}}
                         <form method="GET" action="{{ route('admin.dashboard') }}" id="db-filter">
+                            <input type="hidden" name="branch" value="{{ $filters['branch'] }}">
                             @foreach (['top_products', 'top_payment', 'top_origin', 'top_promo', 'top_branch'] as $o)
                                 <input type="hidden" name="{{ $o }}" value="{{ $filters[$o] }}">
                             @endforeach
@@ -103,19 +104,24 @@
                                  của trình duyệt in theo ngôn ngữ máy khách nên cùng một
                                  trang tiếng Việt lại hiện 09/26/2026. Vỏ v2 đã khai sẵn
                                  bộ chữ tiếng Việt (V2.lichVN) cho cả khu. --}}
-                            <div class="row filter-form g-1 mb-2">
-                                <div class="col-6">
+                            <div class="d-flex align-items-start gap-2 mb-2">
+                                <input class="form-check-input mt-2 flex-shrink-0" type="radio" id="db-range-custom"
+                                    aria-label="{{ __('message.from_date') }} – {{ __('message.to_date') }}"
+                                    {{ $filters['range'] === null ? 'checked' : '' }}>
+                            <div class="row filter-form g-1 flex-grow-1">
+                                <div class="col-12">
                                     <input type="text" class="form-control form-control-sm" name="from" id="db-from"
                                         autocomplete="off" value="{{ $ngayVN($filters['from']) }}"
                                         placeholder="{{ __('message.from_date') }}"
                                         aria-label="{{ __('message.from_date') }}">
                                 </div>
-                                <div class="col-6">
+                                <div class="col-12">
                                     <input type="text" class="form-control form-control-sm" name="to" id="db-to"
                                         autocomplete="off" value="{{ $ngayVN($filters['to']) }}"
                                         placeholder="{{ __('message.to_date') }}"
                                         aria-label="{{ __('message.to_date') }}">
                                 </div>
+                            </div>
                             </div>
 
                             @foreach ($rangeGroups as $tieuDe => $maDS)
@@ -123,7 +129,7 @@
                                     <span class="title_search">{{ $tieuDe }}</span>
                                     @foreach ($maDS as $ma)
                                         <div class="form-check">
-                                            <input class="form-check-input db-range" type="radio" name="range"
+                                            <input class="form-check-input me-2 db-range" type="radio" name="range"
                                                 value="{{ $ma }}" id="db-range-{{ $ma }}"
                                                 {{ $filters['range'] === $ma ? 'checked' : '' }}>
                                             <label class="form-check-label" for="db-range-{{ $ma }}">
@@ -133,12 +139,6 @@
                                     @endforeach
                                 </div>
                             @endforeach
-
-                            {{-- Không JS thì vẫn lọc được: nút này là đường đi duy nhất
-                                 của bàn phím, JS chỉ làm nó thành thừa. --}}
-                            <button type="submit" class="btn btn-sm btn-primary w-100 mt-1">
-                                {{ __('message.search') }}
-                            </button>
                         </form>
                     </div>
                 </div>
@@ -253,14 +253,14 @@
                                 <div class="chart-header d-flex justify-content-between">
                                     <h6 class="mb-0 fw-bold">{{ __('message.current_shift') }}</h6>
                                     <span class="total_quantity">
-                                        @if ($ca)
-                                            {{ __('message.cash_orders') }}: {{ $tien($ca['so_don']) }}
+                                        @if ($caMo)
+                                            {{ __('message.cash_orders') }}: {{ $tien(array_sum(array_column($caMo, 'so_don'))) }}
                                         @endif
                                     </span>
                                 </div>
                                 <div class="chart-body d-flex p-2 db-shift-body">
                                     <div id="list-shift-details" class="w-100">
-                                        @if ($ca)
+                                        @forelse ($caMo as $ca)
                                             <div class="list-history-shift active mb-3 pb-2 border-bottom db-shift-row">
                                                 <div><span class="fw-bold">{{ __('message.branch') }}:</span>
                                                     {{ $ca['chi_nhanh'] !== '' ? $ca['chi_nhanh'] : '—' }}</div>
@@ -271,20 +271,15 @@
                                                 <div><span class="fw-bold">{{ __('message.shift_open_time') }}:</span>
                                                     {{ $ca['gio_mo'] ? date('d-m-Y H:i:s', strtotime($ca['gio_mo'])) : '—' }}</div>
                                                 <div><span class="fw-bold">{{ __('message.shift_close_time') }}:</span>
-                                                    @if ($ca['gio_dong'])
-                                                        {{ date('d-m-Y H:i:s', strtotime($ca['gio_dong'])) }}
-                                                    @else
-                                                        <span class="fw-bold text_success">{{ __('message.open') }}</span>
-                                                    @endif
-                                                </div>
+                                                    <span class="fw-bold text_success">{{ __('message.open') }}</span></div>
                                                 <div><span class="fw-bold">{{ __('message.total_cash') }}:</span>
                                                     {{ $tien($ca['tien_mat']) }} đ</div>
                                             </div>
-                                        @else
+                                        @empty
                                             <p class="text-center noti-error-shift fw-bold alert alert-danger mb-0">
                                                 {{ __('message.no_shift_selected') }}
                                             </p>
-                                        @endif
+                                        @endforelse
                                     </div>
                                 </div>
                             </div>
@@ -478,8 +473,8 @@
         .db-shift-row { font-size: 14px; display: flex; flex-direction: column; gap: 5px; }
         .db-top-scroll { max-height: 250px; min-height: 250px; }
 
-        /* Cột lọc chỉ rộng ~150px: hai ô ngày cạnh nhau phải nhỏ chữ mới đủ chỗ
-           cho khuôn dd-mm-yyyy, không thì ngày bị cắt mất phần năm. */
+        /* Hai ô ngày xếp dọc: cột lọc trừ nút radio chỉ còn ~85px mỗi ô nếu
+           đứng cạnh nhau, khuôn dd-mm-yyyy bị cắt mất phần năm (đo ở 1366/1440). */
         #db-from, #db-to { font-size: 12px; padding-left: 6px; padding-right: 6px; }
 
         /* Bảng trong thẻ hẹp (thẻ chỉ rộng ~270px ở khổ 1366): chia phần trăm đủ
@@ -578,9 +573,18 @@
                 window.location.href = u.toString();
             }));
 
-            // Lịch tiếng Việt cho hai ô ngày, y như các màn v2 khác. Chọn ngày
-            // xong thì bỏ mốc đang tích: hai thứ cùng gửi lên là controller
-            // không biết người dùng vừa đổi cái nào.
+            // Đủ hai ngày thì lọc luôn, không chờ nút — như v2. Bỏ mốc đang tích:
+            // hai thứ cùng gửi lên là controller không biết người dùng vừa đổi cái nào.
+            const tuChon = document.getElementById('db-range-custom');
+            const tuChonDuNgay = () => /^\d{2}-\d{2}-\d{4}$/.test(document.getElementById('db-from').value)
+                && /^\d{2}-\d{2}-\d{4}$/.test(document.getElementById('db-to').value);
+            ['db-from', 'db-to'].forEach((id) => document.getElementById(id).addEventListener('change', () => {
+                document.querySelectorAll('.db-range').forEach((r) => (r.checked = false));
+                tuChon.checked = true;
+                if (tuChonDuNgay()) form.submit();
+            }));
+            tuChon.addEventListener('change', () => document.getElementById('db-from').focus());
+
             if (window.jQuery && $.fn.daterangepicker) {
                 ['#db-from', '#db-to'].forEach(function (sel) {
                     const $o = $(sel);
@@ -592,14 +596,17 @@
                         autoUpdateInput: false,
                         autoApply: true,
                     }, function (start) {
-                        $o.val(start.format('DD-MM-YYYY')).trigger('change');
-                        document.querySelectorAll('.db-range').forEach((r) => (r.checked = false));
+                        $o.val(start.format('DD-MM-YYYY'))[0].dispatchEvent(new Event('change'));
                     });
                 });
             }
 
             const cn = document.getElementById('db-branch');
-            if (cn) cn.addEventListener('change', () => window.V2 && V2.doiChiNhanhTab(cn.value));
+            if (cn) cn.addEventListener('change', () => {
+                const u = new URL(window.location.href);
+                u.searchParams.set('branch', cn.value);
+                window.location.href = u.toString();
+            });
         })();
     </script>
 @endpush
