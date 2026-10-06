@@ -40,6 +40,7 @@
         .th-the .th-dau { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; gap: 8px; }
         .th-the .chart-title { margin: 0; font-size: 17px; }
         .th-the .badge_info { background: #f1f3f5; border-radius: 999px; font-weight: 600; font-size: 13px; white-space: nowrap; }
+        .th-ngoai-loc { margin: 0; padding: 0 10px 8px; font-size: 12.5px; color: #8a6d3b; }
         .th-nen { padding: 18px 22px; }
         .th-nen .th-ve { position: relative; height: 300px; }
         .th-rong { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #8c8c8c; }
@@ -157,9 +158,10 @@
                         <div class="col-12 col-xxl-6 mb-4">
                             <div class="chart-container th-the">
                                 <div class="th-dau">
-                                    <div class="chart-title">Thu / Chi (<span class="text-success">{{ $tien($so['thu']) }} / {{ $tien($so['chi']) }} VND</span>)</div>
+                                    <div class="chart-title">Thu / Chi (<span class="text-success">{{ $tien($so['quy_thu']) }} / {{ $tien($so['quy_chi']) }} VND</span>)</div>
                                     <div class="px-3 py-2 badge_info">Quỹ tiền mặt</div>
                                 </div>
+                                @include('v2::reports._thu-chi-ngoai-loc', ['channel' => $filters['channel']])
                                 <div class="th-nen" style="background: rgba(255, 244, 251, 1);">
                                     <div class="th-ve"><canvas id="thThuChi"></canvas></div>
                                 </div>
@@ -207,6 +209,7 @@
                                             <span class="nhan">Thu</span><span class="so">{{ $so['phieu_thu'] }}</span>
                                             <span class="nhan">Chi</span><span class="so">{{ $so['phieu_chi'] }}</span>
                                         </div>
+                                        @include('v2::reports._thu-chi-ngoai-loc', ['channel' => $filters['channel']])
                                     </td>
                                     <td>
                                         <div class="th-luoi">
@@ -347,7 +350,7 @@
             }
 
             function veHet() {
-                tron('thThuChi', ['Phiếu thu', 'Phiếu chi'], [SO.thu, SO.chi], tien(SO.thu - SO.chi));
+                tron('thThuChi', ['Phiếu thu', 'Phiếu chi'], [SO.quy_thu, SO.quy_chi], tien(SO.quy_thu - SO.quy_chi));
 
                 // Hình thức không có tiền thì không vẽ lát — lát 0 chỉ làm rối chú thích.
                 const ht = Object.values(SO.hinh_thuc).filter((h) => h.tien > 0);

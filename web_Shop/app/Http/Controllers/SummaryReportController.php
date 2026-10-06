@@ -119,6 +119,8 @@ class SummaryReportController extends Controller
             'thu' => $thu,
             'chi' => $chi,
             'thu_chi' => $thu - $chi,
+            'quy_thu' => (float) data_get($bao, 'cashbook.cash_income', 0),
+            'quy_chi' => (float) data_get($bao, 'cashbook.cash_expense', 0),
             'so_don' => (int) data_get($bao, 'totals.orders', 0),
             'doanh_thu' => (float) data_get($bao, 'totals.revenue', 0),
             'hinh_thuc' => $hinhThuc,

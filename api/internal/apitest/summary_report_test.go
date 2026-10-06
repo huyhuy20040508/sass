@@ -21,6 +21,8 @@ type baoCaoTongHop struct {
 		ExpenseCount int64   `json:"expense_count"`
 		Income       float64 `json:"income"`
 		Expense      float64 `json:"expense"`
+		CashIncome   float64 `json:"cash_income"`
+		CashExpense  float64 `json:"cash_expense"`
 	} `json:"cashbook"`
 	Totals struct {
 		Orders  int64   `json:"orders"`
@@ -264,5 +266,34 @@ func TestBaoCaoTongHop_KhongLanCuaHang(t *testing.T) {
 	// Đối chứng: số của A có đổi.
 	if aSau := docTongHop(t, h, a, ""); aSau.Totals.Orders != aTruoc.Totals.Orders+1 {
 		t.Fatalf("cửa hàng A phải thêm 1 đơn, trước %d sau %d", aTruoc.Totals.Orders, aSau.Totals.Orders)
+	}
+}
+
+// TestBaoCaoTongHop_QuyTienMat — quỹ tiền mặt chỉ cộng phiếu tiền mặt; phiếu
+// chuyển khoản vẫn vào tổng sổ thu chi.
+func TestBaoCaoTongHop_QuyTienMat(t *testing.T) {
+	h := dungHeThong(t)
+	a, _ := haiCuaHang(t, h)
+	moCa(t, h, a, 0)
+
+	truoc := docTongHop(t, h, a, "")
+	for _, than := range []map[string]any{
+		thuTienMat(50000),
+		{"type": 0, "amount": 70000, "payment_method": "transfer"},
+		chiTienMat(20000),
+		{"type": 1, "amount": 30000, "payment_method": "transfer"},
+	} {
+		if ma, _ := lapPhieuTC(t, h, a.token, than); ma != http.StatusCreated {
+			t.Fatalf("lập phiếu %v trả %d", than, ma)
+		}
+	}
+	sau := docTongHop(t, h, a, "")
+
+	s, tr := sau.Cashbook, truoc.Cashbook
+	if s.Income-tr.Income != 120000 || s.Expense-tr.Expense != 50000 {
+		t.Errorf("tổng sổ phải +120000 thu / +50000 chi, đang +%v / +%v", s.Income-tr.Income, s.Expense-tr.Expense)
+	}
+	if s.CashIncome-tr.CashIncome != 50000 || s.CashExpense-tr.CashExpense != 20000 {
+		t.Errorf("quỹ tiền mặt phải +50000 thu / +20000 chi, đang +%v / +%v", s.CashIncome-tr.CashIncome, s.CashExpense-tr.CashExpense)
 	}
 }

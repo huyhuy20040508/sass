@@ -48,6 +48,35 @@ class CrmMembershipTest extends TestCase
         $this->assertStringContainsString(route('admin.crm.membership.detail', 2), $html);
     }
 
+    /**
+     * Hai nhãn quy đổi phải được NẠP LẠI cùng bảng sau khi lưu.
+     *
+     * Lưu xong, V2.luuHop gọi V2.napLai, mà napLai chỉ thay mấy khối danh sách —
+     * bảng hạng mới ngay còn hai nhãn ở hàng tiêu đề vẫn là chữ cũ "0đ = 0 điểm".
+     * Người dùng đọc nhãn, tưởng chưa lưu, bấm Lưu thêm mấy lượt nữa.
+     *
+     * Bài canh HỢP ĐỒNG giữa hai chỗ: khối nhãn phải mang đúng cái id mà trang
+     * khai với V2.KHOI. Đổi tên một bên mà quên bên kia là nhãn lại đứng im, và
+     * đó là lỗi chỉ hiện ra khi bấm Lưu nên rất dễ lọt.
+     */
+    public function test_khoi_nhan_quy_doi_nam_trong_danh_sach_nap_lai(): void
+    {
+        Http::fake(['*/admin/the-thanh-vien' => Http::response(['data' => $this->duLieu()])]);
+
+        $html = $this->withSession($this->phien())->get(route('admin.crm.membership.index'))->assertOk()->getContent();
+
+        // Khối bọc hai nhãn, và chính khối ấy được khai để nạp lại.
+        $this->assertMatchesRegularExpression('/id="tv-khoi-quy-doi"/', $html);
+        $this->assertStringContainsString("V2.KHOI.push('#tv-khoi-quy-doi')", $html);
+
+        // Hai nhãn và ô tick nằm TRONG khối — nằm ngoài thì nạp lại không tới.
+        $dau = strpos($html, 'id="tv-khoi-quy-doi"');
+        $khoi = substr($html, $dau, strpos($html, 'btn_top_content', $dau) - $dau);
+        $this->assertStringContainsString('Quy đổi tiền ra điểm:', $khoi);
+        $this->assertStringContainsString('Áp dụng quy đổi điểm:', $khoi);
+        $this->assertStringContainsString('id="tv-bat-doi"', $khoi);
+    }
+
     public function test_trang_chi_tiet_hang(): void
     {
         Http::fake([

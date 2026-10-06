@@ -21,8 +21,9 @@ func (r *reportRepository) ItemKinds(ctx context.Context, p domain.ReportPeriod)
 	return n, err
 }
 
-// CashbookTotals cộng phiếu thu / phiếu chi lập trong kỳ. Không lọc nguồn đơn:
-// phiếu thu chi là sổ của cả quầy. Table() nên phải tự khai deleted_at.
+// CashbookTotals cộng phiếu thu / phiếu chi lập trong kỳ, kèm riêng phần tiền
+// mặt cho thẻ Quỹ. Không lọc nguồn đơn: phiếu thu chi là sổ của cả quầy.
+// Table() nên phải tự khai deleted_at.
 func (r *reportRepository) CashbookTotals(ctx context.Context, p domain.ReportPeriod) (domain.SummaryCashbook, error) {
 	var out domain.SummaryCashbook
 
@@ -37,8 +38,11 @@ func (r *reportRepository) CashbookTotals(ctx context.Context, p domain.ReportPe
 			COALESCE(SUM(CASE WHEN ie.type = ? THEN 1 ELSE 0 END), 0) AS income_count,
 			COALESCE(SUM(CASE WHEN ie.type = ? THEN 1 ELSE 0 END), 0) AS expense_count,
 			COALESCE(SUM(CASE WHEN ie.type = ? THEN ie.amount ELSE 0 END), 0) AS income,
-			COALESCE(SUM(CASE WHEN ie.type = ? THEN ie.amount ELSE 0 END), 0) AS expense`,
-		domain.ThuChiPhieuThu, domain.ThuChiPhieuChi, domain.ThuChiPhieuThu, domain.ThuChiPhieuChi).
+			COALESCE(SUM(CASE WHEN ie.type = ? THEN ie.amount ELSE 0 END), 0) AS expense,
+			COALESCE(SUM(CASE WHEN ie.type = ? AND ie.payment_method = ? THEN ie.amount ELSE 0 END), 0) AS cash_income,
+			COALESCE(SUM(CASE WHEN ie.type = ? AND ie.payment_method = ? THEN ie.amount ELSE 0 END), 0) AS cash_expense`,
+		domain.ThuChiPhieuThu, domain.ThuChiPhieuChi, domain.ThuChiPhieuThu, domain.ThuChiPhieuChi,
+		domain.ThuChiPhieuThu, domain.ThuChiTienMat, domain.ThuChiPhieuChi, domain.ThuChiTienMat).
 		Scan(&out).Error
 	return out, err
 }

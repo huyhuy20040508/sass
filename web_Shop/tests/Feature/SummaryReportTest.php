@@ -43,7 +43,7 @@ class SummaryReportTest extends TestCase
 
         return ['data' => [
             'date' => '2026-05-05',
-            'cashbook' => ['income_count' => 2, 'expense_count' => 1, 'income' => 141750, 'expense' => 20000],
+            'cashbook' => ['income_count' => 2, 'expense_count' => 1, 'income' => 141750, 'expense' => 20000, 'cash_income' => 50000, 'cash_expense' => 20000],
             'totals' => ['orders' => 5, 'revenue' => 458770, 'units' => 15],
             'item_kinds' => 7,
             'by_payment_method' => [
@@ -167,7 +167,7 @@ class SummaryReportTest extends TestCase
 
         $html = $this->withSession($this->phien())->get('/admin/reports/summary')->assertOk()->getContent();
 
-        $this->assertStringContainsString('Thu / Chi (<span class="text-success">141.750 / 20.000 VND</span>)', $html);
+        $this->assertStringContainsString('Thu / Chi (<span class="text-success">50.000 / 20.000 VND</span>)', $html);
         $this->assertStringContainsString('Tổng kết bán hàng (<span class="text-success">458.770 VND</span>)', $html);
         $this->assertStringContainsString('Số hoá đơn (5 đơn hàng)', $html);
         // Dữ liệu 24 giờ đi sang JS, giờ 11 có 3 đơn.
@@ -179,6 +179,32 @@ class SummaryReportTest extends TestCase
         // Khách hàng đổi tên thành Báo cáo cuối ngày.
         preg_match_all('#class="sub-nav-btn[^"]*"[^>]*>\s*([^<]+?)\s*</a>#u', $html, $tab);
         $this->assertSame(['Báo cáo tổng hợp', 'Báo cáo cuối ngày', 'Báo cáo kết ca'], $tab[1]);
+    }
+
+    /**
+     * Lọc Nguồn đơn thì khối Thu/Chi phải NÓI là nó không theo bộ lọc ấy.
+     *
+     * Chọn Online ngày 29/09: "Tổng kết bán hàng" về 0 đơn / 0 đ, còn Thu/Chi vẫn
+     * đếm hai phiếu thu của hai đơn bán tại quầy. Bên API cố ý như vậy — phiếu
+     * thu chi là sổ của cả quầy, phần lớn phiếu chẳng dính đơn nào — nhưng ô lọc
+     * nằm ngay cạnh nên người xem tưởng con số kia cũng đã lọc.
+     *
+     * Dòng chú thích chỉ hiện KHI ĐANG lọc: không lọc thì chẳng có gì hiểu nhầm.
+     */
+    public function test_loc_nguon_don_thi_bao_khoi_thu_chi_khong_theo_loc(): void
+    {
+        $cau = 'Không theo bộ lọc Nguồn đơn';
+
+        $this->fakeApi();
+        $khongLoc = $this->withSession($this->phien())->get('/admin/reports/summary')->assertOk()->getContent();
+        $this->assertStringNotContainsString($cau, $khongLoc, 'chưa lọc nguồn thì đừng in thêm dòng nào');
+
+        $this->fakeApi();
+        $coLoc = $this->withSession($this->phien())->get('/admin/reports/summary?channel=web')->assertOk()->getContent();
+
+        // Hiện ở CẢ hai dạng xem: thẻ biểu đồ và cột của bảng danh sách.
+        $this->assertSame(2, substr_count($coLoc, $cau),
+            'dòng chú thích phải đứng cạnh khối Thu/Chi ở cả dạng biểu đồ lẫn dạng danh sách');
     }
 
     public function test_api_loi_van_ra_trang(): void
