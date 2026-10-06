@@ -99,7 +99,7 @@ class NarrowScreenTableTest extends TestCase
     }
 
     /**
-     * Tổng quan — hai bảng "Top …" nằm trong THẺ, không phải cả trang.
+     * Tổng quan — bảng "Top sản phẩm bán chạy" nằm trong THẺ, không phải cả trang.
      *
      * Thẻ chỉ rộng chừng 260px ở khổ 1366 nên đây là bảng chật nhất trong các
      * màn: để `auto` là một tên hàng dài đẩy bảng tràn ra khỏi thẻ.
@@ -113,11 +113,6 @@ class NarrowScreenTableTest extends TestCase
 
         $this->assertEqualsWithDelta(100.0, $this->tongPhanTram($html, [
             'db-table .db-c-stt', 'db-table .db-c-name', 'db-table .db-c-val',
-        ]), 0.01);
-
-        // Bảng chi nhánh in tiền nên chia lại hai cột sau — vẫn phải đủ 100.
-        $this->assertEqualsWithDelta(100.0 - 15.0, $this->tongPhanTram($html, [
-            'db-table--money .db-c-name', 'db-table--money .db-c-val',
         ]), 0.01);
     }
 

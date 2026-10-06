@@ -1,12 +1,14 @@
-{{-- Tổng quan — dựng lại theo màn cùng tên của bản v2 (dashboard).
+{{-- Tổng quan — dựng lại theo màn cùng tên của bản v2 (dashboard), giữ nguyên
+     bố cục cũ (khung lọc trái, sáu ô KPI, hàng ca / doanh thu / bán chạy, bốn
+     thẻ Top) và bồi thêm: so kỳ trước, lợi nhuận gộp, mục tiêu tháng, giờ cao
+     điểm, thẻ cần chú ý, bấm số để mở màn chi tiết.
 
      Khác bản gốc một điểm có chủ ý: trang này dựng SẴN ở máy chủ chứ không để
-     trống rồi gọi bốn lượt AJAX lấp vào. Mọi màn v2 đã port trong dự án đều lọc
-     bằng tham số trên URL — một màn riêng chạy kiểu khác là hai lối đi cho cùng
-     một việc, và bộ kiểm cũng không soi được nội dung bảng.
+     trống rồi gọi AJAX lấp vào. Mọi màn v2 đã port trong dự án đều lọc bằng
+     tham số trên URL — một màn riêng chạy kiểu khác là hai lối đi cho cùng một
+     việc, và bộ kiểm cũng không soi được nội dung bảng.
 
-     Biểu đồ vẫn cần Chart.js, nạp riêng ở đây: layout v2 cố ý không nạp sẵn vì
-     tới giờ chưa màn nào vẽ biểu đồ (xem chú thích trong layouts/master). --}}
+     Biểu đồ vẫn cần Chart.js, nạp riêng ở đây: layout v2 cố ý không nạp sẵn. --}}
 @extends('v2::layouts.master')
 
 @section('title', 'Tổng quan')
@@ -17,7 +19,7 @@
 
 @php
     $tien = fn ($n) => number_format((float) $n, 0, ',', '.');
-    $ngayVN = fn ($v) => $v ? date('d-m-Y', strtotime($v)) : '';
+    $dmy = fn ($ymd) => date('d-m-Y', strtotime($ymd));
 
     // Ô KPI rút gọn số từ một tỷ trở lên — cùng cách với bốn ô quỹ của màn Thu
     // chi, để hai màn không in cùng một con số theo hai kiểu.
@@ -30,6 +32,60 @@
 
         return ($n < 0 ? '~ -' : '~ ').$so.' '.__('message.billion');
     };
+    $phanTram = fn ($p) => rtrim(rtrim(number_format(abs($p), 1, ',', '.'), '0'), ',').'%';
+
+    $soSanh = function (?array $so) use ($phanTram) {
+        if ($so === null) {
+            return null;
+        }
+        if ($so['moi']) {
+            return ['chu' => '▲ Mới · kỳ trước 0', 'lop' => 'db-up'];
+        }
+
+        return $so['pct'] >= 0
+            ? ['chu' => '▲ '.$phanTram($so['pct']).' so với kỳ trước', 'lop' => 'db-up']
+            : ['chu' => '▼ '.$phanTram($so['pct']).' so với kỳ trước', 'lop' => 'db-down'];
+    };
+
+    $ky = ['from_date' => $dmy($filters['from']), 'to_date' => $dmy($filters['to'])];
+
+    $oKpi = [
+        [
+            'nhan' => __('message.gross-revenue'), 'so' => $tienGon($kpi['gross']).' đ', 'day_du' => $tien($kpi['gross']).' đ',
+            'tip' => __('message.gross_revenue_formula'), 'so_sanh' => $soSanh($kpi['so']['gross']), 'phu' => null,
+            'icon' => 'ic_revenue.png', 'mau' => '#3b82f6', 'link' => route('admin.reports.sales', $ky),
+        ],
+        [
+            'nhan' => __('message.net-revenue'), 'so' => $tienGon($kpi['net']).' đ', 'day_du' => $tien($kpi['net']).' đ',
+            'tip' => __('message.net_revenue_formula'), 'so_sanh' => $soSanh($kpi['so']['net']),
+            'phu' => 'Giảm giá −'.$tien($kpi['gross'] - $kpi['net']),
+            'icon' => 'ic_net_revenue.png', 'mau' => '#6366f1', 'link' => route('admin.reports.sales', $ky),
+        ],
+        [
+            'nhan' => 'Lợi nhuận gộp', 'so' => $tienGon($kpi['profit']).' đ', 'day_du' => $tien($kpi['profit']).' đ',
+            'tip' => 'Lợi nhuận gộp = Tiền hàng − Giảm giá − Giá vốn hàng đã bán (không tính phí vận chuyển)',
+            'so_sanh' => $soSanh($kpi['so']['profit']),
+            'phu' => $kpi['margin'] !== null ? 'Biên lãi '.$phanTram($kpi['margin']) : null,
+            'icon' => 'ic_estimated_revenue.svg', 'mau' => '#16a34a', 'link' => route('admin.reports.profit', $ky),
+        ],
+        [
+            'nhan' => __('message.sales-orders'), 'so' => $tien($kpi['orders']), 'day_du' => $tien($kpi['orders']).' đơn',
+            'tip' => __('message.includes_unpaid_credit_partial_orders'), 'so_sanh' => $soSanh($kpi['so']['orders']),
+            'phu' => $kpi['orders'] > 0 ? 'TB '.$tien($kpi['aov']).' đ/đơn' : null,
+            'icon' => 'ic_order.png', 'mau' => '#0ea5e9', 'link' => route('admin.orders.index', $ky),
+        ],
+        [
+            'nhan' => __('message.cost-of-goods-purchased'), 'so' => $tienGon($kpi['purchase_cost']).' đ', 'day_du' => $tien($kpi['purchase_cost']).' đ',
+            'tip' => __('message.includes_unpaid_and_paid_vouchers').($kpi['purchase_sampled'] ? ' — kỳ này nhiều phiếu, số đang tính trên '.\App\Http\Controllers\DashboardController::MAX_PURCHASE_PAGES.' trang đầu' : ''),
+            'so_sanh' => null, 'phu' => 'Phiếu mua đã duyệt',
+            'icon' => 'ic_trading.png', 'mau' => '#ef4444', 'link' => route('admin.phieu-mua-hang.index', $ky),
+        ],
+        [
+            'nhan' => __('message.quantity_in_stock'), 'so' => $tien($kpi['purchase_qty']), 'day_du' => $tien($kpi['purchase_qty']),
+            'tip' => __('message.stock_in_quantity_formula'), 'so_sanh' => null, 'phu' => 'sản phẩm',
+            'icon' => 'ic_inventory.png', 'mau' => '#10b981', 'link' => route('admin.phieu-mua-hang.index', $ky),
+        ],
+    ];
 
     $PAY = \App\Http\Controllers\OrderController::PAYMENT_METHODS;
     $CHANNEL = \App\Http\Controllers\OrderController::CHANNELS ?? [];
@@ -39,29 +95,67 @@
     $nhanThanhToan = fn ($k) => $PAY[$k] ?? ($k !== '' ? $k : __('message.other'));
     $nhanNguon = fn ($k) => $CHANNEL[$k] ?? ($k !== '' ? $k : __('message.other'));
 
+    $MAU = ['#3b82f6', '#f97316', '#2bb5b5', '#a855f7', '#eab308', '#ef4444', '#64748b', '#10b981', '#ec4899', '#0ea5e9', '#84cc16', '#f43f5e', '#8b5cf6', '#14b8a6', '#f59e0b'];
+    $vong = function (array $ds, string $khoa, callable $nhan, callable $giaTri) use ($MAU, $phanTram) {
+        $tong = array_sum(array_map(fn ($r) => (float) ($r[$khoa] ?? 0), $ds));
+
+        return array_map(fn ($r, $i) => [
+            'nhan' => $nhan($r['nhan']),
+            'gia_tri' => (float) ($r[$khoa] ?? 0),
+            'chu' => $giaTri($r),
+            'pt' => $tong > 0 ? $phanTram((float) ($r[$khoa] ?? 0) / $tong * 100) : '',
+            'mau' => $MAU[$i % count($MAU)],
+        ], $ds, array_keys($ds));
+    };
+    $vongThanhToan = $vong($theoThanhToan, 'revenue', $nhanThanhToan, fn ($r) => $tien($r['revenue'] ?? 0).' đ');
+    $vongNguon = $vong($theoNguon, 'orders', $nhanNguon, fn ($r) => $tien($r['orders'] ?? 0).' đơn');
+    $maxChiNhanh = max([1, ...array_map(fn ($r) => (float) ($r['revenue'] ?? 0), $theoChiNhanh)]);
+    $maxGio = max([1, ...array_column($gioCaoDiem['gio'], 'don')]);
+
     // Số liệu đổ sang JS. Dựng ở đây rồi @json một biến trần: @json với một mảng
     // viết thẳng nhiều dòng làm Blade cắt nhầm biểu thức và cả trang không biên
     // dịch được (cùng cách làm với màn Thu chi).
     $duLieuJs = [
         'chart' => $chart,
-        'thanhToan' => array_map(
-            fn ($r) => ['nhan' => $nhanThanhToan($r['nhan']), 'tien' => (float) ($r['revenue'] ?? 0)],
-            $theoThanhToan
-        ),
-        'nguon' => array_map(
-            fn ($r) => ['nhan' => $nhanNguon($r['nhan']), 'don' => (int) ($r['orders'] ?? 0)],
-            $theoNguon
-        ),
+        'thanhToan' => $vongThanhToan,
+        'nguon' => $vongNguon,
+        'linkDon' => route('admin.orders.index'),
         'chu' => [
             'gop' => __('message.gross-revenue'),
             'thuan' => __('message.net-revenue'),
-            'von' => __('message.cost-of-goods-purchased'),
-            'don' => __('message.order'),
+            'von' => 'Giá vốn',
         ],
+    ];
+
+    $topSelect = function (string $id, string $param) use ($filters, $topChoices) {
+        return ['id' => $id, 'param' => $param, 'chon' => $filters[$param], 'ds' => $topChoices];
+    };
+
+    $theVong = [
+        ['id' => 'myChart2', 'tieu_de' => __('message.top_payment_methods'), 'sel' => $topSelect('byPaymentMethod', 'top_payment'), 'ds' => $vongThanhToan, 'giua' => $tien($kpi['orders']), 'giua_phu' => 'đơn'],
+        ['id' => 'myChart3', 'tieu_de' => __('message.top_order_sources'), 'sel' => $topSelect('byOrigin', 'top_origin'), 'ds' => $vongNguon, 'giua' => $tien(array_sum(array_column($vongNguon, 'gia_tri'))), 'giua_phu' => 'đơn'],
     ];
 @endphp
 
 @section('content')
+    {{-- Nút mở khung lọc trên điện thoại — khung trái ẩn ở khổ hẹp. --}}
+    <div class="call-to-action-container">
+        <div class="wrapper-call-to-action">
+            @if (count($chiNhanh['ds']) > 1)
+                @include('v2::partials.filter-button-mobile', [
+                    'dataBsTarget' => 'offcanvasBottomInMobile',
+                    'dataOffcanvasTarget' => 'branchDashboardTarget',
+                    'modalLabel' => __('message.branch'),
+                ])
+            @endif
+            @include('v2::partials.filter-button-mobile', [
+                'dataBsTarget' => 'offcanvasBottomInMobile',
+                'dataOffcanvasTarget' => 'filterDashboardTarget',
+                'modalLabel' => __('message.time'),
+            ])
+        </div>
+    </div>
+
     <div class="row">
         {{-- ====================== KHUNG LỌC BÊN TRÁI ====================== --}}
         <div class="col-12 col-md-2 pe-lg-0 fillter-box-container">
@@ -70,7 +164,7 @@
                  không bày: ô một lựa chọn không lọc được gì. --}}
             @if (count($chiNhanh['ds']) > 1)
                 <div id="branchDashboardTarget" class="fillter-box">
-                    <div class="card inner-modal-in-mobile">
+                    <div class="card inner-modal-in-mobile db-loc">
                         <div class="card-header header_search">{{ __('message.branch') }}</div>
                         <div class="card-body px-2">
                             <select class="form-control form-select w-100" id="db-branch">
@@ -88,8 +182,16 @@
             @endif
 
             <div id="filterDashboardTarget" class="fillter-box">
-                <div class="card inner-modal-in-mobile">
-                    <div class="card-header header_search">{{ __('message.time') }}</div>
+                <div class="card inner-modal-in-mobile db-loc">
+                    <div class="card-header header_search d-flex justify-content-between align-items-center">
+                        <span>{{ __('message.time') }}</span>
+                        {{-- Nhớ kỳ: mở lại Tổng quan vẫn đứng ở kỳ đã chọn. Giữ ở trình
+                             duyệt (localStorage) — là thói quen của từng máy, không phải
+                             cấu hình của cửa hàng. --}}
+                        <label class="db-nho-ky" title="Mở lại Tổng quan vẫn giữ kỳ và chi nhánh đang chọn">
+                            <input type="checkbox" class="form-check-input m-0" id="db-nho-ky"> Nhớ kỳ
+                        </label>
+                    </div>
                     <div class="card-body px-2">
                         {{-- Form GET: chọn kỳ là nạp lại trang với ?range= hoặc ?from=&to=.
                              Hai ô ngày và nhóm nút loại trừ nhau — gửi kèm cả hai thì
@@ -102,40 +204,33 @@
 
                             {{-- Ô chữ + daterangepicker, KHÔNG phải input[type=date]: lịch
                                  của trình duyệt in theo ngôn ngữ máy khách nên cùng một
-                                 trang tiếng Việt lại hiện 09/26/2026. Vỏ v2 đã khai sẵn
-                                 bộ chữ tiếng Việt (V2.lichVN) cho cả khu. --}}
+                                 trang tiếng Việt lại hiện 09/26/2026. --}}
                             <div class="d-flex align-items-start gap-2 mb-2">
                                 <input class="form-check-input mt-2 flex-shrink-0" type="radio" id="db-range-custom"
                                     aria-label="{{ __('message.from_date') }} – {{ __('message.to_date') }}"
                                     {{ $filters['range'] === null ? 'checked' : '' }}>
-                            <div class="row filter-form g-1 flex-grow-1">
-                                <div class="col-12">
+                                <div class="d-flex flex-column gap-1 flex-grow-1">
                                     <input type="text" class="form-control form-control-sm" name="from" id="db-from"
-                                        autocomplete="off" value="{{ $ngayVN($filters['from']) }}"
+                                        autocomplete="off" value="{{ $dmy($filters['from']) }}"
                                         placeholder="{{ __('message.from_date') }}"
                                         aria-label="{{ __('message.from_date') }}">
-                                </div>
-                                <div class="col-12">
                                     <input type="text" class="form-control form-control-sm" name="to" id="db-to"
-                                        autocomplete="off" value="{{ $ngayVN($filters['to']) }}"
+                                        autocomplete="off" value="{{ $dmy($filters['to']) }}"
                                         placeholder="{{ __('message.to_date') }}"
                                         aria-label="{{ __('message.to_date') }}">
                                 </div>
-                            </div>
                             </div>
 
                             @foreach ($rangeGroups as $tieuDe => $maDS)
                                 <div class="mb-2">
                                     <span class="title_search">{{ $tieuDe }}</span>
                                     @foreach ($maDS as $ma)
-                                        <div class="form-check">
-                                            <input class="form-check-input me-2 db-range" type="radio" name="range"
+                                        <label class="db-opt {{ $filters['range'] === $ma ? 'is-active' : '' }}" for="db-range-{{ $ma }}">
+                                            <input class="form-check-input m-0 db-range" type="radio" name="range"
                                                 value="{{ $ma }}" id="db-range-{{ $ma }}"
                                                 {{ $filters['range'] === $ma ? 'checked' : '' }}>
-                                            <label class="form-check-label" for="db-range-{{ $ma }}">
-                                                {{ $rangeLabels[$ma] }}
-                                            </label>
-                                        </div>
+                                            <span>{{ $rangeLabels[$ma] }}</span>
+                                        </label>
                                     @endforeach
                                 </div>
                             @endforeach
@@ -150,130 +245,107 @@
             <div class="content_dashboard_mid">
                 {{-- Tiêu đề trang: mọi màn v2 dùng chung lớp .tieu-de-trang để cỡ
                      chữ không lệch dần giữa các màn (xem V2PageTitleTest). --}}
-                <div class="content_midd_title">
-                    <h1 class="tieu-de-trang">{{ __('message.overview') }}</h1>
-                    <span class="text-muted small">{{ $filters['describe'] }}</span>
-                </div>
-
-                <div class="card-header">
-                    <div class="row g-2 mb-2">
-                        <div class="col-6 col-md-2">
-                            <div class="box_asset h-100 position-relative justify-content-start">
-                                <span class="position-absolute top-0 end-0 mx-1 cursor-pointer" data-bs-toggle="tooltip"
-                                    data-bs-placement="left" title="{{ __('message.gross_revenue_formula') }}">
-                                    <i class="bi bi-info-circle-fill text-muted"></i>
-                                </span>
-                                <h3>{{ __('message.gross-revenue') }}</h3>
-                                <div class="box_asset_midd">
-                                    <span class="grossRevenue" title="{{ $tien($kpi['gross']) }} đ">{{ $tienGon($kpi['gross']) }} đ</span>
-                                    <img src="{{ asset('v2/images/ic_revenue.png') }}" alt="" width="64" height="64">
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="col-6 col-md-2">
-                            <div class="box_asset h-100 position-relative justify-content-start">
-                                <span class="position-absolute top-0 end-0 mx-1 cursor-pointer" data-bs-toggle="tooltip"
-                                    data-bs-placement="left" title="{{ __('message.net_revenue_formula') }}">
-                                    <i class="bi bi-info-circle-fill text-muted"></i>
-                                </span>
-                                <h3>{{ __('message.net-revenue') }}</h3>
-                                <div class="box_asset_midd">
-                                    <span class="netRevenue" title="{{ $tien($kpi['net']) }} đ">{{ $tienGon($kpi['net']) }} đ</span>
-                                    <img src="{{ asset('v2/images/ic_net_revenue.png') }}" alt="" width="64" height="64">
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="col-6 col-md-2">
-                            <div class="box_asset h-100 position-relative justify-content-start">
-                                <span class="position-absolute top-0 end-0 mx-1 cursor-pointer" data-bs-toggle="tooltip"
-                                    data-bs-placement="left" title="{{ __('message.estimated_revenue_formula') }}">
-                                    <i class="bi bi-info-circle-fill text-muted"></i>
-                                </span>
-                                <h3>{{ __('message.estimated-revenue') }}</h3>
-                                <div class="box_asset_midd">
-                                    <span class="estimatedRevenue" title="{{ $tien($kpi['estimated']) }} đ">{{ $tienGon($kpi['estimated']) }} đ</span>
-                                    <img src="{{ asset('v2/images/ic_estimated_revenue.svg') }}" alt="" width="64" height="64">
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="col-6 col-md-2">
-                            <div class="box_asset h-100 position-relative justify-content-start">
-                                <span class="position-absolute top-0 end-0 mx-1 cursor-pointer" data-bs-toggle="tooltip"
-                                    data-bs-placement="left"
-                                    title="{{ __('message.includes_unpaid_credit_partial_orders') }}">
-                                    <i class="bi bi-info-circle-fill text-muted"></i>
-                                </span>
-                                <h3>{{ __('message.sales-orders') }}</h3>
-                                <div class="box_asset_midd">
-                                    <span class="countOrder">{{ $tien($kpi['orders']) }}</span>
-                                    <img src="{{ asset('v2/images/ic_order.png') }}" alt="" width="64" height="64">
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="col-6 col-md-2">
-                            <div class="box_asset h-100 position-relative justify-content-start">
-                                <span class="position-absolute top-0 end-0 mx-1 cursor-pointer" data-bs-toggle="tooltip"
-                                    data-bs-placement="left"
-                                    title="{{ __('message.includes_unpaid_and_paid_vouchers') }}{{ $kpi['purchase_sampled'] ? ' — kỳ này nhiều phiếu, số đang tính trên '.\App\Http\Controllers\DashboardController::MAX_PURCHASE_PAGES.' trang đầu' : '' }}">
-                                    <i class="bi bi-info-circle-fill text-muted"></i>
-                                </span>
-                                <h3>{{ __('message.cost-of-goods-purchased') }}</h3>
-                                <div class="box_asset_midd">
-                                    <span class="revenuePchOrder" title="{{ $tien($kpi['purchase_cost']) }} đ">{{ $tienGon($kpi['purchase_cost']) }} đ</span>
-                                    <img src="{{ asset('v2/images/ic_trading.png') }}" alt="" width="64" height="64">
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="col-6 col-md-2">
-                            <div class="box_asset h-100 position-relative justify-content-start">
-                                <span class="position-absolute top-0 end-0 mx-1 cursor-pointer" data-bs-toggle="tooltip"
-                                    data-bs-placement="left" title="{{ __('message.stock_in_quantity_formula') }}">
-                                    <i class="bi bi-info-circle-fill text-muted"></i>
-                                </span>
-                                <h3>{{ __('message.quantity_in_stock') }}</h3>
-                                <div class="box_asset_midd">
-                                    <span class="pchOrderCount">{{ $tien($kpi['purchase_qty']) }}</span>
-                                    <img src="{{ asset('v2/images/ic_inventory.png') }}" alt="" width="64" height="64">
-                                </div>
-                            </div>
-                        </div>
+                <div class="db-title">
+                    <h1 class="tieu-de-trang mb-0">{{ __('message.overview') }}</h1>
+                    <div class="db-title-meta">
+                        <span>{{ $filters['describe'] }}</span>
+                        <span class="db-sep"></span>
+                        <span>Cập nhật lúc <b id="db-cap-nhat">{{ $capNhatLuc }}</b> · tự làm mới mỗi 5 phút</span>
+                        <button type="button" class="db-refresh" id="db-lam-moi" aria-label="Làm mới" title="Làm mới">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+                                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"></path>
+                            </svg>
+                        </button>
                     </div>
                 </div>
 
-                <div class="card-body">
-                    {{-- ---------- Hàng đầu tiên ---------- --}}
+                {{-- ---------- Sáu ô KPI: bấm vào để mở màn chi tiết đúng kỳ ---------- --}}
+                <div class="db-kpis">
+                    @foreach ($oKpi as $o)
+                        <a href="{{ $o['link'] }}" class="db-kpi" style="--db-mau: {{ $o['mau'] }}">
+                            <div class="db-kpi-head">
+                                <h3>{{ $o['nhan'] }}</h3>
+                                <span class="db-info" data-bs-toggle="tooltip" data-bs-placement="left" title="{{ $o['tip'] }}">
+                                    <i class="bi bi-info-circle-fill"></i>
+                                </span>
+                            </div>
+                            <div class="db-kpi-body">
+                                <div class="db-kpi-text">
+                                    <span class="db-kpi-so" title="{{ $o['day_du'] }}">{{ $o['so'] }}</span>
+                                    @if ($o['so_sanh'])
+                                        <span class="db-kpi-phu {{ $o['so_sanh']['lop'] }}"
+                                            title="{{ $kyTruoc ? 'Kỳ trước: '.$kyTruoc : '' }}">{{ $o['so_sanh']['chu'] }}</span>
+                                    @endif
+                                    @if ($o['phu'])
+                                        <span class="db-kpi-phu">{{ $o['phu'] }}</span>
+                                    @endif
+                                </div>
+                                <img src="{{ asset('v2/images/'.$o['icon']) }}" alt="" width="46" height="46">
+                            </div>
+                        </a>
+                    @endforeach
+                </div>
+
+                {{-- ---------- Mục tiêu doanh thu tháng ---------- --}}
+                @if ($mucTieu)
+                    <div class="db-goal">
+                        <div class="db-goal-label">
+                            <b>Mục tiêu doanh thu tháng {{ $mucTieu['thang'] }}</b>
+                            <span>{{ $mucTieu['muc_tieu'] > 0 ? $tien($mucTieu['muc_tieu']).' đ (doanh thu thuần)' : 'Chưa đặt mục tiêu' }}</span>
+                        </div>
+                        @if ($mucTieu['pct'] !== null)
+                            <div class="db-goal-bar">
+                                <div class="db-goal-track"><div style="width: {{ min(100, $mucTieu['pct']) }}%"></div></div>
+                                <div class="db-goal-note">
+                                    <span>Đã đạt {{ $tien($mucTieu['dat']) }} đ</span>
+                                    <span>{{ $mucTieu['dat'] >= $mucTieu['muc_tieu'] ? 'Vượt '.$tien($mucTieu['dat'] - $mucTieu['muc_tieu']).' đ' : 'Còn thiếu '.$tien($mucTieu['muc_tieu'] - $mucTieu['dat']).' đ' }}</span>
+                                </div>
+                            </div>
+                            <span class="db-goal-pct">{{ $phanTram($mucTieu['pct']) }}</span>
+                        @else
+                            <div class="db-goal-bar text-muted small">Đặt mục tiêu để theo dõi tiến độ doanh thu thuần trong tháng.</div>
+                        @endif
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="db-goal-sua">
+                            {{ $mucTieu['muc_tieu'] > 0 ? 'Sửa mục tiêu' : 'Đặt mục tiêu' }}
+                        </button>
+                        <form method="POST" action="{{ route('admin.dashboard.muc-tieu') }}" class="db-goal-form d-none" id="db-goal-form">
+                            @csrf
+                            <label for="db-goal-input" class="small text-muted">Mục tiêu mỗi tháng (đ)</label>
+                            <input type="text" inputmode="numeric" class="form-control form-control-sm" id="db-goal-input"
+                                name="muc_tieu" value="{{ $mucTieu['muc_tieu'] > 0 ? $tien($mucTieu['muc_tieu']) : '' }}">
+                            <button type="submit" class="btn btn-sm btn-primary">Lưu</button>
+                        </form>
+                    </div>
+                @endif
+
+                <div class="card-body px-0 pb-0">
+                    {{-- ---------- Hàng 1: ca · doanh thu · bán chạy ---------- --}}
                     <div class="row g-2 mb-2">
                         <div class="col-12 col-md-3 mb-3 mb-md-0">
                             <div class="div-chart h-100">
-                                <div class="chart-header d-flex justify-content-between">
+                                <div class="chart-header d-flex justify-content-between align-items-center">
                                     <h6 class="mb-0 fw-bold">{{ __('message.current_shift') }}</h6>
-                                    <span class="total_quantity">
-                                        @if ($caMo)
-                                            {{ __('message.cash_orders') }}: {{ $tien(array_sum(array_column($caMo, 'so_don'))) }}
-                                        @endif
-                                    </span>
+                                    @if ($caMo)
+                                        <span class="db-pill db-pill--green">{{ count($caMo) > 1 ? count($caMo).' ca đang mở' : 'Đang mở' }}</span>
+                                    @endif
                                 </div>
-                                <div class="chart-body d-flex p-2 db-shift-body">
+                                <div class="chart-body p-2 db-shift-body">
                                     <div id="list-shift-details" class="w-100">
                                         @forelse ($caMo as $ca)
-                                            <div class="list-history-shift active mb-3 pb-2 border-bottom db-shift-row">
-                                                <div><span class="fw-bold">{{ __('message.branch') }}:</span>
-                                                    {{ $ca['chi_nhanh'] !== '' ? $ca['chi_nhanh'] : '—' }}</div>
-                                                <div><span class="fw-bold">{{ __('message.opened_by') }}:</span>
-                                                    {{ $ca['nguoi_mo'] !== '' ? $ca['nguoi_mo'] : '—' }}</div>
-                                                <div><span class="fw-bold">{{ __('message.shift_code') }}:</span>
-                                                    {{ $ca['ma'] }}</div>
-                                                <div><span class="fw-bold">{{ __('message.shift_open_time') }}:</span>
-                                                    {{ $ca['gio_mo'] ? date('d-m-Y H:i:s', strtotime($ca['gio_mo'])) : '—' }}</div>
-                                                <div><span class="fw-bold">{{ __('message.shift_close_time') }}:</span>
-                                                    <span class="fw-bold text_success">{{ __('message.open') }}</span></div>
-                                                <div><span class="fw-bold">{{ __('message.total_cash') }}:</span>
-                                                    {{ $tien($ca['tien_mat']) }} đ</div>
+                                            <div class="list-history-shift active db-shift">
+                                                <dl class="db-shift-rows">
+                                                    <dt>{{ __('message.branch') }}</dt><dd>{{ $ca['chi_nhanh'] !== '' ? $ca['chi_nhanh'] : '—' }}</dd>
+                                                    <dt>{{ __('message.opened_by') }}</dt><dd>{{ $ca['nguoi_mo'] !== '' ? $ca['nguoi_mo'] : '—' }}</dd>
+                                                    <dt>{{ __('message.shift_code') }}</dt><dd>{{ $ca['ma'] }}</dd>
+                                                    <dt>{{ __('message.shift_open_time') }}</dt><dd>{{ $ca['gio_mo'] ? date('d-m-Y H:i', strtotime($ca['gio_mo'])) : '—' }}</dd>
+                                                    <dt>Đơn tiền mặt</dt><dd>{{ $tien($ca['so_don']) }}</dd>
+                                                </dl>
+                                                <div class="db-cash">
+                                                    <span>{{ __('message.total_cash') }}</span>
+                                                    <b>{{ $tien($ca['tien_mat']) }} đ</b>
+                                                    <small>{{ $tien($ca['dau_ca']) }} đầu ca + {{ $tien($ca['thu']) }} thu − {{ $tien($ca['chi']) }} chi</small>
+                                                </div>
                                             </div>
                                         @empty
                                             <p class="text-center noti-error-shift fw-bold alert alert-danger mb-0">
@@ -287,11 +359,19 @@
 
                         <div class="col-12 col-md-6 mb-3 mb-md-0">
                             <div class="div-chart h-100">
-                                <div class="chart-header">
-                                    <h6 class="mb-0 fw-bold">{{ __('message.sales_revenue') }}</h6>
+                                <div class="chart-header d-flex align-items-center gap-2 flex-wrap">
+                                    <h6 class="mb-0 fw-bold me-auto">{{ __('message.sales_revenue') }}</h6>
+                                    <div class="db-seg" role="group" aria-label="Chia trục theo">
+                                        @foreach ($groups as $ma => $nhan)
+                                            <a href="{{ request()->fullUrlWithQuery(['group' => $ma]) }}"
+                                                class="{{ $filters['group'] === $ma ? 'is-active' : '' }}"
+                                                aria-current="{{ $filters['group'] === $ma ? 'true' : 'false' }}">{{ $nhan }}</a>
+                                        @endforeach
+                                    </div>
                                 </div>
                                 <div class="chart-body p-2">
-                                    <canvas id="myChart1" height="250"></canvas>
+                                    <div class="db-chart-box"><canvas id="myChart1"></canvas></div>
+                                    <div class="db-hint">Bấm vào cột để mở danh sách đơn của mốc đó</div>
                                 </div>
                             </div>
                         </div>
@@ -300,17 +380,11 @@
                             <div class="div-chart h-100">
                                 <div class="chart-header d-flex align-items-center">
                                     <h6 class="mb-0 fw-bold flex-grow-1">{{ __('message.top_best_selling_products') }}</h6>
-                                    <select class="form-select form-select-sm w-auto db-top" id="quantityBestSeller"
-                                        data-param="top_products">
-                                        @foreach ($topChoices as $n)
-                                            <option value="{{ $n }}" {{ $filters['top_products'] === $n ? 'selected' : '' }}>
-                                                Top {{ $n }}</option>
-                                        @endforeach
-                                    </select>
+                                    @include('v2::dashboard._top-select', $topSelect('quantityBestSeller', 'top_products'))
                                 </div>
                                 <div class="chart-body p-0">
-                                    <div class="table-responsive mb-2 overflow-y-auto db-top-scroll">
-                                        <table class="table table-sm table-hover border-0 mb-0 db-table">
+                                    <div class="table-responsive db-top-scroll">
+                                        <table class="table table-sm border-0 mb-0 db-table">
                                             <thead class="sticky-top z-0">
                                                 <tr>
                                                     <th class="db-c-stt">{{ __('message.stt') }}</th>
@@ -321,15 +395,19 @@
                                             <tbody class="bestSell">
                                                 @forelse ($banChay as $i => $sp)
                                                     <tr>
-                                                        <td class="db-c-stt">{{ $i + 1 }}</td>
+                                                        <td class="db-c-stt"><span class="db-rank db-rank--{{ $i + 1 }}">{{ $i + 1 }}</span></td>
                                                         <td class="text-start db-c-name" title="{{ $sp['name'] ?? '' }}">
-                                                            {{ $sp['name'] ?? '—' }}</td>
-                                                        <td class="text-end db-c-val">{{ $tien($sp['units'] ?? 0) }}</td>
+                                                            @if (! empty($sp['product_id']))
+                                                                <a href="{{ route('admin.reports.goods', $ky + ['product_id' => $sp['product_id']]) }}">{{ $sp['name'] ?? '—' }}</a>
+                                                            @else
+                                                                {{ $sp['name'] ?? '—' }}
+                                                            @endif
+                                                        </td>
+                                                        <td class="text-end fw-bold db-c-val">{{ $tien($sp['units'] ?? 0) }}</td>
                                                     </tr>
                                                 @empty
                                                     <tr>
-                                                        <td colspan="3" class="text-center text-muted py-3">
-                                                            {{ __('message.no_data') }}</td>
+                                                        <td colspan="3" class="text-center text-muted py-3">{{ __('message.no_data') }}</td>
                                                     </tr>
                                                 @endforelse
                                             </tbody>
@@ -340,69 +418,58 @@
                         </div>
                     </div>
 
-                    {{-- ---------- Hàng thứ hai ---------- --}}
-                    <div class="row g-2">
-                        <div class="col-12 col-md-6 col-xl-3">
-                            <div class="div-chart h-100">
-                                <div class="chart-header d-flex align-items-center">
-                                    <h6 class="mb-0 fw-bold flex-grow-1">{{ __('message.top_payment_methods') }}</h6>
-                                    <select class="form-select form-select-sm w-auto db-top" id="byPaymentMethod"
-                                        data-param="top_payment">
-                                        @foreach ($topChoices as $n)
-                                            <option value="{{ $n }}" {{ $filters['top_payment'] === $n ? 'selected' : '' }}>
-                                                Top {{ $n }}</option>
-                                        @endforeach
-                                    </select>
-                                </div>
-                                <div class="chart-body p-2">
-                                    @if (count($theoThanhToan))
-                                        <canvas id="myChart2" height="250"></canvas>
-                                    @else
-                                        <p class="text-center text-muted my-4">{{ __('message.no_data') }}</p>
-                                    @endif
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="col-12 col-md-6 col-xl-3">
-                            <div class="div-chart h-100">
-                                <div class="chart-header d-flex align-items-center">
-                                    <h6 class="mb-0 fw-bold flex-grow-1">{{ __('message.top_order_sources') }}</h6>
-                                    <select class="form-select form-select-sm w-auto db-top" id="byOrigin"
-                                        data-param="top_origin">
-                                        @foreach ($topChoices as $n)
-                                            <option value="{{ $n }}" {{ $filters['top_origin'] === $n ? 'selected' : '' }}>
-                                                Top {{ $n }}</option>
-                                        @endforeach
-                                    </select>
-                                </div>
-                                <div class="chart-body p-2">
-                                    @if (count($theoNguon))
-                                        <canvas id="myChart3" height="250"></canvas>
-                                    @else
-                                        <p class="text-center text-muted my-4">{{ __('message.no_data') }}</p>
-                                    @endif
+                    {{-- ---------- Hàng 2: bốn thẻ Top ---------- --}}
+                    <div class="row g-2 mb-2">
+                        @foreach ($theVong as $the)
+                            <div class="col-12 col-md-6 col-xl-3">
+                                <div class="div-chart h-100">
+                                    <div class="chart-header d-flex align-items-center">
+                                        <h6 class="mb-0 fw-bold flex-grow-1">{{ $the['tieu_de'] }}</h6>
+                                        @include('v2::dashboard._top-select', $the['sel'])
+                                    </div>
+                                    <div class="chart-body p-2">
+                                        @if (count($the['ds']))
+                                            <div class="db-donut">
+                                                <div class="db-donut-ring">
+                                                    <canvas id="{{ $the['id'] }}" width="130" height="130"></canvas>
+                                                    <div class="db-donut-center"><b>{{ $the['giua'] }}</b><span>{{ $the['giua_phu'] }}</span></div>
+                                                </div>
+                                                <ul class="db-legend">
+                                                    @foreach ($the['ds'] as $l)
+                                                        <li>
+                                                            <span class="db-dot" style="background: {{ $l['mau'] }}"></span>
+                                                            <span class="db-legend-name">{{ $l['nhan'] }}</span>
+                                                            <b>{{ $l['pt'] }}</b>
+                                                            <small>{{ $l['chu'] }}</small>
+                                                        </li>
+                                                    @endforeach
+                                                </ul>
+                                            </div>
+                                        @else
+                                            <p class="text-center text-muted my-4">{{ __('message.no_data') }}</p>
+                                        @endif
+                                    </div>
                                 </div>
                             </div>
-                        </div>
+                        @endforeach
 
                         <div class="col-12 col-md-6 col-xl-3">
                             <div class="div-chart h-100">
                                 <div class="chart-header d-flex align-items-center">
                                     <h6 class="mb-0 fw-bold flex-grow-1">{{ __('message.top_promotions') }}</h6>
-                                    <select class="form-select form-select-sm w-auto db-top" id="byPromo"
-                                        data-param="top_promo">
-                                        @foreach ($topChoices as $n)
-                                            <option value="{{ $n }}" {{ $filters['top_promo'] === $n ? 'selected' : '' }}>
-                                                Top {{ $n }}</option>
-                                        @endforeach
-                                    </select>
+                                    @include('v2::dashboard._top-select', $topSelect('byPromo', 'top_promo'))
                                 </div>
                                 <div class="chart-body p-2">
                                     {{-- API chưa có sổ đếm lượt dùng từng chương trình khuyến
                                          mại, nên thẻ này nói thẳng là chưa có số thay vì vẽ
                                          một biểu đồ rỗng trông như "tháng này không ai dùng". --}}
-                                    <p class="text-center text-muted my-4">{{ __('message.no_data') }}</p>
+                                    <div class="db-empty">
+                                        <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                                            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                            <path d="M20 12l-8 8-9-9V3h8z"></path><circle cx="7.5" cy="7.5" r="1.5"></circle>
+                                        </svg>
+                                        <span>Chưa có số liệu lượt dùng khuyến mại</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -411,43 +478,65 @@
                             <div class="div-chart h-100">
                                 <div class="chart-header d-flex align-items-center">
                                     <h6 class="mb-0 fw-bold flex-grow-1">{{ __('message.top_gross_revenue_by_branch') }}</h6>
-                                    <select class="form-select form-select-sm w-auto db-top" id="byBranch"
-                                        data-param="top_branch">
-                                        @foreach ($topChoices as $n)
-                                            <option value="{{ $n }}" {{ $filters['top_branch'] === $n ? 'selected' : '' }}>
-                                                Top {{ $n }}</option>
-                                        @endforeach
-                                    </select>
+                                    @include('v2::dashboard._top-select', $topSelect('byBranch', 'top_branch'))
                                 </div>
-                                <div class="chart-body p-0">
-                                    <div class="table-responsive mb-2 overflow-y-auto db-top-scroll">
-                                        <table class="table table-sm table-hover border-0 mb-0 db-table db-table--money">
-                                            <thead class="sticky-top z-0">
-                                                <tr>
-                                                    <th class="db-c-stt">{{ __('message.stt') }}</th>
-                                                    <th class="text-start db-c-name">{{ __('message.branch_name') }}</th>
-                                                    <th class="text-end db-c-val">{{ __('message.revenue') }}</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                @forelse ($theoChiNhanh as $i => $cn)
-                                                    <tr>
-                                                        <td class="db-c-stt">{{ $i + 1 }}</td>
-                                                        <td class="text-start db-c-name" title="{{ $cn['nhan'] }}">
-                                                            {{ $cn['nhan'] }}</td>
-                                                        <td class="text-end db-c-val"
-                                                            title="{{ $tien($cn['revenue'] ?? 0) }} đ">
-                                                            {{ $tienGon($cn['revenue'] ?? 0) }}</td>
-                                                    </tr>
-                                                @empty
-                                                    <tr>
-                                                        <td colspan="3" class="text-center text-muted py-3">
-                                                            {{ __('message.no_data') }}</td>
-                                                    </tr>
-                                                @endforelse
-                                            </tbody>
-                                        </table>
+                                <div class="chart-body p-2">
+                                    @forelse ($theoChiNhanh as $i => $cn)
+                                        <div class="db-branch-row">
+                                            <div><span>{{ $i + 1 }}. {{ $cn['nhan'] }}</span><b title="{{ $tien($cn['revenue'] ?? 0) }} đ">{{ $tienGon($cn['revenue'] ?? 0) }}</b></div>
+                                            <div class="db-bar"><div style="width: {{ round((float) ($cn['revenue'] ?? 0) / $maxChiNhanh * 100, 1) }}%"></div></div>
+                                        </div>
+                                    @empty
+                                        <p class="text-center text-muted my-4">{{ __('message.no_data') }}</p>
+                                    @endforelse
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {{-- ---------- Hàng 3: giờ cao điểm · cần chú ý ---------- --}}
+                    <div class="row g-2">
+                        <div class="col-12 col-xl-8">
+                            <div class="div-chart h-100">
+                                <div class="chart-header d-flex justify-content-between align-items-center">
+                                    <h6 class="mb-0 fw-bold">Giờ cao điểm</h6>
+                                    <span class="small text-muted">
+                                        @if ($gioCaoDiem['dinh'] !== null)
+                                            Số đơn theo giờ · đông nhất {{ $gioCaoDiem['dinh'] }}h
+                                        @else
+                                            Số đơn theo giờ
+                                        @endif
+                                    </span>
+                                </div>
+                                <div class="chart-body p-2">
+                                    <div class="db-hours">
+                                        @foreach ($gioCaoDiem['gio'] as $g)
+                                            <div class="db-hour" title="{{ $g['h'] }}h: {{ $g['don'] }} đơn">
+                                                <span>{{ $g['don'] ?: '' }}</span>
+                                                <div class="{{ $g['h'] === $gioCaoDiem['dinh'] ? 'is-peak' : '' }} {{ $g['don'] ? '' : 'is-empty' }}"
+                                                    style="height: {{ $g['don'] ? max(4, round($g['don'] / $maxGio * 76)) : 3 }}px"></div>
+                                            </div>
+                                        @endforeach
                                     </div>
+                                    <div class="db-hours db-hours--label">
+                                        @foreach ($gioCaoDiem['gio'] as $g)
+                                            <div>{{ $g['h'] }}h</div>
+                                        @endforeach
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-12 col-xl-4">
+                            <div class="div-chart h-100 db-alert">
+                                <div class="chart-header">
+                                    <h6 class="mb-0 fw-bold">Cần chú ý</h6>
+                                </div>
+                                <div class="chart-body p-2">
+                                    @forelse ($canhBao as $cb)
+                                        <a href="{{ $cb['link'] }}" class="db-alert-row"><span class="db-dot"></span>{{ $cb['chu'] }} →</a>
+                                    @empty
+                                        <p class="text-muted small mb-0 px-1">Không có việc gì cần chú ý.</p>
+                                    @endforelse
                                 </div>
                             </div>
                         </div>
@@ -458,39 +547,120 @@
     </div>
 
     <style>
-        /* Khối ca + hai bảng Top cao bằng nhau với ô biểu đồ bên cạnh (250px). */
-        /* Số tiền KPI giữ trên MỘT dòng: "148.213.100" rớt xuống dòng thành
-           "148.213.100 / đ" đọc như hai con số. Ô hẹp thì chữ nhỏ lại, và icon
-           nhường chỗ cho con số chứ không phải ngược lại.
-
-           Phải viết `div.box_asset_midd` cho đủ trọng số: luật gốc trong
-           cashier-bundle.css cũng khai kèm `div`, khai mỏng hơn là không đè được. */
-        div.box_asset_midd { gap: 6px; }
-        div.box_asset_midd span { white-space: nowrap; font-size: clamp(14px, 1.15vw, 20px); }
-        div.box_asset_midd img { flex: 0 0 auto; width: 48px; height: 48px; }
-
-        .db-shift-body { flex-direction: column; overflow-y: auto; max-height: 250px; }
-        .db-shift-row { font-size: 14px; display: flex; flex-direction: column; gap: 5px; }
-        .db-top-scroll { max-height: 250px; min-height: 250px; }
-
-        /* Hai ô ngày xếp dọc: cột lọc trừ nút radio chỉ còn ~85px mỗi ô nếu
-           đứng cạnh nhau, khuôn dd-mm-yyyy bị cắt mất phần năm (đo ở 1366/1440). */
+        .db-loc .header_search { font-weight: 600; }
+        .db-nho-ky { display: flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 500; cursor: pointer; margin: 0; }
+        .db-opt { display: flex; align-items: center; gap: 8px; padding: 4px 8px; margin: 1px 0; border-radius: 6px; cursor: pointer; }
+        .db-opt:hover { background: #f1f5f9; }
+        .db-opt.is-active { background: #e8eefb; color: #1d4ed8; font-weight: 700; }
         #db-from, #db-to { font-size: 12px; padding-left: 6px; padding-right: 6px; }
 
-        /* Bảng trong thẻ hẹp (thẻ chỉ rộng ~270px ở khổ 1366): chia phần trăm đủ
+        .db-title { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 16px; margin-bottom: 10px; }
+        .db-title-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; font-size: 13px; color: #475569; }
+        .db-sep { width: 1px; height: 16px; background: #cbd5e1; }
+        .db-refresh { width: 32px; height: 32px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1d4ed8; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+        .db-refresh:hover { background: #eff6ff; }
+
+        .db-kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-bottom: 10px; }
+        /* Sáu ô một hàng chỉ khi đủ rộng: dưới ~1700px mỗi ô còn chưa tới 180px,
+           số tiền và dòng so kỳ trước tràn ra mép (đo ở 1440 / 1536). */
+        @media (min-width: 1700px) { .db-kpis { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+        .db-kpi { display: flex; flex-direction: column; gap: 8px; min-height: 108px; padding: 10px 12px; background: #fff;
+                  border: 1px solid #e2e8f0; border-top: 3px solid var(--db-mau); border-radius: 10px; color: #0f172a; text-decoration: none; transition: box-shadow .15s; }
+        .db-kpi:hover { color: #0f172a; box-shadow: 0 4px 14px rgba(15, 23, 42, .08); }
+        .db-kpi-head { display: flex; justify-content: space-between; gap: 6px; }
+        .db-kpi-head h3 { font-size: 13px; font-weight: 600; color: #334155; margin: 0; }
+        .db-info { color: #94a3b8; font-size: 13px; }
+        .db-kpi-body { flex: 1; display: flex; justify-content: space-between; align-items: flex-start; gap: 6px; }
+        .db-kpi-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+        .db-kpi-so { font-size: 20px; font-weight: 800; white-space: nowrap; }
+        .db-kpi-phu { font-size: 11.5px; color: #64748b; white-space: nowrap; }
+        .db-kpi-phu.db-up { color: #15803d; font-weight: 600; }
+        .db-kpi-phu.db-down { color: #b91c1c; font-weight: 600; }
+        .db-kpi img { flex: 0 0 auto; width: 44px; height: 44px; align-self: flex-end; }
+
+        .db-goal { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding: 10px 14px; margin-bottom: 10px; background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; }
+        .db-goal-label { display: flex; flex-direction: column; min-width: 200px; font-size: 13px; }
+        .db-goal-label span { font-size: 12px; color: #475569; }
+        .db-goal-bar { flex: 1 1 240px; }
+        .db-goal-track { height: 12px; background: #eef2f7; border-radius: 999px; overflow: hidden; }
+        .db-goal-track div { height: 12px; background: #1d4ed8; border-radius: 999px; }
+        .db-goal-note { display: flex; justify-content: space-between; gap: 8px; margin-top: 4px; font-size: 12px; color: #475569; }
+        .db-goal-pct { font-size: 22px; font-weight: 800; color: #1d4ed8; }
+        .db-goal-form { display: flex; align-items: center; gap: 8px; flex-basis: 100%; }
+        .db-goal-form input { max-width: 200px; }
+
+        .db-pill { font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
+        .db-pill--green { background: #dcfce7; color: #14532d; }
+        .db-shift-body { overflow-y: auto; max-height: 290px; }
+        .db-shift + .db-shift { margin-top: 12px; padding-top: 12px; border-top: 1px solid #e2e8f0; }
+        .db-shift-rows { display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; margin: 0 0 8px; font-size: 13px; }
+        .db-shift-rows dt { font-weight: 400; color: #475569; }
+        .db-shift-rows dd { margin: 0; text-align: right; font-weight: 600; }
+        .db-cash { display: flex; flex-direction: column; padding: 8px 10px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; color: #166534; font-size: 12px; }
+        .db-cash b { font-size: 18px; color: #14532d; }
+
+        .db-seg { display: inline-flex; border: 1px solid #cbd5e1; border-radius: 6px; overflow: hidden; }
+        .db-seg a { padding: 3px 10px; font-size: 12px; color: #0f172a; text-decoration: none; }
+        .db-seg a + a { border-left: 1px solid #cbd5e1; }
+        .db-seg a.is-active { background: #1d4ed8; color: #fff; font-weight: 600; }
+        .db-chart-box { position: relative; height: 250px; }
+        .db-hint { font-size: 12px; color: #64748b; margin-top: 4px; }
+
+        .db-top-scroll { max-height: 290px; min-height: 250px; overflow-y: auto; }
+        /* Bảng trong thẻ hẹp (thẻ chỉ rộng ~260px ở khổ 1366): chia phần trăm đủ
            100 và cắt "…" ở cột tên, KHÔNG để `auto` tự nới rồi tràn ra ngoài thẻ. */
         .db-table { table-layout: fixed; width: 100%; }
-        .db-table td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        /* Tiêu đề cột được xuống dòng, ô dữ liệu thì không: cắt "SỐ LƯỢNG" thành
-           "SỐ LƯỢ…" là mất tên cột, còn thẻ chỉ rộng ~260px ở khổ 1366. */
-        .db-table th { white-space: normal; line-height: 1.2; }
+        .db-table th, .db-table td { white-space: nowrap; vertical-align: middle; padding: 7px 6px; font-size: 13px; }
+        .db-table td { overflow: hidden; text-overflow: ellipsis; }
+        .db-table th { font-size: 11px; padding-left: 4px; padding-right: 4px; }
         .db-table .db-c-stt { width: 15%; }
-        .db-table .db-c-name { width: 55%; }
-        .db-table .db-c-val { width: 30%; }
-        /* Bảng chi nhánh in TIỀN ở cột phải: cắt "…" giữa con số là đọc sai số,
-           nên cột đó phải rộng hơn, đổi lại tên chi nhánh chịu cắt. */
-        .db-table--money .db-c-name { width: 45%; }
-        .db-table--money .db-c-val { width: 40%; }
+        .db-table .db-c-name { width: 50%; }
+        .db-table .db-c-val { width: 35%; }
+        .db-table tbody tr:nth-child(even) { background: #fafbfd; }
+        .db-table a { color: #0f172a; text-decoration: none; }
+        .db-table a:hover { color: #1d4ed8; text-decoration: underline; }
+        .db-rank { display: inline-flex; width: 22px; height: 22px; border-radius: 999px; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; background: #e2e8f0; color: #334155; }
+        .db-rank--1 { background: #f59e0b; color: #fff; }
+        .db-rank--2 { background: #94a3b8; color: #fff; }
+        .db-rank--3 { background: #c2773a; color: #fff; }
+
+        .db-donut { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+        .db-donut-ring { position: relative; width: 130px; height: 130px; }
+        .db-donut-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; }
+        .db-donut-center b { font-size: 18px; }
+        .db-donut-center span { font-size: 11px; color: #475569; }
+        .db-legend { list-style: none; margin: 0; padding: 0; width: 100%; display: flex; flex-direction: column; gap: 6px; }
+        .db-legend li { display: grid; grid-template-columns: 10px 1fr auto; column-gap: 6px; align-items: center; font-size: 13px; }
+        .db-legend small { grid-column: 2 / 4; color: #475569; }
+        .db-dot { width: 10px; height: 10px; border-radius: 999px; display: inline-block; flex: 0 0 auto; }
+        .db-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; min-height: 200px; color: #64748b; font-size: 13px; text-align: center; }
+
+        .db-branch-row { display: flex; flex-direction: column; gap: 4px; font-size: 13px; padding: 4px 2px; }
+        .db-branch-row > div:first-child { display: flex; justify-content: space-between; gap: 8px; white-space: nowrap; }
+        .db-bar { height: 8px; background: #eef2f7; border-radius: 4px; overflow: hidden; }
+        .db-bar div { height: 8px; background: #1d4ed8; }
+
+        .db-hours { display: flex; gap: 6px; }
+        .db-hours:not(.db-hours--label) { height: 100px; align-items: flex-end; border-bottom: 1px solid #cbd5e1; }
+        .db-hour { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 2px; }
+        .db-hour span { font-size: 11px; font-weight: 700; color: #1e3a8a; }
+        .db-hour div { width: 100%; border-radius: 3px 3px 0 0; background: #3b82f6; }
+        .db-hour div.is-peak { background: #f97316; }
+        .db-hour div.is-empty { background: #e2e8f0; }
+        .db-hours--label div { flex: 1; text-align: center; font-size: 11px; color: #64748b; }
+
+        .db-alert { background: #fff7ed; border-color: #fed7aa; }
+        .db-alert .chart-header { color: #7c2d12; }
+        .db-alert-row { display: flex; gap: 8px; align-items: baseline; padding: 4px; font-size: 13px; color: #0f172a; text-decoration: none; }
+        .db-alert-row:hover { color: #c2410c; }
+        .db-alert-row .db-dot { width: 8px; height: 8px; background: #c2410c; }
+
+        @media (max-width: 767px) { .db-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+        /* Ô KPI trên điện thoại chỉ ~165px: icon minh hoạ nhường chỗ cho số và dòng so kỳ trước. */
+        @media (max-width: 575px) {
+            .db-kpi img { display: none; }
+            .db-kpi-phu { white-space: normal; }
+        }
     </style>
 @endsection
 
@@ -499,64 +669,126 @@
     <script>
         (function () {
             const soLieu = @json($duLieuJs);
-
-            const MAU = ['#4bc0c0', '#36a2eb', '#ff6384', '#ffcd56', '#9966ff', '#c9cbcf', '#2ecc71'];
             const tien = (v) => new Intl.NumberFormat('vi-VN').format(v);
 
-            // Kỳ dài thì nhãn trục X dày đặc; Chart.js tự bỏ bớt nhãn chứ không
-            // xoay chữ, nên chỉ cần nói nó giữ nguyên thứ tự mốc của máy chủ.
             const ve = (id, cau) => {
                 const o = document.getElementById(id);
-                if (o) new Chart(o.getContext('2d'), cau);
+                return o ? new Chart(o.getContext('2d'), cau) : null;
             };
 
+            // Cột ngày/tuần/tháng: bấm vào là mở Quản lý đơn hàng đúng khoảng
+            // ngày của cột đó (máy chủ đã cắt khoảng trong kỳ đang xem).
             const c = soLieu.chart;
+            const moDon = (i) => {
+                const r = c.ranges[i];
+                if (!r) return;
+                const u = new URL(soLieu.linkDon, window.location.origin);
+                u.searchParams.set('from_date', r[0]);
+                u.searchParams.set('to_date', r[1]);
+                window.location.href = u.toString();
+            };
+            const cot = c.labels.length <= 45;
             ve('myChart1', {
-                type: c.labels.length < 5 ? 'bar' : 'line',
+                type: cot ? 'bar' : 'line',
                 data: {
                     labels: c.labels,
                     datasets: [
-                        { label: soLieu.chu.gop, data: c.gross, borderColor: MAU[0], backgroundColor: MAU[0], tension: .3 },
-                        { label: soLieu.chu.thuan, data: c.net, borderColor: MAU[1], backgroundColor: MAU[1], tension: .3 },
-                        { label: soLieu.chu.von, data: c.cost, borderColor: MAU[2], backgroundColor: MAU[2], tension: .3 },
+                        { label: soLieu.chu.gop, data: c.gross, borderColor: '#2bb5b5', backgroundColor: '#2bb5b5', tension: .3, borderRadius: 3 },
+                        { label: soLieu.chu.thuan, data: c.net, borderColor: '#3b82f6', backgroundColor: '#3b82f6', tension: .3, borderRadius: 3 },
+                        { label: soLieu.chu.von, data: c.cost, borderColor: '#f97316', backgroundColor: '#f97316', tension: .3, borderRadius: 3 },
                     ],
                 },
                 options: {
                     responsive: true, maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
                     plugins: {
                         legend: { position: 'top', labels: { usePointStyle: true, boxWidth: 8 } },
                         tooltip: { callbacks: { label: (x) => `${x.dataset.label}: ${tien(x.parsed.y)} đ` } },
                     },
                     scales: { y: { beginAtZero: true, ticks: { callback: (v) => tien(v) + ' đ' } } },
+                    onClick: (e, els, chart) => {
+                        const p = chart.getElementsAtEventForMode(e, 'index', { intersect: false }, false);
+                        if (p.length) moDon(p[0].index);
+                    },
+                    onHover: (e, els, chart) => { chart.canvas.style.cursor = els.length ? 'pointer' : 'default'; },
                 },
             });
 
-            const tron = (id, ds, khoa, dinhDang) => {
+            const tron = (id, ds) => {
                 if (!ds.length) return;
                 ve(id, {
                     type: 'doughnut',
                     data: {
                         labels: ds.map((r) => r.nhan),
-                        datasets: [{ data: ds.map((r) => r[khoa]), backgroundColor: MAU }],
+                        datasets: [{ data: ds.map((r) => r.gia_tri), backgroundColor: ds.map((r) => r.mau), borderWidth: 2 }],
                     },
                     options: {
-                        responsive: true, maintainAspectRatio: false,
+                        responsive: false, cutout: '68%',
                         plugins: {
-                            legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8 } },
-                            tooltip: { callbacks: { label: (x) => `${x.label}: ${dinhDang(x.parsed)}` } },
+                            legend: { display: false },
+                            tooltip: { callbacks: { label: (x) => `${x.label}: ${ds[x.dataIndex].chu}` } },
                         },
                     },
                 });
             };
+            tron('myChart2', soLieu.thanhToan);
+            tron('myChart3', soLieu.nguon);
 
-            tron('myChart2', soLieu.thanhToan, 'tien', (v) => tien(v) + ' đ');
-            tron('myChart3', soLieu.nguon, 'don', (v) => tien(v) + ' ' + soLieu.chu.don);
+            // ---------- Nhớ kỳ ----------
+            // Bật thì mỗi lần mở trang lưu lại tham số đang xem; mở Tổng quan không
+            // kèm tham số (bấm tab, bấm nút THỐNG KÊ) là quay về đúng chỗ ấy.
+            const KHOA_BAT = 'db_nho_ky', KHOA_KY = 'db_ky';
+            const doc = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+            const ghi = (k, v) => { try { v === null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) {} };
+            const nhoKy = document.getElementById('db-nho-ky');
+            const dangNho = doc(KHOA_BAT) === '1';
+            nhoKy.checked = dangNho;
+            if (dangNho) {
+                const daLuu = doc(KHOA_KY);
+                if (!window.location.search && daLuu) {
+                    window.location.replace(window.location.pathname + daLuu);
+                    return;
+                }
+                if (window.location.search) ghi(KHOA_KY, window.location.search);
+            }
+            nhoKy.addEventListener('change', () => {
+                ghi(KHOA_BAT, nhoKy.checked ? '1' : null);
+                ghi(KHOA_KY, nhoKy.checked && window.location.search ? window.location.search : null);
+            });
 
+            // ---------- Làm mới ----------
+            // Màn này hay để mở cả ngày ở quầy: 5 phút nạp lại một lần, nhưng chỉ
+            // khi tab đang được nhìn và không có hộp nào đang mở dở.
+            const NAM_PHUT = 5 * 60 * 1000;
+            const moLuc = Date.now();
+            const dangBan = () => document.querySelector('.daterangepicker[style*="block"], .offcanvas.show, .modal.show, #db-goal-form:not(.d-none)');
+            setInterval(() => {
+                if (Date.now() - moLuc >= NAM_PHUT && document.visibilityState === 'visible' && !dangBan()) {
+                    window.location.reload();
+                }
+            }, 30000);
+            document.getElementById('db-lam-moi').addEventListener('click', () => window.location.reload());
+
+            // ---------- Mục tiêu tháng ----------
+            const nutMucTieu = document.getElementById('db-goal-sua');
+            if (nutMucTieu) {
+                const formMucTieu = document.getElementById('db-goal-form');
+                const oMucTieu = document.getElementById('db-goal-input');
+                nutMucTieu.addEventListener('click', () => {
+                    formMucTieu.classList.toggle('d-none');
+                    if (!formMucTieu.classList.contains('d-none')) oMucTieu.focus();
+                });
+                oMucTieu.addEventListener('input', () => {
+                    const so = oMucTieu.value.replace(/\D/g, '');
+                    oMucTieu.value = so ? tien(Number(so)) : '';
+                });
+            }
+
+            // ---------- Bộ lọc ----------
             // Đổi kỳ / đổi Top là nạp lại trang: mọi màn v2 khác lọc bằng tham số
             // trên URL, giữ nguyên cách đó thì bấm F5 hay gửi link đều ra cùng một trang.
             const form = document.getElementById('db-filter');
             document.querySelectorAll('.db-range').forEach((o) => o.addEventListener('change', () => {
-                // Chọn mốc thì bỏ khoảng tự chọn, nếu không hai thứ cùng gửi lên.
                 // `disabled` chứ không chỉ xoá giá trị: ô rỗng vẫn được gửi và
                 // để lại `?from=&to=` rỗng trên thanh địa chỉ.
                 ['db-from', 'db-to'].forEach((id) => {
@@ -573,13 +805,13 @@
                 window.location.href = u.toString();
             }));
 
-            // Đủ hai ngày thì lọc luôn, không chờ nút — như v2. Bỏ mốc đang tích:
-            // hai thứ cùng gửi lên là controller không biết người dùng vừa đổi cái nào.
+            // Đủ hai ngày thì lọc luôn, không chờ nút — như v2.
             const tuChon = document.getElementById('db-range-custom');
             const tuChonDuNgay = () => /^\d{2}-\d{2}-\d{4}$/.test(document.getElementById('db-from').value)
                 && /^\d{2}-\d{2}-\d{4}$/.test(document.getElementById('db-to').value);
             ['db-from', 'db-to'].forEach((id) => document.getElementById(id).addEventListener('change', () => {
                 document.querySelectorAll('.db-range').forEach((r) => (r.checked = false));
+                document.querySelectorAll('.db-opt').forEach((l) => l.classList.remove('is-active'));
                 tuChon.checked = true;
                 if (tuChonDuNgay()) form.submit();
             }));
