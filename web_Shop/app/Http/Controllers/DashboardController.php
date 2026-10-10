@@ -54,8 +54,11 @@ class DashboardController extends Controller
     /** Số dòng của các thẻ "Top …" — bày đúng những lựa chọn bản v2 có. */
     public const TOP_CHOICES = [3, 5, 10, 15];
 
-    /** Mặc định của từng thẻ Top, theo đúng bản v2. */
-    public const TOP_MAC_DINH = ['products' => 5, 'payment' => 3, 'origin' => 3, 'promo' => 3, 'branch' => 3];
+    /**
+     * Mặc định của từng thẻ Top. Thanh toán / nguồn đơn / chi nhánh chỉ có vài
+     * lát nên bày hết (bản thiết kế 11/10/2026 bỏ ô chọn Top ở ba thẻ này).
+     */
+    public const TOP_MAC_DINH = ['products' => 5, 'payment' => 15, 'origin' => 15, 'promo' => 5, 'branch' => 15];
 
     /**
      * Số trang phiếu mua hàng (100 phiếu/trang) tối đa được quét.
@@ -92,20 +95,44 @@ class DashboardController extends Controller
         $chiNhanh = CurrentBranch::danhSach();
         $f = $this->filters($request, $chiNhanh['ds']);
         $cn = ['shop_id' => $f['branch']];
+        [$tuTruoc, $denTruoc] = $this->khoangTruoc($f['from'], $f['to']);
+        $ky = ['from' => $f['from'], 'to' => $f['to']];
 
-        $nen = $this->api->getMany([
-            'doanhThu' => ['/admin/reports/revenue', ['from' => $f['from'], 'to' => $f['to'], 'group_by' => $f['group']] + $cn],
-            'donHang' => ['/admin/reports/orders', ['from' => $f['from'], 'to' => $f['to']] + $cn],
-            'sanPham' => ['/admin/reports/products', ['from' => $f['from'], 'to' => $f['to'], 'sort' => 'units'] + $cn],
+        $goi = [
+            'doanhThu' => ['/admin/reports/revenue', $ky + ['group_by' => $f['group']] + $cn],
+            // Kỳ trước cùng độ dài, cùng cách chia trục — nét đứt trên biểu đồ doanh thu.
+            'doanhThuTruoc' => ['/admin/reports/revenue', ['from' => $tuTruoc, 'to' => $denTruoc, 'group_by' => $f['group']] + $cn],
+            'donHang' => ['/admin/reports/orders', $ky + $cn],
+            'sanPham' => ['/admin/reports/products', $ky + ['sort' => 'units'] + $cn],
             'mua' => ['/admin/phieu-mua-hang', $this->queryMua($f, 1)],
+            'muaTruoc' => ['/admin/phieu-mua-hang', $this->queryMua(['from' => $tuTruoc, 'to' => $denTruoc] + $f, 1)],
             'ca' => ['/admin/ca-lam-viec', ['status' => 'dang_mo', 'page_size' => 100] + $cn],
-        ]);
+            'tonKho' => ['/admin/inventory/stats', ['low_stock' => $this->api->settingInt('low_stock_threshold', BranchStockController::LOW_STOCK)]],
+            'hoaDonLoi' => ['/admin/etax/hoa-don', ['status' => 'failed', 'page_size' => 1]],
+        ];
+        // Khuyến mại được dùng: báo cáo khuyến mại chia theo loại chương trình, gọi
+        // đủ các loại rồi gộp lại.
+        foreach (array_keys(PromotionReportController::TAB) as $tab) {
+            $goi['km_'.$tab] = ['/admin/reports/promotions', $ky + ['tab' => $tab] + $cn];
+        }
+        // Thanh mục tiêu luôn bày tiến độ THÁNG NÀY; kỳ đang xem không trọn một
+        // tháng thì gọi thêm doanh thu từ mùng 1 tới hôm nay.
+        if (! $this->tronThang($f)) {
+            $goi['doanhThuThang'] = ['/admin/reports/revenue', ['from' => now()->startOfMonth()->format('Y-m-d'), 'to' => now()->format('Y-m-d'), 'group_by' => 'month'] + $cn];
+        }
+        $nen = $this->api->getMany($goi);
 
         $doanhThu = $this->data($nen['doanhThu'] ?? null, 'revenue report');
         $donHang = $this->data($nen['donHang'] ?? null, 'order report');
-        $muaHang = $this->muaHang($f, $nen['mua'] ?? null);
+        $chart = $this->duLieuBieuDo($doanhThu, $f, $this->data($nen['doanhThuTruoc'] ?? null, 'previous revenue report'));
+        $muaHang = $this->muaHang($f, $nen['mua'] ?? null, $chart['ranges']);
+        $muaTruoc = $this->muaHang(['from' => $tuTruoc, 'to' => $denTruoc] + $f, $nen['muaTruoc'] ?? null);
         $caMo = $this->caDangMo($this->data($nen['ca'] ?? null, 'open shifts'), $chiNhanh['ds']);
         $kpi = $this->kpi($doanhThu, $donHang, $muaHang);
+        $kpi['so']['purchase_qty'] = $muaHang['soLuong'] || $muaTruoc['soLuong']
+            ? $this->soVoiKyTruoc($muaHang['soLuong'], $muaTruoc['soLuong']) + ['chenh' => $muaHang['soLuong'] - $muaTruoc['soLuong']]
+            : null;
+        $km = $this->khuyenMai($nen, $f['top_promo']);
 
         return view('v2::dashboard.index', [
             'filters' => $f,
@@ -116,12 +143,15 @@ class DashboardController extends Controller
             'chiNhanh' => $chiNhanh,
             'kpi' => $kpi,
             'kyTruoc' => $this->kyTruoc($doanhThu),
-            'mucTieu' => $this->mucTieu($f, $kpi['net']),
+            'mucTieu' => $this->mucTieu($f, $this->tronThang($f) ? $kpi['net'] : $this->thuan($this->data($nen['doanhThuThang'] ?? null, 'month revenue'))),
             'caMo' => $caMo,
-            'canhBao' => $this->canhBao($caMo),
-            'chart' => $this->duLieuBieuDo($doanhThu, $f),
+            'canhBao' => $this->canhBao($caMo, $this->data($nen['tonKho'] ?? null, 'inventory stats'), $nen['hoaDonLoi'] ?? null),
+            'chart' => $chart,
+            'muaTheoMoc' => $muaHang['theoMoc'],
             'gioCaoDiem' => $this->gioCaoDiem($donHang),
+            'theoThu' => $this->theoThu($donHang),
             'banChay' => $this->banChay($this->data($nen['sanPham'] ?? null, 'product report'), $f),
+            'khuyenMai' => $km,
             'theoThanhToan' => $this->catLat($doanhThu['by_payment_method'] ?? [], $f['top_payment']),
             'theoNguon' => $this->catLat($donHang['by_source'] ?? [], $f['top_origin']),
             'theoChiNhanh' => $this->catLat($doanhThu['by_shop'] ?? [], $f['top_branch'], 'label'),
@@ -323,6 +353,11 @@ class DashboardController extends Controller
         }
 
         return $nay + [
+            'prev' => $truoc,
+            'discount' => (float) ($doanhThu['totals']['discount'] ?? 0),
+            'purchase_count' => $muaHang['soPhieu'],
+            'purchase_paid' => $muaHang['daTra'],
+            'purchase_items' => $muaHang['matHang'],
             'margin' => $nay['net'] > 0 ? $nay['profit'] / $nay['net'] * 100 : null,
             'aov' => (float) ($doanhThu['totals']['aov'] ?? 0),
             'units_per_order' => (float) ($donHang['totals']['units_per_order'] ?? 0),
@@ -359,7 +394,7 @@ class DashboardController extends Controller
             return null;
         }
 
-        return date('d/m', strtotime($tu)).' – '.date('d/m/Y', strtotime($den));
+        return date('d/m', strtotime($tu)).' → '.date('d/m/Y', strtotime($den));
     }
 
     /**
@@ -376,18 +411,32 @@ class DashboardController extends Controller
             return null;
         }
 
-        if (substr($f['from'], 8, 2) !== '01' || substr($f['from'], 0, 7) !== substr($f['to'], 0, 7)) {
-            return null;
-        }
+        // Xem trọn một tháng thì thanh nói về tháng ấy; kỳ khác thì nói về tháng
+        // này — doanh thu thuần đã gọi riêng từ mùng 1 tới hôm nay.
+        $thang = $this->tronThang($f) ? $f['from'] : now()->format('Y-m-d');
 
         $dich = (float) $values[self::GOAL_KEY];
-
-        return [
-            'thang' => date('m/Y', strtotime($f['from'])),
+        $out = [
+            'thang' => date('m/Y', strtotime($thang)),
             'muc_tieu' => $dich,
             'dat' => $thuan,
             'pct' => $dich > 0 ? $thuan / $dich * 100 : null,
+            'can_dat_pct' => null,
+            'con_ngay' => null,
+            'moi_ngay' => null,
         ];
+
+        // Tháng đang chạy: vạch "đến hôm nay lẽ ra phải đạt" và số cần bán thêm
+        // mỗi ngày còn lại — tháng đã qua thì hai con số ấy không còn nghĩa.
+        if ($dich > 0 && substr($thang, 0, 7) === now()->format('Y-m')) {
+            $soNgay = now()->daysInMonth;
+            $homNay = now()->day;
+            $out['can_dat_pct'] = $homNay / $soNgay * 100;
+            $out['con_ngay'] = $soNgay - $homNay + 1;
+            $out['moi_ngay'] = max(0, $dich - $thuan) / $out['con_ngay'];
+        }
+
+        return $out;
     }
 
     /**
@@ -444,10 +493,16 @@ class DashboardController extends Controller
     /**
      * Thẻ "Cần chú ý" — chỉ những việc có số liệu thật để nói.
      *
+     * Tồn kho đếm trên toàn kho (API stats không cắt theo chi nhánh); hoá đơn
+     * điện tử lỗi là số hoá đơn đang ở trạng thái `failed`, chờ phát hành lại.
+     * Thiếu quyền xem kho / hoá đơn thì API trả 403 và dòng đó tự vắng.
+     *
      * @param  array<int, array<string, mixed>>  $caMo
+     *                                                  `chu` là HTML đã thoát sẵn (view in bằng {!! !!}) — phần chữ lấy từ dữ liệu
+     *                                                  (tên chi nhánh) phải đi qua e() ở đây.
      * @return array<int, array{chu: string, link: ?string}>
      */
-    protected function canhBao(array $caMo): array
+    protected function canhBao(array $caMo, array $tonKho = [], Response|\Throwable|null $hoaDonLoi = null): array
     {
         $out = [];
         foreach ($caMo as $ca) {
@@ -457,9 +512,19 @@ class DashboardController extends Controller
             }
             $bao = $gio >= 48 ? floor($gio / 24).' ngày' : floor($gio).' giờ';
             $out[] = [
-                'chu' => 'Ca '.$ca['ma'].($ca['chi_nhanh'] !== '' ? ' ở '.$ca['chi_nhanh'] : '').' đã mở '.$bao.' chưa chốt',
+                'chu' => 'Ca '.e($ca['ma']).($ca['chi_nhanh'] !== '' ? ' ở '.e($ca['chi_nhanh']) : '').' đã mở '.$bao.' chưa chốt',
                 'link' => route('admin.shift-report.index'),
             ];
+        }
+
+        if (($het = (int) ($tonKho['out_of_stock'] ?? 0)) > 0) {
+            $out[] = ['chu' => '<b>'.$het.' mặt hàng</b> đã hết hàng', 'link' => route('admin.ton-kho-chi-nhanh.index', ['stock' => 'out'])];
+        }
+        if (($sapHet = (int) ($tonKho['low_stock'] ?? 0)) > 0) {
+            $out[] = ['chu' => '<b>'.$sapHet.' mặt hàng</b> sắp hết', 'link' => route('admin.ton-kho-chi-nhanh.index', ['stock' => 'low'])];
+        }
+        if ($hoaDonLoi instanceof Response && $hoaDonLoi->successful() && ($loi = (int) ($hoaDonLoi->json('meta.total') ?? 0)) > 0) {
+            $out[] = ['chu' => '<b>'.$loi.' hoá đơn điện tử</b> phát hành lỗi', 'link' => route('admin.hoa-don-dien-tu.index', ['status' => 'failed'])];
         }
 
         return $out;
@@ -475,21 +540,107 @@ class DashboardController extends Controller
      *
      * @return array<string, mixed>
      */
-    protected function duLieuBieuDo(array $doanhThu, array $f): array
+    protected function duLieuBieuDo(array $doanhThu, array $f, array $truoc = []): array
     {
-        $out = ['labels' => [], 'gross' => [], 'net' => [], 'cost' => [], 'ranges' => []];
+        $out = ['labels' => [], 'gross' => [], 'net' => [], 'cost' => [], 'profit' => [], 'orders' => [], 'prev' => [], 'ranges' => []];
+        $thuan = fn (array $b) => (float) ($b['subtotal'] ?? 0) + (float) ($b['shipping'] ?? 0) - (float) ($b['discount'] ?? 0);
 
         foreach ($doanhThu['buckets'] ?? [] as $b) {
             $nhan = (string) ($b['label'] ?? '');
             $g = (float) ($b['subtotal'] ?? 0) + (float) ($b['shipping'] ?? 0);
             $out['labels'][] = $this->nhanMoc($nhan);
             $out['gross'][] = $g;
-            $out['net'][] = $g - (float) ($b['discount'] ?? 0);
+            $out['net'][] = $thuan($b);
             $out['cost'][] = (float) ($b['cost'] ?? 0);
+            $out['profit'][] = (float) ($b['profit'] ?? 0);
+            $out['orders'][] = (int) ($b['orders'] ?? 0);
             $out['ranges'][] = $this->khoangMoc($nhan, $f['from'], $f['to']);
         }
 
+        // Kỳ trước cùng độ dài nên cùng số mốc (tuần / tháng có thể lệch một mốc
+        // ở hai đầu) — ghép theo THỨ TỰ mốc chứ không theo nhãn ngày.
+        $mocTruoc = array_values($truoc['buckets'] ?? []);
+        foreach (array_keys($out['labels']) as $i) {
+            $out['prev'][] = isset($mocTruoc[$i]) ? $thuan($mocTruoc[$i]) : null;
+        }
+
         return $out;
+    }
+
+    /** Kỳ đang xem bắt đầu mùng 1 và nằm trọn trong một tháng ("Tháng này", "Tháng trước", 01 → cuối tháng). */
+    protected function tronThang(array $f): bool
+    {
+        return substr($f['from'], 8, 2) === '01' && substr($f['from'], 0, 7) === substr($f['to'], 0, 7);
+    }
+
+    /** Doanh thu thuần của một báo cáo doanh thu (gộp − giảm giá), cùng công thức ô KPI. */
+    protected function thuan(array $doanhThu): float
+    {
+        $t = $doanhThu['totals'] ?? [];
+
+        return (float) ($t['subtotal'] ?? 0) + (float) ($t['shipping'] ?? 0) - (float) ($t['discount'] ?? 0);
+    }
+
+    /**
+     * Kỳ liền trước CÙNG ĐỘ DÀI, kết thúc ngay trước kỳ đang xem — đúng cách
+     * API tính `prev` (ReportPeriod.Prev) để nét đứt và ô KPI so cùng một kỳ.
+     *
+     * @return array{0: string, 1: string}
+     */
+    protected function khoangTruoc(string $from, string $to): array
+    {
+        $soNgay = (int) round((strtotime($to) - strtotime($from)) / 86400) + 1;
+
+        return [date('Y-m-d', strtotime($from.' -'.$soNgay.' days')), date('Y-m-d', strtotime($from.' -1 day'))];
+    }
+
+    /**
+     * Số đơn theo thứ trong tuần (1 = Thứ Hai … 7 = Chủ nhật).
+     *
+     * @return array<int, array{nhan: string, don: int}>
+     */
+    protected function theoThu(array $donHang): array
+    {
+        $don = [];
+        foreach ($donHang['by_weekday'] ?? [] as $r) {
+            $don[(int) ($r['key'] ?? 0)] = (int) ($r['orders'] ?? 0);
+        }
+
+        $out = [];
+        foreach ([1 => 'T2', 2 => 'T3', 3 => 'T4', 4 => 'T5', 5 => 'T6', 6 => 'T7', 7 => 'CN'] as $k => $nhan) {
+            $out[] = ['nhan' => $nhan, 'don' => $don[$k] ?? 0];
+        }
+
+        return $out;
+    }
+
+    /**
+     * Khuyến mại được dùng trong kỳ: gộp mọi loại chương trình của báo cáo
+     * khuyến mại, nhiều tiền giảm trước, lấy N dòng. Tổng giảm cộng mọi loại;
+     * số lượt cộng thẳng nên đơn áp hai chương trình tính hai lượt.
+     *
+     * @param  array<string, mixed>  $nen
+     * @return array{ds: array<int, array<string, mixed>>, tong: float, luot: int, tab: string}
+     */
+    protected function khuyenMai(array $nen, int $n): array
+    {
+        $ds = [];
+        foreach (array_keys(PromotionReportController::TAB) as $tab) {
+            foreach ($this->data($nen['km_'.$tab] ?? null, 'promotion report '.$tab)['rows'] ?? [] as $r) {
+                if ((int) ($r['order_count'] ?? 0) <= 0) {
+                    continue;
+                }
+                $ds[] = ['ten' => (string) ($r['name'] ?? ''), 'giam' => (float) ($r['discount'] ?? 0), 'luot' => (int) $r['order_count'], 'tab' => $tab];
+            }
+        }
+        usort($ds, fn ($a, $b) => [$b['giam'], $b['luot']] <=> [$a['giam'], $a['luot']]);
+
+        return [
+            'ds' => array_slice($ds, 0, $n),
+            'tong' => array_sum(array_column($ds, 'giam')),
+            'luot' => array_sum(array_column($ds, 'luot')),
+            'tab' => $ds[0]['tab'] ?? array_key_first(PromotionReportController::TAB),
+        ];
     }
 
     /**
@@ -580,8 +731,10 @@ class DashboardController extends Controller
             $bc['items'] ?? [],
             fn ($r) => (int) ($r['units'] ?? 0) > 0
         ));
+        $theoTien = $ds;
+        usort($theoTien, fn ($a, $b) => ($b['revenue'] ?? 0) <=> ($a['revenue'] ?? 0));
 
-        return array_slice($ds, 0, $f['top_products']);
+        return ['sl' => array_slice($ds, 0, $f['top_products']), 'dt' => array_slice($theoTien, 0, $f['top_products'])];
     }
 
     /**
@@ -615,9 +768,14 @@ class DashboardController extends Controller
      *
      * @return array{tien: float, soLuong: int, catBot: bool}
      */
-    protected function muaHang(array $f, Response|\Throwable|null $trang1): array
+    protected function muaHang(array $f, Response|\Throwable|null $trang1, array $moc = []): array
     {
-        $out = ['tien' => 0.0, 'soLuong' => 0, 'catBot' => false];
+        $out = ['tien' => 0.0, 'soLuong' => 0, 'catBot' => false, 'soPhieu' => 0, 'daTra' => 0.0, 'matHang' => 0,
+            'theoMoc' => ['tien' => array_fill(0, count($moc), 0.0), 'soLuong' => array_fill(0, count($moc), 0)]];
+        // Mốc của biểu đồ (d-m-Y) quy về Y-m-d để so chuỗi.
+        $ymd = fn (string $d) => substr($d, 6, 4).'-'.substr($d, 3, 2).'-'.substr($d, 0, 2);
+        $khoang = array_map(fn ($r) => $r ? [$ymd($r[0]), $ymd($r[1])] : null, $moc);
+        $bienThe = [];
         if (! $trang1 instanceof Response || ! $trang1->successful()) {
             $this->data($trang1, 'purchase orders');
 
@@ -637,12 +795,29 @@ class DashboardController extends Controller
                 if (in_array($phieu['status'] ?? '', self::PURCHASE_DEAD, true)) {
                     continue;
                 }
-                $out['tien'] += (float) ($phieu['total_amount'] ?? 0);
+                $tien = (float) ($phieu['total_amount'] ?? 0);
+                $sl = 0;
                 foreach ($phieu['items'] ?? [] as $dong) {
-                    $out['soLuong'] += (int) ($dong['base_quantity'] ?? $dong['quantity'] ?? 0);
+                    $sl += (int) ($dong['base_quantity'] ?? $dong['quantity'] ?? 0);
+                    $bienThe[(int) ($dong['product_variant_id'] ?? 0)] = true;
+                }
+                $out['tien'] += $tien;
+                $out['soLuong'] += $sl;
+                $out['soPhieu']++;
+                $out['daTra'] += (float) ($phieu['paid_amount'] ?? 0);
+
+                $ngay = substr((string) (($phieu['document_date'] ?? null) ?: ($phieu['created_at'] ?? '')), 0, 10);
+                foreach ($khoang as $i => $k) {
+                    if ($k && $ngay >= $k[0] && $ngay <= $k[1]) {
+                        $out['theoMoc']['tien'][$i] += $tien;
+                        $out['theoMoc']['soLuong'][$i] += $sl;
+                        break;
+                    }
                 }
             }
         }
+        unset($bienThe[0]);
+        $out['matHang'] = count($bienThe);
 
         return $out;
     }
