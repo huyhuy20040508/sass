@@ -175,10 +175,10 @@ class SummaryReportTest extends TestCase
         // Nằm ở module BÁO CÁO, tab đầu tiên đang sáng.
         $this->assertMatchesRegularExpression('#icon-item me-xl-2 active">\s*<a href="[^"]*/admin/reports/summary"#', $html);
         $this->assertMatchesRegularExpression('#reports/summary"\s+class="sub-nav-btn active"#', $html);
-        // Dãy tab chỉ còn ba trang — Doanh thu / Đơn hàng / Hàng hoá đã bỏ, tab
-        // Khách hàng đổi tên thành Báo cáo cuối ngày.
+        // Doanh thu / Đơn hàng / Hàng hoá đã bỏ khỏi dãy tab, tab Khách hàng đổi
+        // tên thành Báo cáo cuối ngày; Báo cáo chương trình khuyến mại thêm 09/10/2026.
         preg_match_all('#class="sub-nav-btn[^"]*"[^>]*>\s*([^<]+?)\s*</a>#u', $html, $tab);
-        $this->assertSame(['Báo cáo tổng hợp', 'Báo cáo cuối ngày', 'Báo cáo kết ca'], $tab[1]);
+        $this->assertSame(['Báo cáo tổng hợp', 'Báo cáo cuối ngày', 'Báo cáo kết ca', 'Báo cáo chương trình khuyến mại'], $tab[1]);
     }
 
     /**

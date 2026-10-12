@@ -44,6 +44,8 @@ type KetQuaDongGia struct {
 	Gia map[uint]GiaDongGia
 	// Qua: hàng tặng của các dòng đang được áp.
 	Qua []QuaDongGia
+	// CTCuaDong: dòng đồng giá đang áp → chương trình của nó.
+	CTCuaDong map[uint]domain.FixedPrice
 }
 
 type GiaDongGia struct {
@@ -491,7 +493,7 @@ func (s *fixedPriceService) tinh(ctx context.Context, ds []domain.FixedPrice, fo
 		return tong >= d.Quantity
 	}
 
-	kq := &KetQuaDongGia{Gia: map[uint]GiaDongGia{}}
+	kq := &KetQuaDongGia{Gia: map[uint]GiaDongGia{}, CTCuaDong: map[uint]domain.FixedPrice{}}
 	for _, f := range ds {
 		for _, d := range f.Details {
 			if du(f, d) {
@@ -523,6 +525,7 @@ func (s *fixedPriceService) tinh(ctx context.Context, ds []domain.FixedPrice, fo
 			if !du(f, d) {
 				continue
 			}
+			kq.CTCuaDong[d.ID] = f
 			for vid := range sl {
 				if cv, ok := found[vid]; ok && phu(f, d, cv) {
 					kq.Gia[vid] = GiaDongGia{Price: d.Price, DetailID: d.ID, TenCT: f.Name}

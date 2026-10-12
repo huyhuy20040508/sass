@@ -43,9 +43,15 @@ type KetQuaKhuyenMai struct {
 }
 
 type KMDaApDung struct {
-	ID   uint
-	Name string
-	Giam float64
+	ID       uint
+	Code     string
+	Name     string
+	Type     uint8
+	DetailID uint
+	Giam     float64
+	// SoLuong: số hàng bán khớp bậc (loại 2/3); SoQua: số hàng tặng của bậc.
+	SoLuong int
+	SoQua   int
 }
 
 type promotionProgramService struct {
@@ -644,11 +650,20 @@ func (s *promotionProgramService) tinh(ctx context.Context, ds []domain.Promotio
 
 	kq.Giam = math.Round(math.Min(tong, tongGiamDong+giamDonTien+giamDonPT))
 	for _, a := range dang {
-		kq.TheoChuongTrinh = append(kq.TheoChuongTrinh, KMDaApDung{ID: a.p.ID, Name: a.p.Name, Giam: math.Round(giamCT[a.p.ID])})
+		ct := KMDaApDung{ID: a.p.ID, Code: a.p.Code, Name: a.p.Name, Type: a.p.Type, DetailID: a.d.ID, Giam: math.Round(giamCT[a.p.ID])}
+		if a.p.Type != domain.KMPhieuBanHang {
+			for vid, q := range sl {
+				if cv, ok := found[vid]; ok && khop(a.p, a.d, cv) {
+					ct.SoLuong += q
+				}
+			}
+		}
 		kq.BacDaApDung = append(kq.BacDaApDung, a.d.ID)
 		for _, g := range a.d.Gifts {
+			ct.SoQua += g.Quantity
 			kq.Qua = append(kq.Qua, QuaDongGia{VariantID: g.ProductVariantID, Quantity: g.Quantity, DetailID: a.d.ID})
 		}
+		kq.TheoChuongTrinh = append(kq.TheoChuongTrinh, ct)
 	}
 
 	return kq

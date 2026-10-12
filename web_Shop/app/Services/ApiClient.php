@@ -2229,6 +2229,21 @@ class ApiClient
         return $this->get('/admin/reports/shifts', $query);
     }
 
+    public function reportPromotions(array $query = []): Response
+    {
+        return $this->get('/admin/reports/promotions', $query);
+    }
+
+    public function reportPromotionOrders(array $query = []): Response
+    {
+        return $this->get('/admin/reports/promotions/orders', $query);
+    }
+
+    public function reportCrm(array $query = []): Response
+    {
+        return $this->get('/admin/reports/crm', $query);
+    }
+
     // ---------- Gói dịch vụ của cửa hàng ----------
 
     /**

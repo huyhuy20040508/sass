@@ -612,7 +612,13 @@ func (s *orderService) POSCheckout(ctx context.Context, req *dto.POSCheckoutRequ
 
 	order, err := s.orderRepo.Checkout(ctx, khoa, func(found map[uint]domain.CheckoutVariant) (*domain.Order, *domain.VoucherClaim, error) {
 		var dongGia *KetQuaDongGia
+		// Giá bán trước khi đồng giá đè lên — để báo cáo tính được tiền giảm.
+		var giaGoc map[uint]float64
 		if dungDongGia {
+			giaGoc = make(map[uint]float64, len(found))
+			for vid, cv := range found {
+				giaGoc[vid] = cv.Price
+			}
 			kq, err := s.dongGia.ApDung(ctx, req.FixedPriceIDs, found, lines)
 			if err != nil {
 				return nil, nil, err
@@ -668,6 +674,9 @@ func (s *orderService) POSCheckout(ctx context.Context, req *dto.POSCheckoutRequ
 		}
 
 		o.Items = items
+		if dongGia != nil {
+			o.Promotions = chupDongGia(items, giaGoc, dongGia)
+		}
 		o.SubtotalAmount = subtotal
 		// Không có phí ship: hàng không đi đâu cả.
 		o.ShippingFee = 0
@@ -709,6 +718,7 @@ func (s *orderService) POSCheckout(ctx context.Context, req *dto.POSCheckoutRequ
 					ids = append(ids, strconv.FormatUint(uint64(id), 10))
 				}
 				o.PromotionDetailIDs = strings.Join(ids, ",")
+				o.Promotions = append(o.Promotions, chupKhuyenMai(km.TheoChuongTrinh, giam)...)
 				if o.Items, err = themQua(o.Items, found, km.Qua, func(it *domain.OrderItem, d uint) { it.PromotionDetailID = &d }); err != nil {
 					return nil, nil, err
 				}
@@ -1728,6 +1738,79 @@ func themDongGia(items []domain.OrderItem, found map[uint]domain.CheckoutVariant
 	}
 
 	return themQua(items, found, kq.Qua, func(it *domain.OrderItem, d uint) { it.FixedPriceDetailID = &d })
+}
+
+// chupKhuyenMai — mỗi chương trình khuyến mại đã áp một dòng order_promotions.
+// Tiền giảm chia lại theo tỉ lệ cho cộng ra đúng orders.promotion_discount: tổng
+// có thể đã bị kẹp trong phần tiền hàng còn lại, và mỗi chương trình làm tròn
+// riêng nên cộng thẳng lệch tổng một vài đồng.
+func chupKhuyenMai(ds []KMDaApDung, giam float64) []domain.OrderPromotion {
+	tong := 0.0
+	for _, c := range ds {
+		tong += c.Giam
+	}
+	out := make([]domain.OrderPromotion, 0, len(ds))
+	daChia := 0.0
+	for i, c := range ds {
+		g := 0.0
+		switch {
+		case i == len(ds)-1:
+			g = math.Max(0, giam-daChia)
+		case tong > 0:
+			g = math.Round(giam * c.Giam / tong)
+		}
+		daChia += g
+		out = append(out, domain.OrderPromotion{
+			Kind: domain.OrderPromotionProgram, ProgramID: c.ID, DetailID: c.DetailID,
+			ProgramCode: c.Code, ProgramName: c.Name, ProgramType: c.Type,
+			Quantity: c.SoLuong, GiftQuantity: c.SoQua, DiscountAmount: g,
+		})
+	}
+
+	return out
+}
+
+// chupDongGia — mỗi chương trình đồng giá có dòng trên đơn một dòng
+// order_promotions. Giá đồng giá nằm thẳng ở unit_price (không phải khoản
+// giảm), nên tiền giảm = (giá gốc − giá đồng giá) × số lượng, có thể âm khi
+// giá đồng giá cao hơn giá bán.
+func chupDongGia(items []domain.OrderItem, giaGoc map[uint]float64, kq *KetQuaDongGia) []domain.OrderPromotion {
+	var out []domain.OrderPromotion
+	viTri := map[uint]int{}
+	for _, it := range items {
+		if it.FixedPriceDetailID == nil {
+			continue
+		}
+		f, ok := kq.CTCuaDong[*it.FixedPriceDetailID]
+		if !ok {
+			continue
+		}
+		k, co := viTri[f.ID]
+		if !co {
+			k = len(out)
+			viTri[f.ID] = k
+			out = append(out, domain.OrderPromotion{
+				Kind: domain.OrderPromotionFixedPrice, ProgramID: f.ID,
+				ProgramCode: f.Code, ProgramName: f.Name, ProgramType: f.Type,
+			})
+		}
+		r := &out[k]
+		if it.IsGift {
+			r.GiftQuantity += it.Quantity
+			continue
+		}
+		goc := it.UnitPrice
+		if it.ProductVariantID != nil {
+			if g, ok := giaGoc[*it.ProductVariantID]; ok {
+				goc = g
+			}
+		}
+		r.Quantity += it.Quantity
+		r.BaseAmount += goc * float64(it.Quantity)
+		r.DiscountAmount += (goc - it.UnitPrice) * float64(it.Quantity)
+	}
+
+	return out
 }
 
 // matchVariant tìm biến thể đã tra được ứng với một dòng giỏ hàng.
