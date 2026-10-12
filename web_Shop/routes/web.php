@@ -35,6 +35,7 @@ use App\Http\Controllers\ShiftReportController;
 use App\Http\Controllers\SummaryReportController;
 use App\Http\Controllers\GoodsReportController;
 use App\Http\Controllers\ProfitReportController;
+use App\Http\Controllers\PromotionReportController;
 use App\Http\Controllers\StaffReportController;
 use App\Http\Controllers\EmployeeReportController;
 use App\Http\Controllers\SalesReportController;
@@ -689,6 +690,9 @@ Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:quan_ly', 'chi.v2'])->
         Route::get('/reports/profit', [ProfitReportController::class, 'index'])->name('reports.profit');
         Route::get('/reports/staff', [StaffReportController::class, 'index'])->name('reports.staff');
         Route::get('/reports/employees', [EmployeeReportController::class, 'index'])->name('reports.employees');
+        Route::get('/reports/promotions', [PromotionReportController::class, 'index'])->name('reports.promotions');
+        Route::get('/reports/promotions/orders', [PromotionReportController::class, 'orders'])->name('reports.promotions.orders');
+        Route::get('/reports/promotions/export', [PromotionReportController::class, 'export'])->name('reports.promotions.export');
     });
 });
 

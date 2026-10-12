@@ -56,6 +56,7 @@ class V2OnlyShell
         'admin.reports.profit',
         'admin.reports.staff',
         'admin.reports.employees',
+        'admin.reports.promotions',
     ];
 
     /**
@@ -129,6 +130,8 @@ class V2OnlyShell
         'admin.shift-report.export', // xuất CSV báo cáo kết ca
         'admin.reports.sales.orders', // hộp chi tiết hoá đơn của một ngày, trả JSON
         'admin.reports.goods.orders', // hộp chi tiết hoá đơn của một mặt hàng, trả JSON
+        'admin.reports.promotions.orders', // hộp đơn của một chương trình khuyến mại, trả JSON
+        'admin.reports.promotions.export', // xuất Excel báo cáo chương trình khuyến mại
         'admin.crm.promotions.export', // xuất Excel chương trình khuyến mãi
         'admin.voucher-coupon.',  // xuất Excel / danh sách mã / lịch sử một mã (Voucher/Coupon)
         // Xuất tệp / gọi ngầm của các màn vừa mở ở CON_BAN_CU. Chặn chúng là nút

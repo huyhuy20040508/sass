@@ -1057,6 +1057,11 @@ func New(
 			q.Dat(manage, http.MethodGet, "/reports/profit", "bao-cao.xem", h.Report.Profit)
 			q.Dat(manage, http.MethodGet, "/reports/staff", "bao-cao.xem", h.Report.Staff)
 			q.Dat(manage, http.MethodGet, "/reports/employees", "bao-cao.xem", h.Report.Employees)
+			q.Dat(manage, http.MethodGet, "/reports/promotions", "bao-cao.xem", h.Report.Promotions)
+			q.Dat(manage, http.MethodGet, "/reports/promotions/orders", "bao-cao.xem", h.Report.PromotionOrders)
+			// CRM → Tổng quan: cùng quyền với danh sách khách — người xem được hồ sơ
+			// và chi tiêu từng khách thì xem được tổng của họ.
+			q.Dat(manage, http.MethodGet, "/reports/crm", "khach-hang.xem", h.Report.Crm)
 			// Báo cáo kết ca nằm ở cụm ca làm việc (cùng repository với ca & sổ
 			// quỹ) nhưng chung quyền với nhóm báo cáo: nó phơi doanh thu từng ca.
 			q.Dat(manage, http.MethodGet, "/reports/shifts", "bao-cao.xem", h.Ca.BaoCaoKetCa)

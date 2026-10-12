@@ -36,6 +36,11 @@ type ReportService interface {
 	Staff(ctx context.Context, q ReportQuery) (domain.StaffReport, error)
 	// Employees — báo cáo nhân viên (hoa hồng), xem employee_report_service.go
 	Employees(ctx context.Context, q ReportQuery) (domain.EmployeeReport, error)
+	// Promotions / PromotionOrders — báo cáo chương trình khuyến mại, xem promotion_report_service.go
+	Promotions(ctx context.Context, q ReportQuery) (domain.PromotionReport, error)
+	PromotionOrders(ctx context.Context, q ReportQuery) ([]domain.PromotionOrderRow, error)
+	// Crm — CRM → Tổng quan, xem crm_report_service.go
+	Crm(ctx context.Context, q ReportQuery) (domain.CrmReport, error)
 }
 
 // ReportQuery — tham số thô lấy từ query string, chưa kiểm tra gì.
@@ -69,6 +74,16 @@ type ReportQuery struct {
 	TopWeekday int
 	Area       string
 	StaffID    uint
+
+	// Báo cáo chương trình khuyến mại: tab (domain.KMBaoCao*) và một chương trình.
+	Tab       string
+	ProgramID uint
+
+	// CRM → Tổng quan: loại khách (individual | company), năm của biểu đồ tăng
+	// trưởng, tháng (YYYY-MM) của biểu đồ đăng ký mới theo ngày.
+	CustomerType string
+	Year         int
+	RegMonth     string
 }
 
 // nguonDon nhận pos | web, giá trị khác coi như "mọi nguồn" — trang XEM, tham

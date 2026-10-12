@@ -152,6 +152,7 @@
         ['nhan' => 'Báo cáo cuối ngày', 'route' => 'admin.reports.sales',
             'sang' => ['admin.reports.sales', 'admin.reports.goods', 'admin.reports.profit', 'admin.reports.staff', 'admin.reports.employees', 'admin.reports.customers']],
         ['nhan' => 'Báo cáo kết ca', 'route' => 'admin.shift-report.index'],
+        ['nhan' => 'Báo cáo chương trình khuyến mại', 'route' => 'admin.reports.promotions'],
     ];
 
     // Tab của module CRM theo bản v2 (config/permission.php của v2), BỎ "Nhóm
@@ -164,7 +165,6 @@
         ['nhan' => 'Danh sách đơn hàng', 'route' => 'admin.crm.orders.index'],
         // 'sang': tab sáng cho mọi trang con (Chương trình khuyến mại / Đồng giá).
         ['nhan' => 'Chương trình khuyến mãi', 'route' => 'admin.crm.promotions.index', 'sang' => 'admin.crm.promotions.*'],
-        ['nhan' => 'Báo cáo chương trình khuyến mại', 'route' => null],
         ['nhan' => 'Thẻ thành viên', 'route' => 'admin.crm.membership.index', 'sang' => 'admin.crm.membership.*'],
         ['nhan' => 'Đánh giá', 'route' => null],
     ];

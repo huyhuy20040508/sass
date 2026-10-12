@@ -1131,6 +1131,8 @@ type Order struct {
 	CreatedAt      time.Time      `json:"created_at"`
 	UpdatedAt      time.Time      `json:"updated_at"`
 	DeletedAt      gorm.DeletedAt `json:"-" gorm:"index"`
+	// Promotions: chương trình đã áp, chụp lúc bán — GORM ghi cùng lượt tạo đơn.
+	Promotions []OrderPromotion `json:"-" gorm:"foreignKey:OrderID"`
 	// StockMoves là những thay đổi tồn kho mà thao tác vừa rồi gây ra, do tầng
 	// repository điền vào sau khi transaction chạy xong. Không phải cột của bảng
 	// orders và không trả ra API — chỉ để service biết biến thể nào vừa tụt xuống

@@ -417,4 +417,13 @@ type ReportRepository interface {
 	StaffShiftRows(ctx context.Context, p ReportPeriod, f StaffReportFilter) ([]StaffShiftRow, error)
 	//  Báo cáo nhân viên (hoa hồng) — xem employee_report.go
 	EmployeeOrders(ctx context.Context, p ReportPeriod, f StaffReportFilter) ([]EmployeeOrder, error)
+
+	// Báo cáo chương trình khuyến mại — xem promotion_report.go
+	PromotionUsage(ctx context.Context, p ReportPeriod, f PromotionReportFilter) ([]PromotionReportRow, error)
+	PromotionUsageTotals(ctx context.Context, p ReportPeriod, f PromotionReportFilter) (PromotionReportRow, error)
+	PromotionOrders(ctx context.Context, p ReportPeriod, f PromotionReportFilter) ([]PromotionOrderRow, error)
+	PromotionCatalog(ctx context.Context, tab string) ([]PromotionCatalogItem, error)
+
+	// CRM → Tổng quan — xem crm_report.go
+	CrmRepository
 }
