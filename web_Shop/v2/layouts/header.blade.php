@@ -124,7 +124,8 @@
     $routeUlWarehouse = route('admin.nha-cung-cap.index');
     $routeUlCashbook = route('admin.cashbook.index');
     $routeUlEmployee = route('admin.staff.index');
-    $routeUlCrm = route('admin.crm.customers.index');
+    // Module CRM mở vào tab đầu — Tổng quan, như crm.index của v2.
+    $routeUlCrm = route('admin.crm.dashboard');
     $routeUlSettings = route('admin.chi-nhanh.index');
 
     // Tab trong module CÀI ĐẶT — cùng luật: màn nào chưa dựng thì giấu.
@@ -160,7 +161,7 @@
     // được ở hộp Thêm/Sửa khách. Cùng luật với Thống kê: màn chưa dựng thì bày
     // ra nhưng làm mờ.
     $tabCrm = [
-        ['nhan' => 'Tổng quan', 'route' => null],
+        ['nhan' => 'Tổng quan', 'route' => 'admin.crm.dashboard'],
         ['nhan' => 'Danh sách khách hàng', 'route' => 'admin.crm.customers.index'],
         ['nhan' => 'Danh sách đơn hàng', 'route' => 'admin.crm.orders.index'],
         // 'sang': tab sáng cho mọi trang con (Chương trình khuyến mại / Đồng giá).
