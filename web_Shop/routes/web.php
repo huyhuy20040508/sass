@@ -9,6 +9,7 @@ use App\Http\Controllers\BranchController;
 use App\Http\Controllers\ChooseWorkspaceController;
 use App\Http\Controllers\DebtController;
 use App\Http\Controllers\ContactController;
+use App\Http\Controllers\CrmDashboardController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\StockAdjustmentController;
@@ -637,6 +638,9 @@ Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:quan_ly', 'chi.v2'])->
         Route::get('/customers', [CustomerController::class, 'index'])->name('customers.index');
         // CRM → Danh sách khách hàng: cùng dữ liệu, khung lọc và bảng theo khuôn
         // crm/customers của v2. Thêm/Sửa/Xoá đi chung các đường /customers dưới đây.
+        // CRM → Tổng quan (crm.index của v2).
+        Route::get('/crm', [CrmDashboardController::class, 'index'])->name('crm.dashboard');
+
         Route::get('/crm/customers', [CustomerController::class, 'crm'])->name('crm.customers.index');
         Route::get('/customers/export', [CustomerController::class, 'export'])->name('customers.export');
         Route::get('/customers/import-template', [CustomerController::class, 'importTemplate'])->name('customers.importTemplate');

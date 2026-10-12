@@ -37,6 +37,7 @@ class V2OnlyShell
         'admin.cashbook.index',
         'admin.cong-no.index',
         'admin.customers.index',
+        'admin.crm.dashboard',
         'admin.crm.customers.index',
         'admin.crm.orders.index',
         'admin.crm.promotions.index',
