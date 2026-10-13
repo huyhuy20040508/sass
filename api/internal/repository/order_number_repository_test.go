@@ -181,9 +181,13 @@ func TestNhomCua(t *testing.T) {
 		chon []string
 		muon []string
 	}{
-		{[]string{"cash"}, []string{"cash", "cod"}},
-		{[]string{"momo"}, []string{"vnpay", "momo", "payos", "ewallet"}},
-		{[]string{"sepay", "cod"}, []string{"cash", "cod", "bank_transfer", "sepay"}},
+		{[]string{"cash"}, []string{"cash"}},
+		// Bốn nhóm của quầy + "Khác": quẹt thẻ cột riêng; SePay là QR tự động; mã
+		// cũ (cod, momo…) ở "Khác" — đúng cách báo cáo bán hàng xếp.
+		{[]string{"card"}, []string{"card"}},
+		{[]string{"momo"}, []string{"cod", "vnpay", "momo", "ewallet"}},
+		{[]string{"sepay", "cod"}, []string{"payos", "sepay", "mpos_qr", "cod", "vnpay", "momo", "ewallet"}},
+		{[]string{"bank_transfer"}, []string{"bank_transfer"}},
 		{[]string{"khong-co"}, []string{""}},
 	}
 	for _, c := range cac {
@@ -203,5 +207,13 @@ func TestSapXep_MacDinhLaVuaDungToi(t *testing.T) {
 	}
 	if got := sapXep("newest"); got != "created_at DESC, id DESC" {
 		t.Errorf("sapXep(newest) = %q", got)
+	}
+}
+
+// Ô lọc gửi tên ô: "auto_qr" mở ra ba cổng; mã lẻ giữ nguyên.
+func TestMaCuaHinhThuc(t *testing.T) {
+	got := strings.Join(domain.MaCuaHinhThuc([]string{"cash", "auto_qr", "sepay"}), ",")
+	if got != "cash,payos,sepay,mpos_qr,sepay" {
+		t.Errorf("MaCuaHinhThuc = %s", got)
 	}
 }

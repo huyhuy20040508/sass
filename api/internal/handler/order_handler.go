@@ -941,7 +941,64 @@ func respondOrderError(c *gin.Context, err error, fallback string) {
 	case errors.Is(err, domain.ErrPaymentMethodDisabled):
 		response.Error(c, http.StatusUnprocessableEntity,
 			"Cửa hàng hiện không nhận hình thức thanh toán này, vui lòng chọn cách khác")
+	case errors.Is(err, domain.ErrPhuongThucQuay):
+		// err đã kèm lý do: phương thức đang tắt, máy đã gỡ, đơn đã trả tiền…
+		response.Error(c, http.StatusUnprocessableEntity,
+			strings.TrimPrefix(err.Error(), domain.ErrPhuongThucQuay.Error()+": "))
+	case errors.Is(err, domain.ErrPaymentDevice):
+		response.Error(c, http.StatusBadGateway,
+			"Không gửi được số tiền xuống máy quẹt thẻ — kiểm tra máy đã bật và kết nối cổng ở Cài đặt → Phương thức thanh toán, hoặc chọn cách thu khác")
+	case errors.Is(err, domain.ErrPaymentGateway):
+		response.Error(c, http.StatusBadGateway,
+			"Không mở được mã QR từ cổng thanh toán — kiểm tra kết nối cổng ở Cài đặt → Phương thức thanh toán, hoặc chọn cách thu khác")
 	default:
 		response.Error(c, http.StatusInternalServerError, fallback)
 	}
+}
+
+// POSHuyQR godoc
+//
+//	@Summary		Huỷ mã QR tự động của một đơn quầy còn chờ tiền
+//	@Description	Chốt lần thử ở cổng thành huỷ rồi huỷ đơn, trả hàng về kho. Tiền đã về thì từ chối.
+//	@Tags			Admin - Bán tại quầy
+//	@Param			id	path	int	true	"ID đơn"
+//	@Router			/admin/orders/pos/{id}/huy-qr [post]
+func (h *OrderHandler) POSHuyQR(c *gin.Context) {
+	id, ok := parseUintParam(c, "id")
+	if !ok {
+		return
+	}
+	if err := h.svc.POSHuyQR(c.Request.Context(), id, currentUserID(c)); err != nil {
+		respondOrderError(c, err, "Không huỷ được mã QR")
+
+		return
+	}
+	response.OKMessage(c, "Đã huỷ mã QR và trả hàng về kho.", nil)
+}
+
+// POSDoiHinhThuc godoc
+//
+//	@Summary		Thu đơn quầy đang chờ QR bằng cách khác (giữ mã đơn)
+//	@Description	Chốt lần thử QR thành huỷ rồi ghi đơn đã thu bằng tiền mặt / chuyển khoản / quẹt thẻ.
+//	@Description	Tiền QR đã về thì từ chối — không thu hai lần.
+//	@Tags			Admin - Bán tại quầy
+//	@Param			id		path	int							true	"ID đơn"
+//	@Param			body	body	dto.POSDoiHinhThucRequest	true	"Hình thức mới"
+//	@Router			/admin/orders/pos/{id}/doi-hinh-thuc [post]
+func (h *OrderHandler) POSDoiHinhThuc(c *gin.Context) {
+	id, ok := parseUintParam(c, "id")
+	if !ok {
+		return
+	}
+	var req dto.POSDoiHinhThucRequest
+	if !bindJSON(c, &req) {
+		return
+	}
+	res, err := h.svc.POSDoiHinhThuc(c.Request.Context(), id, &req, currentUserID(c))
+	if err != nil {
+		respondOrderError(c, err, "Không đổi được hình thức thanh toán")
+
+		return
+	}
+	response.OK(c, res)
 }

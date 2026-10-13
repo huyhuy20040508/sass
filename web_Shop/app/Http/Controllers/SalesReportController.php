@@ -28,14 +28,18 @@ class SalesReportController extends Controller
         'cash' => 'Tiền mặt',
         'transfer' => 'Chuyển khoản',
         'card' => 'Quẹt Thẻ',
+        'card_fee' => 'Phí thẻ',
         'auto_qr' => 'QR Tự động',
         'debt' => 'Công nợ',
     ];
 
+    /** Phí thẻ là ước tính theo % khai cho máy, không phải số sao kê. */
+    public const GOI_Y_PHI_THE = 'Phí quẹt thẻ cửa hàng chịu, ước tính theo % đã khai cho máy — không trừ vào tiền khách trả';
+
     /** Màu chữ từng cột, đúng lớp v2 gắn (text-danger / success / primary / warning). */
     public const MAU = [
         'returns' => 'text-danger', 'cash' => 'text-success', 'transfer' => 'text-primary',
-        'auto_qr' => 'text-warning', 'debt' => 'text-danger',
+        'auto_qr' => 'text-warning', 'debt' => 'text-danger', 'card_fee' => 'text-danger',
     ];
 
     /** Ô "Phương thức thanh toán", đúng thứ tự v2. Khoá là mã gửi sang API. */
@@ -46,10 +50,10 @@ class SalesReportController extends Controller
         'cash' => 'Tiền mặt',
     ];
 
-    /** Nhãn hình thức của đơn cho hộp chi tiết. */
+    /** Nhãn hình thức của đơn cho hộp chi tiết — bốn hình thức của quầy, mã khác in "Khác". */
     public const TEN_HINH_THUC = [
-        'cash' => 'Tiền mặt', 'bank_transfer' => 'Chuyển khoản', 'payos' => 'QR tự động',
-        'sepay' => 'QR tự động', 'cod' => 'Thu hộ (COD)', 'vnpay' => 'VNPay', 'momo' => 'MoMo',
+        'cash' => 'Tiền mặt', 'bank_transfer' => 'Chuyển khoản', 'card' => 'Quẹt Thẻ', 'payos' => 'QR tự động',
+        'sepay' => 'QR tự động', 'mpos_qr' => 'QR tự động',
     ];
 
     public function __construct(protected ApiClient $api) {}
@@ -133,7 +137,7 @@ class SalesReportController extends Controller
 
         $dong = array_map(fn ($h) => $h + [
             'nguon' => ReportController::NGUON_DON[$h['channel'] ?? ''] ?? '',
-            'hinh_thuc' => self::TEN_HINH_THUC[$h['payment_method'] ?? ''] ?? (string) ($h['payment_method'] ?? ''),
+            'hinh_thuc' => ($h['payment_method'] ?? '') === '' ? '' : (self::TEN_HINH_THUC[$h['payment_method']] ?? 'Khác'),
         ], $res->json('data') ?? []);
 
         return response()->json([

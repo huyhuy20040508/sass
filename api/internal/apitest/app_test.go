@@ -328,6 +328,9 @@ func dungHeThongVoi(t *testing.T, banHang, dieuHanh bool) *heThong {
 	thuocTinhRepo := repository.NewThuocTinhRepository(db)
 
 	settingSvc := service.NewSettingService(settingRepo)
+	// Khoá mã hoá riêng cho test: hộp khoá bí mật cổng thanh toán phải mã hoá được.
+	phuongThucSvc := service.NewPaymentMethodService(repository.NewPaymentMethodRepository(db), settingSvc, bimat.New("khoa-test-phuong-thuc"))
+	settingSvc.GanNguonThanhToan(phuongThucSvc)
 	authSvc := service.NewAuthService(userRepo, nguoiDieuHanhRepo, tenantRepo, roleRepo, verifyRepo, mailSender, jwtMgr,
 		cfg.JWT, cfg.Mail, true, settingSvc, fbClient, ggClient, repository.NewNhanVienRepository(db))
 	categorySvc := service.NewCategoryService(categoryRepo, quyTacMaRepo)
@@ -356,10 +359,15 @@ func dungHeThongVoi(t *testing.T, banHang, dieuHanh bool) *heThong {
 	etaxSvc := service.NewEtaxService(
 		repository.NewEtaxRepository(db), chiNhanhRepo, orderRepo, bimat.New(""), minvoice.New(), nil)
 	paymentSvc := service.NewPaymentService(paymentRepo, orderRepo, payosClient, cfg.PayOS, sepayClient, notifSvc, etaxSvc)
+	// Cửa hàng tự kết nối SePay/PayOS: khoá riêng của chi nhánh trung tâm, .env làm dự phòng.
+	phuongThucSvc.GanCauHinhCong(cfg.PayOS, cfg.SePay)
+	paymentSvc.GanCongRieng(phuongThucSvc)
 	fixedPriceRepo := repository.NewFixedPriceRepository(db)
 	dongGiaSvc := service.NewFixedPriceService(fixedPriceRepo, categoryRepo, orderRepo)
 	khuyenMaiSvc := service.NewPromotionProgramService(repository.NewPromotionProgramRepository(db), fixedPriceRepo, categoryRepo, orderRepo)
 	orderSvc := service.NewOrderService(orderRepo, returnRepo, mailSender, cfg.Mail, notifSvc, settingSvc, paymentSvc, promotionSvc, voucherSvc, etaxSvc, dongGiaSvc, khuyenMaiSvc, cfg.JWT.Secret)
+	// Quầy: tài khoản / máy quẹt thẻ / cổng QR theo chi nhánh.
+	orderSvc.DungPhuongThuc(phuongThucSvc)
 	orderSvc.DungThanhVien(repository.NewMembershipRepository(db))
 	returnSvc := service.NewOrderReturnService(returnRepo, notifSvc, settingSvc)
 	inventorySvc := service.NewInventoryService(inventoryRepo)
@@ -368,19 +376,20 @@ func dungHeThongVoi(t *testing.T, banHang, dieuHanh bool) *heThong {
 
 	r := router.New(cfg, jwtMgr, tenMienRepo, nguoiDieuHanhRepo, nil, chiNhanhRepo,
 		repository.NewNhanVienRepository(db), repository.NewQuyenRepository(db), router.Handlers{
-			Health:   handler.NewHealthHandler("test"),
-			Auth:     handler.NewAuthHandler(authSvc),
-			Category: handler.NewCategoryHandler(categorySvc),
-			Product:  handler.NewProductHandler(productSvc, promotionSvc),
-			Customer: handler.NewCustomerHandler(customerSvc),
-			Order:    handler.NewOrderHandler(orderSvc),
-			Return:   handler.NewOrderReturnHandler(returnSvc),
-			Notif:    handler.NewNotificationHandler(notifSvc, hub),
-			Stock:    handler.NewInventoryHandler(inventorySvc),
-			Setting:  handler.NewSettingHandler(settingSvc),
-			User:     handler.NewUserHandler(userSvc),
-			ChiNhanh: handler.NewChiNhanhHandler(service.NewChiNhanhService(chiNhanhRepo, hanMucSvc, quyTacMaRepo)),
-			ETax:     handler.NewEtaxHandler(etaxSvc),
+			Health:        handler.NewHealthHandler("test"),
+			Auth:          handler.NewAuthHandler(authSvc),
+			Category:      handler.NewCategoryHandler(categorySvc),
+			Product:       handler.NewProductHandler(productSvc, promotionSvc),
+			Customer:      handler.NewCustomerHandler(customerSvc),
+			Order:         handler.NewOrderHandler(orderSvc),
+			Return:        handler.NewOrderReturnHandler(returnSvc),
+			Notif:         handler.NewNotificationHandler(notifSvc, hub),
+			Stock:         handler.NewInventoryHandler(inventorySvc),
+			Setting:       handler.NewSettingHandler(settingSvc),
+			User:          handler.NewUserHandler(userSvc),
+			ChiNhanh:      handler.NewChiNhanhHandler(service.NewChiNhanhService(chiNhanhRepo, hanMucSvc, quyTacMaRepo)),
+			ETax:          handler.NewEtaxHandler(etaxSvc),
+			PaymentMethod: handler.NewPaymentMethodHandler(phuongThucSvc),
 			NhanSu: handler.NewNhanSuHandler(service.NewNhanSuService(
 				repository.NewNhanVienRepository(db), chiNhanhRepo, userSvc,
 				repository.NewQuyenRepository(db), quyTacMaRepo, settingSvc)),

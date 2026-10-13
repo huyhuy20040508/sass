@@ -169,9 +169,16 @@ var (
 	// Hình thức thanh toán bị cửa hàng tắt ở trang Cài đặt, hoặc bật chuyển khoản
 	// nhưng chưa khai đủ thông tin tài khoản nhận tiền.
 	ErrPaymentMethodDisabled = errors.New("cửa hàng hiện không nhận hình thức thanh toán này")
+	// ErrPhuongThucQuay — hình thức / tài khoản / máy / cổng chọn ở quầy không dùng
+	// được ở chi nhánh này (đang tắt, đã xoá). err kèm lý do cụ thể.
+	ErrPhuongThucQuay = errors.New("phương thức thanh toán ở quầy không dùng được")
 	// Cổng thanh toán từ chối hoặc không gọi tới được. Đơn VẪN được tạo — chỉ là
 	// chưa có link để trả tiền, khách trả sau hoặc đổi hình thức khác.
 	ErrPaymentGateway = errors.New("không tạo được link thanh toán")
+	// ErrPaymentDevice — không đẩy được số tiền xuống máy quẹt thẻ mPOS. Tách khỏi
+	// ErrPaymentGateway vì câu báo khác việc: lúc này không có mã QR nào, thu
+	// ngân cần đi kiểm cái máy chứ không phải cổng QR.
+	ErrPaymentDevice = errors.New("không gửi được lệnh xuống máy quẹt thẻ")
 	// Khách tự huỷ đơn: đơn đã qua giai đoạn được phép tự huỷ (đang chuẩn bị trở đi).
 	ErrCancelNotAllowed = errors.New("đơn không còn ở giai đoạn khách tự huỷ được")
 

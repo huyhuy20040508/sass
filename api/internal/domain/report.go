@@ -121,6 +121,9 @@ type ReportTotals struct {
 	Cost     float64 `json:"cost"`
 	Profit   float64 `json:"profit"`
 	AOV      float64 `json:"aov"`
+	// CardFee — phí quẹt thẻ cửa hàng chịu. KHÔNG trừ vào Profit (lãi gộp theo
+	// hàng); màn nào cần lãi sau phí thì tự trừ và nói rõ.
+	CardFee float64 `json:"card_fee"`
 }
 
 // ReportBucket — một mốc trên trục thời gian.
@@ -410,6 +413,10 @@ type ReportRepository interface {
 
 	// Báo cáo chi phí&lợi nhuan
 	ProfitRows(ctx context.Context, p ReportPeriod, f GoodsFilter) ([]ProfitRow, error)
+	// CardFeeTotal — tổng phí quẹt thẻ của các đơn còn hiệu lực trong kỳ.
+	CardFeeTotal(ctx context.Context, p ReportPeriod) (float64, error)
+	// CardFeeBuckets — phí quẹt thẻ theo mốc, cùng khoá với ProfitBuckets.
+	CardFeeBuckets(ctx context.Context, p ReportPeriod, groupBy string) (map[string]float64, error)
 	ProfitUnsold(ctx context.Context, p ReportPeriod, f GoodsFilter) ([]ProfitRow, error)
 	ProfitBuckets(ctx context.Context, p ReportPeriod, f GoodsFilter, groupBy string) (map[string]ProfitBucket, error)
 

@@ -26,9 +26,10 @@ class OrderExportTest extends TestCase
     }
 
     /** Một đơn đủ trường để dựng một dòng CSV. */
-    protected function donMau(int $id, string $ma, string $kenh = 'web'): array
+    /** @param  array<string, mixed>  $them  ghi đè vài trường cho từng tình huống */
+    protected function donMau(int $id, string $ma, string $kenh = 'web', array $them = []): array
     {
-        return ['data' => [
+        return ['data' => $them + [
             'id' => $id,
             'order_code' => $ma,
             'channel' => $kenh,
@@ -86,6 +87,74 @@ class OrderExportTest extends TestCase
      * và phiếu trả không có mặt. Bài này chốt cả hai: tham số trạng thái đi sang
      * đúng đường sổ chứng từ, và phiếu trả + hàng tổng cộng có trong tệp.
      */
+    /**
+     * Quẹt thẻ phải ra CHỮ, và phải lọc được.
+     *
+     * PAYMENT_METHODS thiếu khoá 'card' nên mọi nơi đọc hằng ấy đều rơi về mã thô
+     * (`?? $o['payment_method']`): cột "Phương thức" của tệp xuất in "card", hộp
+     * xem nhanh in "card", và khung lọc — dựng từ chính hằng ấy — không có ô nào
+     * để lọc đơn quẹt thẻ, dù quầy vẫn thu bằng hình thức này.
+     *
+     * Một hằng nuôi cả ba chỗ, nên bài canh cả ba: tệp xuất, danh sách ô lọc, và
+     * việc lọc ra đúng đơn.
+     */
+    public function test_don_quet_the_ra_chu_va_loc_duoc(): void
+    {
+        Http::fake([
+            '*/admin/orders/21' => Http::response($this->donMau(21, 'DH021', 'pos', ['payment_method' => 'card'])),
+            '*' => Http::response(['data' => []]),
+        ]);
+
+        $csv = $this->withSession($this->phienQuanTri())
+            ->get(route('admin.orders.export', ['ids' => '21']))->assertOk()->streamedContent();
+
+        $this->assertStringContainsString(',"Quẹt thẻ",', $csv);
+        $this->assertDoesNotMatchRegularExpression('/,card,|,"card"/', $csv, 'tệp xuất còn in mã thô');
+
+        Http::fake(['*' => Http::response(['data' => [], 'meta' => ['page' => 1, 'page_size' => 20, 'total' => 0, 'total_pages' => 1]])]);
+        $html = $this->withSession($this->phienQuanTri())->get('/admin/orders')->assertOk()->getContent();
+        $this->assertStringContainsString('id="dh-ptt-card"', $html, 'khung lọc thiếu ô Quẹt thẻ');
+
+        $this->withSession($this->phienQuanTri())->get('/admin/orders?payment_method=card')->assertOk();
+        Http::assertSent(fn ($r) => str_contains($r->url(), '/admin/orders')
+            && str_contains(urldecode($r->url()), 'payment_method=card'));
+    }
+
+    /** Đơn cũ mang mã ngoài bốn hình thức (cod) in "Khác", không in mã thô. */
+    public function test_ma_cu_in_khac(): void
+    {
+        Http::fake([
+            '*/admin/orders/22' => Http::response($this->donMau(22, 'DH022', 'web', ['payment_method' => 'cod'])),
+            '*' => Http::response(['data' => []]),
+        ]);
+
+        $csv = $this->withSession($this->phienQuanTri())
+            ->get(route('admin.orders.export', ['ids' => '22']))->assertOk()->streamedContent();
+
+        $this->assertStringContainsString(',Khác,', $csv);
+        $this->assertDoesNotMatchRegularExpression('/,cod,|,"cod"/', $csv);
+    }
+
+    /**
+     * Khung lọc đúng bốn ô của quầy — không còn COD / VNPay / MoMo — và ô "QR tự
+     * động" lọc cả hai cổng SePay lẫn PayOS, trong khi ô vẫn được tick lại.
+     */
+    public function test_loc_dung_bon_hinh_thuc(): void
+    {
+        Http::fake(['*' => Http::response(['data' => [], 'meta' => ['page' => 1, 'page_size' => 20, 'total' => 0, 'total_pages' => 1]])]);
+
+        $html = $this->withSession($this->phienQuanTri())->get('/admin/orders?payment_method=cash,auto_qr')->assertOk()->getContent();
+        preg_match_all('/id="dh-ptt-([a-z_]+)"/', $html, $m);
+        $this->assertSame(['cash', 'bank_transfer', 'card', 'auto_qr'], $m[1]);
+        $this->assertMatchesRegularExpression('/id="dh-ptt-auto_qr"\s+checked/', $html);
+        foreach (['VNPay', 'MoMo', 'COD (khi nhận hàng)'] as $cu) {
+            $this->assertStringNotContainsString($cu, $html);
+        }
+
+        Http::assertSent(fn ($r) => str_contains($r->url(), '/admin/orders/so-don')
+            && ($r->data()['payment_method'] ?? null) === 'cash,auto_qr');
+    }
+
     public function test_xuat_theo_bo_loc(): void
     {
         Http::fake([
@@ -93,10 +162,10 @@ class OrderExportTest extends TestCase
                 'data' => [
                     ['loai' => 'don', 'id' => 11, 'ma' => 'DH011', 'kenh' => 'pos', 'khach_hang' => 'Chị Lan',
                         'created_at' => '2026-08-17T10:00:00+07:00', 'tien_mat' => 30000, 'chuyen_khoan' => 20000,
-                        'the_vi' => 0, 'tong_tien' => 100000, 'co_cong_no' => true, 'trang_thai' => 'partial'],
+                        'quet_the' => 0, 'qr_tu_dong' => 0, 'tong_tien' => 100000, 'co_cong_no' => true, 'trang_thai' => 'partial'],
                     ['loai' => 'tra-hang', 'id' => 3, 'ma' => 'TH003', 'kenh' => 'web',
                         'created_at' => '2026-08-17T11:00:00+07:00', 'tien_mat' => 50000, 'chuyen_khoan' => 0,
-                        'the_vi' => 0, 'tong_tien' => 50000, 'co_cong_no' => false, 'trang_thai' => 'returned'],
+                        'quet_the' => 0, 'qr_tu_dong' => 0, 'tong_tien' => 50000, 'co_cong_no' => false, 'trang_thai' => 'returned'],
                 ],
                 'meta' => ['total_pages' => 1],
             ]),
@@ -123,14 +192,14 @@ class OrderExportTest extends TestCase
 
     /**
      * Hai mặc định lấy theo v2: sắp xếp "vừa đụng tới" (`updated_at`) và tick ĐỦ
-     * mọi phương thức = không lọc. Gửi nguyên bảy phương thức thì API vẫn lọc và
+     * mọi phương thức = không lọc. Gửi nguyên bốn ô thì API vẫn lọc và
      * gạt mất phiếu trả không hoàn tiền của lượt đổi hàng.
      */
     public function test_mac_dinh_giong_v2(): void
     {
         Http::fake(['*' => Http::response(['data' => [], 'meta' => ['total_pages' => 1]])]);
 
-        $tatCa = implode(',', array_keys(\App\Http\Controllers\OrderController::PAYMENT_METHODS));
+        $tatCa = implode(',', array_keys(\App\Http\Controllers\OrderController::HINH_THUC_LOC));
         $this->withSession($this->phienQuanTri())
             ->get(route('admin.orders.index', ['payment_method' => $tatCa]))
             ->assertOk();

@@ -45,6 +45,8 @@ type ProfitBucket struct {
 	Revenue float64 `json:"revenue"`
 	Cost    float64 `json:"cost"`
 	Profit  float64 `json:"profit"`
+	// CardFee — phí quẹt thẻ của các đơn trong mốc; 0 khi đang lọc nhóm / mặt hàng.
+	CardFee float64 `json:"card_fee"`
 }
 
 type ProfitReport struct {
@@ -53,6 +55,9 @@ type ProfitReport struct {
 	GroupBy string      `json:"group_by"` // day | week | month
 	Rows    []ProfitRow `json:"rows"`
 	Totals  ProfitRow   `json:"totals"`
+	// CardFee — phí quẹt thẻ của kỳ, để chân bảng trừ ra lãi sau phí. Bằng 0 khi
+	// đang lọc theo nhóm / mặt hàng: phí tính theo ĐƠN, không chia được cho món.
+	CardFee float64 `json:"card_fee"`
 	// Chart — ĐỦ mốc của cả kỳ, mốc không bán gì vẫn có mặt với 0.
 	Chart []ProfitBucket `json:"chart"`
 }

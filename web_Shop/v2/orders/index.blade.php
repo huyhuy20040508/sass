@@ -12,10 +12,10 @@
      - Cột "Bàn", ô lọc "Bàn" và ô "Sử dụng (Tại bàn / Mang về / Online)" của v2
        KHÔNG có ở đây: shop không có bàn ăn. Chỗ "Sử dụng" thay bằng "Kênh bán"
        (đơn giao hàng / bán tại quầy) — cùng vai trò, nói đơn phát sinh ở đâu.
-     - Bốn cột tiền theo phương thức của v2 (mặt / CK / thẻ / QR) gom còn ba:
-       Tiền mặt (cash, COD) · Chuyển khoản (bank_transfer, SePay) · Thẻ/Ví
-       (VNPay, MoMo, PayOS). API chia sẵn theo phương thức của TỪNG lượt thu,
-       đúng như v2 chia đơn công nợ theo cab_debt_details.
+     - Bốn cột tiền theo phương thức như v2: Tiền mặt · Chuyển khoản · Quẹt thẻ ·
+       QR tự động (SePay, PayOS) — đúng bốn hình thức của quầy. API chia sẵn theo
+       phương thức của TỪNG lượt thu, đúng như v2 chia đơn công nợ theo
+       cab_debt_details.
      - v2 gộp trạng thái đơn và trạng thái tiền vào MỘT dãy; bên này tách hai
        dãy, vì đơn giao hàng còn đi qua sáu bước sau khi đã thu tiền.
      - Bỏ tick sạch một dãy = KHÔNG lọc dãy đó. Bên v2 bỏ tick sạch thì bảng
@@ -32,10 +32,22 @@
     $C = \App\Http\Controllers\OrderController::class;
 
     // Cột đang tắt nằm ở ?hide= — giữ được sau khi đổi trang mà không cần bảng riêng.
-    $cotTat = array_filter(explode(',', (string) request()->query('hide', '')));
+    // VẮNG hẳn tham số = lần đầu vào màn, lấy bộ tắt sẵn; CÓ tham số (kể cả rỗng)
+    // = người dùng đã tự chọn thì nghe theo họ.
+    $cotTat = request()->has('hide')
+        ? array_filter(explode(',', (string) request()->query('hide', '')))
+        : $C::COT_BANG_MAC_DINH_TAT;
     $columns = [];
+    $RONG = $C::COT_BANG_RONG_TOI_THIEU;
+    $tongRong = array_sum($RONG);
+    // Cột "Khác" (mã ngoài bốn hình thức, như đơn VNPay cũ) không nằm trong ô chọn
+    // cột: chỉ bày khi kỳ đang xem có tiền ấy, đúng như Báo cáo bán hàng.
+    $coKhac = (float) ($meta['tong']['khac'] ?? 0) > 0;
+    $rongToiThieu = $RONG['_stt'] + $RONG['_action'];
+    $rongToiThieu += $coKhac ? $RONG['khac'] : 0;
     foreach (array_keys($C::COT_BANG) as $c) {
         $columns['show_'.$c] = in_array($c, $cotTat, true) ? 0 : 1;
+        $rongToiThieu += $columns['show_'.$c] ? ($RONG[$c] ?? 0) : 0;
     }
 
     $stt = ($meta['page'] - 1) * $meta['page_size'];
@@ -68,17 +80,12 @@
            Cùng luật với các màn v2 khác: TIÊU ĐỀ luôn một dòng, ô dữ liệu dài thì
            cắt bằng "…" (chữ đủ vẫn còn ở `title` và trong hộp chi tiết).
 
-           13 cột nên bảng có min-width; màn rộng thì vừa khít, màn hẹp thì
-           `.table-responsive` cho cuộn ngang — không bóp chữ lại. */
+           Sàn bề rộng = tổng px các cột ĐANG BẬT (`--dh-rong`, COT_BANG_RONG_TOI_THIEU):
+           màn rộng thì vừa khít, bật nhiều cột hay màn hẹp thì `.table-responsive`
+           cho cuộn ngang — không bóp chữ lại. */
         table.table-don-hang.none_mobile {
             width: 100%;
-            /* 1040, KHÔNG phải 1320. Sàn cũ lớn hơn cả khung của màn 1536 (1212px)
-               nên bảng tràn ngang ở mọi khổ dưới 1920 — thừa 28px ở 1536, 108px ở
-               1440, 169px ở 1366 — và cột Hành động bị đẩy ra khỏi màn.
-               Phần trăm cột bên dưới nay đo theo sàn của khổ 1366 (khung 1071px):
-               nhãn cột nào cũng đủ chỗ từ 1366 trở lên, nên sàn chỉ còn để chặn
-               lúc màn hẹp hơn thế. */
-            min-width: 1040px;
+            min-width: var(--dh-rong, 1040px);
             table-layout: fixed;
         }
         /* TIÊU ĐỀ luôn một dòng — bẻ đôi một tiêu đề là hàng đầu cao gấp rưỡi và
@@ -107,24 +114,11 @@
         /* Trừ ô mang SỐ: bẻ dòng giữa một con số thì đọc thành hai số khác nhau. */
         table.table-don-hang.none_mobile td.la-so { white-space: nowrap; }
 
-        /* Chia % theo bề rộng THẬT của thứ nằm trong cột, tổng đúng 100.
-           Khách hàng rộng nhất vì ô chứa hai dòng (tên + số điện thoại); ba cột
-           tiền theo phương thức hẹp vì chỉ chứa một con số. */
-        table.table-don-hang.none_mobile th:first-child { width: 4%; }
-        table.table-don-hang.none_mobile th.show_code { width: 9.7%; }
-        table.table-don-hang.none_mobile th.show_customer { width: 14.8%; }
-        table.table-don-hang.none_mobile th.show_time { width: 7.2%; }
-        table.table-don-hang.none_mobile th.show_discount { width: 6.3%; }
-        table.table-don-hang.none_mobile th.show_shipping_fee { width: 6.0%; }
-        table.table-don-hang.none_mobile th.show_cash { width: 7%; }
-        table.table-don-hang.none_mobile th.show_transfer { width: 9.9%; }
-        table.table-don-hang.none_mobile th.show_online { width: 5.2%; }
-        table.table-don-hang.none_mobile th.show_debt { width: 6.3%; }
-        table.table-don-hang.none_mobile th.show_total { width: 7%; }
-        /* Trạng thái rộng nhất trong nhóm cuối: "Thanh toán một phần" là nhãn dài
-           nhất của cả bảng, hẹp hơn là nó bị cắt bằng "…" ngay ở dòng đầu tiên. */
-        table.table-don-hang.none_mobile th.show_status { width: 8.8%; }
-        table.table-don-hang.none_mobile th:last-child { width: 7.8%; }
+        /* Chia % theo bề rộng THẬT của thứ nằm trong cột (COT_BANG_RONG_TOI_THIEU),
+           tổng đúng 100 — một nguồn với sàn `--dh-rong`. */
+        @foreach ($RONG as $cot => $px)
+        table.table-don-hang.none_mobile th{{ ['_stt' => ':first-child', '_action' => ':last-child'][$cot] ?? '.show_'.$cot }} { width: {{ round($px / $tongRong * 100, 3) }}%; }
+        @endforeach
 
         /* ---------- KHUNG LỌC: SIẾT KHOẢNG CÁCH ----------
 
@@ -264,6 +258,7 @@
            chỉ thêm nhịp thở giữa các dòng. */
         #modalOrderDetail .inftt > div { padding: 3px 4px; }
         #modalOrderDetail .dh-nhan-nho { color: #8c8c8c; }
+        #modalOrderDetail .dh-phi-the { margin: 2px 0; padding: 4px 0; border-top: 1px dashed #d5d5d5; border-bottom: 1px dashed #d5d5d5; }
 
         /* Icon "Xuất HĐĐT" cạnh con mắt — cùng màu và cỡ v2 cho fa-file-invoice. */
         td.action .xuat-hddt { color: #7083B6; font-size: 16px; margin-right: 8px; cursor: pointer; }
@@ -402,14 +397,13 @@
                             </div>
                         </div>
 
-                        {{-- 7. PHƯƠNG THỨC THANH TOÁN — v2 bày bốn ô chữ đậm (Tiền mặt /
-                             Chuyển khoản / Thẻ / QR). Shop có bảy phương thức nên bày đủ
-                             bảy, không gom: gom lại thì tick "Chuyển khoản" mà không biết
-                             nó có kéo theo SePay hay không. --}}
+                        {{-- 7. PHƯƠNG THỨC THANH TOÁN — bốn ô chữ đậm như v2 (Tiền mặt /
+                             Chuyển khoản / Quẹt thẻ / QR tự động); ô QR gồm cả SePay lẫn
+                             PayOS — OrderController::HINH_THUC_LOC. --}}
                         <div id="filterPaymentMethod" class="mb-3">
                             <div class="inner-modal-in-mobile">
                                 <span class="title_search d-none d-lg-block">{{ __('message.payment-method') }}</span>
-                                @foreach ($C::PAYMENT_METHODS as $ma => $ten)
+                                @foreach ($C::HINH_THUC_LOC as $ma => $ten)
                                     <div class="form-check">
                                         <input class="form-check-input dh-o-tick" type="checkbox" name="payment_method"
                                             value="{{ $ma }}" id="dh-ptt-{{ $ma }}"
@@ -505,7 +499,7 @@
 
                 <div class="list scrollDiv">
                     <div class="table-responsive table-border-style">
-                        <table class="table-don-hang none_mobile">
+                        <table class="table-don-hang none_mobile" style="--dh-rong: {{ $rongToiThieu }}px">
                             <tr>
                                 <th class="text-center">{{ __('message.stt') }}</th>
                                 <th class="text-left show_code {{ $columns['show_code'] ? '' : 'hide' }}">{{ __('message.order_code') }}</th>
@@ -515,7 +509,11 @@
                                 <th class="text-right show_shipping_fee {{ $columns['show_shipping_fee'] ? '' : 'hide' }}">Phí giao</th>
                                 <th class="text-right show_cash {{ $columns['show_cash'] ? '' : 'hide' }}">Tiền mặt</th>
                                 <th class="text-right show_transfer {{ $columns['show_transfer'] ? '' : 'hide' }}">Chuyển khoản</th>
-                                <th class="text-right show_online {{ $columns['show_online'] ? '' : 'hide' }}">Thẻ/Ví</th>
+                                <th class="text-right show_card {{ $columns['show_card'] ? '' : 'hide' }}">Quẹt thẻ</th>
+                                <th class="text-right show_auto_qr {{ $columns['show_auto_qr'] ? '' : 'hide' }}">QR tự động</th>
+                                @if ($coKhac)
+                                    <th class="text-right show_khac" title="Đơn cũ mang hình thức ngoài bốn hình thức của quầy">Khác</th>
+                                @endif
                                 <th class="text-center show_debt {{ $columns['show_debt'] ? '' : 'hide' }}">{{ __('message.debt') }}</th>
                                 <th class="text-right show_total {{ $columns['show_total'] ? '' : 'hide' }}">{{ __('message.total_money') }}</th>
                                 <th class="text-left show_status {{ $columns['show_status'] ? '' : 'hide' }}">{{ __('message.status') }}</th>
@@ -554,7 +552,11 @@
                                          lượt thu — bảng chỉ in ra. --}}
                                     <td class="la-so text-right show_cash {{ $columns['show_cash'] ? '' : 'hide' }}">{{ $tien($o['tien_mat'] ?? 0) }}</td>
                                     <td class="la-so text-right show_transfer {{ $columns['show_transfer'] ? '' : 'hide' }}">{{ $tien($o['chuyen_khoan'] ?? 0) }}</td>
-                                    <td class="la-so text-right show_online {{ $columns['show_online'] ? '' : 'hide' }}">{{ $tien($o['the_vi'] ?? 0) }}</td>
+                                    <td class="la-so text-right show_card {{ $columns['show_card'] ? '' : 'hide' }}">{{ $tien($o['quet_the'] ?? 0) }}</td>
+                                    <td class="la-so text-right show_auto_qr {{ $columns['show_auto_qr'] ? '' : 'hide' }}">{{ $tien($o['qr_tu_dong'] ?? 0) }}</td>
+                                    @if ($coKhac)
+                                        <td class="la-so text-right show_khac">{{ $tien($o['khac'] ?? 0) }}</td>
+                                    @endif
                                     {{-- "Có" như `have_debt` của v2: đơn đã thu MỘT PHẦN và còn
                                          thiếu. Đơn chưa thu đồng nào (COD đang giao) không phải nợ. --}}
                                     <td class="la-so text-center show_debt {{ $columns['show_debt'] ? '' : 'hide' }}">
@@ -586,7 +588,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="13" class="text-center py-4">
+                                    <td colspan="{{ count(array_filter($columns)) + 2 + ($coKhac ? 1 : 0) }}" class="text-center py-4">
                                         {{ $coLoc
                                             ? 'Không có đơn hàng nào khớp bộ lọc đang bật.'
                                             : 'Chưa có đơn hàng nào. Đơn sẽ hiện ở đây khi khách đặt trên website hoặc khi thu ngân bán tại quầy.' }}
@@ -620,7 +622,11 @@
                                         <td class="la-so text-right show_shipping_fee {{ $columns['show_shipping_fee'] ? '' : 'hide' }}">{{ $tien($cong($ds, 'phi_giao')) }}</td>
                                         <td class="la-so text-right show_cash {{ $columns['show_cash'] ? '' : 'hide' }}">{{ $tien($cong($ds, 'tien_mat')) }}</td>
                                         <td class="la-so text-right show_transfer {{ $columns['show_transfer'] ? '' : 'hide' }}">{{ $tien($cong($ds, 'chuyen_khoan')) }}</td>
-                                        <td class="la-so text-right show_online {{ $columns['show_online'] ? '' : 'hide' }}">{{ $tien($cong($ds, 'the_vi')) }}</td>
+                                        <td class="la-so text-right show_card {{ $columns['show_card'] ? '' : 'hide' }}">{{ $tien($cong($ds, 'quet_the')) }}</td>
+                                        <td class="la-so text-right show_auto_qr {{ $columns['show_auto_qr'] ? '' : 'hide' }}">{{ $tien($cong($ds, 'qr_tu_dong')) }}</td>
+                                        @if ($coKhac)
+                                            <td class="la-so text-right show_khac">{{ $tien($cong($ds, 'khac')) }}</td>
+                                        @endif
                                         <td class="show_debt {{ $columns['show_debt'] ? '' : 'hide' }}"></td>
                                         <td class="la-so text-right show_total {{ $columns['show_total'] ? '' : 'hide' }}">{{ $tien($cong($ds, 'tong_tien')) }}</td>
                                         <td class="show_status {{ $columns['show_status'] ? '' : 'hide' }}"></td>
@@ -783,6 +789,18 @@
                             <div class="d-flex justify-content-between">
                                 <span id="dh-v-method"></span><span id="dh-v-paid"></span>
                             </div>
+                            {{-- Phí thẻ là chi phí nội bộ: không cộng vào tiền khách trả, không in ra phiếu. --}}
+                            <div id="dh-v-phi-wrap" class="dh-phi-the" style="display: none">
+                                <div class="d-flex justify-content-between dh-nhan-nho"><span id="dh-v-phi-may"></span></div>
+                                <div class="d-flex justify-content-between text-danger" title="{{ \App\Http\Controllers\SalesReportController::GOI_Y_PHI_THE }}">
+                                    <span id="dh-v-phi-nhan">Phí thẻ cửa hàng chịu</span><span id="dh-v-phi"></span>
+                                </div>
+                                <div class="d-flex justify-content-between" id="dh-v-thuc-nhan-dong">
+                                    <strong>Thực nhận</strong><strong id="dh-v-thuc-nhan"></strong>
+                                </div>
+                                <div class="dh-nhan-nho text-danger" id="dh-v-phi-huy"></div>
+                                <div class="dh-nhan-nho" id="dh-v-phi-phieu"></div>
+                            </div>
                             {{-- Các lần đã thu, cũ trước mới sau. Chỉ hiện khi đơn thu
                                  làm nhiều lần — đơn thu một lần thì dòng "phương thức |
                                  số tiền" ngay trên đã nói đủ. --}}
@@ -905,7 +923,12 @@
                     <input type="text" class="form-control mb-2" id="tt-so-tien" inputmode="numeric" autocomplete="off">
                     <label class="form-label mb-1">{{ __('message.payment-method-short') }}</label>
                     <select class="form-control form-select mb-2" id="tt-phuong-thuc">
-                        @foreach ($C::PAYMENT_METHODS as $ma => $ten)
+                        {{-- Ô "giữ nguyên" cho đơn có hình thức NGOÀI ba lựa chọn thu tay
+                             (QR tự động, hay đơn mã cũ vnpay / momo). Gửi lên rỗng là
+                             đúng nhánh API tự lấp bằng hình thức của đơn; chữ trong ô
+                             do JS điền tên hình thức thật lúc mở hộp. --}}
+                        <option value="">Giữ nguyên hình thức của đơn</option>
+                        @foreach ($C::HINH_THUC_THU_TAY as $ma => $ten)
                             <option value="{{ $ma }}">{{ $ten }}</option>
                         @endforeach
                     </select>
@@ -1006,6 +1029,7 @@
 @push('scripts')
     <script>
         const URL_DH = @json(url('/admin/orders'));
+        const URL_THU_CHI = @json(route('admin.cashbook.index'));
         const CHU_SO = (o) => String(o == null ? '' : o).replace(/[^0-9]/g, '');
 
         const DH_STATUSES = @json(\App\Http\Controllers\OrderController::STATUSES);
@@ -1164,13 +1188,48 @@
 
             $('#dh-v-luotthu').html(list.map(function (p) {
                 const luc = p.paid_at ? moment(p.paid_at).format('DD-MM-YYYY') : '';
-                const ten = DH_PAY_METHODS[p.payment_method] || p.payment_method || '';
+                const ten = p.payment_method ? (DH_PAY_METHODS[p.payment_method] || 'Khác') : '';
 
                 return '<div class="ps-2 d-flex justify-content-between">'
                     + '<span class="text-secondary">' + thoat(luc + (ten ? ' · ' + ten : '')) + '</span>'
                     + '<span class="text-secondary">' + tienVN(p.amount) + 'đ</span>'
                     + '</div>';
             }).join(''));
+        }
+
+        function vePhiThe(o) {
+            const p = o.phi_the;
+            $('#dh-v-phi-wrap').toggle(Boolean(p));
+            if (!p) return;
+
+            const tong = Number(o.total_amount || 0), phi = Number(p.card_fee || 0);
+            const tyLe = tong > 0 ? Math.round(phi * 10000 / tong) / 100 : 0;
+            $('#dh-v-phi-may').text(p.device_name ? 'Máy: ' + p.device_name : '').parent().toggle(Boolean(p.device_name));
+            $('#dh-v-phi-nhan').text('Phí thẻ cửa hàng chịu' + (tyLe ? ' (' + String(tyLe).replace('.', ',') + '%)' : ''));
+            $('#dh-v-phi').text('-' + tienVN(phi) + 'đ');
+
+            // Đơn huỷ / trả hàng: GIỮ dòng phí nhưng bỏ "Thực nhận".
+            //
+            // Phí thẻ đã thu thật (phiếu chi vẫn nằm trong sổ quỹ) nên giấu hẳn khối
+            // này là giấu một khoản có thật. Nhưng "Thực nhận" là số tiền đơn này
+            // mang về, mà đơn đã huỷ thì không mang về đồng nào — Báo cáo bán hàng
+            // cũng loại hẳn đơn huỷ/trả ra (deadStatuses bên API), nên để nguyên con
+            // số ấy là hộp đơn nói một đằng, báo cáo một nẻo.
+            const chet = o.status === 'cancelled' || o.status === 'returned';
+            // toggleClass('d-none') chứ không .toggle(): .d-flex của Bootstrap là
+            // `display: flex !important` nên đè luôn style nội tuyến mà jQuery đặt —
+            // dòng vẫn hiện như thường.
+            $('#dh-v-thuc-nhan-dong').toggleClass('d-none', chet);
+            $('#dh-v-thuc-nhan').text(tienVN(tong - phi) + 'đ');
+            $('#dh-v-phi-huy').text(chet
+                ? (DH_STATUSES[o.status] || 'Đơn không còn hiệu lực') + ' — báo cáo bán hàng không tính khoản phí này.'
+                : '');
+
+            const ngay = o.created_at ? moment(o.created_at).format('YYYY-MM-DD') : '';
+            const loc = new URLSearchParams({ keyword: p.expense_code || o.order_code || '', source: 'card_fee', from_date: ngay, to_date: ngay });
+            $('#dh-v-phi-phieu').html(p.expense_code
+                ? 'Đã ghi phiếu chi <a href="' + URL_THU_CHI + '?' + loc + '" target="_blank" rel="noopener">' + thoat(p.expense_code) + '</a>'
+                : '');
         }
 
         /** Bày/giấu một dòng của khối thanh toán theo việc nó có giá trị hay không. */
@@ -1216,7 +1275,7 @@
 
             // v2 in "tên phương thức | số tiền đã trả theo phương thức đó". Đơn của
             // shop chỉ mang MỘT phương thức, nên chưa thu thì số ấy là 0.
-            $('#dh-v-method').text(DH_PAY_METHODS[o.payment_method] || o.payment_method || '—');
+            $('#dh-v-method').text(o.payment_method ? (DH_PAY_METHODS[o.payment_method] || 'Khác') : '—');
             $('#dh-v-paid').text(tienVN(o.da_thu) + 'đ');
 
             // Chỗ v2 để "Hạn nợ / Ghi chú" khi đơn còn nợ. Hai con số dưới đây do
@@ -1227,6 +1286,7 @@
             $('#dh-v-debt').text(tienVN(o.con_no) + 'đ');
 
             veLuotThu(o.luot_thu);
+            vePhiThe(o);
 
             // Mỗi nút chỉ hiện khi bấm vào là làm được — bày nút rồi nhận lỗi từ
             // API là bẫy người dùng.
@@ -1253,7 +1313,26 @@
             // Điền sẵn ĐÚNG phần còn nợ: chín trên mười lần khách trả nốt, và sửa
             // lại được khi họ trả góp.
             $('#tt-so-tien').val(Number(conNo).toLocaleString('vi-VN'));
-            $('#tt-phuong-thuc').val($chiTiet.data('phuong-thuc') || 'cash');
+            // Hình thức của đơn có thể KHÔNG nằm trong ba lựa chọn thu tay — đơn QR
+            // tự động, hay đơn mã cũ vnpay / momo. Khi ấy .val() không khớp option
+            // nào và ô thành TRỐNG TRƠN: bấm Lưu vẫn ghi được (API lấp bằng hình
+            // thức của đơn) nhưng người thu không hề biết tiền sẽ vào cột nào.
+            //
+            // Không tự chọn đại một hình thức khác: làm vậy là ĐỔI cột tiền của
+            // lượt thu mà không ai yêu cầu. Chọn ô "giữ nguyên" và nói rõ tên hình
+            // thức ngay trong ô — xem <option value=""> ở khối hộp.
+            const ptDon = String($chiTiet.data('phuong-thuc') || '');
+            const $pt = $('#tt-phuong-thuc');
+            const thuTay = $pt.find('option').map((i, o) => o.value).get().filter(Boolean);
+            if (thuTay.includes(ptDon)) {
+                $pt.val(ptDon);
+            } else {
+                // Mã lạ (đơn cũ vnpay / momo) thì DH_PAY_METHODS không có tên —
+                // nói "Giữ nguyên: Khác" đọc ra vô nghĩa, nên lùi về câu chung.
+                const tenPt = DH_PAY_METHODS[ptDon];
+                $pt.find('option[value=""]').text(tenPt ? 'Giữ nguyên: ' + tenPt : 'Giữ nguyên hình thức của đơn');
+                $pt.val('');
+            }
             $('#tt-ghi-chu').val('');
             $('#tt-luu').prop('disabled', false);
 

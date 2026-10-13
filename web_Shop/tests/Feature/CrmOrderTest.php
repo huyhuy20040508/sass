@@ -48,12 +48,15 @@ class CrmOrderTest extends TestCase
         $this->assertStringNotContainsString('text-overflow', $khoi);
         $this->assertStringNotContainsString('line-clamp', $khoi);
 
+        // Đếm theo HẰNG, không ghi số cứng: thêm/bớt một cột là bài này tự theo,
+        // thay vì đỏ vì đếm lệch rồi người sửa chỉ việc đổi con số cho xanh.
+        $soCot = count(\App\Http\Controllers\OrderController::COT_CRM_RONG_TOI_THIEU);
         preg_match_all('/none_mobile th[^{]*\{ width: ([0-9.]+)%/', $khoi, $m);
-        $this->assertCount(14, $m[1], 'phải khai đủ 14 cột');
+        $this->assertCount($soCot, $m[1], 'phải khai đủ '.$soCot.' cột');
         $this->assertEqualsWithDelta(100.0, array_sum(array_map('floatval', $m[1])), 0.01);
     }
 
-    /** Ba cột tách nhỏ tắt sẵn, sàn bề rộng tính theo đúng cột đang bật. */
+    /** Bốn cột tách nhỏ tắt sẵn, sàn bề rộng tính theo đúng cột đang bật. */
     public function test_cot_tat_san_va_san_rong_theo_cot_dang_bat(): void
     {
         Http::fake([
@@ -70,7 +73,9 @@ class CrmOrderTest extends TestCase
         }
         $this->assertMatchesRegularExpression('/<th class="[^"]*show_total\s*"/', $html, 'Tổng tiền phải bật sẵn');
 
-        $rongMacDinh = array_sum($C::COT_CRM_RONG_TOI_THIEU)
+        // "Khác" chỉ bày khi kỳ có tiền mã cũ — kỳ rỗng ở đây thì không tính vào sàn.
+        $tatCa = array_sum($C::COT_CRM_RONG_TOI_THIEU) - $C::COT_CRM_RONG_TOI_THIEU['khac'];
+        $rongMacDinh = $tatCa
             - array_sum(array_map(fn ($c) => $C::COT_CRM_RONG_TOI_THIEU[$c], $C::COT_CRM_MAC_DINH_TAT));
         $this->assertStringContainsString('--dh-rong: '.$rongMacDinh.'px', $html);
         // Vừa khung thẻ khổ 1440 (1132px) ở cỡ chữ đầy đủ.
@@ -79,7 +84,87 @@ class CrmOrderTest extends TestCase
         // `hide=` rỗng = bật hết, không được quay về bộ tắt sẵn.
         $html = $this->withSession($this->phienQuanTri())->get($url.'?hide=')->assertOk()->getContent();
         $this->assertStringNotContainsString(' hide"', $html);
-        $this->assertStringContainsString('--dh-rong: '.array_sum($C::COT_CRM_RONG_TOI_THIEU).'px', $html);
+        $this->assertStringContainsString('--dh-rong: '.$tatCa.'px', $html);
+    }
+
+    /**
+     * Kỳ có đơn mã cũ (VNPay…) thì bày cột "Khác" — cùng cách xếp với báo cáo bán
+     * hàng — sàn bề rộng tính cả cột ấy, và "Đã thu" cộng cả khoản đó.
+     */
+    public function test_cot_khac_chi_bay_khi_co_tien_ma_cu(): void
+    {
+        $don = ['loai' => 'don', 'id' => 41, 'ma' => 'DH041', 'kenh' => 'web', 'khach_hang' => 'Khách cũ',
+            'created_at' => '2026-10-12T10:00:00+07:00', 'tien_mat' => 0, 'chuyen_khoan' => 0, 'quet_the' => 0,
+            'qr_tu_dong' => 0, 'khac' => 24200000, 'tong_tien' => 24200000, 'co_cong_no' => false, 'trang_thai' => 'paid'];
+        Http::fake([
+            '*/admin/orders/so-don*' => Http::response(['data' => [$don], 'meta' => ['page' => 1, 'page_size' => 20, 'total' => 1,
+                'total_pages' => 1, 'tong' => ['khac' => 24200000, 'tong_tien' => 24200000]]]),
+            '*' => Http::response(['data' => []]),
+        ]);
+
+        $C = \App\Http\Controllers\OrderController::class;
+        $html = $this->withSession($this->phienQuanTri())->get(route('admin.crm.orders.index'))->assertOk()->getContent();
+        $this->assertMatchesRegularExpression('/<th class="[^"]*show_khac/', $html);
+        $this->assertMatchesRegularExpression('/show_khac">24\.200\.000</', $html);
+        $this->assertMatchesRegularExpression('/show_paid\s*">24\.200\.000</', $html, '"Đã thu" phải cộng cả tiền "Khác"');
+        $rong = array_sum($C::COT_CRM_RONG_TOI_THIEU)
+            - array_sum(array_map(fn ($c) => $C::COT_CRM_RONG_TOI_THIEU[$c], $C::COT_CRM_MAC_DINH_TAT));
+        $this->assertStringContainsString('--dh-rong: '.$rong.'px', $html);
+
+        $html = $this->withSession($this->phienQuanTri())->get(route('admin.orders.index'))->assertOk()->getContent();
+        $this->assertMatchesRegularExpression('/show_khac">24\.200\.000</', $html);
+
+        $csv = $this->withSession($this->phienQuanTri())->get(route('admin.orders.export'))->assertOk()->streamedContent();
+        $this->assertStringContainsString('"QR tự động",Khác,', $csv);
+        $this->assertStringContainsString(',0,24200000,-,24200000,', $csv);
+    }
+
+    /**
+     * Đơn thu bằng hình thức ĐANG TẮT không được đọc ra như chưa thu.
+     *
+     * CRM tắt sẵn cả bốn cột hình thức, nên đơn quẹt thẻ DH000043 (thu đủ
+     * 24.200.000) hiện "Tiền mặt 0 · Chuyển khoản 0 · Công nợ —" — ba con số
+     * đang bày đều bằng 0, đọc như đơn chưa thu đồng nào.
+     *
+     * Bày đủ bốn cột thì hết nói dối nhưng bảng tràn khung ở 1280 / 1366 / 1536
+     * (đo thật: thừa 75 / 3 / 66px). Nên thay bằng MỘT cột "Đã thu" gộp — vừa
+     * đúng vừa hẹp hơn hiện tại.
+     */
+    public function test_don_thu_bang_hinh_thuc_dang_tat_van_hien_so_da_thu(): void
+    {
+        Http::fake([
+            '*/admin/orders*' => Http::response([
+                'data' => [[
+                    'id' => 900037, 'order_code' => 'DH000043', 'channel' => 'pos',
+                    'created_at' => '2026-10-12T14:27:00+07:00', 'status' => 'completed',
+                    'payment_status' => 'paid', 'payment_method' => 'card',
+                    'total_amount' => 24200000, 'discount_amount' => 0, 'shipping_fee' => 0,
+                    // Thu TRỌN bằng quẹt thẻ — cột hình thức tắt sẵn.
+                    'tien_mat' => 0, 'chuyen_khoan' => 0, 'quet_the' => 24200000, 'qr_tu_dong' => 0,
+                ]],
+                'meta' => ['page' => 1, 'page_size' => 20, 'total' => 1, 'total_pages' => 1],
+            ]),
+            '*' => Http::response(['data' => []]),
+        ]);
+
+        $C = \App\Http\Controllers\OrderController::class;
+        $html = $this->withSession($this->phienQuanTri())
+            ->get(route('admin.crm.orders.index'))->assertOk()->getContent();
+
+        // Cột gộp bật sẵn, bốn cột hình thức tắt sẵn.
+        $this->assertMatchesRegularExpression('/<th class="[^"]*show_paid\s*"/', $html, 'cột "Đã thu" phải bật sẵn');
+        foreach (['cash', 'transfer', 'card', 'auto_qr'] as $cot) {
+            $this->assertContains($cot, $C::COT_CRM_MAC_DINH_TAT, "cột $cot phải tắt sẵn ở CRM");
+        }
+
+        // Và con số thật sự hiện ra, không phải 0.
+        $this->assertMatchesRegularExpression('/show_paid\s*">24\.200\.000</', $html,
+            'đơn thu đủ bằng quẹt thẻ mà cột "Đã thu" không ra số');
+
+        // Ba hằng phải khai cùng một bộ cột, lệch nhau là bảng tính sai bề rộng.
+        foreach (array_keys($C::COT_CRM) as $cot) {
+            $this->assertArrayHasKey($cot, $C::COT_CRM_RONG_TOI_THIEU, "cột $cot thiếu bề rộng tối thiểu");
+        }
     }
 
     /**
@@ -135,11 +220,13 @@ class CrmOrderTest extends TestCase
         }
         $this->assertStringNotContainsString('value="100"', $html, '100 dòng/trang không thuộc bộ của v2');
 
-        // 2 cột cố định + 12 cột bật/tắt − 3 cột tắt sẵn = 11.
-        $this->assertStringContainsString('colspan="11"', $html);
+        // colspan = 2 cột cố định (STT, Hành động) + số cột bật/tắt đang BẬT.
+        $C = \App\Http\Controllers\OrderController::class;
+        $batSan = count($C::COT_CRM) - count($C::COT_CRM_MAC_DINH_TAT);
+        $this->assertStringContainsString('colspan="'.(2 + $batSan).'"', $html);
 
         $html = $this->withSession($this->phienQuanTri())->get($url.'?hide=')->assertOk()->getContent();
-        $this->assertStringContainsString('colspan="14"', $html);
+        $this->assertStringContainsString('colspan="'.(2 + count($C::COT_CRM)).'"', $html);
     }
 
     public function test_bang_mo_dau_bang_hai_cot_khach(): void

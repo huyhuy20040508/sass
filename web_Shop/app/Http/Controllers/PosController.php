@@ -23,12 +23,25 @@ class PosController extends Controller
     public const TITLE = 'Bán hàng';
 
     /**
-     * Chỉ hai hình thức, và đó là chủ ý: đơn quầy ghi "đã thanh toán" ngay lúc
-     * tạo, nên chỉ nhận thứ tiền ĐÃ về trước khi khách rời quầy.
+     * Hình thức API nhận ở quầy. Bày ra hình thức nào là do chi nhánh bật gì ở
+     * Cài đặt → Phương thức thanh toán (xem phuongThuc()). sepay / payos là QR tự
+     * động: đơn tạo ra CHỜ TIỀN, cổng báo về mới hoàn tất.
      */
     public const PAYMENT_METHODS = [
         'cash' => 'Tiền mặt',
         'bank_transfer' => 'Chuyển khoản',
+        'card' => 'Quẹt thẻ',
+        'sepay' => 'QR SePay',
+        'payos' => 'QR PayOS',
+        'mpos_qr' => 'QR mPOS',
+    ];
+
+    /** Bốn ô hình thức của hộp Thanh toán, theo thứ tự của v2. */
+    public const O_HINH_THUC = [
+        1 => ['ma' => 'cash', 'ten' => 'Tiền mặt', 'icon' => 'fa-money-bill-wave'],
+        4 => ['ma' => 'bank_transfer', 'ten' => 'Chuyển khoản', 'icon' => 'fa-building-columns'],
+        5 => ['ma' => 'card', 'ten' => 'Quẹt thẻ', 'icon' => 'fa-credit-card'],
+        6 => ['ma' => 'auto_qr', 'ten' => 'QR tự động', 'icon' => 'fa-qrcode'],
     ];
 
     /** Mệnh giá bấm cộng dồn vào ô khách đưa — bấm thì không gõ thừa số 0 được. */
@@ -42,7 +55,138 @@ class PosController extends Controller
             'hanMucGiam' => $this->hanMucGiam(),
             'nhomHang' => $this->nhomHang(),
             'thanhVien' => $this->thanhVien(),
+            'nganHang' => $this->nganHang(),
+            'phuongThuc' => $this->phuongThuc(),
         ]);
+    }
+
+    /**
+     * Hình thức chi nhánh đang bật + tài khoản / máy / cổng của từng hình thức.
+     *
+     * API hỏng thì lùi về hai hình thức quầy vẫn luôn nhận (tiền mặt, chuyển khoản
+     * tay) — đứng quầy mà không thu được tiền mặt chỉ vì một lượt đọc cấu hình
+     * trục trặc là cái giá không đáng.
+     */
+    protected function phuongThuc(): array
+    {
+        try {
+            $res = $this->api->phuongThucQuay();
+            if ($res->successful()) {
+                $o = [];
+                foreach ((array) ($res->json('data') ?? []) as $pt) {
+                    $loai = (int) ($pt['type'] ?? 0);
+                    if (! isset(self::O_HINH_THUC[$loai])) {
+                        continue;
+                    }
+                    $o[] = self::O_HINH_THUC[$loai] + [
+                        'md' => ! empty($pt['is_default']),
+                        'ct' => array_map(fn ($d) => [
+                            'id' => (int) ($d['id'] ?? 0),
+                            'loai' => (string) ($d['detail_type'] ?? ''),
+                            'md' => ! empty($d['is_default']),
+                            'nh' => (string) ($d['bank_name'] ?? ''),
+                            'so' => (string) ($d['bank_account'] ?? ''),
+                            'chu' => (string) ($d['bank_account_name'] ?? ''),
+                            'suaTien' => ! empty($d['edit_amount']),
+                            'may' => (string) ($d['device_name'] ?? ''),
+                            'phi' => (float) (($d['card_fee'] ?? [])['card_fee_physical'] ?? 0),
+                        ], array_values(array_filter((array) ($pt['details'] ?? []),
+                            // MoMo chưa nối cổng: không chào ra ở quầy (API cũng không nhận).
+                            fn ($d) => ($d['detail_type'] ?? '') !== 'momo'))),
+                    ];
+                    if ($loai === 6 && end($o)['ct'] === []) {
+                        array_pop($o);
+                    }
+                }
+                if ($o !== []) {
+                    return $o;
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Load POS payment methods failed', ['msg' => $e->getMessage()]);
+        }
+
+        return [self::O_HINH_THUC[1] + ['md' => true, 'ct' => []], self::O_HINH_THUC[4] + ['md' => false, 'ct' => []]];
+    }
+
+    /** Màn quầy hỏi tiền của đơn QR tự động đã về chưa. */
+    public function qrTrangThai(string $code)
+    {
+        return $this->jsonTuApi(fn () => $this->api->posQrTrangThai($code), 'Không hỏi được trạng thái thanh toán.');
+    }
+
+    /**
+     * Khách đổi ý khi mã QR đang chờ: thu bằng tiền mặt / chuyển khoản / quẹt thẻ
+     * ngay trên chính đơn đó — giữ mã đơn, không lập đơn huỷ rồi đơn mới.
+     */
+    public function doiHinhThuc(Request $request, int $id)
+    {
+        $data = $request->validate([
+            'payment_method' => 'required|in:cash,bank_transfer,card',
+            'payment_detail_id' => 'nullable|integer|min:1',
+            'amount_tendered' => 'nullable|numeric|min:0',
+        ]);
+        $payload = ['payment_method' => $data['payment_method']];
+        if (! empty($data['payment_detail_id']) && $data['payment_method'] !== 'cash') {
+            $payload['payment_detail_id'] = (int) $data['payment_detail_id'];
+        }
+        if ($data['payment_method'] === 'cash' && isset($data['amount_tendered'])) {
+            $payload['amount_tendered'] = (float) $data['amount_tendered'];
+        }
+
+        return $this->jsonTuApi(fn () => $this->api->posDoiHinhThuc($id, $payload), 'Không đổi được hình thức thanh toán.');
+    }
+
+    /** Thu ngân huỷ mã QR tự động — đơn huỷ, hàng về kho. */
+    public function huyQr(int $id)
+    {
+        return $this->jsonTuApi(fn () => $this->api->posHuyQr($id), 'Không huỷ được mã QR.');
+    }
+
+    /**
+     * Tài khoản nhận chuyển khoản ở quầy — cùng cấu hình với thanh toán online
+     * (Cài đặt → Thanh toán), để khách quét QR ở quầy hay trên web đều vào một tài khoản.
+     */
+    protected function nganHang(): array
+    {
+        $anh = $this->api->settingString('bank_qr_image');
+        $anh = $anh !== '' && ! preg_match('#^https?://#i', $anh) ? asset(ltrim($anh, '/')) : $anh;
+
+        // Tài khoản mặc định của CHI NHÁNH đang đứng quầy (Cài đặt → Phương thức
+        // thanh toán). Chi nhánh tắt Chuyển khoản thì trả rỗng — quầy báo chưa có
+        // tài khoản thay vì in QR của một tài khoản chủ tiệm đã tắt.
+        try {
+            $res = $this->api->phuongThucQuay();
+            if ($res->successful()) {
+                foreach ((array) ($res->json('data') ?? []) as $pt) {
+                    if ((int) ($pt['type'] ?? 0) !== 4) {
+                        continue;
+                    }
+                    foreach ((array) ($pt['details'] ?? []) as $tk) {
+                        if (! empty($tk['is_default'])) {
+                            return [
+                                'ten' => (string) ($tk['bank_name'] ?? ''),
+                                'so' => (string) ($tk['bank_account'] ?? ''),
+                                'chu' => (string) ($tk['bank_account_name'] ?? ''),
+                                'anh' => $anh,
+                            ];
+                        }
+                    }
+                }
+
+                return ['ten' => '', 'so' => '', 'chu' => '', 'anh' => ''];
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Load POS payment methods failed', ['msg' => $e->getMessage()]);
+        }
+
+        // API chưa có sổ phương thức (bản cũ) hoặc trục trặc: lùi về trang Cài đặt cũ.
+        return [
+            'ten' => $this->api->settingString('bank_name'),
+            'so' => $this->api->settingString('bank_account_number'),
+            'chu' => $this->api->settingString('bank_account_name'),
+            'anh' => $anh,
+        ];
     }
 
     /**
@@ -86,6 +230,8 @@ class PosController extends Controller
             'customer_name' => 'nullable|string|max:100',
             'customer_phone' => 'nullable|string|max:20',
             'payment_method' => 'required|in:'.implode(',', array_keys(self::PAYMENT_METHODS)),
+            // Tài khoản / máy / cổng đã chọn — API kiểm nó còn bật ở chi nhánh này.
+            'payment_detail_id' => 'nullable|integer|min:1',
             'amount_tendered' => 'nullable|numeric|min:0',
             'voucher_code' => 'nullable|string|max:50',
             'note' => 'nullable|string|max:500',
@@ -135,6 +281,9 @@ class PosController extends Controller
         ];
         if (! empty($data['user_id'])) {
             $payload['user_id'] = (int) $data['user_id'];
+        }
+        if (! empty($data['payment_detail_id']) && $data['payment_method'] !== 'cash') {
+            $payload['payment_detail_id'] = (int) $data['payment_detail_id'];
         }
         // Tiền khách đưa chỉ có nghĩa với tiền mặt.
         if ($data['payment_method'] === 'cash' && isset($data['amount_tendered'])) {
@@ -276,12 +425,19 @@ class PosController extends Controller
             'phone' => 'nullable|string|max:20',
             'email' => 'nullable|email|max:191',
             'address' => 'nullable|string|max:255',
+            'customer_type' => 'nullable|in:0,1',
+            'tax_code' => 'nullable|string|max:20',
         ], [
             'full_name.required' => 'Nhập tên khách.',
             'email.email' => 'Email chưa đúng dạng.',
         ]);
 
         $payload = array_filter(array_map(fn ($v) => trim((string) $v), $data), fn ($v) => $v !== '');
+        $payload['customer_type'] = (int) ($payload['customer_type'] ?? 0);
+        // MST chỉ có nghĩa với doanh nghiệp: hồ sơ cá nhân mang MST là hoá đơn ghi sai người.
+        if ($payload['customer_type'] !== 1) {
+            unset($payload['tax_code']);
+        }
 
         return $this->jsonKemCau(fn () => $this->api->posTaoKhach($payload), 'Không lưu được khách hàng.', fn ($d) => [
             'customer' => $this->khachGon((array) ($d['customer'] ?? [])),
@@ -338,6 +494,8 @@ class PosController extends Controller
     {
         return [
             'id' => (int) ($c['id'] ?? 0),
+            'code' => (string) ($c['customer_code'] ?? ''),
+            'customer_type' => (int) ($c['customer_type'] ?? 0),
             'name' => (string) ($c['full_name'] ?? ''),
             'phone' => (string) ($c['phone'] ?? ''),
             'email' => (string) ($c['email'] ?? ''),
@@ -373,7 +531,7 @@ class PosController extends Controller
             'tenCuaHang' => $this->api->settingString('site_name', config('app.name')),
             'diaChi' => $this->api->settingString('store_address'),
             'dienThoai' => $this->api->settingString('contact_phone'),
-            'khoGiay' => request()->query('warehouse') === '58' ? '58' : '80',
+            'khoGiay' => request()->query('paper') === '58' ? '58' : '80',
         ]);
     }
 

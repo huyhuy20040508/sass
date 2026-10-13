@@ -152,7 +152,7 @@ class DashboardController extends Controller
             'theoThu' => $this->theoThu($donHang),
             'banChay' => $this->banChay($this->data($nen['sanPham'] ?? null, 'product report'), $f),
             'khuyenMai' => $km,
-            'theoThanhToan' => $this->catLat($doanhThu['by_payment_method'] ?? [], $f['top_payment']),
+            'theoThanhToan' => $this->catLat($this->gopHinhThuc($doanhThu['by_payment_method'] ?? []), $f['top_payment']),
             'theoNguon' => $this->catLat($donHang['by_source'] ?? [], $f['top_origin']),
             'theoChiNhanh' => $this->catLat($doanhThu['by_shop'] ?? [], $f['top_branch'], 'label'),
             'capNhatLuc' => now()->format('H:i'),
@@ -743,6 +743,24 @@ class DashboardController extends Controller
      * @param  array<int, array<string, mixed>>  $lat
      * @return array<int, array<string, mixed>>
      */
+    /**
+     * Gộp lát cắt theo hình thức về đúng bốn hình thức của quầy: SePay và PayOS là
+     * hai cổng của cùng "QR tự động", để riêng thì vòng tròn có hai miếng cùng tên.
+     * Khoá của dòng gộp là chính nhãn.
+     */
+    protected function gopHinhThuc(array $lat): array
+    {
+        $gop = [];
+        foreach ($lat as $r) {
+            $ten = OrderController::tenHinhThuc((string) ($r['key'] ?? ''));
+            $gop[$ten] ??= ['key' => $ten, 'revenue' => 0.0, 'orders' => 0];
+            $gop[$ten]['revenue'] += (float) ($r['revenue'] ?? 0);
+            $gop[$ten]['orders'] += (int) ($r['orders'] ?? 0);
+        }
+
+        return array_values($gop);
+    }
+
     protected function catLat(array $lat, int $n, string $nhan = 'key'): array
     {
         $ds = array_values(array_filter($lat, fn ($r) => (float) ($r['revenue'] ?? 0) != 0.0 || (int) ($r['orders'] ?? 0) > 0));

@@ -11,6 +11,7 @@ import (
 	"sass-api/internal/domain"
 	"sass-api/internal/service"
 	"sass-api/pkg/logger"
+	"sass-api/pkg/nextpay"
 	"sass-api/pkg/payos"
 	"sass-api/pkg/response"
 	"sass-api/pkg/sepay"
@@ -120,6 +121,68 @@ func (h *PaymentHandler) SePayWebhook(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 
+// PayOSWebhookTheoMa / SePayWebhookTheoMa — webhook tới URL RIÊNG của một cổng
+// do chủ tiệm tự khai (Cài đặt → Phương thức thanh toán). Phần cuối URL là mã
+// ngẫu nhiên của cổng: nó cho biết tiền thuộc cửa hàng nào, và gói dữ liệu được
+// kiểm bằng khoá của CHÍNH cổng đó chứ không phải khoá chung trong .env.
+//
+//	@Summary	Webhook PayOS tới URL riêng của một cửa hàng (công khai)
+//	@Tags		Payments
+//	@Param		ma	path	string	true	"Mã webhook của cổng"
+//	@Router		/payments/payos/webhook/{ma} [post]
+func (h *PaymentHandler) PayOSWebhookTheoMa(c *gin.Context) {
+	raw, err := io.ReadAll(io.LimitReader(c.Request.Body, 1<<20))
+	if err != nil {
+		response.Error(c, http.StatusBadRequest, "Không đọc được dữ liệu webhook")
+		return
+	}
+	if err := h.svc.HandlePayOSWebhookTheoMa(c.Request.Context(), c.Param("ma"), raw); err != nil {
+		switch {
+		case errors.Is(err, domain.ErrNotFound):
+			response.Error(c, http.StatusNotFound, "Không có cổng thanh toán nào ứng với địa chỉ này")
+		case errors.Is(err, payos.ErrSignature):
+			logger.Warn("webhook PayOS (URL riêng) sai chữ ký, đã từ chối")
+			response.Error(c, http.StatusBadRequest, "Chữ ký không hợp lệ")
+		case errors.Is(err, domain.ErrPaymentMethodDisabled):
+			response.Error(c, http.StatusBadRequest, "Cổng thanh toán chưa khai đủ khoá")
+		default:
+			logger.Error("xử lý webhook PayOS (URL riêng) lỗi", zap.Error(err))
+			response.Error(c, http.StatusInternalServerError, "Lỗi xử lý webhook")
+		}
+		return
+	}
+	response.OKMessage(c, "Đã nhận", nil)
+}
+
+// @Summary	Webhook SePay tới URL riêng của một cửa hàng (công khai)
+// @Tags		Payments
+// @Param		ma				path	string	true	"Mã webhook của cổng"
+// @Param		Authorization	header	string	true	"Apikey <khoá webhook của cửa hàng>"
+// @Router		/payments/sepay/webhook/{ma} [post]
+func (h *PaymentHandler) SePayWebhookTheoMa(c *gin.Context) {
+	raw, err := io.ReadAll(io.LimitReader(c.Request.Body, 1<<20))
+	if err != nil {
+		response.Error(c, http.StatusBadRequest, "Không đọc được dữ liệu webhook")
+		return
+	}
+	if err := h.svc.HandleSePayWebhookTheoMa(c.Request.Context(), c.Param("ma"), c.GetHeader("Authorization"), raw); err != nil {
+		switch {
+		case errors.Is(err, domain.ErrNotFound):
+			response.Error(c, http.StatusNotFound, "Không có cổng thanh toán nào ứng với địa chỉ này")
+		case errors.Is(err, sepay.ErrUnauthorized):
+			logger.Warn("webhook SePay (URL riêng) sai khoá, đã từ chối")
+			response.Error(c, http.StatusUnauthorized, "Khoá không hợp lệ")
+		case errors.Is(err, domain.ErrPaymentMethodDisabled), errors.Is(err, sepay.ErrNotConfigured):
+			response.Error(c, http.StatusBadRequest, "Cổng thanh toán chưa khai đủ khoá")
+		default:
+			logger.Error("xử lý webhook SePay (URL riêng) lỗi", zap.Error(err))
+			response.Error(c, http.StatusInternalServerError, "Lỗi xử lý webhook")
+		}
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true})
+}
+
 // Status godoc
 //
 //	@Summary		Tra tình trạng thanh toán của một giao dịch (công khai)
@@ -152,4 +215,36 @@ func (h *PaymentHandler) Status(c *gin.Context) {
 		return
 	}
 	response.OK(c, res)
+}
+
+// MposWebhookTheoMa — NextPay báo QR mPOS / quẹt thẻ mPOS xong. Gói {"reqData"}
+// mã hoá AES bằng Secret Key của cổng; trả lời theo khuôn NextPay chờ
+// ({"resCode":200,…}), khác hẳn hai cổng kia.
+//
+//	@Summary	Webhook NextPay mPOS tới URL riêng của một cửa hàng (công khai)
+//	@Tags		Payments
+//	@Param		ma	path	string	true	"Mã webhook của cổng"
+//	@Router		/payments/mpos/webhook/{ma} [post]
+func (h *PaymentHandler) MposWebhookTheoMa(c *gin.Context) {
+	raw, err := io.ReadAll(io.LimitReader(c.Request.Body, 1<<20))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"resCode": 400, "message": "Không đọc được dữ liệu"})
+		return
+	}
+	if err := h.svc.HandleMposWebhookTheoMa(c.Request.Context(), c.Param("ma"), raw); err != nil {
+		switch {
+		case errors.Is(err, domain.ErrNotFound):
+			c.JSON(http.StatusNotFound, gin.H{"resCode": 404, "message": "Không có cổng thanh toán nào ứng với địa chỉ này"})
+		case errors.Is(err, nextpay.ErrGiaiMa):
+			logger.Warn("webhook NextPay (URL riêng) giải mã hỏng — sai Secret Key, đã từ chối")
+			c.JSON(http.StatusBadRequest, gin.H{"resCode": 400, "message": "Dữ liệu không hợp lệ"})
+		case errors.Is(err, domain.ErrPaymentMethodDisabled):
+			c.JSON(http.StatusBadRequest, gin.H{"resCode": 400, "message": "Cổng thanh toán chưa khai đủ khoá"})
+		default:
+			logger.Error("xử lý webhook NextPay (URL riêng) lỗi", zap.Error(err))
+			c.JSON(http.StatusInternalServerError, gin.H{"resCode": 500, "message": "Lỗi xử lý webhook"})
+		}
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"resCode": 200, "message": "Success"})
 }

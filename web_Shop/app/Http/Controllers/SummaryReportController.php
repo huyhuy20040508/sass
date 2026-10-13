@@ -34,15 +34,9 @@ class SummaryReportController extends Controller
         'cash' => ['nhan' => 'Tiền mặt', 'ma' => ['cash']],
         'transfer' => ['nhan' => 'Chuyển khoản', 'ma' => ['bank_transfer']],
         'card' => ['nhan' => 'Quẹt thẻ', 'ma' => ['card']],
-        'auto_qr' => ['nhan' => 'QR tự động', 'ma' => ['payos', 'sepay']],
+        'auto_qr' => ['nhan' => 'QR tự động', 'ma' => ['payos', 'sepay', 'mpos_qr']],
     ];
 
-    /** Hình thức của đơn web — chỉ bày khi trong ngày thật sự có tiền. */
-    public const HINH_THUC_KHAC = [
-        'cod' => 'Thu hộ (COD)',
-        'vnpay' => 'VNPay',
-        'momo' => 'MoMo',
-    ];
 
     public function __construct(protected ApiClient $api) {}
 
@@ -96,10 +90,12 @@ class SummaryReportController extends Controller
                 'tien' => array_sum(array_map(fn ($m) => $theoMa[$m] ?? 0, $ht['ma'])),
             ];
         }
-        foreach (self::HINH_THUC_KHAC as $ma => $nhan) {
-            if (($theoMa[$ma] ?? 0) > 0) {
-                $hinhThuc[$ma] = ['nhan' => $nhan, 'tien' => $theoMa[$ma]];
-            }
+        // Mã ngoài bốn hình thức (đơn cũ cod / vnpay / momo) gom một dòng "Khác",
+        // chỉ bày khi có tiền: bỏ hẳn thì các dòng cộng lại hụt so với doanh thu.
+        $daGom = array_merge(...array_column(self::HINH_THUC, 'ma'));
+        $khac = array_sum(array_filter($theoMa, fn ($m) => ! in_array($m, $daGom, true), ARRAY_FILTER_USE_KEY));
+        if ($khac > 0) {
+            $hinhThuc['other'] = ['nhan' => 'Khác', 'tien' => $khac];
         }
 
         $gio = array_fill(0, 24, ['don' => 0, 'tien' => 0.0]);
@@ -124,6 +120,7 @@ class SummaryReportController extends Controller
             'so_don' => (int) data_get($bao, 'totals.orders', 0),
             'doanh_thu' => (float) data_get($bao, 'totals.revenue', 0),
             'hinh_thuc' => $hinhThuc,
+            'phi_the' => (float) data_get($bao, 'totals.card_fee', 0),
             'mat_hang' => (int) data_get($bao, 'item_kinds', 0),
             'so_luong' => (int) data_get($bao, 'totals.units', 0),
             'tra_dong' => (int) data_get($bao, 'returns.lines', 0),

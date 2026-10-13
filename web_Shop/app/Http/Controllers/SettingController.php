@@ -47,7 +47,7 @@ class SettingController extends Controller
         ],
         'payment' => [
             'title' => 'Thanh toán',
-            'sub' => 'Hình thức khách chọn được khi đặt hàng, và tài khoản nhận chuyển khoản in ra cho khách.',
+            'sub' => 'Chỉ còn công tắc nhận hàng trả tiền (COD) của website. Tài khoản ngân hàng, PayOS và SePay đã chuyển sang Cài đặt → Phương thức thanh toán, khai theo từng chi nhánh.',
         ],
         'inventory' => [
             'title' => 'Kho',
@@ -221,6 +221,13 @@ class SettingController extends Controller
         } catch (\Throwable $e) {
             Log::error('Load settings failed', ['group' => $group, 'msg' => $e->getMessage()]);
             $error = 'Không tải được cấu hình hệ thống. Kiểm tra kết nối API.';
+        }
+
+        // Tài khoản ngân hàng và cổng QR nay khai ở màn Phương thức thanh toán (theo
+        // chi nhánh) — website đọc từ đó. Bày lại các ô cũ ở đây là cho sửa một thứ
+        // không còn chạy vào đâu.
+        if ($group === 'payment') {
+            $fields = array_values(array_filter($fields, fn ($f) => ($f['key'] ?? '') === 'payment_cod_enabled'));
         }
 
         $view = view('settings.form', [

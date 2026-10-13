@@ -147,7 +147,7 @@
         </div>
 
         <div class="lb-foot">
-            <span>{{ $PAY_METHODS[$o['payment_method'] ?? ''] ?? '' }}</span>
+            <span>{{ ($o['payment_method'] ?? '') !== '' ? \App\Http\Controllers\OrderController::tenHinhThuc($o['payment_method']) : '' }}</span>
             <span>In: {{ now()->format('H:i d/m/Y') }}</span>
         </div>
     </div>

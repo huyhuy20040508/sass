@@ -177,15 +177,15 @@ func TestSettingChuyenKhoanPhaiCoTaiKhoan(t *testing.T) {
 	}
 }
 
-// Bản cài mới: chuyển khoản bật sẵn nhưng CHƯA có số tài khoản — phải coi như chưa
-// nhận, không được chào ra rồi để khách bấm vào một hướng dẫn trống.
-func TestSettingChuyenKhoanMacDinhChuaSanSang(t *testing.T) {
+// Bản cài mới: chuyển khoản mặc định TẮT — bật sẵn mà chưa có tài khoản là đúng
+// trạng thái trang Cài đặt từ chối lưu. COD vẫn bật để bán được ngay.
+func TestSettingChuyenKhoanMacDinhTat(t *testing.T) {
 	svc := NewSettingService(newFakeSettingRepo())
 	ctx := ctxShop()
 	napLai(t, svc, ctx)
 
-	if !svc.Bool(ctx, SettingPaymentBankEnabled) {
-		t.Fatal("mặc định phải bật cờ chuyển khoản")
+	if svc.Bool(ctx, SettingPaymentBankEnabled) {
+		t.Fatal("mặc định phải TẮT cờ chuyển khoản")
 	}
 	if paymentMethodAvailable(ctx, svc, "bank_transfer") {
 		t.Fatal("chưa khai tài khoản thì chưa được chào chuyển khoản")
@@ -193,12 +193,40 @@ func TestSettingChuyenKhoanMacDinhChuaSanSang(t *testing.T) {
 	if !paymentMethodAvailable(ctx, svc, "cod") {
 		t.Fatal("COD mặc định phải dùng được, không thì bản cài mới không bán được gì")
 	}
+	if got := svc.Public(ctx)[SettingPaymentBankEnabled]; got != "0" {
+		t.Fatalf("storefront phải thấy chuyển khoản TẮT, nhận %q", got)
+	}
 }
 
-// Luật chéo của nhóm thanh toán KHÔNG được chặn việc lưu nhóm khác: cấu hình mặc
-// định (bật chuyển khoản, chưa có tài khoản) sẽ khoá luôn trang Vận chuyển.
+// Dữ liệu cũ đang lệch (lưu "1" mà ba ô tài khoản rỗng): storefront phải thấy
+// TẮT — không chào ra hình thức không có số tài khoản nào. Khai đủ thì mới hiện.
+func TestSettingPublicGiauChuyenKhoanThieuTaiKhoan(t *testing.T) {
+	repo := newFakeSettingRepo()
+	repo.rows[SettingPaymentBankEnabled] = domain.Setting{Key: SettingPaymentBankEnabled, Value: "1"}
+	svc := NewSettingService(repo)
+	ctx := ctxShop()
+
+	if got := svc.Public(ctx)[SettingPaymentBankEnabled]; got != "0" {
+		t.Fatalf("bật cờ mà thiếu tài khoản thì storefront phải thấy \"0\", nhận %q", got)
+	}
+
+	if _, err := svc.Update(ctx, map[string]string{
+		SettingBankName: "Vietcombank", SettingBankAccountNumber: "0123456789", SettingBankAccountName: "NGUYEN VAN A",
+	}); err != nil {
+		t.Fatalf("khai đủ tài khoản phải lưu được: %v", err)
+	}
+	if got := svc.Public(ctx)[SettingPaymentBankEnabled]; got != "1" {
+		t.Fatalf("khai đủ tài khoản thì storefront phải thấy chuyển khoản bật, nhận %q", got)
+	}
+}
+
+// Luật chéo của nhóm thanh toán KHÔNG được chặn việc lưu nhóm khác: dữ liệu cũ
+// đang lệch (bật chuyển khoản, chưa có tài khoản) mà khoá luôn trang Vận chuyển
+// thì chủ tiệm không lưu được gì cho tới khi đi sửa trang Thanh toán.
 func TestSettingLuatThanhToanKhongChanNhomKhac(t *testing.T) {
-	svc := NewSettingService(newFakeSettingRepo())
+	repo := newFakeSettingRepo()
+	repo.rows[SettingPaymentBankEnabled] = domain.Setting{Key: SettingPaymentBankEnabled, Value: "1"}
+	svc := NewSettingService(repo)
 
 	if _, err := svc.Update(ctxShop(), map[string]string{
 		SettingDefaultShippingFee: "35000",

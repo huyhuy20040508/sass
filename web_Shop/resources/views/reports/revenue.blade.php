@@ -16,12 +16,9 @@
         use App\Support\Chart;
         use App\Http\Controllers\OrderController;
 
-        $PAY_METHODS = OrderController::PAYMENT_METHODS;
         $PAY_STATUSES = OrderController::PAYMENT_STATUSES;
         $COLORS = \App\Http\Controllers\ReportController::METHOD_COLORS;
 
-        /** Tên phương thức bản ngắn — chú giải hẹp không chứa nổi phần trong ngoặc. */
-        $shortMethod = fn ($key) => preg_replace('/\s*\(.*\)$/u', '', $PAY_METHODS[$key] ?? (string) $key);
 
         $buckets = $report['buckets'] ?? [];
         $totals = $report['totals'] ?? [];
@@ -39,14 +36,17 @@
         $days = max(1, (int) $filters['days']);
         $perDayRev = $get($totals, 'revenue') / $days;
 
-        // Cơ cấu theo hình thức thanh toán.
+        // Cơ cấu theo hình thức thanh toán — gộp về bốn hình thức của quầy (SePay +
+        // PayOS là một ô "QR tự động"), mã cũ vào "Khác".
         $methodTotal = collect($report['by_payment_method'] ?? [])->sum('orders');
-        $methodRows = collect($report['by_payment_method'] ?? [])->map(fn ($m) => [
-            'label' => $shortMethod($m['key']),
-            'value' => Chart::money($m['revenue'] ?? 0),
-            'share' => Chart::share($m['orders'] ?? 0, $methodTotal),
-            'color' => $COLORS[$m['key']] ?? '#8c8c8c',
-        ])->all();
+        $methodRows = collect($report['by_payment_method'] ?? [])
+            ->groupBy(fn ($m) => OrderController::tenHinhThuc((string) ($m['key'] ?? '')))
+            ->map(fn ($nhom, $ten) => [
+                'label' => $ten,
+                'value' => Chart::money($nhom->sum('revenue')),
+                'share' => Chart::share($nhom->sum('orders'), $methodTotal),
+                'color' => $COLORS[$ten] ?? '#8c8c8c',
+            ])->values()->all();
 
         // Tình trạng thu tiền — đây là chỗ thấy phần doanh thu mới nằm trên giấy.
         $payTotal = collect($report['by_payment_status'] ?? [])->sum('revenue');

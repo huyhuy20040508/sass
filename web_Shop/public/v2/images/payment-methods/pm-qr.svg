@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96" fill="none">
+    <!-- Thẻ QR phía sau -->
+    <rect x="12" y="14" width="34" height="44" rx="5" fill="#26A69A"/>
+    <g fill="#FFFFFF">
+        <rect x="18" y="21" width="9" height="9" rx="1.5"/>
+        <rect x="31" y="21" width="9" height="9" rx="1.5"/>
+        <rect x="18" y="34" width="9" height="9" rx="1.5"/>
+        <rect x="31" y="34" width="9" height="9" rx="1.5" opacity="0.6"/>
+    </g>
+    <rect x="18" y="48" width="22" height="4" rx="2" fill="#F6C445"/>
+    <!-- Điện thoại -->
+    <rect x="36" y="12" width="44" height="72" rx="9" fill="#7E57C2"/>
+    <rect x="41" y="20" width="34" height="48" rx="4" fill="#FFFFFF"/>
+    <!-- Khối QR -->
+    <g fill="#1B2C58">
+        <rect x="46" y="26" width="10" height="10" rx="1.5"/>
+        <rect x="60" y="26" width="10" height="10" rx="1.5"/>
+        <rect x="46" y="40" width="10" height="10" rx="1.5"/>
+        <rect x="60" y="40" width="4.5" height="4.5" rx="1"/>
+        <rect x="65.5" y="45.5" width="4.5" height="4.5" rx="1"/>
+        <rect x="60" y="51" width="4.5" height="4.5" rx="1"/>
+        <rect x="65.5" y="56" width="4.5" height="4.5" rx="1"/>
+        <rect x="46" y="54" width="10" height="6" rx="1.5" opacity="0.7"/>
+    </g>
+    <!-- Nút quét -->
+    <rect x="46" y="72" width="24" height="7" rx="3.5" fill="#26A69A"/>
+</svg>

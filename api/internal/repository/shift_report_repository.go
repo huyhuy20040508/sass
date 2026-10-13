@@ -135,7 +135,7 @@ func (r *caLamViecRepository) BaoCaoKetCa(
 		}
 		if g, ok := gop[x.ID]; ok {
 			d.OrderCount, d.TotalRevenue = g.OrderCount, g.TotalRevenue
-			d.TotalCash, d.TotalTransfer, d.TotalAutoQR = g.TotalCash, g.TotalTransfer, g.TotalAutoQR
+			d.TotalCash, d.TotalTransfer, d.TotalCard, d.TotalAutoQR = g.TotalCash, g.TotalTransfer, g.TotalCard, g.TotalAutoQR
 		}
 		out = append(out, d)
 	}
@@ -150,6 +150,7 @@ type gopCa struct {
 	TotalRevenue  float64
 	TotalCash     float64
 	TotalTransfer float64
+	TotalCard     float64
 	TotalAutoQR   float64
 }
 
@@ -169,8 +170,9 @@ func (r *caLamViecRepository) gopDonTheoCa(ctx context.Context, ids []uint) (map
 			COALESCE(SUM(o.total_amount), 0) AS total_revenue,
 			COALESCE(SUM(CASE WHEN o.payment_method = ? THEN o.total_amount ELSE 0 END), 0) AS total_cash,
 			COALESCE(SUM(CASE WHEN o.payment_method = ? THEN o.total_amount ELSE 0 END), 0) AS total_transfer,
+			COALESCE(SUM(CASE WHEN o.payment_method = ? THEN o.total_amount ELSE 0 END), 0) AS total_card,
 			COALESCE(SUM(CASE WHEN o.payment_method IN ? THEN o.total_amount ELSE 0 END), 0) AS total_auto_qr`,
-			domain.PaymentMethodCash, domain.PaymentMethodBank,
+			domain.PaymentMethodCash, domain.PaymentMethodBank, domain.PaymentMethodCard,
 			[]string{domain.PaymentMethodPayOS, domain.PaymentMethodSePay}).
 		Joins(`JOIN work_shifts ws ON ws.shop_id = o.shop_id
 			AND o.created_at >= ws.opened_at

@@ -34,17 +34,31 @@ func (s *reportService) Profit(ctx context.Context, q ReportQuery) (domain.Profi
 	}
 	out.Totals.TinhBien()
 
+	if len(f.CategoryIDs) == 0 && f.ProductID == 0 && f.Keyword == "" {
+		if out.CardFee, err = s.repo.CardFeeTotal(ctx, p); err != nil {
+			return out, err
+		}
+	}
+
 	// Biểu đồ không theo ô tìm, như v2 — ô tìm chỉ để dò một dòng trong bảng.
 	f.Keyword = ""
 	moc, err := s.repo.ProfitBuckets(ctx, p, f, groupBy)
 	if err != nil {
 		return out, err
 	}
+	// Biểu đồ bỏ ô tìm nên chỉ còn nhóm / mặt hàng chặn việc trừ phí theo đơn.
+	var phiMoc map[string]float64
+	if len(f.CategoryIDs) == 0 && f.ProductID == 0 {
+		if phiMoc, err = s.repo.CardFeeBuckets(ctx, p, groupBy); err != nil {
+			return out, err
+		}
+	}
 	nhan := labels(p, groupBy)
 	out.Chart = make([]domain.ProfitBucket, 0, len(nhan))
 	for _, k := range nhan {
 		b := moc[k]
 		b.Key = k
+		b.CardFee = phiMoc[k]
 		out.Chart = append(out.Chart, b)
 	}
 

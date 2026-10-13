@@ -1,0 +1,78 @@
+/*
+ * Token màn quầy — giá trị gốc đo từ màn v2 đang chạy (/cashier/sales, 1366px,
+ * computed style ngày 09/10/2026). Đổi số ở đây, đừng gõ màu/khoảng cách thẳng
+ * vào pos.css.
+ */
+:root {
+  /* Màu thương hiệu v2 */
+  --c-black: #000;
+  --c-navy: #183556;          /* nút Thanh toán v2 */
+  --c-navy-strong: #001a8d;   /* nhóm hàng đang chọn */
+  --c-navy-ink: #1a234a;
+  --c-navy-name: #000084;     /* tên trên thẻ hàng */
+  --c-orange: #f29220;        /* ô module đang chọn, viền nhấn */
+  --c-price: #c24800;         /* giá trên thẻ hàng — v2 dùng #f65900 (3,3:1), đậm lên cho đạt 4,5:1 */
+  --c-canvas: linear-gradient(#000, #26375a, #2a5293);
+
+  /* Trung tính */
+  --c-ink: #2c2c34;
+  --c-text: #444;
+  /* #6b7280 trên nền trắng = 4,8:1 — chữ phụ vẫn đạt AA. */
+  --c-muted: #6b7280;
+  --c-line: #dee2e6;
+  --c-surface: #fff;
+  --c-surface-2: #f4f6fb;
+  --c-head-row: #d5e1f3;      /* đầu bảng hoá đơn v2 */
+  --c-chip: rgba(226, 226, 226, .506);
+  --c-option: #d9d9d9;        /* nút phụ v2 */
+  --c-overlay: rgba(255, 255, 255, .1);
+
+  /* Ngữ nghĩa */
+  --c-danger: #c62828;
+  --c-danger-soft: #fdecec;
+  --c-success: #157a34;
+  --c-success-soft: #e7f5ec;
+  --c-warn-soft: #fff4e5;
+  --c-focus: #1586ff;
+
+  /* Chữ — Roboto như v2 */
+  --font: Roboto, "Segoe UI", Arial, sans-serif;
+  --fs-xs: 12px;
+  --fs-sm: 13px;
+  --fs-md: 14px;
+  --fs-lg: 16px;
+  --fs-xl: 20px;
+  --fs-total: 24px;
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-bold: 700;
+
+  /* Thang khoảng cách 4px */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 20px;
+  --s-6: 24px;
+
+  /* Bo góc v2: nút phụ 5px · thẻ hàng 6px · nút/ô nhập 10px */
+  --r-sm: 5px;
+  --r-md: 6px;
+  --r-lg: 10px;
+  --r-pill: 999px;
+
+  --shadow-pop: 0 8px 24px rgba(16, 24, 40, .18);
+
+  /* Vùng bấm: chuột dùng cỡ gọn, màn cảm ứng nở lên ở khối media bên dưới. */
+  --tap: 36px;
+  --tap-lg: 44px;
+  --header-h: 72px;
+  --bar-h: 64px;
+}
+
+@media (pointer: coarse) {
+  :root {
+    --tap: 44px;
+    --tap-lg: 52px;
+  }
+}

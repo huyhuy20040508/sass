@@ -300,6 +300,12 @@ var DanhMucQuyen = []KhuQuyen{
 						Viec: []string{QuyenSua},
 					},
 					{
+						// Tách khỏi "cau-hinh": chỗ này cất tài khoản nhận tiền và
+						// khoá cổng thanh toán — sửa nhầm là tiền của khách đi chỗ khác.
+						Prefix: "phuong-thuc-tt", Ten: "Phương thức thanh toán",
+						Viec: []string{QuyenXem, QuyenSua},
+					},
+					{
 						// Tách "xem" khỏi "sửa": mã chứng từ đã đi vào giấy tờ, đổi
 						// quy tắc là đổi cả dải số của những phiếu lập sau đó.
 						Prefix: "quy-tac-ma", Ten: "Quy tắc đánh số chứng từ",

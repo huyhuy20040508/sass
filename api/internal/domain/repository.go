@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"slices"
 	"time"
 )
 
@@ -302,6 +303,8 @@ type OrderRepository interface {
 	GhiLuotThu(ctx context.Context, p *OrderPayment) error
 	// LuotThuCuaDon liệt kê các lượt thu đã ghi của một đơn.
 	LuotThuCuaDon(ctx context.Context, orderID uint) ([]OrderPayment, error)
+	// PhiTheCuaDon trả nil khi đơn không có phí quẹt thẻ.
+	PhiTheCuaDon(ctx context.Context, orderID uint) (*PhiTheDon, error)
 	FindByID(ctx context.Context, id uint) (*Order, error)
 	// Create tạo đơn mới (kèm sản phẩm) trong một transaction, tự sinh mã đơn theo
 	// ID, TRỪ TỒN KHO (khoá biến thể, ghi sổ kho) và ghi mốc lịch sử khởi tạo.
@@ -1300,7 +1303,7 @@ type DongSoDon struct {
 	// DaThu là TỔNG số tiền thật đã vào két, mọi phương thức cộng lại. Đơn chưa thu
 	// thì 0 — in nguyên tổng tiền của một đơn còn nợ là báo cáo nói dối.
 	DaThu float64 `json:"da_thu"`
-	// Ba cột tiền của bảng — DaThu chia theo NHÓM phương thức của TỪNG lượt thu,
+	// Các cột tiền của bảng (bốn hình thức + Khác) — DaThu chia theo NHÓM phương thức của TỪNG lượt thu,
 	// đúng cách v2 chia theo `cab_debt_details.payment_method` cho đơn công nợ.
 	// Đơn chuyển khoản mà khách trả nốt bằng tiền mặt thì phần ấy nằm ở cột Tiền
 	// mặt, không dồn cả vào cột Chuyển khoản theo phương thức khai trên đơn.
@@ -1309,7 +1312,9 @@ type DongSoDon struct {
 	// hoàn tiền thật (v2 cũng bày `total_return` vào cột theo phương thức phiếu).
 	TienMat     float64 `json:"tien_mat"`
 	ChuyenKhoan float64 `json:"chuyen_khoan"`
-	TheVi       float64 `json:"the_vi"`
+	QuetThe     float64 `json:"quet_the"`
+	QRTuDong    float64 `json:"qr_tu_dong"`
+	Khac        float64 `json:"khac"`
 	// ConNo là phần CÒN PHẢI THU của đơn đang sống. Đơn đã huỷ, đã trả hàng hay đã
 	// thu đủ (kể cả đã hoàn tiền) luôn là 0 — không ai đi đòi tiền một đơn đã huỷ.
 	ConNo float64 `json:"con_no"`
@@ -1343,19 +1348,54 @@ type TongSoDon struct {
 	PhiGiao     float64 `json:"phi_giao"`
 	TienMat     float64 `json:"tien_mat"`
 	ChuyenKhoan float64 `json:"chuyen_khoan"`
-	TheVi       float64 `json:"the_vi"`
+	QuetThe     float64 `json:"quet_the"`
+	QRTuDong    float64 `json:"qr_tu_dong"`
+	Khac        float64 `json:"khac"`
 }
 
-// Ba NHÓM phương thức tương ứng ba cột tiền của sổ chứng từ. Nguồn DUY NHẤT của
-// phép gom: câu SQL chia cột và bộ lọc phiếu trả theo phương thức đều đọc từ đây.
+// Bốn NHÓM phương thức của quầy (CacLoaiPT) cộng nhóm "Khác" — NGUỒN DUY NHẤT
+// cho cả cột tiền của sổ chứng từ, ô lọc theo hình thức (sổ đơn, báo cáo bán
+// hàng) và cách báo cáo xếp tiền. Ba nơi tự giữ ba danh sách là ba cách xếp: đơn
+// VNPay cũ từng nằm ở "QR tự động" bên sổ đơn mà ở "Khác" bên báo cáo.
 //
-// Gồm cả phương thức THU của đơn lẫn phương thức HOÀN của phiếu trả (`ewallet`),
-// vì cùng một cột phải nhận được cả hai.
+// Gồm cả phương thức HOÀN của phiếu trả. NhomKhac là mã ngoài bốn hình thức —
+// đơn web cũ (cod, vnpay, momo) và phiếu hoàn bằng ví (ewallet): vẫn phải có
+// nhóm, bỏ ra thì tiền của chúng biến khỏi mọi cột.
 var (
-	NhomTienMat     = []string{"cash", "cod"}
-	NhomChuyenKhoan = []string{"bank_transfer", "sepay"}
-	NhomTheVi       = []string{"vnpay", "momo", "payos", "ewallet"}
+	NhomTienMat     = []string{"cash"}
+	NhomChuyenKhoan = []string{"bank_transfer"}
+	NhomQuetThe     = []string{"card"}
+	NhomQRTuDong    = []string{"payos", "sepay", "mpos_qr"}
+	NhomKhac        = []string{"cod", "vnpay", "momo", "ewallet"}
 )
+
+// HinhThucQuay — bốn ô lọc "Phương thức thanh toán" (tên ô → mã trên đơn).
+// "Khác" không có ô: tích đủ bốn ô là không lọc, nên đơn mã cũ vẫn có mặt.
+var HinhThucQuay = map[string][]string{
+	"cash":          NhomTienMat,
+	"bank_transfer": NhomChuyenKhoan,
+	"card":          NhomQuetThe,
+	"auto_qr":       NhomQRTuDong,
+}
+
+// MaBonHinhThuc — mọi mã thuộc bốn hình thức; mã nằm ngoài danh sách này là "Khác".
+func MaBonHinhThuc() []string {
+	return slices.Concat(NhomTienMat, NhomChuyenKhoan, NhomQuetThe, NhomQRTuDong)
+}
+
+// MaCuaHinhThuc đổi tên ô ("auto_qr") ra các mã trên đơn; giá trị không phải tên
+// ô giữ nguyên, để bộ lọc vẫn nhận một mã lẻ như "sepay".
+func MaCuaHinhThuc(chon []string) []string {
+	var out []string
+	for _, v := range chon {
+		if ma, co := HinhThucQuay[v]; co {
+			out = append(out, ma...)
+		} else {
+			out = append(out, v)
+		}
+	}
+	return out
+}
 
 // Năm trạng thái của SỔ CHỨNG TỪ, chép nguyên bộ của bản v2.
 //

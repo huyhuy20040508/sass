@@ -10,15 +10,8 @@ import (
 	"sass-api/internal/domain"
 )
 
-// Bốn ô "Phương thức thanh toán" của v2 và các hình thức đơn mỗi ô gom vào.
-// Quẹt thẻ chưa có hình thức nào ở quầy — lọc riêng ô này là ra rỗng, đúng
-// nghĩa "không có đơn quẹt thẻ".
-var oHinhThuc = map[string][]string{
-	"cash":          {domain.PaymentMethodCash},
-	"bank_transfer": {domain.PaymentMethodBank},
-	"card":          {"card"},
-	"auto_qr":       {domain.PaymentMethodPayOS, domain.PaymentMethodSePay},
-}
+// Bốn ô "Phương thức thanh toán" — cùng nguồn với sổ đơn (domain.HinhThucQuay).
+var oHinhThuc = domain.HinhThucQuay
 
 // hinhThucLoc đổi "cash,auto_qr" thành danh sách payment_method để lọc.
 // Rỗng, hoặc tích đủ cả bốn ô, là KHÔNG lọc: tích đủ nghĩa là "tất cả", và đơn

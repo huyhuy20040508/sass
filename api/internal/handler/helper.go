@@ -347,6 +347,8 @@ func handleServiceError(c *gin.Context, err error) {
 		})
 	case errors.Is(err, domain.ErrETaxMSTDaDung):
 		response.Error(c, 409, "Mã số thuế này đã kết nối ở một chi nhánh khác — mỗi tài khoản cổng hoá đơn chỉ dùng cho một điểm bán")
+	case errors.Is(err, domain.ErrETaxTaiKhoanDaDung):
+		response.Error(c, 409, "Tài khoản hoá đơn điện tử này đã kết nối ở một chi nhánh khác — mỗi tài khoản chỉ dùng cho một điểm bán")
 	case errors.Is(err, domain.ErrETaxKyHieuLa):
 		response.ValidationError(c, map[string]string{
 			"template_symbol": "Ký hiệu này không có trong danh sách đã đăng ký — bấm Đồng bộ mẫu rồi chọn lại",

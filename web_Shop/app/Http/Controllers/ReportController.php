@@ -138,13 +138,13 @@ class ReportController extends Controller
     public const CHANNELS = ['member' => 'Khách có tài khoản', 'guest' => 'Khách vãng lai'];
 
     /**
-     * Màu gắn CỨNG theo đối tượng, không theo thứ hạng trong kỳ: đổi kỳ xem thì
-     * COD vẫn xanh dương, VNPay vẫn tím — màu nhảy chỗ là biểu đồ đọc sai.
-     * Cùng bảng màu với trang Tổng quan.
+     * Màu gắn CỨNG theo hình thức (khoá là nhãn của OrderController::tenHinhThuc),
+     * không theo thứ hạng trong kỳ: đổi kỳ xem thì Tiền mặt vẫn xanh dương — màu
+     * nhảy chỗ là biểu đồ đọc sai.
      */
     public const METHOD_COLORS = [
-        'cod' => '#1890ff', 'vnpay' => '#722ed1', 'momo' => '#13c2c2',
-        'bank_transfer' => '#fa8c16', 'payos' => '#52c41a', 'sepay' => '#eb2f96',
+        'Tiền mặt' => '#1890ff', 'Chuyển khoản' => '#fa8c16', 'Quẹt thẻ' => '#722ed1',
+        'QR tự động' => '#52c41a', 'Khác' => '#8c8c8c',
     ];
 
     public const CHANNEL_COLORS = ['member' => '#1890ff', 'guest' => '#8c8c8c'];

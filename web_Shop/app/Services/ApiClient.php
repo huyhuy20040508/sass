@@ -1190,6 +1190,24 @@ class ApiClient
     }
 
     /** Quét một mã vạch (hoặc SKU) — trả món hàng kèm giá đã trừ khuyến mãi và tồn chi nhánh. */
+    /** Đơn QR tự động ở quầy: tiền đã về chưa (theo mã giao dịch của cổng). */
+    public function posQrTrangThai(string $code): Response
+    {
+        return $this->get('/admin/orders/pos/payments/'.rawurlencode($code));
+    }
+
+    /** Đơn quầy đang chờ QR: thu bằng cách khác ngay trên chính đơn đó (giữ mã đơn). */
+    public function posDoiHinhThuc(int $id, array $payload): Response
+    {
+        return $this->post("/admin/orders/pos/{$id}/doi-hinh-thuc", $payload);
+    }
+
+    /** Huỷ mã QR tự động của một đơn quầy còn chờ tiền. */
+    public function posHuyQr(int $id): Response
+    {
+        return $this->post("/admin/orders/pos/{$id}/huy-qr");
+    }
+
     public function posScan(string $code): Response
     {
         return $this->get('/admin/orders/pos/scan', ['code' => $code]);
@@ -2499,5 +2517,78 @@ class ApiClient
     public function congNoLichSuTra(int $id): Response
     {
         return $this->get("/admin/cong-no/{$id}/lich-su-tra");
+    }
+
+    // ---------------------------------------------------------------------
+    // Phương thức thanh toán — theo chi nhánh đang làm (header X-Chi-Nhanh)
+    // ---------------------------------------------------------------------
+
+    /** 4 phương thức + chi tiết, máy quẹt thẻ, danh sách ngân hàng VietQR, can_edit. */
+    public function phuongThucTT(): Response
+    {
+        return $this->get('/admin/payment-methods');
+    }
+
+    public function batTatPhuongThucTT(int $id, bool $bat): Response
+    {
+        return $this->put("/admin/payment-methods/{$id}/status", ['status' => $bat]);
+    }
+
+    public function macDinhPhuongThucTT(int $id): Response
+    {
+        return $this->put("/admin/payment-methods/{$id}/default");
+    }
+
+    public function taoChiTietTT(int $id, array $data): Response
+    {
+        return $this->post("/admin/payment-methods/{$id}/details", $data);
+    }
+
+    /** Ô khoá bí mật bỏ trống = API giữ khoá đã lưu. */
+    public function suaChiTietTT(int $id, int $chiTiet, array $data): Response
+    {
+        return $this->put("/admin/payment-methods/{$id}/details/{$chiTiet}", $data);
+    }
+
+    public function batTatChiTietTT(int $id, int $chiTiet, bool $bat): Response
+    {
+        return $this->put("/admin/payment-methods/{$id}/details/{$chiTiet}/status", ['status' => $bat]);
+    }
+
+    public function macDinhChiTietTT(int $id, int $chiTiet): Response
+    {
+        return $this->put("/admin/payment-methods/{$id}/details/{$chiTiet}/default");
+    }
+
+    public function xoaChiTietTT(int $id, int $chiTiet): Response
+    {
+        return $this->delete("/admin/payment-methods/{$id}/details/{$chiTiet}");
+    }
+
+    /** Thử cổng QR bằng khoá đã lưu; webhook_url là URL riêng của cổng. */
+    public function kiemTraCongTT(int $id, int $chiTiet, string $webhookUrl): Response
+    {
+        return $this->post("/admin/payment-methods/{$id}/details/{$chiTiet}/test", ['webhook_url' => $webhookUrl]);
+    }
+
+    public function taoMayQuetThe(array $data): Response
+    {
+        return $this->post('/admin/payment-devices', $data);
+    }
+
+    public function suaMayQuetThe(int $id, array $data): Response
+    {
+        return $this->put("/admin/payment-devices/{$id}", $data);
+    }
+
+    public function xoaMayQuetThe(int $id): Response
+    {
+        return $this->delete("/admin/payment-devices/{$id}");
+    }
+
+    /** Bản rút gọn cho quầy: phương thức đang bật, không kèm khoá bí mật. */
+    public function phuongThucQuay(): Response
+    {
+        return $this->get('/admin/orders/pos/payment-methods');
     }
 }

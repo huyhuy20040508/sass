@@ -1138,6 +1138,14 @@ type Order struct {
 	// orders và không trả ra API — chỉ để service biết biến thể nào vừa tụt xuống
 	// mức cần nhập thêm mà bắn cảnh báo, sau khi đơn đã ghi xong.
 	StockMoves []StockMove `json:"-" gorm:"-"`
+
+	// PaymentMethodDetailID / CardFee — tài khoản, máy quẹt thẻ hay cổng QR đã thu,
+	// và phí thẻ cửa hàng chịu (migration 0080). KHÔNG đi trong câu tạo đơn: ghi
+	// bằng một lượt riêng ngay sau đó (PaymentMethodRepository.GhiDonDung), để môi
+	// trường chưa chạy migration vẫn bán được — hai cột này là thông tin đối soát,
+	// thiếu không được làm hỏng lượt bán.
+	PaymentMethodDetailID *uint   `json:"payment_method_detail_id,omitempty" gorm:"-"`
+	CardFee               float64 `json:"card_fee,omitempty" gorm:"-"`
 }
 
 // StockMove là một lần tồn kho của biến thể đổi giá trị: số trước và số sau.

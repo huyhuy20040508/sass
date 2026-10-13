@@ -60,6 +60,8 @@ type Handlers struct {
 	ChiNhanh *handler.ChiNhanhHandler
 	// ETax — kết nối cổng hoá đơn điện tử của từng chi nhánh.
 	ETax *handler.EtaxHandler
+	// PaymentMethod — Cài đặt → Phương thức thanh toán của từng chi nhánh.
+	PaymentMethod *handler.PaymentMethodHandler
 	// NhanSu là HỒ SƠ người đi làm (bảng `employees`), đứng cạnh User chứ không
 	// thay: nhân viên không có tài khoản đăng nhập vẫn có hồ sơ ở đây.
 	NhanSu *handler.NhanSuHandler
@@ -375,6 +377,16 @@ func New(
 		// Khu quản trị KHÔNG gọi đường nào trong cụm này — đã đối chiếu với danh
 		// sách URI trong web_Shop/app/Services/ApiClient.php.
 		// ====================================================================
+
+		// URL webhook RIÊNG của từng cổng QR do chủ tiệm tự kết nối (Cài đặt →
+		// Phương thức thanh toán). Đăng ký NGOÀI cụm storefront: tắt bán online thì
+		// quầy vẫn dùng QR tự động, và cổng vẫn phải báo tiền về được. Gắn thẳng vào
+		// v1, không qua khachLa — cổng gọi tới không mang token, không đi qua tên
+		// miền của tiệm; mã cuối URL mới cho biết tiền thuộc cửa hàng nào.
+		v1.POST("/payments/payos/webhook/:ma", h.Payment.PayOSWebhookTheoMa)
+		v1.POST("/payments/sepay/webhook/:ma", h.Payment.SePayWebhookTheoMa)
+		v1.POST("/payments/mpos/webhook/:ma", h.Payment.MposWebhookTheoMa)
+
 		if cfg.App.EnableStorefront {
 			// Cả cụm dưới đây phục vụ khách mua sắm, tức là phải biết đang mở cửa
 			// hàng nào. Hôm nay chỉ khách ĐÃ ĐĂNG NHẬP mới nói được điều đó (qua
@@ -726,6 +738,12 @@ func New(
 			// trong lúc bán, nên đứng cạnh chính đường bán.
 			q.Dat(quay, http.MethodGet, "/orders/pos/scan", "don-hang.xem", h.Order.POSScan)
 			q.Dat(quay, http.MethodGet, "/orders/pos/discount-limit", "don-hang.xem", h.Order.POSDiscountLimit)
+			// Phương thức đang bật của chi nhánh, cho hộp Thanh toán ở quầy.
+			q.Dat(quay, http.MethodGet, "/orders/pos/payment-methods", "don-hang.xem", h.PaymentMethod.ForPOS)
+			// QR tự động ở quầy: màn thu ngân hỏi tiền đã về chưa, và huỷ mã khi khách đổi ý.
+			q.Dat(quay, http.MethodGet, "/orders/pos/payments/:code", "don-hang.them", h.Payment.Status)
+			q.Dat(quay, http.MethodPost, "/orders/pos/:id/huy-qr", "don-hang.them", h.Order.POSHuyQR)
+			q.Dat(quay, http.MethodPost, "/orders/pos/:id/doi-hinh-thuc", "don-hang.them", h.Order.POSDoiHinhThuc)
 			// Đồng giá: nút "Đồng giá" hỏi chương trình đủ điều kiện và giá sau khi
 			// chọn — cùng quyền với bán, người đứng quầy là người bấm.
 			q.Dat(quay, http.MethodPost, "/orders/pos/dong-gia", "don-hang.them", h.DongGia.POSXemTruoc)
@@ -957,6 +975,20 @@ func New(
 			// Hoá đơn điện tử của một chi nhánh. Đi theo quyền của chính chi nhánh:
 			// ai sửa được điểm bán thì nối được cổng HĐĐT cho nó, và mật khẩu ấy
 			// phát hành được hoá đơn đứng tên cửa hàng nên không xuống thấp hơn.
+			// Phương thức thanh toán — theo chi nhánh đang làm (header X-Chi-Nhanh).
+			q.Dat(manage, http.MethodGet, "/payment-methods", "phuong-thuc-tt.xem", h.PaymentMethod.List)
+			q.Dat(manage, http.MethodPut, "/payment-methods/:id/status", "phuong-thuc-tt.sua", h.PaymentMethod.Status)
+			q.Dat(manage, http.MethodPut, "/payment-methods/:id/default", "phuong-thuc-tt.sua", h.PaymentMethod.Default)
+			q.Dat(manage, http.MethodPost, "/payment-methods/:id/details", "phuong-thuc-tt.sua", h.PaymentMethod.CreateDetail)
+			q.Dat(manage, http.MethodPut, "/payment-methods/:id/details/:detailId", "phuong-thuc-tt.sua", h.PaymentMethod.UpdateDetail)
+			q.Dat(manage, http.MethodPut, "/payment-methods/:id/details/:detailId/status", "phuong-thuc-tt.sua", h.PaymentMethod.DetailStatus)
+			q.Dat(manage, http.MethodPut, "/payment-methods/:id/details/:detailId/default", "phuong-thuc-tt.sua", h.PaymentMethod.DetailDefault)
+			q.Dat(manage, http.MethodDelete, "/payment-methods/:id/details/:detailId", "phuong-thuc-tt.sua", h.PaymentMethod.DeleteDetail)
+			q.Dat(manage, http.MethodPost, "/payment-methods/:id/details/:detailId/test", "phuong-thuc-tt.sua", h.PaymentMethod.TestDetail)
+			q.Dat(manage, http.MethodPost, "/payment-devices", "phuong-thuc-tt.sua", h.PaymentMethod.CreateDevice)
+			q.Dat(manage, http.MethodPut, "/payment-devices/:id", "phuong-thuc-tt.sua", h.PaymentMethod.UpdateDevice)
+			q.Dat(manage, http.MethodDelete, "/payment-devices/:id", "phuong-thuc-tt.sua", h.PaymentMethod.DeleteDevice)
+
 			q.Dat(manage, http.MethodGet, "/chi-nhanh/:id/etax", "chi-nhanh.xem", h.ETax.Get)
 			q.Dat(manage, http.MethodPost, "/chi-nhanh/:id/etax", "chi-nhanh.sua", h.ETax.Connect)
 			q.Dat(manage, http.MethodPut, "/chi-nhanh/:id/etax", "chi-nhanh.sua", h.ETax.Update)

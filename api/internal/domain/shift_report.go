@@ -53,11 +53,9 @@ type BaoCaoCaDong struct {
 	OrderCount    int64   `json:"order_count"`
 	TotalCash     float64 `json:"total_cash"`
 	TotalTransfer float64 `json:"total_transfer"`
-	// TotalCard — quẹt thẻ. Quầy chưa có hình thức này nên luôn 0; giữ trường
-	// cho đủ khuôn cột v2, có hình thức rồi thì chỉ phải sửa câu gộp.
-	TotalCard    float64 `json:"total_card"`
-	TotalAutoQR  float64 `json:"total_auto_qr"`
-	TotalRevenue float64 `json:"total_revenue"`
+	TotalCard     float64 `json:"total_card"`
+	TotalAutoQR   float64 `json:"total_auto_qr"`
+	TotalRevenue  float64 `json:"total_revenue"`
 
 	OpeningCash float64 `json:"opening_cash"`
 	// Ba con số đối chiếu két — nil khi ca chưa đóng. Không trả 0: "chênh 0"

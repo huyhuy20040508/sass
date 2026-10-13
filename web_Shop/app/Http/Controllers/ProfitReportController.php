@@ -64,7 +64,7 @@ class ProfitReportController extends Controller
         $dong = ReportController::sapXepDong($bao['rows'] ?? [], $filters['sort_field'], $filters['sort_type'], self::COT_CHU);
 
         if ($request->query('xuat') === 'excel') {
-            return $this->xuat($dong, $bao['totals'] ?? [], $filters);
+            return $this->xuat($dong, $bao['totals'] ?? [], $filters, (float) ($bao['card_fee'] ?? 0));
         }
 
         $cotTat = array_filter(explode(',', (string) $request->query('hide', '')));
@@ -77,6 +77,7 @@ class ProfitReportController extends Controller
             'filters' => $filters,
             'dong' => $dong,
             'tong' => $bao['totals'] ?? [],
+            'phiThe' => (float) ($bao['card_fee'] ?? 0),
             'bieuDo' => ['moc' => $bao['group_by'] ?? 'day', 'cot' => $bao['chart'] ?? []],
             'columns' => $columns,
             'chiNhanh' => CurrentBranch::danhSach()['ds'],
@@ -99,12 +100,12 @@ class ProfitReportController extends Controller
     }
 
     /** Xuất đúng bảng đang xem (cùng bộ lọc, cùng thứ tự), kèm dòng tổng. */
-    protected function xuat(array $dong, array $tong, array $filters)
+    protected function xuat(array $dong, array $tong, array $filters, float $phiThe = 0)
     {
         $ten = 'bao-cao-chi-phi-loi-nhuan-'.$filters['from_date'].'-den-'.$filters['to_date'].'.csv';
         $so = fn ($k, $d) => $k === 'margin' ? round((float) ($d[$k] ?? 0), 2) : ($d[$k] ?? '');
 
-        return response()->streamDownload(function () use ($dong, $tong, $so) {
+        return response()->streamDownload(function () use ($dong, $tong, $so, $phiThe) {
             $out = fopen('php://output', 'w');
             fwrite($out, "\xEF\xBB\xBF");
             fputcsv($out, array_values(self::COT));
@@ -116,8 +117,22 @@ class ProfitReportController extends Controller
                     fn ($k) => $so($k, $tong),
                     ['quantity', 'revenue', 'cost', 'profit', 'margin']
                 )));
+                if ($phiThe > 0) {
+                    $sau = self::laiSauPhi($tong, $phiThe);
+                    fputcsv($out, ['Trừ phí quẹt thẻ cửa hàng chịu', '', '', '', '', '', -$phiThe, '']);
+                    fputcsv($out, ['Lợi nhuận sau phí thẻ', '', '', '', '', '', $sau['lai'], round($sau['bien'], 2)]);
+                }
             }
             fclose($out);
         }, $ten, ['Content-Type' => 'text/csv; charset=UTF-8']);
+    }
+
+    /** Lãi gộp theo hàng trừ phí thẻ; biên tính trên cùng doanh thu của bảng. */
+    public static function laiSauPhi(array $tong, float $phiThe): array
+    {
+        $doanhThu = (float) ($tong['revenue'] ?? 0);
+        $lai = (float) ($tong['profit'] ?? 0) - $phiThe;
+
+        return ['lai' => $lai, 'bien' => $doanhThu > 0 ? $lai * 100 / $doanhThu : 0];
     }
 }
