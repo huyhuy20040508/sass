@@ -1,9 +1,14 @@
 package apitest
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"testing"
+	"time"
+
+	"sass-api/internal/domain"
+	"sass-api/internal/tenant"
 )
 
 // Báo cáo kết ca — GET /admin/reports/shifts.
@@ -20,6 +25,7 @@ type caBaoCao struct {
 	OrderCount    int64    `json:"order_count"`
 	TotalCash     float64  `json:"total_cash"`
 	TotalTransfer float64  `json:"total_transfer"`
+	TotalCard     float64  `json:"total_card"`
 	TotalRevenue  float64  `json:"total_revenue"`
 	OpeningCash   float64  `json:"opening_cash"`
 	ExpectedCash  *float64 `json:"expected_cash"`
@@ -223,5 +229,34 @@ func TestBaoCaoKetCa_KhongLanCuaHang(t *testing.T) {
 	// Đối chứng: A thấy ca của chính mình.
 	if bc := docBaoCaoCa(t, h, a, ""); bc.Meta.Total != 1 {
 		t.Fatalf("cửa hàng A phải thấy 1 ca, đang thấy %d", bc.Meta.Total)
+	}
+}
+
+// TestBaoCaoKetCa_QuetThe — đơn quẹt thẻ trong ca vào đúng cột Quẹt thẻ, không
+// lẫn sang tiền mặt (két) hay chuyển khoản.
+func TestBaoCaoKetCa_QuetThe(t *testing.T) {
+	h := dungHeThong(t)
+	a, _ := haiCuaHang(t, h)
+	moCa(t, h, a, 0)
+	banQuay(t, h, a, "cash", 1) // 90.000 tiền mặt
+
+	ctx := tenant.WithID(context.Background(), a.id)
+	now := time.Now()
+	don := &domain.Order{
+		ShopID: a.chiNhanh, OrderCode: "ca-the-" + a.vet, Channel: domain.OrderChannelPOS,
+		SubtotalAmount: 150000, TotalAmount: 150000,
+		PaymentMethod: domain.PaymentMethodCard, PaymentStatus: domain.OrderPaymentPaid,
+		Status: domain.OrderStatusCompleted, PlacedAt: &now,
+	}
+	tao(t, h.db, ctx, don)
+
+	bc := docBaoCaoCa(t, h, a, "")
+	if len(bc.Data) != 1 {
+		t.Fatalf("phải có đúng 1 ca, đang có %d", len(bc.Data))
+	}
+	ca := bc.Data[0]
+	if ca.TotalCard != 150000 || ca.TotalCash != 90000 || ca.TotalTransfer != 0 || ca.TotalRevenue != 240000 {
+		t.Errorf("thẻ / tiền mặt / chuyển khoản / doanh thu phải là 150000 / 90000 / 0 / 240000, đang là %v / %v / %v / %v",
+			ca.TotalCard, ca.TotalCash, ca.TotalTransfer, ca.TotalRevenue)
 	}
 }

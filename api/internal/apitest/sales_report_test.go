@@ -1,11 +1,15 @@
 package apitest
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"testing"
 	"time"
+
+	"sass-api/internal/domain"
+	"sass-api/internal/tenant"
 )
 
 // Báo cáo doanh thu — GET /admin/reports/sales và /admin/reports/sales/orders.
@@ -270,5 +274,38 @@ func TestBaoCaoDoanhThu_KhongLanCuaHang(t *testing.T) {
 				t.Fatalf("B thấy hoá đơn %d của A", hd.ID)
 			}
 		}
+	}
+}
+
+// TestBaoCaoDoanhThu_QuetThe — đơn quẹt thẻ vào đúng cột Quẹt thẻ, không rơi
+// sang cột Khác; lọc riêng Quẹt thẻ ra đúng đơn đó.
+func TestBaoCaoDoanhThu_QuetThe(t *testing.T) {
+	h := dungHeThong(t)
+	a, _ := haiCuaHang(t, h)
+	ctx := tenant.WithID(context.Background(), a.id)
+	now := time.Now()
+
+	truoc := ngayHomNay(docDoanhThu(t, h, a, ""))
+	don := &domain.Order{
+		ShopID: a.chiNhanh, OrderCode: "dt-the-" + a.vet, Channel: domain.OrderChannelPOS,
+		SubtotalAmount: 220000, VatAmount: 22000, TotalAmount: 242000,
+		PaymentMethod: domain.PaymentMethodCard, PaymentStatus: domain.OrderPaymentPaid,
+		Status: domain.OrderStatusCompleted, PlacedAt: &now,
+	}
+	tao(t, h.db, ctx, don)
+	tao(t, h.db, ctx, &domain.OrderItem{
+		OrderID: don.ID, ProductID: &a.sanPham, ProductVariantID: &a.bienThe, ProductName: "Sản phẩm " + a.vet,
+		UnitPrice: 220000, Quantity: 1, TotalPrice: 220000,
+	})
+
+	sau := ngayHomNay(docDoanhThu(t, h, a, ""))
+	if sau.Card-truoc.Card != 242000 || sau.Other != truoc.Other {
+		t.Errorf("đơn quẹt thẻ 242000 phải vào cột Quẹt thẻ, cột Khác đứng yên: thẻ +%v, khác +%v", sau.Card-truoc.Card, sau.Other-truoc.Other)
+	}
+	if hinhThuc := sau.Cash + sau.Transfer + sau.Card + sau.AutoQR + sau.Other; hinhThuc != sau.Paid {
+		t.Errorf("cộng các cột hình thức %v phải bằng đã thu %v", hinhThuc, sau.Paid)
+	}
+	if chiThe := ngayHomNay(docDoanhThu(t, h, a, "&methods=card")); chiThe.Card != 242000 || chiThe.Paid != 242000 || chiThe.Other != 0 {
+		t.Errorf("lọc Quẹt thẻ phải ra đúng đơn 242000, đang là %+v", chiThe)
 	}
 }

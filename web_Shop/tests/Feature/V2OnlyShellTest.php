@@ -131,6 +131,57 @@ class V2OnlyShellTest extends TestCase
             ->assertOk();
     }
 
+    /**
+     * Vào phần mềm thì dừng ở TỔNG QUAN.
+     *
+     * Route `/admin` vốn đã có sẵn lượt chuyển hướng sang Tổng quan, nhưng nó
+     * KHÔNG CÓ TÊN — mà cửa này lọc theo tên route, nên coi `/admin` là màn chưa
+     * dựng v2 và đá sang Khách hàng trước khi lượt chuyển hướng kia kịp chạy.
+     *
+     * Bài canh cả hai đầu vào: gốc trang web và gốc khu quản trị.
+     */
+    public function test_vao_phan_mem_thi_ve_tong_quan(): void
+    {
+        $this->fakeApi();
+
+        $this->withSession($this->phienQuanTri())->get('/admin')
+            ->assertRedirect(route('admin.dashboard'));
+
+        // Gốc trang web: đã đăng nhập thì đi thẳng tới trang chủ của khu làm việc
+        // (WorkspaceModule::trangChuCuaPhien) — với khu Quản trị chính là Tổng quan.
+        $this->withSession($this->phienQuanTri())->get('/')
+            ->assertRedirect(route('admin.dashboard'));
+    }
+
+    /**
+     * Mọi lối "về trang chủ phần mềm" trong vỏ v2 đều ra Tổng quan.
+     *
+     * Gõ địa chỉ /admin chỉ là một lối; ba lối còn lại nằm ngay trên thanh đầu
+     * trang và đều trỏ vào Khách hàng: LOGO cửa hàng, biểu tượng NHÀ ở breadcrumb,
+     * và mục "Quản trị" trong menu khu làm việc. Bản v2 gốc làm vậy vì hồi đó
+     * chưa có màn Tổng quan.
+     *
+     * Bài đếm theo ô `href` đã dựng ra HTML, vì đây là liên kết chứ không phải
+     * đường chuyển hướng — gõ địa chỉ thì không bao giờ chạm tới chúng.
+     */
+    public function test_cac_loi_ve_trang_chu_deu_ra_tong_quan(): void
+    {
+        $this->fakeApi();
+
+        $html = $this->withSession($this->phienQuanTri())
+            ->get(route('admin.dashboard'))->assertOk()->getContent();
+
+        $dau = strpos($html, '<div class="logo">');
+        $this->assertNotFalse($dau, 'không tìm thấy logo trên thanh đầu trang');
+        $this->assertStringContainsString(route('admin.dashboard'), substr($html, $dau, 200), 'logo không trỏ về Tổng quan');
+
+        foreach (['quick-link-admin', 'breadcrumb-item'] as $lop) {
+            $i = strpos($html, $lop);
+            $this->assertNotFalse($i, 'không tìm thấy '.$lop);
+            $this->assertStringContainsString(route('admin.dashboard'), substr($html, $i, 260), $lop.' không trỏ về Tổng quan');
+        }
+    }
+
     /** Nút Xuất Excel của chính mấy màn ấy cũng phải lọt, không thì bấm là bị đá đi. */
     public function test_duong_xuat_tep_cua_man_con_ban_cu_van_lot(): void
     {

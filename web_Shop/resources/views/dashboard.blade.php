@@ -24,10 +24,9 @@
         $LOW_STOCK = $lowStockThreshold;
         $ORDER_STATUSES = \App\Http\Controllers\OrderController::STATUSES;
         $ORDER_TONES = \App\Http\Controllers\OrderController::STATUS_TONES;
-        $PAY_METHODS = \App\Http\Controllers\OrderController::PAYMENT_METHODS;
 
         /** Tên phương thức thanh toán bản ngắn — cột hẹp không chứa nổi phần trong ngoặc. */
-        $shortMethod = fn ($key) => preg_replace('/\s*\(.*\)$/u', '', $PAY_METHODS[$key] ?? (string) $key);
+        $shortMethod = fn ($key) => \App\Http\Controllers\OrderController::tenHinhThuc((string) $key);
 
         $money = fn ($v) => number_format((float) $v, 0, ',', '.') . '₫';
         $int = fn ($v) => number_format((float) $v, 0, ',', '.');

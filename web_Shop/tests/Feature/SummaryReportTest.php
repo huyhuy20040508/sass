@@ -147,18 +147,21 @@ class SummaryReportTest extends TestCase
         $this->assertMatchesRegularExpression('#Số món trả lại</span><span class="so">2<#', $html);
         $this->assertMatchesRegularExpression('#Số lượng món trả lại</span><span class="so">3<#', $html);
         $this->assertStringContainsString('Tổng tiền trả hàng<b>45.000đ</b>', $html);
-        // Không có đơn COD thì không bày dòng COD.
-        $this->assertStringNotContainsString('Thu hộ (COD)', $html);
+        // Không có mã nào ngoài bốn hình thức thì không bày dòng "Khác".
+        $this->assertDoesNotMatchRegularExpression('#Khác</span><span class="so">#', $html);
     }
 
-    public function test_hinh_thuc_web_chi_bay_khi_co_tien(): void
+    public function test_ma_ngoai_bon_hinh_thuc_gom_dong_khac(): void
     {
         $bao = $this->baoMau();
         $bao['data']['by_payment_method'][] = ['key' => 'cod', 'orders' => 1, 'revenue' => 99000];
+        $bao['data']['by_payment_method'][] = ['key' => 'momo', 'orders' => 1, 'revenue' => 1000];
         $this->fakeApi($bao);
 
-        $this->withSession($this->phien())->get('/admin/reports/summary?show=table')
-            ->assertOk()->assertSee('Thu hộ (COD)');
+        $html = $this->withSession($this->phien())->get('/admin/reports/summary?show=table')->assertOk()->getContent();
+        $this->assertMatchesRegularExpression('#Khác</span><span class="so">100.000<#', $html);
+        $this->assertStringNotContainsString('Thu hộ (COD)', $html);
+        $this->assertStringNotContainsString('MoMo', $html);
     }
 
     public function test_bieu_do_nhan_du_so_lieu(): void

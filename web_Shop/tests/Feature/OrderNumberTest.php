@@ -30,19 +30,19 @@ class OrderNumberTest extends TestCase
                 'data' => [
                     // Đơn thu một phần bằng HAI phương thức: 30.000 tiền mặt + 20.000 CK.
                     ['loai' => 'don', 'id' => 11, 'ma' => 'DH011', 'kenh' => 'pos',
-                        'tien_mat' => 30000, 'chuyen_khoan' => 20000, 'the_vi' => 0,
+                        'tien_mat' => 30000, 'chuyen_khoan' => 20000, 'quet_the' => 0, 'qr_tu_dong' => 0,
                         'con_no' => 50000, 'co_cong_no' => true, 'tong_tien' => 100000, 'trang_thai' => 'partial'],
                     // Đơn COD đang giao, chưa thu đồng nào: CÒN PHẢI THU nhưng KHÔNG phải nợ.
                     ['loai' => 'don', 'id' => 12, 'ma' => 'DH012', 'kenh' => 'web',
-                        'tien_mat' => 0, 'chuyen_khoan' => 0, 'the_vi' => 0,
+                        'tien_mat' => 0, 'chuyen_khoan' => 0, 'quet_the' => 0, 'qr_tu_dong' => 0,
                         'con_no' => 100000, 'co_cong_no' => false, 'tong_tien' => 100000, 'trang_thai' => 'unpaid'],
                     ['loai' => 'tra-hang', 'id' => 3, 'ma' => 'TH003', 'kenh' => 'web',
-                        'tien_mat' => 40000, 'chuyen_khoan' => 0, 'the_vi' => 0,
+                        'tien_mat' => 40000, 'chuyen_khoan' => 0, 'quet_the' => 0, 'qr_tu_dong' => 0,
                         'con_no' => 0, 'co_cong_no' => false, 'tong_tien' => 40000, 'trang_thai' => 'returned'],
                 ],
                 'meta' => ['page' => 1, 'page_size' => 20, 'total' => 3, 'total_pages' => 1,
                     'tong' => ['so_dong' => 30, 'tong_tien' => 9990000, 'tien_mat' => 1230000,
-                        'chuyen_khoan' => 0, 'the_vi' => 0, 'giam_gia' => 0, 'phi_giao' => 0]],
+                        'chuyen_khoan' => 0, 'quet_the' => 0, 'qr_tu_dong' => 0, 'giam_gia' => 0, 'phi_giao' => 0]],
             ]),
             '*' => Http::response(['data' => []]),
         ]);

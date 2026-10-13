@@ -87,6 +87,157 @@ class PosTest extends TestCase
             && $req['items'] === [['product_variant_id' => 1, 'quantity' => 1]]);
     }
 
+    /**
+     * Mã hỏng: hộp Giảm giá phải GIỮ LẠI và in câu lỗi vào trong hộp.
+     *
+     * Controller đã giữ nguyên câu của API (bài ngay dưới), nhưng quầy đóng hộp
+     * trước rồi mới hỏi mã, nên mã sai trông y hệt mã đúng: hộp đóng, ô mã còn
+     * chữ, tổng không đổi — chỉ thiếu dòng "Giảm giá (mã …)". Câu lỗi có bắn ra
+     * báo nổi, mà báo nổi ở góc dưới trong 3,5 giây thì người đang nhìn vào hộp
+     * không thấy; lúc hộp còn mở thì nó còn bị chính tờ hộp che, vì <dialog> mở
+     * bằng showModal() nằm ở top layer còn khay toast chỉ có z-index 50.
+     *
+     * Bài canh HAI điều đo được từ khuôn — việc chạy thật thì đo bằng trình duyệt:
+     *   1. hộp có khối báo lỗi riêng (như hộp Khách mới);
+     *   2. lượt hỏi mã diễn ra TRƯỚC khi đóng hộp.
+     */
+    public function test_hop_giam_gia_giu_lai_khi_ma_hong(): void
+    {
+        $js = file_get_contents(resource_path('../v2/pos/sale.blade.php'));
+
+        // 1. Khối báo lỗi nằm trong hộp Giảm giá.
+        $dau = strpos($js, 'id="posGiamBox"');
+        $this->assertNotFalse($dau, 'không tìm thấy hộp Giảm giá');
+        $hop = substr($js, $dau, strpos($js, '</dialog>', $dau) - $dau);
+        $this->assertStringContainsString('id="posGiamLoi"', $hop, 'hộp Giảm giá phải có khối báo lỗi riêng');
+
+        // 2. Trong trình xử lý Áp dụng: hỏi mã TRƯỚC, đóng hộp SAU.
+        $d = strpos($js, "\$('posGiamForm').addEventListener('submit'");
+        $this->assertNotFalse($d, 'không tìm thấy trình xử lý Áp dụng giảm giá');
+        $than = substr($js, $d, strpos($js, "\n    });", $d) - $d);
+
+        $hoi = strpos($than, 'await hoiMaGiam(');
+        $dong = strpos($than, "hop('posGiamBox').hide()");
+        $this->assertNotFalse($hoi, 'phải CHỜ API trả lời mã rồi mới quyết định đóng hộp');
+        $this->assertNotFalse($dong, 'không thấy chỗ đóng hộp');
+        $this->assertLessThan($dong, $hoi, 'đóng hộp trước khi hỏi mã thì mã sai không còn chỗ nào để báo');
+        // Mã hỏng thì dừng hẳn, không đi tiếp xuống nhánh đóng hộp.
+        $this->assertMatchesRegularExpression('/catch \(err\) \{\s*loiGiam\(err\.message\);\s*return;/', $than);
+    }
+
+    /**
+     * Phụ thu ÂM: giữ hộp lại và nói ra, không lặng lẽ đổi dấu.
+     *
+     * Gõ "-5000" thì ô tự thành "5.000" ngay lúc gõ (soTien lọc sạch ký tự không
+     * phải chữ số), Lưu xong khối tổng ghi "Phụ thu 5.000 đ" — người nhập có ý
+     * TRỪ mà khách bị CỘNG thêm. Chốt chặn phụ thu âm bên API (bài
+     * test_chan_email_nguoi_mua_sai_dang_va_phu_thu_am) không bao giờ chạm tới,
+     * vì số gửi lên đã dương từ trước.
+     *
+     * Bài canh ba điều đọc được từ khuôn:
+     *   1. hộp có khối báo lỗi riêng;
+     *   2. ô Giá trị đọc qua soPhuThu() — hàm GIỮ dấu — chứ không phải soNhap();
+     *   3. lượt Lưu chặn số âm và DỪNG HẲN trước khi ghi vào hoá đơn.
+     */
+    public function test_hop_phu_thu_chan_so_am(): void
+    {
+        $js = file_get_contents(resource_path('../v2/pos/sale.blade.php'));
+
+        $dau = strpos($js, 'id="posPhuThuBox"');
+        $this->assertNotFalse($dau, 'không tìm thấy hộp Phụ thu');
+        $hop = substr($js, $dau, strpos($js, '</dialog>', $dau) - $dau);
+        $this->assertStringContainsString('id="posPhuThuLoi"', $hop, 'hộp Phụ thu phải có khối báo lỗi riêng');
+
+        $d = strpos($js, "\$('posPhuThuForm').addEventListener('submit'");
+        $this->assertNotFalse($d, 'không tìm thấy trình xử lý Lưu phụ thu');
+        $than = substr($js, $d, strpos($js, "\n    });", $d) - $d);
+
+        $this->assertStringContainsString('soPhuThu(', $than, 'phải đọc ô bằng hàm giữ dấu, không phải soNhap()');
+        $this->assertMatchesRegularExpression('/if \(gt < 0\) \{\s*loiPhuThu\([^)]*\);\s*return;/', $than,
+            'số âm phải dừng hẳn lượt Lưu, không đi tiếp xuống chỗ ghi vào hoá đơn');
+
+        // Hàm đọc ô dùng chung với hộp Giảm giá; bài test của hộp kia canh phần
+        // ruột (soCoDau thật sự đọc dấu) nên ở đây chỉ cần nó đi qua đúng hàm.
+        $this->assertStringContainsString('const soPhuThu = (v) => soCoDau(v, kieuPhuThu)', $js);
+    }
+
+    /**
+     * Phụ thu % quá 100: cũng nói ra rồi giữ hộp, không lặng lẽ hạ về 100.
+     *
+     * Lộ ra đúng lúc chạy lại lỗi phụ thu âm: chốt chặn số âm vừa thêm nằm ngay
+     * trên dòng `gt = Math.min(100, …)` — gõ 150 thì hộp đóng êm, khối tổng ghi
+     * "Phụ thu 22.000.000 đ" (= 100% tiền hàng) và người nhập tin là đã lưu
+     * 150%. Hộp Giảm giá cùng màn kẹp mức giảm thì có báo, phụ thu thì im.
+     *
+     * Giữ trần 100% chứ không bỏ — phụ thu lớn hơn cả tiền hàng gần như luôn là
+     * gõ nhầm, và ai thật sự cần số lớn hơn thì đã có ô VNĐ.
+     */
+    public function test_hop_phu_thu_chan_phan_tram_qua_tran(): void
+    {
+        $js = file_get_contents(resource_path('../v2/pos/sale.blade.php'));
+
+        $d = strpos($js, "\$('posPhuThuForm').addEventListener('submit'");
+        $this->assertNotFalse($d, 'không tìm thấy trình xử lý Lưu phụ thu');
+        $than = substr($js, $d, strpos($js, "\n    });", $d) - $d);
+
+        // Quá trần thì DỪNG HẲN, không đi tiếp xuống chỗ ghi vào hoá đơn.
+        $this->assertMatchesRegularExpression('/if \(gt > 100\) \{\s*loiPhuThu\([^)]*\);\s*return;/', $than,
+            'quá 100% phải báo rồi giữ hộp lại, không tự hạ xuống 100');
+        // Và không còn chỗ nào lặng lẽ kẹp về 100.
+        $this->assertStringNotContainsString('Math.min(100', $than,
+            'còn Math.min(100…) nghĩa là vẫn có đường tự hạ số mà không nói');
+
+        // Trần nói trước ở dòng gợi ý, đỡ phải gõ sai mới biết.
+        $this->assertStringContainsString('Tối đa 100%.', $js);
+    }
+
+    /**
+     * Ô "Giảm trên cả đơn" cũng không được lặng lẽ đổi số.
+     *
+     * Quét cả màn quầy sau khi sửa phụ thu thì lòi ra ba chỗ cùng tật, đều im:
+     * gõ "-5000" (VNĐ) thì ô thành "5.000" ngay lúc gõ; gõ 150 (%) thì
+     * `Math.min(100, gt)` hạ xuống 100 — tức giảm TRỌN tiền hàng, khách trả 0 đ
+     * mà không một câu báo; gõ -5 (%) thì `soNhap` kẹp về 0.
+     *
+     * Chỗ 150% nặng hơn hẳn lỗi phụ thu: một lần gõ nhầm là cho không cả đơn.
+     *
+     * Lượt sau còn lòi thêm nhánh VNĐ: gõ 30.000.000 trên giỏ 22.000.000 cũng bị
+     * kẹp im, nhưng chỗ kẹp nằm trong giamDon() chứ không ở lượt Áp dụng.
+     *
+     * Bài KHÔNG đòi gỡ phép kẹp trong giamDon(): nó còn lo trường hợp bớt hàng SAU
+     * khi đã đặt mức giảm, lúc ấy không ai gõ sai cả. Chỗ phải nói là lượt Áp dụng.
+     */
+    public function test_o_giam_ca_don_khong_lang_le_doi_so(): void
+    {
+        $js = file_get_contents(resource_path('../v2/pos/sale.blade.php'));
+
+        $d = strpos($js, "\$('posGiamForm').addEventListener('submit'");
+        $this->assertNotFalse($d, 'không tìm thấy trình xử lý Áp dụng giảm giá');
+        $than = substr($js, $d, strpos($js, "\n    });", $d) - $d);
+
+        // Đọc ô bằng hàm GIỮ DẤU, không phải soNhap() (hàm kẹp âm về 0).
+        $this->assertStringContainsString('soCoDau(', $than, 'phải đọc ô bằng hàm giữ dấu');
+        $this->assertStringNotContainsString("soNhap(\$('posGiamDon')", $than);
+
+        // Âm và quá trần đều DỪNG HẲN, không đi tiếp xuống chỗ ghi vào hoá đơn.
+        $this->assertMatchesRegularExpression('/if \(gt < 0\) \{\s*loiGiam\([^)]*\);\s*return;/', $than,
+            'mức giảm âm phải báo rồi giữ hộp lại');
+        $this->assertMatchesRegularExpression('/gt > 100[^)]*\) \{\s*loiGiam\([^)]*\);\s*return;/', $than,
+            'giảm quá 100% phải báo rồi giữ hộp lại');
+        // Nhánh VNĐ: chỗ kẹp nằm trong giamDon() nên lượt Áp dụng không thấy để mà
+        // báo — gõ 30 triệu trên giỏ 22 triệu thì hộp đóng êm, khách trả 0 đ, mở lại
+        // hộp ô vẫn ghi 30 triệu. Phải chặn ngay ở lượt Áp dụng.
+        $this->assertMatchesRegularExpression('/gt > tienHang\(\)\) \{\s*loiGiam\([^;]*\);\s*return;/', $than,
+            'giảm bằng VNĐ quá tiền hàng phải báo rồi giữ hộp lại');
+        // Và không còn đường tự hạ về 100 mà không nói.
+        $this->assertStringNotContainsString('Math.min(100', $than);
+
+        // Hàm đọc ô thật sự giữ dấu chứ không chỉ mang tên như vậy.
+        $k = strpos($js, 'const soCoDau = (v, kieu) =>');
+        $this->assertNotFalse($k, 'không tìm thấy soCoDau()');
+        $this->assertStringContainsString("startsWith('-')", substr($js, $k, 400));
+    }
+
     /** Mã hỏng thì trả nguyên câu lỗi của API để quầy bỏ mã, không nuốt đi. */
     public function test_ma_hong_tra_nguyen_cau_loi(): void
     {
@@ -374,8 +525,77 @@ class PosTest extends TestCase
     {
         Http::fake(['*/admin/orders/88' => Http::response(['data' => ['order_code' => 'DH1', 'items' => []]]), '*' => Http::response(['data' => []])]);
 
-        $this->withSession($this->phien())->get(route('thu-ngan.ban-hang.phieu', ['id' => 88, 'warehouse' => '58']))->assertViewHas('khoGiay', '58');
-        $this->withSession($this->phien())->get(route('thu-ngan.ban-hang.phieu', ['id' => 88, 'warehouse' => '99mm;}']))->assertViewHas('khoGiay', '80');
+        $this->withSession($this->phien())->get(route('thu-ngan.ban-hang.phieu', ['id' => 88, 'paper' => '58']))->assertViewHas('khoGiay', '58');
+        $this->withSession($this->phien())->get(route('thu-ngan.ban-hang.phieu', ['id' => 88, 'paper' => '99mm;}']))->assertViewHas('khoGiay', '80');
+    }
+
+    /**
+     * Mọi khoản trên phiếu phải cộng ra đúng TỔNG CỘNG: 600.000 − 30.000 bớt món
+     * − 20.000 mã − 57.000 giảm tay − 10.000 KM − 5.000 hạng − 3.000 điểm
+     * + 20.000 phụ thu + 47.500 VAT = 542.500.
+     */
+    public function test_phieu_tach_tung_khoan_giam_va_cong_ra_tong(): void
+    {
+        Http::fake([
+            '*/admin/orders/88' => Http::response(['data' => [
+                'order_code' => 'DH000088', 'placed_at' => '2026-10-07T09:30:00+07:00',
+                'created_by_name' => 'Thu Ngân A', 'recipient_name' => 'Chị Lan', 'recipient_phone' => '0909123456',
+                'subtotal_amount' => 570000, 'discount_amount' => 95000, 'voucher_code' => 'TQ20K',
+                'order_discount_percent' => 10, 'order_discount_amount' => 57000,
+                'promotion_discount' => 10000, 'rank_discount' => 5000, 'points_used' => 3, 'points_amount' => 3000,
+                'surcharge_amount' => 20000, 'surcharge_note' => 'Gói quà', 'vat_amount' => 47500, 'shipping_fee' => 0,
+                'total_amount' => 542500, 'payment_method' => 'cash', 'amount_tendered' => 600000, 'change_amount' => 57500,
+                'points_earned' => 54,
+                'items' => [
+                    ['product_name' => 'Áo thun', 'variant_name' => 'Đen · L', 'unit_price' => 150000, 'quantity' => 2, 'discount_percent' => 10, 'discount_amount' => 30000],
+                    ['product_name' => 'Quần jean', 'variant_name' => '', 'unit_price' => 300000, 'quantity' => 1, 'discount_amount' => 0],
+                    ['product_name' => 'Móc khoá', 'variant_name' => '', 'unit_price' => 0, 'quantity' => 1, 'is_gift' => true],
+                ],
+            ]]),
+            '*' => Http::response(['data' => []]),
+        ]);
+
+        $html = $this->withSession($this->phien())->get(route('thu-ngan.ban-hang.phieu', ['id' => 88]))->assertOk()->getContent();
+        $phang = $this->chuPhieu($html);
+
+        foreach ([
+            'HOÁ ĐƠN BÁN HÀNG', 'DH000088', '07/10/2026 09:30', 'Thu ngân: Thu Ngân A', 'Khách: Chị Lan · 0909123456',
+            'Áo thun (Đen · L)', '2 × 150.000 300.000', 'Bớt 10% -30.000', 'Móc khoá (Tặng)',
+            'Tiền hàng 600.000', 'Bớt theo món -30.000', 'Mã TQ20K -20.000', 'Giảm cả đơn 10% -57.000',
+            'Khuyến mãi -10.000', 'Giảm theo hạng -5.000', 'Đổi 3 điểm -3.000', 'Phụ thu: Gói quà 20.000',
+            'Thuế VAT 47.500', 'TỔNG CỘNG 542.500', 'Thanh toán Tiền mặt', 'Khách đưa 600.000', 'TIỀN THỐI 57.500',
+            'Điểm tích được +54',
+        ] as $dong) {
+            $this->assertStringContainsString($dong, $phang);
+        }
+        $this->assertStringNotContainsString('Phí giao hàng', $phang);
+    }
+
+    /** Đơn chuyển khoản không có tiền khách đưa: không in dòng thối 0 đ gây hiểu nhầm. */
+    public function test_phieu_chuyen_khoan_khong_in_tien_thoi(): void
+    {
+        Http::fake([
+            '*/admin/orders/88' => Http::response(['data' => [
+                'order_code' => 'DH000089', 'total_amount' => 100000, 'subtotal_amount' => 100000, 'payment_method' => 'bank_transfer',
+                'amount_tendered' => null, 'change_amount' => null,
+                'items' => [['product_name' => 'Nón', 'unit_price' => 100000, 'quantity' => 1]],
+            ]]),
+            '*' => Http::response(['data' => []]),
+        ]);
+
+        $phang = $this->chuPhieu($this->withSession($this->phien())->get(route('thu-ngan.ban-hang.phieu', ['id' => 88]))->getContent());
+
+        $this->assertStringContainsString('Thanh toán Chuyển khoản', $phang);
+        $this->assertStringNotContainsString('TIỀN THỐI', $phang);
+        $this->assertStringNotContainsString('Mã giảm giá', $phang);
+    }
+
+    /** Chữ trên phiếu, mỗi thẻ thành một dấu cách — hai cột của một dòng không dính vào nhau. */
+    protected function chuPhieu(string $html): string
+    {
+        $than = preg_replace('#<(style|script)\b.*?</\1>#su', ' ', $html);
+
+        return trim(preg_replace('/\s+/u', ' ', html_entity_decode(preg_replace('/<[^>]+>/', ' ', $than))));
     }
 
     public function test_phieu_cua_don_khong_co_la_404(): void
@@ -507,6 +727,31 @@ class PosTest extends TestCase
             ->assertCreated()
             ->assertJsonPath('data.customer.id', 9)
             ->assertJsonPath('data.existed', false);
+    }
+
+    /** Thêm nhanh doanh nghiệp: gửi loại khách + MST để hoá đơn điện tử lấy được về sau. */
+    public function test_them_khach_doanh_nghiep_gui_loai_va_mst(): void
+    {
+        Http::fake(['*/admin/orders/pos/khach-hang' => Http::response(['data' => ['customer' => ['id' => 11, 'full_name' => 'Công ty ABC', 'tax_code' => '0312345678'], 'existed' => false]], 201)]);
+
+        $this->withSession($this->phien())
+            ->postJson(route('thu-ngan.ban-hang.taoKhach'), ['full_name' => 'Công ty ABC', 'customer_type' => '1', 'tax_code' => ' 0312345678 ', 'address' => '1 Lê Lợi'])
+            ->assertCreated()
+            ->assertJsonPath('data.customer.tax_code', '0312345678');
+
+        Http::assertSent(fn ($req) => $req['customer_type'] === 1 && $req['tax_code'] === '0312345678' && $req['address'] === '1 Lê Lợi');
+    }
+
+    /** Khách cá nhân có lỡ gõ MST thì cũng không gửi: hồ sơ cá nhân không mang MST. */
+    public function test_them_khach_ca_nhan_bo_mst(): void
+    {
+        Http::fake(['*/admin/orders/pos/khach-hang' => Http::response(['data' => ['customer' => ['id' => 12, 'full_name' => 'Lan'], 'existed' => false]], 201)]);
+
+        $this->withSession($this->phien())
+            ->postJson(route('thu-ngan.ban-hang.taoKhach'), ['full_name' => 'Lan', 'customer_type' => '0', 'tax_code' => '0312345678'])
+            ->assertCreated();
+
+        Http::assertSent(fn ($req) => $req['customer_type'] === 0 && ! array_key_exists('tax_code', $req->data()));
     }
 
     public function test_them_khach_thieu_ten_khong_goi_api(): void

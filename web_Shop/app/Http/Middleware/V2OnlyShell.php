@@ -19,6 +19,9 @@ class V2OnlyShell
 {
     /** Màn đã có bản v2 — cho qua. */
     public const DA_CO_V2 = [
+        // Gốc /admin: không phải một màn, chỉ chuyển hướng sang Tổng quan — nhưng
+        // vẫn phải khai ở đây, không thì chính cửa này nuốt mất lượt chuyển hướng.
+        'admin.index',
         'admin.dashboard',
         'admin.nha-cung-cap.index',
         'admin.dieu-chinh-ton-kho.index',
@@ -32,17 +35,18 @@ class V2OnlyShell
         'admin.tra-hang-nha-cung-cap.index',
         'admin.phieu-dieu-chuyen.index',
         'admin.chi-nhanh.index',
+        'admin.phuong-thuc-tt.index',
         'admin.staff.index',
         'admin.loai-thu-chi.index',
         'admin.cashbook.index',
         'admin.cong-no.index',
         'admin.customers.index',
-        'admin.crm.dashboard',
         'admin.crm.customers.index',
         'admin.crm.orders.index',
         'admin.crm.promotions.index',
         'admin.crm.promotions.dongGia',
         'admin.crm.promotions.voucher',
+        'admin.crm.dashboard',
         'admin.crm.membership.index',
         'admin.crm.membership.detail',
         'admin.orders.index',

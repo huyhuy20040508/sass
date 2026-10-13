@@ -70,6 +70,7 @@ class CashbookController extends Controller
         'purchase' => 'Mua hàng',
         'supplier_return' => 'Trả hàng nhà cung cấp',
         'order_return' => 'Trả hàng bán',
+        'card_fee' => 'Phí thẻ',
     ];
 
     /**
@@ -85,6 +86,7 @@ class CashbookController extends Controller
         'purchase' => 'Mua hàng',
         'manual' => 'Tự tạo',
         'return' => 'Trả hàng',
+        'card_fee' => 'Phí thẻ',
     ];
 
     /**

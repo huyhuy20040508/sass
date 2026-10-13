@@ -32,6 +32,7 @@ import (
 	"sass-api/pkg/minvoice"
 	"sass-api/pkg/payos"
 	"sass-api/pkg/sepay"
+	"sass-api/pkg/sepayinvoice"
 )
 
 const version = "0.1.0"
@@ -386,7 +387,13 @@ func main() {
 	}
 	etaxSvc := service.NewEtaxService(
 		repository.NewEtaxRepository(db), chiNhanhRepo, orderRepo, hopETax, minvoice.New(),
+		sepayinvoice.New(cfg.ETax.SePayBaseURL),
 	)
+	// Phương thức thanh toán theo chi nhánh. Khoá cổng (PayOS, SePay, mPOS…) mã
+	// hoá bằng cùng hộp với mật khẩu HĐĐT. Website hỏi sổ này thay cho trang Cài
+	// đặt cũ — xem GanNguonThanhToan.
+	phuongThucSvc := service.NewPaymentMethodService(repository.NewPaymentMethodRepository(db), settingSvc, hopETax)
+	settingSvc.GanNguonThanhToan(phuongThucSvc)
 	caSvc := service.NewCaLamViecService(caRepo, userRepo, chiNhanhRepo)
 	// Quy tắc đánh số chứng từ — chiNhanhRepo để chốt chi nhánh có thật trước khi
 	// ghi một bộ quy tắc không màn hình nào đọc tới.
@@ -443,6 +450,9 @@ func main() {
 	// Cổng thanh toán PayOS. Dựng TRƯỚC orderSvc vì đặt hàng cần nó để xin link;
 	// chiều ngược lại paymentSvc chỉ dùng orderRepo nên hai bên không tham chiếu vòng.
 	paymentSvc := service.NewPaymentService(paymentRepo, orderRepo, payosClient, cfg.PayOS, sepayClient, notifSvc, etaxSvc)
+	// Cửa hàng tự kết nối SePay/PayOS: khoá riêng của chi nhánh trung tâm, .env làm dự phòng.
+	phuongThucSvc.GanCauHinhCong(cfg.PayOS, cfg.SePay)
+	paymentSvc.GanCongRieng(phuongThucSvc)
 	// Mailer để gửi email xác nhận sau khi khách đặt hàng (chạy nền, hỏng không chặn đơn).
 	// returnRepo để chặn hoàn cả đơn khi đơn đã có phiếu trả hàng riêng.
 	// settingSvc cấp phí vận chuyển, ngưỡng miễn phí ship, hotline và tên cửa hàng.
@@ -451,6 +461,8 @@ func main() {
 	dongGiaSvc := service.NewFixedPriceService(fixedPriceRepo, categoryRepo, orderRepo)
 	khuyenMaiSvc := service.NewPromotionProgramService(repository.NewPromotionProgramRepository(db), fixedPriceRepo, categoryRepo, orderRepo)
 	orderSvc := service.NewOrderService(orderRepo, returnRepo, mailSender, cfg.Mail, notifSvc, settingSvc, paymentSvc, promotionSvc, voucherSvc, etaxSvc, dongGiaSvc, khuyenMaiSvc, cfg.JWT.Secret)
+	// Quầy: tài khoản / máy quẹt thẻ / cổng QR theo chi nhánh.
+	orderSvc.DungPhuongThuc(phuongThucSvc)
 	orderSvc.DungThanhVien(repository.NewMembershipRepository(db))
 	returnSvc := service.NewOrderReturnService(returnRepo, notifSvc, settingSvc)
 	inventorySvc := service.NewInventoryService(inventoryRepo)
@@ -471,35 +483,36 @@ func main() {
 
 	// 7. Handler
 	handlers := router.Handlers{
-		Health:       handler.NewHealthHandler(version),
-		Auth:         handler.NewAuthHandler(authSvc),
-		Category:     handler.NewCategoryHandler(categorySvc),
-		Product:      handler.NewProductHandler(productSvc, promotionSvc),
-		Tep:          handler.NewTepHandler(cfg.App.UploadDir, cfg.App.BaseURL),
-		Customer:     handler.NewCustomerHandler(customerSvc),
-		NhomKhach:    handler.NewCustomerGroupHandler(nhomKhachSvc),
-		Order:        handler.NewOrderHandler(orderSvc),
-		Return:       handler.NewOrderReturnHandler(returnSvc),
-		Notif:        handler.NewNotificationHandler(notifSvc, hub),
-		Stock:        handler.NewInventoryHandler(inventorySvc),
-		Setting:      handler.NewSettingHandler(settingSvc),
-		User:         handler.NewUserHandler(userSvc),
-		ChiNhanh:     handler.NewChiNhanhHandler(chiNhanhSvc),
-		ETax:         handler.NewEtaxHandler(etaxSvc),
-		NhanSu:       handler.NewNhanSuHandler(nhanSuSvc),
-		NhomQuyen:    handler.NewNhomQuyenHandler(nhomQuyenSvc),
-		QuyTacMa:     handler.NewQuyTacMaHandler(quyTacMaSvc),
-		Thue:         handler.NewThueHandler(thueSvc),
-		DonViTinh:    handler.NewDonViTinhHandler(donViTinhSvc),
-		LoaiThuChi:   handler.NewLoaiThuChiHandler(loaiThuChiSvc),
-		ThuChi:       handler.NewThuChiHandler(thuChiSvc),
-		CongNo:       handler.NewCongNoHandler(congNoSvc),
-		ViTri:        handler.NewViTriHandler(viTriSvc),
-		NhaCungCap:   handler.NewNhaCungCapHandler(nhaCungCapSvc),
-		PhieuMuaHang: handler.NewPhieuMuaHangHandler(phieuMuaHangSvc),
-		TraHangNCC:   handler.NewTraHangNCCHandler(traHangNCCSvc),
-		DieuChuyen:   handler.NewPhieuDieuChuyenHandler(dieuChuyenSvc),
-		DieuChinh:    handler.NewPhieuDieuChinhHandler(dieuChinhSvc),
+		Health:        handler.NewHealthHandler(version),
+		Auth:          handler.NewAuthHandler(authSvc),
+		Category:      handler.NewCategoryHandler(categorySvc),
+		Product:       handler.NewProductHandler(productSvc, promotionSvc),
+		Tep:           handler.NewTepHandler(cfg.App.UploadDir, cfg.App.BaseURL),
+		Customer:      handler.NewCustomerHandler(customerSvc),
+		NhomKhach:     handler.NewCustomerGroupHandler(nhomKhachSvc),
+		Order:         handler.NewOrderHandler(orderSvc),
+		Return:        handler.NewOrderReturnHandler(returnSvc),
+		Notif:         handler.NewNotificationHandler(notifSvc, hub),
+		Stock:         handler.NewInventoryHandler(inventorySvc),
+		Setting:       handler.NewSettingHandler(settingSvc),
+		User:          handler.NewUserHandler(userSvc),
+		ChiNhanh:      handler.NewChiNhanhHandler(chiNhanhSvc),
+		ETax:          handler.NewEtaxHandler(etaxSvc),
+		PaymentMethod: handler.NewPaymentMethodHandler(phuongThucSvc),
+		NhanSu:        handler.NewNhanSuHandler(nhanSuSvc),
+		NhomQuyen:     handler.NewNhomQuyenHandler(nhomQuyenSvc),
+		QuyTacMa:      handler.NewQuyTacMaHandler(quyTacMaSvc),
+		Thue:          handler.NewThueHandler(thueSvc),
+		DonViTinh:     handler.NewDonViTinhHandler(donViTinhSvc),
+		LoaiThuChi:    handler.NewLoaiThuChiHandler(loaiThuChiSvc),
+		ThuChi:        handler.NewThuChiHandler(thuChiSvc),
+		CongNo:        handler.NewCongNoHandler(congNoSvc),
+		ViTri:         handler.NewViTriHandler(viTriSvc),
+		NhaCungCap:    handler.NewNhaCungCapHandler(nhaCungCapSvc),
+		PhieuMuaHang:  handler.NewPhieuMuaHangHandler(phieuMuaHangSvc),
+		TraHangNCC:    handler.NewTraHangNCCHandler(traHangNCCSvc),
+		DieuChuyen:    handler.NewPhieuDieuChuyenHandler(dieuChuyenSvc),
+		DieuChinh:     handler.NewPhieuDieuChinhHandler(dieuChinhSvc),
 		GiaChiNhanh: handler.NewGiaChiNhanhHandler(
 			service.NewGiaChiNhanhService(repository.NewGiaChiNhanhRepository(db), chiNhanhRepo)),
 		ThuocTinh: handler.NewThuocTinhHandler(thuocTinhSvc),

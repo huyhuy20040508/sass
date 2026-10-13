@@ -266,7 +266,7 @@ func (h *EtaxHandler) TraCuuMST(c *gin.Context) {
 // Lỗi nghiệp vụ của mình vẫn đi đường chung để giữ đúng mã HTTP.
 func loiHoaDon(c *gin.Context, err error) {
 	cau := err.Error()
-	if !strings.Contains(cau, "minvoice:") {
+	if !strings.Contains(cau, "minvoice:") && !strings.Contains(cau, "sepay:") {
 		handleServiceError(c, err)
 
 		return
@@ -274,6 +274,7 @@ func loiHoaDon(c *gin.Context, err error) {
 
 	// 502: chỗ hỏng nằm ở nhà cung cấp hoặc ở dữ liệu mình gửi cho họ, không
 	// phải ở máy chủ này.
+	cau = strings.ReplaceAll(cau, "sepay: ", "SePay: ")
 	response.Error(c, 502, hoaDauCau(strings.ReplaceAll(cau, "minvoice: ", "")))
 }
 

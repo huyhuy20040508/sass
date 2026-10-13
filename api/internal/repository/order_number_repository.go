@@ -52,7 +52,9 @@ func (r *orderRepository) SoDon(ctx context.Context, f domain.OrderFilter) ([]do
 		COALESCE(SUM(phi_giao), 0) AS phi_giao,
 		COALESCE(SUM(tien_mat), 0) AS tien_mat,
 		COALESCE(SUM(chuyen_khoan), 0) AS chuyen_khoan,
-		COALESCE(SUM(the_vi), 0) AS the_vi`).
+		COALESCE(SUM(quet_the), 0) AS quet_the,
+		COALESCE(SUM(qr_tu_dong), 0) AS qr_tu_dong,
+		COALESCE(SUM(khac), 0) AS khac`).
 		Scan(&tong).Error
 	if err != nil {
 		return nil, domain.TongSoDon{}, err
@@ -135,7 +137,7 @@ var (
 	// khách rút lại thì chưa có gì được trả, không có chỗ trong sổ bán hàng.
 	phieuDaTra = sqlDanhSach(returnedStatuses)
 
-	// cauLuotThu cộng sổ THU TIỀN của từng đơn (migration 0066), tách sẵn theo ba
+	// cauLuotThu cộng sổ THU TIỀN của từng đơn (migration 0066), tách sẵn theo bốn
 	// nhóm phương thức. Nối bằng câu con đã gom nhóm chứ không JOIN thẳng rồi
 	// GROUP BY cả câu ngoài: câu ngoài còn phải UNION với phiếu trả, mà một mệnh đề
 	// GROUP BY quàng qua cả hai nhánh thì mỗi lần thêm cột lại phải nhớ thêm vào đó.
@@ -144,12 +146,15 @@ var (
 				SUM(amount) AS da_thu,
 				SUM(CASE WHEN payment_method IN (%s) THEN amount ELSE 0 END) AS tm,
 				SUM(CASE WHEN payment_method IN (%s) THEN amount ELSE 0 END) AS ck,
-				SUM(CASE WHEN payment_method IN (%s) THEN amount ELSE 0 END) AS vi
+				SUM(CASE WHEN payment_method IN (%s) THEN amount ELSE 0 END) AS the,
+				SUM(CASE WHEN payment_method IN (%s) THEN amount ELSE 0 END) AS qr,
+				SUM(CASE WHEN payment_method IN (%s) THEN amount ELSE 0 END) AS kh
 			FROM order_payments
 			WHERE deleted_at IS NULL
 			GROUP BY order_id, tenant_id
 		) tt ON tt.order_id = orders.id AND tt.tenant_id = orders.tenant_id`,
-		sqlDanhSach(domain.NhomTienMat), sqlDanhSach(domain.NhomChuyenKhoan), sqlDanhSach(domain.NhomTheVi))
+		sqlDanhSach(domain.NhomTienMat), sqlDanhSach(domain.NhomChuyenKhoan),
+		sqlDanhSach(domain.NhomQuetThe), sqlDanhSach(domain.NhomQRTuDong), sqlDanhSach(domain.NhomKhac))
 
 	// phanThuMotLan là phần tiền của đơn đã thu đủ mà sổ không có lượt nào ghi —
 	// tiền thu một lần ngay lúc bán, hay đơn được gạt cờ "đã thanh toán". Phần ấy
@@ -185,14 +190,14 @@ var (
 	}
 )
 
-// cotTienDon là một trong ba cột tiền của đơn bán: các lượt thu thuộc nhóm ấy,
+// cotTienDon là một cột tiền của đơn bán: các lượt thu thuộc nhóm ấy,
 // cộng phần thu một lần nếu phương thức khai trên đơn cũng thuộc nhóm ấy.
 func cotTienDon(cotLuotThu string, nhom []string) string {
 	return fmt.Sprintf("COALESCE(tt.%s, 0) + CASE WHEN orders.payment_method IN (%s) THEN %s ELSE 0 END",
 		cotLuotThu, sqlDanhSach(nhom), phanThuMotLan)
 }
 
-// cotTienPhieuTra là một trong ba cột tiền của phiếu trả: số tiền hoàn, nằm ở
+// cotTienPhieuTra là một cột tiền của phiếu trả: số tiền hoàn, nằm ở
 // cột theo phương thức hoàn, và CHỈ khi phiếu đã hoàn tiền thật. Phiếu mới nhận
 // hàng về (hay phiếu của lượt đổi hàng, hoàn "none") chưa có đồng nào đi ra.
 func cotTienPhieuTra(nhom []string) string {
@@ -229,7 +234,9 @@ func (r *orderRepository) cauDonBan(ctx context.Context, f domain.OrderFilter) *
 				ELSE COALESCE(tt.da_thu, 0) END AS da_thu,
 			` + cotTienDon("tm", domain.NhomTienMat) + ` AS tien_mat,
 			` + cotTienDon("ck", domain.NhomChuyenKhoan) + ` AS chuyen_khoan,
-			` + cotTienDon("vi", domain.NhomTheVi) + ` AS the_vi,
+			` + cotTienDon("the", domain.NhomQuetThe) + ` AS quet_the,
+			` + cotTienDon("qr", domain.NhomQRTuDong) + ` AS qr_tu_dong,
+			` + cotTienDon("kh", domain.NhomKhac) + ` AS khac,
 			CASE WHEN ` + donConSong + ` AND NOT (` + daThuDu + `)
 				THEN GREATEST(orders.total_amount - COALESCE(tt.da_thu, 0), 0)
 				ELSE 0 END AS con_no,
@@ -297,7 +304,9 @@ func (r *orderRepository) cauPhieuTra(ctx context.Context, f domain.OrderFilter)
 			0 AS da_thu,
 			` + cotTienPhieuTra(domain.NhomTienMat) + ` AS tien_mat,
 			` + cotTienPhieuTra(domain.NhomChuyenKhoan) + ` AS chuyen_khoan,
-			` + cotTienPhieuTra(domain.NhomTheVi) + ` AS the_vi,
+			` + cotTienPhieuTra(domain.NhomQuetThe) + ` AS quet_the,
+			` + cotTienPhieuTra(domain.NhomQRTuDong) + ` AS qr_tu_dong,
+			` + cotTienPhieuTra(domain.NhomKhac) + ` AS khac,
 			0 AS con_no,
 			0 AS co_cong_no,
 			0 AS xuat_duoc_hoa_don,
@@ -325,7 +334,7 @@ func (r *orderRepository) cauPhieuTra(ctx context.Context, f domain.OrderFilter)
 	// Lọc phương thức: phiếu trả ở lại nếu nó HOÀN bằng cùng nhóm phương thức (v2
 	// lọc phiếu trả theo `payment_method` của chính phiếu, không gạt cả nhánh).
 	if coLoc(f.PaymentMethod) {
-		q = q.Where("order_returns.refund_method IN ?", nhomCua(splitCSV(f.PaymentMethod)))
+		q = q.Where("order_returns.refund_method IN ?", nhomCua(domain.MaCuaHinhThuc(splitCSV(f.PaymentMethod))))
 	}
 
 	if f.Keyword != "" {
@@ -384,7 +393,7 @@ func locPhuongThucDon(q *gorm.DB, giaTri string) *gorm.DB {
 	if !coLoc(giaTri) {
 		return q
 	}
-	ds := splitCSV(giaTri)
+	ds := domain.MaCuaHinhThuc(splitCSV(giaTri))
 
 	return q.Where(`(orders.payment_method IN ? OR EXISTS (
 		SELECT 1 FROM order_payments p
@@ -400,7 +409,7 @@ func locPhuongThucDon(q *gorm.DB, giaTri string) *gorm.DB {
 // Gom lên nhóm — cũng là cách v2 lọc: bốn nhóm, không phải từng mã.
 func nhomCua(chon []string) []string {
 	var out []string
-	for _, nhom := range [][]string{domain.NhomTienMat, domain.NhomChuyenKhoan, domain.NhomTheVi} {
+	for _, nhom := range [][]string{domain.NhomTienMat, domain.NhomChuyenKhoan, domain.NhomQuetThe, domain.NhomQRTuDong, domain.NhomKhac} {
 		for _, v := range chon {
 			if slices.Contains(nhom, v) {
 				out = append(out, nhom...)
@@ -410,7 +419,7 @@ func nhomCua(chon []string) []string {
 		}
 	}
 	if len(out) == 0 {
-		// Chọn toàn giá trị ngoài ba nhóm: không phiếu trả nào khớp.
+		// Chọn toàn giá trị ngoài các nhóm: không phiếu trả nào khớp.
 		return []string{""}
 	}
 
@@ -586,4 +595,27 @@ func (r *orderRepository) LuotThuCuaDon(ctx context.Context, orderID uint) ([]do
 		Find(&rows).Error
 
 	return rows, err
+}
+
+func (r *orderRepository) PhiTheCuaDon(ctx context.Context, orderID uint) (*domain.PhiTheDon, error) {
+	var x domain.PhiTheDon
+	err := r.db.WithContext(ctx).Table("orders o").
+		Joins("LEFT JOIN payment_method_details d ON d.id = o.payment_method_detail_id").
+		Joins("LEFT JOIN payment_devices pd ON pd.id = d.device_id").
+		Where("o.id = ?", orderID).
+		Select("o.card_fee, COALESCE(pd.name, '') AS ten_may").
+		Scan(&x).Error
+	if err != nil || x.CardFee <= 0 {
+		return nil, err
+	}
+
+	var ma []string
+	err = r.db.WithContext(ctx).Model(&domain.ThuChi{}).
+		Where("source = ? AND source_id = ?", domain.ThuChiTuPhiThe, orderID).
+		Order("id").Limit(1).Pluck("code", &ma).Error
+	if len(ma) > 0 {
+		x.MaPhieuChi = ma[0]
+	}
+
+	return &x, err
 }

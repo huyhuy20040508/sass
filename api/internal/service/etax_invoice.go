@@ -32,6 +32,9 @@ func (s *etaxService) Ky(ctx context.Context, orderID uint) (*domain.EtaxInvoice
 	if hd.Status == domain.HoaDonDaGui || hd.Status == domain.HoaDonDaPhatHanh {
 		return nil, domain.ErrHoaDonDaKy
 	}
+	if ketNoi.Provider == domain.NhaCungCapSePay {
+		return s.kySePay(ctx, hd, ketNoi)
+	}
 
 	err = s.thuLai(ctx, ketNoi, func() error {
 		return s.mi.Ky(ctx, ketNoi.TaxCode, ketNoi.Token, hd.InvoiceID)
@@ -66,6 +69,9 @@ func (s *etaxService) DongBo(ctx context.Context, orderID uint) (*domain.EtaxInv
 	if err != nil {
 		return nil, err
 	}
+	if ketNoi.Provider == domain.NhaCungCapSePay {
+		return s.dongBoSePay(ctx, hd, ketNoi)
+	}
 
 	truoc := hd.Status
 	s.dongBoTuCong(ctx, ketNoi, hd)
@@ -89,6 +95,9 @@ func (s *etaxService) ThayThe(ctx context.Context, orderID uint, req *dto.EtaxTh
 	hd, ketNoi, err := s.hoaDonVaKetNoi(ctx, orderID)
 	if err != nil {
 		return nil, err
+	}
+	if ketNoi.Provider == domain.NhaCungCapSePay {
+		return nil, domain.ErrETaxChuaHoTro
 	}
 	if err := coTheSua(hd); err != nil {
 		return nil, err
@@ -138,6 +147,9 @@ func (s *etaxService) DieuChinh(ctx context.Context, orderID uint, req *dto.Etax
 	if err != nil {
 		return nil, err
 	}
+	if ketNoi.Provider == domain.NhaCungCapSePay {
+		return nil, domain.ErrETaxChuaHoTro
+	}
 	if err := coTheSua(hd); err != nil {
 		return nil, err
 	}
@@ -165,6 +177,10 @@ func (s *etaxService) BanIn(ctx context.Context, orderID uint, chuyenDoi bool) (
 	if err != nil {
 		return nil, err
 	}
+	// SePay không có bản chuyển đổi riêng — bản PDF là bản in.
+	if ketNoi.Provider == domain.NhaCungCapSePay {
+		return s.tepSePay(ctx, hd, ketNoi, "pdf")
+	}
 
 	var du []byte
 	err = s.thuLai(ctx, ketNoi, func() error {
@@ -190,6 +206,9 @@ func (s *etaxService) BanXML(ctx context.Context, orderID uint) ([]byte, error) 
 	// một câu khó hiểu.
 	if hd.Status == domain.HoaDonNhap {
 		return nil, domain.ErrHoaDonChuaKy
+	}
+	if ketNoi.Provider == domain.NhaCungCapSePay {
+		return s.tepSePay(ctx, hd, ketNoi, "xml")
 	}
 
 	var du []byte

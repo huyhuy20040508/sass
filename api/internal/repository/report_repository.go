@@ -121,13 +121,15 @@ func (r *reportRepository) Totals(ctx context.Context, p domain.ReportPeriod) (d
 		Subtotal float64
 		Discount float64
 		Shipping float64
+		CardFee  float64
 	}
 	err := r.orders(ctx, p).
 		Select(`COUNT(*) AS orders,
 			COALESCE(SUM(o.total_amount), 0) AS revenue,
 			COALESCE(SUM(o.subtotal_amount), 0) AS subtotal,
 			COALESCE(SUM(o.discount_amount), 0) AS discount,
-			COALESCE(SUM(o.shipping_fee), 0) AS shipping`).
+			COALESCE(SUM(o.shipping_fee), 0) AS shipping,
+			COALESCE(SUM(o.card_fee), 0) AS card_fee`).
 		Scan(&money).Error
 	if err != nil {
 		return out, err
@@ -152,6 +154,7 @@ func (r *reportRepository) Totals(ctx context.Context, p domain.ReportPeriod) (d
 		Shipping: money.Shipping,
 		Units:    goods.Units,
 		Cost:     goods.Cost,
+		CardFee:  money.CardFee,
 	}
 	out.Profit = out.Subtotal - out.Discount - out.Cost
 	if out.Orders > 0 {

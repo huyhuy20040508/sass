@@ -126,7 +126,14 @@ const (
 	ThuChiTuPhieuMua = "purchase"
 	ThuChiTuTraNCC   = "supplier_return"
 	ThuChiTuTraHang  = "order_return"
+	// ThuChiTuPhiThe — phí quẹt thẻ cửa hàng chịu của một đơn quầy (source_id = id đơn).
+	ThuChiTuPhiThe = "card_fee"
 )
+
+// LoaiChiPhiThanhToan là loại chi gieo sẵn cho mọi cửa hàng (migration 0057) mà
+// phiếu phí thẻ tự sinh trỏ vào. Tra theo tên: cửa hàng đổi tên hay xoá loại này
+// thì phiếu vẫn ghi, chỉ là không có phân loại.
+const LoaiChiPhiThanhToan = "Phí thanh toán, phí ngân hàng, phí cổng thanh toán"
 
 // TuSinh cho biết phiếu do chứng từ khác đẻ ra, không phải người dùng tự lập.
 func (t ThuChi) TuSinh() bool { return t.Source != "" && t.Source != ThuChiTuTay }

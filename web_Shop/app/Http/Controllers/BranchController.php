@@ -61,6 +61,7 @@ class BranchController extends Controller
      */
     public const NHA_CUNG_CAP_ETAX = [
         'minvoice' => 'M-Invoice',
+        'sepay' => 'SePay',
     ];
 
     /** Hai lựa chọn của ô lọc trạng thái. '' = không lọc. */
@@ -251,10 +252,12 @@ class BranchController extends Controller
     {
         $du = $request->validate([
             'provider' => ['required', 'string', Rule::in(array_keys(self::NHA_CUNG_CAP_ETAX))],
-            'tax_code' => ['required', 'string', 'max:30'],
+            // SePay chỉ cần tên đăng nhập / mật khẩu; M-Invoice dựng địa chỉ cổng từ MST.
+            'tax_code' => [Rule::requiredIf(fn () => $request->input('provider') === 'minvoice'), 'nullable', 'string', 'max:30'],
             'username' => ['required', 'string', 'max:150'],
             'password' => ['required', 'string', 'max:200'],
             'ma_dvcs' => ['nullable', 'string', 'max:20'],
+            'account_ref' => ['nullable', 'string', 'max:64'],
         ], [
             'provider.in' => 'Nhà cung cấp hoá đơn điện tử này chưa được hỗ trợ.',
             'tax_code.required' => 'Chưa nhập mã số thuế.',
@@ -265,12 +268,15 @@ class BranchController extends Controller
         return $this->send(
             fn () => $this->api->ketNoiEtax($id, [
                 'provider' => $du['provider'],
-                'tax_code' => trim($du['tax_code']),
+                'tax_code' => trim((string) ($du['tax_code'] ?? '')),
                 'username' => trim($du['username']),
                 // KHÔNG trim mật khẩu: khoảng trắng đầu/cuối có thể là một phần
                 // của nó, và cắt đi là lượt đăng nhập hỏng mà không ai hiểu vì sao.
                 'password' => $du['password'],
                 'ma_dvcs' => trim((string) ($du['ma_dvcs'] ?? '')) ?: 'VP',
+                // SePay: tài khoản nhà cung cấp muốn dùng. Màn hình không hỏi ô
+                // này (rỗng = API tự chọn cái đang bật duy nhất).
+                'account_ref' => trim((string) ($du['account_ref'] ?? '')),
             ]),
             'Đã kết nối '.(self::NHA_CUNG_CAP_ETAX[$du['provider']] ?? 'cổng hoá đơn điện tử').'.'
         );

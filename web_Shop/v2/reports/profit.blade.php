@@ -150,6 +150,15 @@
                             <tr class="ln-tong-lai">
                                 <th colspan="{{ max(1, $soCotHien) }}" class="text-right">Tổng cộng Lợi nhuận: {{ $tien($tong['profit'] ?? 0) }}</th>
                             </tr>
+                            @if (($phiThe ?? 0) > 0)
+                                @php($sauPhi = $C::laiSauPhi($tong, $phiThe))
+                                <tr class="ln-phi-the">
+                                    <th colspan="{{ max(1, $soCotHien) }}" class="text-right" title="{{ \App\Http\Controllers\SalesReportController::GOI_Y_PHI_THE }}">Trừ phí quẹt thẻ cửa hàng chịu: <span class="text-danger">-{{ $tien($phiThe) }}</span></th>
+                                </tr>
+                                <tr class="ln-sau-phi">
+                                    <th colspan="{{ max(1, $soCotHien) }}" class="text-right {{ $sauPhi['lai'] < 0 ? 'text-danger' : 'text-success' }}">Lợi nhuận sau phí thẻ: {{ $tien($sauPhi['lai']) }} ({{ $phanTram($sauPhi['bien']) }}%)</th>
+                                </tr>
+                            @endif
                         </tfoot>
                     @endif
                 </table>
@@ -207,25 +216,34 @@
                 if (new URLSearchParams(location.search).get('chart_sort') === 'desc') cot.reverse();
                 const nhieuNam = new Set(cot.map((m) => m.key.slice(0, 4))).size > 1;
 
+                const cotBan = [
+                    ['Tổng doanh thu', 'revenue', 'rgba(124, 110, 246, 0.85)'],
+                    ['Giá vốn', 'cost', 'rgba(255, 145, 140, 0.85)'],
+                    ['Lợi nhuận', 'profit', 'rgba(60, 195, 223, 0.85)'],
+                ].map(([ten, k, mau]) => ({
+                    label: ten, data: cot.map((m) => m[k]), backgroundColor: mau, order: 1,
+                    borderRadius: 3, barPercentage: 0.8, categoryPercentage: 0.75, maxBarThickness: 28,
+                }));
+                // Đường chỉ vẽ khi kỳ có phí thẻ: API trả 0 khi đang lọc nhóm / mặt hàng.
+                if (cot.some((m) => Number(m.card_fee) > 0)) {
+                    cotBan.push({
+                        type: 'line', label: 'Lợi nhuận sau phí thẻ', order: 0, phiThe: true,
+                        data: cot.map((m) => (Number(m.profit) || 0) - (Number(m.card_fee) || 0)),
+                        borderColor: '#f29220', backgroundColor: '#f29220', borderWidth: 2,
+                        pointRadius: 4, pointHoverRadius: 6, tension: 0.25,
+                    });
+                }
+
                 if (bieuDo) bieuDo.destroy();
                 bieuDo = new Chart(o, {
                     type: 'bar',
-                    data: {
-                        labels: cot.map((m) => nhan(m.key, nhieuNam)),
-                        datasets: [
-                            ['Tổng doanh thu', 'revenue', 'rgba(124, 110, 246, 0.85)'],
-                            ['Giá vốn', 'cost', 'rgba(255, 145, 140, 0.85)'],
-                            ['Lợi nhuận', 'profit', 'rgba(60, 195, 223, 0.85)'],
-                        ].map(([ten, k, mau]) => ({
-                            label: ten, data: cot.map((m) => m[k]), backgroundColor: mau,
-                            borderRadius: 3, barPercentage: 0.8, categoryPercentage: 0.75, maxBarThickness: 28,
-                        })),
-                    },
+                    data: { labels: cot.map((m) => nhan(m.key, nhieuNam)), datasets: cotBan },
                     options: {
                         responsive: true, maintainAspectRatio: false,
                         plugins: {
-                            legend: { position: 'bottom', labels: { boxWidth: 12 } },
-                            tooltip: { callbacks: { label: (x) => `${x.dataset.label}: ${tien(x.parsed.y)} đ` } },
+                            legend: { position: 'bottom', labels: { boxWidth: 12, sort: (a, b) => a.datasetIndex - b.datasetIndex } },
+                            tooltip: { callbacks: { label: (x) => `${x.dataset.label}: ${tien(x.parsed.y)} đ`
+                                + (x.dataset.phiThe ? ` (đã trừ phí thẻ ${tien(cot[x.dataIndex].card_fee)} đ)` : '') } },
                         },
                         scales: { y: { ticks: { callback: (v) => tien(v) } } },
                     },

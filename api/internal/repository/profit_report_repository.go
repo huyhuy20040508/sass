@@ -96,3 +96,30 @@ func (r *reportRepository) ProfitBuckets(ctx context.Context, p domain.ReportPer
 	}
 	return out, nil
 }
+
+func (r *reportRepository) CardFeeTotal(ctx context.Context, p domain.ReportPeriod) (float64, error) {
+	var phi float64
+	err := r.orders(ctx, p).Select("COALESCE(SUM(o.card_fee), 0)").Scan(&phi).Error
+	return phi, err
+}
+
+func (r *reportRepository) CardFeeBuckets(ctx context.Context, p domain.ReportPeriod, groupBy string) (map[string]float64, error) {
+	expr := groupExpr(groupBy)
+	var rows []struct {
+		Key     string
+		CardFee float64
+	}
+	err := r.orders(ctx, p).
+		Select(expr + " AS `key`, COALESCE(SUM(o.card_fee), 0) AS card_fee").
+		Group(expr).
+		Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+
+	out := make(map[string]float64, len(rows))
+	for _, x := range rows {
+		out[x.Key] = x.CardFee
+	}
+	return out, nil
+}

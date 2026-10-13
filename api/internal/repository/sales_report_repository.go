@@ -11,10 +11,7 @@ import (
 // Theo giờ / theo thứ dùng lại ByHour / ByWeekday, theo ngày dùng lại Buckets.
 // Ở đây là bốn phép gộp riêng của tab doanh thu.
 
-// hinhThucQR — hai cổng thanh toán QR, gộp thành cột "QR tự động".
-var hinhThucQR = []string{domain.PaymentMethodPayOS, domain.PaymentMethodSePay}
-
-// SalesDays gộp đơn theo NGÀY đặt. Một câu cho cả mười cột: mọi cột tính trên
+// SalesDays gộp đơn theo NGÀY đặt. Một câu cho mọi cột: mọi cột tính trên
 // cùng một tập đơn nên không có chuyện hai cột lệch nhau.
 func (r *reportRepository) SalesDays(ctx context.Context, p domain.ReportPeriod) ([]domain.SalesDay, error) {
 	var rows []domain.SalesDay
@@ -24,15 +21,19 @@ func (r *reportRepository) SalesDays(ctx context.Context, p domain.ReportPeriod)
 			COALESCE(SUM(o.total_amount - o.vat_amount), 0) AS revenue,
 			COALESCE(SUM(o.total_amount), 0) AS revenue_vat,
 			COALESCE(SUM(CASE WHEN o.payment_status = ? THEN o.total_amount ELSE 0 END), 0) AS paid,
-			COALESCE(SUM(CASE WHEN o.payment_status = ? AND o.payment_method = ? THEN o.total_amount ELSE 0 END), 0) AS cash,
-			COALESCE(SUM(CASE WHEN o.payment_status = ? AND o.payment_method = ? THEN o.total_amount ELSE 0 END), 0) AS transfer,
+			COALESCE(SUM(CASE WHEN o.payment_status = ? AND o.payment_method IN ? THEN o.total_amount ELSE 0 END), 0) AS cash,
+			COALESCE(SUM(CASE WHEN o.payment_status = ? AND o.payment_method IN ? THEN o.total_amount ELSE 0 END), 0) AS transfer,
+			COALESCE(SUM(CASE WHEN o.payment_status = ? AND o.payment_method IN ? THEN o.total_amount ELSE 0 END), 0) AS card,
 			COALESCE(SUM(CASE WHEN o.payment_status = ? AND o.payment_method IN ? THEN o.total_amount ELSE 0 END), 0) AS auto_qr,
-			COALESCE(SUM(CASE WHEN o.payment_status = ? AND o.payment_method NOT IN ? THEN o.total_amount ELSE 0 END), 0) AS other`,
+			COALESCE(SUM(CASE WHEN o.payment_status = ? AND o.payment_method NOT IN ? THEN o.total_amount ELSE 0 END), 0) AS other,
+			COALESCE(SUM(o.card_fee), 0) AS card_fee`,
 			domain.OrderPaymentPaid,
-			domain.OrderPaymentPaid, domain.PaymentMethodCash,
-			domain.OrderPaymentPaid, domain.PaymentMethodBank,
-			domain.OrderPaymentPaid, hinhThucQR,
-			domain.OrderPaymentPaid, append([]string{domain.PaymentMethodCash, domain.PaymentMethodBank}, hinhThucQR...)).
+			domain.OrderPaymentPaid, domain.NhomTienMat,
+			domain.OrderPaymentPaid, domain.NhomChuyenKhoan,
+			domain.OrderPaymentPaid, domain.NhomQuetThe,
+			domain.OrderPaymentPaid, domain.NhomQRTuDong,
+			// Khác = mọi mã ngoài bốn nhóm (cả mã lạ chưa khai), cùng cách sổ đơn xếp.
+			domain.OrderPaymentPaid, domain.MaBonHinhThuc()).
 		Group("date").
 		Order("date DESC").
 		Scan(&rows).Error
@@ -112,6 +113,7 @@ func (r *reportRepository) SalesOrders(ctx context.Context, p domain.ReportPerio
 			o.vat_amount AS vat,
 			o.total_amount AS total,
 			CASE WHEN o.payment_status = ? THEN o.total_amount ELSE 0 END AS paid,
+			o.card_fee,
 			COALESCE(u.customer_code, '') AS customer_code,
 			COALESCE(u.full_name, o.recipient_name, '') AS customer_name,
 			COALESCE(NULLIF(u.phone, ''), o.recipient_phone, '') AS phone,

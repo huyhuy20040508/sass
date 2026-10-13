@@ -8,15 +8,19 @@ import (
 
 // HOÁ ĐƠN ĐIỆN TỬ — kết nối của từng chi nhánh tới cổng của nhà cung cấp.
 //
-// Hôm nay mới làm M-Invoice. `Provider` để chuỗi chứ không phải cờ vì thêm nhà
-// cung cấp thứ hai là thêm một client, không phải sửa lược đồ.
-
-// NhaCungCapMInvoice — mã nhà cung cấp duy nhất đang chạy.
-const NhaCungCapMInvoice = "minvoice"
+// `Provider` để chuỗi chứ không phải cờ: thêm nhà cung cấp là thêm một client,
+// không phải sửa lược đồ.
+const (
+	NhaCungCapMInvoice = "minvoice"
+	// NhaCungCapSePay — cổng eInvoice của SePay. Username/Password của kết nối
+	// là client ID / client secret, và AccountRef là tài khoản nhà cung cấp.
+	NhaCungCapSePay = "sepay"
+)
 
 // NhaCungCapETax là danh mục để màn hình vẽ ô chọn và API kiểm giá trị gửi lên.
 var NhaCungCapETax = map[string]string{
 	NhaCungCapMInvoice: "M-Invoice",
+	NhaCungCapSePay:    "SePay",
 }
 
 // EtaxConnection — tài khoản cổng HĐĐT của MỘT chi nhánh.
@@ -33,6 +37,9 @@ type EtaxConnection struct {
 	Username string `json:"username"`
 	Password string `json:"-" gorm:"column:password_enc"`
 	MaDVCS   string `json:"ma_dvcs"`
+	// AccountRef — SePay: `provider_account_id` hoá đơn phát hành trên đó. Một
+	// tài khoản SePay có thể nối nhiều nhà cung cấp nên phải chốt một cái.
+	AccountRef string `json:"account_ref"`
 
 	Token         string     `json:"-"`
 	TokenSyncedAt *time.Time `json:"token_synced_at"`
@@ -177,6 +184,10 @@ var (
 	// phiếu nào của nơi nào.
 	ErrETaxMSTDaDung = errors.New("mã số thuế này đã kết nối ở một chi nhánh khác")
 
+	// ErrETaxTaiKhoanDaDung — như trên, cho nhà cung cấp đăng nhập không cần
+	// mã số thuế (SePay).
+	ErrETaxTaiKhoanDaDung = errors.New("tài khoản hoá đơn điện tử này đã kết nối ở một chi nhánh khác")
+
 	// ErrHoaDonChuaLap — đơn chưa phát hành hoá đơn nên chưa có gì để ký, in
 	// hay thay thế.
 	ErrHoaDonChuaLap = errors.New("đơn này chưa phát hành hoá đơn")
@@ -203,6 +214,9 @@ var (
 	// đã kéo về. Nhận bừa thì tới lúc phát hành mới hỏng, và lúc đó khách đang
 	// đứng ở quầy chờ hoá đơn.
 	ErrETaxKyHieuLa = errors.New("ký hiệu hoá đơn này không có trong danh sách đã đăng ký")
+
+	// ErrETaxChuaHoTro — việc này chưa làm với nhà cung cấp của chi nhánh.
+	ErrETaxChuaHoTro = errors.New("nhà cung cấp hoá đơn của chi nhánh này chưa hỗ trợ thao tác này — làm trên trang của nhà cung cấp")
 )
 
 // EtaxRepository — sổ kết nối HĐĐT của một cửa hàng.
@@ -212,6 +226,9 @@ type EtaxRepository interface {
 	TheoChiNhanh(ctx context.Context, shopID uint) (*EtaxConnection, error)
 	// MaSoThueDaDung cho biết mã số thuế đã có chi nhánh KHÁC dùng chưa.
 	MaSoThueDaDung(ctx context.Context, taxCode string, trChiNhanh uint) (bool, error)
+	// TaiKhoanDaDung — cùng câu hỏi nhưng theo tên đăng nhập của một nhà cung
+	// cấp (SePay không hỏi mã số thuế).
+	TaiKhoanDaDung(ctx context.Context, provider, username string, trChiNhanh uint) (bool, error)
 	Luu(ctx context.Context, cn *EtaxConnection) error
 	Xoa(ctx context.Context, id uint) error
 	// LuuMau ghi đè danh sách mẫu của một kết nối bằng đúng thứ vừa kéo về.

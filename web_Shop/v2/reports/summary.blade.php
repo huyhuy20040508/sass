@@ -54,6 +54,8 @@
         .th-luoi span { border-bottom: 1px solid #d5d5d5; padding: 2px 0; white-space: nowrap; }
         .th-luoi span.nhan { color: #1a2a57; font-weight: 700; }
         .th-luoi span.so { text-align: center; }
+        .th-luoi span.th-phi { color: #c62828; font-weight: 400; }
+        .th-luoi span.nhan.th-phi { padding-left: 14px; }
         table.th-bang td.th-tong { font-size: 14px; }
         table.th-bang td.th-tong b { display: block; font-size: 18px; }
     </style>
@@ -214,8 +216,11 @@
                                     <td>
                                         <div class="th-luoi">
                                             <span class="nhan">Tổng số hoá đơn</span><span class="so">{{ $so['so_don'] }}</span>
-                                            @foreach ($so['hinh_thuc'] as $ht)
+                                            @foreach ($so['hinh_thuc'] as $khoa => $ht)
                                                 <span class="nhan">{{ $ht['nhan'] }}</span><span class="so">{{ $tien($ht['tien']) }}</span>
+                                                @if ($khoa === 'card' && $so['phi_the'] > 0)
+                                                    <span class="nhan th-phi" title="{{ \App\Http\Controllers\SalesReportController::GOI_Y_PHI_THE }}">↳ Phí thẻ cửa hàng chịu</span><span class="so th-phi">-{{ $tien($so['phi_the']) }}</span>
+                                                @endif
                                             @endforeach
                                         </div>
                                     </td>

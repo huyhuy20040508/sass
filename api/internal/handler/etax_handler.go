@@ -87,7 +87,7 @@ func (h *EtaxHandler) Connect(c *gin.Context) {
 	}
 	cn, err := h.svc.KetNoi(c.Request.Context(), id, &req)
 	if err != nil {
-		handleServiceError(c, err)
+		loiHoaDon(c, err)
 
 		return
 	}
@@ -148,7 +148,7 @@ func (h *EtaxHandler) Sync(c *gin.Context) {
 	}
 	cn, err := h.svc.DongBoMau(c.Request.Context(), id)
 	if err != nil {
-		handleServiceError(c, err)
+		loiHoaDon(c, err)
 
 		return
 	}

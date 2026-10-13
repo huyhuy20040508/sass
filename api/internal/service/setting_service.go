@@ -251,10 +251,10 @@ var settingRegistry = []settingDef{
 		Required: true, Public: true, MaxNum: 100_000_000,
 	},
 	// ----- Thanh toán: hình thức nhận tiền -----
-	// Mặc định bật cả hai để bản cài mới giữ đúng hai lựa chọn storefront vẫn đang
-	// hiện. Chuyển khoản chỉ THỰC SỰ được chào ra khi thông tin tài khoản đã đủ —
-	// xem BankTransferReady: bật cờ mà chưa điền số tài khoản thì khách chuyển vào
-	// đâu?
+	// COD mặc định bật để bản cài mới bán được ngay. Chuyển khoản mặc định TẮT
+	// (migration 0076): bật sẵn mà ba ô tài khoản còn rỗng là đúng trạng thái
+	// chính trang Cài đặt từ chối lưu, và storefront chào ra một hình thức không
+	// có số tài khoản nào. Khai xong tài khoản thì chủ tiệm tự bật.
 	{
 		Key: SettingPaymentCODEnabled, Group: SettingGroupPayment, Section: SettingSectionMethods,
 		Type: SettingTypeBool, Label: "Thanh toán khi nhận hàng (COD)", Default: "1",
@@ -262,7 +262,7 @@ var settingRegistry = []settingDef{
 	},
 	{
 		Key: SettingPaymentBankEnabled, Group: SettingGroupPayment, Section: SettingSectionMethods,
-		Type: SettingTypeBool, Label: "Chuyển khoản ngân hàng", Default: "1",
+		Type: SettingTypeBool, Label: "Chuyển khoản ngân hàng", Default: "0",
 		Public: true,
 	},
 	// Mặc định TẮT, khác hai hình thức trên: bộ khoá PayOS nằm ở .env, bản cài mới
@@ -418,6 +418,12 @@ type SettingService interface {
 	SetSePayReady(ready bool)
 	SePayReady() bool
 
+	// GanNguonThanhToan nối sổ Phương thức thanh toán (theo chi nhánh) vào chỗ
+	// website hỏi "có nhận chuyển khoản / PayOS / SePay không, chuyển vào tài
+	// khoản nào". Chưa nối (test, công cụ dòng lệnh) thì vẫn đọc trang Cài đặt cũ.
+	GanNguonThanhToan(n NguonThanhToanWeb)
+	NguonThanhToan() NguonThanhToanWeb
+
 	// Các hàm đọc nhanh từ snapshot của cửa hàng trong ctx. Chỉ chạm database ở
 	// lượt đọc ĐẦU TIÊN của mỗi cửa hàng.
 	Get(ctx context.Context, key string) string
@@ -427,7 +433,8 @@ type SettingService interface {
 }
 
 type settingService struct {
-	repo domain.SettingRepository
+	repo  domain.SettingRepository
+	nguon NguonThanhToanWeb
 
 	mu sync.RWMutex
 	// snaps giữ cấu hình theo TỪNG cửa hàng. Nạp lười: cửa hàng nào chưa có mặt
@@ -629,9 +636,9 @@ var paymentSetupKeys = []string{
 //   - Bật chuyển khoản mà thiếu số tài khoản = bảo khách chuyển tiền vào hư không.
 //   - Bật PayOS mà .env chưa có khoá = công tắc bật nhưng storefront vẫn không hiện.
 //
-// Chỉ chạy khi payload có ĐỤNG tới khoá thanh toán: cấu hình mặc định (bật chuyển
-// khoản, chưa điền tài khoản) là trạng thái hợp lệ của bản cài mới, không được để
-// nó chặn luôn việc lưu trang Vận chuyển hay trang Kho.
+// Chỉ chạy khi payload có ĐỤNG tới khoá thanh toán: dữ liệu cũ đang lệch luật
+// (bật chuyển khoản, chưa điền tài khoản) không được chặn luôn việc lưu trang
+// Vận chuyển hay trang Kho.
 //
 // current đọc giá trị đang lưu, dùng cho khoá không có trong payload — người dùng
 // bấm tắt COD ở trang thanh toán thì luật vẫn phải biết chuyển khoản đang bật hay
@@ -783,16 +790,64 @@ func (s *settingService) Public(ctx context.Context) map[string]string {
 			out[d.Key] = snap[d.Key]
 		}
 	}
+	// Tài khoản và công tắc cổng QR nay lấy từ chi nhánh trung tâm (Cài đặt →
+	// Phương thức thanh toán), đè lên giá trị cũ của trang Cài đặt.
+	if n := s.nguon; n != nil {
+		if tk, ok := n.TaiKhoanWeb(ctx); ok {
+			out[SettingBankName], out[SettingBankAccountNumber], out[SettingBankAccountName] = tk.NganHang, tk.SoTK, tk.ChuTK
+		}
+		for _, cong := range [][2]string{{"payos", SettingPaymentPayOSEnabled}, {"sepay", SettingPaymentSePayEnabled}} {
+			if nhan, ok := n.CoNhanWeb(ctx, cong[0]); ok {
+				out[cong[1]] = boolSo(nhan)
+			}
+		}
+	}
 	// Bật công tắc PayOS nhưng .env chưa có khoá thì báo ra là TẮT. Storefront dựng
 	// danh sách hình thức thanh toán từ đúng map này; nói dối ở đây là khách chọn
 	// được một hình thức mà API sẽ từ chối, sau khi họ đã điền xong địa chỉ.
-	if !s.PayOSReady() {
+	if !s.PayOSReady() && !coKhoaRieng(ctx, s.nguon, "payos") {
 		out[SettingPaymentPayOSEnabled] = "0"
 	}
-	if !s.SePayReady() {
+	if !s.SePayReady() && !coKhoaRieng(ctx, s.nguon, "sepay") {
 		out[SettingPaymentSePayEnabled] = "0"
 	}
+	// Cùng lý do với chuyển khoản: cờ bật mà thiếu tài khoản thì khách chọn xong
+	// không biết chuyển vào đâu, và lượt chốt đơn cũng sẽ bị từ chối.
+	if !paymentMethodAvailable(ctx, s, "bank_transfer") {
+		out[SettingPaymentBankEnabled] = "0"
+	} else if s.nguon != nil {
+		out[SettingPaymentBankEnabled] = "1"
+	}
 	return out
+}
+
+func boolSo(b bool) string {
+	if b {
+		return "1"
+	}
+
+	return "0"
+}
+
+func (s *settingService) GanNguonThanhToan(n NguonThanhToanWeb) { s.nguon = n }
+
+func (s *settingService) NguonThanhToan() NguonThanhToanWeb { return s.nguon }
+
+// coKhoaRieng — chi nhánh trung tâm đã tự kết nối cổng bằng khoá của tiệm.
+func coKhoaRieng(ctx context.Context, n NguonThanhToanWeb, loai string) bool {
+	k, ok := n.(interface {
+		CoKhoaRieng(ctx context.Context, loai string) bool
+	})
+
+	return ok && n != nil && k.CoKhoaRieng(ctx, loai)
+}
+
+func nguonCua(svc SettingService) NguonThanhToanWeb {
+	if svc == nil {
+		return nil
+	}
+
+	return svc.NguonThanhToan()
 }
 
 func (s *settingService) SetPayOSReady(ready bool) {
@@ -874,9 +929,23 @@ func settingBool(ctx context.Context, svc SettingService, key string) bool {
 //
 // Chuyển khoản cần ĐỦ ba thứ khách phải có mới chuyển được tiền: ngân hàng, số tài
 // khoản, chủ tài khoản. Bật cờ mà thiếu một trong ba thì coi như chưa nhận —
-// mặc định của bản cài mới rơi đúng vào trường hợp này, và thà không chào ra còn
-// hơn để khách bấm chọn rồi không biết chuyển đi đâu.
+// thà không chào ra còn hơn để khách bấm chọn rồi không biết chuyển đi đâu.
 func paymentMethodAvailable(ctx context.Context, svc SettingService, method string) bool {
+	if n := nguonCua(svc); n != nil {
+		if nhan, ok := n.CoNhanWeb(ctx, method); ok {
+			switch method {
+			case "bank_transfer":
+				ten, so, chu := taiKhoanChuyenKhoan(ctx, svc)
+				return nhan && ten != "" && so != "" && chu != ""
+			// Cổng nhận được khi chi nhánh trung tâm bật nó VÀ có khoá để gọi: khoá
+			// riêng của tiệm, hoặc khoá chung trong .env.
+			case "payos":
+				return nhan && (svc.PayOSReady() || coKhoaRieng(ctx, n, method))
+			case "sepay":
+				return nhan && (svc.SePayReady() || coKhoaRieng(ctx, n, method))
+			}
+		}
+	}
 	switch method {
 	case "cod":
 		return settingBool(ctx, svc, SettingPaymentCODEnabled)

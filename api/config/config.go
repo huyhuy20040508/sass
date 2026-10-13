@@ -41,6 +41,9 @@ type Config struct {
 // đơn đứng tên cửa hàng.
 type ETaxConfig struct {
 	SecretKey string
+	// SePayBaseURL — ép mọi lượt gọi eInvoice SePay về một máy. Rỗng = tự chọn
+	// theo tài khoản: tên đăng nhập EINV-TEST-… đi sandbox, còn lại máy thật.
+	SePayBaseURL string
 }
 
 type AppConfig struct {
@@ -443,6 +446,7 @@ func Load() (*Config, error) {
 	v.SetDefault("SEPAY_API_TOKEN", "")
 	v.SetDefault("SEPAY_API_BASE_URL", "https://my.sepay.vn")
 	v.SetDefault("SEPAY_QR_BASE_URL", "https://qr.sepay.vn")
+	v.SetDefault("SEPAY_EINVOICE_BASE_URL", "")
 	v.SetDefault("FACEBOOK_APP_ID", "")
 	v.SetDefault("FACEBOOK_APP_SECRET", "")
 	v.SetDefault("FACEBOOK_GRAPH_BASE_URL", "https://graph.facebook.com")
@@ -541,7 +545,8 @@ func Load() (*Config, error) {
 			Version:   strings.Trim(strings.TrimSpace(v.GetString("FACEBOOK_GRAPH_VERSION")), "/"),
 		},
 		ETax: ETaxConfig{
-			SecretKey: strings.TrimSpace(v.GetString("ETAX_SECRET_KEY")),
+			SecretKey:    strings.TrimSpace(v.GetString("ETAX_SECRET_KEY")),
+			SePayBaseURL: strings.TrimSpace(v.GetString("SEPAY_EINVOICE_BASE_URL")),
 		},
 		Google: GoogleConfig{
 			// Client secret dán từ console hay dính khoảng trắng đầu/cuối; thừa một ký

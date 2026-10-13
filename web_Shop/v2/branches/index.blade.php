@@ -336,7 +336,7 @@
                                             {{-- Đã nối thì mở hộp cài đặt, chưa nối thì mở hộp khai tài khoản. --}}
                                             @if ($etax)
                                                 <button type="button" class="bt btn_gray handle-detail-invoice" data-id="{{ $id }}"
-                                                    title="Đang dùng {{ $C::NHA_CUNG_CAP_ETAX[$etax['provider'] ?? ''] ?? 'cổng hoá đơn' }} — mã số thuế {{ $etax['tax_code'] ?? '' }}">
+                                                    title="Đang dùng {{ $C::NHA_CUNG_CAP_ETAX[$etax['provider'] ?? ''] ?? 'cổng hoá đơn' }}{{ ($etax['tax_code'] ?? '') !== '' ? ' — mã số thuế '.$etax['tax_code'] : '' }}">
                                                     {{ __('message.detail') }}
                                                 </button>
                                             @else
@@ -710,13 +710,16 @@
                                 </ul>
                             </div>
 
-                            <div class="col-12 col-md-3 mt-3">
+                            {{-- M-Invoice hỏi MST + mã đơn vị + tài khoản; SePay CHỈ hỏi tên đăng
+                                 nhập / mật khẩu đúng như trang của họ, còn lại API tự lo. Ô nào
+                                 chỉ của một bên thì mang data-ncc, JS ẩn/hiện theo ô chọn. --}}
+                            <div class="col-12 col-md-3 mt-3" data-ncc="minvoice">
                                 <label class="form-label fw-bold">{{ __('message.tax_code') }} <span class="required">*</span></label>
                                 <input type="text" class="form-control w-100 connect_tax_code" maxlength="30" autocomplete="off"
                                     placeholder="0312345678">
                                 <small class="text-muted">Chính mã số thuế đăng nhập cổng — địa chỉ máy chủ dựng từ nó.</small>
                             </div>
-                            <div class="col-12 col-md-3 mt-3">
+                            <div class="col-12 col-md-3 mt-3" data-ncc="minvoice">
                                 <label class="form-label fw-bold">Mã đơn vị cơ sở</label>
                                 <input type="text" class="form-control w-100 connect_ma_dvcs" maxlength="20" autocomplete="off" value="VP">
                                 <small class="text-muted">Bỏ trống = VP (văn phòng).</small>
@@ -731,8 +734,11 @@
                             </div>
 
                             <div class="col-12 mt-2">
-                                <small class="text-muted">Mật khẩu được mã hoá trước khi lưu và không có đường đọc lại.
+                                <small class="text-muted" data-ncc="minvoice">Mật khẩu được mã hoá trước khi lưu và không có đường đọc lại.
                                     Đổi mật khẩu bên nhà cung cấp thì khai lại ở đây.</small>
+                                <small class="text-muted" data-ncc="sepay">Chép <b>Tên đăng nhập</b> và <b>Mật khẩu</b> ở my.sepay.vn → eInvoice →
+                                    API xuất hóa đơn điện tử (tab Live). Tài khoản Sandbox (EINV-TEST-…) tự phát hành ở môi trường thử.
+                                    Mật khẩu được mã hoá trước khi lưu; bấm "Làm mới mật khẩu" bên SePay thì khai lại ở đây.</small>
                             </div>
                         </div>
                     </div>
@@ -760,8 +766,9 @@
 
                     <div class="p-2 border rounded mb-3">
                         <div class="item-left"><label class="fw-bold">Nhà cung cấp</label><span class="etax_provider"></span></div>
-                        <div class="item-left"><label class="fw-bold">{{ __('message.tax_code') }}</label><span class="etax_tax_code"></span></div>
+                        <div class="item-left etax_tax_code_dong"><label class="fw-bold">{{ __('message.tax_code') }}</label><span class="etax_tax_code"></span></div>
                         <div class="item-left"><label class="fw-bold">{{ __('message.username') }}</label><span class="etax_username"></span></div>
+                        <div class="item-left etax_account_dong"><label class="fw-bold">Tài khoản HĐĐT</label><span class="etax_account"></span></div>
                         <div class="item-left"><label class="fw-bold">Đăng nhập gần nhất</label><span class="etax_synced"></span></div>
                     </div>
 
@@ -781,7 +788,7 @@
                         <label class="form-check-label" for="etax_auto_print">Tự in hoá đơn sau khi phát hành</label>
                     </div>
 
-                    <small class="text-muted d-block">Tự phát hành chỉ chạy được với chữ ký số MỀM (file p12, hoặc dịch vụ
+                    <small class="text-muted d-block etax_ghi_minvoice">Tự phát hành chỉ chạy được với chữ ký số MỀM (file p12, hoặc dịch vụ
                         EASY / ICA / INTRUST). Ký bằng USB token thì đơn vẫn lưu thành hoá đơn nháp, bấm
                         <b>Ký và gửi</b> ở màn Đơn hàng để phát hành.</small>
                 </div>
@@ -1200,9 +1207,14 @@
         const $chiTiet = $('#detailInvoiceModal');
         const etaxDuong = (id, duoi) => URL_BASE + '/' + id + '/etax' + (duoi || '');
 
-        // Đổi ô chọn nhà cung cấp là đổi luôn tên trong ba dòng nhắc bên dưới.
+        // Đổi ô chọn nhà cung cấp là đổi luôn tên trong ba dòng nhắc bên dưới, và
+        // bộ ô riêng của nhà cung cấp đó.
         $(document).on('change', '[name="etax_supplier"]', function () {
             $noi.find('.etax-supplier-name').text($(this).data('name'));
+            const ncc = $(this).val();
+            $noi.find('[data-ncc]').each(function () {
+                $(this).toggleClass('d-none', $(this).data('ncc') !== ncc);
+            });
         });
 
         $(document).on('click', '.handle-connect-invoice', function () {
@@ -1222,13 +1234,15 @@
             const mst = $noi.find('.connect_tax_code').val().trim();
             const user = $noi.find('.connect_username').val().trim();
             const mk = $noi.find('.connect_password').val();
-            if (!mst) { toastr.error('Chưa nhập mã số thuế.'); return; }
+            const ncc = $noi.find('[name="etax_supplier"]:checked').val();
+            const laSePay = ncc === 'sepay';
+            if (!laSePay && !mst) { toastr.error('Chưa nhập mã số thuế.'); return; }
             if (!user) { toastr.error('Chưa nhập tên đăng nhập.'); return; }
             if (!mk) { toastr.error('Chưa nhập mật khẩu.'); return; }
 
             V2.luuHop($noi, etaxDuong(id), 'POST', {
-                provider: $noi.find('[name="etax_supplier"]:checked').val(),
-                tax_code: mst,
+                provider: ncc,
+                tax_code: laSePay ? '' : mst,
                 username: user,
                 // KHÔNG trim mật khẩu: khoảng trắng đầu/cuối có thể là một phần
                 // của nó, và cắt đi là lượt đăng nhập hỏng mà không ai hiểu vì sao.
@@ -1244,6 +1258,11 @@
             $chiTiet.find('.etax_provider').text(NHA_CC[d.provider] || d.provider || '-');
             $chiTiet.find('.etax_tax_code').text(chu(d.tax_code));
             $chiTiet.find('.etax_username').text(chu(d.username));
+            const laSePay = d.provider === 'sepay';
+            $chiTiet.find('.etax_account').text(chu(d.account_ref));
+            $chiTiet.find('.etax_account_dong').toggleClass('d-none', !laSePay);
+            $chiTiet.find('.etax_tax_code_dong').toggleClass('d-none', laSePay && !d.tax_code);
+            $chiTiet.find('.etax_ghi_minvoice').toggleClass('d-none', laSePay);
             $chiTiet.find('.etax_synced').text(gioNgay(d.token_synced_at));
 
             // Dựng ô chọn bằng Option(): ký hiệu và tên loại là chữ của nhà cung

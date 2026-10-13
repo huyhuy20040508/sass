@@ -26,14 +26,17 @@ type SalesDay struct {
 	// cũng không trừ, trừ ở đây là hai trang nói hai số cho cùng một ngày.
 	Returns float64 `json:"returns"`
 	Paid    float64 `json:"paid"`
-	// Tiền đã thu theo hình thức. QR tự động = payos + sepay. Quẹt thẻ: quầy
-	// chưa có hình thức này nên luôn 0. Other = cod / vnpay / momo của đơn web.
+	// Tiền đã thu theo hình thức. QR tự động = payos + sepay. Other = cod /
+	// vnpay / momo của đơn web — hình thức nào đã có cột riêng thì phải nằm
+	// trong danh sách loại trừ của Other, không thì một đơn bị đếm hai lần.
 	Cash     float64 `json:"cash"`
 	Transfer float64 `json:"transfer"`
 	Card     float64 `json:"card"`
 	AutoQR   float64 `json:"auto_qr"`
 	Other    float64 `json:"other"`
 	Debt     float64 `json:"debt"`
+	// CardFee — phí quẹt thẻ cửa hàng chịu. Không trừ vào Paid: khách đã trả đủ.
+	CardFee float64 `json:"card_fee"`
 }
 
 // Cộng dồn một ngày vào dòng tổng.
@@ -49,6 +52,7 @@ func (d *SalesDay) Cong(x SalesDay) {
 	d.AutoQR += x.AutoQR
 	d.Other += x.Other
 	d.Debt += x.Debt
+	d.CardFee += x.CardFee
 }
 
 // SalesReport — báo cáo doanh thu của một kỳ.
@@ -81,6 +85,7 @@ type SalesOrderRow struct {
 	VAT           float64 `json:"vat"`
 	Total         float64 `json:"total"` // doanh thu (VAT)
 	Paid          float64 `json:"paid"`
+	CardFee       float64 `json:"card_fee"`
 	Debt          float64 `json:"debt"`
 	// Returns — tiền hoàn của các phiếu trả (đã nhận hàng / đã hoàn tiền) của đơn này.
 	Returns float64 `json:"returns"`

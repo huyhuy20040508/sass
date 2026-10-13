@@ -29,7 +29,7 @@ func nguonTuLoc(v string) []string {
 	case "return":
 		return []string{domain.ThuChiTuTraHang, domain.ThuChiTuTraNCC}
 	case domain.ThuChiTuTay, domain.ThuChiTuDonHang, domain.ThuChiTuPhieuMua,
-		domain.ThuChiTuTraNCC, domain.ThuChiTuTraHang:
+		domain.ThuChiTuTraNCC, domain.ThuChiTuTraHang, domain.ThuChiTuPhiThe:
 		return []string{strings.TrimSpace(v)}
 	}
 
@@ -284,6 +284,7 @@ func (r *thuChiRepository) trangTri(ctx context.Context, list []domain.ThuChi) e
 // khác nhau. Khai ở đây một chỗ để thêm nguồn mới là thêm một dòng.
 var bangMaNguon = map[string][2]string{
 	domain.ThuChiTuDonHang:  {"orders", "order_code"},
+	domain.ThuChiTuPhiThe:   {"orders", "order_code"},
 	domain.ThuChiTuPhieuMua: {"purchase_orders", "po_code"},
 	domain.ThuChiTuTraHang:  {"order_returns", "return_code"},
 	domain.ThuChiTuTraNCC:   {"supplier_returns", "return_code"},

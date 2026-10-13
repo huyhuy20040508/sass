@@ -85,11 +85,23 @@ type OrderDetail struct {
 	// đã huỷ hay đã trả hết hàng không còn khoản nào phải thu.
 	DaThu float64 `json:"da_thu"`
 	ConNo float64 `json:"con_no"`
+	// PhiThe — phí quẹt thẻ cửa hàng chịu; nil khi đơn không quẹt thẻ.
+	PhiThe *domain.PhiTheDon `json:"phi_the,omitempty"`
 }
 
 type OrderService interface {
 	// DungThanhVien gắn kho thẻ thành viên — gọi một lần lúc dựng ứng dụng.
 	DungThanhVien(repo domain.MembershipRepository)
+	// DungPhuongThuc gắn sổ phương thức thanh toán theo chi nhánh (quẹt thẻ, QR
+	// tự động, tài khoản chuyển khoản ở quầy) — gọi một lần lúc dựng ứng dụng.
+	DungPhuongThuc(pt PhuongThucQuay)
+	// POSHuyQR huỷ một đơn quầy QR tự động còn chờ tiền (thu ngân bấm "Huỷ mã QR"):
+	// chốt lần thử ở cổng thành huỷ rồi huỷ đơn, trả hàng về kho.
+	POSHuyQR(ctx context.Context, id, actorID uint) error
+	// POSDoiHinhThuc thu đơn quầy đang chờ QR bằng cách khác (tiền mặt, chuyển
+	// khoản, quẹt thẻ) ngay trên chính đơn đó: chốt lần thử QR thành huỷ, ghi đơn
+	// đã thu, giữ nguyên mã đơn và hàng đã giữ.
+	POSDoiHinhThuc(ctx context.Context, id uint, req *dto.POSDoiHinhThucRequest, actorID uint) (*dto.POSCheckoutResponse, error)
 	List(ctx context.Context, filter domain.OrderFilter) ([]domain.Order, int64, error)
 	// SoDon — sổ chứng từ cho màn Quản lý đơn hàng (đơn bán + phiếu trả, đã quy
 	// đổi sẵn thành dòng bảng). Xem repository.SoDon.
@@ -194,10 +206,51 @@ type orderService struct {
 	// thanhVien: hạng và quy đổi điểm cho giảm theo hạng / đổi điểm ở quầy. Có thể
 	// nil (test) — khi nil thì đơn quầy không giảm theo hạng, không đổi điểm.
 	thanhVien domain.MembershipRepository
+	// phuongThuc: tài khoản / máy / cổng theo chi nhánh. Có thể nil (test) — khi
+	// nil thì quầy chỉ nhận tiền mặt và chuyển khoản tay như trước.
+	phuongThuc PhuongThucQuay
+}
+
+// PhuongThucQuay — phần của PaymentMethodService mà lượt bán ở quầy cần.
+type PhuongThucQuay interface {
+	ChonChoQuay(ctx context.Context, method string, detailID uint) (*ChonQuay, error)
+	GhiDonQuay(ctx context.Context, orderID uint, chon *ChonQuay, phi float64)
 }
 
 // DungThanhVien gắn kho thẻ thành viên (giảm theo hạng, đổi điểm ở quầy).
 func (s *orderService) DungThanhVien(repo domain.MembershipRepository) { s.thanhVien = repo }
+
+func (s *orderService) DungPhuongThuc(pt PhuongThucQuay) { s.phuongThuc = pt }
+
+// laQRTuDong — đơn quầy thu qua cổng QR: tạo ra CHỜ TIỀN, cổng báo về mới xong.
+func laQRTuDong(m string) bool {
+	return domain.OnlinePaymentMethod(m) || m == domain.PaymentMethodMposQR
+}
+
+// laMayMPOS — quẹt thẻ bằng máy mPOS: đẩy số tiền xuống máy, đơn chờ NextPay báo
+// quẹt xong như đơn QR.
+func tenChoTien(m string) string {
+	if m == domain.PaymentMethodCard {
+		return "lệnh máy mPOS"
+	}
+
+	return "mã QR"
+}
+
+func quaCong(m string) string {
+	if m == domain.PaymentMethodCard {
+		return "máy mPOS"
+	}
+
+	return "QR"
+}
+
+func laMayMPOS(c *ChonQuay) bool { return c != nil && c.Loai == "mpos_device" }
+
+// choTienQuay — đơn quầy đang chờ cổng báo tiền (QR tự động hoặc máy mPOS).
+func choTienQuay(o *domain.Order) bool {
+	return o.Channel == domain.OrderChannelPOS && (laQRTuDong(o.PaymentMethod) || o.PaymentMethod == domain.PaymentMethodCard)
+}
 
 func NewOrderService(orderRepo domain.OrderRepository, returnRepo domain.OrderReturnRepository, mail mailer.Mailer, mailCfg config.MailConfig, notify NotificationService, settings SettingService, payments PaymentService, promos PromotionService, vouchers VoucherService, etax PhatHanhHDDT, dongGia FixedPriceService, khuyenMai PromotionProgramService, khoaMaDon string) OrderService {
 	return &orderService{
@@ -344,7 +397,7 @@ func (s *orderService) Checkout(ctx context.Context, req *dto.CheckoutRequest, u
 	// khi trừ kho: đơn tạo xong mới phát hiện không mở được cổng thì hàng đã bị giữ
 	// cho một đơn khách không trả tiền được.
 	if domain.OnlinePaymentMethod(req.PaymentMethod) &&
-		(s.payments == nil || !s.payments.Available(req.PaymentMethod)) {
+		(s.payments == nil || !s.payments.Available(ctx, req.PaymentMethod)) {
 		return nil, domain.ErrPaymentMethodDisabled
 	}
 
@@ -441,10 +494,11 @@ func (s *orderService) Checkout(ctx context.Context, req *dto.CheckoutRequest, u
 	var bank *dto.CheckoutBankTransfer
 	if order.PaymentMethod == "bank_transfer" {
 		msg = "Đặt hàng thành công! Vui lòng chuyển khoản theo thông tin bên dưới, chúng tôi xác nhận ngay khi nhận được tiền."
+		tkTen, tkSo, tkChu := taiKhoanChuyenKhoan(ctx, s.settings)
 		bank = &dto.CheckoutBankTransfer{
-			BankName:      settingText(ctx, s.settings, SettingBankName),
-			AccountNumber: settingText(ctx, s.settings, SettingBankAccountNumber),
-			AccountName:   settingText(ctx, s.settings, SettingBankAccountName),
+			BankName:      tkTen,
+			AccountNumber: tkSo,
+			AccountName:   tkChu,
 			Content:       order.OrderCode,
 			QRImage:       settingText(ctx, s.settings, SettingBankQRImage),
 			Note:          settingText(ctx, s.settings, SettingBankTransferNote),
@@ -530,6 +584,27 @@ func (s *orderService) POSCheckout(ctx context.Context, req *dto.POSCheckoutRequ
 		if !exists {
 			return nil, domain.ErrNotFound
 		}
+	}
+
+	// Quẹt thẻ / QR tự động / tài khoản nhận: chi tiết phải đang bật ở chính chi
+	// nhánh bán. Kiểm TRƯỚC khi trừ kho, như mọi lý do từ chối khác.
+	var chon *ChonQuay
+	if req.PaymentMethod != domain.PaymentMethodCash {
+		if s.phuongThuc == nil {
+			if req.PaymentMethod != domain.PaymentMethodBank {
+				return nil, domain.ErrPaymentMethodDisabled
+			}
+		} else {
+			c, err := s.phuongThuc.ChonChoQuay(ctx, req.PaymentMethod, req.PaymentDetailID)
+			if err != nil {
+				return nil, err
+			}
+			chon = c
+		}
+	}
+	choCong := laQRTuDong(req.PaymentMethod) || laMayMPOS(chon)
+	if choCong && s.payments == nil {
+		return nil, domain.ErrPaymentMethodDisabled
 	}
 
 	// CỐ Ý không hỏi paymentMethodAvailable: các công tắc đó nói cửa hàng nhận
@@ -654,6 +729,12 @@ func (s *orderService) POSCheckout(ctx context.Context, req *dto.POSCheckoutRequ
 			ConfirmedAt: &now,
 			DeliveredAt: &now,
 		}
+		// QR tự động: tiền CHƯA về lúc tạo đơn. Đơn chờ, cổng báo tiền về thì tự
+		// hoàn tất (paymentService.markOrderPaid); thu ngân huỷ mã thì huỷ đơn.
+		if choCong {
+			o.PaymentStatus, o.Status = domain.OrderPaymentPending, domain.OrderStatusPending
+			o.ConfirmedAt, o.DeliveredAt = nil, nil
+		}
 		if req.UserID > 0 {
 			uid := req.UserID
 			o.UserID = &uid
@@ -760,6 +841,10 @@ func (s *orderService) POSCheckout(ctx context.Context, req *dto.POSCheckoutRequ
 		}
 		total += o.SurchargeAmount + o.VatAmount
 		o.TotalAmount = total
+		// Phí quẹt thẻ cửa hàng chịu, theo % đã khai cho máy — như card_fee của v2.
+		if chon != nil && chon.TyLePhi > 0 {
+			o.CardFee = math.Round(total * chon.TyLePhi / 100)
+		}
 
 		// Tiền mặt: đưa thiếu thì KHÔNG bán. Bán rồi ghi "đã thanh toán" khi khách
 		// mới đưa một nửa là tự tạo ra một khoản nợ mà không sổ nào ghi lại.
@@ -785,6 +870,41 @@ func (s *orderService) POSCheckout(ctx context.Context, req *dto.POSCheckoutRequ
 	// đếm hỏng không được làm hỏng một lượt bán đã thu tiền.
 	if len(kmDaDung) > 0 {
 		_ = s.khuyenMai.TangLuotDung(ctx, kmDaDung)
+	}
+
+	if s.phuongThuc != nil {
+		s.phuongThuc.GhiDonQuay(ctx, order.ID, chon, order.CardFee)
+	}
+
+	// QR tự động: mở mã ngay. Mở không được (cổng lỗi, sai khoá) thì huỷ đơn vừa
+	// tạo để trả hàng về kho — thu ngân chọn cách thu khác cho cùng giỏ hàng.
+	if choCong {
+		var thanhToan *dto.CheckoutPayment
+		ghiChu, cau := "Không mở được mã QR tự động", "Đang chờ khách quét mã — tiền về là đơn tự hoàn tất."
+		if laMayMPOS(chon) {
+			ghiChu, cau = "Không đẩy được lệnh xuống máy mPOS", "Đã gửi số tiền xuống máy mPOS — khách quẹt thẻ xong là đơn tự hoàn tất."
+			thanhToan, err = s.payments.DayXuongMay(ctx, order, chon)
+		} else {
+			thanhToan, err = s.payments.Start(ctx, order)
+		}
+		if err != nil {
+			if _, huyErr := s.UpdateStatus(ctx, order.ID, &dto.OrderStatusRequest{
+				Status: domain.OrderStatusCancelled, Note: ghiChu,
+			}, actorID); huyErr != nil {
+				logger.Error("không huỷ được đơn QR mở mã hỏng",
+					zap.String("order_code", order.OrderCode), zap.Error(huyErr))
+			}
+			return nil, err
+		}
+		s.signalOrder(ctx, order)
+
+		return &dto.POSCheckoutResponse{
+			OrderID: order.ID, OrderCode: order.OrderCode, Subtotal: order.SubtotalAmount,
+			Discount: order.DiscountAmount, VoucherCode: order.VoucherCode, Total: order.TotalAmount,
+			PaymentMethod: order.PaymentMethod, Status: order.Status, PaymentStatus: order.PaymentStatus,
+			Message: cau,
+			Payment: thanhToan,
+		}, nil
 	}
 
 	// Không gửi email (đơn quầy không hỏi địa chỉ thư) và không đẩy thông báo vào
@@ -846,7 +966,127 @@ func (s *orderService) POSCheckout(ctx context.Context, req *dto.POSCheckoutRequ
 		SurchargeNote:     order.SurchargeNote,
 		VatAmount:         order.VatAmount,
 		EInvoice:          hoaDon,
+		CardFee:           order.CardFee,
 	}, nil
+}
+
+func (s *orderService) POSDoiHinhThuc(ctx context.Context, id uint, req *dto.POSDoiHinhThucRequest, actorID uint) (*dto.POSCheckoutResponse, error) {
+	o, err := s.orderRepo.FindByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	laQR := choTienQuay(o)
+	if laQR && o.PaymentStatus == domain.OrderPaymentPaid {
+		return nil, fmt.Errorf("%w: khách đã trả qua %s — đơn đã hoàn tất", domain.ErrPhuongThucQuay, quaCong(o.PaymentMethod))
+	}
+	if !laQR || o.Status != domain.OrderStatusPending {
+		return nil, fmt.Errorf("%w: đơn này không phải đơn đang chờ tiền", domain.ErrPhuongThucQuay)
+	}
+	// Kiểm hình thức mới TRƯỚC khi đụng vào mã QR: máy tắt, tài khoản đã gỡ thì
+	// mã QR vẫn phải còn sống để khách quét tiếp.
+	var chon *ChonQuay
+	if req.PaymentMethod != domain.PaymentMethodCash && s.phuongThuc != nil {
+		if chon, err = s.phuongThuc.ChonChoQuay(ctx, req.PaymentMethod, req.PaymentDetailID); err != nil {
+			return nil, err
+		}
+		// Máy mPOS cần một lệnh mới gắn mã đơn — đơn này đã có lần thử với cổng
+		// (mã giao dịch trùng mã đơn), nên đi đường huỷ rồi bán lại.
+		if laMayMPOS(chon) {
+			return nil, fmt.Errorf("%w: máy mPOS cần lệnh mới — huỷ lượt chờ này rồi bán lại bằng máy mPOS", domain.ErrPhuongThucQuay)
+		}
+	} else if req.PaymentMethod == domain.PaymentMethodCard && s.phuongThuc == nil {
+		return nil, domain.ErrPaymentMethodDisabled
+	}
+	if req.PaymentMethod == domain.PaymentMethodCash && req.AmountTendered != nil && *req.AmountTendered < o.TotalAmount {
+		return nil, fmt.Errorf("%w: còn thiếu %s", domain.ErrTenderTooLow, formatVND(o.TotalAmount-*req.AmountTendered))
+	}
+
+	// Chốt lần thử QR thành HUỶ trước: từ đây tiền quét tới muộn không còn ghi
+	// được vào đơn — không thu hai lần. Tiền đã về đúng lúc này thì dừng lại.
+	duoc, err := s.payments.HuyTheoDon(ctx, o)
+	if err != nil {
+		return nil, err
+	}
+	if !duoc {
+		return nil, fmt.Errorf("%w: khách vừa trả qua %s — đơn đã hoàn tất, không thu thêm", domain.ErrPhuongThucQuay, quaCong(o.PaymentMethod))
+	}
+
+	cuDung := o.PaymentMethod
+	o, err = s.orderRepo.LockAndUpdate(ctx, id, func(o *domain.Order) (*domain.OrderStatusHistory, []string, *domain.StockRelease, error) {
+		if o.PaymentStatus == domain.OrderPaymentPaid || o.Status != domain.OrderStatusPending {
+			return nil, nil, nil, fmt.Errorf("%w: đơn đã đổi trạng thái — tải lại màn quầy", domain.ErrPhuongThucQuay)
+		}
+		now := time.Now()
+		o.PaymentMethod = req.PaymentMethod
+		o.PaymentStatus, o.Status = domain.OrderPaymentPaid, domain.OrderStatusCompleted
+		o.ConfirmedAt, o.DeliveredAt = &now, &now
+		cols := []string{"PaymentMethod", "PaymentStatus", "Status", "ConfirmedAt", "DeliveredAt"}
+		if req.PaymentMethod == domain.PaymentMethodCash && req.AmountTendered != nil {
+			dua, thoi := *req.AmountTendered, *req.AmountTendered-o.TotalAmount
+			o.AmountTendered, o.ChangeAmount = &dua, &thoi
+			cols = append(cols, "AmountTendered", "ChangeAmount")
+		}
+		h := &domain.OrderStatusHistory{
+			OrderID: o.ID, FromStatus: domain.OrderStatusPending, ToStatus: domain.OrderStatusCompleted,
+			Note:      "Đổi " + tenChoTien(cuDung) + " (" + cuDung + ") sang " + req.PaymentMethod + " tại quầy",
+			ChangedBy: nguoiTao(actorID),
+		}
+
+		return h, cols, nil, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	if s.phuongThuc != nil {
+		phi := 0.0
+		if chon != nil && chon.TyLePhi > 0 {
+			phi = math.Round(o.TotalAmount * chon.TyLePhi / 100)
+		}
+		if chon == nil {
+			chon = &ChonQuay{}
+		}
+		s.phuongThuc.GhiDonQuay(ctx, o.ID, chon, phi)
+		o.CardFee = phi
+	}
+	s.signalOrder(ctx, o)
+	s.tuPhatHanhHoaDon(ctx, o.ID)
+
+	msg := "Đã thu và hoàn tất đơn " + o.OrderCode + "."
+	if o.ChangeAmount != nil {
+		msg = "Đã thu " + formatVND(*o.AmountTendered) + ", thối lại " + formatVND(*o.ChangeAmount) + "."
+	}
+
+	return &dto.POSCheckoutResponse{
+		OrderID: o.ID, OrderCode: o.OrderCode, Subtotal: o.SubtotalAmount, Discount: o.DiscountAmount,
+		VoucherCode: o.VoucherCode, Total: o.TotalAmount, AmountTendered: o.AmountTendered, ChangeAmount: o.ChangeAmount,
+		PaymentMethod: o.PaymentMethod, Status: o.Status, PaymentStatus: o.PaymentStatus, Message: msg, CardFee: o.CardFee,
+	}, nil
+}
+
+func (s *orderService) POSHuyQR(ctx context.Context, id, actorID uint) error {
+	o, err := s.orderRepo.FindByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	laQR := choTienQuay(o)
+	if laQR && o.PaymentStatus == domain.OrderPaymentPaid {
+		return fmt.Errorf("%w: khách đã trả tiền — đơn đã hoàn tất, không huỷ được", domain.ErrPhuongThucQuay)
+	}
+	if !laQR || o.Status != domain.OrderStatusPending {
+		return fmt.Errorf("%w: đơn này không phải đơn đang chờ tiền", domain.ErrPhuongThucQuay)
+	}
+	duoc, err := s.payments.HuyTheoDon(ctx, o)
+	if err != nil {
+		return err
+	}
+	if !duoc {
+		return fmt.Errorf("%w: tiền vừa về — đơn đã hoàn tất, không huỷ được", domain.ErrPhuongThucQuay)
+	}
+	_, err = s.UpdateStatus(ctx, id, &dto.OrderStatusRequest{
+		Status: domain.OrderStatusCancelled, Note: "Thu ngân huỷ " + tenChoTien(o.PaymentMethod),
+	}, actorID)
+
+	return err
 }
 
 // POSDiscountLimit trả mức giảm giá tối đa một vai trò được TỰ bấm ở quầy.
@@ -1177,18 +1417,18 @@ func (s *orderService) CancelMine(ctx context.Context, userID, id uint, reason s
 // paymentMethodLabel đổi mã phương thức thanh toán thành câu chữ cho khách đọc.
 func paymentMethodLabel(m string) string {
 	switch m {
-	case "cod":
-		return "Thanh toán khi nhận hàng (COD)"
-	case "bank_transfer":
-		return "Chuyển khoản ngân hàng"
-	case "vnpay":
-		return "Thanh toán qua VNPAY"
-	case "momo":
-		return "Thanh toán qua MoMo"
+	case domain.PaymentMethodCash:
+		return "Tiền mặt"
+	case domain.PaymentMethodBank:
+		return "Chuyển khoản"
+	case domain.PaymentMethodCard:
+		return "Quẹt thẻ"
 	case domain.PaymentMethodPayOS, domain.PaymentMethodSePay:
-		return "Thanh toán online (QR ngân hàng)"
+		return "QR tự động"
+	case domain.PaymentMethodCOD:
+		return "Thanh toán khi nhận hàng (COD)"
 	default:
-		return m
+		return "Khác"
 	}
 }
 
@@ -1246,9 +1486,7 @@ func (s *orderService) sendOrderMail(ctx context.Context, o *domain.Order) {
 	// Chỉ đơn chuyển khoản mới kèm hướng dẫn — đơn COD nhận thêm số tài khoản chỉ
 	// tổ làm khách phân vân không biết có phải chuyển trước không.
 	if o.PaymentMethod == "bank_transfer" && paymentMethodAvailable(ctx, s.settings, "bank_transfer") {
-		data.BankName = settingText(ctx, s.settings, SettingBankName)
-		data.BankAccountNumber = settingText(ctx, s.settings, SettingBankAccountNumber)
-		data.BankAccountName = settingText(ctx, s.settings, SettingBankAccountName)
+		data.BankName, data.BankAccountNumber, data.BankAccountName = taiKhoanChuyenKhoan(ctx, s.settings)
 		data.BankTransferNote = settingText(ctx, s.settings, SettingBankTransferNote)
 	}
 	for _, it := range o.Items {
@@ -2193,6 +2431,9 @@ func (s *orderService) detail(ctx context.Context, o *domain.Order) (*OrderDetai
 		conNo = max(o.TotalAmount-daThu, 0)
 	}
 
+	// Như sổ thu tiền: đọc hỏng thì bỏ dòng phí, không hỏng cả hộp chi tiết.
+	phiThe, _ := s.orderRepo.PhiTheCuaDon(ctx, o.ID)
+
 	return &OrderDetail{
 		Order:        o,
 		Histories:    histories,
@@ -2200,6 +2441,7 @@ func (s *orderService) detail(ctx context.Context, o *domain.Order) (*OrderDetai
 		LuotThu:      luotThu,
 		DaThu:        daThu,
 		ConNo:        conNo,
+		PhiThe:       phiThe,
 	}, nil
 }
 

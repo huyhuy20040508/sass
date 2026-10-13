@@ -1,0 +1,310 @@
+/* Màn Bán hàng — phần riêng của màn, đặt sau tokens/base/v3. */
+
+.v3 .goods-filter { width: var(--tap); height: var(--tap); border-radius: var(--r-lg); background: var(--v3-paper); box-shadow: 0 0 0 1px rgba(26, 35, 74, .08); color: var(--c-navy); }
+
+.btn--option { position: relative; }
+
+.opt-dot {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--c-orange);
+}
+
+.opt-dot[hidden] { display: none; }
+
+.menh-gia { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.menh-gia button {
+  flex: 1 1 64px;
+  min-height: 32px;
+  border: 1px dashed var(--c-line);
+  border-radius: var(--r-pill);
+  background: var(--v3-paper);
+  color: var(--c-navy);
+  font-weight: var(--fw-medium);
+  font-variant-numeric: tabular-nums;
+}
+
+.menh-gia button:hover { border-color: var(--c-navy); }
+
+@media (pointer: coarse) {
+  .menh-gia button { min-height: var(--tap); }
+}
+
+.v3 #posPayBox .notes { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+@media (max-width: 599px) {
+  #posPayBox .numpad { display: none; }
+}
+
+.pay-sum > div { display: contents; }
+.pay-sum > div[hidden] { display: none; }
+
+.field-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-3); }
+
+@media (max-width: 599px) {
+  .field-2 { grid-template-columns: minmax(0, 1fr); }
+}
+.field-stack { display: grid; gap: var(--s-3); transition: opacity .15s; }
+
+.tv { display: grid; gap: var(--s-2); padding-top: var(--s-3); border-top: 1px solid var(--c-line); }
+.tv[hidden] { display: none; }
+
+.tv__row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2) var(--s-3); }
+.tv__row > :last-child { margin-left: auto; }
+.tv__diem { width: 110px; }
+
+.done-hddt { display: grid; justify-items: center; gap: var(--s-2); width: 100%; }
+.done-hddt[hidden] { display: none; }
+.done-hddt p { margin: 0; font-weight: var(--fw-medium); }
+
+.pick-grid { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+.pick input[type="checkbox"] { flex: none; }
+
+.nhom-ds { display: grid; gap: 4px; }
+
+.v3 .lines .col-qty.num { padding-left: 4px; }
+
+/* ================================================================ Hoá đơn điện tử */
+
+.field-2 > .field[hidden] { display: none; }
+.req { color: var(--c-danger); }
+.req[hidden] { display: none; }
+
+.ei-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-3);
+  padding: var(--s-3);
+  border: 1px solid var(--c-line);
+  border-radius: 12px;
+  background: var(--c-surface-2);
+  cursor: pointer;
+}
+
+.ei-toggle .switch { min-height: 0; padding-top: 2px; }
+.ei-toggle b { display: block; color: var(--c-ink); }
+.ei-toggle small { color: var(--c-muted); font-size: var(--fs-xs); }
+.ei-toggle:has(input:checked) { border-color: var(--c-navy); background: #eef3fa; }
+
+.ei-sec { display: grid; gap: var(--s-3); padding: var(--s-3); border: 1px solid var(--c-line); border-radius: 12px; }
+.ei-sec__row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-2); }
+
+.ei-sec__title {
+  margin: 0;
+  color: var(--c-muted);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-bold);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.ei-fill { min-height: 32px; padding: 0 var(--s-2); color: var(--c-navy); font-size: var(--fs-sm); }
+.ei-type { justify-self: start; }
+.ei-type button { display: inline-flex; align-items: center; gap: 6px; }
+.ei-type button[aria-checked="true"] { background: var(--c-surface); color: var(--c-navy); box-shadow: 0 1px 2px rgba(0, 0, 0, .12); }
+.input[readonly] { background: var(--c-surface-2); color: var(--c-muted); }
+
+.cus-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-2); }
+
+/* ================================================================ Thanh toán hai cột */
+
+dialog.modal--pay { width: min(1040px, calc(100vw - 32px)); }
+.modal--pay .modal__head small { display: block; color: var(--v3-rail-ink, #c3cbe0); font-size: var(--fs-xs); font-weight: var(--fw-regular); }
+
+.pay-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+  gap: var(--s-4);
+  align-items: start;
+}
+
+.pay-left {
+  position: relative;
+  display: grid;
+  gap: var(--s-3);
+  padding: var(--s-4) var(--s-3) var(--s-3);
+  border-radius: 12px;
+  background: var(--c-surface-2);
+}
+
+.pay-items-wrap > summary { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s-2); cursor: pointer; list-style: none; }
+.pay-items-wrap > summary::-webkit-details-marker { display: none; }
+.pay-items-wrap > summary::after { content: "\f078"; font: var(--fa-font-solid); font-size: 10px; color: var(--c-muted); transition: transform .15s; }
+.pay-items-wrap[open] > summary::after { transform: rotate(180deg); }
+
+.pay-items { display: grid; gap: 2px; max-height: 260px; margin: var(--s-2) 0 0; padding: 0; overflow-y: auto; list-style: none; }
+
+.pay-items li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: baseline;
+  gap: var(--s-2);
+  padding: 6px 0;
+  border-bottom: 1px dashed var(--v3-rule, #c9d0dc);
+  font-size: var(--fs-sm);
+}
+
+.pay-items__name { color: var(--c-ink); font-weight: var(--fw-medium); overflow-wrap: anywhere; }
+.pay-items__name small { display: block; color: var(--c-muted); font-size: 11px; font-weight: var(--fw-regular); }
+.pay-items__qty { color: var(--c-muted); font-family: var(--font-mono); }
+.pay-items b { font-family: var(--font-mono); white-space: nowrap; }
+.pay-items .is-gift small { color: var(--c-success); }
+
+.pay-lines { display: grid; grid-template-columns: 1fr auto; gap: 4px var(--s-3); margin: 0; font-size: var(--fs-sm); }
+.pay-lines dt { color: var(--c-ink); }
+.pay-lines dd { margin: 0; text-align: right; font-family: var(--font-mono); white-space: nowrap; }
+.pay-lines .minus { color: var(--c-success); }
+
+.pay-due {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-2);
+  padding-top: var(--s-2);
+  border-top: 2px solid var(--c-ink);
+}
+
+.pay-due span { color: var(--c-ink); font-size: var(--fs-xs); font-weight: var(--fw-bold); letter-spacing: .08em; text-transform: uppercase; }
+.pay-due b { color: var(--c-navy-ink); font-family: var(--font-mono); font-size: 28px; }
+.pay-left textarea { background: var(--c-surface); }
+
+.pay-right { display: grid; gap: var(--s-3); min-width: 0; }
+.pay-methods--4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.pay-methods--4 .pay-method { flex-direction: column; gap: 2px; min-height: 56px; font-size: var(--fs-sm); }
+.pay-methods--4 .pay-method kbd { display: none; }
+.pay-methods--4 .pay-method[aria-checked="true"]::before { display: none; }
+.pay-block { display: grid; gap: var(--s-3); }
+.pay-block[hidden] { display: none; }
+
+.qr-card {
+  grid-template-columns: 168px minmax(0, 1fr);
+  align-items: center;
+  padding: var(--s-3);
+  border: 1px solid var(--c-line);
+  border-radius: 12px;
+}
+
+.qr-card__img { width: 168px; height: 168px; border-radius: 8px; background: var(--c-surface-2); object-fit: contain; }
+.qr-card__info { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px var(--s-3); margin: 0; font-size: var(--fs-sm); }
+.qr-card__info dt { color: var(--c-muted); }
+.qr-card__info dd { margin: 0; color: var(--c-ink); overflow-wrap: anywhere; }
+.qr-card__hint { grid-column: 1 / -1; margin: 0; }
+
+.debt-left { display: flex; align-items: center; min-height: var(--tap); color: var(--c-danger); font-family: var(--font-mono); font-size: 20px; font-weight: var(--fw-bold); }
+
+@media (max-width: 899px) {
+  .pay-grid { grid-template-columns: minmax(0, 1fr); }
+  .pay-methods--4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 599px) {
+  dialog.modal--pay { width: 100vw; max-width: 100vw; }
+  .qr-card { grid-template-columns: minmax(0, 1fr); justify-items: center; }
+  .qr-card__info { width: 100%; }
+}
+
+.notes[hidden] { display: none; }
+.pay3 .change { flex-direction: column; align-items: flex-start; gap: 2px; }
+.pay3 .change span:first-child { white-space: nowrap; font-size: var(--fs-sm); }
+
+/* Hộp cao hơn màn: đầu hộp và hàng nút đứng yên, chỉ thân hộp cuộn. */
+dialog.modal[open] { display: flex; flex-direction: column; }
+dialog.modal > form { display: flex; flex: 1; flex-direction: column; min-height: 0; }
+dialog.modal .modal__body { flex: 1; min-height: 0; }
+dialog.modal .modal__head,
+dialog.modal .modal__foot { flex: none; }
+
+.pay-method:disabled { opacity: .55; cursor: not-allowed; }
+.pay-method .soon {
+  padding: 0 6px;
+  border-radius: var(--r-pill);
+  background: var(--c-surface-2);
+  color: var(--c-muted);
+  font-size: 10px;
+  font-weight: var(--fw-medium);
+}
+
+.qr-card__trong {
+  display: grid;
+  place-items: center;
+  width: 168px;
+  height: 168px;
+  border: 2px dashed var(--c-line);
+  border-radius: 8px;
+  color: #c3c9d4;
+  font-size: 48px;
+}
+
+.qr-card__trong[hidden],
+.qr-card__img[hidden],
+.qr-card__info[hidden] { display: none; }
+.pay3 .menh-gia button { flex-basis: 56px; }
+
+/* ---- Hình thức theo cấu hình chi nhánh: 2–4 ô, quẹt thẻ, QR tự động ---- */
+.pay-methods--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.pay-methods--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.pay-methods--2 .pay-method,
+.pay-methods--3 .pay-method { flex-direction: column; gap: 2px; min-height: 56px; font-size: var(--fs-sm); }
+.pay-methods--2 .pay-method[aria-checked="true"]::before,
+.pay-methods--3 .pay-method[aria-checked="true"]::before { display: none; }
+.pay-chon[hidden] { display: none; }
+.pay-chon select { width: 100%; }
+
+.the-card { padding: var(--s-3); border: 1px solid var(--c-line); border-radius: 12px; }
+.the-card__info { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px var(--s-3); margin: 0; font-size: var(--fs-sm); }
+.the-card__info dt { color: var(--c-muted); }
+.the-card__info dt small { font-size: 11px; }
+.the-card__info dd { margin: 0; color: var(--c-ink); text-align: right; }
+.the-card__info .num { font-family: var(--font-mono); }
+.the-card .hint { margin: 0; }
+.the-cho { display: grid; gap: var(--s-2); justify-items: start; margin-top: var(--s-2); }
+.the-cho[hidden] { display: none; }
+
+.pay-cong { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.pay-cong[hidden] { display: none; }
+.pay-cong__nut {
+  min-height: var(--tap);
+  padding: 0 var(--s-3);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-pill);
+  background: var(--c-surface);
+  color: var(--c-ink);
+  font: inherit;
+  font-weight: var(--fw-medium);
+  cursor: pointer;
+}
+.pay-cong__nut[aria-checked="true"] { border-color: var(--c-navy); background: var(--c-surface-2); box-shadow: inset 0 0 0 1px var(--c-navy); }
+.pay-cong__nut:disabled { opacity: .55; cursor: not-allowed; }
+
+.qrtd { display: grid; }
+.qrtd__ben { display: grid; gap: var(--s-2); align-content: start; min-width: 0; }
+.qrtd__trang { margin: 0; color: var(--c-ink); font-size: var(--fs-sm); }
+.qrtd.is-cho { border-color: var(--c-navy); }
+.qrtd__xoay {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 4px;
+  border: 2px solid var(--c-line);
+  border-top-color: var(--c-navy);
+  border-radius: 50%;
+  vertical-align: -1px;
+  animation: qrtd-xoay .8s linear infinite;
+}
+@keyframes qrtd-xoay { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .qrtd__xoay { animation: none; } }
+.btn--sm { min-height: 32px; padding: 0 var(--s-3); font-size: var(--fs-sm); justify-self: start; }
+.btn[hidden] { display: none; }
+#posQrTdHuy[hidden] { display: none; }
+@media (max-width: 899px) {
+  .pay-methods--3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.pay-doi { margin: 0; padding: var(--s-2) var(--s-3); border-radius: 8px; background: var(--c-warn-soft); color: #5b3a00; font-size: var(--fs-sm); }
+.pay-doi[hidden] { display: none; }
+/* base.css khai .change { display: flex } đè lên [hidden]: ô "Còn thiếu" hiện cả khi chưa nhập tiền khách đưa. */
+.change[hidden] { display: none; }

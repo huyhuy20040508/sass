@@ -41,6 +41,7 @@ use App\Http\Controllers\StaffReportController;
 use App\Http\Controllers\EmployeeReportController;
 use App\Http\Controllers\SalesReportController;
 use App\Http\Controllers\ReturnController;
+use App\Http\Controllers\PaymentMethodController;
 use App\Http\Controllers\SettingController;
 use App\Http\Controllers\ParameterController;
 use App\Http\Controllers\CashbookController;
@@ -115,7 +116,7 @@ Route::middleware(['admin.auth', 'admin.khoa'])->prefix('admin')->name('admin.')
     Route::get('/ban-tai-quay', fn () => redirect()->route('thu-ngan.ban-hang.index'))
         ->name('cu.ban-tai-quay');
     Route::get('/ban-tai-quay/{id}/phieu', fn (int $id) => redirect()->route(
-        'thu-ngan.ban-hang.phieu', ['id' => $id, 'warehouse' => request()->query('warehouse')]
+        'thu-ngan.ban-hang.phieu', ['id' => $id, 'paper' => request()->query('kho')]
     ))->whereNumber('id')->name('cu.ban-tai-quay.phieu');
     Route::get('/ca-lam-viec', fn () => redirect()->route('thu-ngan.ca-lam-viec.index'))
         ->name('cu.ca-lam-viec');
@@ -135,7 +136,11 @@ Route::middleware(['admin.auth', 'admin.khoa'])->prefix('admin')->name('admin.')
 // module thì vẫn mời họ sang. Cửa đặt ở đúng một chỗ này thay vì rải `admin.cua`
 // lên từng nhóm con — thêm một trang mới là nó nằm trong cửa sẵn, không phải nhớ.
 Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:quan_ly', 'chi.v2'])->prefix('admin')->name('admin.')->group(function () {
-    Route::get('/', fn () => redirect()->route('admin.dashboard'));
+    // CÓ TÊN là chuyện bắt buộc, không phải cho đẹp: V2OnlyShell lọc theo TÊN
+    // route, route không tên thì nó coi là màn chưa dựng v2 và đá về Khách hàng —
+    // lượt redirect ngay dưới đây không bao giờ chạy tới, nên vào /admin lại rơi
+    // vào Khách hàng thay vì Tổng quan.
+    Route::get('/', fn () => redirect()->route('admin.dashboard'))->name('index');
     // ĐANG CHUYỂN SANG GIAO DIỆN V2.
     //
     // Màn nào đã dựng lại trong resources/views/v2 thì route trỏ thẳng vào đó.
@@ -292,6 +297,9 @@ Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:quan_ly', 'chi.v2'])->
         Route::get('/voucher-coupons/{id}/codes', [VoucherCouponController::class, 'codes'])->whereNumber('id')->name('voucher-coupon.codes');
         Route::put('/voucher-codes/{id}/status', [VoucherCouponController::class, 'codeStatus'])->whereNumber('id')->name('voucher-coupon.codeStatus');
         Route::get('/voucher-codes/{id}/history', [VoucherCouponController::class, 'codeHistory'])->whereNumber('id')->name('voucher-coupon.codeHistory');
+        // CRM → Tổng quan (crm.index của v2).
+        Route::get('/crm', [CrmDashboardController::class, 'index'])->name('crm.dashboard');
+
         // CRM → Thẻ thành viên (khuôn crm/membership-rank của v2).
         Route::get('/crm/membership', [MembershipController::class, 'index'])->name('crm.membership.index');
         Route::get('/crm/membership/{id}', [MembershipController::class, 'detail'])->whereNumber('id')->name('crm.membership.detail');
@@ -517,6 +525,21 @@ Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:quan_ly', 'chi.v2'])->
         Route::get('/settings/{group}', [SettingController::class, 'page'])->name('settings.page');
         Route::put('/settings/{group}', [SettingController::class, 'update'])->name('settings.update');
 
+        // Phương thức thanh toán theo chi nhánh (màn v2) — trang + các lượt ghi trả JSON.
+        Route::get('/payment-methods', [PaymentMethodController::class, 'index'])->name('phuong-thuc-tt.index');
+        Route::get('/payment-methods/data', [PaymentMethodController::class, 'data'])->name('phuong-thuc-tt.data');
+        Route::put('/payment-methods/{id}/status', [PaymentMethodController::class, 'trangThai'])->whereNumber('id')->name('phuong-thuc-tt.trangThai');
+        Route::put('/payment-methods/{id}/default', [PaymentMethodController::class, 'macDinh'])->whereNumber('id')->name('phuong-thuc-tt.macDinh');
+        Route::post('/payment-methods/{id}/details', [PaymentMethodController::class, 'taoChiTiet'])->whereNumber('id')->name('phuong-thuc-tt.taoChiTiet');
+        Route::put('/payment-methods/{id}/details/{chiTiet}', [PaymentMethodController::class, 'suaChiTiet'])->whereNumber(['id', 'chiTiet'])->name('phuong-thuc-tt.suaChiTiet');
+        Route::put('/payment-methods/{id}/details/{chiTiet}/status', [PaymentMethodController::class, 'trangThaiChiTiet'])->whereNumber(['id', 'chiTiet'])->name('phuong-thuc-tt.trangThaiChiTiet');
+        Route::put('/payment-methods/{id}/details/{chiTiet}/default', [PaymentMethodController::class, 'macDinhChiTiet'])->whereNumber(['id', 'chiTiet'])->name('phuong-thuc-tt.macDinhChiTiet');
+        Route::delete('/payment-methods/{id}/details/{chiTiet}', [PaymentMethodController::class, 'xoaChiTiet'])->whereNumber(['id', 'chiTiet'])->name('phuong-thuc-tt.xoaChiTiet');
+        Route::post('/payment-methods/{id}/details/{chiTiet}/test', [PaymentMethodController::class, 'kiemTra'])->whereNumber(['id', 'chiTiet'])->name('phuong-thuc-tt.kiemTra');
+        Route::post('/payment-devices', [PaymentMethodController::class, 'taoMay'])->name('phuong-thuc-tt.taoMay');
+        Route::put('/payment-devices/{id}', [PaymentMethodController::class, 'suaMay'])->whereNumber('id')->name('phuong-thuc-tt.suaMay');
+        Route::delete('/payment-devices/{id}', [PaymentMethodController::class, 'xoaMay'])->whereNumber('id')->name('phuong-thuc-tt.xoaMay');
+
         // Thông số chung — bộ khung của tiệm, dựng lại theo bản ERP cũ.
         // Mới có trang Quy tắc đánh số chứng từ; xem ParameterController::PAGES.
         Route::get('/parameters', [ParameterController::class, 'index'])->name('thong-so-chung.index');
@@ -638,9 +661,6 @@ Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:quan_ly', 'chi.v2'])->
         Route::get('/customers', [CustomerController::class, 'index'])->name('customers.index');
         // CRM → Danh sách khách hàng: cùng dữ liệu, khung lọc và bảng theo khuôn
         // crm/customers của v2. Thêm/Sửa/Xoá đi chung các đường /customers dưới đây.
-        // CRM → Tổng quan (crm.index của v2).
-        Route::get('/crm', [CrmDashboardController::class, 'index'])->name('crm.dashboard');
-
         Route::get('/crm/customers', [CustomerController::class, 'crm'])->name('crm.customers.index');
         Route::get('/customers/export', [CustomerController::class, 'export'])->name('customers.export');
         Route::get('/customers/import-template', [CustomerController::class, 'importTemplate'])->name('customers.importTemplate');
@@ -726,6 +746,10 @@ Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:thu_ngan'])->prefix('c
     // hai bản sao thì sẽ có bản bị bỏ quên khi dữ liệu sản phẩm đổi hình dạng.
     Route::get('/sales', [PosController::class, 'index'])->name('ban-hang.index');
     Route::post('/sales', [PosController::class, 'store'])->name('ban-hang.store');
+    // QR tự động: hỏi tiền đã về chưa, và huỷ mã khi khách đổi cách trả.
+    Route::get('/sales/qr/{code}', [PosController::class, 'qrTrangThai'])->where('code', '[A-Za-z0-9_-]{1,64}')->name('ban-hang.qrTrangThai');
+    Route::post('/sales/{id}/cancel-qr', [PosController::class, 'huyQr'])->whereNumber('id')->name('ban-hang.huyQr');
+    Route::post('/sales/{id}/switch-payment', [PosController::class, 'doiHinhThuc'])->whereNumber('id')->name('ban-hang.doiHinhThuc');
     // /scan đứng TRƯỚC /{id}/receipt để không bị hiểu là một id.
     Route::get('/sales/scan', [PosController::class, 'scan'])->name('ban-hang.scan');
     // Nút "Đồng giá": chương trình giỏ đủ điều kiện + giá khi chọn (trả JSON).

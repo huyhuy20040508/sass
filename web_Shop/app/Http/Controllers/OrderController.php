@@ -23,11 +23,30 @@ class OrderController extends Controller
         'shipping_fee' => 'Phí giao',
         'cash' => 'Tiền mặt',
         'transfer' => 'Chuyển khoản',
-        'online' => 'Thẻ/Ví',
+        'card' => 'Quẹt thẻ',
+        'auto_qr' => 'QR tự động',
         'debt' => 'Công nợ',
         'total' => 'Tổng tiền',
         'status' => 'Trạng thái',
     ];
+
+    /**
+     * Bề rộng tối thiểu từng cột của bảng Quản lý đơn hàng (px, ĐO ở cỡ chữ 13px):
+     * ô số không bao giờ bị cắt. % của cột và sàn `--dh-rong` đều suy từ đây, như
+     * COT_CRM_RONG_TOI_THIEU — mười hai cột bật sẵn cộng lại vừa khung 1060px của
+     * khổ 1366; bật thêm thì bảng cuộn ngang thay vì bóp chữ.
+     */
+    public const COT_BANG_RONG_TOI_THIEU = [
+        '_stt' => 42, 'code' => 100, 'customer' => 128, 'time' => 88, 'discount' => 76,
+        'shipping_fee' => 64, 'cash' => 86, 'transfer' => 100, 'card' => 86, 'auto_qr' => 88,
+        'khac' => 86, 'debt' => 62, 'total' => 100, 'status' => 90, '_action' => 84,
+    ];
+
+    /**
+     * Cột tắt sẵn lúc mở màn Quản lý đơn hàng — cùng lý do với CRM: hai cột này
+     * tách nhỏ con số đã có (Tổng tiền), bốn cột hình thức mới là thứ cần thấy.
+     */
+    public const COT_BANG_MAC_DINH_TAT = ['discount', 'shipping_fee'];
 
     /**
      * Cột của CRM → Danh sách đơn hàng (khuôn crm/orders của v2): hai cột khách
@@ -42,7 +61,12 @@ class OrderController extends Controller
         'shipping_fee' => 'Phí giao',
         'cash' => 'Tiền mặt',
         'transfer' => 'Chuyển khoản',
-        'online' => 'Thẻ/Ví',
+        'card' => 'Quẹt thẻ',
+        'auto_qr' => 'QR tự động',
+        // Gộp bốn hình thức trên thành MỘT con số. Có cột này thì bảng mới nói
+        // được "đơn đã thu bao nhiêu" mà không phải bày đủ bốn cột hình thức —
+        // xem COT_CRM_MAC_DINH_TAT.
+        'paid' => 'Đã thu',
         'debt' => 'Công nợ',
         'total' => 'Tổng tiền',
         'status' => 'Trạng thái',
@@ -55,11 +79,20 @@ class OrderController extends Controller
      * 1296px, trong khi khung khổ 1600 chỉ có 1266px — bày hết là cột Hành
      * động nằm ngoài màn ở mọi khổ dưới 1920.
      *
-     * Ba cột này tắt trước vì chúng tách nhỏ một con số đã có sẵn: Tổng tiền
-     * vẫn hiện, còn giảm giá / phí giao / thẻ-ví chỉ cần khi soát riêng từng
-     * khoản, mà lúc ấy mở hộp chi tiết đơn là thấy đủ.
+     * Tắt sẵn giảm giá / phí giao vì chúng tách nhỏ một con số đã có (Tổng tiền),
+     * và tắt CẢ BỐN cột hình thức — thay bằng cột "Đã thu" gộp.
+     *
+     * Vì sao không bày bốn cột hình thức như màn Quản lý đơn hàng: ở đó chúng là
+     * thứ cần thấy, còn ở CRM thì ba cột đang bày đều bằng 0 mỗi khi đơn thu bằng
+     * hình thức ĐANG TẮT — đơn DH000043 thu đủ 24.200.000 bằng quẹt thẻ mà bảng
+     * đọc ra như chưa thu đồng nào. Mở cả bốn cột thì hết nói dối nhưng bảng tràn
+     * khung ở 1280 / 1366 / 1536 (đo thật: thừa 75 / 3 / 66px), tức mở lại đúng
+     * lỗi bảng vỡ vừa chữa.
+     *
+     * Cột gộp vừa hết nói dối vừa HẸP HƠN hiện tại: bỏ hai cột 193px, thêm một
+     * cột 100px. Cần tách từng hình thức thì bật lại ở ô chọn cột.
      */
-    public const COT_CRM_MAC_DINH_TAT = ['discount', 'shipping_fee', 'online'];
+    public const COT_CRM_MAC_DINH_TAT = ['discount', 'shipping_fee', 'cash', 'transfer', 'card', 'auto_qr'];
 
     /**
      * Bề rộng tối thiểu từng cột (px) — ĐO THẬT ở cỡ chữ đầy đủ 13px.
@@ -70,7 +103,7 @@ class OrderController extends Controller
     public const COT_CRM_RONG_TOI_THIEU = [
         '_stt' => 42, 'customer_code' => 113, 'customer_name' => 165, 'code' => 126,
         'time' => 96, 'discount' => 86, 'shipping_fee' => 64, 'cash' => 86,
-        'transfer' => 107, 'online' => 58, 'debt' => 69, 'total' => 94,
+        'transfer' => 107, 'card' => 86, 'auto_qr' => 98, 'khac' => 86, 'paid' => 100, 'debt' => 69, 'total' => 100,
         'status' => 106, '_action' => 84,
     ];
 
@@ -134,12 +167,36 @@ class OrderController extends Controller
         'cancelled' => 'text-danger',
     ];
 
+    /**
+     * Nhãn của mã hình thức LƯU TRÊN ĐƠN — đúng bốn hình thức của quầy (Cài đặt →
+     * Phương thức thanh toán). SePay và PayOS là hai cổng của CÙNG một hình thức
+     * "QR tự động", nên cùng một nhãn. Mã không có ở đây (đơn cũ cod / vnpay /
+     * momo) in "Khác" — đọc qua tenHinhThuc().
+     */
     public const PAYMENT_METHODS = [
-        'cod' => 'COD (khi nhận hàng)', 'vnpay' => 'VNPay',
-        'momo' => 'MoMo', 'bank_transfer' => 'Chuyển khoản',
-        'payos' => 'Online (PayOS)', 'sepay' => 'Chuyển khoản (SePay)',
-        'cash' => 'Tiền mặt (tại quầy)',
+        'cash' => 'Tiền mặt', 'bank_transfer' => 'Chuyển khoản', 'card' => 'Quẹt thẻ',
+        'sepay' => 'QR tự động', 'payos' => 'QR tự động', 'mpos_qr' => 'QR tự động',
     ];
+
+    /**
+     * Bốn ô lọc theo hình thức, như v2 (Tiền mặt / Chuyển khoản / Thẻ / QR). Gửi
+     * NGUYÊN tên ô cho API — API tự đổi ra mã trên đơn theo domain.HinhThucQuay, một
+     * nguồn với cột tiền của sổ và báo cáo bán hàng ("auto_qr" = SePay + PayOS).
+     */
+    public const HINH_THUC_LOC = [
+        'cash' => 'Tiền mặt', 'bank_transfer' => 'Chuyển khoản', 'card' => 'Quẹt thẻ', 'auto_qr' => 'QR tự động',
+    ];
+
+    /**
+     * Hình thức chọn được khi GHI LƯỢT THU tay. Không có QR tự động: tiền QR do cổng
+     * báo về và tự ghi, ghi tay thêm là thu hai lần cho một khoản.
+     */
+    public const HINH_THUC_THU_TAY = ['cash' => 'Tiền mặt', 'bank_transfer' => 'Chuyển khoản', 'card' => 'Quẹt thẻ'];
+
+    public static function tenHinhThuc(?string $ma): string
+    {
+        return self::PAYMENT_METHODS[$ma ?? ''] ?? 'Khác';
+    }
 
     /** Nơi đơn phát sinh. Hai loại đơn này vận hành khác hẳn nhau — đơn 'web' còn
      *  phải soạn và giao, đơn 'pos' thì xong ngay lúc tạo — nên trộn chung một
@@ -639,7 +696,7 @@ class OrderController extends Controller
     {
         $data = $request->validate([
             'amount' => 'required|numeric|min:1',
-            'payment_method' => 'nullable|in:'.implode(',', array_keys(self::PAYMENT_METHODS)),
+            'payment_method' => 'nullable|in:'.implode(',', array_keys(self::HINH_THUC_THU_TAY)),
             'note' => 'nullable|string|max:255',
         ]);
 
@@ -700,7 +757,7 @@ class OrderController extends Controller
                     $o['recipient_name'] ?? '', $o['recipient_phone'] ?? '', self::shippingAddress($o),
                     collect($o['items'] ?? [])->sum('quantity'), (float) ($o['subtotal_amount'] ?? 0), (float) ($o['discount_amount'] ?? 0),
                     (float) ($o['shipping_fee'] ?? 0), (float) ($o['total_amount'] ?? 0),
-                    self::PAYMENT_METHODS[$o['payment_method'] ?? ''] ?? ($o['payment_method'] ?? ''),
+                    self::tenHinhThuc($o['payment_method'] ?? null),
                     self::PAYMENT_STATUSES[$o['payment_status'] ?? ''] ?? ($o['payment_status'] ?? ''),
                     self::STATUSES[$o['status'] ?? ''] ?? ($o['status'] ?? ''),
                 ]);
@@ -726,13 +783,17 @@ class OrderController extends Controller
         $rows = $this->docHetSoDon($this->filters($request));
         $fileName = 'don-hang-'.date('Ymd-His').'.csv';
 
-        return response()->streamDownload(function () use ($rows) {
+        // Cột "Khác" (mã ngoài bốn hình thức) chỉ có khi tệp có tiền ấy — như bảng.
+        $coKhac = array_sum(array_map(fn ($o) => (float) ($o['khac'] ?? 0), $rows)) > 0;
+
+        return response()->streamDownload(function () use ($rows, $coKhac) {
             $out = fopen('php://output', 'w');
             fwrite($out, "\xEF\xBB\xBF");
             fputcsv($out, ['STT', 'Mã đơn', 'Kênh', 'Thời gian', 'Khách hàng', 'Số điện thoại', 'Người tạo',
-                'Giảm giá', 'Phí giao', 'Tiền mặt', 'Chuyển khoản', 'Thẻ/Ví', 'Công nợ', 'Tổng tiền', 'Trạng thái']);
+                'Giảm giá', 'Phí giao', 'Tiền mặt', 'Chuyển khoản', 'Quẹt thẻ', 'QR tự động',
+                ...($coKhac ? ['Khác'] : []), 'Công nợ', 'Tổng tiền', 'Trạng thái']);
 
-            $tong = array_fill_keys(['giam_gia', 'phi_giao', 'tien_mat', 'chuyen_khoan', 'the_vi', 'tong_tien'], 0.0);
+            $tong = array_fill_keys(['giam_gia', 'phi_giao', 'tien_mat', 'chuyen_khoan', 'quet_the', 'qr_tu_dong', 'khac', 'tong_tien'], 0.0);
             foreach ($rows as $i => $o) {
                 $laTra = ($o['loai'] ?? 'don') === 'tra-hang';
                 foreach ($tong as $k => $v) {
@@ -746,7 +807,9 @@ class OrderController extends Controller
                     ! empty($o['created_at']) ? Carbon::parse($o['created_at'])->format('H:i:s d-m-Y') : '',
                     $o['khach_hang'] ?? '', $o['so_dien_thoai'] ?? '', $o['nguoi_tao'] ?? '',
                     (float) ($o['giam_gia'] ?? 0), (float) ($o['phi_giao'] ?? 0),
-                    (float) ($o['tien_mat'] ?? 0), (float) ($o['chuyen_khoan'] ?? 0), (float) ($o['the_vi'] ?? 0),
+                    (float) ($o['tien_mat'] ?? 0), (float) ($o['chuyen_khoan'] ?? 0),
+                    (float) ($o['quet_the'] ?? 0), (float) ($o['qr_tu_dong'] ?? 0),
+                    ...($coKhac ? [(float) ($o['khac'] ?? 0)] : []),
                     ! empty($o['co_cong_no']) ? 'Có' : '-',
                     (float) ($o['tong_tien'] ?? 0),
                     self::TRANG_THAI_SO[$o['trang_thai'] ?? ''] ?? ($o['trang_thai'] ?? ''),
@@ -754,7 +817,8 @@ class OrderController extends Controller
             }
 
             fputcsv($out, ['', 'Tổng cộng', '', '', '', '', '',
-                $tong['giam_gia'], $tong['phi_giao'], $tong['tien_mat'], $tong['chuyen_khoan'], $tong['the_vi'],
+                $tong['giam_gia'], $tong['phi_giao'], $tong['tien_mat'], $tong['chuyen_khoan'], $tong['quet_the'], $tong['qr_tu_dong'],
+                ...($coKhac ? [$tong['khac']] : []),
                 '', $tong['tong_tien'], '']);
             fclose($out);
         }, $fileName, ['Content-Type' => 'text/csv; charset=UTF-8']);
@@ -804,11 +868,11 @@ class OrderController extends Controller
         $so = (string) $request->query('sort', array_key_first(self::SORTS));
         $psize = (int) $request->query('page_size', self::PAGE_SIZE_MAC_DINH);
 
-        // Tick ĐỦ bảy phương thức = không lọc, đúng như v2 (isAllPaymentTypesSelected).
-        // Gửi nguyên bảy giá trị thì API vẫn lọc — và gạt mất phiếu trả hoàn "none"
-        // của lượt đổi hàng, thứ không thuộc phương thức nào.
-        $phuongThuc = $this->locNhieu($request->query('payment_method'), array_keys(self::PAYMENT_METHODS));
-        if (count(explode(',', $phuongThuc)) === count(self::PAYMENT_METHODS)) {
+        // Tick ĐỦ bốn ô = không lọc, đúng như v2 (isAllPaymentTypesSelected). Gửi
+        // nguyên bốn ô thì API vẫn lọc — và gạt mất phiếu trả hoàn "none" của lượt
+        // đổi hàng, cùng đơn cũ mang mã ngoài bốn hình thức.
+        $phuongThuc = $this->locNhieu($request->query('payment_method'), array_keys(self::HINH_THUC_LOC));
+        if (count(explode(',', $phuongThuc)) === count(self::HINH_THUC_LOC)) {
             $phuongThuc = 'all';
         }
 

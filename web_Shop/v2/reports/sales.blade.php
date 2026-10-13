@@ -38,7 +38,7 @@
             .'"><i class="fa-solid '.$icon.'"></i></a>';
     };
 
-    // Cột "Khác" (cod / vnpay / momo của đơn web) chỉ bày khi kỳ có tiền ấy —
+    // Cột "Khác" (đơn cũ ngoài bốn hình thức của quầy) chỉ bày khi kỳ có tiền ấy —
     // không có nó thì các cột hình thức cộng lại không ra "Đã thanh toán".
     $coKhac = (float) ($tong['other'] ?? 0) > 0;
     $tienCot = array_slice(array_keys($C::COT), 1);
@@ -135,10 +135,10 @@
                         <tr>
                             <th class="show_stt {{ $an('stt') }}">STT</th>
                             @foreach ($C::COT as $khoa => $nhan)
-                                <th class="show_{{ $khoa }} {{ $an($khoa) }}">{{ $nhan }} {!! $nutSap($khoa) !!}</th>
+                                <th class="show_{{ $khoa }} {{ $an($khoa) }}" @if ($khoa === 'card_fee') title="{{ $C::GOI_Y_PHI_THE }}" @endif>{{ $nhan }} {!! $nutSap($khoa) !!}</th>
                             @endforeach
                             @if ($coKhac)
-                                <th title="Thu hộ (COD) / VNPay / MoMo của đơn web">Khác</th>
+                                <th title="Đơn cũ mang hình thức ngoài bốn hình thức của quầy">Khác</th>
                             @endif
                         </tr>
                     </thead>
@@ -158,7 +158,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="12" class="tk-rong">Kỳ này chưa có doanh thu.</td>
+                                <td colspan="13" class="tk-rong">Kỳ này chưa có doanh thu.</td>
                             </tr>
                         @endforelse
                     </tbody>
@@ -225,7 +225,7 @@
                             <thead>
                                 <tr>
                                     @foreach (['STT', 'Mã hóa đơn', 'Nguồn đơn', 'Phương thức thanh toán', 'Số lượng Sp', 'Tạm tính',
-                                        'Phụ thu', 'Giảm giá', 'Doanh thu', 'VAT', 'Doanh thu (VAT)', 'Đã thanh toán', 'Còn nợ',
+                                        'Phụ thu', 'Giảm giá', 'Doanh thu', 'VAT', 'Doanh thu (VAT)', 'Đã thanh toán', 'Phí thẻ', 'Còn nợ',
                                         'Trả hàng', 'Mã khách hàng', 'Tên khách hàng', 'Số điện thoại'] as $nhan)
                                         <th>{{ $nhan }}</th>
                                     @endforeach
@@ -310,7 +310,7 @@
                 q.set('date', $(this).data('date'));
 
                 $('#ctnTieuDe').text('Đang tải…');
-                $('#ctnThan').html('<tr><td colspan="17" class="text-center py-4">Đang tải…</td></tr>');
+                $('#ctnThan').html('<tr><td colspan="18" class="text-center py-4">Đang tải…</td></tr>');
                 bootstrap.Modal.getOrCreateInstance(document.getElementById('modalChiTietNgay')).show();
 
                 $.ajax({ url: URL_CHI_TIET + '?' + q, headers: { Accept: 'application/json' } })
@@ -322,6 +322,7 @@
                             + '<td>' + tien(cong('units')) + '</td>'
                             + ['subtotal', 'surcharge', 'discount', 'revenue', 'vat', 'total', 'paid']
                                 .map((k) => '<td class="text-right">' + tien(cong(k)) + '</td>').join('')
+                            + '<td class="text-right text-danger">' + tien(cong('card_fee')) + '</td>'
                             + '<td class="text-right text-danger">' + tien(cong('debt')) + '</td>'
                             + '<td class="text-right text-danger">' + tien(cong('returns')) + '</td>'
                             + '<td></td><td></td><td></td></tr>';
@@ -331,18 +332,19 @@
                                 + '<td>' + tien(h.units) + '</td>'
                                 + ['subtotal', 'surcharge', 'discount', 'revenue', 'vat', 'total', 'paid']
                                     .map((k) => '<td class="text-right">' + tien(h[k]) + '</td>').join('')
+                                + '<td class="text-right text-danger">' + tien(h.card_fee) + '</td>'
                                 + '<td class="text-right text-danger">' + tien(h.debt) + '</td>'
                                 + '<td class="text-right text-danger">' + tien(h.returns) + '</td>'
                                 + '<td>' + thoat(h.customer_code || '-') + '</td><td>' + thoat(h.customer_name || '-')
                                 + '</td><td>' + thoat(h.phone || '-') + '</td></tr>';
                         });
-                        if (!ds.length) html = '<tr><td colspan="17" class="text-center py-4">Ngày này không có hoá đơn nào khớp bộ lọc.</td></tr>';
+                        if (!ds.length) html = '<tr><td colspan="18" class="text-center py-4">Ngày này không có hoá đơn nào khớp bộ lọc.</td></tr>';
                         $('#ctnThan').html(html);
                     })
                     .fail(function (xhr) {
                         const cau = (xhr.responseJSON && xhr.responseJSON.message) || 'Không tải được hoá đơn của ngày.';
                         $('#ctnTieuDe').text('Chi tiết báo cáo bán hàng');
-                        $('#ctnThan').html('<tr><td colspan="17" class="text-center text-danger py-4">' + thoat(cau) + '</td></tr>');
+                        $('#ctnThan').html('<tr><td colspan="18" class="text-center text-danger py-4">' + thoat(cau) + '</td></tr>');
                     });
             });
         })();

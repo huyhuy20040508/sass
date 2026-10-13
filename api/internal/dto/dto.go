@@ -700,13 +700,19 @@ type ChiNhanhRequest struct {
 // Mật khẩu chỉ đi MỘT CHIỀU: gửi lên để đăng nhập rồi mã hoá cất đi, không có
 // đường đọc lại. Đổi mật khẩu bên nhà cung cấp thì khai lại cả tài khoản.
 type EtaxKetNoiRequest struct {
-	// Provider bỏ trống = minvoice (hôm nay mới có một nhà cung cấp).
-	Provider string `json:"provider" binding:"omitempty,oneof=minvoice" example:"minvoice"`
-	TaxCode  string `json:"tax_code" binding:"required,max=30" example:"0106026495-998"`
+	// Provider bỏ trống = minvoice.
+	Provider string `json:"provider" binding:"omitempty,oneof=minvoice sepay" example:"minvoice"`
+	// TaxCode bắt buộc với M-Invoice (địa chỉ cổng dựng từ nó); SePay không cần.
+	TaxCode string `json:"tax_code" binding:"omitempty,max=30" example:"0106026495-998"`
+	// Username / Password — với SePay là "Tên đăng nhập" / "Mật khẩu" ở trang
+	// API xuất hoá đơn của my.sepay.vn (client ID / secret).
 	Username string `json:"username" binding:"required,max=150"`
 	Password string `json:"password" binding:"required,max=200"`
 	// MaDVCS là mã đơn vị cơ sở bên M-Invoice; bỏ trống = "VP" (văn phòng).
 	MaDVCS string `json:"ma_dvcs" binding:"omitempty,max=20" example:"VP"`
+	// AccountRef — SePay: provider_account_id muốn dùng. Bỏ trống = tài khoản
+	// đang hoạt động duy nhất của SePay; có nhiều cái thì phải chọn.
+	AccountRef string `json:"account_ref" binding:"omitempty,max=64"`
 }
 
 // EtaxCaiDatRequest — ký hiệu dùng để phát hành và hai công tắc tự động.
@@ -1095,7 +1101,7 @@ type OrderThuTienRequest struct {
 	// hai vì chỉ nó mới biết đơn đã thu tới đâu.
 	Amount float64 `json:"amount" binding:"required,gt=0"`
 	// PaymentMethod bỏ trống thì lấy theo phương thức đã khai trên đơn.
-	PaymentMethod string `json:"payment_method" binding:"omitempty,oneof=cod vnpay momo bank_transfer payos sepay cash"`
+	PaymentMethod string `json:"payment_method" binding:"omitempty,oneof=cash bank_transfer card payos sepay"`
 	Note          string `json:"note" binding:"omitempty,max=255"`
 }
 
@@ -1226,6 +1232,9 @@ type PaymentStatusResponse struct {
 	// CheckoutURL còn hiệu lực thì trả lại để khách trả tiếp, rỗng nếu link đã khép.
 	CheckoutURL string `json:"checkout_url,omitempty"`
 	Message     string `json:"message"`
+	// LechTien — số tiền cổng đã báo LỆCH cho lượt thu còn chờ (nil = chưa báo
+	// lệch lần nào). Màn quầy dựa vào đây để nhắc kiểm lại với khách.
+	LechTien *float64 `json:"lech_tien,omitempty"`
 }
 
 // CheckoutBankTransfer — hướng dẫn chuyển khoản kèm theo một đơn vừa đặt.
@@ -1332,7 +1341,12 @@ type POSCheckoutRequest struct {
 	// tiền mặt, hoặc khách tự chuyển khoản và người bán nhìn thấy báo có. Cổng
 	// thanh toán online (payos/sepay) không nằm ở đây vì đơn quầy được ghi "đã
 	// thanh toán" ngay lúc tạo, mà tiền qua cổng thì phải đợi cổng báo về.
-	PaymentMethod string `json:"payment_method" binding:"required,oneof=cash bank_transfer"`
+	// card = quẹt thẻ (thu ngân xác nhận tay sau khi máy báo thành công);
+	// sepay / payos = QR tự động — đơn tạo ra CHỜ TIỀN, cổng báo về thì tự hoàn tất.
+	PaymentMethod string `json:"payment_method" binding:"required,oneof=cash bank_transfer card sepay payos mpos_qr"`
+	// PaymentDetailID — tài khoản nhận / máy quẹt thẻ đã chọn (Cài đặt → Phương thức
+	// thanh toán). 0 = dòng mặc định của chi nhánh.
+	PaymentDetailID uint `json:"payment_detail_id"`
 	// AmountTendered là số tiền mặt khách đưa. Bỏ trống nghĩa là khách đưa vừa đủ
 	// (hoặc không trả bằng tiền mặt) — con trỏ chứ không phải float64 để phân biệt
 	// "không khai" với "đưa 0đ". Đưa thiếu thì đơn bị từ chối, không tạo nợ.
@@ -1439,6 +1453,14 @@ type POSScanResponse struct {
 }
 
 // POSCheckoutResponse — kết quả một lượt bán tại quầy, đủ để in hoá đơn ngay.
+// POSDoiHinhThucRequest — đơn quầy đang chờ QR tự động, khách đổi sang trả cách
+// khác: thu NGAY trên chính đơn đó (giữ mã đơn, không huỷ rồi lập lại).
+type POSDoiHinhThucRequest struct {
+	PaymentMethod   string   `json:"payment_method" binding:"required,oneof=cash bank_transfer card"`
+	PaymentDetailID uint     `json:"payment_detail_id"`
+	AmountTendered  *float64 `json:"amount_tendered" binding:"omitempty,gte=0"`
+}
+
 type POSCheckoutResponse struct {
 	OrderID   uint   `json:"order_id"`
 	OrderCode string `json:"order_code"`
@@ -1461,6 +1483,10 @@ type POSCheckoutResponse struct {
 	Status         string   `json:"status"`
 	PaymentStatus  string   `json:"payment_status"`
 	Message        string   `json:"message"`
+	// CardFee — phí quẹt thẻ cửa hàng chịu, ghi vào đơn để đối soát.
+	CardFee float64 `json:"card_fee,omitempty"`
+	// Payment — mã QR của đơn QR tự động (đơn đang chờ tiền).
+	Payment *CheckoutPayment `json:"payment,omitempty"`
 
 	// OrderDiscount là phần giảm tay trên cả đơn (đã nằm trong Discount).
 	OrderDiscount float64 `json:"order_discount_amount"`

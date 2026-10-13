@@ -115,7 +115,7 @@
     $isCashbookSection = request()->is('admin/cashbook*');
     $isHumanSection = request()->is('admin/staff*');
     $isCrmSection = request()->is('admin/crm*');
-    $isSettingSection = request()->is('admin/settings*', 'admin/branches*');
+    $isSettingSection = request()->is('admin/settings*', 'admin/branches*', 'admin/payment-methods*');
 
     // Đường vào từng module. Bật cờ ở trên rồi thì thay '#' bằng route thật.
     $statisticDefaultRoute = route('admin.dashboard');
@@ -223,8 +223,13 @@
                          website và thanh trái khu cũ. Chưa tải ảnh thì về logo
                          Sellio bản chữ sáng — thanh này nền đen, logo chữ tối
                          tải lên sẽ chìm. --}}
+                    {{-- Logo, nút "Quản trị" ở menu khu làm việc và biểu tượng nhà ở
+                         breadcrumb đều là đường VỀ TRANG CHỦ phần mềm, nên cùng trỏ về
+                         Tổng quan. Bản v2 gốc trỏ cả ba vào Khách hàng vì hồi đó chưa
+                         có màn Tổng quan; nay có rồi mà vẫn để vậy thì bấm logo lại ra
+                         một màn danh sách, không ai đọc đó là "trang chủ". --}}
                     <div class="logo">
-                        <a href="{{ route('admin.customers.index') }}"><img alt="{{ $tenCuaHang }}"
+                        <a href="{{ route('admin.dashboard') }}"><img alt="{{ $tenCuaHang }}"
                                 src="{{ $logoCuaHang }}"></a>
                     </div>
                 </div>
@@ -348,7 +353,7 @@
                                 <ul class="dropdown-menu-function-method-container">
                                     @if($dashboardPer)
                                         <li class="quick-link-admin">
-                                            <a href="{{ route('admin.customers.index') }}">
+                                            <a href="{{ route('admin.dashboard') }}">
                                                 <img class="dropdown-menu-normal"
                                                     src="{{ asset('v2/images/admin_normal.png') }}" alt="admin_normal" />
                                                 <img class="dropdown-menu-hover" src="{{ asset('v2/images/admin_hover.png') }}"
@@ -686,6 +691,10 @@
                                 {{ \App\Http\Controllers\BranchController::TITLE }}
                             </a>
                         @endif
+                        <a href="{{ route('admin.phuong-thuc-tt.index') }}"
+                            class="sub-nav-btn {{ request()->routeIs('admin.phuong-thuc-tt.*') ? 'active' : '' }}">
+                            {{ \App\Http\Controllers\PaymentMethodController::TITLE }}
+                        </a>
                     @endif
                 </div>
             </div>
@@ -697,7 +706,7 @@
                 <nav aria-label="breadcrumb">
                     <ol class="breadcrumb">
                         <li class="breadcrumb-item">
-                            <a href="{{ route('admin.customers.index') }}">
+                            <a href="{{ route('admin.dashboard') }}">
                                 <i class="fa fa-home"></i>
                             </a>
                         </li>

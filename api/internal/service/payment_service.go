@@ -20,6 +20,7 @@ import (
 	"sass-api/internal/dto"
 	"sass-api/internal/realtime"
 	"sass-api/pkg/logger"
+	"sass-api/pkg/nextpay"
 	"sass-api/pkg/payos"
 	"sass-api/pkg/sepay"
 )
@@ -44,8 +45,9 @@ import (
 // tiền lại cần sửa đơn) và không dựng được cái nào trước.
 type PaymentService interface {
 	// Available cho biết một hình thức thanh toán online đã đủ cấu hình để dùng
-	// thật hay chưa.
-	Available(method string) bool
+	// thật hay chưa — với cửa hàng trong ctx: khoá riêng của chi nhánh trung tâm
+	// nếu đã khai, không thì khoá chung trong .env.
+	Available(ctx context.Context, method string) bool
 	// Start dựng thông tin thanh toán cho một đơn vừa đặt (mã QR, link, số tài
 	// khoản). Đơn còn mã cũ chưa hết hạn thì trả lại đúng mã đó.
 	Start(ctx context.Context, o *domain.Order) (*dto.CheckoutPayment, error)
@@ -54,6 +56,22 @@ type PaymentService interface {
 	// HandleSePayWebhook xử lý webhook SePay báo tài khoản có tiền vào.
 	// authHeader là header Authorization nguyên văn — nơi mang khoá API.
 	HandleSePayWebhook(ctx context.Context, authHeader string, raw []byte) error
+	// HandlePayOSWebhookTheoMa / HandleSePayWebhookTheoMa — webhook tới URL RIÊNG
+	// của một cổng (…/webhook/{mã}): mã cho biết cửa hàng nào, kiểm bằng khoá của
+	// chính cổng đó. Mã lạ: domain.ErrNotFound.
+	HandlePayOSWebhookTheoMa(ctx context.Context, ma string, raw []byte) error
+	HandleSePayWebhookTheoMa(ctx context.Context, ma, authHeader string, raw []byte) error
+	// HandleMposWebhookTheoMa — NextPay báo QR mPOS / quẹt thẻ mPOS xong (gói mã
+	// hoá AES bằng Secret Key của cổng). Khoá sai: nextpay.ErrGiaiMa.
+	HandleMposWebhookTheoMa(ctx context.Context, ma string, raw []byte) error
+	// DayXuongMay đẩy số tiền của một đơn quầy xuống máy mPOS đã chọn; khách quẹt
+	// xong NextPay báo về webhook thì đơn tự hoàn tất.
+	DayXuongMay(ctx context.Context, o *domain.Order, chon *ChonQuay) (*dto.CheckoutPayment, error)
+	// GanCongRieng nối nguồn khoá cổng theo cửa hàng (Cài đặt → Phương thức thanh toán).
+	GanCongRieng(n NguonCongThanhToan)
+	// HuyTheoDon huỷ mã QR còn chờ của một đơn (thu ngân bấm "Huỷ mã QR"). false =
+	// lần thử đã chốt từ trước (khách vừa trả xong) — nơi gọi KHÔNG được huỷ đơn.
+	HuyTheoDon(ctx context.Context, o *domain.Order) (bool, error)
 	// Status tra tình trạng thanh toán theo MÃ GIAO DỊCH phía cổng.
 	Status(ctx context.Context, gatewayCode string) (*dto.PaymentStatusResponse, error)
 }
@@ -81,11 +99,94 @@ type paymentService struct {
 	// sớm hơn một nhịp.
 	lookupMu   sync.Mutex
 	lastLookup map[uint]time.Time
+	// lechTien nhớ số tiền cổng báo LỆCH cho từng lượt thu còn chờ, để màn quầy
+	// nói được "cổng báo lệch — kiểm lại với khách" thay vì đứng im. Trong bộ nhớ
+	// như lastLookup: mất khi khởi động lại thì chỉ mất câu nhắc, lượt thu vẫn chờ.
+	lechMu   sync.Mutex
+	lechTien map[uint]float64
 	// notify đẩy thông báo "đơn đã thanh toán" vào chuông của nhân viên và của
 	// khách. Có thể nil khi dựng service trong test.
 	notify NotificationService
 	// etax tự phát hành hoá đơn điện tử khi tiền đã về. Có thể nil.
 	etax PhatHanhHDDT
+	// cong là khoá cổng theo cửa hàng. nil = chỉ dùng khoá chung trong .env.
+	cong NguonCongThanhToan
+}
+
+func (s *paymentService) GanCongRieng(n NguonCongThanhToan) { s.cong = n }
+
+// payosCho / sepayCho chọn client cho cửa hàng trong ctx: khoá riêng của chi
+// nhánh trung tâm nếu đã khai đủ, không thì khoá chung trong .env — đúng nghĩa
+// ".env làm dự phòng" người dùng đã chốt.
+func (s *paymentService) payosCho(ctx context.Context) *payos.Client {
+	if s.cong != nil {
+		if c := s.cong.CongWeb(ctx, domain.PaymentMethodPayOS); c != nil && c.PayOS != nil {
+			return c.PayOS
+		}
+	}
+
+	return s.payos
+}
+
+// payosChoDon / sepayChoDon: đơn QUẦY dùng cổng của chính chi nhánh bán — mỗi
+// chi nhánh tự kết nối tài khoản của mình; đơn website dùng chi nhánh trung tâm.
+func (s *paymentService) payosChoDon(ctx context.Context, o *domain.Order) *payos.Client {
+	if o != nil && o.Channel == domain.OrderChannelPOS && s.cong != nil {
+		if c := s.cong.CongChiNhanh(ctx, o.ShopID, domain.PaymentMethodPayOS); c != nil && c.PayOS != nil {
+			return c.PayOS
+		}
+
+		return s.payos
+	}
+
+	return s.payosCho(ctx)
+}
+
+func (s *paymentService) sepayChoDon(ctx context.Context, o *domain.Order) *sepay.Client {
+	if o != nil && o.Channel == domain.OrderChannelPOS && s.cong != nil {
+		if c := s.cong.CongChiNhanh(ctx, o.ShopID, domain.PaymentMethodSePay); c != nil && c.SePay != nil {
+			return c.SePay
+		}
+
+		return s.sepay
+	}
+
+	return s.sepayCho(ctx)
+}
+
+// mposChoDon — QR mPOS của chính chi nhánh bán. Không có dự phòng .env: mỗi
+// merchant NextPay là của riêng cửa hàng.
+func (s *paymentService) mposChoDon(ctx context.Context, o *domain.Order) *CongRieng {
+	if s.cong == nil || o == nil {
+		return nil
+	}
+
+	return s.cong.CongChiNhanh(ctx, o.ShopID, "mpos_qr")
+}
+
+func (s *paymentService) coCongDon(ctx context.Context, o *domain.Order) bool {
+	switch o.PaymentMethod {
+	case domain.PaymentMethodMposQR:
+		return o.Channel == domain.OrderChannelPOS && s.mposChoDon(ctx, o) != nil
+	case domain.PaymentMethodPayOS:
+		c := s.payosChoDon(ctx, o)
+		return c != nil && c.Enabled()
+	case domain.PaymentMethodSePay:
+		c := s.sepayChoDon(ctx, o)
+		return c != nil && c.Enabled()
+	}
+
+	return false
+}
+
+func (s *paymentService) sepayCho(ctx context.Context) *sepay.Client {
+	if s.cong != nil {
+		if c := s.cong.CongWeb(ctx, domain.PaymentMethodSePay); c != nil && c.SePay != nil {
+			return c.SePay
+		}
+	}
+
+	return s.sepay
 }
 
 func NewPaymentService(
@@ -109,12 +210,14 @@ func NewPaymentService(
 	}
 }
 
-func (s *paymentService) Available(method string) bool {
+func (s *paymentService) Available(ctx context.Context, method string) bool {
 	switch method {
 	case domain.PaymentMethodPayOS:
-		return s.payos != nil && s.payos.Enabled()
+		c := s.payosCho(ctx)
+		return c != nil && c.Enabled()
 	case domain.PaymentMethodSePay:
-		return s.sepay != nil && s.sepay.Enabled()
+		c := s.sepayCho(ctx)
+		return c != nil && c.Enabled()
 	default:
 		return false
 	}
@@ -125,14 +228,14 @@ func (s *paymentService) Available(method string) bool {
 // Start là cửa vào chung: đơn còn mã cũ dùng được thì trả lại, không thì dựng mới
 // theo đúng cách của cổng tương ứng.
 func (s *paymentService) Start(ctx context.Context, o *domain.Order) (*dto.CheckoutPayment, error) {
-	if !s.Available(o.PaymentMethod) {
+	if !s.coCongDon(ctx, o) {
 		return nil, domain.ErrPaymentMethodDisabled
 	}
 
 	// Đơn còn mã chưa hết hạn thì mở lại đúng mã đó. Sinh mã mới cho cùng một khoản
 	// tiền sẽ để lại hai mã QR cùng sống, và khách rất dễ quét nhầm cái đã bỏ.
 	if p, err := s.repo.FindOpenByOrder(ctx, o.ID, time.Now()); err == nil {
-		return s.paymentDTO(p, o), nil
+		return s.paymentDTO(ctx, p, o), nil
 	} else if !errors.Is(err, domain.ErrNotFound) {
 		return nil, err
 	}
@@ -145,6 +248,8 @@ func (s *paymentService) Start(ctx context.Context, o *domain.Order) (*dto.Check
 	switch o.PaymentMethod {
 	case domain.PaymentMethodSePay:
 		return s.startSePay(ctx, o, amount)
+	case domain.PaymentMethodMposQR:
+		return s.startMposQR(ctx, o, amount)
 	default:
 		return s.startPayOS(ctx, o, amount)
 	}
@@ -161,7 +266,7 @@ func (s *paymentService) startSePay(ctx context.Context, o *domain.Order, amount
 	p := &domain.Payment{
 		OrderID:         o.ID,
 		TransactionCode: o.OrderCode,
-		QRCode:          s.sepay.QRImageURL(amount, o.OrderCode),
+		QRCode:          s.sepayChoDon(ctx, o).QRImageURL(amount, o.OrderCode),
 		Provider:        domain.PaymentMethodSePay,
 		Amount:          o.TotalAmount,
 		Currency:        "VND",
@@ -175,7 +280,7 @@ func (s *paymentService) startSePay(ctx context.Context, o *domain.Order, amount
 
 	logger.Info("đã mở mã QR SePay cho đơn",
 		zap.String("order_code", o.OrderCode), zap.Int64("amount", amount))
-	return s.paymentDTO(p, o), nil
+	return s.paymentDTO(ctx, p, o), nil
 }
 
 // startPayOS xin PayOS cấp một link thanh toán mới cho đơn.
@@ -183,7 +288,8 @@ func (s *paymentService) startPayOS(ctx context.Context, o *domain.Order, amount
 	gatewayCode := gatewayOrderCode(o.ID, time.Now())
 	expiredAt := time.Now().Add(s.payosCfg.Expire)
 
-	link, err := s.payos.CreateLink(ctx, payos.CreateRequest{
+	cong := s.payosChoDon(ctx, o)
+	link, err := cong.CreateLink(ctx, payos.CreateRequest{
 		OrderCode: gatewayCode,
 		Amount:    amount,
 		// Nội dung chuyển khoản khách thấy trong app ngân hàng. Dùng chính mã đơn vì
@@ -221,7 +327,7 @@ func (s *paymentService) startPayOS(ctx context.Context, o *domain.Order, amount
 		// bỏ đi — huỷ luôn ở cổng để khách không quét trúng một mã QR mồ côi.
 		logger.Error("không lưu được lần thử thanh toán, huỷ link vừa tạo",
 			zap.String("order_code", o.OrderCode), zap.Int64("gateway_code", gatewayCode), zap.Error(err))
-		if _, cancelErr := s.payos.CancelLink(ctx, gatewayCode, "Lỗi lưu dữ liệu phía cửa hàng"); cancelErr != nil {
+		if _, cancelErr := cong.CancelLink(ctx, gatewayCode, "Lỗi lưu dữ liệu phía cửa hàng"); cancelErr != nil {
 			logger.Warn("huỷ link mồ côi không thành công",
 				zap.Int64("gateway_code", gatewayCode), zap.Error(cancelErr))
 		}
@@ -232,7 +338,63 @@ func (s *paymentService) startPayOS(ctx context.Context, o *domain.Order, amount
 		zap.String("order_code", o.OrderCode),
 		zap.Int64("gateway_code", gatewayCode),
 		zap.Int64("amount", amount))
-	return s.paymentDTO(p, o), nil
+	return s.paymentDTO(ctx, p, o), nil
+}
+
+// startMposQR xin NextPay một mã QR cho đơn quầy. Mã giao dịch là MÃ ĐƠN — đó là
+// orderId NextPay trả lại trong gói báo tiền.
+func (s *paymentService) startMposQR(ctx context.Context, o *domain.Order, amount int64) (*dto.CheckoutPayment, error) {
+	cong := s.mposChoDon(ctx, o)
+	qr, err := cong.NextPay.TaoQR(ctx, o.OrderCode, cong.Muid, amount, cong.KieuQR, o.OrderCode)
+	if err != nil {
+		logger.Error("không tạo được mã QR mPOS", zap.String("order_code", o.OrderCode), zap.Error(err))
+		return nil, fmt.Errorf("%w: %v", domain.ErrPaymentGateway, err)
+	}
+	p := &domain.Payment{
+		OrderID: o.ID, TransactionCode: o.OrderCode, QRCode: qr, Provider: domain.PaymentMethodMposQR,
+		Amount: o.TotalAmount, Currency: "VND", Status: domain.PaymentStatusPending,
+	}
+	if err := s.repo.Create(ctx, p); err != nil {
+		_ = cong.NextPay.HuyQR(ctx, o.OrderCode, cong.Muid, amount)
+		return nil, fmt.Errorf("%w: %v", domain.ErrPaymentGateway, err)
+	}
+
+	return s.paymentDTO(ctx, p, o), nil
+}
+
+// lenhMay — payments.payment_link_id của lệnh quẹt thẻ: "chi tiết:serial máy",
+// đủ để huỷ lệnh và tính phí theo đúng máy đã đẩy.
+func lenhMay(detailID uint, posID string) string {
+	return strconv.FormatUint(uint64(detailID), 10) + ":" + posID
+}
+
+func docLenhMay(s string) (uint, string) {
+	id, pos, _ := strings.Cut(s, ":")
+	n, _ := strconv.ParseUint(id, 10, 64)
+
+	return uint(n), pos
+}
+
+func (s *paymentService) DayXuongMay(ctx context.Context, o *domain.Order, chon *ChonQuay) (*dto.CheckoutPayment, error) {
+	if chon == nil || chon.Cong == nil || chon.Cong.NextPay == nil {
+		return nil, domain.ErrPaymentMethodDisabled
+	}
+	amount := int64(math.Round(o.TotalAmount))
+	np := chon.Cong.NextPay
+	if err := np.DayXuongMay(ctx, o.OrderCode, chon.PosID, amount, o.OrderCode); err != nil {
+		logger.Error("không đẩy được lệnh xuống máy mPOS", zap.String("order_code", o.OrderCode), zap.Error(err))
+		return nil, fmt.Errorf("%w: %v", domain.ErrPaymentDevice, err)
+	}
+	p := &domain.Payment{
+		OrderID: o.ID, TransactionCode: o.OrderCode, PaymentLinkID: lenhMay(chon.DetailID, chon.PosID),
+		Provider: domain.PaymentMethodCard, Amount: o.TotalAmount, Currency: "VND", Status: domain.PaymentStatusPending,
+	}
+	if err := s.repo.Create(ctx, p); err != nil {
+		_ = np.HuyLenhMay(ctx, o.OrderCode, chon.PosID, amount)
+		return nil, fmt.Errorf("%w: %v", domain.ErrPaymentDevice, err)
+	}
+
+	return &dto.CheckoutPayment{Provider: p.Provider, TransactionCode: p.TransactionCode, Content: o.OrderCode, Amount: p.Amount}, nil
 }
 
 // gatewayOrderCode sinh mã giao dịch gửi sang PayOS.
@@ -267,7 +429,7 @@ func payosItems(o *domain.Order) []payos.Item {
 // Chỗ khác nhau giữa hai cổng gói gọn ở đây: PayOS trả về CHUỖI VietQR nên phải tự
 // vẽ ra ảnh, còn SePay cho sẵn ĐỊA CHỈ ảnh nên gán thẳng. Nhờ vậy client chỉ thấy
 // một trường qr_image duy nhất và không cần biết cổng nào đang chạy.
-func (s *paymentService) paymentDTO(p *domain.Payment, o *domain.Order) *dto.CheckoutPayment {
+func (s *paymentService) paymentDTO(ctx context.Context, p *domain.Payment, o *domain.Order) *dto.CheckoutPayment {
 	out := &dto.CheckoutPayment{
 		Provider:        p.Provider,
 		CheckoutURL:     p.CheckoutURL,
@@ -278,8 +440,8 @@ func (s *paymentService) paymentDTO(p *domain.Payment, o *domain.Order) *dto.Che
 
 	if p.Provider == domain.PaymentMethodSePay {
 		out.QRImage = p.QRCode
-		if s.sepay != nil {
-			out.AccountNumber, out.BankName, out.AccountName = s.sepay.Account()
+		if c := s.sepayChoDon(ctx, o); c != nil {
+			out.AccountNumber, out.BankName, out.AccountName = c.Account()
 		}
 	} else {
 		out.QRCode = p.QRCode
@@ -316,15 +478,39 @@ func qrImageDataURI(payload string) string {
 // ---------- Webhook ----------
 
 func (s *paymentService) HandlePayOSWebhook(ctx context.Context, raw []byte) error {
-	if !s.Available(domain.PaymentMethodPayOS) {
+	cong := s.payosCho(ctx)
+	if cong == nil || !cong.Enabled() {
 		return domain.ErrPaymentMethodDisabled
 	}
 
-	data, err := s.payos.ParseWebhook(raw)
+	data, err := cong.ParseWebhook(raw)
 	if err != nil {
 		return err
 	}
 
+	return s.xuLyPayOS(ctx, data, raw)
+}
+
+func (s *paymentService) HandlePayOSWebhookTheoMa(ctx context.Context, ma string, raw []byte) error {
+	if s.cong == nil {
+		return domain.ErrNotFound
+	}
+	ctx, cong, err := s.cong.CongTheoMa(ctx, ma, domain.PaymentMethodPayOS)
+	if err != nil {
+		return err
+	}
+	data, err := cong.PayOS.ParseWebhook(raw)
+	if err != nil {
+		return err
+	}
+	// Chữ ký đúng là cổng đã nối thông — kể cả gói kiểm tra lúc đăng ký URL.
+	s.cong.GhiNhanBao(ctx, cong.DetailID)
+
+	return s.xuLyPayOS(ctx, data, raw)
+}
+
+// xuLyPayOS — phần chung sau khi chữ ký đã được kiểm bằng đúng khoá.
+func (s *paymentService) xuLyPayOS(ctx context.Context, data *payos.WebhookData, raw []byte) error {
 	code := strconv.FormatInt(data.OrderCode, 10)
 	p, err := s.repo.FindByTransactionCode(ctx, code)
 	if errors.Is(err, domain.ErrNotFound) {
@@ -352,7 +538,8 @@ func (s *paymentService) HandlePayOSWebhook(ctx context.Context, raw []byte) err
 		logger.Error("webhook PayOS lệch số tiền, không ghi nhận tự động",
 			zap.String("gateway_code", code),
 			zap.Int64("nhan_duoc", data.Amount), zap.Int64("phai_la", want))
-		return s.settle(ctx, p, domain.PaymentStatusFailed, raw, nil)
+		s.ghiLech(p.ID, float64(data.Amount))
+		return nil
 	}
 
 	paidAt := parseGatewayTime(data.TransactionDateTime)
@@ -365,15 +552,99 @@ func (s *paymentService) HandlePayOSWebhook(ctx context.Context, raw []byte) err
 // khoản vừa nhận X đồng, nội dung là Y". Việc tìm ra đơn nào là của mình: dò xem
 // mã giao dịch nào đang chờ có mặt trong nội dung đó.
 func (s *paymentService) HandleSePayWebhook(ctx context.Context, authHeader string, raw []byte) error {
-	if !s.Available(domain.PaymentMethodSePay) {
+	cong := s.sepayCho(ctx)
+	if cong == nil || !cong.Enabled() {
 		return domain.ErrPaymentMethodDisabled
 	}
 
-	data, err := s.sepay.ParseWebhook(authHeader, raw)
+	data, err := cong.ParseWebhook(authHeader, raw)
 	if err != nil {
 		return err
 	}
 
+	return s.xuLySePay(ctx, data, raw)
+}
+
+func (s *paymentService) HandleSePayWebhookTheoMa(ctx context.Context, ma, authHeader string, raw []byte) error {
+	if s.cong == nil {
+		return domain.ErrNotFound
+	}
+	ctx, cong, err := s.cong.CongTheoMa(ctx, ma, domain.PaymentMethodSePay)
+	if err != nil {
+		return err
+	}
+	data, err := cong.SePay.ParseWebhook(authHeader, raw)
+	if err != nil {
+		return err
+	}
+	// Khoá đúng là SePay đã nối thông — kể cả gói "Gửi thử" bên trang SePay.
+	s.cong.GhiNhanBao(ctx, cong.DetailID)
+
+	return s.xuLySePay(ctx, data, raw)
+}
+
+func (s *paymentService) HandleMposWebhookTheoMa(ctx context.Context, ma string, raw []byte) error {
+	if s.cong == nil {
+		return domain.ErrNotFound
+	}
+	ctx, cong, err := s.cong.CongTheoMa(ctx, ma, "mpos")
+	if err != nil {
+		return err
+	}
+	bao, err := cong.NextPay.DocWebhook(raw)
+	if err != nil {
+		return err
+	}
+	s.cong.GhiNhanBao(ctx, cong.DetailID)
+
+	var provider string
+	switch {
+	case bao.QRXong():
+		provider = domain.PaymentMethodMposQR
+	case bao.QuetTheXong():
+		provider = domain.PaymentMethodCard
+	default:
+		// Giao dịch lỗi / bị huỷ phía máy: đơn vẫn chờ, thu ngân thấy và chọn cách khác.
+		logger.Info("NextPay báo giao dịch chưa thành công", zap.String("ma_don", bao.MaDon), zap.Int("trang_thai", bao.TransStatus))
+		return nil
+	}
+	p, err := s.repo.FindByTransactionCode(ctx, bao.MaDon)
+	if errors.Is(err, domain.ErrNotFound) || err == nil && p.Provider != provider {
+		logger.Info("NextPay báo tiền nhưng không khớp đơn nào đang chờ", zap.String("ma_don", bao.MaDon), zap.Float64("so_tien", bao.SoTien))
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if want, got := math.Round(p.Amount), math.Round(bao.SoTien); got != want {
+		logger.Error("NextPay lệch số tiền, không ghi nhận tự động",
+			zap.String("ma_don", bao.MaDon), zap.Float64("nhan_duoc", got), zap.Float64("phai_la", want))
+		s.ghiLech(p.ID, got)
+		return nil
+	}
+	// Phí quẹt thẻ theo loại thẻ NextPay báo, mức của chính máy đã đẩy lệnh. Ghi
+	// TRƯỚC khi chốt tiền để màn quầy thấy đơn hoàn tất là đã có phí.
+	if provider == domain.PaymentMethodCard && p.Status == domain.PaymentStatusPending {
+		if did, _ := docLenhMay(p.PaymentLinkID); did > 0 {
+			if o, err := s.orderRepo.FindByID(ctx, p.OrderID); err == nil {
+				if c := s.cong.CongTheoChiTiet(ctx, o.ShopID, did); c != nil {
+					tyLe, roLoai := phiTheoLoaiThe(c.Phi, bao.IssuerCode)
+					if !roLoai {
+						logger.Warn("NextPay báo loại thẻ không có trong bảng phí của máy — tạm tính theo mức cao nhất, cần đối soát",
+							zap.String("ma_don", bao.MaDon), zap.String("issuer_code", bao.IssuerCode), zap.Float64("ty_le", tyLe))
+					}
+					s.cong.GhiPhiThe(ctx, o.ID, did, math.Round(p.Amount*tyLe/100))
+				}
+			}
+		}
+	}
+	now := time.Now()
+
+	return s.settle(ctx, p, domain.PaymentStatusSuccess, raw, &now)
+}
+
+// xuLySePay — phần chung sau khi khoá webhook đã được kiểm bằng đúng khoá.
+func (s *paymentService) xuLySePay(ctx context.Context, data *sepay.Webhook, raw []byte) error {
 	// Tiền RA cũng bắn về cùng địa chỉ này. Bỏ qua ngay, không thì mỗi lần cửa hàng
 	// chi tiền lại có một đơn được đánh dấu đã thanh toán.
 	if !data.IsIncoming() {
@@ -403,7 +674,8 @@ func (s *paymentService) HandleSePayWebhook(ctx context.Context, authHeader stri
 		logger.Error("SePay lệch số tiền, không ghi nhận tự động",
 			zap.String("ma_don", p.TransactionCode),
 			zap.Float64("nhan_duoc", got), zap.Float64("phai_la", want))
-		return s.settle(ctx, p, domain.PaymentStatusFailed, raw, nil)
+		s.ghiLech(p.ID, got)
+		return nil
 	}
 
 	paidAt := parseGatewayTime(data.TransactionDate)
@@ -423,13 +695,30 @@ func (s *paymentService) Status(ctx context.Context, gatewayCode string) (*dto.P
 	if err != nil {
 		return nil, err
 	}
-	if !s.Available(p.Provider) {
-		return nil, domain.ErrPaymentMethodDisabled
+	res, err := s.status(ctx, p, code)
+	if err != nil || res.Status != domain.PaymentStatusPending {
+		return res, err
 	}
+	// Còn chờ mà cổng đã từng báo lệch: nói ra, kẻo thu ngân tưởng chưa ai quét.
+	if got, co := s.docLech(p.ID); co {
+		res.LechTien = &got
+		res.Message = "Cổng báo nhận " + formatVND(got) + ", đơn cần " + formatVND(p.Amount) +
+			" — kiểm lại với khách. Mã vẫn chờ, khách trả đúng số là tự hoàn tất."
+	}
+	return res, nil
+}
 
+func (s *paymentService) status(ctx context.Context, p *domain.Payment, code string) (*dto.PaymentStatusResponse, error) {
 	o, err := s.orderRepo.FindByID(ctx, p.OrderID)
 	if err != nil {
 		return nil, err
+	}
+	// mPOS: không có đường hỏi ngược NextPay — trạng thái chỉ đổi khi webhook về.
+	if p.Provider == domain.PaymentMethodMposQR || p.Provider == domain.PaymentMethodCard {
+		return statusDTO(o, p.Status, ""), nil
+	}
+	if p.Status == domain.PaymentStatusPending && !s.coCongDon(ctx, o) {
+		return nil, domain.ErrPaymentMethodDisabled
 	}
 
 	// Đã chốt xong từ trước (webhook về kịp, hoặc khách bấm kiểm tra lần hai).
@@ -474,12 +763,13 @@ func (s *paymentService) shouldAskGateway(paymentID uint) bool {
 // và ở máy local (SePay không gọi vào localhost được) nghĩa là phải vào trang quản
 // trị xác nhận tay.
 func (s *paymentService) statusSePay(ctx context.Context, p *domain.Payment, o *domain.Order) (*dto.PaymentStatusResponse, error) {
-	if !s.sepay.CanQuery() || !s.shouldAskGateway(p.ID) {
+	cong := s.sepayChoDon(ctx, o)
+	if !cong.CanQuery() || !s.shouldAskGateway(p.ID) {
 		return statusDTO(o, domain.PaymentStatusPending, ""), nil
 	}
 
 	// Quét từ lúc mở mã, lùi thêm chút cho lệch giờ — đừng quét cả cuốn sao kê.
-	tx, err := s.sepay.FindIncoming(ctx, p.TransactionCode, p.CreatedAt)
+	tx, err := cong.FindIncoming(ctx, p.TransactionCode, p.CreatedAt)
 	if err != nil {
 		// Không hỏi được thì trả về những gì đang biết: thà nói "chưa thấy tiền về"
 		// còn hơn ném lỗi kỹ thuật vào mặt khách đang ngồi chờ.
@@ -495,6 +785,7 @@ func (s *paymentService) statusSePay(ctx context.Context, p *domain.Payment, o *
 		logger.Error("sao kê SePay lệch số tiền, không ghi nhận tự động",
 			zap.String("ma_don", p.TransactionCode),
 			zap.Float64("nhan_duoc", got), zap.Float64("phai_la", want))
+		s.ghiLech(p.ID, got)
 		return statusDTO(o, domain.PaymentStatusPending, ""), nil
 	}
 
@@ -515,7 +806,7 @@ func (s *paymentService) statusPayOS(ctx context.Context, p *domain.Payment, o *
 	if err != nil {
 		return nil, domain.ErrNotFound
 	}
-	info, err := s.payos.GetLink(ctx, n)
+	info, err := s.payosChoDon(ctx, o).GetLink(ctx, n)
 	if err != nil {
 		// Không hỏi được cổng thì trả về những gì đang biết, kèm link để khách trả
 		// tiếp — thà nói "chưa thấy tiền về" còn hơn báo lỗi kỹ thuật cho khách.
@@ -576,6 +867,7 @@ func (s *paymentService) settle(ctx context.Context, p *domain.Payment, status s
 	if err != nil {
 		return err
 	}
+	s.xoaLech(p.ID)
 	if !first || status != domain.PaymentStatusSuccess {
 		return nil
 	}
@@ -588,11 +880,19 @@ func (s *paymentService) settle(ctx context.Context, p *domain.Payment, status s
 // vẫn do nhân viên quyết định. Tiền đã về không có nghĩa hàng đã được kiểm và gói.
 func (s *paymentService) markOrderPaid(ctx context.Context, orderID uint) error {
 	o, err := s.orderRepo.LockAndUpdate(ctx, orderID, func(o *domain.Order) (*domain.OrderStatusHistory, []string, *domain.StockRelease, error) {
-		if o.PaymentStatus == domain.OrderPaymentPaid {
+		if o.PaymentStatus == domain.OrderPaymentPaid || o.Status == domain.OrderStatusCancelled {
 			return nil, nil, nil, nil
 		}
 		o.PaymentStatus = domain.OrderPaymentPaid
-		return nil, []string{"PaymentStatus"}, nil, nil
+		cols := []string{"PaymentStatus"}
+		// Đơn QR tại quầy: khách đứng đó, tiền về là xong lượt bán — hoàn tất luôn
+		// như mọi đơn quầy khác, không chờ ai bấm duyệt.
+		if o.Channel == domain.OrderChannelPOS && o.Status == domain.OrderStatusPending {
+			now := time.Now()
+			o.Status, o.ConfirmedAt, o.DeliveredAt = domain.OrderStatusCompleted, &now, &now
+			cols = append(cols, "Status", "ConfirmedAt", "DeliveredAt")
+		}
+		return nil, cols, nil, nil
 	})
 	if err != nil {
 		return err
@@ -674,4 +974,87 @@ func truncateRunes(s string, max int) string {
 		return s
 	}
 	return strings.TrimSpace(string(r[:max]))
+}
+
+func (s *paymentService) HuyTheoDon(ctx context.Context, o *domain.Order) (bool, error) {
+	p, err := s.repo.FindOpenByOrder(ctx, o.ID, time.Now())
+	if errors.Is(err, domain.ErrNotFound) {
+		// Không còn lần thử nào đang chờ: hoặc đã hết hạn (huỷ được), hoặc đã trả.
+		return o.PaymentStatus != domain.OrderPaymentPaid, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	// Chốt lần thử thành "huỷ" TRƯỚC: tiền tới sau đó thì webhook thấy lần thử đã
+	// chốt và không đánh dấu đơn đã huỷ thành đã trả.
+	ok, err := s.repo.MarkSettled(ctx, p.ID, domain.PaymentStatusCancelled, "{}", nil)
+	if err != nil || !ok {
+		return false, err
+	}
+	amount := int64(math.Round(p.Amount))
+	switch p.Provider {
+	case domain.PaymentMethodMposQR:
+		if c := s.mposChoDon(ctx, o); c != nil {
+			if err := c.NextPay.HuyQR(ctx, p.TransactionCode, c.Muid, amount); err != nil {
+				logger.Warn("huỷ mã QR mPOS không thành công", zap.String("ma_don", p.TransactionCode), zap.Error(err))
+			}
+		}
+	case domain.PaymentMethodCard:
+		did, pos := docLenhMay(p.PaymentLinkID)
+		if c := s.cong.CongTheoChiTiet(ctx, o.ShopID, did); s.cong != nil && c != nil {
+			if err := c.NextPay.HuyLenhMay(ctx, p.TransactionCode, pos, amount); err != nil {
+				logger.Warn("huỷ lệnh máy mPOS không thành công", zap.String("ma_don", p.TransactionCode), zap.Error(err))
+			}
+		}
+	}
+	if p.Provider == domain.PaymentMethodPayOS {
+		if n, err := strconv.ParseInt(p.TransactionCode, 10, 64); err == nil {
+			if _, err := s.payosChoDon(ctx, o).CancelLink(ctx, n, "Thu ngân huỷ mã QR"); err != nil {
+				logger.Warn("huỷ link PayOS không thành công", zap.Int64("gateway_code", n), zap.Error(err))
+			}
+		}
+	}
+
+	return true, nil
+}
+
+// ghiLech / docLech / xoaLech — sổ nhớ "cổng báo lệch tiền" của lượt thu còn chờ.
+//
+// Báo lệch KHÔNG chốt lượt thu thành failed: chốt rồi thì gói báo ĐÚNG đến sau
+// (khách quét lại cho đúng, cổng gửi lại gói) không còn lượt nào đang chờ để
+// khớp, đơn treo mãi dù tiền đã về.
+func (s *paymentService) ghiLech(id uint, soTien float64) {
+	s.lechMu.Lock()
+	defer s.lechMu.Unlock()
+	if s.lechTien == nil {
+		s.lechTien = map[uint]float64{}
+	}
+	s.lechTien[id] = soTien
+}
+
+func (s *paymentService) docLech(id uint) (float64, bool) {
+	s.lechMu.Lock()
+	defer s.lechMu.Unlock()
+	v, co := s.lechTien[id]
+	return v, co
+}
+
+func (s *paymentService) xoaLech(id uint) {
+	s.lechMu.Lock()
+	defer s.lechMu.Unlock()
+	delete(s.lechTien, id)
+}
+
+// phiTheoLoaiThe — % phí của loại thẻ NextPay báo, theo bảng phí đã khai của máy.
+// Mã lạ / thiếu (NextPay thêm loại thẻ mới, gói thiếu trường) hoặc loại thẻ máy
+// chưa khai mức thì KHÔNG tính 0: lấy mức cao nhất đã khai, roLoai = false để ghi
+// cảnh báo. Ghi 0 là khoản phí biến khỏi sổ mà không ai biết để đi đối soát.
+func phiTheoLoaiThe(bang map[string]float64, issuer string) (tyLe float64, roLoai bool) {
+	if v, co := bang[nextpay.PhiTheoThe(issuer)]; co {
+		return v, true
+	}
+	for _, v := range bang {
+		tyLe = max(tyLe, v)
+	}
+	return tyLe, false
 }

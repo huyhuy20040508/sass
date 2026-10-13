@@ -175,7 +175,7 @@
         <p class="inv-status">
             Trạng thái: {{ $STATUSES[$o['status'] ?? ''] ?? '—' }}
             &nbsp;•&nbsp; Thanh toán: {{ $PAY_STATUSES[$o['payment_status'] ?? ''] ?? '—' }}
-            ({{ $PAY_METHODS[$o['payment_method'] ?? ''] ?? '—' }})
+            ({{ ($o['payment_method'] ?? '') !== '' ? \App\Http\Controllers\OrderController::tenHinhThuc($o['payment_method']) : '—' }})
         </p>
 
         {{-- Hoá đơn điện tử. Chỉ in khi cơ quan thuế ĐÃ CẤP MÃ: một tờ chưa có
