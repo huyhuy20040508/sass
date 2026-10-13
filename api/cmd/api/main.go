@@ -32,6 +32,7 @@ import (
 	"sass-api/pkg/minvoice"
 	"sass-api/pkg/payos"
 	"sass-api/pkg/sepay"
+	"sass-api/pkg/sepayinvoice"
 )
 
 const version = "0.1.0"
@@ -386,6 +387,7 @@ func main() {
 	}
 	etaxSvc := service.NewEtaxService(
 		repository.NewEtaxRepository(db), chiNhanhRepo, orderRepo, hopETax, minvoice.New(),
+		sepayinvoice.New(cfg.ETax.SePayBaseURL),
 	)
 	caSvc := service.NewCaLamViecService(caRepo, userRepo, chiNhanhRepo)
 	// Quy tắc đánh số chứng từ — chiNhanhRepo để chốt chi nhánh có thật trước khi

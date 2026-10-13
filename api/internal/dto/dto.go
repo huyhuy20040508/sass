@@ -700,13 +700,19 @@ type ChiNhanhRequest struct {
 // Mật khẩu chỉ đi MỘT CHIỀU: gửi lên để đăng nhập rồi mã hoá cất đi, không có
 // đường đọc lại. Đổi mật khẩu bên nhà cung cấp thì khai lại cả tài khoản.
 type EtaxKetNoiRequest struct {
-	// Provider bỏ trống = minvoice (hôm nay mới có một nhà cung cấp).
-	Provider string `json:"provider" binding:"omitempty,oneof=minvoice" example:"minvoice"`
-	TaxCode  string `json:"tax_code" binding:"required,max=30" example:"0106026495-998"`
+	// Provider bỏ trống = minvoice.
+	Provider string `json:"provider" binding:"omitempty,oneof=minvoice sepay" example:"minvoice"`
+	// TaxCode bắt buộc với M-Invoice (địa chỉ cổng dựng từ nó); SePay không cần.
+	TaxCode string `json:"tax_code" binding:"omitempty,max=30" example:"0106026495-998"`
+	// Username / Password — với SePay là "Tên đăng nhập" / "Mật khẩu" ở trang
+	// API xuất hoá đơn của my.sepay.vn (client ID / secret).
 	Username string `json:"username" binding:"required,max=150"`
 	Password string `json:"password" binding:"required,max=200"`
 	// MaDVCS là mã đơn vị cơ sở bên M-Invoice; bỏ trống = "VP" (văn phòng).
 	MaDVCS string `json:"ma_dvcs" binding:"omitempty,max=20" example:"VP"`
+	// AccountRef — SePay: provider_account_id muốn dùng. Bỏ trống = tài khoản
+	// đang hoạt động duy nhất của SePay; có nhiều cái thì phải chọn.
+	AccountRef string `json:"account_ref" binding:"omitempty,max=64"`
 }
 
 // EtaxCaiDatRequest — ký hiệu dùng để phát hành và hai công tắc tự động.

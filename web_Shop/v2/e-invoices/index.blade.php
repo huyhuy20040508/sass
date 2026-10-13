@@ -741,7 +741,7 @@
             $('#hd-v-ma-cqt').val(hd.tax_auth_code || '');
             $('#hd-v-ma-tra-cuu').val(hd.lookup_code || '');
             $('#hd-v-trang-thai').val((HD_TRANG_THAI[tt] || tt) + loaiTo);
-            $('#hd-v-phuong-thuc').val(HD_PAY_METHODS[o.payment_method] || o.payment_method || '');
+            $('#hd-v-phuong-thuc').val(o.payment_method ? (HD_PAY_METHODS[o.payment_method] || 'Khác') : '');
             $('#hd-v-nguoi-tao').val(o.created_by_name || '—');
             $('#hd-v-ngay').val(moc ? moment(moc).format('DD-MM-YYYY HH:mm') : '');
 

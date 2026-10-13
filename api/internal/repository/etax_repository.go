@@ -49,6 +49,17 @@ func (r *etaxRepository) MaSoThueDaDung(ctx context.Context, taxCode string, trC
 	return so > 0, err
 }
 
+func (r *etaxRepository) TaiKhoanDaDung(ctx context.Context, provider, username string, trChiNhanh uint) (bool, error) {
+	var so int64
+	q := r.db.WithContext(ctx).Model(&domain.EtaxConnection{}).Where("provider = ? AND username = ?", provider, username)
+	if trChiNhanh > 0 {
+		q = q.Where("shop_id <> ?", trChiNhanh)
+	}
+	err := q.Count(&so).Error
+
+	return so > 0, err
+}
+
 // Luu tạo mới hoặc ghi đè. Save() ghi cả bản ghi nên nơi gọi phải dựng đủ
 // trường — xem EtaxService.
 func (r *etaxRepository) Luu(ctx context.Context, cn *domain.EtaxConnection) error {

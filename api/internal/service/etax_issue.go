@@ -93,6 +93,9 @@ func (s *etaxService) PhatHanh(ctx context.Context, orderID uint) (*domain.EtaxI
 	if strings.TrimSpace(ketNoi.TemplateSymbol) == "" {
 		return nil, domain.ErrETaxChuaChonKyHieu
 	}
+	if ketNoi.Provider == domain.NhaCungCapSePay {
+		return s.phatHanhSePay(ctx, don, cu, ketNoi)
+	}
 
 	chiNhanh, err := s.chiNhanh.FindByID(ctx, don.ShopID)
 	if err != nil {
@@ -255,15 +258,25 @@ func (s *etaxService) TuPhatHanh(ctx context.Context, orderID uint) {
 	}
 }
 
-// dungHoaDon dựng payload M-Invoice từ một đơn hàng, và trả kèm tổng tiền thuế.
-func (s *etaxService) dungHoaDon(
-	ctx context.Context,
-	don *domain.Order,
-	ketNoi *domain.EtaxConnection,
-	chiNhanh *domain.ChiNhanh,
-) (map[string]any, float64, error) {
-	coThue := strings.HasPrefix(ketNoi.TemplateSymbol, kyHieuGTGT)
+// dongHoaDon là một dòng của tờ hoá đơn, đã tính xong tiền — chưa mang hình
+// dạng của nhà cung cấp nào. Hai cổng nhận hai bộ tên trường khác nhau, nhưng
+// con số trên mỗi dòng phải là MỘT: quầy đã thu thuế theo đúng các số này.
+type dongHoaDon struct {
+	Ma       string
+	Ten      string
+	SoLuong  int
+	DonGia   float64
+	TienHang float64
+	Bot      float64
+	ChuaThue float64
+	// MucThue theo quy ước Product.VAT (số dương = %, -1 KCT, -2 KKKNT).
+	MucThue  int
+	TienThue float64
+}
 
+// dongTuDon tính các dòng hoá đơn của một đơn hàng: từng mặt hàng, rồi phí giao
+// hàng và phụ thu thành dòng riêng.
+func (s *etaxService) dongTuDon(ctx context.Context, don *domain.Order) ([]dongHoaDon, error) {
 	ids := make([]uint, 0, len(don.Items))
 	for _, it := range don.Items {
 		if it.ProductID != nil {
@@ -272,7 +285,7 @@ func (s *etaxService) dungHoaDon(
 	}
 	thueSuat, err := s.repo.ThueSuatTheoMatHang(ctx, ids)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 
 	// Giảm giá TOÀN ĐƠN (voucher, khuyến mại) chưa nằm trong TotalPrice của dòng
@@ -281,9 +294,7 @@ func (s *etaxService) dungHoaDon(
 	// giảm treo ở đầu phiếu thì không nói được nó giảm phần chịu thuế nào.
 	chiaBot := chiaGiamGia(don)
 
-	dong := make([]map[string]any, 0, len(don.Items)+1)
-	var tongThue, tongChuaThue, tongTienHang, tongBot float64
-
+	dong := make([]dongHoaDon, 0, len(don.Items)+2)
 	for i, it := range don.Items {
 		ten := strings.TrimSpace(it.ProductName)
 		if it.VariantName != "" {
@@ -293,96 +304,96 @@ func (s *etaxService) dungHoaDon(
 		// TotalPrice đã trừ phần bớt của CHÍNH dòng đó (xem OrderItem.TotalPrice);
 		// phần còn phải trừ là suất giảm giá toàn đơn chia về đây.
 		chuaThue := lamTron(it.TotalPrice - chiaBot[i])
-		bot := lamTron(it.DiscountAmount + chiaBot[i])
-		tienHang := lamTron(it.UnitPrice * float64(it.Quantity))
 		// Mức CHỤP lúc bán thắng mức hiện tại — xem mucThueDong. Quầy đã thu thuế
 		// theo đúng mức ấy (thueCuaDon), nên hai con số trùng nhau tới từng đồng.
 		mucThue := mucThueDong(it, thueSuat)
-		tienThue := tinhThue(chuaThue, mucThue)
 
-		d := map[string]any{
-			"tchat":                     "1",
-			"stt_rec0":                  i + 1,
-			"inv_itemCode":              maHangHoaDon(it.VariantSKU),
-			"inv_itemName":              ten,
-			"inv_unitCode":              "",
-			"inv_quantity":              it.Quantity,
-			"inv_unitPrice":             it.UnitPrice,
-			"inv_Amount":                tienHang,
-			"inv_discountPercentage":    0,
-			"inv_discountAmount":        bot,
-			"inv_TotalAmountWithoutVat": chuaThue,
-		}
-		if coThue {
-			d["ma_thue"] = maThue(mucThue)
-			d["inv_vatAmount"] = lamTron(tienThue)
-			d["inv_TotalAmount"] = lamTron(chuaThue + tienThue)
-		}
-		dong = append(dong, d)
-
-		tongThue += tienThue
-		tongChuaThue += chuaThue
-		tongTienHang += tienHang
-		tongBot += bot
+		dong = append(dong, dongHoaDon{
+			Ma:       maHangHoaDon(it.VariantSKU),
+			Ten:      ten,
+			SoLuong:  it.Quantity,
+			DonGia:   it.UnitPrice,
+			TienHang: lamTron(it.UnitPrice * float64(it.Quantity)),
+			Bot:      lamTron(it.DiscountAmount + chiaBot[i]),
+			ChuaThue: chuaThue,
+			MucThue:  mucThue,
+			TienThue: tinhThue(chuaThue, mucThue),
+		})
 	}
 
 	// Phí giao hàng đi thành MỘT DÒNG của hoá đơn, không gộp vào tổng: khách
-	// đối chiếu hoá đơn với đơn hàng phải thấy đủ từng khoản đã trả.
+	// đối chiếu hoá đơn với đơn hàng phải thấy đủ từng khoản đã trả. Nó không
+	// mang thuế suất của mặt hàng nào — để KCT thay vì mượn bừa mức của dòng cuối.
 	if don.ShippingFee > 0 {
-		d := map[string]any{
-			"tchat":                     "1",
-			"stt_rec0":                  len(dong) + 1,
-			"inv_itemCode":              "",
-			"inv_itemName":              "Phí giao hàng",
-			"inv_unitCode":              "",
-			"inv_quantity":              1,
-			"inv_unitPrice":             don.ShippingFee,
-			"inv_Amount":                lamTron(don.ShippingFee),
-			"inv_discountPercentage":    0,
-			"inv_discountAmount":        0,
-			"inv_TotalAmountWithoutVat": lamTron(don.ShippingFee),
-		}
-		if coThue {
-			// Phí giao hàng không mang thuế suất của mặt hàng nào — để KCT thay vì
-			// mượn bừa mức của dòng cuối cùng.
-			d["ma_thue"] = maThue(mucKhongChiuThue)
-			d["inv_vatAmount"] = 0
-			d["inv_TotalAmount"] = lamTron(don.ShippingFee)
-		}
-		dong = append(dong, d)
-		tongChuaThue += lamTron(don.ShippingFee)
-		tongTienHang += lamTron(don.ShippingFee)
+		dong = append(dong, dongPhi("Phí giao hàng", don.ShippingFee))
 	}
 
 	// Phụ thu ở quầy (phí gói quà, ngoài giờ…) đi thành một dòng riêng, cùng luật
-	// với phí giao hàng: khách thấy đủ từng khoản, và không mang thuế suất của mặt
-	// hàng nào.
+	// với phí giao hàng.
 	if don.SurchargeAmount > 0 {
 		ten := "Phụ thu"
 		if ghi := strings.TrimSpace(don.SurchargeNote); ghi != "" {
 			ten += ": " + ghi
 		}
+		dong = append(dong, dongPhi(ten, don.SurchargeAmount))
+	}
+
+	return dong, nil
+}
+
+func dongPhi(ten string, tien float64) dongHoaDon {
+	return dongHoaDon{
+		Ten:      ten,
+		SoLuong:  1,
+		DonGia:   tien,
+		TienHang: lamTron(tien),
+		ChuaThue: lamTron(tien),
+		MucThue:  mucKhongChiuThue,
+	}
+}
+
+// dungHoaDon dựng payload M-Invoice từ một đơn hàng, và trả kèm tổng tiền thuế.
+func (s *etaxService) dungHoaDon(
+	ctx context.Context,
+	don *domain.Order,
+	ketNoi *domain.EtaxConnection,
+	chiNhanh *domain.ChiNhanh,
+) (map[string]any, float64, error) {
+	coThue := strings.HasPrefix(ketNoi.TemplateSymbol, kyHieuGTGT)
+
+	ds, err := s.dongTuDon(ctx, don)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	dong := make([]map[string]any, 0, len(ds))
+	var tongThue, tongChuaThue, tongTienHang, tongBot float64
+
+	for i, x := range ds {
 		d := map[string]any{
 			"tchat":                     "1",
-			"stt_rec0":                  len(dong) + 1,
-			"inv_itemCode":              "",
-			"inv_itemName":              ten,
+			"stt_rec0":                  i + 1,
+			"inv_itemCode":              x.Ma,
+			"inv_itemName":              x.Ten,
 			"inv_unitCode":              "",
-			"inv_quantity":              1,
-			"inv_unitPrice":             don.SurchargeAmount,
-			"inv_Amount":                lamTron(don.SurchargeAmount),
+			"inv_quantity":              x.SoLuong,
+			"inv_unitPrice":             x.DonGia,
+			"inv_Amount":                x.TienHang,
 			"inv_discountPercentage":    0,
-			"inv_discountAmount":        0,
-			"inv_TotalAmountWithoutVat": lamTron(don.SurchargeAmount),
+			"inv_discountAmount":        x.Bot,
+			"inv_TotalAmountWithoutVat": x.ChuaThue,
 		}
 		if coThue {
-			d["ma_thue"] = maThue(mucKhongChiuThue)
-			d["inv_vatAmount"] = 0
-			d["inv_TotalAmount"] = lamTron(don.SurchargeAmount)
+			d["ma_thue"] = maThue(x.MucThue)
+			d["inv_vatAmount"] = lamTron(x.TienThue)
+			d["inv_TotalAmount"] = lamTron(x.ChuaThue + x.TienThue)
 		}
 		dong = append(dong, d)
-		tongChuaThue += lamTron(don.SurchargeAmount)
-		tongTienHang += lamTron(don.SurchargeAmount)
+
+		tongThue += x.TienThue
+		tongChuaThue += x.ChuaThue
+		tongTienHang += x.TienHang
+		tongBot += x.Bot
 	}
 
 	hoaDon := map[string]any{
@@ -535,11 +546,13 @@ func diaChiGiao(don *domain.Order) string {
 
 // tenPhuongThuc đổi mã phương thức thanh toán sang chữ in trên hoá đơn. Mã lạ
 // thì gửi "TM/CK" — đúng thứ cơ quan thuế nhận cho trường hợp không rõ.
+// Quẹt thẻ ghi "CK": tiền về tài khoản chứ không qua két; v2 có provider ghi
+// "TTD" nhưng không phải cổng nào cũng nhận chữ đó.
 func tenPhuongThuc(ma string) string {
 	switch strings.ToLower(strings.TrimSpace(ma)) {
 	case "cash", "cod":
 		return "TM"
-	case "bank", "banking", "transfer", "payos", "sepay", "vnpay", "momo":
+	case "bank_transfer", "bank", "banking", "transfer", "card", "payos", "sepay", "mpos_qr", "vnpay", "momo":
 		return "CK"
 	default:
 		return "TM/CK"

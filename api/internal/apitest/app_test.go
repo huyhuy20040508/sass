@@ -354,7 +354,7 @@ func dungHeThongVoi(t *testing.T, banHang, dieuHanh bool) *heThong {
 	// Hoá đơn điện tử: hộp mã hoá rỗng và client trỏ máy chủ thật. Bộ test hiện
 	// chưa chạm nhóm này; dựng sớm vì đơn hàng và thanh toán móc vào nó.
 	etaxSvc := service.NewEtaxService(
-		repository.NewEtaxRepository(db), chiNhanhRepo, orderRepo, bimat.New(""), minvoice.New())
+		repository.NewEtaxRepository(db), chiNhanhRepo, orderRepo, bimat.New(""), minvoice.New(), nil)
 	paymentSvc := service.NewPaymentService(paymentRepo, orderRepo, payosClient, cfg.PayOS, sepayClient, notifSvc, etaxSvc)
 	fixedPriceRepo := repository.NewFixedPriceRepository(db)
 	dongGiaSvc := service.NewFixedPriceService(fixedPriceRepo, categoryRepo, orderRepo)
