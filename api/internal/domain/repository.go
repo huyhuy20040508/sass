@@ -176,7 +176,9 @@ type CheckoutVariant struct {
 	// hình dùng tới.
 	Barcode     string
 	VariantName string
-	Thumbnail   string
+	// UnitName — tên ĐVT của sản phẩm cha, chụp vào dòng đơn cho phiếu in.
+	UnitName  string
+	Thumbnail string
 	// CategoryID lấy sẵn để đối chiếu phạm vi chương trình khuyến mãi mà không
 	// phải hỏi thêm bảng products lần nữa ngay giữa giao dịch đặt hàng.
 	CategoryID uint
@@ -285,10 +287,23 @@ type RevenueSummary struct {
 
 // OrderRepository — truy cập bảng orders.
 type OrderRepository interface {
+	// CoCaMo trả ErrChuaMoCa khi chi nhánh chưa có ca mở — luật thu tiền ở quầy.
+	CoCaMo(ctx context.Context, shopID uint) error
 	List(ctx context.Context, f OrderFilter) ([]Order, int64, error)
 	// GiuMaDon cấp TRƯỚC mã đơn kế tiếp theo quy tắc mã của chi nhánh đang bán, cho
 	// hoá đơn đang mở ở quầy. "" = chi nhánh chưa bật quy tắc mã đơn.
 	GiuMaDon(ctx context.Context) (string, error)
+	// Đơn nháp ở quầy (pos_drafts) — hoá đơn đang mở, cắt theo chi nhánh đang làm.
+	// Xem domain.DonNhapQuay.
+	TaoNhapQuay(ctx context.Context, d *DonNhapQuay) error
+	NhapQuay(ctx context.Context, id uint) (*DonNhapQuay, error)
+	SuaNhapQuay(ctx context.Context, id uint, apply func(d *DonNhapQuay) error) (*DonNhapQuay, error)
+	DanhSachNhapQuay(ctx context.Context, f LocNhapQuay) ([]DonNhapQuay, error)
+	// GianhNhapQuay / TraNhapQuay / ChotNhapQuay: một máy giành hoá đơn để thanh
+	// toán, trả lại khi chốt hỏng, đánh dấu đã thành đơn khi chốt xong.
+	GianhNhapQuay(ctx context.Context, id uint) (*DonNhapQuay, error)
+	TraNhapQuay(ctx context.Context, id uint) error
+	ChotNhapQuay(ctx context.Context, id, orderID uint) error
 	// SoDon là SỔ CHỨNG TỪ BÁN HÀNG của màn Quản lý đơn hàng: mỗi dòng một chứng
 	// từ, gộp đơn bán và phiếu trả hàng vào cùng một danh sách rồi sắp chung theo
 	// lần đụng tới gần nhất.

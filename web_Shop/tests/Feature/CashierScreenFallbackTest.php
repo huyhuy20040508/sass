@@ -23,14 +23,27 @@ class CashierScreenFallbackTest extends TestCase
         ];
     }
 
+    /**
+     * Mọi màn quầy đã có view thật (Lịch sử, Điều phối ca), nên kiểm thẳng cơ chế
+     * dự phòng với một view không tồn tại — màn quầy mới thêm sau vẫn dựa vào nó.
+     */
     public function test_man_chua_co_ban_v2_thi_ve_quay(): void
     {
-        foreach (['thu-ngan.ca-lam-viec.index', 'thu-ngan.don-hang.index'] as $ten) {
-            $this->withSession($this->phienThuNgan())
-                ->get(route($ten))
-                ->assertRedirect(route('thu-ngan.ban-hang.index'))
-                ->assertSessionHas('error');
-        }
+        $guard = new class
+        {
+            use \App\Http\Controllers\Concerns\V2ScreenFallback;
+
+            public function thu(string $view)
+            {
+                return $this->veQuayNeuThieuView($view);
+            }
+        };
+
+        $ve = $guard->thu('v2::pos.khong-co-man-nay');
+        $this->assertNotNull($ve);
+        $this->assertSame(route('thu-ngan.ban-hang.index'), $ve->getTargetUrl());
+        $this->assertNotEmpty($ve->getSession()->get('error'));
+        $this->assertNull($guard->thu('v2::pos.work-shift'));
     }
 
     /** Màn bán hàng đã có bản v2 nên phải mở thẳng, không bị guard đá về. */

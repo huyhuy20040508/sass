@@ -9,7 +9,7 @@
     API tính lại lúc chốt.
 
     Phím tắt: F1 (hoặc F3) ô tìm · F2 hoá đơn mới · F4 thanh toán tiền mặt · F9 thanh
-    toán · Ctrl+Z hoàn tác lần xoá món vừa rồi.
+    toán · F8 in lại phiếu vừa bán · Ctrl+Z hoàn tác lần xoá món vừa rồi.
 --}}
 @extends('v2::layouts.pos')
 
@@ -46,6 +46,8 @@
          data-qr-url="{{ route('thu-ngan.ban-hang.qrTrangThai', ['code' => '__MA__']) }}"
          data-huy-qr-url="{{ route('thu-ngan.ban-hang.huyQr', ['id' => 0]) }}"
          data-doi-ht-url="{{ route('thu-ngan.ban-hang.doiHinhThuc', ['id' => 0]) }}"
+         data-mo-ca-url="{{ route('thu-ngan.ca-lam-viec.mo') }}"
+         data-ca-mo="{{ $caMo === false ? '0' : '1' }}"
          data-nguoi-ban="{{ $nguoiBan }}"
          data-ten-tiem="{{ $tenTiem }}"
          data-empty-img="{{ asset('v2/images/icons/emptyCart.svg') }}"></div>
@@ -56,6 +58,10 @@
     </div>
 
     <section class="pane goods" id="paneGoods" aria-label="Hàng hoá">
+        @if($quaLau ?? null)
+            {{-- Chỉ nhắc, không chặn bán: ca bỏ quên làm mọi con số đối chiếu két vô nghĩa. --}}
+            <div class="ca-qua-lau" role="alert"><i class="fa-solid fa-clock"></i><span>{{ $quaLau['cau'] }}</span><a href="{{ route('thu-ngan.ca-lam-viec.index') }}">Điều phối ca</a></div>
+        @endif
         <div class="goods-head">
             <div class="search">
                 <label class="sr-only" for="posSearch">Tìm hàng hoặc quét mã vạch</label>
@@ -137,6 +143,30 @@
             </div>
         </div>
     </section>
+
+    {{-- Chưa mở ca: khoá cả khu bán (thanh trên vẫn bấm được để đổi chi nhánh), mở ca ngay tại đây. --}}
+    <div class="ca-khoa" id="posCaKhoa" @if($caMo !== false) hidden @endif>
+        <form class="ca-khoa__the" id="posCaForm" novalidate aria-labelledby="posCaTieuDe">
+            <div class="ca-khoa__icon"><i class="fa-solid fa-lock"></i></div>
+            <h2 id="posCaTieuDe">Chưa mở ca</h2>
+            <p id="posCaCau">{{ $tenChiNhanh }} chưa có ca nào đang mở. Đếm tiền trong két rồi mở ca để bắt đầu bán.</p>
+            @include('v2::pos._mo-ca-nguoi-gio', ['p' => 'posCa', 'truc' => $truc ?? ['ds' => [], 'macDinh' => null]])
+            <div class="field">
+                <label for="posCaTien">Tiền đang có trong két *</label>
+                <input class="input num" id="posCaTien" inputmode="numeric" autocomplete="off" placeholder="0">
+                <span class="hint">Két trống thì nhập 0.</span>
+            </div>
+            <div class="field">
+                <label for="posCaGhi">Ghi chú</label>
+                <input class="input" id="posCaGhi" maxlength="500" autocomplete="off" placeholder="Ví dụ: nhận két từ ca tối">
+            </div>
+            <div class="alert" role="alert" id="posCaLoi" hidden></div>
+            <div class="ca-khoa__nut">
+                <a class="btn btn--outline" href="{{ route('thu-ngan.ca-lam-viec.index') }}">Điều phối ca</a>
+                <button type="submit" class="btn btn--primary" id="posCaMo"><i class="fa-solid fa-lock-open"></i> Mở ca</button>
+            </div>
+        </form>
+    </div>
 @endsection
 
 @section('bar')
@@ -287,7 +317,7 @@
             </div>
         </div>
         <div class="modal__foot">
-            <a class="btn btn--outline" id="posDoneIn" href="#" target="_blank" rel="noopener"><i class="fa-solid fa-print"></i> In phiếu</a>
+            <button type="button" class="btn btn--outline" id="posDoneIn"><i class="fa-solid fa-print"></i> In lại phiếu <kbd>F8</kbd></button>
             <span class="spacer"></span>
             <button type="button" class="btn btn--primary" data-dong autofocus>Bán đơn mới <kbd>Enter</kbd></button>
         </div>
@@ -530,6 +560,7 @@
                 <li><button type="button" class="pick" id="posDongGia"><i class="fa-solid fa-tags"></i><span class="pick__main"><span class="pick__title">Đồng giá</span><span class="pick__sub" id="posDongGiaMark" hidden>Đang áp dụng</span></span></button></li>
                 <li><button type="button" class="pick" data-them="giam"><i class="fa-solid fa-percent"></i><span class="pick__main"><span class="pick__title">Giảm giá, mã giảm giá, điểm</span></span></button></li>
                 <li><button type="button" class="pick" data-them="phuThu"><i class="fa-solid fa-circle-plus"></i><span class="pick__main"><span class="pick__title">Phụ thu</span></span></button></li>
+                <li><button type="button" class="pick" data-them="inLai"><i class="fa-solid fa-print"></i><span class="pick__main"><span class="pick__title">In lại phiếu vừa bán</span><span class="pick__sub">Chọn khổ 80 / 58 / A5 / A4 và số bản · F8</span></span></button></li>
                 <li><button type="button" class="pick" id="posXoaHet"><i class="fa-solid fa-eraser"></i><span class="pick__main"><span class="pick__title">Xoá hết hàng trong hoá đơn</span><span class="pick__sub">Hoàn tác được trong 6 giây</span></span></button></li>
             </ul>
         </div>
@@ -626,6 +657,8 @@
     const ghi = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* máy chặn lưu: vẫn bán được */ } };
     const camUng = () => matchMedia('(pointer: coarse)').matches;
     const hepMan = () => matchMedia('(max-width: 899px)').matches;
+    // Chi nhánh chưa mở ca: API từ chối mọi lượt thu tiền ở quầy (409 CHUA_MO_CA).
+    let chuaMoCa = false;
 
     // Hộp thoại là <dialog>. Mở hộp này thì đóng hộp đang mở — không chồng hai hộp lên nhau.
     // 'hop:mo' / 'hop:dong' bắn ra để các khối bên dưới đặt focus, dọn trạng thái.
@@ -633,6 +666,7 @@
         const d = $(id);
         return {
             show() {
+                if (chuaMoCa) return;
                 document.querySelectorAll('dialog[open]').forEach((x) => { if (x !== d) x.close(); });
                 if (!d.open) d.showModal();
                 requestAnimationFrame(() => d.dispatchEvent(new Event('hop:mo')));
@@ -647,6 +681,62 @@
     const coHopMo = () => !!document.querySelector('dialog[open]');
     const nhac = (m) => window.posToast(m, 'warn');
     const baoLoi = (m) => { $('posErr').textContent = m || ''; $('posErr').hidden = !m; };
+
+    // Khoá khu bán tới khi mở ca. Hoá đơn đang dở vẫn giữ nguyên — mở ca xong bán tiếp.
+    function khoaCa(cau) {
+        chuaMoCa = true;
+        document.querySelectorAll('dialog[open]').forEach((x) => x.close());
+        if (cau) $('posCaCau').textContent = cau;
+        $('posCaTien').value = ''; $('posCaGhi').value = '';
+        $('posCaLoi').hidden = true;
+        window.gioMoCa.dat($('posCaKhoa'));
+        $('posCaKhoa').hidden = false;
+        $('paneGoods').inert = $('paneBill').inert = true;
+        $('posCaTien').focus();
+    }
+    function moKhoaCa() {
+        chuaMoCa = false;
+        $('posCaKhoa').hidden = true;
+        $('paneGoods').inert = $('paneBill').inert = false;
+    }
+    $('posCaTien').addEventListener('input', (e) => {
+        e.target.removeAttribute('aria-invalid');
+        e.target.value = /\d/.test(e.target.value) ? so(soTien(e.target.value)) : '';
+    });
+    $('posCaForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const o = $('posCaTien'), nut = $('posCaMo');
+        const bao = (m) => { $('posCaLoi').textContent = m || ''; $('posCaLoi').hidden = !m; };
+        if (!o.value.trim()) {
+            bao('Đếm và nhập số tiền đang có trong két (két trống thì nhập 0).');
+            o.setAttribute('aria-invalid', 'true'); o.focus();
+            return;
+        }
+        const them = window.gioMoCa.doc($('posCaKhoa'));
+        if (them.loi) { bao(them.loi); $('posCaGio').focus(); return; }
+        bao(''); nut.disabled = true; nut.classList.add('is-busy');
+        try {
+            const r = await fetch(D.moCaUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': CSRF },
+                body: JSON.stringify({ opening_cash: soTien(o.value), note: $('posCaGhi').value.trim(), ...them.du }),
+            });
+            const j = await r.json().catch(() => ({}));
+            // 409 = người khác vừa mở ca ở chi nhánh này: ca đã có, quầy bán được.
+            if (r.ok || r.status === 409) {
+                moKhoaCa();
+                window.posToast(r.ok ? 'Đã mở ca — bắt đầu bán.' : (j.message || 'Chi nhánh đã có ca đang mở.'));
+                $('posSearch').focus();
+                return;
+            }
+            const loiO = j.errors ? Object.values(j.errors)[0] : null;
+            bao((Array.isArray(loiO) ? loiO[0] : '') || j.message || 'Không mở được ca.');
+        } catch (err) {
+            bao('Mất kết nối — chưa mở được ca. Kiểm tra mạng rồi bấm lại.');
+        } finally {
+            nut.disabled = false; nut.classList.remove('is-busy');
+        }
+    });
 
     // Hình thức chi nhánh đang bật (Quản trị → Cài đặt → Phương thức thanh toán): mỗi ô
     // kèm tài khoản / máy / cổng của nó. Hoá đơn mới mở sẵn vào ô "mặc định ở quầy".
@@ -1556,7 +1646,7 @@
     $('posThemBox').addEventListener('click', (e) => {
         const b = e.target.closest('[data-them]');
         if (!b) return;
-        ({ giam: moGiam, phuThu: moPhuThu })[b.dataset.them]?.();
+        ({ giam: moGiam, phuThu: moPhuThu, inLai: () => { hop('posThemBox').hide(); inLaiVuaBan(); } })[b.dataset.them]?.();
     });
 
     // PHỤ THU: lý do + số tiền hoặc %. % tính trên tiền hàng lúc chốt.
@@ -1702,25 +1792,25 @@
     $('posTamTinh').addEventListener('click', () => {
         const g = gio();
         if (!g.length) return;
-        const w = window.open('', '_blank', 'width=420,height=680');
-        if (!w) { nhac('Trình duyệt chặn cửa sổ in — bấm biểu tượng chặn trên thanh địa chỉ, chọn Luôn cho phép, rồi bấm lại.'); return; }
-        const dong = g.map((d) => `<div class="mon"><div>${esc(d.ten)}${d.opt ? ` (${esc(d.opt)})` : ''}</div>`
+        const dong = g.map((d) => `<div class="mon"><div class="ten">${esc(d.ten)}${d.opt ? ` (${esc(d.opt)})` : ''}</div>`
             + `<div class="dong thut"><span>${d.sl} × ${so(giaSauBot(d))}</span><span>${so(thanhTien(d))}</span></div></div>`).join('')
-            + quaHienThi().map((q) => `<div class="mon"><div>${esc(q.name)} (Tặng)</div><div class="dong thut"><span>${q.quantity} × 0</span><span>0</span></div></div>`).join('');
+            + quaHienThi().map((q) => `<div class="mon"><div class="ten">${esc(q.name)} (Tặng)</div><div class="dong thut"><span>${q.quantity} × 0</span><span>0</span></div></div>`).join('');
         const luc = new Date().toLocaleString('vi-VN', { hour12: false });
-        w.document.write(`<!DOCTYPE html><html lang="vi"><head><meta charset="utf-8"><title>Phiếu tạm tính</title><style>`
-            + `@page{size:80mm auto;margin:0}*{box-sizing:border-box}body{width:76mm;margin:0 auto;padding:4mm 2mm 8mm;font-family:"Cascadia Mono",Consolas,"DejaVu Sans Mono",monospace;font-size:12px;line-height:1.45;color:#000}`
-            + `.giua{text-align:center}.dong{display:flex;justify-content:space-between;gap:6px}.thut{padding-left:8px}.mon{margin-top:4px}.ke{margin:4px 0;border-top:1px dashed #000}.tong{margin-top:4px;font-size:1.2em;font-weight:700}`
-            + `</style></head><body><div class="giua" style="font-size:1.2em;font-weight:700">${esc(D.tenTiem)}</div><div class="ke"></div>`
-            + `<div class="giua" style="font-weight:700">PHIẾU TẠM TÍNH</div><div class="dong"><span>${esc(nhanHd(cur()))}</span><span>${luc}</span></div><div class="ke"></div>${dong}<div class="ke"></div>`
+        // Cùng khuôn chữ với phiếu thật (pos/receipt); in bằng khung ẩn của khung quầy, không mở tab.
+        window.posInHtml(`<!DOCTYPE html><html lang="vi"><head><meta charset="utf-8"><title>Phiếu tạm tính</title><style>`
+            // Không đặt `size`: khổ do driver máy in quyết — xem chú thích @page ở pos/receipt.
+            + `@page{margin:0}*{box-sizing:border-box}body{width:72mm;margin:0 auto;padding:0 2mm;font-family:Arial,"Liberation Sans","DejaVu Sans",sans-serif;font-variant-numeric:tabular-nums;font-size:12.5px;line-height:1.35;color:#000;background:#fff}`
+            + `.ban{padding:3mm 0 6mm}.giua{text-align:center}.dong{display:flex;justify-content:space-between;gap:6px}.dong>span:last-child{white-space:nowrap}.thut{padding-left:6px}.mon+.mon{margin-top:4px}.ten{font-weight:700}`
+            + `.ke{margin:5px 0;border-top:1px dashed #000}.ke-dam{margin:5px 0;border-top:2px solid #000}.tong{font-size:1.3em;font-weight:700}.tong>span{white-space:nowrap}`
+            + `</style></head><body><div class="ban"><div class="giua" style="font-size:1.35em;font-weight:700;text-transform:uppercase">${esc(D.tenTiem)}</div><div class="ke"></div>`
+            + `<div class="giua" style="font-size:1.1em;font-weight:700">PHIẾU TẠM TÍNH</div><div class="dong"><span>${esc(nhanHd(cur()))}</span><span>${luc}</span></div><div class="ke"></div>${dong}<div class="ke"></div>`
             + `<div class="dong"><span>Tiền hàng</span><span>${so(tamTinh())}</span></div>${botMon() > 0 ? `<div class="dong"><span>Bớt theo món</span><span>-${so(botMon())}</span></div>` : ''}`
             + `${giamDon() > 0 ? `<div class="dong"><span>Giảm cả đơn</span><span>-${so(giamDon())}</span></div>` : ''}`
             + cur().khuyenMai.theo.filter((c) => c.giam > 0).map((c) => `<div class="dong"><span>KM: ${esc(c.name)}</span><span>-${so(c.giam)}</span></div>`).join('')
             + `${phuThu() > 0 ? `<div class="dong"><span>Phụ thu${cur().phuThu.ghiChu ? ': ' + esc(cur().phuThu.ghiChu) : ''}</span><span>${so(phuThu())}</span></div>` : ''}`
             + `${thue() > 0 ? `<div class="dong"><span>Thuế sản phẩm</span><span>${so(thue())}</span></div>` : ''}`
-            + `<div class="dong tong"><span>TỔNG CỘNG</span><span>${so(phaiTra())}</span></div><div class="giua" style="margin-top:8px">(Chưa thanh toán)</div>`
-            + `<script>window.onload=function(){setTimeout(function(){window.print()},120)}<\/script></body></html>`);
-        w.document.close();
+            + `<div class="ke-dam"></div><div class="dong tong"><span>TỔNG CỘNG</span><span>${so(phaiTra())}</span></div><div class="ke-dam"></div>`
+            + `<div class="giua" style="margin-top:6px;font-weight:700">(Chưa thanh toán)</div></div></body></html>`);
     });
 
     /* =====================================================================
@@ -2030,6 +2120,7 @@
 
     // Nút Thanh toán mở hộp thanh toán; chốt thật ở hai nút trong hộp.
     function moPay() {
+        if (chuaMoCa) { khoaCa(); return; }
         if (!gio().length || dangGui) return;
         baoLoi(''); veTomTatTT(); capNhatTien(); hop('posPayBox').show();
     }
@@ -2213,18 +2304,22 @@
      * CHỐT ĐƠN
      * ===================================================================== */
     // Trình duyệt không cho biết tờ phiếu đã ra khỏi máy in hay chưa: chỉ báo điều biết chắc
-    // (đã mở được phiếu để in, hoặc bị chặn cửa sổ bật lên) và luôn để sẵn nút In lại.
-    function veTrangThaiIn(inPhieu, biChan, ma, phieu) {
+    // (đã gửi lệnh in, hoặc không tải được phiếu) và luôn để sẵn nút In lại.
+    // trangThai: null = không in, 'dang' = đang tải phiếu, true / false = đã gửi / hỏng.
+    function veTrangThaiIn(trangThai, ma) {
         const o = $('posInTrangThai');
-        o.hidden = !inPhieu;
-        if (!inPhieu) return;
-        const lai = `<a class="link-btn" href="${esc(phieu)}" target="_blank" rel="noopener">In lại</a>`;
-        if (biChan) {
-            o.className = 'print-status is-fail';
-            o.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i><span><b>Không mở được phiếu in.</b> Trình duyệt đang chặn cửa sổ bật lên — bấm biểu tượng chặn trên thanh địa chỉ, chọn Luôn cho phép, rồi bấm ${lai}.</span>`;
-        } else {
+        o.hidden = trangThai === null;
+        if (trangThai === null) return;
+        const lai = '<button type="button" class="link-btn" data-in-lai-vua-ban>In lại</button>';
+        if (trangThai === 'dang') {
+            o.className = 'print-status';
+            o.innerHTML = `<i class="fa-solid fa-print"></i><span>Đang gửi phiếu ${esc(ma)} ra máy in…</span>`;
+        } else if (trangThai) {
             o.className = 'print-status is-ok';
-            o.innerHTML = `<i class="fa-solid fa-print"></i><span>Đã mở phiếu ${esc(ma)} để in. Phiếu không ra? ${lai}</span>`;
+            o.innerHTML = `<i class="fa-solid fa-print"></i><span>Đã gửi phiếu ${esc(ma)} ra máy in. Phiếu không ra? ${lai}</span>`;
+        } else {
+            o.className = 'print-status is-fail';
+            o.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i><span><b>Chưa in được phiếu ${esc(ma)}.</b> Đơn đã ghi xong — bấm ${lai}.</span>`;
         }
     }
 
@@ -2243,8 +2338,6 @@
         dangGui = true; capNhatTien();
         const nutBam = inPhieu ? $('posXacNhanIn') : $('posXacNhan');
         nutBam.classList.add('is-busy');
-        // Mở cửa sổ phiếu NGAY trong lượt bấm: mở sau `await` là trình duyệt chặn popup.
-        const cuaSo = inPhieu ? window.open('about:blank', '_blank') : null;
 
         const chiTiet = hinhThuc === 'bank_transfer' ? (chonTk(), NH.id) : hinhThuc === 'card' ? theDangChon()?.id : qrtd ? congDangChon()?.id : 0;
         const payload = {
@@ -2282,8 +2375,9 @@
             });
             const j = await r.json().catch(() => ({}));
             if (!r.ok) {
-                if (cuaSo) cuaSo.close();
-                const loiO = j.errors ? Object.values(j.errors)[0]?.[0] : '';
+                if (j.errors?.ma === 'CHUA_MO_CA') { khoaCa(j.message); return; }
+                // errors.ma là chuỗi mã máy đọc, không phải danh sách câu lỗi của ô.
+                const loiO = j.errors && Array.isArray(Object.values(j.errors)[0]) ? Object.values(j.errors)[0][0] : '';
                 // In NGUYÊN câu API trả: nó nói rõ món nào hết, thiếu bao nhiêu.
                 baoLoi(loiO || j.message || 'Không hoàn tất được lượt bán.');
                 return;
@@ -2298,9 +2392,8 @@
                 luu(); capNhatTien(); hoiQrTiep();
                 return;
             }
-            hoanTatDon(h, d, inPhieu, cuaSo);
+            hoanTatDon(h, d, inPhieu);
         } catch (e) {
-            if (cuaSo) cuaSo.close();
             baoLoi('Mất kết nối — lượt bán CHƯA được ghi. Hoá đơn và số tiền vẫn giữ nguyên, kiểm tra mạng rồi bấm lại.');
         } finally {
             dangGui = false; nutBam.classList.remove('is-busy'); capNhatTien();
@@ -2311,7 +2404,6 @@
         dangGui = true; capNhatTien();
         const nutBam = inPhieu ? $('posXacNhanIn') : $('posXacNhan');
         nutBam.classList.add('is-busy');
-        const cuaSo = inPhieu ? window.open('about:blank', '_blank') : null;
         const payload = { payment_method: hinhThuc };
         const chiTiet = hinhThuc === 'bank_transfer' ? (chonTk(), NH.id) : hinhThuc === 'card' ? theDangChon()?.id : 0;
         if (chiTiet) payload.payment_detail_id = chiTiet;
@@ -2324,13 +2416,12 @@
             });
             const j = await r.json().catch(() => ({}));
             if (!r.ok) {
-                if (cuaSo) cuaSo.close();
+                if (j.errors?.ma === 'CHUA_MO_CA') { khoaCa(j.message); return; }
                 baoLoi(j.message || 'Không đổi được hình thức thanh toán.');
                 return;
             }
-            hoanTatDon(h, j.data || {}, inPhieu, cuaSo);
+            hoanTatDon(h, j.data || {}, inPhieu);
         } catch (e) {
-            if (cuaSo) cuaSo.close();
             baoLoi('Mất kết nối — CHƯA đổi được hình thức. Lượt chờ vẫn giữ nguyên, kiểm tra mạng rồi bấm lại.');
         } finally {
             dangGui = false; nutBam.classList.remove('is-busy'); capNhatTien();
@@ -2340,9 +2431,9 @@
     // Lượt bán xong (thu ngay, hoặc QR vừa báo tiền về): hoá đơn nhường chỗ cho hoá đơn trống,
     // hiện hộp "Đã thanh toán". h có thể KHÔNG phải hoá đơn đang mở — QR về khi thu ngân đã
     // chuyển sang bán cho khách khác thì không được kéo họ khỏi hoá đơn đang làm.
-    function hoanTatDon(h, d, inPhieu, cuaSo) {
+    function hoanTatDon(h, d, inPhieu) {
         const phieu = D.receiptUrl.replace('/0/receipt', `/${d.order_id}/receipt`);
-        if (cuaSo) cuaSo.location.href = phieu;
+        nhoDonVuaBan({ id: d.order_id, ma: d.order_code || '' });
         const dangMo = cur() === h;
         hd.ds = hd.ds.filter((x) => x !== h);
         if (dangMo || !hd.ds.length) { const moi = hdMoi(); hd.ds.push(moi); hd.dang = moi.id; }
@@ -2354,11 +2445,25 @@
         $('posDoneTong').textContent = tien(d.total_amount ?? 0);
         $('posDoneThoi').textContent = tien(d.change_amount || 0);
         $('posDoneThoiDong').hidden = !(Number(d.change_amount) > 0);
-        $('posDoneIn').href = phieu;
-        veTrangThaiIn(inPhieu, inPhieu && !cuaSo, d.order_code || '', phieu);
+        veTrangThaiIn(inPhieu ? 'dang' : null, d.order_code || '');
         veHoaDonXong(d.order_id, d.einvoice || null);
         hop('posDoneBox').show();
+        // In bằng khung ẩn của khung quầy (posIn): không mở tab, không bị chặn cửa sổ bật lên.
+        if (inPhieu) window.posIn(phieu).then((ok) => veTrangThaiIn(ok, d.order_code || ''));
     }
+
+    // Đơn vừa bán nhớ qua cả lượt tải lại trang: F8 / nút "In lại phiếu" in lại đúng đơn đó.
+    const KHOA_VUA_BAN = 'pos.don-vua-ban';
+    function nhoDonVuaBan(x) { try { localStorage.setItem(KHOA_VUA_BAN, JSON.stringify(x)); } catch (e) { /* máy chặn lưu */ } }
+    function inLaiVuaBan() {
+        let x = null;
+        try { x = JSON.parse(localStorage.getItem(KHOA_VUA_BAN) || 'null'); } catch (e) { /* máy chặn lưu */ }
+        if (!x?.id) { window.posToast('Chưa có đơn nào vừa bán trên máy này để in lại.'); return; }
+        window.posInLai({ id: x.id, ma: x.ma, loai: 'don' });
+    }
+    $('posDoneIn').addEventListener('click', inLaiVuaBan);
+    $('posDoneBox').addEventListener('click', (e) => { if (e.target.closest('[data-in-lai-vua-ban]')) inLaiVuaBan(); });
+    $('posDoneBox').addEventListener('keydown', (e) => { if (e.key === 'F8') { e.preventDefault(); inLaiVuaBan(); } });
 
     $('posXacNhan').addEventListener('click', () => chot(false));
     $('posXacNhanIn').addEventListener('click', () => chot(true));
@@ -2411,11 +2516,12 @@
     document.querySelectorAll('[data-tam-tinh]').forEach((b) => b.addEventListener('click', () => $('posTamTinh').click()));
 
     document.addEventListener('keydown', (e) => {
-        if (coHopMo()) return;
+        if (coHopMo() || chuaMoCa) return;
         if (e.key === 'F2') { e.preventDefault(); themHd(); }
         else if (e.key === 'F1' || e.key === 'F3') { e.preventDefault(); datKhu('goods'); $('posSearch').focus(); $('posSearch').select(); }
         else if (e.key === 'F4') { e.preventDefault(); if (hinhThuc !== 'cash') chonHinhThuc('cash'); moPay(); }
         else if (e.key === 'F9') { e.preventDefault(); moPay(); }
+        else if (e.key === 'F8') { e.preventDefault(); inLaiVuaBan(); }
         else if (e.key === 'z' && (e.ctrlKey || e.metaKey) && hoanTac && !e.target.closest('input, textarea')) { e.preventDefault(); hoanTac(); }
     });
 
@@ -2437,6 +2543,7 @@
     veTatCa();
     datKhu('goods');
     taiHang();
+    if (D.caMo === '0') khoaCa();
 })();
 </script>
 @endpush

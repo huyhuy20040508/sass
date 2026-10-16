@@ -607,6 +607,7 @@ func loadCheckoutVariants(tx *gorm.DB, lines []domain.CheckoutLine, lock bool) (
 		Thumbnail  string
 		VAT        int
 		IsActive   bool
+		UnitID     *uint
 	}
 	pids := make([]uint, 0, len(variants))
 	for _, v := range variants {
@@ -615,7 +616,7 @@ func loadCheckoutVariants(tx *gorm.DB, lines []domain.CheckoutLine, lock bool) (
 	var prods []prodRow
 	if len(pids) > 0 {
 		if err := tx.Table("products").
-			Select("id, name, slug, category_id, base_price, sale_price, cost_price, thumbnail, vat, is_active").
+			Select("id, name, slug, category_id, base_price, sale_price, cost_price, thumbnail, vat, is_active, unit_id").
 			Where("id IN ? AND deleted_at IS NULL", pids).Scan(&prods).Error; err != nil {
 			return nil, err
 		}
@@ -623,6 +624,19 @@ func loadCheckoutVariants(tx *gorm.DB, lines []domain.CheckoutLine, lock bool) (
 	prodByID := make(map[uint]prodRow, len(prods))
 	for _, p := range prods {
 		prodByID[p.ID] = p
+	}
+
+	// Tên ĐVT để chụp vào dòng đơn (phiếu in "2 Cái"). Câu riêng chứ không JOIN:
+	// plugin cửa hàng chỉ lọc bảng chính của câu truy vấn.
+	tenDVT := map[uint]string{}
+	if uids := donViCuaSanPham(prods, func(p prodRow) *uint { return p.UnitID }); len(uids) > 0 {
+		var dvt []domain.DonViTinh
+		if err := tx.Where("id IN ?", uids).Find(&dvt).Error; err != nil {
+			return nil, err
+		}
+		for _, d := range dvt {
+			tenDVT[d.ID] = d.Name
+		}
 	}
 
 	resolved := make(map[uint]domain.CheckoutVariant, len(variants))
@@ -663,8 +677,27 @@ func loadCheckoutVariants(tx *gorm.DB, lines []domain.CheckoutLine, lock bool) (
 			Price:      price, CostPrice: cost, Stock: tonChiNhanh[v.ID],
 			VAT: p.VAT,
 		}
+		if p.UnitID != nil {
+			cv := resolved[v.ID]
+			cv.UnitName = tenDVT[*p.UnitID]
+			resolved[v.ID] = cv
+		}
 	}
 	return resolved, nil
+}
+
+// donViCuaSanPham — các unit_id khác nhau (bỏ nil) của một danh sách sản phẩm.
+func donViCuaSanPham[T any](ds []T, lay func(T) *uint) []uint {
+	thay := map[uint]bool{}
+	out := []uint{}
+	for _, x := range ds {
+		if id := lay(x); id != nil && *id > 0 && !thay[*id] {
+			thay[*id] = true
+			out = append(out, *id)
+		}
+	}
+
+	return out
 }
 
 // ScanVariant tra một biến thể theo mã người bán vừa quét (hoặc gõ tay), kèm GIÁ
@@ -796,6 +829,11 @@ func (r *orderRepository) Checkout(
 		// Gán ở đây chứ không để service tự khai: chi nhánh bán đơn phải là ĐÚNG cái
 		// mà bước trừ kho bên dưới đọc, và cả hai cùng lấy từ một chỗ duy nhất.
 		o.ShopID = shopID
+		if o.Channel == domain.OrderChannelPOS {
+			if err := chanChuaMoCa(tx, shopID); err != nil {
+				return err
+			}
+		}
 		if err := chupNhanSuLapDon(tx, o); err != nil {
 			return err
 		}
@@ -870,51 +908,9 @@ func (r *orderRepository) Checkout(
 			return err
 		}
 
-		// 6c. Tiền mặt vào két — ghi sổ quỹ TRONG CÙNG giao dịch với đơn.
-		//
-		// Chỉ đơn quầy đã thu tiền mặt: chuyển khoản không đi qua két, còn đơn giao
-		// hàng thì tiền về sau và về bằng đường khác. Ghi nhầm vào đây là con số
-		// đối chiếu cuối ca không còn khớp với tiền đếm được — hỏng đúng thứ sổ quỹ
-		// sinh ra để phục vụ.
-		if o.Channel == domain.OrderChannelPOS &&
-			o.PaymentMethod == domain.PaymentMethodCash &&
-			o.PaymentStatus == domain.OrderPaymentPaid {
-			orderID := o.ID
-			if err := ghiSoQuy(tx, &domain.SoQuy{
-				ShopID:        o.ShopID,
-				Direction:     domain.SoQuyThu,
-				Amount:        o.TotalAmount,
-				Reason:        "Bán hàng " + o.OrderCode,
-				ReferenceType: domain.SoQuyTuDonHang,
-				ReferenceID:   &orderID,
-			}); err != nil {
-				return err
-			}
-		}
-
-		// 6d. Tiền đã thu vào SỔ THU CHI — cũng trong cùng giao dịch với đơn.
-		//
-		// Khác bước 6c ở phạm vi, và khác có chủ ý: sổ quỹ chỉ nhận TIỀN MẶT vì nó
-		// đối chiếu cái két, còn sổ thu chi là sổ kế toán nên nhận MỌI phương thức.
-		// Điều kiện chung là "đã thu tiền" — đơn còn nợ thì chưa có đồng nào để ghi.
-		//
-		// Phiếu này mang `source = order` nên không ai sửa/xoá được: sửa nó là số
-		// liệu của đơn hàng đổi mà đơn hàng không biết.
-		if o.PaymentStatus == domain.OrderPaymentPaid && o.TotalAmount > 0 {
-			orderID := o.ID
-			if err := GhiThuChiTuSinh(ctx, tx, &domain.ThuChi{
-				ShopID:        o.ShopID,
-				Type:          domain.ThuChiPhieuThu,
-				Amount:        o.TotalAmount,
-				PaymentMethod: phuongThucThuChi(o.PaymentMethod),
-				Note:          "Bán hàng " + o.OrderCode,
-				Source:        domain.ThuChiTuDonHang,
-				SourceID:      &orderID,
-				// CreatedBy để trống: tầng repository không biết ai đang bấm (ctx
-				// chỉ mang cửa hàng và chi nhánh), và gán bừa một id là nói dối về
-				// người chịu trách nhiệm. Cột "Người tạo" của dòng này trống, đúng
-				// nghĩa "máy ghi" — ai bán thì tra ở chính đơn hàng.
-			}); err != nil {
+		// 6c/6d. Đơn trả tiền ngay lúc tạo: tiền vào sổ trong CÙNG giao dịch với đơn.
+		if o.PaymentStatus == domain.OrderPaymentPaid {
+			if err := ghiTienDonVuaThu(ctx, tx, o, o.TotalAmount, o.PaymentMethod); err != nil {
 				return err
 			}
 		}
@@ -1015,7 +1011,7 @@ func (r *orderRepository) LockAndUpdate(ctx context.Context, id uint, apply func
 			return err
 		}
 
-		fromStatus := o.Status
+		fromStatus, fromPay := o.Status, o.PaymentStatus
 		history, cols, release, err := apply(&o)
 		if err != nil {
 			return err
@@ -1051,10 +1047,67 @@ func (r *orderRepository) LockAndUpdate(ctx context.Context, id uint, apply func
 			}
 		}
 
+		// Đơn vừa sang "đã thu" (QR về, đổi hình thức ở quầy, giao thành công, gạt
+		// cờ đã thanh toán): phần chưa có phiếu thu thì vào sổ thu chi — và vào két
+		// nếu là đơn quầy tiền mặt — trong cùng giao dịch này. Thiếu bước này thì
+		// chỉ đơn trả ngay lúc tạo mới có phiếu thu, đóng ca két dư tiền.
+		//
+		// Trừ theo PHIẾU THU đã có của đơn chứ không theo lượt thu: gạt cờ đã thanh
+		// toán đi rồi gạt lại không được sinh phiếu thứ hai.
+		if fromPay != domain.OrderPaymentPaid && o.PaymentStatus == domain.OrderPaymentPaid {
+			var daGhi float64
+			if err := tx.Model(&domain.ThuChi{}).
+				Where("source = ? AND source_id = ? AND type = ?", domain.ThuChiTuDonHang, o.ID, domain.ThuChiPhieuThu).
+				Select("COALESCE(SUM(amount), 0)").Scan(&daGhi).Error; err != nil {
+				return err
+			}
+			if err := ghiTienDonVuaThu(ctx, tx, &o, o.TotalAmount-daGhi, o.PaymentMethod); err != nil {
+				return err
+			}
+		}
+
 		result = &o
 		return nil
 	})
 	return result, err
+}
+
+// ghiTienDonVuaThu ghi một khoản tiền vừa thu của đơn vào sổ, trong transaction
+// của chính lượt thu ấy — MỘT luật cho mọi đường thu (trả ngay lúc tạo, ghi lượt
+// thu, QR về, đổi hình thức ở quầy…):
+//   - Sổ quỹ (két): chỉ đơn QUẦY thu TIỀN MẶT. Chuyển khoản không qua két, còn
+//     tiền đơn giao hàng về sau bằng đường khác — ghi nhầm vào đây là đối chiếu
+//     cuối ca không khớp tiền đếm được.
+//   - Sổ thu chi: MỌI hình thức (sổ kế toán), phiếu `source = order` không ai
+//     sửa/xoá được. CreatedBy để trống: tầng này không biết ai đang bấm, ai bán
+//     thì tra ở chính đơn hàng.
+func ghiTienDonVuaThu(ctx context.Context, tx *gorm.DB, o *domain.Order, soTien float64, hinhThuc string) error {
+	if soTien <= 0 {
+		return nil
+	}
+	orderID := o.ID
+	if o.Channel == domain.OrderChannelPOS && hinhThuc == domain.PaymentMethodCash {
+		if err := ghiSoQuy(tx, &domain.SoQuy{
+			ShopID:        o.ShopID,
+			Direction:     domain.SoQuyThu,
+			Amount:        soTien,
+			Reason:        "Bán hàng " + o.OrderCode,
+			ReferenceType: domain.SoQuyTuDonHang,
+			ReferenceID:   &orderID,
+		}); err != nil {
+			return err
+		}
+	}
+
+	return GhiThuChiTuSinh(ctx, tx, &domain.ThuChi{
+		ShopID:        o.ShopID,
+		Type:          domain.ThuChiPhieuThu,
+		Amount:        soTien,
+		PaymentMethod: phuongThucThuChi(hinhThuc),
+		Note:          "Bán hàng " + o.OrderCode,
+		Source:        domain.ThuChiTuDonHang,
+		SourceID:      &orderID,
+	})
 }
 
 // UpdateDetail sửa thông tin đơn và thay toàn bộ danh sách sản phẩm dưới khoá dòng.

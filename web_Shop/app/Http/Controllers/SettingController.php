@@ -82,6 +82,8 @@ class SettingController extends Controller
         'default_shipping_fee' => 'Phí thu khi đơn chưa đạt ngưỡng miễn phí bên dưới.',
         'free_shipping_threshold' => 'Đơn từ mức này trở lên được miễn phí vận chuyển. Đặt 0 = miễn phí mọi đơn.',
         'low_stock_threshold' => 'Biến thể còn tồn từ mức này trở xuống bị xếp vào nhóm "sắp hết" ở trang Tồn kho.',
+        'shift_open_alert_hours' => 'Ca đang mở quá số giờ này mà chưa đóng thì hiện dải nhắc vàng ở màn Bán hàng, Điều phối ca và thẻ Cần chú ý ở Tổng quan — chỉ nhắc, không chặn bán. Đặt 0 = tắt nhắc.',
+        'shift_diff_alert_threshold' => 'Đóng ca mà tiền đếm được lệch so với sổ QUÁ mức này (thiếu hay dư đều tính) thì chuông của quản lý và chủ cửa hàng nhận một thông báo: ca nào, ai trực, thiếu/dư bao nhiêu, kèm nút mở tờ ca. Đặt 0 = lệch một đồng cũng báo.',
         'pos_staff_discount_limit' => 'Nhân viên bán tại quầy được tự bớt giá từng món tới mức này. Bấm cao hơn thì hệ thống từ chối bán và bảo họ gọi quản lý. Bạn và các quản trị viên KHÔNG bị con số này chặn. Đặt 0 = nhân viên không được tự bớt đồng nào.',
         'payment_cod_enabled' => 'Khách trả tiền cho shipper lúc nhận hàng. Tắt đi thì lựa chọn này biến mất khỏi trang thanh toán.',
         'payment_bank_enabled' => 'Khách chuyển khoản trước rồi cửa hàng mới giao. Chỉ hiện ra cho khách khi đã khai đủ ngân hàng, số tài khoản và chủ tài khoản bên dưới.',
@@ -127,10 +129,12 @@ class SettingController extends Controller
         'free_shipping_threshold' => '₫',
         'low_stock_threshold' => 'sản phẩm',
         'pos_staff_discount_limit' => '%',
+        'shift_diff_alert_threshold' => '₫',
+        'shift_open_alert_hours' => 'giờ',
     ];
 
     /** Khoá dạng số nhưng là TIỀN — ô nhập tự chấm phân cách hàng nghìn. */
-    public const MONEY_KEYS = ['default_shipping_fee', 'free_shipping_threshold'];
+    public const MONEY_KEYS = ['default_shipping_fee', 'free_shipping_threshold', 'shift_diff_alert_threshold'];
 
     /**
      * Ngân hàng Việt Nam — danh sách chọn cho ô "Ngân hàng".

@@ -489,6 +489,7 @@ class AdminSmokeTest extends TestCase
             'admin.goi-dich-vu.thanh-toan' => ['id' => $this->firstValue('/admin/goi-dich-vu/don', 'id')],
             'thu-ngan.ban-hang.phieu' => ['id' => $this->firstValue('/admin/orders', 'id')],
             'thu-ngan.ca-lam-viec.show' => ['id' => $this->firstValue('/admin/ca-lam-viec', 'id')],
+            'thu-ngan.ca-lam-viec.phieu' => ['id' => $this->firstValue('/admin/ca-lam-viec', 'id')],
         ];
 
         $routes = $this->adminGetRoutes(withParams: true);

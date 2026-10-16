@@ -62,6 +62,7 @@ func tonBienThe(t *testing.T, h *heThong, id uint) int {
 func TestQuay_QuetThe(t *testing.T) {
 	h := dungHeThong(t)
 	a, _ := haiCuaHang(t, h)
+	moCa(t, h, a, 0)
 
 	if r, _ := banQuayTT(t, h, a.token, a, map[string]any{"payment_method": "card"}); r.ma != http.StatusUnprocessableEntity || !strings.Contains(r.than, "Quẹt thẻ đang tắt") {
 		t.Fatalf("quẹt thẻ đang tắt phải 422 kèm lý do, nhận %d %s", r.ma, catBot(r.than))
@@ -109,6 +110,7 @@ func TestQuay_QuetThe(t *testing.T) {
 func TestQuay_ChuyenKhoanChonTaiKhoan(t *testing.T) {
 	h := dungHeThong(t)
 	a, _ := haiCuaHang(t, h)
+	moCa(t, h, a, 0)
 	if r, d := banQuayTT(t, h, a.token, a, map[string]any{"payment_method": "bank_transfer"}); r.ma != http.StatusCreated || d.PaymentStatus != "paid" {
 		t.Fatalf("chuyển khoản tay khi chưa cấu hình vẫn phải bán được, nhận %d %s", r.ma, catBot(r.than))
 	}
@@ -132,6 +134,7 @@ func TestQuay_ChuyenKhoanChonTaiKhoan(t *testing.T) {
 func TestQuay_QRTuDong(t *testing.T) {
 	h := dungHeThong(t)
 	a, _ := haiCuaHang(t, h)
+	moCa(t, h, a, 0)
 	if r, _ := banQuayTT(t, h, a.token, a, map[string]any{"payment_method": "sepay"}); r.ma != http.StatusUnprocessableEntity {
 		t.Fatalf("QR tự động đang tắt phải 422, nhận %d", r.ma)
 	}
@@ -193,6 +196,7 @@ func TestQuay_QRTuDong(t *testing.T) {
 func TestQuay_DoiQRSangCachKhac(t *testing.T) {
 	h := dungHeThong(t)
 	a, _ := haiCuaHang(t, h)
+	moCa(t, h, a, 0)
 	ma := ketNoiSePay(t, h, a)
 	thuNgan := h.dangNhapVoi(t, a.ma, "nhanvien")
 	doi := func(id uint, body map[string]any) traLoi {
@@ -200,6 +204,21 @@ func TestQuay_DoiQRSangCachKhac(t *testing.T) {
 
 		return h.goi(t, thuNgan, http.MethodPost, fmt.Sprintf("/api/v1/admin/orders/pos/%d/doi-hinh-thuc", id), body)
 	}
+
+	// Ca đóng khi đơn còn chờ QR: tiền QR về sau vẫn ghi nhận (webhook không qua
+	// két), còn đổi hình thức ở quầy thì bị chặn tới khi mở ca lại.
+	_, d0 := banQuayTT(t, h, thuNgan, a, map[string]any{"payment_method": "sepay"})
+	if r := h.goi(t, a.token, http.MethodPost, "/api/v1/admin/ca-lam-viec/dong", map[string]any{"counted_cash": 0}); r.ma != http.StatusOK {
+		t.Fatalf("đóng ca trả %d %s", r.ma, catBot(r.than))
+	}
+	if r := doi(d0.OrderID, map[string]any{"payment_method": "cash"}); r.ma != http.StatusConflict || !strings.Contains(r.than, `"CHUA_MO_CA"`) {
+		t.Fatalf("đổi hình thức khi chưa mở ca phải 409 CHUA_MO_CA, nhận %d %s", r.ma, catBot(r.than))
+	}
+	baoTienSePay(t, h, ma, khoaSePayTest, "CK "+d0.OrderCode, int(d0.Total))
+	if _, pay, _, _ := cotDon(t, h, d0.OrderID); pay != "paid" {
+		t.Fatalf("tiền QR về lúc không có ca vẫn phải ghi nhận, đơn đang %s", pay)
+	}
+	moCa(t, h, a, 0)
 
 	ton := tonBienThe(t, h, a.bienThe)
 	_, d := banQuayTT(t, h, thuNgan, a, map[string]any{"payment_method": "sepay"})

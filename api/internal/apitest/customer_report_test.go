@@ -106,6 +106,7 @@ func banChoKhach(t *testing.T, h *heThong, c *cuaHang, khach uint, hinhThuc stri
 func TestBaoCaoKhachHang_CotMoi(t *testing.T) {
 	h := dungHeThong(t)
 	a, _ := haiCuaHang(t, h)
+	moCa(t, h, a, 0)
 	vet := fmt.Sprintf("bck%d", time.Now().UnixNano()%1e9)
 
 	an := taoKhachCoNhom(t, h, a, "Nhóm "+vet, vet+" An")
@@ -153,6 +154,7 @@ func TestBaoCaoKhachHang_CotMoi(t *testing.T) {
 func TestBaoCaoKhachHang_BoLoc(t *testing.T) {
 	h := dungHeThong(t)
 	a, _ := haiCuaHang(t, h)
+	moCa(t, h, a, 0)
 	vet := fmt.Sprintf("bcl%d", time.Now().UnixNano()%1e9)
 
 	an := taoKhachCoNhom(t, h, a, "Nhóm "+vet, vet+" An")
@@ -190,6 +192,7 @@ func TestBaoCaoKhachHang_BoLoc(t *testing.T) {
 func TestBaoCaoKhachHang_KhachLe(t *testing.T) {
 	h := dungHeThong(t)
 	a, _ := haiCuaHang(t, h)
+	moCa(t, h, a, 0)
 
 	truoc := docBaoCaoKhach(t, h, a, url.Values{})
 	banQuay(t, h, a, "cash", 1) // khách lẻ, đã thu 90.000

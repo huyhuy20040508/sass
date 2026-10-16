@@ -152,7 +152,12 @@ class ShiftReportController extends Controller
             'shop_name' => (string) ($c['shop_name'] ?? ''),
             'employee_code' => (string) ($c['employee_code'] ?? ''),
             'employee_name' => (string) (($c['employee_name'] ?? '') ?: ($c['opened_by_name'] ?? '')),
-            'open_time' => $gio($c['opened_at'] ?? null),
+            // Ca mở từ hôm trước (bỏ quên rồi mới đóng): ghi kèm ngày mở, không thì
+            // giờ mở đọc thành giờ của ngày ở cột Ngày.
+            'open_time' => ! $dangMo && ! empty($c['opened_at'])
+                && Carbon::parse($c['opened_at'])->format('Y-m-d') !== Carbon::parse($c['closed_at'])->format('Y-m-d')
+                ? Carbon::parse($c['opened_at'])->format('d/m H:i')
+                : $gio($c['opened_at'] ?? null),
             'close_time' => $gio($c['closed_at'] ?? null),
             'total_order' => (int) ($c['order_count'] ?? 0),
             'cash' => (float) ($c['total_cash'] ?? 0),

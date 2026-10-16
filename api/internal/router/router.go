@@ -70,6 +70,8 @@ type Handlers struct {
 	NhomQuyen *handler.NhomQuyenHandler
 	// QuyTacMa — quy tắc đánh số chứng từ (Cài đặt → Thông số chung).
 	QuyTacMa *handler.QuyTacMaHandler
+	// ThietBi — Cài đặt → Thông số chung → Cài đặt thiết bị: máy in, mẫu in.
+	ThietBi *handler.ThietBiHandler
 	// ThuocTinh — thuộc tính và giá trị của nó (Hàng hóa → Thuộc tính).
 	ThuocTinh *handler.ThuocTinhHandler
 	// LoaiThuChi — loại thu chi (Thu chi → Loại thu chi).
@@ -740,6 +742,11 @@ func New(
 			q.Dat(quay, http.MethodGet, "/orders/pos/discount-limit", "don-hang.xem", h.Order.POSDiscountLimit)
 			// Phương thức đang bật của chi nhánh, cho hộp Thanh toán ở quầy.
 			q.Dat(quay, http.MethodGet, "/orders/pos/payment-methods", "don-hang.xem", h.PaymentMethod.ForPOS)
+			// Mẫu in đang dùng của chi nhánh, cho phiếu in ở quầy.
+			q.Dat(quay, http.MethodGet, "/orders/pos/mau-in/:ma", "don-hang.xem", h.ThietBi.TemplateForPOS)
+			// Phiếu trả hàng in lại từ màn Đơn hàng của quầy: thu ngân không có quyền
+			// vào /returns (nhóm quản lý) nhưng in phiếu cho khách là việc của quầy.
+			q.Dat(quay, http.MethodGet, "/orders/pos/tra-hang/:id", "don-hang.xem", h.Return.Get)
 			// QR tự động ở quầy: màn thu ngân hỏi tiền đã về chưa, và huỷ mã khi khách đổi ý.
 			q.Dat(quay, http.MethodGet, "/orders/pos/payments/:code", "don-hang.them", h.Payment.Status)
 			q.Dat(quay, http.MethodPost, "/orders/pos/:id/huy-qr", "don-hang.them", h.Order.POSHuyQR)
@@ -758,6 +765,13 @@ func New(
 			q.Dat(quay, http.MethodPost, "/orders/pos/:id/hoa-don-dien-tu", "don-hang.them", h.Order.POSPhatHanhHoaDon)
 			// Giữ trước mã đơn cho hoá đơn đang mở — tab hoá đơn hiện mã như v2 cũ.
 			q.Dat(quay, http.MethodPost, "/orders/pos/ma-don", "don-hang.them", h.Order.POSGiuMaDon)
+			// Hoá đơn đang mở = đơn nháp có mã từ món đầu tiên (pos_drafts). Ghi ở quầy;
+			// ĐỌC ở nhóm admin như mọi đường đọc đơn: chủ tiệm không đứng quầy vẫn xem được.
+			q.Dat(quay, http.MethodPost, "/orders/pos/nhap", "don-hang.them", h.Order.POSTaoNhap)
+			q.Dat(quay, http.MethodPut, "/orders/pos/nhap/:id", "don-hang.them", h.Order.POSSuaNhap)
+			q.Dat(quay, http.MethodPost, "/orders/pos/nhap/:id/huy", "don-hang.them", h.Order.POSHuyNhap)
+			q.Dat(admin, http.MethodGet, "/orders/pos/nhap", "don-hang.xem", h.Order.POSDanhSachNhap)
+			q.Dat(admin, http.MethodGet, "/orders/pos/nhap/:id", "don-hang.xem", h.Order.POSXemNhap)
 			// Khách hàng TẠI QUẦY: tra và thêm khách ngay lúc bán. /customers là khu
 			// Khách hàng của chủ tiệm (nhóm manage) — người chỉ có cửa Thu ngân gõ tìm
 			// khách quen ở đó thì không ra ai. Hai đường này chỉ đọc danh sách và thêm
@@ -813,8 +827,12 @@ func New(
 			//
 			// /hien-tai, /mo, /dong đứng TRƯỚC /:id để không bị hiểu là một id.
 			q.Dat(admin, http.MethodGet, "/ca-lam-viec/hien-tai", "ca-lam-viec.xem", h.Ca.HienTai)
+			q.Dat(admin, http.MethodGet, "/ca-lam-viec/ngoai-ca", "ca-lam-viec.xem", h.Ca.NgoaiCa)
+			q.Dat(admin, http.MethodGet, "/ca-lam-viec/nguoi-truc", "ca-lam-viec.xem", h.Ca.NguoiTruc)
 			q.Dat(quay, http.MethodPost, "/ca-lam-viec/mo", "ca-lam-viec.them", h.Ca.MoCa)
+			q.Dat(quay, http.MethodGet, "/ca-lam-viec/nhan-vien-truc", "ca-lam-viec.them", h.Ca.NhanVienTruc)
 			q.Dat(quay, http.MethodPost, "/ca-lam-viec/dong", "ca-lam-viec.them", h.Ca.DongCa)
+			q.Dat(quay, http.MethodPost, "/ca-lam-viec/ngoai-ca/gan", "so-quy.sua", h.Ca.GanNgoaiCa)
 			q.Dat(admin, http.MethodGet, "/ca-lam-viec", "ca-lam-viec.xem", h.Ca.List)
 			q.Dat(admin, http.MethodGet, "/ca-lam-viec/:id", "ca-lam-viec.xem", h.Ca.Get)
 			q.Dat(quay, http.MethodPost, "/so-quy", "so-quy.them", h.Ca.GhiSoQuy)
@@ -1003,12 +1021,27 @@ func New(
 			q.Dat(manage, http.MethodGet, "/quy-tac-ma", "quy-tac-ma.xem", h.QuyTacMa.List)
 			q.Dat(manage, http.MethodPut, "/quy-tac-ma", "quy-tac-ma.sua", h.QuyTacMa.Update)
 
+			// Cài đặt thiết bị của chi nhánh. Máy quẹt thẻ dùng /payment-devices.
+			q.Dat(manage, http.MethodGet, "/thiet-bi", "thiet-bi.xem", h.ThietBi.List)
+			q.Dat(manage, http.MethodPost, "/thiet-bi/may-in", "thiet-bi.sua", h.ThietBi.CreatePrinter)
+			q.Dat(manage, http.MethodPut, "/thiet-bi/may-in/:id", "thiet-bi.sua", h.ThietBi.UpdatePrinter)
+			q.Dat(manage, http.MethodPut, "/thiet-bi/may-in/:id/status", "thiet-bi.sua", h.ThietBi.PrinterStatus)
+			q.Dat(manage, http.MethodDelete, "/thiet-bi/may-in/:id", "thiet-bi.sua", h.ThietBi.DeletePrinter)
+			q.Dat(manage, http.MethodPost, "/thiet-bi/gan-phieu", "thiet-bi.sua", h.ThietBi.CreateRoute)
+			q.Dat(manage, http.MethodPut, "/thiet-bi/gan-phieu/:id", "thiet-bi.sua", h.ThietBi.UpdateRoute)
+			q.Dat(manage, http.MethodPut, "/thiet-bi/gan-phieu/:id/status", "thiet-bi.sua", h.ThietBi.RouteStatus)
+			q.Dat(manage, http.MethodDelete, "/thiet-bi/gan-phieu/:id", "thiet-bi.sua", h.ThietBi.DeleteRoute)
+			q.Dat(manage, http.MethodPut, "/thiet-bi/nut-in/:ma", "thiet-bi.sua", h.ThietBi.UpdateButton)
+			q.Dat(manage, http.MethodPut, "/thiet-bi/mau-in/:ma", "thiet-bi.sua", h.ThietBi.UpdateTemplate)
+			q.Dat(manage, http.MethodDelete, "/thiet-bi/mau-in/:ma", "thiet-bi.sua", h.ThietBi.ResetTemplate)
+
 			// Nhân sự — HỒ SƠ NGƯỜI ĐI LÀM, khác hẳn /users (tài khoản đăng
 			// nhập): một người có thể có hồ sơ mà không có tài khoản. Cùng nhóm
 			// `manage` vì hồ sơ mang lương và số căn cước của đồng nghiệp.
 			q.Dat(manage, http.MethodGet, "/nhan-su", "nhan-su.xem", h.NhanSu.List)
 			q.Dat(manage, http.MethodPost, "/nhan-su", "nhan-su.them", h.NhanSu.Create)
 			q.Dat(manage, http.MethodGet, "/nhan-su/:id", "nhan-su.xem", h.NhanSu.Get)
+			q.Dat(manage, http.MethodGet, "/nhan-su/:id/nhat-ky", "nhan-su.xem", h.Ca.NhatKyNhanVien)
 			q.Dat(manage, http.MethodPut, "/nhan-su/:id", "nhan-su.sua", h.NhanSu.Update)
 			// Công tắc trạng thái trên bảng danh sách — chỉ đổi một cột.
 			q.Dat(manage, http.MethodPut, "/nhan-su/:id/trang-thai", "nhan-su.sua", h.NhanSu.DoiTrangThai)

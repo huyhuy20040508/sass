@@ -47,6 +47,7 @@ func coNutXuatHoaDon(t *testing.T, h *heThong, c *cuaHang, id uint) bool {
 func TestQuanLyDonHang_NutXuatHoaDon(t *testing.T) {
 	h := dungHeThong(t)
 	a, _ := haiCuaHang(t, h)
+	moCa(t, h, a, 0)
 
 	ban := h.goi(t, a.token, http.MethodPost, "/api/v1/admin/orders/pos", map[string]any{
 		"payment_method":  "cash",

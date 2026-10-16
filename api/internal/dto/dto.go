@@ -1395,6 +1395,9 @@ type POSCheckoutRequest struct {
 	// khi đơn gắn khách (user_id). Máy chủ kẹp về số điểm khách đang có và số tiền
 	// còn phải trả.
 	UsePoints uint `json:"use_points" binding:"omitempty,max=100000000"`
+	// DraftID: hoá đơn đang mở (đơn nháp, pos_drafts) mà lượt chốt này thanh toán.
+	// Có thì đơn vào sổ đúng mã của nháp và nháp chuyển sang "đã thành đơn".
+	DraftID uint `json:"draft_id"`
 }
 
 // POSMaDonResponse — mã đơn cấp trước cho hoá đơn đang mở ở quầy.
@@ -2600,7 +2603,13 @@ type MoCaRequest struct {
 	// Không suy ra từ ca trước: giữa hai ca có thể có người rút tiền về, và con
 	// số đối chiếu phải bắt đầu từ thứ đếm được thật.
 	OpeningCash float64 `json:"opening_cash" binding:"gte=0"`
-	Note        string  `json:"note" binding:"omitempty,max=500"`
+	// OpeningCount — bảng đếm theo mệnh giá (tuỳ chọn); có thì phải cộng ra đúng OpeningCash.
+	OpeningCount []domain.DemTo `json:"opening_count" binding:"omitempty,max=20"`
+	Note         string         `json:"note" binding:"omitempty,max=500"`
+	// EmployeeID — người trực két; bỏ trống = hồ sơ nhân sự của người bấm (nếu có).
+	EmployeeID *uint `json:"employee_id"`
+	// OpenedAt "YYYY-MM-DD HH:MM[:SS]" giờ địa phương — mở bù khi quên; trống = bây giờ.
+	OpenedAt string `json:"opened_at" binding:"omitempty,max=25"`
 }
 
 // DongCaRequest — chốt ca đang mở của chi nhánh.
@@ -2608,7 +2617,13 @@ type DongCaRequest struct {
 	// CountedCash là tiền ĐẾM ĐƯỢC trong két. Bắt buộc phải gửi, kể cả khi bằng 0:
 	// đóng ca mà không đếm thì cả cái ca không còn tác dụng gì.
 	CountedCash float64 `json:"counted_cash" binding:"gte=0"`
-	Note        string  `json:"note" binding:"omitempty,max=500"`
+	// CountedCount — bảng đếm theo mệnh giá (tuỳ chọn); có thì phải cộng ra đúng CountedCash.
+	CountedCount []domain.DemTo `json:"counted_count" binding:"omitempty,max=20"`
+	Note         string         `json:"note" binding:"omitempty,max=500"`
+	// DeliveredCash / KeptCash — bàn giao: giao về chủ + giữ lại cho ca sau = tiền
+	// đếm được. Không gửi = giao hết; gửi một ô thì ô kia tự suy ra.
+	DeliveredCash *float64 `json:"delivered_cash"`
+	KeptCash      *float64 `json:"kept_cash"`
 }
 
 // DongCaResponse — kết quả đóng ca.
@@ -2623,8 +2638,9 @@ type DongCaResponse struct {
 
 // CaChiTietResponse — một ca kèm toàn bộ dòng sổ quỹ của nó.
 type CaChiTietResponse struct {
-	Ca    *domain.CaLamViec `json:"ca"`
-	SoQuy []domain.SoQuy    `json:"so_quy"`
+	Ca       *domain.CaLamViec  `json:"ca"`
+	SoQuy    []domain.SoQuy     `json:"so_quy"`
+	DoanhThu *domain.DoanhThuCa `json:"doanh_thu"`
 }
 
 // GhiSoQuyRequest — ghi tay một khoản thu/chi tiền mặt.
@@ -2637,6 +2653,10 @@ type GhiSoQuyRequest struct {
 	// Reason bắt buộc: một khoản tiền ra khỏi két mà không có lý do thì đúng bằng
 	// mất tiền, chỉ khác là có ghi lại.
 	Reason string `json:"reason" binding:"required,max=255"`
+	// XacNhanAm: người trực đã được hỏi lại và VẪN ghi khoản chi lớn hơn tiền két
+	// theo sổ (sổ thiếu một khoản thu nào đó, đối chiếu sau). Không có cờ này thì
+	// API từ chối — két thật không bao giờ âm, nên đó gần như luôn là gõ nhầm số.
+	XacNhanAm bool `json:"xac_nhan_am"`
 }
 
 // ---------- Đổi hàng tại quầy ----------

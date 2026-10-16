@@ -311,6 +311,12 @@ var DanhMucQuyen = []KhuQuyen{
 						Prefix: "quy-tac-ma", Ten: "Quy tắc đánh số chứng từ",
 						Viec: []string{QuyenXem, QuyenSua},
 					},
+					{
+						// Máy in, mẫu in của từng chi nhánh. Máy quẹt thẻ đi theo
+						// quyền Phương thức thanh toán — cùng một bảng.
+						Prefix: "thiet-bi", Ten: "Cài đặt thiết bị",
+						Viec: []string{QuyenXem, QuyenSua},
+					},
 				},
 			},
 		},
@@ -337,7 +343,8 @@ var DanhMucQuyen = []KhuQuyen{
 					{
 						// Thu/chi ngoài đơn hàng — tiền mặt ra vào két giữa ca.
 						Prefix: "so-quy", Ten: "Sổ quỹ",
-						Viec: []string{QuyenThem},
+						// Sửa = gắn khoản tiền mặt "ngoài ca" vào ca đang mở (0091).
+						Viec: []string{QuyenThem, QuyenSua},
 					},
 				},
 			},

@@ -95,6 +95,7 @@ func TestDongGia_QuanTri(t *testing.T) {
 func TestDongGia_TaiQuay(t *testing.T) {
 	h := dungHeThong(t)
 	a, _ := haiCuaHang(t, h)
+	moCa(t, h, a, 0)
 	ma := fmt.Sprintf("DQ%d", time.Now().UnixNano()%1e8)
 
 	tao := h.goi(t, a.token, http.MethodPost, "/api/v1/admin/dong-gia", dgThan(a, ma, true))

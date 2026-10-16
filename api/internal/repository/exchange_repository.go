@@ -52,6 +52,10 @@ func (r *orderRepository) DoiHang(
 	}
 
 	err = r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// Đổi hàng có tiền vào / ra két — chưa mở ca thì không đổi, như bán.
+		if err := chanChuaMoCa(tx, shopID); err != nil {
+			return err
+		}
 		// 1. Khoá đơn cũ và tính lại số còn trả được NGAY DƯỚI KHOÁ.
 		//
 		// Tính trước rồi mới khoá là để hai người cùng đổi một chiếc áo đều thấy

@@ -140,8 +140,8 @@ func TestBaoCaoKetCa_CaDangMo(t *testing.T) {
 	h := dungHeThong(t)
 	a, _ := haiCuaHang(t, h)
 
-	// Bán lúc CHƯA mở ca — lượt này không thuộc ca nào.
-	banQuay(t, h, a, "cash", 1)
+	// Một lượt không thuộc ca nào (dữ liệu từ trước khi chặn bán ngoài ca).
+	banQuayNgoaiCa(t, h, a, "cash", 1)
 
 	moCa(t, h, a, 200000)
 	banQuay(t, h, a, "cash", 1)

@@ -31,6 +31,7 @@ func docKhachDiem(t *testing.T, h *heThong, a *cuaHang) khachDiemThu {
 func TestTheThanhVien_TichDiemLenHangVaDoiDiem(t *testing.T) {
 	h := dungHeThong(t)
 	a, _ := haiCuaHang(t, h)
+	moCa(t, h, a, 0)
 	goc := "/api/v1/admin/the-thanh-vien"
 
 	// 10.000đ = 100 điểm; 1 điểm = 100đ.

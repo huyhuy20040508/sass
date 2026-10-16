@@ -12,6 +12,7 @@ import (
 func TestQuay_SePayLechTienRoiDung(t *testing.T) {
 	h := dungHeThong(t)
 	a, _ := haiCuaHang(t, h)
+	moCa(t, h, a, 0)
 	ma := ketNoiSePay(t, h, a)
 	thuNgan := h.dangNhapVoi(t, a.ma, "nhanvien")
 

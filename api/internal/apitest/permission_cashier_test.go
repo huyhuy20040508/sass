@@ -32,6 +32,7 @@ type duong struct {
 func TestThuNgan_ChiVaoDuocQuayBan(t *testing.T) {
 	h := dungHeThong(t)
 	a, _ := haiCuaHang(t, h)
+	moCa(t, h, a, 0)
 
 	// Token của tài khoản `nhanvien` — vai trò staff, do gieo() dựng sẵn trong
 	// chính cửa hàng này. Cùng cửa hàng với token quản trị a.token, nên mọi khác

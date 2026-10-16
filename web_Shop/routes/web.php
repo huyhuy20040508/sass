@@ -43,6 +43,7 @@ use App\Http\Controllers\SalesReportController;
 use App\Http\Controllers\ReturnController;
 use App\Http\Controllers\PaymentMethodController;
 use App\Http\Controllers\SettingController;
+use App\Http\Controllers\DeviceSettingController;
 use App\Http\Controllers\ParameterController;
 use App\Http\Controllers\CashbookController;
 use App\Http\Controllers\TaxController;
@@ -548,6 +549,26 @@ Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:quan_ly', 'chi.v2'])->
         Route::put('/parameters/numbering-rules', [ParameterController::class, 'luuQuyTacDanhSo'])
             ->name('thong-so-chung.luuQuyTacDanhSo');
 
+        // Cài đặt thiết bị — một trang v2, bốn khung đổi bằng ?v=. Các đường JSON
+        // để trang ghi rồi nạp lại không tải trang; máy quẹt thẻ ghi qua
+        // /payment-devices của Phương thức thanh toán.
+        Route::prefix('/parameters/devices')->name('thong-so-chung.devices')->group(function () {
+            Route::get('/', [DeviceSettingController::class, 'index'])->name('');
+            Route::get('/data', [DeviceSettingController::class, 'data'])->name('.data');
+            Route::post('/printers', [DeviceSettingController::class, 'taoMayIn'])->name('.taoMayIn');
+            Route::put('/printers/{id}', [DeviceSettingController::class, 'suaMayIn'])->whereNumber('id')->name('.suaMayIn');
+            Route::put('/printers/{id}/status', [DeviceSettingController::class, 'trangThaiMayIn'])->whereNumber('id')->name('.trangThaiMayIn');
+            Route::delete('/printers/{id}', [DeviceSettingController::class, 'xoaMayIn'])->whereNumber('id')->name('.xoaMayIn');
+            Route::post('/routes', [DeviceSettingController::class, 'taoGanPhieu'])->name('.taoGanPhieu');
+            Route::put('/routes/{id}', [DeviceSettingController::class, 'suaGanPhieu'])->whereNumber('id')->name('.suaGanPhieu');
+            Route::put('/routes/{id}/status', [DeviceSettingController::class, 'trangThaiGanPhieu'])->whereNumber('id')->name('.trangThaiGanPhieu');
+            Route::delete('/routes/{id}', [DeviceSettingController::class, 'xoaGanPhieu'])->whereNumber('id')->name('.xoaGanPhieu');
+            Route::put('/buttons/{ma}', [DeviceSettingController::class, 'luuNutIn'])->where('ma', '[a-z-]+')->name('.luuNutIn');
+            Route::put('/templates/{ma}', [DeviceSettingController::class, 'luuMauIn'])->where('ma', '[a-z0-9]+')->name('.luuMauIn');
+            Route::delete('/templates/{ma}', [DeviceSettingController::class, 'macDinhMauIn'])->where('ma', '[a-z0-9]+')->name('.macDinhMauIn');
+            Route::post('/templates/{ma}/preview', [DeviceSettingController::class, 'xemTruoc'])->where('ma', '[a-z0-9]+')->name('.xemTruoc');
+        });
+
         // Phân quyền theo chức năng — định nghĩa NHÓM QUYỀN của cửa hàng.
         // Gán nhóm cho từng người thì làm ở hồ sơ nhân sự, không phải ở đây.
         // Phân quyền theo chức năng — chi nhánh → nhân viên → tick từng việc.
@@ -597,6 +618,8 @@ Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:quan_ly', 'chi.v2'])->
         Route::post('/staff/{id}/reset-password', [StaffController::class, 'resetPassword'])
             ->whereNumber('id')->name('staff.resetPassword');
         Route::delete('/staff/{id}', [StaffController::class, 'destroy'])->whereNumber('id')->name('staff.destroy');
+        // Tab Nhật ký của hộp xem hồ sơ (mở / đóng ca).
+        Route::get('/staff/{id}/log', [StaffController::class, 'nhatKy'])->whereNumber('id')->name('staff.nhatKy');
 
         // Loại thu chi — bảng tra cho phiếu thu / phiếu chi (module Thu chi).
         // Đường dẫn /cashbook/* để header nhận ra module đang mở. Chủ tiệm mới
@@ -766,18 +789,30 @@ Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:thu_ngan'])->prefix('c
         ->whereNumber('id')->name('ban-hang.hoaDon');
     Route::get('/sales/{id}/receipt', [PosController::class, 'phieu'])
         ->whereNumber('id')->name('ban-hang.phieu');
+    Route::get('/sales/{id}/invoice', [PosController::class, 'hoaDonA'])
+        ->whereNumber('id')->name('ban-hang.hoaDonA');
+    Route::get('/returns/{id}/slip', [PosController::class, 'phieuTra'])
+        ->whereNumber('id')->name('tra-hang.phieu');
 
     // Điều phối ca & sổ quỹ — nơi đối chiếu tiền trong két với sổ.
     Route::get('/shifts', [WorkShiftController::class, 'index'])->name('ca-lam-viec.index');
-    // /current, /open, /close, /cash-log đứng TRƯỚC /{id} để không bị hiểu là một id.
+    // /current, /open, /close, /cash-log, /summary-slip đứng TRƯỚC /{id} để không bị hiểu là một id.
     Route::get('/shifts/current', [WorkShiftController::class, 'hienTai'])->name('ca-lam-viec.hienTai');
     Route::post('/shifts/open', [WorkShiftController::class, 'moCa'])->name('ca-lam-viec.mo');
     Route::post('/shifts/close', [WorkShiftController::class, 'dongCa'])->name('ca-lam-viec.dong');
+    Route::post('/shifts/outside/attach', [WorkShiftController::class, 'ganNgoaiCa'])->name('ca-lam-viec.ganNgoaiCa');
     Route::post('/shifts/cash-log', [WorkShiftController::class, 'ghiSoQuy'])->name('ca-lam-viec.soQuy');
+    Route::get('/shifts/summary-slip', [WorkShiftController::class, 'phieuTongHop'])->name('ca-lam-viec.phieuTongHop');
+    Route::get('/shifts/{id}/slip', [WorkShiftController::class, 'phieu'])->whereNumber('id')->name('ca-lam-viec.phieu');
     Route::get('/shifts/{id}', [WorkShiftController::class, 'show'])->whereNumber('id')->name('ca-lam-viec.show');
 
     // Lịch sử đơn — chỉ những đơn bán ra từ chính module này, để tra lại và in lại
     // phiếu. Khác trang Đơn hàng bên quản trị: ở đó là đơn giao hàng cần xử lý,
     // còn đơn quầy thì xong ngay lúc tạo.
     Route::get('/orders', [CashierController::class, 'donHang'])->name('don-hang.index');
+    // /export đứng TRƯỚC /{id} để không bị hiểu là một id.
+    Route::get('/orders/export', [CashierController::class, 'xuat'])->name('don-hang.xuat');
+    Route::get('/orders/{id}', [CashierController::class, 'chiTiet'])->whereNumber('id')->name('don-hang.chiTiet');
+    // Thu nợ ngay ở quầy — đường /admin/orders/{id}/payments nằm sau cửa Quản lý.
+    Route::post('/orders/{id}/payments', [CashierController::class, 'thuNo'])->whereNumber('id')->name('don-hang.thuNo');
 });

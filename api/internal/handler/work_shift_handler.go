@@ -2,6 +2,8 @@ package handler
 
 import (
 	"errors"
+	"fmt"
+	"math"
 	"net/http"
 	"strconv"
 
@@ -9,6 +11,7 @@ import (
 
 	"sass-api/internal/domain"
 	"sass-api/internal/dto"
+	"sass-api/internal/middleware"
 	"sass-api/internal/service"
 	"sass-api/pkg/response"
 )
@@ -95,6 +98,8 @@ func (h *CaLamViecHandler) DongCa(c *gin.Context) {
 // @Produce		json
 // @Param			shop_id		query		int		false	"Lọc theo chi nhánh (bỏ trống = mọi chi nhánh)"
 // @Param			status		query		string	false	"dang_mo|da_dong"
+// @Param			opened_by	query		int		false	"Chỉ ca do người này mở"
+// @Param			lech		query		int		false	"1 = chỉ ca đã đóng có chênh lệch két"
 // @Param			from_date	query		string	false	"Từ ngày (YYYY-MM-DD)"
 // @Param			to_date		query		string	false	"Đến ngày (YYYY-MM-DD)"
 // @Param			page		query		int		false	"Trang (mặc định 1)"
@@ -112,10 +117,13 @@ func (h *CaLamViecHandler) List(c *gin.Context) {
 		pageSize = 20
 	}
 
+	openedBy, _ := strconv.ParseUint(c.Query("opened_by"), 10, 64)
 	f := domain.CaFilter{
 		Status:   c.Query("status"),
 		FromDate: c.Query("from_date"),
 		ToDate:   c.Query("to_date"),
+		OpenedBy: uint(openedBy),
+		ChiLech:  c.Query("lech") == "1",
 		Page:     page,
 		PageSize: pageSize,
 	}
@@ -185,12 +193,140 @@ func (h *CaLamViecHandler) GhiSoQuy(c *gin.Context) {
 	response.Created(c, e)
 }
 
+// @Summary		Tiền mặt ngoài ca hôm nay
+// @Description	Các dòng sổ quỹ hôm nay của chi nhánh đang làm KHÔNG gắn ca nào (bán lúc chưa ai mở ca). Đã vào/ra két thật nhưng không nằm trong con số đối chiếu của ca nào — người mở ca kế tiếp cần biết để đếm két.
+// @Tags			Admin - Ca làm việc
+// @Produce		json
+// @Success		200	{object}	response.Body{data=[]domain.SoQuy}
+// @Security		BearerAuth
+// @Router			/admin/ca-lam-viec/ngoai-ca [get]
+func (h *CaLamViecHandler) NgoaiCa(c *gin.Context) {
+	ds, err := h.svc.NgoaiCaHomNay(c.Request.Context())
+	if err != nil {
+		respondCaError(c, err, "Lỗi đọc sổ quỹ ngoài ca")
+		return
+	}
+	// meta cho nút "Gắn vào ca đang mở": người xem có quyền không, và khoản phát
+	// sinh trước gan_tu (giờ đóng ca trước) thì không gắn được.
+	moc, err := h.svc.MocGanNgoaiCa(c.Request.Context())
+	if err != nil {
+		respondCaError(c, err, "Lỗi đọc sổ quỹ ngoài ca")
+		return
+	}
+	c.JSON(http.StatusOK, response.Body{Success: true, Data: ds, Meta: gin.H{
+		"co_the_gan": middleware.CoQuyen(c, "so-quy.sua"), "gan_tu": moc,
+	}})
+}
+
+type ganNgoaiCaRequest struct {
+	IDs []uint `json:"ids" binding:"required,min=1,max=200"`
+}
+
+// GanNgoaiCa godoc
+//
+//	@Summary	Gắn khoản tiền mặt ngoài ca vào ca đang mở (ghi ai gắn, lúc nào)
+//	@Tags		Admin - Ca làm việc
+//	@Router		/admin/ca-lam-viec/ngoai-ca/gan [post]
+func (h *CaLamViecHandler) GanNgoaiCa(c *gin.Context) {
+	var req ganNgoaiCaRequest
+	if !bindJSON(c, &req) {
+		return
+	}
+	ca, err := h.svc.GanNgoaiCa(c.Request.Context(), req.IDs, currentUserID(c))
+	if err != nil {
+		respondCaError(c, err, "Không gắn được khoản ngoài ca")
+		return
+	}
+	response.OKMessage(c, fmt.Sprintf("Đã gắn %d khoản vào ca #%d.", len(req.IDs), ca.ID), ca)
+}
+
+// @Summary		Người đã trực ca
+// @Description	Những người đã từng mở ca ở chi nhánh đang làm — cho ô lọc "người trực" của lịch sử ca.
+// @Tags			Admin - Ca làm việc
+// @Produce		json
+// @Success		200	{object}	response.Body{data=[]domain.NguoiTrucCa}
+// @Security		BearerAuth
+// @Router			/admin/ca-lam-viec/nguoi-truc [get]
+func (h *CaLamViecHandler) NguoiTruc(c *gin.Context) {
+	ds, err := h.svc.NguoiTruc(c.Request.Context(), chiNhanhLoc(c))
+	if err != nil {
+		respondCaError(c, err, "Lỗi đọc danh sách người trực")
+		return
+	}
+	response.OK(c, ds)
+}
+
+// NhatKyNhanVien godoc
+//
+//	@Summary	Nhật ký của một nhân sự (mở / đóng ca) kèm số ca trực, số lần lệch
+//	@Tags		Admin - Nhân sự
+//	@Router		/admin/nhan-su/{id}/nhat-ky [get]
+func (h *CaLamViecHandler) NhatKyNhanVien(c *gin.Context) {
+	id, ok := parseUintParam(c, "id")
+	if !ok {
+		return
+	}
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	out, err := h.svc.NhatKyNhanVien(c.Request.Context(), id, page, pageSize)
+	if err != nil {
+		respondCaError(c, err, "Lỗi đọc nhật ký nhân viên")
+		return
+	}
+	response.OK(c, out)
+}
+
+// NhanVienTruc godoc
+//
+//	@Summary	Nhân sự chọn được làm người trực két ở chi nhánh đang làm
+//	@Tags		Admin - Ca làm việc
+//	@Router		/admin/ca-lam-viec/nhan-vien-truc [get]
+func (h *CaLamViecHandler) NhanVienTruc(c *gin.Context) {
+	ds, err := h.svc.NhanVienTruc(c.Request.Context())
+	if err != nil {
+		respondCaError(c, err, "Lỗi đọc danh sách nhân sự")
+		return
+	}
+	response.OK(c, ds)
+}
+
 func respondCaError(c *gin.Context, err error, fallback string) {
 	if loiChiNhanh(c, err) {
 		return
 	}
 
+	var am *domain.LoiKetAm
+	var moCa *domain.LoiMoCa
+	var dongCa *domain.LoiDongCa
+	var gan *domain.LoiGanNgoaiCa
 	switch {
+	case errors.As(err, &gan):
+		response.Error(c, http.StatusUnprocessableEntity, gan.Cau)
+	case errors.As(err, &dongCa):
+		cau := "Thông tin bàn giao két chưa hợp lệ."
+		for _, k := range []string{"counted_count", "delivered_cash", "kept_cash"} {
+			if v, co := dongCa.O[k]; co {
+				cau = v
+				break
+			}
+		}
+		c.AbortWithStatusJSON(http.StatusUnprocessableEntity, response.Body{Success: false, Message: cau, Errors: dongCa.O})
+	case errors.As(err, &moCa):
+		// Câu chính là lỗi của ô đầu tiên: màn quầy chỉ đọc message.
+		cau := "Thông tin mở ca chưa hợp lệ."
+		for _, k := range []string{"employee_id", "opened_at", "opening_count"} {
+			if v, co := moCa.O[k]; co {
+				cau = v
+				break
+			}
+		}
+		c.AbortWithStatusJSON(http.StatusUnprocessableEntity, response.Body{Success: false, Message: cau, Errors: moCa.O})
+	case errors.Is(err, domain.ErrChuaMoCa):
+		response.ErrorMa(c, http.StatusConflict, response.MaChuaMoCa,
+			"Chi nhánh chưa mở ca — mở ca rồi mới ghi thu / chi vào két.")
+	case errors.As(err, &am):
+		response.ErrorMa(c, http.StatusUnprocessableEntity, response.MaKetAm,
+			"Két theo sổ chỉ còn "+tienVN(am.Con)+" — khoản chi lớn hơn tiền đang có. Kiểm lại số tiền, hoặc xác nhận để vẫn ghi.")
 	case errors.Is(err, domain.ErrCaDangMo):
 		response.Error(c, http.StatusConflict,
 			"Chi nhánh này đang có ca mở. Đóng ca đó trước khi mở ca mới.")
@@ -204,4 +340,17 @@ func respondCaError(c *gin.Context, err error, fallback string) {
 	default:
 		response.Error(c, http.StatusInternalServerError, fallback)
 	}
+}
+
+// tienVN in số tiền kiểu "1.234.000 đ" (số âm giữ dấu trừ) cho câu báo của ca.
+func tienVN(v float64) string {
+	am := v < 0
+	s := strconv.FormatInt(int64(math.Abs(math.Round(v))), 10)
+	for i := len(s) - 3; i > 0; i -= 3 {
+		s = s[:i] + "." + s[i:]
+	}
+	if am {
+		s = "−" + s
+	}
+	return s + " đ"
 }

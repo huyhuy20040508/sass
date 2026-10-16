@@ -69,6 +69,7 @@ func dongKM(t *testing.T, bc baoCaoKM, id uint) dongBCKM {
 func TestBaoCaoKhuyenMai(t *testing.T) {
 	h := dungHeThong(t)
 	a, _ := haiCuaHang(t, h)
+	moCa(t, h, a, 0)
 	goc := "/api/v1/admin/chuong-trinh-khuyen-mai"
 
 	p0 := docCTKM(t, h.goi(t, a.token, http.MethodPost, goc, ctkmThan(a, "Phieu", 0, true, []map[string]any{
@@ -231,6 +232,7 @@ func TestBaoCaoKhuyenMai(t *testing.T) {
 func TestBaoCaoKhuyenMai_ChuaTonTaiThiKhongBay(t *testing.T) {
 	h := dungHeThong(t)
 	a, _ := haiCuaHang(t, h)
+	moCa(t, h, a, 0)
 
 	p0 := docCTKM(t, h.goi(t, a.token, http.MethodPost, "/api/v1/admin/chuong-trinh-khuyen-mai",
 		ctkmThan(a, "Moi", 0, true, []map[string]any{{"total_apply": 10000, "formality": 1, "value": 5000}})))

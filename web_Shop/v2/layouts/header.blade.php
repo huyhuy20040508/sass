@@ -115,7 +115,7 @@
     $isCashbookSection = request()->is('admin/cashbook*');
     $isHumanSection = request()->is('admin/staff*');
     $isCrmSection = request()->is('admin/crm*');
-    $isSettingSection = request()->is('admin/settings*', 'admin/branches*', 'admin/payment-methods*');
+    $isSettingSection = request()->is('admin/settings*', 'admin/branches*', 'admin/payment-methods*', 'admin/parameters/devices*');
 
     // Đường vào từng module. Bật cờ ở trên rồi thì thay '#' bằng route thật.
     $statisticDefaultRoute = route('admin.dashboard');
@@ -695,6 +695,12 @@
                             class="sub-nav-btn {{ request()->routeIs('admin.phuong-thuc-tt.*') ? 'active' : '' }}">
                             {{ \App\Http\Controllers\PaymentMethodController::TITLE }}
                         </a>
+                        {{-- Thông số chung: mới có Cài đặt thiết bị ở giao diện v2, nên
+                             tab dẫn thẳng vào đó; Quy tắc đánh số mở từ cột trái của trang. --}}
+                        <a href="{{ route('admin.thong-so-chung.devices') }}"
+                            class="sub-nav-btn {{ request()->routeIs('admin.thong-so-chung.*') ? 'active' : '' }}">
+                            {{ \App\Http\Controllers\ParameterController::TITLE }}
+                        </a>
                     @endif
                 </div>
             </div>
@@ -876,17 +882,25 @@
     const V2_HO_SO = @json($v2HoSo);
     let notiChiChuaDoc = false;
 
+    const CHUONG_URL_CA = @json(route('thu-ngan.ca-lam-viec.index', ['ca' => '__ID__']));
+
     function veMotThongBao(n) {
         const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => (
             { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
         ));
         const luc = n.created_at ? new Date(String(n.created_at)).toLocaleString('vi-VN') : '';
         const mau = n.is_read ? '#d9d9d9' : '#1890ff';
+        let du = n.data || {};
+        if (typeof du === 'string') { try { du = JSON.parse(du) || {}; } catch (e) { du = {}; } }
+        const link = n.type === 'shift_diff' && du.shift_id
+            ? `<p class="mb-0"><a href="${CHUONG_URL_CA.replace('__ID__', encodeURIComponent(du.shift_id))}" class="noti-link">Mở tờ ca #${esc(du.shift_id)} <i class="fa-solid fa-arrow-right"></i></a></p>`
+            : '';
         return `<div class="notification">
             <div class="status" style="background:${mau}"></div>
             <div class="content-noti ${n.is_read ? '' : 'content-unread'}" data-id="${n.id}">
                 <p><b>${esc(n.title || '')}</b></p>
                 <p>${esc(n.content || '')}</p>
+                ${link}
                 <p class="time">${esc(luc)}</p>
             </div>
         </div>`;

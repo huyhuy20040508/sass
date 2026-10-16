@@ -93,6 +93,7 @@ func demKey(ds []crmBucketThu, key string) int64 {
 func TestCrmTongQuan(t *testing.T) {
 	h := dungHeThong(t)
 	a, _ := haiCuaHang(t, h)
+	moCa(t, h, a, 0)
 	vet := fmt.Sprintf("crm%d", time.Now().UnixNano()%1e9)
 
 	taoKhach := func(than map[string]any) uint {

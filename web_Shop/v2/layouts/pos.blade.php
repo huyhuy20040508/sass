@@ -186,6 +186,41 @@
 
 @stack('modals')
 
+{{-- IN PHIẾU DÙNG CHUNG CỦA QUẦY. In bằng khung ẩn ngay trên màn đang đứng: không bật
+     tab mới, không vướng chặn cửa sổ bật lên. Hộp "In lại" chọn khổ (theo mẫu / 80 /
+     58 / A5 / A4) và số bản cho lần in đó, không đổi mẫu đã cài. --}}
+<iframe id="tnInKhung" title="Khung in phiếu" aria-hidden="true" tabindex="-1"
+        style="position:fixed;right:0;bottom:0;width:0;height:0;border:0"></iframe>
+<dialog class="modal" id="tnInLai" aria-labelledby="tnInLaiT"
+        data-url-phieu="{{ route('thu-ngan.ban-hang.phieu', ['id' => 0]) }}"
+        data-url-a="{{ route('thu-ngan.ban-hang.hoaDonA', ['id' => 0]) }}"
+        data-url-tra="{{ route('thu-ngan.tra-hang.phieu', ['id' => 0]) }}">
+    <form method="dialog" id="tnInLaiForm">
+        <div class="modal__head"><h2 id="tnInLaiT">In lại <span id="tnInLaiMa"></span></h2><button type="button" class="icon-btn" aria-label="Đóng" data-tn-close><i class="fa-solid fa-xmark"></i></button></div>
+        <div class="modal__body">
+            <div class="field">
+                <span class="label">Khổ giấy</span>
+                <div class="seg" id="tnInLaiKho" role="group" aria-label="Khổ giấy" style="flex-wrap:wrap">
+                    <button type="button" data-v="" aria-pressed="true">Theo mẫu</button>
+                    <button type="button" data-v="80" aria-pressed="false">80mm</button>
+                    <button type="button" data-v="58" aria-pressed="false">58mm</button>
+                    <button type="button" data-v="a5" aria-pressed="false" data-chi-don>A5</button>
+                    <button type="button" data-v="a4" aria-pressed="false" data-chi-don>A4</button>
+                </div>
+                <span class="hint">Chỉ đổi cho lần in này — mẫu đã cài trong Cài đặt thiết bị giữ nguyên.</span>
+            </div>
+            <div class="field">
+                <label for="tnInLaiBan">Số bản</label>
+                <input class="input t-num" id="tnInLaiBan" type="number" min="1" max="9" step="1" placeholder="Theo mẫu" style="max-width:140px">
+            </div>
+        </div>
+        <div class="modal__foot">
+            <button type="button" class="btn btn--outline" data-tn-close>Huỷ</button>
+            <button type="submit" class="btn btn--primary" id="tnInLaiNut"><i class="fa-solid fa-print"></i> In <kbd>Enter</kbd></button>
+        </div>
+    </form>
+</dialog>
+
 <script>
 (function () {
     const $ = (id) => document.getElementById(id);
@@ -225,6 +260,83 @@
             $('tnCnId').value = cn.dataset.tnCn;
             $('tnCnForm').submit();
         }
+    });
+
+    // ---- In phiếu bằng khung ẩn. Trả về true khi đã gọi lệnh in. ----
+    // Trang phiếu không vẽ ra .ban / .to (hết phiên → trang đăng nhập, đơn đã bị xoá → 404)
+    // thì KHÔNG in: in ra tờ "Trang không tồn tại" còn tệ hơn báo lỗi.
+    let dangIn = null;
+    function inKhung(nap) {
+        const khung = $('tnInKhung');
+        if (dangIn) dangIn(false);
+        return new Promise((xong) => {
+            dangIn = xong;
+            const het = setTimeout(() => { if (dangIn === xong) { dangIn = null; posToast('Phiếu tải quá lâu — kiểm tra mạng rồi bấm In lại.', 'error'); xong(false); } }, 20000);
+            khung.onload = () => {
+                if (dangIn !== xong) return;
+                clearTimeout(het);
+                dangIn = null;
+                let doc = null;
+                try { doc = khung.contentDocument; } catch (err) { /* khác nguồn */ }
+                if (!doc || !doc.querySelector('.ban, .to')) {
+                    posToast('Không tải được phiếu để in — tải lại trang rồi thử lại.', 'error');
+                    xong(false);
+                    return;
+                }
+                // Lấy lại con trỏ sau khi in: để nó ở khung ẩn là phím tắt của quầy (F8, F9…)
+                // chết cho tới khi thu ngân bấm chuột vào màn.
+                const truoc = document.activeElement;
+                khung.contentWindow.focus();
+                khung.contentWindow.print();
+                window.focus();
+                if (truoc && truoc !== document.body && truoc.isConnected) truoc.focus({ preventScroll: true });
+                xong(true);
+            };
+            nap(khung);
+        });
+    }
+    window.posIn = (url) => inKhung((khung) => {
+        const u = new URL(url, location.href);
+        u.searchParams.set('nhung', '1');
+        khung.removeAttribute('srcdoc');
+        khung.src = u.pathname + u.search;
+    });
+    /** Phiếu dựng sẵn ở trình duyệt (tạm tính) — html phải có khối .ban. */
+    window.posInHtml = (html) => inKhung((khung) => { khung.srcdoc = html; });
+
+    // Lần in lại gần nhất nhớ khổ + số bản: quầy hay in lại cùng một kiểu.
+    let inLai = null;
+    const KHOA_IN_LAI = 'pos.in-lai';
+    const chonKho = (v) => document.querySelectorAll('#tnInLaiKho button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === v)));
+    $('tnInLaiKho').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b && !b.hidden) chonKho(b.dataset.v); });
+    /** viec = { id, ma, loai: 'don' | 'tra' }. */
+    window.posInLai = function (viec) {
+        inLai = viec;
+        const laDon = viec.loai !== 'tra';
+        $('tnInLaiMa').textContent = viec.ma || '';
+        document.querySelectorAll('#tnInLaiKho [data-chi-don]').forEach((b) => { b.hidden = !laDon; });
+        let nho = {};
+        try { nho = JSON.parse(localStorage.getItem(KHOA_IN_LAI) || '{}'); } catch (err) { /* máy chặn lưu */ }
+        chonKho(laDon || !/^a/.test(nho.kho || '') ? (nho.kho || '') : '');
+        $('tnInLaiBan').value = nho.ban || '';
+        // Chồng lên hộp đang mở (vd "Đã thanh toán") thay vì đóng nó: in xong vẫn quay về đúng chỗ.
+        if (!$('tnInLai').open) $('tnInLai').showModal();
+        $('tnInLaiNut').focus();
+    };
+    $('tnInLaiForm').addEventListener('submit', (e) => {
+        e.preventDefault();
+        if (!inLai) return;
+        const d = $('tnInLai').dataset;
+        const kho = document.querySelector('#tnInLaiKho [aria-pressed="true"]')?.dataset.v || '';
+        const ban = Math.max(0, Math.min(9, parseInt($('tnInLaiBan').value, 10) || 0));
+        try { localStorage.setItem(KHOA_IN_LAI, JSON.stringify({ kho, ban: ban || '' })); } catch (err) { /* máy chặn lưu */ }
+        const goc = inLai.loai === 'tra' ? d.urlTra : (/^a/.test(kho) ? d.urlA : d.urlPhieu);
+        const u = new URL(goc.replace(/\/0\//, `/${inLai.id}/`), location.href);
+        if (/^a/.test(kho)) u.searchParams.set('kho', kho);
+        else if (kho) u.searchParams.set('paper', kho);
+        if (ban) u.searchParams.set('ban', String(ban));
+        $('tnInLai').close();
+        posIn(u.pathname + u.search);
     });
 
     $('tnChuong').addEventListener('click', () => posToast('Chưa có thông báo nào cho quầy.'));

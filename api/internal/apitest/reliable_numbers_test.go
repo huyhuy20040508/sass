@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 
 	"sass-api/internal/domain"
@@ -42,6 +43,37 @@ func moCa(t *testing.T, h *heThong, c *cuaHang, dauCa float64) map[string]any {
 		t.Fatalf("mở ca trả %d\n%s", res.ma, catBot(res.than))
 	}
 	return doc(t, res)
+}
+
+// moCaChiNhanh mở ca (đầu ca 0) ở một chi nhánh khác chi nhánh mặc định của token.
+func moCaChiNhanh(t *testing.T, h *heThong, c *cuaHang, shopID uint) {
+	t.Helper()
+
+	res := h.goiChiNhanh(t, c.token, shopID, http.MethodPost, "/api/v1/admin/ca-lam-viec/mo",
+		map[string]any{"opening_cash": 0})
+	if res.ma != http.StatusCreated {
+		t.Fatalf("mở ca ở chi nhánh %d trả %d\n%s", shopID, res.ma, catBot(res.than))
+	}
+}
+
+// banQuayNgoaiCa dựng một đơn quầy KHÔNG thuộc ca nào — dữ liệu từ hồi quầy còn
+// bán được khi chưa mở ca. Nay API chặn đường đó nên phải bán trong một ca tạm
+// rồi xoá ca ấy đi; sổ quỹ và phiếu thu về shift_id NULL đúng như dữ liệu cũ.
+func banQuayNgoaiCa(t *testing.T, h *heThong, c *cuaHang, hinhThuc string, soLuong int) {
+	t.Helper()
+
+	ca := uint(moCa(t, h, c, 0)["id"].(float64))
+	banQuay(t, h, c, hinhThuc, soLuong)
+	db := h.db.WithContext(ctxThoat())
+	for _, q := range []string{
+		"UPDATE income_expenses SET shift_id = NULL WHERE shift_id = ?",
+		"UPDATE cash_entries SET shift_id = NULL WHERE shift_id = ?",
+		"DELETE FROM work_shifts WHERE id = ?",
+	} {
+		if err := db.Exec(q, ca).Error; err != nil {
+			t.Fatalf("không gỡ được ca tạm %d: %v", ca, err)
+		}
+	}
 }
 
 // TestCaLamViec_TienBanHangTuVaoSoQuy — bán tiền mặt là tiền tự vào sổ, gắn đúng ca.
@@ -167,51 +199,68 @@ func TestCaLamViec_MotChiNhanhChiMotCaMo(t *testing.T) {
 	}
 }
 
-// TestCaLamViec_ChuaMoCaVanBanDuoc — chưa mở ca thì vẫn bán được.
+// TestCaLamViec_ChuaMoCaThiQuayBiChan — chưa mở ca thì quầy không thu được tiền.
 //
-// Đây là đánh đổi đã cân nhắc: chặn bán khi chưa mở ca thì một buổi sáng quên mở
-// ca là cả tiệm đứng im. Tiền vẫn vào sổ, chỉ là chưa thuộc ca nào — và màn hình
-// đóng ca có trách nhiệm chỉ chúng ra.
-func TestCaLamViec_ChuaMoCaVanBanDuoc(t *testing.T) {
+// Trước đây cho bán khi chưa mở ca để sáng quên mở ca thì tiệm không đứng im, nhưng
+// tiền bán lúc đó nằm ngoài mọi ca: két cuối ngày không ai đối chiếu được. Nay chặn
+// cứng mọi thao tác thu/chi ở quầy (bán, đổi hình thức, đổi hàng, ghi sổ quỹ tay);
+// đơn web và "Thu tiền" ở màn Đơn hàng không đi qua két nên không bị chặn.
+func TestCaLamViec_ChuaMoCaThiQuayBiChan(t *testing.T) {
 	h := dungHeThong(t)
 	a, _ := haiCuaHang(t, h)
 
-	res := h.goi(t, a.token, http.MethodPost, "/api/v1/admin/orders/pos", map[string]any{
-		"payment_method": "cash",
-		"items":          []map[string]any{{"product_variant_id": a.bienThe, "quantity": 1}},
-	})
-	if res.ma != http.StatusCreated {
-		t.Fatalf("chưa mở ca vẫn phải bán được, đang trả %d\n%s", res.ma, catBot(res.than))
+	biChan := func(viec string, res traLoi) {
+		t.Helper()
+		if res.ma != http.StatusConflict || !strings.Contains(res.than, `"CHUA_MO_CA"`) {
+			t.Fatalf("%s khi chưa mở ca phải trả 409 CHUA_MO_CA, đang trả %d\n%s", viec, res.ma, catBot(res.than))
+		}
+	}
+	ban := func(hinhThuc string) traLoi {
+		return h.goi(t, a.token, http.MethodPost, "/api/v1/admin/orders/pos", map[string]any{
+			"payment_method": hinhThuc,
+			"items":          []map[string]any{{"product_variant_id": a.bienThe, "quantity": 1}},
+		})
 	}
 
+	ton := tonCua(t, h, a, a.chiNhanh, a.bienThe)
+	for _, ht := range []string{"cash", "bank_transfer"} {
+		biChan("bán tại quầy ("+ht+")", ban(ht))
+	}
+	if got := tonCua(t, h, a, a.chiNhanh, a.bienThe); got != ton {
+		t.Fatalf("bị chặn thì kho phải giữ nguyên %d, đang là %d", ton, got)
+	}
+	biChan("ghi sổ quỹ tay", h.goi(t, a.token, http.MethodPost, "/api/v1/admin/so-quy",
+		map[string]any{"direction": "in", "amount": 10000, "reason": "thu tay"}))
+
 	// Chưa có ca nào: đường "ca hiện tại" trả null chứ không phải lỗi.
-	res = h.goi(t, a.token, http.MethodGet, "/api/v1/admin/ca-lam-viec/hien-tai", nil)
-	if res.ma != http.StatusOK {
+	if res := h.goi(t, a.token, http.MethodGet, "/api/v1/admin/ca-lam-viec/hien-tai", nil); res.ma != http.StatusOK {
 		t.Fatalf("hỏi ca hiện tại khi chưa mở ca phải trả 200, đang trả %d", res.ma)
 	}
 
-	// Mở ca rồi đóng ngay: khoản tiền bán lúc nãy nằm NGOÀI ca và phải được chỉ ra.
+	// Mở ca thì bán được — một đơn tiền mặt, một đơn chuyển khoản còn chờ thu.
 	moCa(t, h, a, 0)
-	res = h.goi(t, a.token, http.MethodPost, "/api/v1/admin/ca-lam-viec/dong",
-		map[string]any{"counted_cash": 0})
+	res := ban("cash")
+	if res.ma != http.StatusCreated {
+		t.Fatalf("mở ca rồi phải bán được, đang trả %d\n%s", res.ma, catBot(res.than))
+	}
+	donTienMat := uint(doc(t, res)["order_id"].(float64))
+	dongCu := dongHangDauTien(t, h, a, donTienMat)
+
+	res = h.goi(t, a.token, http.MethodPost, "/api/v1/admin/ca-lam-viec/dong", map[string]any{"counted_cash": 90000})
 	if res.ma != http.StatusOK {
 		t.Fatalf("đóng ca trả %d\n%s", res.ma, catBot(res.than))
 	}
-	// Khoản bán trước khi mở ca có created_at sớm hơn opened_at nên không lọt vào
-	// khoảng của ca — điều cần khẳng định ở đây là đóng ca KHÔNG nhận nhầm nó vào
-	// con số đối chiếu.
-	var out struct {
-		Data struct {
-			Ca struct {
-				ExpectedCash float64 `json:"expected_cash"`
-			} `json:"ca"`
-		} `json:"data"`
-	}
-	_ = json.Unmarshal([]byte(res.than), &out)
-	if out.Data.Ca.ExpectedCash != 0 {
-		t.Fatalf("tiền bán TRƯỚC khi mở ca không được tính vào ca, mà tiền theo sổ đang là %v",
-			out.Data.Ca.ExpectedCash)
-	}
+
+	// Đóng ca rồi: đổi hàng của đơn cũ cũng là tiền qua két nên bị chặn.
+	biChan("đổi hàng", h.goi(t, a.token, http.MethodPost, "/api/v1/admin/orders/pos/doi-hang", map[string]any{
+		"order_id":       donTienMat,
+		"tra":            []map[string]any{{"order_item_id": dongCu, "quantity": 1}},
+		"payment_method": "cash",
+	}))
+	biChan("bán lại sau khi đóng ca", ban("cash"))
+
+	// Đơn web (TestDatHangTrenWeb_DonThuocVeChiNhanhBan) và "Thu tiền" ở màn Đơn hàng
+	// (TestSoDon_*) không qua két: các bài đó chạy không mở ca nào và phải xanh.
 }
 
 // ---------------------------------------------------------------------
@@ -226,6 +275,7 @@ func TestCaLamViec_ChuaMoCaVanBanDuoc(t *testing.T) {
 func TestGiaVon_ChupLucBanVaKhongDoiKhiNhapLoMoi(t *testing.T) {
 	h := dungHeThong(t)
 	a, _ := haiCuaHang(t, h)
+	moCa(t, h, a, 0)
 
 	// Dữ liệu gieo sẵn có vài đơn cũ cũng góp vào báo cáo, nên đóng băng giá vốn
 	// của chúng trước: bài này nói về LƯỢT BÁN CỦA NÓ, không phải về tổng của kỳ.
@@ -309,6 +359,7 @@ func laiGop(t *testing.T, h *heThong, c *cuaHang) float64 {
 func TestLaiGop_TachDuocTheoChiNhanh(t *testing.T) {
 	h := dungHeThong(t)
 	a, _ := haiCuaHang(t, h)
+	moCa(t, h, a, 0)
 	dongBangGiaVonNen(t, h)
 	datGiaVon(t, h, a.bienThe, 40000)
 
@@ -384,6 +435,7 @@ func chiNhanhTrongBaoCao(t *testing.T, h *heThong, c *cuaHang) latChiNhanh {
 func TestDoiHang_HangCuVeKhoHangMoiRaKho(t *testing.T) {
 	h := dungHeThong(t)
 	a, _ := haiCuaHang(t, h)
+	moCa(t, h, a, 0)
 
 	tonDau := tonCua(t, h, a, a.chiNhanh, a.bienThe)
 
@@ -482,6 +534,7 @@ func TestDoiHang_TraHangKhongLayGiThiTraLaiTien(t *testing.T) {
 func TestDoiHang_KhongTraQuaSoDaMua(t *testing.T) {
 	h := dungHeThong(t)
 	a, _ := haiCuaHang(t, h)
+	moCa(t, h, a, 0)
 
 	res := h.goi(t, a.token, http.MethodPost, "/api/v1/admin/orders/pos", map[string]any{
 		"payment_method": "cash",
@@ -511,6 +564,7 @@ func TestDoiHang_KhongTraQuaSoDaMua(t *testing.T) {
 func TestDoiHang_NoiPhieuTraVoiDonMoi(t *testing.T) {
 	h := dungHeThong(t)
 	a, _ := haiCuaHang(t, h)
+	moCa(t, h, a, 0)
 
 	res := h.goi(t, a.token, http.MethodPost, "/api/v1/admin/orders/pos", map[string]any{
 		"payment_method": "cash",

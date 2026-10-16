@@ -1261,6 +1261,12 @@ class ApiClient
         return $this->post('/admin/ca-lam-viec/mo', $payload);
     }
 
+    /** Nhân sự đang làm ở chi nhánh — ô "Người trực két" của hộp Mở ca. */
+    public function nhanVienTrucCa(): Response
+    {
+        return $this->get('/admin/ca-lam-viec/nhan-vien-truc');
+    }
+
     public function dongCa(array $payload): Response
     {
         return $this->post('/admin/ca-lam-viec/dong', $payload);
@@ -1274,6 +1280,24 @@ class ApiClient
     public function caChiTiet(int $id): Response
     {
         return $this->get("/admin/ca-lam-viec/{$id}");
+    }
+
+    /** Tiền mặt hôm nay của chi nhánh đang làm mà không thuộc ca nào. */
+    public function caNgoaiCa(): Response
+    {
+        return $this->get('/admin/ca-lam-viec/ngoai-ca');
+    }
+
+    /** Gắn các dòng sổ quỹ "ngoài ca" vào ca đang mở (quyền so-quy.sua). */
+    public function ganNgoaiCa(array $ids): Response
+    {
+        return $this->post('/admin/ca-lam-viec/ngoai-ca/gan', ['ids' => array_values($ids)]);
+    }
+
+    /** Những người đã mở ca ở chi nhánh đang làm — cho ô lọc người trực. */
+    public function caNguoiTruc(): Response
+    {
+        return $this->get('/admin/ca-lam-viec/nguoi-truc');
     }
 
     /** Ghi tay một khoản thu/chi tiền mặt vào sổ quỹ. */
@@ -1876,6 +1900,12 @@ class ApiClient
     public function nhanSu(array $query = []): Response
     {
         return $this->get('/admin/nhan-su', $query);
+    }
+
+    /** Nhật ký một hồ sơ nhân sự (mở / đóng ca) kèm số ca trực, số lần lệch. */
+    public function nhatKyNhanSu(int $id, int $page = 1): Response
+    {
+        return $this->get("/admin/nhan-su/{$id}/nhat-ky", ['page' => $page, 'page_size' => 20]);
     }
 
     /** Thêm hồ sơ nhân viên. Bỏ trống `code` thì API tự đặt (NV0001, NV0002…). */
@@ -2590,5 +2620,104 @@ class ApiClient
     public function phuongThucQuay(): Response
     {
         return $this->get('/admin/orders/pos/payment-methods');
+    }
+
+    // ---- Cài đặt thiết bị (Thông số chung): máy in, phiếu ra máy nào, nút in, mẫu in.
+    // Máy quẹt thẻ dùng lại taoMayQuetThe / suaMayQuetThe / xoaMayQuetThe ở trên.
+
+    public function thietBi(): Response
+    {
+        return $this->get('/admin/thiet-bi');
+    }
+
+    public function taoMayIn(array $data): Response
+    {
+        return $this->post('/admin/thiet-bi/may-in', $data);
+    }
+
+    public function suaMayIn(int $id, array $data): Response
+    {
+        return $this->put("/admin/thiet-bi/may-in/{$id}", $data);
+    }
+
+    public function batTatMayIn(int $id, bool $bat): Response
+    {
+        return $this->put("/admin/thiet-bi/may-in/{$id}/status", ['is_active' => $bat]);
+    }
+
+    public function xoaMayIn(int $id): Response
+    {
+        return $this->delete("/admin/thiet-bi/may-in/{$id}");
+    }
+
+    public function taoGanPhieu(array $data): Response
+    {
+        return $this->post('/admin/thiet-bi/gan-phieu', $data);
+    }
+
+    public function suaGanPhieu(int $id, array $data): Response
+    {
+        return $this->put("/admin/thiet-bi/gan-phieu/{$id}", $data);
+    }
+
+    public function batTatGanPhieu(int $id, bool $bat): Response
+    {
+        return $this->put("/admin/thiet-bi/gan-phieu/{$id}/status", ['is_active' => $bat]);
+    }
+
+    public function xoaGanPhieu(int $id): Response
+    {
+        return $this->delete("/admin/thiet-bi/gan-phieu/{$id}");
+    }
+
+    public function luuNutIn(string $ma, array $data): Response
+    {
+        return $this->put('/admin/thiet-bi/nut-in/'.rawurlencode($ma), $data);
+    }
+
+    public function luuMauIn(string $ma, array $data): Response
+    {
+        return $this->put('/admin/thiet-bi/mau-in/'.rawurlencode($ma), $data);
+    }
+
+    public function macDinhMauIn(string $ma): Response
+    {
+        return $this->delete('/admin/thiet-bi/mau-in/'.rawurlencode($ma));
+    }
+
+    /**
+     * Chạy $lam với chi nhánh $chiNhanh thay cho chi nhánh của phiên, rồi trả lại
+     * như cũ. Phiếu in lại một đơn phải theo chi nhánh BÁN RA đơn (mẫu in, tài
+     * khoản nhận chuyển khoản); phiên đang để "Tất cả" (hoặc chưa chọn) thì API
+     * không biết chi nhánh nào và trả cấu hình mặc định. $chiNhanh <= 0: giữ phiên.
+     *
+     * @template T
+     *
+     * @param  callable(): T  $lam
+     * @return T
+     */
+    public function theoChiNhanh(int $chiNhanh, callable $lam): mixed
+    {
+        $cu = self::$chiNhanhCuaRequest;
+        if ($chiNhanh > 0) {
+            self::$chiNhanhCuaRequest = $chiNhanh;
+        }
+        try {
+            return $lam();
+        } finally {
+            self::$chiNhanhCuaRequest = $cu;
+        }
+    }
+
+    /** Phiếu trả hàng cho quầy in lại — thu ngân không vào được /admin/returns. */
+    public function posPhieuTra(int $id): Response
+    {
+        return $this->get("/admin/orders/pos/tra-hang/{$id}");
+    }
+
+    /** Mẫu in đang dùng ở quầy — phiếu in đọc cái này. */
+    public function mauInQuay(string $ma): Response
+    {
+        return $this->get('/admin/orders/pos/mau-in/'.rawurlencode($ma));
     }
 }

@@ -154,6 +154,17 @@ class ShiftReportTest extends TestCase
         $this->assertMatchesRegularExpression('#shift-report"\s+class="sub-nav-btn active"#', $html);
     }
 
+    /** KB #73: ca bỏ quên mở 17/08, đóng 13/10 — cột Ngày là ngày đóng nên giờ mở ghi kèm ngày. */
+    public function test_ca_mo_tu_hom_truoc_ghi_kem_ngay_mo(): void
+    {
+        $c = new \App\Http\Controllers\ShiftReportController(app(\App\Services\ApiClient::class));
+        $d = $c->dong(['id' => 1, 'opened_at' => '2026-08-17T11:57:00+07:00', 'closed_at' => '2026-10-13T14:34:00+07:00']);
+        $this->assertSame(['17/08 11:57', '14:34', '13-10-2026'], [$d['open_time'], $d['close_time'], $d['date']]);
+
+        $d = $c->dong(['id' => 2, 'opened_at' => '2026-10-13T07:58:00+07:00', 'closed_at' => '2026-10-13T15:02:00+07:00']);
+        $this->assertSame('07:58', $d['open_time']);
+    }
+
     public function test_ca_dang_mo_de_trong_phan_doi_chieu_ket(): void
     {
         $this->fakeApi();

@@ -103,7 +103,7 @@
 
                         <div id="filterTime" class="mb-3">
                             <div class="inner-modal-in-mobile">
-                                <label class="form-label title_search">{{ __('message.time') }}</label>
+                                <label class="form-label title_search">{{ __('message.time') }} <small class="text-muted fw-normal">· theo giờ đóng ca</small></label>
                                 <div class="row g-0 kc-nhanh">
                                     @foreach ($R::KY_NHANH as $ma => $nhan)
                                         <div class="col-6">

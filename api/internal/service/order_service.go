@@ -87,6 +87,16 @@ type OrderDetail struct {
 	ConNo float64 `json:"con_no"`
 	// PhiThe — phí quẹt thẻ cửa hàng chịu; nil khi đơn không quẹt thẻ.
 	PhiThe *domain.PhiTheDon `json:"phi_the,omitempty"`
+	// ThanhVien — hạng thẻ và điểm HIỆN CÓ của khách, cho dòng "Hạng · điểm còn
+	// lại" trên phiếu in. nil khi đơn không gắn khách hay không đọc được.
+	ThanhVien *ThanhVienPhieu `json:"thanh_vien,omitempty"`
+}
+
+// ThanhVienPhieu — điểm đọc lúc xem đơn, không phải lúc bán: in lại đơn cũ thì
+// ra số dư hôm nay, nên phiếu ghi "Điểm hiện có" chứ không "sau đơn này".
+type ThanhVienPhieu struct {
+	Hang string `json:"hang"`
+	Diem uint   `json:"diem"`
 }
 
 type OrderService interface {
@@ -130,6 +140,12 @@ type OrderService interface {
 	// POSGiuMaDon — cấp trước mã đơn cho hoá đơn đang mở ở quầy, kèm chữ ký để lượt
 	// chốt dùng lại đúng mã đó. OrderCode rỗng = chi nhánh chưa bật quy tắc mã đơn.
 	POSGiuMaDon(ctx context.Context) (*dto.POSMaDonResponse, error)
+	// Đơn nháp ở quầy: hoá đơn đang mở có mã đơn từ món đầu tiên (xem pos_draft.go).
+	POSTaoNhap(ctx context.Context, req *dto.POSNhapRequest, actorID uint) (*dto.POSNhapResponse, error)
+	POSSuaNhap(ctx context.Context, id uint, req *dto.POSNhapRequest, actorID uint) (*dto.POSNhapResponse, error)
+	POSHuyNhap(ctx context.Context, id uint, lyDo string, actorID uint) (*dto.POSNhapResponse, error)
+	POSXemNhap(ctx context.Context, id uint) (*dto.POSNhapResponse, error)
+	POSDanhSachNhap(ctx context.Context, f domain.LocNhapQuay) ([]dto.POSNhapResponse, error)
 	// POSDoiHang — đổi hàng tại quầy: hàng cũ về kho, hàng mới ra khỏi kho, chênh
 	// lệch thanh toán ngay. Cả ba vế đi trong MỘT giao dịch.
 	POSDoiHang(ctx context.Context, req *dto.DoiHangRequest, role string, actorID uint) (*dto.DoiHangResponse, error)
@@ -356,6 +372,19 @@ func (s *orderService) GhiLuotThu(ctx context.Context, id uint, req *dto.OrderTh
 		Note:          strings.TrimSpace(req.Note),
 		CreatedBy:     nguoiTao(actorID),
 	}
+	// Đơn quầy đang chờ QR / máy mPOS mà thu tay ở đây: chốt lần thử ở cổng thành
+	// HUỶ trước, như đổi hình thức ở quầy — không thì khách vẫn quét được mã cũ và
+	// cửa hàng thu hai lần. Tiền cổng vừa về đúng lúc này thì dừng lại.
+	if cu, err := s.orderRepo.FindByID(ctx, id); err == nil && s.payments != nil && choTienQuay(cu) &&
+		cu.Status == domain.OrderStatusPending && cu.PaymentStatus != domain.OrderPaymentPaid {
+		duoc, err := s.payments.HuyTheoDon(ctx, cu)
+		if err != nil {
+			return nil, err
+		}
+		if !duoc {
+			return nil, fmt.Errorf("%w: khách vừa trả qua %s — đơn đã thu đủ", domain.ErrInvalidStatus, quaCong(cu.PaymentMethod))
+		}
+	}
 	if err := s.orderRepo.GhiLuotThu(ctx, p); err != nil {
 		return nil, err
 	}
@@ -365,6 +394,9 @@ func (s *orderService) GhiLuotThu(ctx context.Context, id uint, req *dto.OrderTh
 		return nil, err
 	}
 	s.signalOrder(ctx, o)
+	if o.Channel == domain.OrderChannelPOS && o.Status == domain.OrderStatusCompleted {
+		s.tuPhatHanhHoaDon(ctx, o.ID)
+	}
 
 	return s.detail(ctx, o)
 }
@@ -558,6 +590,17 @@ func (s *orderService) Checkout(ctx context.Context, req *dto.CheckoutRequest, u
 //   - Không phí ship, không địa chỉ: hàng trao tay ngay tại quầy.
 //   - Có thể không gắn tài khoản nào (khách lẻ).
 func (s *orderService) POSCheckout(ctx context.Context, req *dto.POSCheckoutRequest, role string, actorID uint) (*dto.POSCheckoutResponse, error) {
+	// Hoá đơn đang mở đã có dòng nháp: giành nó, chốt bằng đúng mã của nó.
+	if req.DraftID > 0 {
+		return s.chotTuNhap(ctx, req, role, actorID)
+	}
+
+	return s.posCheckout(ctx, req, role, actorID, "")
+}
+
+// posCheckout là thân lượt chốt. maNhap: mã đơn của hoá đơn nháp đang chốt (đã cấp
+// ở server lúc mở hoá đơn nên không cần chữ ký); "" = dùng mã giữ trước có ký như cũ.
+func (s *orderService) posCheckout(ctx context.Context, req *dto.POSCheckoutRequest, role string, actorID uint, maNhap string) (*dto.POSCheckoutResponse, error) {
 	if len(req.Items) == 0 {
 		return nil, domain.ErrEmptyCart
 	}
@@ -743,6 +786,9 @@ func (s *orderService) POSCheckout(ctx context.Context, req *dto.POSCheckoutRequ
 		// hạn thì dùng — mã trên tab là mã vào sổ. Sai hoặc hết hạn thì để trống, repository
 		// cấp mã mới như thường: không vì một cái mã mà từ chối lượt bán.
 		o.OrderCode = maDonGiuHopLe(ctx, s.khoaMaDon, req.OrderCode, req.OrderCodeToken, now)
+		if maNhap != "" {
+			o.OrderCode = maNhap
+		}
 
 		items, subtotal, err := buildOrderItems(found, lines)
 		if err != nil {
@@ -981,6 +1027,10 @@ func (s *orderService) POSDoiHinhThuc(ctx context.Context, id uint, req *dto.POS
 	}
 	if !laQR || o.Status != domain.OrderStatusPending {
 		return nil, fmt.Errorf("%w: đơn này không phải đơn đang chờ tiền", domain.ErrPhuongThucQuay)
+	}
+	// Thu tiền ở quầy cần ca đang mở — kiểm trước khi đụng vào mã QR.
+	if err := s.orderRepo.CoCaMo(ctx, o.ShopID); err != nil {
+		return nil, err
 	}
 	// Kiểm hình thức mới TRƯỚC khi đụng vào mã QR: máy tắt, tài khoản đã gỡ thì
 	// mã QR vẫn phải còn sống để khách quét tiếp.
@@ -1898,6 +1948,7 @@ func buildOrderItems(found map[uint]domain.CheckoutVariant, lines []domain.Check
 			ProductName:      p.cv.ProductName,
 			VariantSKU:       p.cv.SKU,
 			VariantName:      p.cv.VariantName,
+			UnitName:         p.cv.UnitName,
 			Thumbnail:        p.cv.Thumbnail,
 			UnitPrice:        p.cv.Price,
 			// Giá vốn CHỤP LẠI ngay đây, trong cùng giao dịch đã khoá biến thể: đây
@@ -1944,6 +1995,7 @@ func themQua(items []domain.OrderItem, found map[uint]domain.CheckoutVariant, qu
 			ProductName:      cv.ProductName,
 			VariantSKU:       cv.SKU,
 			VariantName:      cv.VariantName,
+			UnitName:         cv.UnitName,
 			Thumbnail:        cv.Thumbnail,
 			CostPrice:        cv.CostPrice,
 			Quantity:         q.Quantity,
@@ -2434,6 +2486,17 @@ func (s *orderService) detail(ctx context.Context, o *domain.Order) (*OrderDetai
 	// Như sổ thu tiền: đọc hỏng thì bỏ dòng phí, không hỏng cả hộp chi tiết.
 	phiThe, _ := s.orderRepo.PhiTheCuaDon(ctx, o.ID)
 
+	// Như trên: thiếu dòng hạng/điểm trên phiếu còn hơn hỏng cả hộp chi tiết.
+	var thanhVien *ThanhVienPhieu
+	if o.UserID != nil && s.thanhVien != nil {
+		if k, err := s.thanhVien.KhachDiem(ctx, *o.UserID); err == nil {
+			thanhVien = &ThanhVienPhieu{Diem: k.Points}
+			if k.Rank != nil {
+				thanhVien.Hang = k.Rank.Name
+			}
+		}
+	}
+
 	return &OrderDetail{
 		Order:        o,
 		Histories:    histories,
@@ -2442,6 +2505,7 @@ func (s *orderService) detail(ctx context.Context, o *domain.Order) (*OrderDetai
 		DaThu:        daThu,
 		ConNo:        conNo,
 		PhiThe:       phiThe,
+		ThanhVien:    thanhVien,
 	}, nil
 }
 

@@ -160,3 +160,114 @@ func TestSoDon_GhiLuotThuQuetThe(t *testing.T) {
 	}
 	t.Fatalf("sổ đơn không có đơn %d", o.ID)
 }
+
+// phieuThuDon cộng phiếu thu tự sinh của một đơn: số phiếu, tổng tiền, hình thức.
+func phieuThuDon(t *testing.T, h *heThong, orderID uint) (so int64, tong float64, hinhThuc string) {
+	t.Helper()
+	row := h.db.WithContext(ctxThoat()).Raw(`SELECT COUNT(*), COALESCE(SUM(amount),0), COALESCE(MAX(payment_method),'')
+		FROM income_expenses WHERE source = 'order' AND source_id = ? AND type = 0 AND deleted_at IS NULL`, orderID).Row()
+	if err := row.Scan(&so, &tong, &hinhThuc); err != nil {
+		t.Fatalf("không đọc được phiếu thu của đơn %d: %v", orderID, err)
+	}
+	return
+}
+
+// TestSoDon_ThuSauCoPhieuThu — đơn chưa thu lúc tạo, thu sau bằng lượt thu ở màn
+// Đơn hàng hay gạt cờ "đã thanh toán", đều phải có phiếu thu như đơn trả ngay;
+// gạt cờ đi rồi gạt lại không sinh phiếu thứ hai.
+func TestSoDon_ThuSauCoPhieuThu(t *testing.T) {
+	h := dungHeThong(t)
+	a, _ := haiCuaHang(t, h)
+	ctx := tenant.WithID(context.Background(), a.id)
+	now := time.Now()
+	donCho := func(ma string) *domain.Order {
+		o := &domain.Order{
+			ShopID: a.chiNhanh, OrderCode: ma + "-" + a.vet, Channel: domain.OrderChannelWeb,
+			SubtotalAmount: 100000, TotalAmount: 100000,
+			PaymentMethod: domain.PaymentMethodBank, PaymentStatus: domain.OrderPaymentPending,
+			Status: domain.OrderStatusConfirmed, PlacedAt: &now,
+		}
+		tao(t, h.db, ctx, o)
+		return o
+	}
+
+	// Hai lượt thu: mỗi lượt một phiếu, cộng lại đúng tổng đơn.
+	o1 := donCho("pt-luot")
+	duong := fmt.Sprintf("/api/v1/admin/orders/%d/payments", o1.ID)
+	for _, so := range []int{40000, 60000} {
+		if r := h.goi(t, a.token, http.MethodPost, duong, map[string]any{"amount": so, "payment_method": "bank_transfer"}); r.ma >= 300 {
+			t.Fatalf("ghi lượt thu %d trả %d %s", so, r.ma, catBot(r.than))
+		}
+	}
+	if so, tong, ht := phieuThuDon(t, h, o1.ID); so != 2 || tong != 100000 || ht != domain.ThuChiChuyenKhoan {
+		t.Errorf("hai lượt thu phải có 2 phiếu thu chuyển khoản cộng 100000, nhận %d / %v / %s", so, tong, ht)
+	}
+
+	// Gạt cờ đã thanh toán: một phiếu; gạt đi rồi gạt lại vẫn một phiếu.
+	o2 := donCho("pt-co")
+	co := fmt.Sprintf("/api/v1/admin/orders/%d/payment", o2.ID)
+	for _, st := range []string{"paid", "pending", "paid"} {
+		if r := h.goi(t, a.token, http.MethodPut, co, map[string]any{"payment_status": st}); r.ma >= 300 {
+			t.Fatalf("gạt cờ %s trả %d %s", st, r.ma, catBot(r.than))
+		}
+	}
+	if so, tong, _ := phieuThuDon(t, h, o2.ID); so != 1 || tong != 100000 {
+		t.Errorf("gạt cờ đã thanh toán (kể cả gạt lại) phải đúng 1 phiếu 100000, nhận %d / %v", so, tong)
+	}
+}
+
+// trangThaiDon đọc status / payment_status của đơn.
+func trangThaiDon(t *testing.T, h *heThong, id uint) (st, pay string) {
+	t.Helper()
+	if err := h.db.WithContext(ctxThoat()).Raw("SELECT status, payment_status FROM orders WHERE id = ?", id).Row().Scan(&st, &pay); err != nil {
+		t.Fatalf("không đọc được đơn %d: %v", id, err)
+	}
+	return
+}
+
+// TestSoDon_ThuDuDonQuayThiHoanTat — đơn quầy đang chờ thu đủ ở màn Đơn hàng thì
+// đóng luôn (completed) như khi QR về; thu một phần vẫn chờ; đơn giao hàng thu đủ
+// thì KHÔNG tự nhảy trạng thái (còn các bước giao).
+func TestSoDon_ThuDuDonQuayThiHoanTat(t *testing.T) {
+	h := dungHeThong(t)
+	a, _ := haiCuaHang(t, h)
+	ctx := tenant.WithID(context.Background(), a.id)
+	now := time.Now()
+	don := func(ma, kenh, st string) uint {
+		o := &domain.Order{
+			ShopID: a.chiNhanh, OrderCode: ma + "-" + a.vet, Channel: kenh,
+			SubtotalAmount: 100000, TotalAmount: 100000,
+			PaymentMethod: domain.PaymentMethodBank, PaymentStatus: domain.OrderPaymentPending,
+			Status: st, PlacedAt: &now,
+		}
+		tao(t, h.db, ctx, o)
+		return o.ID
+	}
+	thu := func(id uint, so int) {
+		t.Helper()
+		if r := h.goi(t, a.token, http.MethodPost, fmt.Sprintf("/api/v1/admin/orders/%d/payments", id), map[string]any{"amount": so, "payment_method": "cash"}); r.ma >= 300 {
+			t.Fatalf("ghi lượt thu trả %d %s", r.ma, catBot(r.than))
+		}
+	}
+
+	quay := don("ht-quay", domain.OrderChannelPOS, domain.OrderStatusPending)
+	thu(quay, 30000)
+	if st, pay := trangThaiDon(t, h, quay); st != "pending" || pay == "paid" {
+		t.Fatalf("thu một phần: đơn quầy vẫn chờ, nhận %s / %s", st, pay)
+	}
+	thu(quay, 70000)
+	if st, pay := trangThaiDon(t, h, quay); st != "completed" || pay != "paid" {
+		t.Fatalf("thu đủ đơn quầy phải hoàn tất, nhận %s / %s", st, pay)
+	}
+	var moc int64
+	h.db.WithContext(ctxThoat()).Raw("SELECT COUNT(*) FROM order_status_history WHERE order_id = ? AND to_status = 'completed'", quay).Scan(&moc)
+	if moc != 1 {
+		t.Errorf("đóng đơn phải có đúng 1 mốc lịch sử completed, nhận %d", moc)
+	}
+
+	giao := don("ht-giao", domain.OrderChannelWeb, domain.OrderStatusConfirmed)
+	thu(giao, 100000)
+	if st, pay := trangThaiDon(t, h, giao); st != "confirmed" || pay != "paid" {
+		t.Errorf("đơn giao hàng thu đủ vẫn giữ bước giao (confirmed), nhận %s / %s", st, pay)
+	}
+}

@@ -36,6 +36,7 @@ class V2OnlyShell
         'admin.phieu-dieu-chuyen.index',
         'admin.chi-nhanh.index',
         'admin.phuong-thuc-tt.index',
+        'admin.thong-so-chung.devices',
         'admin.staff.index',
         'admin.loai-thu-chi.index',
         'admin.cashbook.index',

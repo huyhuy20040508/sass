@@ -354,6 +354,8 @@ func dungHeThongVoi(t *testing.T, banHang, dieuHanh bool) *heThong {
 	userSvc := service.NewUserService(userRepo, roleRepo, hanMucSvc)
 	hub := realtime.NewHub()
 	notifSvc := service.NewNotificationService(notifRepo, hub)
+	caSvc := service.NewCaLamViecService(caRepo, userRepo, chiNhanhRepo)
+	caSvc.DungCanhBaoLech(notifSvc, settingSvc)
 	// Hoá đơn điện tử: hộp mã hoá rỗng và client trỏ máy chủ thật. Bộ test hiện
 	// chưa chạm nhóm này; dựng sớm vì đơn hàng và thanh toán móc vào nó.
 	etaxSvc := service.NewEtaxService(
@@ -397,6 +399,7 @@ func dungHeThongVoi(t *testing.T, banHang, dieuHanh bool) *heThong {
 				service.NewNhomQuyenService(repository.NewQuyenRepository(db), userRepo)),
 			QuyTacMa: handler.NewQuyTacMaHandler(
 				service.NewQuyTacMaService(quyTacMaRepo, chiNhanhRepo)),
+			ThietBi:    handler.NewThietBiHandler(service.NewThietBiService(repository.NewThietBiRepository(db))),
 			Thue:       handler.NewThueHandler(service.NewThueService(thueRepo)),
 			DonViTinh:  handler.NewDonViTinhHandler(service.NewDonViTinhService(donViTinhRepo, quyTacMaRepo)),
 			LoaiThuChi: handler.NewLoaiThuChiHandler(service.NewLoaiThuChiService(loaiThuChiRepo)),
@@ -415,7 +418,7 @@ func dungHeThongVoi(t *testing.T, banHang, dieuHanh bool) *heThong {
 			GiaChiNhanh: handler.NewGiaChiNhanhHandler(service.NewGiaChiNhanhService(
 				repository.NewGiaChiNhanhRepository(db), chiNhanhRepo)),
 			ThuocTinh: handler.NewThuocTinhHandler(service.NewThuocTinhService(thuocTinhRepo, quyTacMaRepo)),
-			Ca:        handler.NewCaLamViecHandler(service.NewCaLamViecService(caRepo, userRepo, chiNhanhRepo)),
+			Ca:        handler.NewCaLamViecHandler(caSvc),
 			Payment:   handler.NewPaymentHandler(paymentSvc),
 			Banner:    handler.NewBannerHandler(bannerSvc),
 			Report:    handler.NewReportHandler(reportSvc),

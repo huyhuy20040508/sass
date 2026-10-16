@@ -9,6 +9,11 @@
         #DetailEmployee .modal-dialog { min-width: 70%; }
         #CreateEmployee .modal-body,
         #DetailEmployee .modal-body { padding: 0 !important; padding-top: 5px !important; }
+        .nk-tong { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-bottom: 10px; font-size: 14px; }
+        .nk-tong b { font-variant-numeric: tabular-nums; }
+        .nk-bang th, .nk-bang td { white-space: nowrap; font-size: 13.5px; }
+        .nk-bang td.nk-ghi { white-space: normal; min-width: 160px; }
+        .nk-bang .nk-so { text-align: right; font-variant-numeric: tabular-nums; }
         #CreateEmployee .tab-content { border-bottom: 0 !important; border-left: 0; border-right: 0; }
         .btn_top_content > * { margin-left: 8px; }
         .btn_top_content .btn-export { cursor: pointer; }
@@ -484,6 +489,9 @@
                             <li class="nav-item" role="presentation">
                                 <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#detailEmployeeView" type="button" role="tab">{{ __('message.detail') }}</button>
                             </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#logEmployeeView" type="button" role="tab" id="nkTab">Nhật ký</button>
+                            </li>
                         </ul>
                         <div class="tab-content p-3 border border-top-0">
                             <div class="tab-pane fade show active" id="detailEmployeeView" role="tabpanel">
@@ -555,6 +563,19 @@
                                         <div class="mt-2 small text-muted detail-tai-khoan"></div>
                                     </div>
                                 </div>
+                            </div>
+                            {{-- Nhật ký nhân viên: mở / đóng ca của người trực (API ghi lúc mở, đóng ca). --}}
+                            <div class="tab-pane fade" id="logEmployeeView" role="tabpanel">
+                                <div class="nk-tong" id="nkTong"></div>
+                                <div class="table-responsive">
+                                    <table class="table table-bordered mb-0 nk-bang">
+                                        <thead>
+                                            <tr><th>Thời gian</th><th>Sự kiện</th><th>Chi nhánh</th><th>Ca</th><th class="text-end">Tiền</th><th class="text-end">Chênh lệch</th><th>Người thao tác</th><th>Ghi chú</th></tr>
+                                        </thead>
+                                        <tbody id="nkThan"></tbody>
+                                    </table>
+                                </div>
+                                <div class="text-center mt-2"><button type="button" class="btn btn-sm btn-outline-secondary" id="nkThem" hidden>Xem thêm</button></div>
                             </div>
                         </div>
                     </form>
@@ -984,10 +1005,53 @@
                 : 'Không có tài khoản đăng nhập');
         }
 
+        // ---------- Tab Nhật ký ----------
+        const NK_URL_CA = @json(route('thu-ngan.ca-lam-viec.index', ['ca' => '__ID__']));
+        const nk = { id: 0, trang: 0, dangTai: false };
+        const soVN = (n) => Math.round(Math.abs(Number(n) || 0)).toLocaleString('vi-VN');
+        const thoatNK = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        function chenhNK(v) {
+            if (v === null || v === undefined) return '';
+            const n = Number(v);
+            if (!n) return '<span class="text-success">Khớp</span>';
+            return `<span class="${n < 0 ? 'text-danger' : 'text-warning'}">${n < 0 ? 'Thiếu −' : 'Dư +'}${soVN(n)}</span>`;
+        }
+        function taiNhatKy(tiep) {
+            if (!nk.id || nk.dangTai) return;
+            nk.dangTai = true;
+            const trang = tiep ? nk.trang + 1 : 1;
+            if (!tiep) { $('#nkThan').html('<tr><td colspan="8" class="text-center text-muted py-3">Đang tải…</td></tr>'); $('#nkTong').empty(); }
+            $.getJSON(URL_BASE + '/' + nk.id + '/log', { page: trang }).done(function (r) {
+                const d = (r && r.data) || {}, ds = d.items || [], tg = d.tong || {};
+                nk.trang = trang;
+                $('#nkTong').html(`<span>Trực <b>${tg.so_ca || 0}</b> ca</span><span>Lệch <b>${tg.so_lan_lech || 0}</b> lần</span>`
+                    + `<span>Tổng thiếu <b class="text-danger">${tg.tong_thieu ? '−' + soVN(tg.tong_thieu) : '0'}</b></span>`
+                    + `<span>Tổng dư <b class="text-warning">${tg.tong_du ? '+' + soVN(tg.tong_du) : '0'}</b></span>`);
+                const dong = ds.map(function (x) {
+                    const mo = x.event === 'shift_open';
+                    const ca = x.shift_id ? `<a href="${NK_URL_CA.replace('__ID__', x.shift_id)}">#${x.shift_id}</a>` : '—';
+                    return `<tr><td>${thoatNK(moment(x.happened_at).format('HH:mm DD/MM/YYYY'))}</td>`
+                        + `<td>${mo ? 'Mở ca' : 'Đóng ca'}</td><td>${thoatNK(x.shop_name || '—')}</td><td>${ca}</td>`
+                        + `<td class="nk-so" title="${mo ? 'Tiền đầu ca' : 'Tiền đếm được'}">${x.amount === null ? '' : soVN(x.amount)}</td>`
+                        + `<td class="nk-so">${mo ? '' : chenhNK(x.difference)}</td>`
+                        + `<td>${thoatNK(x.user_name || '—')}</td><td class="nk-ghi">${thoatNK(x.note || '')}</td></tr>`;
+                }).join('');
+                if (tiep) $('#nkThan').append(dong);
+                else $('#nkThan').html(dong || '<tr><td colspan="8" class="text-center text-muted py-3">Chưa có dòng nhật ký nào.</td></tr>');
+                $('#nkThem').prop('hidden', nk.trang * 20 >= (d.total || 0));
+            }).fail(function (x) {
+                $('#nkThan').html(`<tr><td colspan="8" class="text-center text-danger py-3">${thoatNK((x.responseJSON && x.responseJSON.message) || 'Không tải được nhật ký.')}</td></tr>`);
+            }).always(function () { nk.dangTai = false; });
+        }
+        $('#nkTab').on('shown.bs.tab', function () { if (!nk.trang) taiNhatKy(false); });
+        $('#nkThem').on('click', function () { taiNhatKy(true); });
+
         $(document).on('click', '.detail-item', function () {
             const nv = cuaDong(this);
             if (!nv) return;
             doVaoChiTiet(nv);
+            nk.id = nv.id; nk.trang = 0;
+            $('#DetailEmployee .nav-tabs .nav-link').first().tab('show');
             $('#DetailEmployee').modal('show');
         });
 

@@ -899,6 +899,8 @@ func respondOrderError(c *gin.Context, err error, fallback string) {
 	}
 
 	switch {
+	case errors.Is(err, domain.ErrNhapKhongMo), errors.Is(err, domain.ErrNhapDangChot):
+		response.Error(c, http.StatusConflict, err.Error())
 	case errors.Is(err, domain.ErrKhongDuDiem):
 		response.Error(c, http.StatusUnprocessableEntity, err.Error())
 	case errors.Is(err, domain.ErrDongGiaKhongGopKM), errors.Is(err, domain.ErrKMKhongGopDongGia):
@@ -945,6 +947,9 @@ func respondOrderError(c *gin.Context, err error, fallback string) {
 		// err đã kèm lý do: phương thức đang tắt, máy đã gỡ, đơn đã trả tiền…
 		response.Error(c, http.StatusUnprocessableEntity,
 			strings.TrimPrefix(err.Error(), domain.ErrPhuongThucQuay.Error()+": "))
+	case errors.Is(err, domain.ErrChuaMoCa):
+		response.ErrorMa(c, http.StatusConflict, response.MaChuaMoCa,
+			"Chi nhánh chưa mở ca — mở ca (nhập tiền đầu ca) rồi mới bán / thu tiền được.")
 	case errors.Is(err, domain.ErrPaymentDevice):
 		response.Error(c, http.StatusBadGateway,
 			"Không gửi được số tiền xuống máy quẹt thẻ — kiểm tra máy đã bật và kết nối cổng ở Cài đặt → Phương thức thanh toán, hoặc chọn cách thu khác")

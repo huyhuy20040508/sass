@@ -574,11 +574,24 @@ func (r *orderRepository) GhiLuotThu(ctx context.Context, p *domain.OrderPayment
 		if err := tx.Create(p).Error; err != nil {
 			return err
 		}
+		// Lượt thu nào cũng có phiếu thu (và vào két nếu là đơn quầy tiền mặt) —
+		// cùng luật với đơn trả ngay lúc tạo.
+		if err := ghiTienDonVuaThu(ctx, tx, &o, p.Amount, p.PaymentMethod); err != nil {
+			return err
+		}
 
 		// Thu nốt phần còn lại thì đóng luôn trạng thái tiền.
 		if daThu+p.Amount >= o.TotalAmount {
 			if err := tx.Model(&o).Update("payment_status", domain.OrderPaymentPaid).Error; err != nil {
 				return err
+			}
+			// Đơn QUẦY còn chờ (QR chưa về rồi thu ở màn Đơn hàng): thu đủ là xong
+			// lượt bán — đóng đơn như khi QR về hay đổi hình thức ở quầy. Đơn giao
+			// hàng thì còn các bước giao, vẫn để nhân viên đẩy tiếp.
+			if o.Channel == domain.OrderChannelPOS && o.Status == domain.OrderStatusPending {
+				if err := dongDonQuayDaThu(tx, &o, p.CreatedBy); err != nil {
+					return err
+				}
 			}
 		}
 
@@ -618,4 +631,26 @@ func (r *orderRepository) PhiTheCuaDon(ctx context.Context, orderID uint) (*doma
 	}
 
 	return &x, err
+}
+
+// dongDonQuayDaThu chuyển đơn quầy đang chờ sang hoàn tất, kèm đủ việc của một lần
+// đổi trạng thái (lượt bán, điểm thành viên, mốc lịch sử) — cùng giao dịch với
+// lượt thu vừa đủ tiền.
+func dongDonQuayDaThu(tx *gorm.DB, o *domain.Order, nguoi *uint) error {
+	tu, now := o.Status, time.Now()
+	o.Status, o.ConfirmedAt, o.DeliveredAt = domain.OrderStatusCompleted, &now, &now
+	if err := tx.Model(o).Select("Status", "ConfirmedAt", "DeliveredAt").Updates(o).Error; err != nil {
+		return err
+	}
+	if err := syncSoldCount(tx, o, tu, o.Status); err != nil {
+		return err
+	}
+	if err := diemKhiDoiTrangThai(tx, o, tu); err != nil {
+		return err
+	}
+
+	return tx.Create(&domain.OrderStatusHistory{
+		OrderID: o.ID, FromStatus: tu, ToStatus: o.Status,
+		Note: "Thu đủ tiền ở màn Đơn hàng", ChangedBy: nguoi,
+	}).Error
 }

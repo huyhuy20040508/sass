@@ -18,8 +18,8 @@ import "time"
 
 // BaoCaoCaFilter — bộ lọc báo cáo kết ca.
 type BaoCaoCaFilter struct {
-	// From / To là nửa khoảng [From, To) theo opened_at: To là 00:00 của ngày
-	// SAU ngày cuối kỳ, cùng quy ước với ReportPeriod.
+	// From / To là nửa khoảng [From, To) theo closed_at (ca đang mở: opened_at < To):
+	// To là 00:00 của ngày SAU ngày cuối kỳ, cùng quy ước với ReportPeriod.
 	From time.Time
 	To   time.Time
 	// ShopID = 0 là mọi chi nhánh.
