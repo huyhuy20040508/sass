@@ -18,6 +18,7 @@ import (
 func TestTruKho_TatThiBanKhongDungVaoKho(t *testing.T) {
 	h := dungHeThong(t)
 	a, _ := haiCuaHang(t, h)
+	moCa(t, h, a, 0)
 
 	// Tắt "Trừ kho" cho mặt hàng của biến thể đang bán.
 	if err := h.db.WithContext(tenant.WithID(context.Background(), a.id)).Model(&domain.Product{}).

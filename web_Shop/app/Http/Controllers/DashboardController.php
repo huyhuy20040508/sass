@@ -85,7 +85,7 @@ class DashboardController extends Controller
      */
     public const GOAL_KEY = 'monthly_revenue_goal';
 
-    /** Ca mở quá chừng này giờ mà chưa chốt thì đưa vào thẻ "Cần chú ý". */
+    /** Ca mở quá chừng này giờ (khi Cài đặt chưa có số) thì đưa vào thẻ "Cần chú ý". */
     public const CA_QUA_LAU_GIO = 24;
 
     public function __construct(protected ApiClient $api) {}
@@ -107,6 +107,9 @@ class DashboardController extends Controller
             'mua' => ['/admin/phieu-mua-hang', $this->queryMua($f, 1)],
             'muaTruoc' => ['/admin/phieu-mua-hang', $this->queryMua(['from' => $tuTruoc, 'to' => $denTruoc] + $f, 1)],
             'ca' => ['/admin/ca-lam-viec', ['status' => 'dang_mo', 'page_size' => 100] + $cn],
+            // Thẻ "Ca lệch két · 7 ngày" cố định 7 ngày theo giờ ĐÓNG, không theo kỳ đang xem.
+            'caLech' => ['/admin/ca-lam-viec', ['status' => 'da_dong', 'lech' => 1, 'page_size' => 100,
+                'from_date' => now()->subDays(6)->format('Y-m-d'), 'to_date' => now()->format('Y-m-d')] + $cn],
             'tonKho' => ['/admin/inventory/stats', ['low_stock' => $this->api->settingInt('low_stock_threshold', BranchStockController::LOW_STOCK)]],
             'hoaDonLoi' => ['/admin/etax/hoa-don', ['status' => 'failed', 'page_size' => 1]],
         ];
@@ -145,6 +148,7 @@ class DashboardController extends Controller
             'kyTruoc' => $this->kyTruoc($doanhThu),
             'mucTieu' => $this->mucTieu($f, $this->tronThang($f) ? $kpi['net'] : $this->thuan($this->data($nen['doanhThuThang'] ?? null, 'month revenue'))),
             'caMo' => $caMo,
+            'caLech' => $this->caLech($nen['caLech'] ?? null, $chiNhanh['ds']),
             'canhBao' => $this->canhBao($caMo, $this->data($nen['tonKho'] ?? null, 'inventory stats'), $nen['hoaDonLoi'] ?? null),
             'chart' => $chart,
             'muaTheoMoc' => $muaHang['theoMoc'],
@@ -474,9 +478,11 @@ class DashboardController extends Controller
             // Ca của API không có "mã ca" riêng như bản v2 — id CHÍNH LÀ thứ hai
             // bên đối chiếu khi tra lại một lượt trực, nên in thẳng nó.
             $out[] = [
+                'id' => (int) ($ca['id'] ?? 0),
                 'ma' => '#'.($ca['id'] ?? '—'),
                 'chi_nhanh' => (string) (($ca['shop_name'] ?? '') ?: ($ten[(int) ($ca['shop_id'] ?? 0)] ?? '')),
-                'nguoi_mo' => (string) ($ca['opened_by_name'] ?? ''),
+                // Người trực két; ca mở trước khi có ô này thì lùi về người bấm Mở ca.
+                'nguoi_mo' => (string) (($ca['employee_name'] ?? '') ?: ($ca['opened_by_name'] ?? '')),
                 'gio_mo' => $ca['opened_at'] ?? null,
                 'dau_ca' => $dauCa,
                 'thu' => $thu,
@@ -484,10 +490,49 @@ class DashboardController extends Controller
                 // Tiền SỔ nói lẽ ra đang có trong két: đầu ca cộng thu trừ chi.
                 'tien_mat' => $dauCa + $thu - $chi,
                 'so_don' => (int) ($ca['so_don_tien_mat'] ?? 0),
+                // Câu nhắc khi ca mở quá ngưỡng ở Cài đặt; null = chưa quá.
+                'qua_lau' => WorkShiftController::caMoQuaLau($ca, $this->api)['cau'] ?? null,
             ];
         }
 
         return $out;
+    }
+
+    /**
+     * Thẻ "Ca lệch két · 7 ngày": số ca đóng lệch, tổng thiếu / dư, ca nào vượt
+     * ngưỡng báo quản lý (Cài đặt → Quầy bán hàng) và 5 ca gần nhất.
+     *
+     * Thiếu quyền xem ca thì API trả 403 → null, thẻ không hiện.
+     *
+     * @return array<string, mixed>|null
+     */
+    protected function caLech(Response|\Throwable|null $res, array $dsChiNhanh): ?array
+    {
+        if (! $res instanceof Response || ! $res->successful()) {
+            return null;
+        }
+        $ten = collect($dsChiNhanh)->mapWithKeys(fn ($cn) => [(int) ($cn['id'] ?? 0) => (string) ($cn['name'] ?? '')]);
+        $nguong = (float) $this->api->settingInt('shift_diff_alert_threshold', 50000);
+        $ds = $res->json('data') ?? [];
+        $lech = fn ($ca) => (float) ($ca['difference'] ?? 0);
+
+        return [
+            'so' => (int) ($res->json('meta.total') ?? count($ds)),
+            'thieu' => collect($ds)->map($lech)->filter(fn ($v) => $v < 0)->sum(),
+            'du' => collect($ds)->map($lech)->filter(fn ($v) => $v > 0)->sum(),
+            'nguong' => $nguong,
+            'vuot' => collect($ds)->filter(fn ($ca) => abs($lech($ca)) > $nguong)->count(),
+            'ds' => collect($ds)->take(5)->map(fn ($ca) => [
+                'id' => (int) $ca['id'],
+                'chi_nhanh' => $ten[(int) ($ca['shop_id'] ?? 0)] ?? '',
+                'truc' => (string) (($ca['employee_name'] ?? '') ?: ($ca['opened_by_name'] ?? '')),
+                'dong' => $ca['closed_at'] ?? null,
+                'lech' => $lech($ca),
+                'vuot' => abs($lech($ca)) > $nguong,
+                'link' => route('thu-ngan.ca-lam-viec.index', ['ca' => (int) $ca['id']]),
+            ])->all(),
+            'tatCa' => route('thu-ngan.ca-lam-viec.index', ['lech' => 1, 'from_date' => now()->subDays(6)->format('Y-m-d'), 'to_date' => now()->format('Y-m-d')]),
+        ];
     }
 
     /**
@@ -505,15 +550,16 @@ class DashboardController extends Controller
     protected function canhBao(array $caMo, array $tonKho = [], Response|\Throwable|null $hoaDonLoi = null): array
     {
         $out = [];
+        $nguong = $this->api->settingInt('shift_open_alert_hours', self::CA_QUA_LAU_GIO);
         foreach ($caMo as $ca) {
             $gio = $ca['gio_mo'] ? (time() - strtotime($ca['gio_mo'])) / 3600 : 0;
-            if ($gio < self::CA_QUA_LAU_GIO) {
+            if ($nguong <= 0 || $gio < $nguong) {
                 continue;
             }
             $bao = $gio >= 48 ? floor($gio / 24).' ngày' : floor($gio).' giờ';
             $out[] = [
                 'chu' => 'Ca '.e($ca['ma']).($ca['chi_nhanh'] !== '' ? ' ở '.e($ca['chi_nhanh']) : '').' đã mở '.$bao.' chưa chốt',
-                'link' => route('admin.shift-report.index'),
+                'link' => route('thu-ngan.ca-lam-viec.index', ['ca' => $ca['id']]),
             ];
         }
 

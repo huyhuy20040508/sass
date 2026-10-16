@@ -308,3 +308,45 @@ dialog.modal .modal__foot { flex: none; }
 .pay-doi[hidden] { display: none; }
 /* base.css khai .change { display: flex } đè lên [hidden]: ô "Còn thiếu" hiện cả khi chưa nhập tiền khách đưa. */
 .change[hidden] { display: none; }
+
+/* Chưa mở ca: phủ cả khu bán, chừa thanh trên để còn đổi chi nhánh / sang Điều phối ca. */
+.pos-main { position: relative; }
+.ca-khoa {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: var(--s-4);
+  overflow-y: auto;
+  background: rgba(15, 23, 42, .45);
+}
+.ca-khoa[hidden] { display: none; }
+.ca-khoa__the {
+  display: grid;
+  gap: var(--s-3);
+  width: min(420px, 100%);
+  padding: var(--s-6) var(--s-5) var(--s-5);
+  border-radius: var(--r-lg);
+  background: var(--c-surface);
+  box-shadow: var(--shadow-pop);
+}
+.ca-khoa__icon {
+  display: grid;
+  place-items: center;
+  justify-self: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--c-warn-soft);
+  color: #9a4f00;
+  font-size: 24px;
+}
+.ca-khoa__the h2 { margin: 0; color: var(--c-ink); font-size: var(--fs-xl); text-align: center; }
+.ca-khoa__the p { margin: 0; color: var(--c-muted); text-align: center; }
+.ca-khoa__nut { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--s-2); }
+
+/* Nhắc ca mở quá lâu (Cài đặt → Quầy bán hàng); chỉ nhắc, không chặn bán. */
+.ca-qua-lau { display: flex; align-items: center; gap: var(--s-2); margin-bottom: var(--s-2); padding: var(--s-2) var(--s-3); border-radius: var(--r-lg); background: var(--c-warn-soft); color: #7a4100; font-size: var(--fs-sm); }
+.ca-qua-lau > span { flex: 1 1 auto; min-width: 0; }
+.ca-qua-lau a { flex: 0 0 auto; color: #7a4100; font-weight: 600; white-space: nowrap; }

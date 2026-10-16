@@ -411,6 +411,9 @@
                                             <b title="Ca {{ $ca['ma'] }}">{{ $ca['chi_nhanh'] !== '' ? $ca['chi_nhanh'] : 'Ca '.$ca['ma'] }}</b>
                                             <span>{{ $ca['nguoi_mo'] !== '' ? $ca['nguoi_mo'] : '—' }} · mở {{ $ca['gio_mo'] ? date('d/m H:i', strtotime($ca['gio_mo'])) : '—' }}</span>
                                         </div>
+                                        @if (! empty($ca['qua_lau']))
+                                            <a href="{{ route('thu-ngan.ca-lam-viec.index', ['ca' => $ca['id']]) }}" class="db-ca-lau"><i class="fa-solid fa-clock"></i> {{ $ca['qua_lau'] }}</a>
+                                        @endif
                                         <div class="db-ca-tien">
                                             <span>Tiền mặt trong két</span>
                                             <b>{{ $tien($ca['tien_mat']) }} đ</b>
@@ -422,6 +425,32 @@
                                 @endforelse
                             </div>
                         </div>
+                        @if ($caLech)
+                            <div class="div-chart db-lech">
+                                <div class="chart-header d-flex align-items-center">
+                                    <h6 class="mb-0 fw-bold flex-grow-1"><i class="fa-solid fa-scale-unbalanced db-h-ic" style="--ic: #dc2626" aria-hidden="true"></i>Ca lệch két · 7 ngày</h6>
+                                    <span class="db-pill {{ $caLech['so'] ? 'db-pill--cam' : 'db-pill--xanh' }}">{{ $caLech['so'] }} ca</span>
+                                </div>
+                                <div class="chart-body p-2">
+                                    @if ($caLech['so'])
+                                        <div class="db-lech-tong">
+                                            <span>Thiếu <b class="text-danger">{{ $caLech['thieu'] ? '−'.$tien(abs($caLech['thieu'])) : '0' }} đ</b></span>
+                                            <span>Dư <b class="text-success">{{ $caLech['du'] ? '+'.$tien($caLech['du']) : '0' }} đ</b></span>
+                                            <span title="Ngưỡng báo quản lý ở Cài đặt → Quầy bán hàng">{{ $caLech['vuot'] }} ca quá {{ $tien($caLech['nguong']) }} đ</span>
+                                        </div>
+                                        @foreach ($caLech['ds'] as $ca)
+                                            <a href="{{ $ca['link'] }}" class="db-lech-dong {{ $ca['vuot'] ? 'is-vuot' : '' }}">
+                                                <span class="db-lech-ai"><b>#{{ $ca['id'] }}</b> {{ $ca['chi_nhanh'] !== '' ? $ca['chi_nhanh'].' · ' : '' }}{{ $ca['truc'] !== '' ? $ca['truc'] : '—' }}<small>đóng {{ $ca['dong'] ? date('d/m H:i', strtotime($ca['dong'])) : '—' }}</small></span>
+                                                <b class="{{ $ca['lech'] < 0 ? 'text-danger' : 'text-success' }}">{{ $ca['lech'] < 0 ? '−' : '+' }}{{ $tien(abs($ca['lech'])) }} đ</b>
+                                            </a>
+                                        @endforeach
+                                        <a href="{{ $caLech['tatCa'] }}" class="db-lech-het">Xem tất cả ca lệch <i class="fa-solid fa-chevron-right"></i></a>
+                                    @else
+                                        <p class="text-muted small mb-0 px-1">7 ngày qua mọi ca đều khớp két.</p>
+                                    @endif
+                                </div>
+                            </div>
+                        @endif
                     </div>
                 </div>
 
@@ -696,6 +725,16 @@
         .db-alert .chart-header { color: #7c2d12; }
         .db-alert-row { display: grid; grid-template-columns: 8px 1fr 10px; gap: 8px; align-items: center; padding: 6px 4px; font-size: 13px; color: #0f172a; text-decoration: none; border-radius: 6px; }
         .db-alert-row:hover { background: #ffedd5; color: #0f172a; }
+        .db-ca-lau { display: block; margin: 4px 0; padding: 5px 8px; border-radius: 6px; background: #fef3c7; color: #92400e; font-size: 12.5px; text-decoration: none; }
+        .db-ca-lau:hover { background: #fde68a; color: #92400e; }
+        .db-lech-tong { display: flex; flex-wrap: wrap; gap: 4px 14px; padding: 2px 4px 8px; font-size: 13px; color: #475569; border-bottom: 1px dashed #e2e8f0; margin-bottom: 4px; }
+        .db-lech-dong { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 4px; border-radius: 6px; font-size: 13px; color: #0f172a; text-decoration: none; }
+        .db-lech-dong:hover { background: #f1f5f9; color: #0f172a; }
+        .db-lech-dong.is-vuot { box-shadow: inset 3px 0 0 #dc2626; padding-left: 8px; }
+        .db-lech-ai { min-width: 0; }
+        .db-lech-ai small { margin-left: 6px; color: #64748b; }
+        .db-lech-dong > b { white-space: nowrap; font-variant-numeric: tabular-nums; }
+        .db-lech-het { display: block; padding: 6px 4px 2px; font-size: 12.5px; text-align: right; text-decoration: none; }
         .db-alert-row .db-dot { width: 8px; height: 8px; background: #c2410c; }
         .db-alert-row i { font-size: 10px; color: #c2410c; }
 

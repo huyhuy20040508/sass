@@ -1193,9 +1193,11 @@ type OrderItem struct {
 	VariantSKU       string `json:"variant_sku" gorm:"column:variant_sku"`
 	// VariantName chụp lại TÊN biến thể lúc lập chứng từ ("128GB · Đen").
 	// Rỗng = hàng không có biến thể.
-	VariantName string  `json:"variant_name"`
-	Thumbnail   string  `json:"thumbnail"`
-	UnitPrice   float64 `json:"unit_price"`
+	VariantName string `json:"variant_name"`
+	// UnitName chụp TÊN ĐVT lúc lập đơn ("Cái", "Sợi") cho phiếu in — đơn cũ rỗng.
+	UnitName  string  `json:"unit_name"`
+	Thumbnail string  `json:"thumbnail"`
+	UnitPrice float64 `json:"unit_price"`
 	// CostPrice là giá vốn một đơn vị CHỤP LẠI tại thời điểm bán.
 	//
 	// Có nó thì lãi gộp của tháng trước không tự đổi khi nhập lô mới đắt hơn. nil =

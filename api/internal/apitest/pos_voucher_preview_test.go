@@ -19,6 +19,7 @@ import (
 func TestQuayXemTruocMaGiam(t *testing.T) {
 	h := dungHeThong(t)
 	a, _ := haiCuaHang(t, h)
+	moCa(t, h, a, 0)
 
 	ma := "XEMTRUOC" + a.vet
 	taoVoucher(t, h, a, ma, nil)
@@ -74,6 +75,7 @@ func TestQuayXemTruocMaGiam(t *testing.T) {
 func TestQuayXemTruocMaGiam_KhongTieuLuot(t *testing.T) {
 	h := dungHeThong(t)
 	a, _ := haiCuaHang(t, h)
+	moCa(t, h, a, 0)
 
 	ma := "KHONGTIEU" + a.vet
 	id := taoVoucher(t, h, a, ma, nil)
@@ -113,6 +115,7 @@ func TestQuayXemTruocMaGiam_KhongTieuLuot(t *testing.T) {
 func TestQuayXemTruocMaGiam_MaHongBaoLoi(t *testing.T) {
 	h := dungHeThong(t)
 	a, _ := haiCuaHang(t, h)
+	moCa(t, h, a, 0)
 
 	res := h.goi(t, a.token, http.MethodPost, "/api/v1/admin/orders/pos/voucher", map[string]any{
 		"items": []map[string]any{{"product_variant_id": a.bienThe, "quantity": 1}},

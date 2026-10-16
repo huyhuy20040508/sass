@@ -203,6 +203,7 @@ func banVoiGiam(t *testing.T, h *heThong, token string, variantID uint, phanTram
 func TestGiamGiaDong_NhanVienBiChanOMucCauHinh(t *testing.T) {
 	h := dungHeThong(t)
 	a, _ := haiCuaHang(t, h)
+	moCa(t, h, a, 0)
 	tokenNV := dangNhapNhanVien(t, h, a.ma)
 
 	truoc := tonCua(t, h, a, a.chiNhanh, a.bienThe)
@@ -230,6 +231,7 @@ func TestGiamGiaDong_NhanVienBiChanOMucCauHinh(t *testing.T) {
 func TestGiamGiaDong_QuanTriKhongBiChan(t *testing.T) {
 	h := dungHeThong(t)
 	a, _ := haiCuaHang(t, h)
+	moCa(t, h, a, 0)
 
 	res := banVoiGiam(t, h, a.token, a.bienThe, 50)
 	if res.ma != http.StatusCreated {
@@ -264,6 +266,7 @@ func TestGiamGiaDong_QuanTriKhongBiChan(t *testing.T) {
 func TestGiamGiaDong_GhiLaiCaMucVaSoTien(t *testing.T) {
 	h := dungHeThong(t)
 	a, _ := haiCuaHang(t, h)
+	moCa(t, h, a, 0)
 
 	res := banVoiGiam(t, h, a.token, a.bienThe, 20)
 	if res.ma != http.StatusCreated {

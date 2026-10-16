@@ -205,6 +205,7 @@ func TestLo_DuyetPhieuTachDungHaiLo(t *testing.T) {
 func TestLo_BanRutFIFO(t *testing.T) {
 	h := dungHeThong(t)
 	a, _ := haiCuaHang(t, h)
+	moCa(t, h, a, 0)
 	donKho(t, h, a)
 	datLuatXuatKho(t, h, a, "fifo", false)
 
@@ -231,6 +232,7 @@ func TestLo_BanRutFIFO(t *testing.T) {
 func TestLo_BanRutFEFO(t *testing.T) {
 	h := dungHeThong(t)
 	a, _ := haiCuaHang(t, h)
+	moCa(t, h, a, 0)
 	donKho(t, h, a)
 	datLuatXuatKho(t, h, a, "fefo", false)
 
@@ -256,6 +258,7 @@ func TestLo_BanRutFEFO(t *testing.T) {
 func TestLo_HangKhongHanXuongCuoiTrongFEFO(t *testing.T) {
 	h := dungHeThong(t)
 	a, _ := haiCuaHang(t, h)
+	moCa(t, h, a, 0)
 	donKho(t, h, a)
 	datLuatXuatKho(t, h, a, "fefo", false)
 
@@ -280,6 +283,7 @@ func TestLo_HangKhongHanXuongCuoiTrongFEFO(t *testing.T) {
 func TestLo_ChanHangQuaHan(t *testing.T) {
 	h := dungHeThong(t)
 	a, _ := haiCuaHang(t, h)
+	moCa(t, h, a, 0)
 	donKho(t, h, a)
 	datLuatXuatKho(t, h, a, "fifo", true)
 

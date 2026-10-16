@@ -104,6 +104,8 @@ const (
 	SettingLotIssueMethod       = "lot_issue_method"
 	SettingBlockExpiredStock    = "block_expired_stock"
 	SettingMonthlyRevenueGoal   = "monthly_revenue_goal"
+	SettingShiftDiffAlert       = "shift_diff_alert_threshold"
+	SettingShiftOpenAlertHours  = "shift_open_alert_hours"
 )
 
 // Thứ tự rút lô khi xuất kho — bản v2 gọi là thông số `inventory_valuation`.
@@ -347,6 +349,21 @@ var settingRegistry = []settingDef{
 		// Chủ cửa hàng và quản trị viên KHÔNG bị con số này chặn — họ tự chịu trách
 		// nhiệm về mức mình bấm. Đây là hạn quyền cho người làm thuê đứng quầy.
 		Default: "10", Required: true, MaxNum: 100,
+	},
+	{
+		// Đóng ca lệch quá mức này (tính trị tuyệt đối) thì báo vào chuông của
+		// quản lý + chủ. 50.000 đủ lọc mấy đồng lẻ thối nhầm mà vẫn bắt được một
+		// tờ tiền mất.
+		Key: SettingShiftDiffAlert, Group: SettingGroupPOS, Type: SettingTypeNumber,
+		Label:   "Báo quản lý khi đóng ca lệch két quá (đ)",
+		Default: "50000", Required: true, MaxNum: 1_000_000_000,
+	},
+	{
+		// Ca mở quá chừng này giờ chưa đóng thì nhắc ở Điều phối ca, Bán hàng và
+		// Tổng quan (không chặn bán). 0 = tắt nhắc. Trần 720 giờ = 30 ngày.
+		Key: SettingShiftOpenAlertHours, Group: SettingGroupPOS, Type: SettingTypeNumber,
+		Label:   "Nhắc khi ca mở quá (giờ)",
+		Default: "24", Required: true, MaxNum: 720,
 	},
 	{
 		Key: SettingStaffDefaultPassword, Group: SettingGroupPOS, Type: SettingTypeText,

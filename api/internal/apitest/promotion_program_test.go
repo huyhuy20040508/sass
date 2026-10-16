@@ -40,6 +40,7 @@ func ctkmThan(a *cuaHang, ten string, loai int, duyet bool, dong []map[string]an
 func TestChuongTrinhKhuyenMai_V2(t *testing.T) {
 	h := dungHeThong(t)
 	a, _ := haiCuaHang(t, h)
+	moCa(t, h, a, 0)
 	goc := "/api/v1/admin/chuong-trinh-khuyen-mai"
 
 	// Loại 0 — phiếu bán hàng: bậc thấp (đơn ≥ 10.000đ) giảm 5.000đ + tặng 1 cái; bậc cao không ai đạt.

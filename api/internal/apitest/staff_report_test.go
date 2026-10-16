@@ -126,8 +126,8 @@ func TestBaoCaoCa_NgoaiCaVaOnline(t *testing.T) {
 	h := dungHeThong(t)
 	a, _ := haiCuaHang(t, h)
 
-	// Quầy bán được khi chưa ai mở ca.
-	banQuay(t, h, a, "cash", 1)
+	// Đơn quầy không thuộc ca nào (dữ liệu từ trước khi chặn bán ngoài ca).
+	banQuayNgoaiCa(t, h, a, "cash", 1)
 	gieoDonWebDaThu(t, h, a, "dh-nv", a.nhanVien, 50000)
 	gieoDonWebDaThu(t, h, a, "dh-khach", a.khach, 70000)
 	bc := docBaoCaoNV(t, h, a, "")
@@ -162,7 +162,7 @@ func TestBaoCaoCa_DongCaRoiBan(t *testing.T) {
 		map[string]any{"counted_cash": 90000}); res.ma != http.StatusOK {
 		t.Fatalf("đóng ca trả %d\n%s", res.ma, catBot(res.than))
 	}
-	banQuay(t, h, a, "cash", 2)
+	banQuayNgoaiCa(t, h, a, "cash", 2)
 
 	bc := docBaoCaoNV(t, h, a, "")
 	if r, _ := dongLoai(bc, domain.CaLoaiCa, a.quanTri, ca); r.OrderCount != 1 || r.Revenue != 90000 {

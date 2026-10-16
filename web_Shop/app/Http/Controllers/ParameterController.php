@@ -27,6 +27,12 @@ class ParameterController extends Controller
             'title' => 'Quy tắc đánh số chứng từ',
             'sub' => 'Đặt hình dạng mã cho từng loại chứng từ và danh mục. Chỉ áp cho phiếu lập SAU khi lưu — mã cũ giữ nguyên.',
         ],
+        // Trang v2 riêng (DeviceSettingController) — có mặt ở đây để thanh bên
+        // của các trang Thông số chung còn ở giao diện cũ cũng dẫn tới nó.
+        'devices' => [
+            'title' => DeviceSettingController::TITLE,
+            'sub' => 'Máy in, mẫu in và máy quẹt thẻ của chi nhánh.',
+        ],
     ];
 
     /**

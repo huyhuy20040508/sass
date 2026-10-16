@@ -471,6 +471,23 @@ class StaffController extends Controller
      * một việc API không làm được: dọn tệp ảnh trên ổ đĩa của Shop Admin. Dọn SAU
      * khi API nhận, vì API còn có thể từ chối (còn ca chưa đóng, đã ghi sổ quỹ).
      */
+    /** Tab Nhật ký của hộp xem hồ sơ — gọi ngầm, trả JSON. */
+    public function nhatKy(Request $request, int $id)
+    {
+        try {
+            $res = $this->api->nhatKyNhanSu($id, max(1, (int) $request->query('page', 1)));
+        } catch (\Throwable $e) {
+            Log::error('Load employee log failed', ['id' => $id, 'msg' => $e->getMessage()]);
+
+            return response()->json(['message' => 'Không tải được nhật ký. Kiểm tra kết nối API.'], 502);
+        }
+        if (! $res->successful()) {
+            return response()->json(['message' => $res->json('message') ?: 'Không tải được nhật ký.'], $res->status() >= 500 ? 502 : $res->status());
+        }
+
+        return response()->json(['data' => $res->json('data')]);
+    }
+
     public function destroy(Request $request, int $id)
     {
         $anh = trim((string) $request->input('avatar', ''));

@@ -22,6 +22,7 @@ import (
 func TestBanTaiQuay_GiamDonPhuThuThue(t *testing.T) {
 	h := dungHeThong(t)
 	a, _ := haiCuaHang(t, h)
+	moCa(t, h, a, 0)
 
 	ctx := tenant.WithoutScope(context.Background(), "test: đặt thuế suất cho mặt hàng gieo sẵn")
 	if err := h.db.WithContext(ctx).Exec("UPDATE products SET vat = 10 WHERE id = ? AND tenant_id = ?", a.sanPham, a.id).Error; err != nil {
@@ -107,6 +108,7 @@ func TestBanTaiQuay_GiamDonPhuThuThue(t *testing.T) {
 func TestBanTaiQuay_GiamDonVuotQuyenNhanVien(t *testing.T) {
 	h := dungHeThong(t)
 	a, _ := haiCuaHang(t, h)
+	moCa(t, h, a, 0)
 	thuNgan := h.dangNhapVoi(t, a.ma, "nhanvien")
 
 	truoc := tonCua(t, h, a, a.chiNhanh, a.bienThe)
@@ -144,6 +146,7 @@ func TestBanTaiQuay_GiamDonVuotQuyenNhanVien(t *testing.T) {
 func TestBanTaiQuay_ThemKhachTaiQuay(t *testing.T) {
 	h := dungHeThong(t)
 	a, b := haiCuaHang(t, h)
+	moCa(t, h, a, 0)
 	thuNgan := h.dangNhapVoi(t, a.ma, "nhanvien")
 
 	ten := "Khách quầy " + a.vet
@@ -206,6 +209,7 @@ func TestBanTaiQuay_ThemKhachTaiQuay(t *testing.T) {
 func TestBanTaiQuay_HoaDonDienTuTaiQuay(t *testing.T) {
 	h := dungHeThong(t)
 	a, _ := haiCuaHang(t, h)
+	moCa(t, h, a, 0)
 	thuNgan := h.dangNhapVoi(t, a.ma, "nhanvien")
 
 	res := h.goi(t, thuNgan, http.MethodPost, "/api/v1/admin/orders/pos", map[string]any{

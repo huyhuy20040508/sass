@@ -57,7 +57,34 @@ class PosController extends Controller
             'thanhVien' => $this->thanhVien(),
             'nganHang' => $this->nganHang(),
             'phuongThuc' => $this->phuongThuc(),
+            'caMo' => $this->caMo(),
+            'quaLau' => WorkShiftController::caMoQuaLau($this->caDangMo, $this->api),
+            // Luôn nạp: ca có thể bị đóng ở máy khác giữa giờ, lúc đó quầy khoá và cần hộp Mở ca.
+            'truc' => WorkShiftController::nguoiTrucKet($this->api),
         ]);
+    }
+
+    /**
+     * Chi nhánh đang có ca mở không. null = không hỏi được: khi đó màn không tự
+     * khoá — API vẫn chặn lúc chốt đơn và màn khoá theo mã CHUA_MO_CA.
+     */
+    /** Ca đang mở đọc được ở caMo() — cho dải nhắc "ca mở quá lâu". */
+    protected ?array $caDangMo = null;
+
+    protected function caMo(): ?bool
+    {
+        try {
+            $res = $this->api->caHienTai();
+            if ($res->successful()) {
+                $this->caDangMo = $res->json('data');
+
+                return $this->caDangMo !== null;
+            }
+        } catch (\Throwable $e) {
+            Log::info('Load current shift for POS failed', ['msg' => $e->getMessage()]);
+        }
+
+        return null;
     }
 
     /**
@@ -511,13 +538,83 @@ class PosController extends Controller
     /**
      * Phiếu tính tiền khổ in nhiệt. Trang riêng vì khổ 58/80mm cần @page riêng —
      * nhét vào màn bán hàng thì mỗi Ctrl+P vô tình cũng nhả ra một tờ phiếu.
+     *
+     * ?nhung=1: màn quầy nạp trang vào khung ẩn rồi tự gọi in (không mở tab mới),
+     * nên trang không tự in và không vẽ thanh nút.
      */
     public function phieu(int $id)
     {
         if ($ve = $this->veQuayNeuThieuView('v2::pos.receipt')) {
             return $ve;
         }
+        $don = $this->donDeIn($id);
+        $chiNhanh = (int) ($don['shop_id'] ?? 0);
+        $mau = $this->mauIn('hd', $chiNhanh);
 
+        return view('v2::pos.receipt', $this->duLieuPhieu($don, $mau, $this->qrCuaDon($don, $mau)) + [
+            // ?paper= / ?ban= (nút "Đổi sang khổ…", hộp In lại) thắng khổ và số bản của mẫu.
+            'khoGiay' => self::khoGiay(request()->query('paper') ?? ($mau['settings']['kho'] ?? '80')),
+            'soBan' => self::soBan(request()->query('ban') ?? ($mau['settings']['ban'] ?? 1)),
+            'tuIn' => ! request()->boolean('nhung'),
+        ]);
+    }
+
+    /** Hoá đơn khổ A5 / A4 (?kho=a4) cho máy in văn phòng — mẫu "Hoá đơn A5/A4". */
+    public function hoaDonA(int $id)
+    {
+        $don = $this->donDeIn($id);
+        $kho = request()->query('kho') === 'a4' ? 'a4' : 'a5';
+        $mau = $this->mauIn($kho, (int) ($don['shop_id'] ?? 0));
+
+        return view('v2::pos.invoice-a', $this->duLieuPhieu($don, $mau, $this->qrCuaDon($don, $mau)) + [
+            'khoGiay' => $kho,
+            'soBan' => self::soBan(request()->query('ban') ?? ($mau['settings']['ban'] ?? 1)),
+            'tuIn' => ! request()->boolean('nhung'),
+        ]);
+    }
+
+    /** Phiếu trả hàng khổ nhiệt — mẫu "Phiếu trả hàng" của chi nhánh lập phiếu. */
+    public function phieuTra(int $id)
+    {
+        $this->tatDebugbar();
+        try {
+            $res = $this->api->posPhieuTra($id);
+        } catch (\Throwable $e) {
+            Log::error('Thu ngan: tai phieu tra that bai', ['id' => $id, 'msg' => $e->getMessage()]);
+            abort(404);
+        }
+        abort_unless($res->successful(), 404);
+        $tra = $res->json('data') ?? [];
+
+        // Dòng trả không chụp ĐVT: lấy theo dòng của đơn gốc.
+        $dvt = collect($tra['order']['items'] ?? [])->pluck('unit_name', 'id');
+        $tra['items'] = array_map(fn ($it) => $it + ['unit_name' => (string) ($dvt[$it['order_item_id'] ?? 0] ?? '')], (array) ($tra['items'] ?? []));
+
+        $mau = $this->mauIn('tra', (int) ($tra['shop_id'] ?? 0));
+        $caiDat = (array) ($mau['settings'] ?? []);
+
+        return view('v2::pos.return-slip', [
+            'tra' => $tra,
+            'tenCuaHang' => $this->api->settingString('site_name', config('app.name')),
+            'diaChi' => $this->api->settingString('store_address'),
+            'hien' => self::hienTheoMau($mau),
+            'khoGiay' => self::khoGiay(request()->query('paper') ?? ($caiDat['kho'] ?? '80')),
+            'soBan' => self::soBan(request()->query('ban') ?? ($caiDat['ban'] ?? 1)),
+            'tuIn' => ! request()->boolean('nhung'),
+        ]);
+    }
+
+    /** Trang in đi thẳng ra máy in: debugbar (bản dev) chèn thanh công cụ vào cuối trang thì Chrome in thêm một tờ thừa. */
+    protected function tatDebugbar(): void
+    {
+        if (app()->bound('debugbar')) {
+            app('debugbar')->disable();
+        }
+    }
+
+    protected function donDeIn(int $id): array
+    {
+        $this->tatDebugbar();
         try {
             $res = $this->api->order($id);
         } catch (\Throwable $e) {
@@ -526,12 +623,100 @@ class PosController extends Controller
         }
         abort_unless($res->successful(), 404);
 
-        return view('v2::pos.receipt', [
-            'don' => $res->json('data') ?? [],
+        return $res->json('data') ?? [];
+    }
+
+    /**
+     * Mẫu in của chi nhánh BÁN RA đơn (Cài đặt → Thông số chung → Cài đặt thiết
+     * bị), không phải chi nhánh của phiên. Hỏng thì null — in như cũ, đủ mọi dòng:
+     * phiếu ra được còn hơn không.
+     */
+    protected function mauIn(string $ma, int $chiNhanh): ?array
+    {
+        try {
+            $r = $this->api->theoChiNhanh($chiNhanh, fn () => $this->api->mauInQuay($ma));
+
+            return $r->successful() ? $r->json('data') : null;
+        } catch (\Throwable $e) {
+            Log::warning('Thu ngan: tai mau in that bai', ['ma' => $ma, 'msg' => $e->getMessage()]);
+
+            return null;
+        }
+    }
+
+    /** QR chỉ có nghĩa với đơn trả bằng chuyển khoản; đơn tiền mặt / thẻ mà in QR thì khách tưởng phải chuyển thêm. */
+    protected function qrCuaDon(array $don, ?array $mau): string
+    {
+        return self::hienTheoMau($mau)('qr') && ($don['payment_method'] ?? '') === 'bank_transfer'
+            ? $this->qrChuyenKhoan($don, (int) ($don['shop_id'] ?? 0))
+            : '';
+    }
+
+    /** Dòng không có trong mẫu (API hỏng, mẫu cũ) thì in — thiếu còn tệ hơn thừa. */
+    public static function hienTheoMau(?array $mau): \Closure
+    {
+        $dong = (array) ($mau['options'] ?? []);
+
+        return fn (string $ma) => (bool) ($dong[$ma] ?? true);
+    }
+
+    public static function khoGiay(mixed $kho): string
+    {
+        return (string) $kho === '58' ? '58' : '80';
+    }
+
+    public static function soBan(mixed $ban): int
+    {
+        return max(1, min(99, (int) $ban));
+    }
+
+    /**
+     * Phần chung của phiếu thật và ô xem trước trong Cài đặt thiết bị — một chỗ
+     * quyết định dòng nào in, để xem trước không lệch tờ in ra.
+     *
+     * Chỉ logo cửa hàng tự tải lên: không in logo mặc định của nền tảng lên phiếu
+     * của khách.
+     */
+    public function duLieuPhieu(array $don, ?array $mau, string $qr): array
+    {
+        $hien = self::hienTheoMau($mau);
+        $caiDat = (array) ($mau['settings'] ?? []);
+
+        return [
+            'don' => $don,
             'tenCuaHang' => $this->api->settingString('site_name', config('app.name')),
             'diaChi' => $this->api->settingString('store_address'),
             'dienThoai' => $this->api->settingString('contact_phone'),
-            'khoGiay' => request()->query('paper') === '58' ? '58' : '80',
+            'logo' => $hien('logo') ? $this->duongDanAnh($this->api->settingString('store_logo')) : '',
+            'qr' => $qr,
+            'hien' => $hien,
+            'loiChao' => (string) ($caiDat['footer_txt'] ?? 'Cảm ơn quý khách!'),
+            'wifi' => trim((string) ($caiDat['wifi_txt'] ?? '')),
+            'chinhSach' => trim((string) ($caiDat['chinhsach_txt'] ?? '')),
+        ];
+    }
+
+    /** Ảnh lưu đường dẫn tương đối (tải lên máy chủ web) thì đổi ra địa chỉ đầy đủ. */
+    protected function duongDanAnh(string $anh): string
+    {
+        return $anh !== '' && ! preg_match('#^(https?:|data:)#i', $anh) ? asset(ltrim($anh, '/')) : $anh;
+    }
+
+    /**
+     * Ảnh QR chuyển khoản đúng số tiền của đơn, vào tài khoản mặc định của chi
+     * nhánh bán ra đơn — cùng cách màn quầy vẽ QR (qr.sepay.vn). Chưa có tài khoản
+     * thì lùi về ảnh QR tĩnh đã tải lên; không có cả hai thì bỏ dòng QR.
+     */
+    protected function qrChuyenKhoan(array $don, int $chiNhanh): string
+    {
+        $tong = (int) round((float) ($don['total_amount'] ?? 0));
+        $nh = $this->api->theoChiNhanh($chiNhanh, fn () => $this->nganHang());
+        if ($tong <= 0 || ($nh['ten'] ?? '') === '' || ($nh['so'] ?? '') === '') {
+            return (string) ($nh['anh'] ?? '');
+        }
+
+        return 'https://qr.sepay.vn/img?'.http_build_query([
+            'acc' => $nh['so'], 'bank' => $nh['ten'], 'amount' => $tong, 'des' => 'TT '.($don['order_code'] ?? ''),
         ]);
     }
 

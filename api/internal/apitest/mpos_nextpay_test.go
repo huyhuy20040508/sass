@@ -11,6 +11,7 @@ import (
 	"sync"
 	"testing"
 
+	"sass-api/internal/domain"
 	"sass-api/pkg/nextpay"
 )
 
@@ -147,6 +148,7 @@ func TestMpos_QRTaiQuay(t *testing.T) {
 	g := dungNextPayGia(t)
 	h := dungHeThong(t)
 	a, _ := haiCuaHang(t, h)
+	moCa(t, h, a, 0)
 	qr := docPMQR(t, h, a)
 	if r := h.goi(t, a.token, http.MethodPost, fmt.Sprintf("/api/v1/admin/payment-methods/%d/details", qr), map[string]any{
 		"detail_type": "mpos_qr", "data": khoaMPOS(map[string]string{"mpos_type": "VAQR"}),
@@ -182,6 +184,10 @@ func TestMpos_QRTaiQuay(t *testing.T) {
 	if tt := h.goi(t, thuNgan, http.MethodGet, "/api/v1/admin/orders/pos/payments/"+d.Payment.Transaction, nil); !strings.Contains(tt.than, `"paid":true`) {
 		t.Fatalf("màn quầy hỏi phải thấy đã trả: %s", catBot(tt.than))
 	}
+	// Tiền QR về sau lúc tạo đơn: vẫn phải có phiếu thu (chuyển khoản — không qua két).
+	if so, tong, ht := phieuThuDon(t, h, d.OrderID); so != 1 || tong != d.Total || ht != domain.ThuChiChuyenKhoan {
+		t.Fatalf("QR về phải sinh 1 phiếu thu chuyển khoản %.0f, nhận %d / %v / %s", d.Total, so, tong, ht)
+	}
 
 	// Huỷ mã: đơn huỷ, NextPay nhận REMOVE_QR.
 	_, d2 := banQuayTT(t, h, thuNgan, a, map[string]any{"payment_method": "mpos_qr"})
@@ -215,6 +221,23 @@ func TestMpos_QRTaiQuay(t *testing.T) {
 	}
 	if tt := h.goi(t, thuNgan, http.MethodGet, "/api/v1/admin/orders/pos/payments/"+d4.Payment.Transaction, nil); !strings.Contains(tt.than, `"paid":true`) || strings.Contains(tt.than, "lech_tien") {
 		t.Fatalf("đã trả đủ thì hết câu nhắc lệch tiền, nhận %s", catBot(tt.than))
+	}
+
+	// Mã QR đang chờ mà thu tay ở màn Đơn hàng: huỷ mã ở cổng trước (không thu hai
+	// lần), rồi đơn quầy hoàn tất.
+	_, d5 := banQuayTT(t, h, thuNgan, a, map[string]any{"payment_method": "mpos_qr"})
+	if r := h.goi(t, a.token, http.MethodPost, fmt.Sprintf("/api/v1/admin/orders/%d/payments", d5.OrderID), map[string]any{"amount": d5.Total, "payment_method": "cash"}); r.ma >= 300 {
+		t.Fatalf("thu tay đơn chờ QR trả %d %s", r.ma, catBot(r.than))
+	}
+	if g.co("REMOVE_QR", d5.OrderCode) == nil {
+		t.Fatalf("thu tay đơn chờ QR phải huỷ mã ở NextPay: %+v", g.ds())
+	}
+	if st, pay, _, _ := cotDon(t, h, d5.OrderID); st != "completed" || pay != "paid" {
+		t.Fatalf("thu đủ đơn chờ QR phải hoàn tất, nhận %s %s", st, pay)
+	}
+	baoTienNP(t, h, ma, khoaNextPayTest, map[string]any{"transStatus": 104, "orderId": d5.OrderCode, "amount": d5.Total, "transCode": "NP5"})
+	if so, _, _ := phieuThuDon(t, h, d5.OrderID); so != 1 {
+		t.Fatalf("QR tới muộn sau khi đã thu tay không được sinh phiếu thu thứ hai, nhận %d phiếu", so)
 	}
 
 	// Kiểm tra kết nối: tạo thử rồi huỷ ngay một mã 3.000đ.
@@ -256,6 +279,7 @@ func TestMpos_MayQuetThe(t *testing.T) {
 	g := dungNextPayGia(t)
 	h := dungHeThong(t)
 	a, _ := haiCuaHang(t, h)
+	moCa(t, h, a, 0)
 	may := idTra(t, h.goi(t, a.token, http.MethodPost, "/api/v1/admin/payment-devices", map[string]any{"code": "SN" + a.vet, "name": "mPOS quay 1", "is_physical": false}))
 	qt, _, _ := docPM(t, h, a.token).pt(5)
 	data := khoaMPOS(map[string]string{"bank_id": "970436", "bank_account": "0071", "bank_account_name": "A", "card_fee_foreign": "2.4", "card_fee_local": "0.5"})
@@ -324,6 +348,15 @@ func TestMpos_MayQuetThe(t *testing.T) {
 	}
 	if g.co("REMOVE_ORDER_INFOR", d2.OrderCode) == nil {
 		t.Fatalf("đổi sang tiền mặt phải huỷ lệnh trên máy: %+v", g.ds())
+	}
+	// Đổi sang tiền mặt ở quầy: phiếu thu tiền mặt + một dòng sổ quỹ (két) cho đơn.
+	if so, tong, ht := phieuThuDon(t, h, d2.OrderID); so != 1 || tong != d2.Total || ht != domain.ThuChiTienMat {
+		t.Fatalf("đổi sang tiền mặt phải sinh 1 phiếu thu tiền mặt %.0f, nhận %d / %v / %s", d2.Total, so, tong, ht)
+	}
+	var quy float64
+	h.db.WithContext(ctxThoat()).Raw("SELECT COALESCE(SUM(amount),0) FROM cash_entries WHERE reference_id = ? AND direction = 'in'", d2.OrderID).Scan(&quy)
+	if quy != d2.Total {
+		t.Fatalf("đổi sang tiền mặt phải vào két (sổ quỹ) %.0f, nhận %.0f", d2.Total, quy)
 	}
 	baoTienNP(t, h, ma, khoaNextPayTest, map[string]any{"transStatus": 100, "orderID": d2.OrderCode, "amount": d2.Total, "issuerCode": "VISA"})
 	if _, pay, _, phi := cotDon(t, h, d2.OrderID); pay != "paid" || phi != 0 {

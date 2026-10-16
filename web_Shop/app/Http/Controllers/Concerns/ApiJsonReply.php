@@ -28,10 +28,13 @@ trait ApiJsonReply
         }
 
         if (! $res->successful()) {
-            return response()->json(
-                ['message' => $res->json('message') ?: $cauMacDinh],
-                $res->status() === 500 ? 502 : $res->status()
-            );
+            $tra = ['message' => $res->json('message') ?: $cauMacDinh];
+            // Mã máy đọc (errors.ma) đi theo: màn hình rẽ nhánh theo mã, không theo câu chữ.
+            if ($ma = $res->json('errors.ma')) {
+                $tra['errors'] = ['ma' => $ma];
+            }
+
+            return response()->json($tra, $res->status() === 500 ? 502 : $res->status());
         }
 
         return response()->json(['data' => $res->json('data')]);

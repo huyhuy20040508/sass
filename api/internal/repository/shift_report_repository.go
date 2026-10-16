@@ -30,7 +30,7 @@ func (r *caLamViecRepository) BaoCaoKetCa(
 
 	// ---- 1. id của mọi ca khớp bộ lọc ----
 	q := r.db.WithContext(ctx).Table("work_shifts ws").
-		Where("ws.opened_at >= ? AND ws.opened_at < ?", f.From, f.To)
+		Where("((ws.closed_at IS NULL AND ws.opened_at < ?) OR (ws.closed_at >= ? AND ws.closed_at < ?))", f.To, f.From, f.To)
 	if f.ShopID > 0 {
 		q = q.Where("ws.shop_id = ?", f.ShopID)
 	}
@@ -45,7 +45,7 @@ func (r *caLamViecRepository) BaoCaoKetCa(
 	}
 
 	var ids []uint
-	if err := q.Order("ws.opened_at DESC, ws.id DESC").Pluck("ws.id", &ids).Error; err != nil {
+	if err := q.Order("ws.closed_at IS NULL DESC, ws.closed_at DESC, ws.id DESC").Pluck("ws.id", &ids).Error; err != nil {
 		return nil, 0, tong, err
 	}
 	total := int64(len(ids))
@@ -110,7 +110,7 @@ func (r *caLamViecRepository) BaoCaoKetCa(
 		Joins("LEFT JOIN users uc ON uc.id = ws.closed_by").
 		Joins("LEFT JOIN employees e ON e.user_id = ws.opened_by").
 		Where("ws.id IN ?", trang).
-		Order("ws.opened_at DESC, ws.id DESC").
+		Order("ws.closed_at IS NULL DESC, ws.closed_at DESC, ws.id DESC").
 		Scan(&rows).Error
 	if err != nil {
 		return nil, 0, tong, err

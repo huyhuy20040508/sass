@@ -53,6 +53,7 @@ func tenKhach(ds []khachCRM) []string {
 func TestCRMKhachHang_BoLocVaCotMoi(t *testing.T) {
 	h := dungHeThong(t)
 	a, _ := haiCuaHang(t, h)
+	moCa(t, h, a, 0)
 	vet := fmt.Sprintf("crm%d", time.Now().UnixNano()%1e9)
 	homNay := time.Now()
 

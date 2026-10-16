@@ -59,6 +59,7 @@ func batQuetThe(t *testing.T, h *heThong, c *cuaHang, tenMay, tyLe string) uint 
 func TestPhiThe_PhieuChiVaChiTietDon(t *testing.T) {
 	h := dungHeThong(t)
 	a, _ := haiCuaHang(t, h)
+	moCa(t, h, a, 0)
 	// Cửa hàng thật được gieo sẵn loại này (0057 / lượt tạo cửa hàng); bộ test thì không.
 	if r := h.goi(t, a.token, http.MethodPost, "/api/v1/admin/loai-thu-chi", map[string]any{"type": 1, "name": domain.LoaiChiPhiThanhToan}); r.ma != http.StatusCreated {
 		t.Fatalf("tạo loại chi trả %d %s", r.ma, catBot(r.than))
@@ -125,6 +126,7 @@ func TestPhiThe_PhieuChiVaChiTietDon(t *testing.T) {
 func TestPhiThe_DoiQRSangThe(t *testing.T) {
 	h := dungHeThong(t)
 	a, _ := haiCuaHang(t, h)
+	moCa(t, h, a, 0)
 	ketNoiSePay(t, h, a)
 	ct := batQuetThe(t, h, a, "May 2", "2")
 
@@ -147,6 +149,7 @@ func TestPhiThe_DoiQRSangThe(t *testing.T) {
 func TestPhiThe_BaoCao(t *testing.T) {
 	h := dungHeThong(t)
 	a, b := haiCuaHang(t, h)
+	moCa(t, h, a, 0)
 	batQuetThe(t, h, a, "May A", "1.5")
 	batQuetThe(t, h, b, "May B", "3")
 

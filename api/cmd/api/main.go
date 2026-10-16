@@ -447,6 +447,7 @@ func main() {
 	// đơn hiện ngay ở trang tài khoản của khách, không cần tải lại trang.
 	hub := realtime.NewHub()
 	notifSvc := service.NewNotificationService(notifRepo, hub)
+	caSvc.DungCanhBaoLech(notifSvc, settingSvc)
 	// Cổng thanh toán PayOS. Dựng TRƯỚC orderSvc vì đặt hàng cần nó để xin link;
 	// chiều ngược lại paymentSvc chỉ dùng orderRepo nên hai bên không tham chiếu vòng.
 	paymentSvc := service.NewPaymentService(paymentRepo, orderRepo, payosClient, cfg.PayOS, sepayClient, notifSvc, etaxSvc)
@@ -502,6 +503,7 @@ func main() {
 		NhanSu:        handler.NewNhanSuHandler(nhanSuSvc),
 		NhomQuyen:     handler.NewNhomQuyenHandler(nhomQuyenSvc),
 		QuyTacMa:      handler.NewQuyTacMaHandler(quyTacMaSvc),
+		ThietBi:       handler.NewThietBiHandler(service.NewThietBiService(repository.NewThietBiRepository(db))),
 		Thue:          handler.NewThueHandler(thueSvc),
 		DonViTinh:     handler.NewDonViTinhHandler(donViTinhSvc),
 		LoaiThuChi:    handler.NewLoaiThuChiHandler(loaiThuChiSvc),

@@ -73,6 +73,12 @@ const (
 	// xuống đúng một trang. Shop Admin đọc mã này để đưa người dùng về trang gói
 	// dịch vụ thay vì xoá session và đá ra màn hình đăng nhập.
 	MaCuaHangKhoa = "CUA_HANG_KHOA"
+	// MaKetAm: khoản chi tay lớn hơn tiền đang có trong két theo sổ. Màn ca hỏi lại
+	// người trực rồi gửi lại kèm `xac_nhan_am` — không chỉ in câu lỗi ra.
+	MaKetAm = "KET_AM"
+	// MaChuaMoCa: bán / thu tiền ở quầy khi chi nhánh chưa mở ca. Màn quầy khoá lại
+	// và mời mở ca ngay tại chỗ.
+	MaChuaMoCa = "CHUA_MO_CA"
 )
 
 // ErrorMa trả lỗi kèm MÃ máy đọc được trong `errors.ma`.

@@ -412,7 +412,7 @@ func (r *orderReturnRepository) LockAndUpdate(
 				}
 			}
 			if effects.RecordRefund {
-				if err := recordRefund(tx, &rt); err != nil {
+				if err := recordRefund(tx, &rt, effects.ActorID); err != nil {
 					return err
 				}
 			}
@@ -621,7 +621,7 @@ func settleOrderIfFullyReturned(tx *gorm.DB, rt *domain.OrderReturn, actorID uin
 // Ghi vào payments chứ không chỉ đổi orders.payment_status: kế toán cần biết
 // hoàn bao nhiêu, hoàn lúc nào, theo phiếu nào — orders chỉ giữ được trạng thái
 // cuối cùng.
-func recordRefund(tx *gorm.DB, rt *domain.OrderReturn) error {
+func recordRefund(tx *gorm.DB, rt *domain.OrderReturn, actorID uint) error {
 	var o domain.Order
 	if err := tx.First(&o, rt.OrderID).Error; err != nil {
 		return err
@@ -631,12 +631,13 @@ func recordRefund(tx *gorm.DB, rt *domain.OrderReturn) error {
 	}
 
 	now := time.Now()
-	// payments.provider là enum của các cổng THANH TOÁN, không có "tiền mặt" hay
-	// "ví". Chuyển khoản khớp thẳng được, các cách hoàn còn lại ghi theo phương
-	// thức khách đã trả tiền — mã phiếu và số tiền mới là thứ dùng để đối soát.
+	// provider là cách tiền THẬT SỰ ra khỏi cửa hàng (0087 thêm cash/ewallet vào
+	// enum) — đơn chuyển khoản hoàn tiền mặt thì phiếu chi phải là tiền mặt.
+	// Phiếu không ghi cách hoàn thì lùi về cách khách đã trả.
 	provider := o.PaymentMethod
-	if rt.RefundMethod == "bank_transfer" {
-		provider = "bank_transfer"
+	switch rt.RefundMethod {
+	case domain.PaymentMethodCash, domain.PaymentMethodBank, "ewallet":
+		provider = rt.RefundMethod
 	}
 
 	if err := tx.Create(&domain.Payment{
@@ -651,6 +652,28 @@ func recordRefund(tx *gorm.DB, rt *domain.OrderReturn) error {
 		return err
 	}
 
+	// Hoàn tiền mặt là tiền ra khỏi KÉT: phải vào sổ quỹ của ca (két của chi
+	// nhánh bán đơn), không thì đóng ca báo thiếu đúng bằng khoản hoàn.
+	// GhiThuChiTuSinh bên dưới cố ý không đụng sổ quỹ nên luồng này tự ghi,
+	// như đổi hàng.
+	returnID := rt.ID
+	if provider == domain.PaymentMethodCash {
+		quy := &domain.SoQuy{
+			ShopID:        o.ShopID,
+			Direction:     domain.SoQuyChi,
+			Amount:        rt.RefundAmount,
+			Reason:        "Hoàn tiền trả hàng " + rt.ReturnCode,
+			ReferenceType: domain.SoQuyTuTraHang,
+			ReferenceID:   &returnID,
+		}
+		if actorID > 0 {
+			quy.CreatedBy = &actorID
+		}
+		if err := ghiSoQuy(tx, quy); err != nil {
+			return err
+		}
+	}
+
 	// Tiền hoàn cho khách vào SỔ THU CHI — phiếu CHI, ngay tại lúc hoàn.
 	//
 	// Chi nhánh lấy từ ĐƠN GỐC, không phải nơi người bấm đang đứng: tiền ra khỏi
@@ -659,7 +682,6 @@ func recordRefund(tx *gorm.DB, rt *domain.OrderReturn) error {
 	// Phương thức suy từ `provider` vừa dựng ở trên thay vì tự đọc lại
 	// `rt.RefundMethod`: hai chỗ đọc hai kiểu là một ngày nào đó sổ thu chi ghi
 	// tiền mặt trong khi sổ thanh toán ghi chuyển khoản.
-	returnID := rt.ID
 	if err := GhiThuChiTuSinh(tx.Statement.Context, tx, &domain.ThuChi{
 		ShopID:        o.ShopID,
 		Type:          domain.ThuChiPhieuChi,

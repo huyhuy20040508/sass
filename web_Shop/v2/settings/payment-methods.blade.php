@@ -136,16 +136,89 @@
         .pm-so { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 50%;
                  background: var(--pm-navy); color: #fff; font-size: 11px; transform: translateY(-1px); }
 
-        .pm-hai-cot { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 20px; }
-        .pm-qr-xem { align-self: start; padding: 14px; border: 1px dashed #b9c3d9; border-radius: 10px; background: var(--pm-nen); transition: opacity .15s; }
-        .pm-qr-xem.tat { opacity: .5; }
-        .pm-qr-nhan { margin-bottom: 10px; color: var(--pm-mo); font-size: 11.5px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; }
-        .pm-qr-than { display: flex; flex-direction: column; align-items: center; gap: 12px; }
-        .pm-qr-ma { display: inline-flex; align-items: center; justify-content: center; width: 112px; height: 112px; border-radius: 10px;
-                    background: #fff; color: var(--pm-navy); font-size: 84px; box-shadow: 0 1px 2px rgba(16, 24, 40, .08); }
-        .pm-qr-than dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 10px; width: 100%; margin: 0; font-size: 13px; }
-        .pm-qr-than dt { color: var(--pm-mo); font-weight: 400; white-space: nowrap; }
-        .pm-qr-than dd { margin: 0; color: #111827; font-weight: 500; overflow-wrap: anywhere; }
+        .pm-hai-cot { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 20px; }
+        /* Xem trước: thẻ VietQR như khách thấy ở quầy / website — mã quét được thật. */
+        .pm-qr-xem { align-self: start; padding: 12px; border-radius: 12px; background: var(--pm-nen); }
+        .pm-qr-nhan { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px;
+                      color: var(--pm-mo); font-size: 11.5px; font-weight: 700; letter-spacing: .6px !important; text-transform: uppercase; }
+        .pm-qr-nhan .pm-chip { letter-spacing: normal !important; text-transform: none; }
+        .vq { position: relative; overflow: hidden; border: 1px solid var(--pm-vien); border-radius: 12px; background: #fff;
+              box-shadow: 0 1px 2px rgba(16, 24, 40, .06), 0 4px 12px rgba(16, 24, 40, .05); transition: filter .15s, opacity .15s; }
+        .vq-dau { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid #eef1f6; }
+        .vq-logo { font-size: 17px; font-weight: 800; letter-spacing: -.3px !important; line-height: 1; }
+        .vq-logo b { color: #da251d; font-weight: 800; } .vq-logo span { color: #0a3a8c; }
+        .vq-napas { color: #0a3a8c; font-size: 11px; font-weight: 700; letter-spacing: .2px !important; }
+        .vq-napas i { color: #da251d; font-style: normal; }
+        .vq-ma { position: relative; width: 176px; height: 176px; margin: 14px auto 10px; }
+        .vq-ma svg { display: block; width: 100%; height: 100%; }
+        .vq-goc { position: absolute; width: 22px; height: 22px; border: 3px solid #da251d; }
+        .vq-goc.a { top: -8px; left: -8px; border-right: 0; border-bottom: 0; border-top-left-radius: 6px; }
+        .vq-goc.b { top: -8px; right: -8px; border-left: 0; border-bottom: 0; border-top-right-radius: 6px; }
+        .vq-goc.c { bottom: -8px; left: -8px; border-right: 0; border-top: 0; border-bottom-left-radius: 6px; }
+        .vq-goc.d { bottom: -8px; right: -8px; border-left: 0; border-top: 0; border-bottom-right-radius: 6px; }
+        .vq-trong { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+                    padding: 14px; border-radius: 8px; background: repeating-linear-gradient(45deg, #f6f7fb 0 8px, #fff 8px 16px);
+                    color: var(--pm-mo); font-size: 12.5px; line-height: 1.4; text-align: center; }
+        .vq-trong i { color: #c3cad9; font-size: 34px; }
+        .vq-nh { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 0 14px; }
+        .vq-nh-ic { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; min-width: 30px; height: 22px; padding: 0 6px;
+                    border-radius: 6px; background: #0a3a8c; color: #fff; font-size: 10.5px; font-weight: 700; letter-spacing: .2px !important; }
+        .vq-nh-ic[hidden] { display: none; }
+        .vq-nh b { color: #111827; font-size: 13.5px; font-weight: 600; }
+        .vq-chu { margin: 6px 14px 0; color: #111827; font-size: 15px; font-weight: 700; text-align: center; overflow-wrap: anywhere; }
+        .vq-so { margin: 2px 14px 12px; color: #0a3a8c; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+                 font-size: 15px; font-weight: 600; letter-spacing: .5px !important; text-align: center; overflow-wrap: anywhere; }
+        .vq-chu.mo, .vq-so.mo { color: #b4bccb; font-weight: 500; }
+        .vq-ds { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 10px; margin: 0; padding: 10px 14px 12px;
+                 border-top: 1px dashed #dfe4ee; background: #fafbfd; font-size: 12.5px; }
+        .vq-ds dt { color: var(--pm-mo); font-weight: 400; white-space: nowrap; }
+        .vq-ds dd { margin: 0; color: #111827; font-weight: 600; text-align: right; overflow-wrap: anywhere; }
+        .vq-ds dd small { display: block; color: var(--pm-mo); font-size: 11.5px; font-weight: 400; }
+        .vq-tat { position: absolute; top: 46px; left: 50%; transform: translateX(-50%); padding: 4px 10px; border-radius: 999px;
+                  background: #374151; color: #fff; font-size: 12px; font-weight: 600; white-space: nowrap; }
+        .pm-qr-xem.tat .vq > :not(.vq-tat) { filter: grayscale(1); opacity: .45; }
+        .vq-goi { display: flex; gap: 6px; margin: 10px 2px 0; color: var(--pm-mo); font-size: 12px; line-height: 1.45; }
+        .vq-goi i { margin-top: 2px; color: var(--pm-xanh); }
+
+        /* Ô chọn có tìm (thay giao diện <select> gốc; select gốc vẫn giữ giá trị, kiểm bắt buộc). */
+        .pmc { position: relative; min-width: 0; }
+        .input-group > .pmc { flex: 1 1 auto; width: 1%; }
+        .input-group > .pmc:not(:last-child) .pmc-nut { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+        .pmc > select { position: absolute; left: 0; bottom: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+        .pmc-nut { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 40px; padding: 6px 34px 6px 12px; text-align: left;
+                   background-color: #fff; cursor: pointer; transition: border-color .15s, box-shadow .15s; }
+        .pmc-nut:hover { border-color: #b6c0d4; }
+        .pmc-nut:focus-visible, .pmc.mo .pmc-nut { border-color: #6d8ad6; outline: 0; box-shadow: 0 0 0 3px rgba(26, 79, 180, .14); }
+        .pmc-nut:disabled { background-color: #f3f4f7; cursor: not-allowed; }
+        .pmc-nut .pmc-chu { flex: 1 1 auto; min-width: 0; color: #111827; white-space: nowrap; overflow: hidden; }
+        .pmc-nut .pmc-chu.trong { color: #9aa3b2; }
+        .co-loi .pmc-nut { border-color: #c62828; }
+        .pmc-bang { position: fixed; z-index: 1090; display: flex; flex-direction: column; overflow: hidden; border: 1px solid #d9dfea; border-radius: 10px;
+                    background: #fff; box-shadow: 0 12px 32px rgba(16, 24, 40, .16), 0 2px 6px rgba(16, 24, 40, .08); }
+        .pmc-bang[hidden] { display: none; }
+        .pmc-tim { position: relative; flex: 0 0 auto; padding: 8px; border-bottom: 1px solid #eef1f6; }
+        .pmc-tim i { position: absolute; top: 50%; left: 20px; transform: translateY(-50%); color: #9aa3b2; font-size: 13px; }
+        .pmc-tim input { width: 100%; height: 36px; padding: 0 30px 0 34px; border: 1px solid #dfe4ee; border-radius: 8px; background: #f7f8fb; font-size: 14px; }
+        .pmc-tim input:focus { border-color: #6d8ad6; outline: 0; background: #fff; box-shadow: 0 0 0 3px rgba(26, 79, 180, .12); }
+        .pmc-tim .pmc-xoa { position: absolute; top: 50%; right: 14px; display: flex; align-items: center; justify-content: center; width: 22px; height: 22px;
+                            min-width: 0; padding: 0; border: 0; border-radius: 50%; background: #e7eaf1; color: #5b6475; font-size: 11px; line-height: 1; transform: translateY(-50%); }
+        .pmc-tim .pmc-xoa[hidden] { display: none; }
+        .pmc-tim .pmc-xoa i { position: static; transform: none; color: inherit; font-size: 11px; }
+        .pmc-ds { flex: 1 1 auto; margin: 0; padding: 4px; overflow-y: auto; list-style: none; overscroll-behavior: contain; }
+        .pmc-nhom { padding: 8px 10px 4px; color: #8a93a3; font-size: 11px; font-weight: 700; letter-spacing: .5px !important; text-transform: uppercase; }
+        .pmc-mon { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 6px 10px; border-radius: 7px; color: #111827; font-size: 14px; cursor: pointer; }
+        .pmc-mon.dang { background: #eef3ff; }
+        .pmc-mon[aria-selected="true"] { font-weight: 600; }
+        .pmc-mon .pmc-ten { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+        .pmc-mon .pmc-phu, .pmc-nut .pmc-phu { flex: 0 0 auto; color: #8a93a3; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; font-weight: 400; }
+        .pmc-mon .pmc-dau { flex: 0 0 16px; color: #1a4fb4; font-size: 13px; visibility: hidden; }
+        .pmc-mon[aria-selected="true"] .pmc-dau { visibility: visible; }
+        .pmc-mon mark { padding: 0; border-radius: 2px; background: #fff1c2; color: inherit; }
+        .pmc-the { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; min-width: 42px; height: 22px; padding: 0 6px;
+                   border-radius: 6px; background: #e9effb; color: #0a3a8c; font-size: 10.5px; font-weight: 700; letter-spacing: .2px !important; }
+        .pmc-the.may { min-width: 26px; background: #f1f3f8; color: #4b5563; font-size: 12px; }
+        .pmc-rong { padding: 18px 12px; color: #6b7280; font-size: 13px; text-align: center; }
+        .pmc-rong i { display: block; margin-bottom: 6px; color: #c3cad9; font-size: 20px; }
 
         .pm-tuy-ds { border: 1px solid var(--pm-vien); border-radius: 10px; }
         .pm-tuy { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 0; padding: 12px 14px; cursor: pointer; }
@@ -219,8 +292,7 @@
 
         @media (max-width: 767.98px) {
             .pm-hai-cot { grid-template-columns: minmax(0, 1fr); }
-            .pm-qr-than { flex-direction: row; align-items: flex-start; }
-            .pm-qr-ma { flex: 0 0 84px; width: 84px; height: 84px; font-size: 62px; }
+            .pm-qr-xem { max-width: 340px; width: 100%; justify-self: center; }
             .pm-phi-luoi { grid-template-columns: minmax(0, 1fr); }
             .pm-phi-luoi label:nth-last-child(2) { border-bottom: 1px solid #f0f2f6; }
         }
@@ -326,18 +398,28 @@
                                 <div class="form-text">Tự viết hoa, bỏ dấu — đúng như trên app ngân hàng.</div>
                             </div>
                         </div>
-                        <div class="pm-qr-xem" id="btXemTruoc" aria-live="polite">
-                            <div class="pm-qr-nhan">Khách sẽ thấy</div>
-                            <div class="pm-qr-than">
-                                <span class="pm-qr-ma" aria-hidden="true"><i class="fa-solid fa-qrcode"></i></span>
-                                <dl>
-                                    <dt>Ngân hàng</dt><dd class="xt-bank">—</dd>
-                                    <dt>Số tài khoản</dt><dd class="xt-so so">—</dd>
-                                    <dt>Chủ tài khoản</dt><dd class="xt-chu">—</dd>
+                        {{-- Thẻ VietQR như khách thấy. Mã là VietQR THẬT (chuẩn NAPAS 247) dựng từ
+                             ngân hàng + số tài khoản đang gõ — quét bằng app ngân hàng, app hiện đúng tên
+                             chủ tài khoản là khai đúng. Không kèm số tiền: mỗi đơn một số tiền riêng. --}}
+                        <div class="pm-qr-xem" id="btXemTruoc">
+                            <div class="pm-qr-nhan"><span>Khách sẽ thấy</span><span class="pm-chip ok xt-md" hidden>Mặc định</span></div>
+                            <figure class="vq m-0" aria-label="Xem trước mã VietQR">
+                                <div class="vq-dau"><span class="vq-logo" aria-label="VietQR"><b>Viet</b><span>QR</span></span><span class="vq-napas">napas <i>247</i></span></div>
+                                <div class="vq-ma">
+                                    <span class="vq-goc a"></span><span class="vq-goc b"></span><span class="vq-goc c"></span><span class="vq-goc d"></span>
+                                    <div class="xt-qr" role="img" aria-label="Mã QR chuyển khoản"></div>
+                                    <div class="vq-trong xt-trong"><i class="fa-solid fa-qrcode"></i><span>Chọn ngân hàng và nhập số tài khoản — mã QR hiện ở đây.</span></div>
+                                </div>
+                                <div class="vq-nh"><span class="vq-nh-ic xt-nh-ic" hidden></span><b class="xt-bank">Chưa chọn ngân hàng</b></div>
+                                <div class="vq-chu xt-chu mo">TÊN CHỦ TÀI KHOẢN</div>
+                                <div class="vq-so xt-so mo">Số tài khoản</div>
+                                <dl class="vq-ds">
+                                    <dt>Số tiền</dt><dd class="xt-tien">Theo từng đơn<small>Mã ở quầy kèm sẵn số tiền</small></dd>
                                     <dt>Nội dung</dt><dd>TT &lt;mã đơn&gt;</dd>
-                                    <dt>Số tiền</dt><dd class="xt-tien">Kèm sẵn theo đơn</dd>
                                 </dl>
-                            </div>
+                                <span class="vq-tat xt-tat" hidden><i class="fa-solid fa-eye-slash me-1"></i>Đang tắt — khách không thấy</span>
+                            </figure>
+                            <p class="vq-goi xt-goi" hidden><i class="fa-solid fa-mobile-screen-button"></i><span>Mã thật — mở app ngân hàng quét thử: app hiện đúng tên chủ tài khoản là đã khai đúng.</span></p>
                         </div>
                     </div>
 
@@ -641,6 +723,7 @@
 @endsection
 
 @push('scripts')
+    <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
     <script>
     (function () {
         var D = JSON.parse(document.getElementById('pmData').textContent || 'null');
@@ -874,7 +957,8 @@
 
         // ---------- Ô nhập dùng chung ----------
         function boDau(s) { return s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D'); }
-        $(document).on('input', '.bank_account_name', function () { this.value = boDau(this.value).replace(/[^a-zA-Z0-9 ]/g, '').toUpperCase(); });
+        function chuanTen(v) { return boDau(v).replace(/[^a-zA-Z0-9 ]/g, '').toUpperCase(); }
+        $(document).on('input', '.bank_account_name', function () { this.value = chuanTen(this.value); });
         $(document).on('input', '.bank_account, .sepay_account', function () { this.value = this.value.replace(/[^a-zA-Z0-9]/g, ''); });
         $(document).on('input', '.input-percent', function () {
             var v = this.value.replace(',', '.').replace(/[^0-9.]/g, '').replace(/(\..*?)\..*/g, '$1');
@@ -929,6 +1013,7 @@
         function veNganHang() {
             var opt = '<option value="">Chọn ngân hàng</option>' + (D.banks || []).map(function (b) { return '<option value="' + b.bin + '">' + esc(b.name) + ' (' + b.bin + ')</option>'; }).join('');
             $('select.bank_id').html(opt);
+            $('select.bank_id').each(function () { lamMoiChon(this); });
         }
         function thuData($vung) {
             var o = {};
@@ -947,13 +1032,61 @@
 
         // ---------- Hộp chuyển khoản ----------
         var $bt = $('#modalBankTransfer');
+        // VietQR (chuẩn EMVCo của NAPAS): mỗi trường = mã 2 số + độ dài 2 số + giá trị,
+        // kết thúc bằng CRC16-CCITT. Mã tĩnh (11) — không kèm số tiền.
+        function truongQR(id, v) { return id + ('0' + v.length).slice(-2) + v; }
+        function crc16(s) {
+            var c = 0xFFFF;
+            for (var i = 0; i < s.length; i++) {
+                c ^= s.charCodeAt(i) << 8;
+                for (var j = 0; j < 8; j++) c = c & 0x8000 ? (c << 1) ^ 0x1021 : c << 1;
+                c &= 0xFFFF;
+            }
+            return ('000' + c.toString(16).toUpperCase()).slice(-4);
+        }
+        function chuoiVietQR(bin, so) {
+            var tk = truongQR('00', 'A000000727') + truongQR('01', truongQR('00', bin) + truongQR('01', so)) + truongQR('02', 'QRIBFTTA');
+            var s = truongQR('00', '01') + truongQR('01', '11') + truongQR('38', tk) + truongQR('53', '704') + truongQR('58', 'VN') + '6304';
+            return s + crc16(s);
+        }
+        function svgQR(chuoi) {
+            if (typeof window.qrcode !== 'function') return '';
+            var q = window.qrcode(0, 'M'); q.addData(chuoi); q.make();
+            var n = q.getModuleCount(), le = 2, d = '';
+            for (var r = 0; r < n; r++) for (var c = 0; c < n; c++) if (q.isDark(r, c)) d += 'M' + (c + le) + ' ' + (r + le) + 'h1v1h-1z';
+            return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + (n + le * 2) + ' ' + (n + le * 2) + '" shape-rendering="crispEdges">' +
+                '<rect width="100%" height="100%" fill="#fff"/><path fill="#0b1324" d="' + d + '"/></svg>';
+        }
+        // Tên viết tắt quen mặt trên app ngân hàng; ngân hàng khác lấy chữ hoa trong tên.
+        var VIET_TAT = { '970436': 'VCB', '970415': 'VTB', '970405': 'AGR', '970407': 'TCB', '970422': 'MB', '970432': 'VPB',
+            '970423': 'TPB', '970403': 'STB', '970437': 'HDB', '970431': 'EIB', '970440': 'SSB', '970449': 'LPB', '970428': 'NAB',
+            '970409': 'BAB', '970412': 'PVB', '970427': 'VAB', '970400': 'SGB', '970438': 'BVB', '970454': 'BVBank', '970452': 'KLB' };
+        function vietTat(bin, ten) {
+            if (VIET_TAT[bin]) return VIET_TAT[bin];
+            var hoa = (ten || '').replace(/[^A-Z]/g, '');
+            return hoa.length >= 2 ? hoa.slice(0, 5) : (ten || '').slice(0, 3).toUpperCase();
+        }
         function xemTruoc() {
-            var $x = $('#btXemTruoc'), bin = $bt.find('.bank_id').val();
-            $x.find('.xt-bank').text(((D.banks || []).filter(function (b) { return b.bin === bin; })[0] || {}).name || '—');
-            $x.find('.xt-so').text($bt.find('.bank_account').val() || '—');
-            $x.find('.xt-chu').text($bt.find('.bank_account_name').val() || '—');
-            $x.find('.xt-tien').text($bt.find('.edit_amount').is(':checked') ? 'Khách tự gõ' : 'Kèm sẵn theo đơn');
-            $x.toggleClass('tat', !$bt.find('.status_method').is(':checked'));
+            var $x = $('#btXemTruoc'), bin = $bt.find('.bank_id').val() || '';
+            var nh = ((D.banks || []).filter(function (b) { return b.bin === bin; })[0] || {}).name || '';
+            var so = ($bt.find('.bank_account').val() || '').trim(), chu = chuanTen($bt.find('.bank_account_name').val() || '').trim();
+            var du = !!(nh && /^[A-Za-z0-9]{4,19}$/.test(so));
+            $x.find('.xt-bank').text(nh || 'Chưa chọn ngân hàng');
+            $x.find('.xt-nh-ic').text(nh ? vietTat(bin, nh) : '').prop('hidden', !nh);
+            $x.find('.xt-chu').text(chu || 'TÊN CHỦ TÀI KHOẢN').toggleClass('mo', !chu);
+            $x.find('.xt-so').text(so ? so.replace(/(.{4})(?=.)/g, '$1 ') : 'Số tài khoản').toggleClass('mo', !so);
+            $x.find('.xt-tien').html($bt.find('.edit_amount').is(':checked')
+                ? 'Khách tự nhập<small>Mã không kèm số tiền</small>' : 'Theo từng đơn<small>Mã ở quầy kèm sẵn số tiền</small>');
+            var svg = du ? svgQR(chuoiVietQR(bin, so)) : '';
+            $x.find('.xt-qr').html(svg).attr('data-chuoi', svg ? chuoiVietQR(bin, so) : '');
+            $x.find('.xt-trong').prop('hidden', !!svg).find('span').text(
+                !nh ? 'Chọn ngân hàng và nhập số tài khoản — mã QR hiện ở đây.'
+                    : !so ? 'Nhập số tài khoản — mã QR hiện ở đây.' : !du ? 'Số tài khoản 4–19 ký tự, chỉ chữ và số.'
+                    : 'Chưa tải được bộ vẽ mã QR — kiểm tra mạng rồi mở lại hộp.');
+            $x.find('.xt-goi').prop('hidden', !svg);
+            var bat = $bt.find('.status_method').is(':checked');
+            $x.toggleClass('tat', !bat).find('.xt-tat').prop('hidden', bat);
+            $x.find('.xt-md').prop('hidden', !$bt.find('.bank_default').is(':checked') || !bat);
         }
         $bt.on('input change', 'input, select', xemTruoc);
         function moBank(x) {
@@ -967,6 +1100,7 @@
             $bt.find('.bank_default').prop('checked', x ? x.is_default : !dangBat(4).length);
             $bt.find('.edit_amount').prop('checked', x ? x.data.edit_amount === '1' : false);
             xemTruoc();
+            veLaiChon($bt);
             bootstrap.Modal.getOrCreateInstance($bt[0]).show();
         }
         $bt.find('.save-item').on('click', function () {
@@ -984,12 +1118,13 @@
                 var v = $sc.find(p[0]).val();
                 $sc.find(p[0]).html('<option value="">Chọn máy</option>' + (D.devices || []).filter(function (d) { return !!d.is_physical === p[1]; })
                     .map(function (d) { return '<option value="' + d.id + '">' + esc(d.code + ' - ' + d.name) + '</option>'; }).join('')).val(v);
+                lamMoiChon($sc.find(p[0])[0]);
             });
             nutSuaMay();
         }
         function nutSuaMay() {
             $sc.find('.select_device, .select_device_physical').each(function () {
-                $(this).siblings('.edit_device').prop('disabled', !this.value);
+                $(this).closest('.input-group').find('.edit_device').prop('disabled', !this.value);
             });
         }
         $sc.on('change', '.select_device, .select_device_physical', nutSuaMay);
@@ -1022,6 +1157,7 @@
             }
             doiLoaiThe();
             gioiThieuCong($sc, x);
+            veLaiChon($sc);
             bootstrap.Modal.getOrCreateInstance($sc[0]).show();
         }
         $sc.find('.save-item').on('click', function () {
@@ -1080,7 +1216,7 @@
         }
         $(document).on('click', '.add_device', function () { moMay(null); });
         $(document).on('click', '.edit_device', function () {
-            var id = +$(this).siblings('select').val();
+            var id = +$(this).closest('.input-group').find('select').val();
             var may = (D.devices || []).filter(function (d) { return d.id === id; })[0];
             if (may) moMay(may);
         });
@@ -1193,6 +1329,7 @@
             dangSuaQR = x;
             gioiThieuCong($qr, x);
             doiLoaiQR();
+            veLaiChon($qr);
             bootstrap.Modal.getOrCreateInstance($qr[0]).show();
         }
         $qr.find('.save-item').on('click', function () {
@@ -1227,6 +1364,148 @@
             var id = +$(this).data('id'), x = cua(dangMo).filter(function (d) { return d.id === id; })[0];
             if (x) (dangMo === 4 ? moBank : dangMo === 5 ? moThe : moQR)(x);
         });
+
+        // ---------- Ô chọn có tìm ----------
+        // Thay phần nhìn của <select> trong các hộp: nút + bảng thả có ô tìm. Select gốc vẫn
+        // là nơi giữ giá trị (thuData, batBuoc, .val() ở các hàm mở hộp không phải đổi).
+        // Ngân hàng gõ được không dấu, tên viết tắt, mã BIN hoặc tên đầy đủ.
+        var BIET_DANH = { '970436': 'ngoai thuong', '970415': 'cong thuong ctg', '970418': 'dau tu phat trien', '970405': 'nong nghiep phat trien nong thon',
+            '970407': 'ky thuong', '970422': 'quan doi', '970416': 'a chau', '970432': 'viet nam thinh vuong', '970423': 'tien phong',
+            '970403': 'sai gon thuong tin', '970437': 'phat trien thanh pho', '970441': 'quoc te', '970443': 'sai gon ha noi', '970431': 'xuat nhap khau',
+            '970426': 'hang hai', '970448': 'phuong dong', '970440': 'dong nam a', '970449': 'loc phat buu dien lienviet', '970428': 'nam a',
+            '970425': 'an binh', '970409': 'bac a', '970412': 'dai chung', '970427': 'viet a', '970400': 'sai gon cong thuong', '970438': 'bao viet' };
+        var PHO_BIEN = 12;
+        function khongDau(v) { return boDau(String(v || '')).toLowerCase(); }
+        function moTaChon(sel, o) {
+            if (!o || !o.value) return null;
+            if ($(sel).hasClass('bank_id')) {
+                var b = (D.banks || []).filter(function (x) { return x.bin === o.value; })[0] || { name: o.text, bin: o.value };
+                return { the: vietTat(b.bin, b.name), ten: b.name, phu: b.bin, tim: khongDau(b.name + ' ' + vietTat(b.bin, b.name) + ' ' + b.bin + ' ' + (BIET_DANH[b.bin] || '')) };
+            }
+            if ($(sel).is('.select_device, .select_device_physical')) {
+                var d = (D.devices || []).filter(function (x) { return String(x.id) === o.value; })[0] || { code: o.text, name: '' };
+                return { icon: d.is_physical ? 'fa-cash-register' : 'fa-mobile-screen-button', ten: d.name || d.code, phu: d.code, tim: khongDau(d.code + ' ' + d.name) };
+            }
+            return { ten: o.text, tim: khongDau(o.text) };
+        }
+        function nhanChon(m) {
+            return (m.the ? '<span class="pmc-the">' + esc(m.the) + '</span>' : m.icon ? '<span class="pmc-the may"><i class="fa-solid ' + m.icon + '"></i></span>' : '');
+        }
+        function lamMoiChon(sel) {
+            if (!sel || !sel._pmc) return;
+            var o = sel.options[sel.selectedIndex], m = moTaChon(sel, o), $n = $(sel._pmc.nut);
+            $n.html(m ? nhanChon(m) + '<span class="pmc-chu">' + esc(m.ten) + '</span>' + (m.phu && m.phu !== m.ten ? '<span class="pmc-phu">' + esc(m.phu) + '</span>' : '')
+                : '<span class="pmc-chu trong">' + esc((sel.options[0] && !sel.options[0].value && sel.options[0].text) || 'Chọn') + '</span>');
+            $n.prop('disabled', sel.disabled);
+        }
+        var chonMo = null;
+        function dongChon(traFocus) {
+            if (!chonMo) return;
+            var c = chonMo; chonMo = null;
+            c.bang.hidden = true; $(c.vo).removeClass('mo'); c.nut.setAttribute('aria-expanded', 'false');
+            $(window).off('.pmc'); $(document).off('.pmc'); $(c.nut).closest('.modal-body').off('.pmc');
+            if (traFocus) c.nut.focus();
+        }
+        function datViTri(c) {
+            var r = c.nut.getBoundingClientRect(), duoi = innerHeight - r.bottom - 12, tren = r.top - 12;
+            var cao = Math.min(c.coTim ? 360 : 280, Math.max(duoi, tren) - 6), len = duoi < 220 && tren > duoi;
+            var rong = Math.max(r.width, Math.min(320, innerWidth - 24)), trai = Math.min(r.left, innerWidth - rong - 12);
+            $(c.bang).css({ left: Math.max(12, trai), width: rong, maxHeight: cao, top: len ? 'auto' : r.bottom + 4, bottom: len ? innerHeight - r.top + 4 : 'auto' });
+        }
+        function veDanhSach(c) {
+            var q = khongDau(c.tim ? c.tim.value.trim() : ''), sel = c.sel, html = '', so = 0, i = 0;
+            c.mon = [];
+            [].forEach.call(sel.options, function (o) {
+                if (!o.value) return;
+                var m = moTaChon(sel, o);
+                if (q && q.split(/\s+/).some(function (t) { return m.tim.indexOf(t) < 0; })) return;
+                if (!q && sel.classList.contains('bank_id') && (i === 0 || i === PHO_BIEN)) html += '<li class="pmc-nhom" role="presentation">' + (i === 0 ? 'Phổ biến' : 'Ngân hàng khác') + '</li>';
+                i++;
+                var ten = esc(m.ten);
+                if (q) {
+                    var k = khongDau(m.ten).indexOf(q);
+                    if (k >= 0 && m.ten.length === khongDau(m.ten).length) ten = esc(m.ten.slice(0, k)) + '<mark>' + esc(m.ten.slice(k, k + q.length)) + '</mark>' + esc(m.ten.slice(k + q.length));
+                }
+                html += '<li class="pmc-mon" role="option" id="' + c.id + '-' + so + '" data-v="' + esc(o.value) + '" aria-selected="' + (o.value === sel.value) + '">' +
+                    '<i class="fa-solid fa-check pmc-dau"></i>' + nhanChon(m) + '<span class="pmc-ten">' + ten + '</span>' + (m.phu && m.phu !== m.ten ? '<span class="pmc-phu">' + esc(m.phu) + '</span>' : '') + '</li>';
+                c.mon.push(o.value); so++;
+            });
+            c.ds.innerHTML = html || '<li class="pmc-rong" role="presentation"><i class="fa-solid fa-magnifying-glass"></i>Không thấy ' + (sel.classList.contains('bank_id') ? 'ngân hàng' : 'mục') + ' nào khớp “' + esc(c.tim.value.trim()) + '”</li>';
+            var dang = c.mon.indexOf(sel.value);
+            danhDau(c, q ? 0 : Math.max(0, dang));
+        }
+        function danhDau(c, k) {
+            c.dang = Math.max(0, Math.min(k, c.mon.length - 1));
+            $(c.ds).find('.pmc-mon').removeClass('dang');
+            var el = c.mon.length ? document.getElementById(c.id + '-' + c.dang) : null;
+            if (el) { el.classList.add('dang'); el.scrollIntoView({ block: 'nearest' }); }
+            (c.tim || c.nut).setAttribute('aria-activedescendant', el ? el.id : '');
+        }
+        function chonGiaTri(c, v) {
+            if (v != null && c.sel.value !== v) { $(c.sel).val(v).trigger('change'); }
+            lamMoiChon(c.sel); dongChon(true);
+        }
+        function moChon(c) {
+            if (chonMo === c) return dongChon(true);
+            dongChon(false);
+            chonMo = c; $(c.vo).addClass('mo'); c.nut.setAttribute('aria-expanded', 'true');
+            c.bang.hidden = false;
+            if (c.tim) c.tim.value = '';
+            $(c.bang).find('.pmc-tim').prop('hidden', !c.coTim);
+            veDanhSach(c); datViTri(c);
+            if (c.coTim) setTimeout(function () { c.tim.focus(); }, 0);
+            $(window).on('resize.pmc', function () { datViTri(c); });
+            // Cuộn hộp: bảng bám theo ô; ô đã cuộn khuất thì đóng.
+            $(c.nut).closest('.modal-body').on('scroll.pmc', function () {
+                var n = c.nut.getBoundingClientRect(), v = this.getBoundingClientRect();
+                if (n.bottom < v.top || n.top > v.bottom) dongChon(false); else datViTri(c);
+            });
+            $(document).on('mousedown.pmc touchstart.pmc', function (e) { if (!$(e.target).closest(c.bang).length && !$(e.target).closest(c.vo).length) dongChon(false); });
+        }
+        function phimChon(c, e) {
+            var k = e.key;
+            if (k === 'ArrowDown' || k === 'ArrowUp') { e.preventDefault(); if (chonMo !== c) return moChon(c); danhDau(c, c.dang + (k === 'ArrowDown' ? 1 : -1)); }
+            else if (k === 'Enter' && chonMo === c) { e.preventDefault(); if (c.mon.length) chonGiaTri(c, c.mon[c.dang]); }
+            else if (k === 'Escape' && chonMo === c) { e.preventDefault(); e.stopPropagation(); dongChon(true); }
+            else if (k === 'Tab' && chonMo === c) dongChon(false);
+            else if (k === 'Home' && chonMo === c && !c.coTim) { e.preventDefault(); danhDau(c, 0); }
+            else if (k === 'End' && chonMo === c && !c.coTim) { e.preventDefault(); danhDau(c, c.mon.length - 1); }
+        }
+        var soChon = 0;
+        function lamDepChon(sel) {
+            if (sel._pmc) return;
+            var id = 'pmc' + (++soChon), $vo = $('<div class="pmc"></div>');
+            $(sel).before($vo); $vo.append(sel);
+            var nut = $('<button type="button" class="form-select pmc-nut" aria-haspopup="listbox" aria-expanded="false"></button>')
+                .attr({ 'aria-controls': id + '-ds' }).appendTo($vo)[0];
+            var nhan = sel.id ? $('label[for="' + sel.id + '"]') : $(sel).closest('.o-nhap').find('.form-label').first();
+            if (nhan.length) { if (!nhan.attr('id')) nhan.attr('id', id + '-nhan'); nut.setAttribute('aria-labelledby', nhan.attr('id') + ' ' + id + '-nut'); if (sel.id) nhan.attr('for', id + '-nut'); }
+            nut.id = id + '-nut';
+            var bang = $('<div class="pmc-bang" hidden><div class="pmc-tim"><i class="fa-solid fa-magnifying-glass"></i>' +
+                '<input type="text" autocomplete="off" spellcheck="false" role="combobox" aria-autocomplete="list" aria-expanded="true">' +
+                '<button type="button" class="pmc-xoa" aria-label="Xoá ô tìm" hidden><i class="fa-solid fa-xmark"></i></button></div>' +
+                '<ul class="pmc-ds" role="listbox" id="' + id + '-ds"></ul></div>').appendTo($(sel).closest('.modal').length ? $(sel).closest('.modal') : document.body)[0];
+            var c = { id: id, sel: sel, vo: $vo[0], nut: nut, bang: bang, ds: $(bang).find('.pmc-ds')[0], tim: $(bang).find('input')[0], mon: [], dang: 0 };
+            Object.defineProperty(c, 'coTim', { get: function () { return sel.options.length > 6; } });
+            c.tim.setAttribute('aria-controls', id + '-ds');
+            c.tim.placeholder = sel.classList.contains('bank_id') ? 'Tìm tên, viết tắt hoặc mã BIN…' : 'Tìm…';
+            sel._pmc = c;
+            $(nut).on('click', function () { moChon(c); }).on('keydown', function (e) { phimChon(c, e); });
+            $(c.tim).on('keydown', function (e) { phimChon(c, e); }).on('input', function () {
+                $(bang).find('.pmc-xoa').prop('hidden', !this.value); veDanhSach(c);
+            });
+            $(bang).find('.pmc-xoa').on('click', function () { c.tim.value = ''; this.hidden = true; veDanhSach(c); c.tim.focus(); });
+            $(c.ds).on('mousemove', '.pmc-mon', function () { var k = c.mon.indexOf(this.getAttribute('data-v')); if (k !== c.dang) danhDau(c, k); })
+                .on('click', '.pmc-mon', function () { chonGiaTri(c, this.getAttribute('data-v')); });
+            // Ô gốc bị gọi focus (batBuoc tô đỏ ô trống) → đưa sang nút.
+            $(sel).on('focus', function () { nut.focus(); }).on('change', function () { lamMoiChon(sel); });
+            lamMoiChon(sel);
+        }
+        $('.pm-hop select.form-select').each(function () { lamDepChon(this); });
+        // Các hàm mở hộp đặt giá trị bằng .val() (không bắn change) — kể cả lúc hộp đang mở
+        // (thêm cổng / máy mới xong chuyển sang sửa), nên vẽ lại nhãn ngay trước khi show().
+        function veLaiChon($hop) { $hop.find('select.form-select').each(function () { lamMoiChon(this); }); }
+        $('.pm-hop').on('hide.bs.modal', function () { dongChon(false); });
 
         if (D) { veNganHang(); ve(); }
     })();

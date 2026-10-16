@@ -59,6 +59,7 @@ func banVoiMa(t *testing.T, h *heThong, token string, bienThe uint, ma, chuKy st
 func TestBanTaiQuay_GiuMaDon(t *testing.T) {
 	h := dungHeThong(t)
 	a, _ := haiCuaHang(t, h)
+	moCa(t, h, a, 0)
 	thuNgan := h.dangNhapVoi(t, a.ma, "nhanvien")
 
 	// Chưa bật quy tắc mã đơn: không có gì để cấp trước.

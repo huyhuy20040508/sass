@@ -575,6 +575,7 @@ func TestThuChi_TraDuTruongChoManHinh(t *testing.T) {
 func TestThuChi_BanHangDeRaPhieuThu(t *testing.T) {
 	h := dungHeThong(t)
 	a, _ := haiCuaHang(t, h)
+	moCa(t, h, a, 0)
 
 	res := h.goi(t, a.token, http.MethodPost, "/api/v1/admin/orders/pos", map[string]any{
 		"payment_method": "cash",

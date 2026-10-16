@@ -559,12 +559,13 @@ class PosTest extends TestCase
         $phang = $this->chuPhieu($html);
 
         foreach ([
-            'HOÁ ĐƠN BÁN HÀNG', 'DH000088', '07/10/2026 09:30', 'Thu ngân: Thu Ngân A', 'Khách: Chị Lan · 0909123456',
+            // Nhãn theo bố cục "Gọn, rõ" (14/10/2026): dòng hình thức in số khách đưa, ngay dưới là tiền thối.
+            'HOÁ ĐƠN BÁN HÀNG', 'Số: DH000088', '09:30 07/10/2026', 'Thu ngân: Thu Ngân A', 'Khách: Chị Lan · 0909123456',
             'Áo thun (Đen · L)', '2 × 150.000 300.000', 'Bớt 10% -30.000', 'Móc khoá (Tặng)',
-            'Tiền hàng 600.000', 'Bớt theo món -30.000', 'Mã TQ20K -20.000', 'Giảm cả đơn 10% -57.000',
-            'Khuyến mãi -10.000', 'Giảm theo hạng -5.000', 'Đổi 3 điểm -3.000', 'Phụ thu: Gói quà 20.000',
-            'Thuế VAT 47.500', 'TỔNG CỘNG 542.500', 'Thanh toán Tiền mặt', 'Khách đưa 600.000', 'TIỀN THỐI 57.500',
-            'Điểm tích được +54',
+            'Tiền hàng', '600.000', 'Bớt theo món -30.000', 'Mã TQ20K -20.000', 'Giảm cả đơn 10% -57.000',
+            'Khuyến mãi -10.000', 'Giảm hạng -5.000', 'Đổi 3 điểm -3.000', 'Phụ thu: Gói quà 20.000',
+            'Thuế VAT 47.500', 'TỔNG CỘNG 542.500', 'Tiền mặt 600.000', 'Tiền thối 57.500',
+            'Điểm tích thêm +54',
         ] as $dong) {
             $this->assertStringContainsString($dong, $phang);
         }
@@ -585,8 +586,8 @@ class PosTest extends TestCase
 
         $phang = $this->chuPhieu($this->withSession($this->phien())->get(route('thu-ngan.ban-hang.phieu', ['id' => 88]))->getContent());
 
-        $this->assertStringContainsString('Thanh toán Chuyển khoản', $phang);
-        $this->assertStringNotContainsString('TIỀN THỐI', $phang);
+        $this->assertStringContainsString('Chuyển khoản 100.000', $phang);
+        $this->assertStringNotContainsString('Tiền thối', $phang);
         $this->assertStringNotContainsString('Mã giảm giá', $phang);
     }
 

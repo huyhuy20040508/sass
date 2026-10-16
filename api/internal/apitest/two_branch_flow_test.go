@@ -87,6 +87,7 @@ func soBuToanKho(t *testing.T, h *heThong, c *cuaHang, shopID uint) int {
 func TestLuongHaiChiNhanh_SoLieuDungOCaHaiBen(t *testing.T) {
 	h := dungHeThong(t)
 	a, _ := haiCuaHang(t, h)
+	moCa(t, h, a, 0)
 	kho1 := a.chiNhanh
 	kho2 := moChiNhanhThuHai(t, h, a, "Kho hai")
 
@@ -135,6 +136,7 @@ func TestLuongHaiChiNhanh_SoLieuDungOCaHaiBen(t *testing.T) {
 	}
 
 	// ---------- Bước 4: BÁN 2 ở kho 2 ----------
+	moCaChiNhanh(t, h, a, kho2)
 	if res := h.goiChiNhanh(t, a.token, kho2, http.MethodPost, "/api/v1/admin/orders/pos", map[string]any{
 		"payment_method": "cash", "amount_tendered": 10_000_000, "customer_name": "Khách lẻ",
 		"items": []map[string]any{{"product_variant_id": a.bienThe, "quantity": 2}},
@@ -165,6 +167,7 @@ func TestLuongHaiChiNhanh_SoLieuDungOCaHaiBen(t *testing.T) {
 func TestLuongHaiChiNhanh_ChungTuVaSoKhoCatDungBen(t *testing.T) {
 	h := dungHeThong(t)
 	a, _ := haiCuaHang(t, h)
+	moCa(t, h, a, 0)
 	kho1 := a.chiNhanh
 	kho2 := moChiNhanhThuHai(t, h, a, "Kho hai")
 

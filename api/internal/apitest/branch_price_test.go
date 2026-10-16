@@ -49,7 +49,9 @@ func giaCuaDon(t *testing.T, h *heThong, c *cuaHang, shopID uint) float64 {
 func TestGiaChiNhanh_MoiQuayThuTheoGiaCuaMinh(t *testing.T) {
 	h := dungHeThong(t)
 	a, _ := haiCuaHang(t, h)
+	moCa(t, h, a, 0)
 	kho2 := moChiNhanhThuHai(t, h, a, "Kho hai")
+	moCaChiNhanh(t, h, a, kho2)
 
 	// Đủ hàng ở cả hai kho để bán được.
 	donKho(t, h, a)

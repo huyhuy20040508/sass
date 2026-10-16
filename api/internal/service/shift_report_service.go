@@ -47,7 +47,7 @@ func (s *caLamViecService) BaoCaoKetCa(
 	if tu.After(den) {
 		tu, den = den, tu
 	}
-	// To là mốc MỞ: 00:00 của ngày sau ngày cuối kỳ, để ca mở lúc 23:59 ngày
+	// To là mốc MỞ: 00:00 của ngày sau ngày cuối kỳ, để ca đóng lúc 23:59 ngày
 	// cuối vẫn được tính.
 	den = den.AddDate(0, 0, 1)
 	if den.Sub(tu) > reportMaxDays*24*time.Hour {

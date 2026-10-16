@@ -37,6 +37,7 @@ func donQuay(t *testing.T, h *heThong, c *cuaHang, id uint) map[string]any {
 func TestBanTaiQuay_MotLuotBanTronVen(t *testing.T) {
 	h := dungHeThong(t)
 	a, _ := haiCuaHang(t, h)
+	moCa(t, h, a, 0)
 
 	truoc := tonCua(t, h, a, a.chiNhanh, a.bienThe)
 
@@ -196,6 +197,7 @@ func TestDatHangTrenWeb_DonThuocVeChiNhanhBan(t *testing.T) {
 func TestBanTaiQuay_LocTheoKenh(t *testing.T) {
 	h := dungHeThong(t)
 	a, _ := haiCuaHang(t, h)
+	moCa(t, h, a, 0)
 
 	res := h.goi(t, a.token, http.MethodPost, "/api/v1/admin/orders/pos", map[string]any{
 		"payment_method": "cash",
@@ -263,6 +265,7 @@ func kenhCuaDanhSach(t *testing.T, h *heThong, c *cuaHang, kenh string) []string
 func TestBanTaiQuay_DuaThieuTienThiKhongBan(t *testing.T) {
 	h := dungHeThong(t)
 	a, _ := haiCuaHang(t, h)
+	moCa(t, h, a, 0)
 
 	truoc := tonCua(t, h, a, a.chiNhanh, a.bienThe)
 
@@ -290,6 +293,7 @@ func TestBanTaiQuay_DuaThieuTienThiKhongBan(t *testing.T) {
 func TestBanTaiQuay_KhongBanVuotHang(t *testing.T) {
 	h := dungHeThong(t)
 	a, _ := haiCuaHang(t, h)
+	moCa(t, h, a, 0)
 
 	truoc := tonCua(t, h, a, a.chiNhanh, a.bienThe)
 

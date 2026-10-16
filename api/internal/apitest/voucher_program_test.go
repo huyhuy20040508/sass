@@ -116,6 +116,7 @@ func TestVoucherCoupon_VongDoi(t *testing.T) {
 func TestVoucherCoupon_TaiQuay(t *testing.T) {
 	h := dungHeThong(t)
 	a, _ := haiCuaHang(t, h)
+	moCa(t, h, a, 0)
 	goc := "/api/v1/admin/voucher-coupon"
 	ban := func(code string) traLoi {
 		return h.goi(t, a.token, http.MethodPost, "/api/v1/admin/orders/pos", map[string]any{
