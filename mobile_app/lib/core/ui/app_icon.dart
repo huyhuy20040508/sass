@@ -28,7 +28,22 @@ enum AppIcons {
   shield('<path d="M12 21.5s7.5-3.5 7.5-9.5V5.5L12 2.5l-7.5 3V12c0 6 7.5 9.5 7.5 9.5Z"/><path d="m9 12 2 2 4-4"/>'),
   mail('<rect x="2.5" y="4.5" width="19" height="15" rx="2.5"/><path d="m3 7 9 6 9-6"/>'),
   check('<path d="M20 6.5 9.5 17 4 11.5"/>'),
-  receipt('<path d="M6 2.5h12v19l-2-1.5-2 1.5-2-1.5-2 1.5-2-1.5-2 1.5Z"/><path d="M9 8h6M9 12h6"/>');
+  receipt('<path d="M6 2.5h12v19l-2-1.5-2 1.5-2-1.5-2 1.5-2-1.5-2 1.5Z"/><path d="M9 8h6M9 12h6"/>'),
+  // Từ design/html/chon-noi-lam-viec-mobile.html
+  logout('<path d="M14 4.5h3.5a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H14"/><path d="M10 16.5 5.5 12 10 7.5M5.5 12h10"/>'),
+  swap('<path d="m7 15 5 5 5-5M7 9l5-5 5 5"/>'),
+  clock('<circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3 2"/>'),
+  hq(
+    '<path d="M4 21V5.5L12 3l8 2.5V21"/>'
+    '<path d="M2.5 21h19M9 21v-4h6v4M8 8.5h1.5M14.5 8.5H16M8 12.5h1.5M14.5 12.5H16"/>',
+  ),
+  grid(
+    '<rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/>'
+    '<rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/>',
+  ),
+  cash(
+    '<rect x="2.5" y="6" width="19" height="12" rx="2"/><circle cx="12" cy="12" r="2.6"/><path d="M6 9.5v.1M18 14.4v.1"/>',
+  );
 
   const AppIcons(this.paths);
 
@@ -43,12 +58,18 @@ class AppIcon extends StatelessWidget {
   final Color color;
   final double strokeWidth;
 
+  // Ô nhập dựng lại mỗi lần gõ phím; giữ sẵn chuỗi SVG để khỏi ghép lại mỗi lần.
+  static final _cache = <(AppIcons, Color, double), String>{};
+
   @override
   Widget build(BuildContext context) {
-    final svg =
-        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="${_hex(color)}" '
-        'stroke-opacity="${color.a.toStringAsFixed(3)}" stroke-width="$strokeWidth" stroke-linecap="round" '
-        'stroke-linejoin="round">${icon.paths}</svg>';
+    final svg = _cache.putIfAbsent(
+      (icon, color, strokeWidth),
+      () =>
+          '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="${_hex(color)}" '
+          'stroke-opacity="${color.a.toStringAsFixed(3)}" stroke-width="$strokeWidth" stroke-linecap="round" '
+          'stroke-linejoin="round">${icon.paths}</svg>',
+    );
     return SvgPicture.string(svg, width: size, height: size, excludeFromSemantics: true);
   }
 }

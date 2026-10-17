@@ -31,7 +31,7 @@ class LoginScreen extends ConsumerStatefulWidget {
   ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends ConsumerState<LoginScreen> {
+class _LoginScreenState extends ConsumerState<LoginScreen> with WidgetsBindingObserver {
   final _shop = TextEditingController();
   final _user = TextEditingController();
   final _pass = TextEditingController();
@@ -56,8 +56,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Timer? _lockTimer;
   int _lockLeft = 0;
 
-  bool _typing = false;
-  Timer? _blurTimer;
+  double _keyboardInset = 0;
   bool _capsLock = false;
 
   @override
@@ -67,13 +66,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       f.addListener(_onFocusChange);
     }
     HardwareKeyboard.instance.addHandler(_onKey);
+    WidgetsBinding.instance.addObserver(this);
   }
 
   @override
   void dispose() {
     HardwareKeyboard.instance.removeHandler(_onKey);
+    WidgetsBinding.instance.removeObserver(this);
     _lockTimer?.cancel();
-    _blurTimer?.cancel();
     for (final x in [_shop, _user, _pass]) {
       x.dispose();
     }
@@ -86,18 +86,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool get _locked => _lockLeft > 0;
   bool get _chipShown => _remembered != null;
 
-  // Rời ô thì chờ một nhịp: chạm từ ô này sang ô kia không làm đầu tím giật lên xuống.
+  bool get _anyFocus => _shopFocus.hasFocus || _userFocus.hasFocus || _passFocus.hasFocus;
+
   void _onFocusChange() {
-    final any = _shopFocus.hasFocus || _userFocus.hasFocus || _passFocus.hasFocus;
-    _blurTimer?.cancel();
-    if (any) {
-      if (!_typing) setState(() => _typing = true);
-    } else {
-      _blurTimer = Timer(const Duration(milliseconds: 120), () {
-        if (mounted) setState(() => _typing = false);
-      });
-    }
+    setState(() {});
     _syncCaps();
+  }
+
+  // Android tắt bàn phím (nút Back, vuốt) mà ô vẫn giữ focus — bỏ focus luôn
+  // để màn về đúng trạng thái thường, không còn viền tím của ô đang gõ.
+  @override
+  void didChangeMetrics() {
+    final inset = View.of(context).viewInsets.bottom;
+    if (_keyboardInset > 0 && inset == 0) FocusManager.instance.primaryFocus?.unfocus();
+    _keyboardInset = inset;
   }
 
   bool _onKey(KeyEvent _) {
@@ -215,6 +217,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final screenH = mq.size.height;
     final safeTop = mq.padding.top;
     final hasAlert = _error != null || _locked;
+    // Thu đầu tím theo bàn phím thật chứ không theo focus: tắt bàn phím mà ô
+    // còn focus thì vẫn phải về bố cục thường, không chừa khoảng trống.
+    final typing = mq.viewInsets.bottom > 0 && _anyFocus;
 
     final name = _remembered?.displayName ?? '';
     final title = _chipShown && name.isNotEmpty ? 'Chào $name,' : 'Chào mừng trở lại';
@@ -223,7 +228,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         : 'Đăng nhập để quản lý cửa hàng của bạn';
 
     final hero = LoginHero(
-      compact: _typing,
+      compact: typing,
       showDeco: screenH >= LoginScreen.decoMinHeight && !hasAlert,
       showSubtitle: screenH >= LoginScreen.subtitleMinHeight,
       title: title,
@@ -248,13 +253,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         // Cấu trúc cây giữ nguyên khi đang gõ, chỉ đổi hệ số co giãn —
                         // bọc/bỏ Expanded sẽ dựng lại ô nhập và làm mất chữ vừa gõ.
                         Flexible(
-                          flex: _typing ? 0 : 1,
+                          flex: typing ? 0 : 1,
                           child: ConstrainedBox(
-                            constraints: BoxConstraints(minHeight: _typing ? 0 : safeTop + 150 - LoginHero.overlap),
+                            constraints: BoxConstraints(minHeight: typing ? 0 : safeTop + 150 - LoginHero.overlap),
                             child: hero,
                           ),
                         ),
-                        Flexible(flex: _typing ? 1 : 0, child: _sheet(context)),
+                        Flexible(flex: typing ? 1 : 0, child: _sheet(context)),
                       ],
                     ),
                   ),
