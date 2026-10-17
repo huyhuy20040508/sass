@@ -19,6 +19,29 @@ abstract final class AppColors {
   static const focus = Color(0x385B2AA0);
 }
 
+/// Bộ màu navy của màn chọn nơi làm việc (design/html/chon-noi-lam-viec-mobile.html#…-navy),
+/// cùng tông với bản PC đang chạy.
+abstract final class NavyColors {
+  static const hd1 = Color(0xFF0B1B3A);
+  static const hd2 = Color(0xFF14284F);
+  static const hd3 = Color(0xFF1D3A6E);
+  static const glow = Color(0x4D1890FF);
+  static const pick = Color(0xFF1890FF);
+  static const pickSoft = Color(0xFFE8F3FF);
+  static const page = Color(0xFFF4F3F7);
+  static const ink = Color(0xFF14121C);
+  static const text = Color(0xFF474655);
+  static const muted = Color(0xFF6B6A78);
+  static const line = Color(0xFFEBE9F0);
+
+  static const header = LinearGradient(
+    begin: Alignment(-0.26, -1),
+    end: Alignment(0.26, 1),
+    colors: [hd1, hd2, hd3],
+    stops: [0, .62, 1],
+  );
+}
+
 const appFont = 'BeVietnamPro';
 
 ThemeData buildTheme() {

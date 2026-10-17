@@ -4,10 +4,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/theme.dart';
 import '../../core/api/api_exception.dart';
 import '../auth/auth_controller.dart';
+import '../workspace/workspace.dart';
 
-/// Màn chính tạm thời: chưa có thiết kế, chỉ để kiểm tra phiên và API chạy được.
+/// Màn chính tạm thời của từng khu vực: chưa có thiết kế, chỉ để kiểm tra phiên và API chạy được.
 class HomeScreen extends ConsumerStatefulWidget {
-  const HomeScreen({super.key});
+  const HomeScreen({super.key, required this.area});
+
+  final WorkspaceArea area;
 
   @override
   ConsumerState<HomeScreen> createState() => _HomeScreenState();
@@ -49,6 +52,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       appBar: AppBar(
         title: Text(s.tenant.name.isNotEmpty ? s.tenant.name : s.tenant.code),
         actions: [
+          // Cùng chỗ với nút đổi module ở góc phải thanh trên cùng bản PC.
+          TextButton.icon(
+            onPressed: () => ref.read(currentAreaProvider.notifier).leave(),
+            style: TextButton.styleFrom(foregroundColor: Colors.white),
+            icon: const Icon(Icons.swap_horiz),
+            label: Text(widget.area.name),
+          ),
           IconButton(
             tooltip: 'Đăng xuất',
             icon: const Icon(Icons.logout),
