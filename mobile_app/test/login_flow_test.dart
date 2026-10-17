@@ -167,10 +167,33 @@ void main() {
     await _settle(t);
     expect(find.byKey(const Key('shop_code')), findsOneWidget);
     expect(_fieldText(t, 'shop_code'), '');
-    expect(find.text('Chào mừng trở lại'), findsNothing, reason: 'đang gõ ô mã nên đầu tím thu gọn');
     FocusManager.instance.primaryFocus?.unfocus();
     await _settle(t);
     expect(find.text('Chào mừng trở lại'), findsOneWidget);
+  });
+
+  testWidgets('Bàn phím hiện thì thu đầu tím; tắt bàn phím (Back) thì về bố cục thường, bỏ focus', (t) async {
+    await _open(t, store: _MemoryStore(remembered: _remembered));
+    final heroH = t.getTopLeft(find.byKey(const Key('username'))).dy;
+
+    await t.tap(find.byKey(const Key('password')));
+    t.view.viewInsets = const FakeViewPadding(bottom: 300);
+    await _settle(t);
+    expect(find.text('Chào Quản trị viên,'), findsNothing);
+
+    // Back trên Android: bàn phím tắt nhưng ô vẫn giữ focus.
+    t.view.viewInsets = FakeViewPadding.zero;
+    await _settle(t);
+    expect(find.text('Chào Quản trị viên,'), findsOneWidget);
+    expect(t.getTopLeft(find.byKey(const Key('username'))).dy, heroH, reason: 'không chừa khoảng trống');
+    expect(FocusManager.instance.primaryFocus?.context?.findAncestorWidgetOfExactType<TextField>(), isNull);
+  });
+
+  testWidgets('Chỉ focus mà không có bàn phím mềm (bàn phím rời) thì không thu đầu tím', (t) async {
+    await _open(t, store: _MemoryStore(remembered: _remembered));
+    await t.tap(find.byKey(const Key('password')));
+    await _settle(t);
+    expect(find.text('Chào Quản trị viên,'), findsOneWidget);
   });
 
   testWidgets('Thiếu thông tin: báo dưới từng ô, gõ vào thì hết báo, không gửi API', (t) async {
