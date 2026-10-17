@@ -43,12 +43,18 @@ class AppIcon extends StatelessWidget {
   final Color color;
   final double strokeWidth;
 
+  // Ô nhập dựng lại mỗi lần gõ phím; giữ sẵn chuỗi SVG để khỏi ghép lại mỗi lần.
+  static final _cache = <(AppIcons, Color, double), String>{};
+
   @override
   Widget build(BuildContext context) {
-    final svg =
-        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="${_hex(color)}" '
-        'stroke-opacity="${color.a.toStringAsFixed(3)}" stroke-width="$strokeWidth" stroke-linecap="round" '
-        'stroke-linejoin="round">${icon.paths}</svg>';
+    final svg = _cache.putIfAbsent(
+      (icon, color, strokeWidth),
+      () =>
+          '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="${_hex(color)}" '
+          'stroke-opacity="${color.a.toStringAsFixed(3)}" stroke-width="$strokeWidth" stroke-linecap="round" '
+          'stroke-linejoin="round">${icon.paths}</svg>',
+    );
     return SvgPicture.string(svg, width: size, height: size, excludeFromSemantics: true);
   }
 }

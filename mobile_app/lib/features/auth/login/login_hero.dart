@@ -1,5 +1,4 @@
 import 'dart:math' as math;
-import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -50,9 +49,12 @@ class LoginHero extends StatelessWidget {
           right: 0,
           top: 0,
           bottom: -overlap,
-          child: DecoratedBox(
-            decoration: BoxDecoration(gradient: heroGradient),
-            child: Stack(fit: StackFit.expand, children: [_Glow(), _DotGrid()]),
+          // Nền tĩnh: tách lớp để thẻ minh hoạ trôi không bắt vẽ lại lưới chấm + ShaderMask mỗi khung hình.
+          child: RepaintBoundary(
+            child: DecoratedBox(
+              decoration: BoxDecoration(gradient: heroGradient),
+              child: Stack(fit: StackFit.expand, children: [_Glow(), _DotGrid()]),
+            ),
           ),
         ),
         Padding(
@@ -257,50 +259,55 @@ class _DecoState extends State<_Deco> with SingleTickerProviderStateMixin {
     // Không dùng LayoutBuilder: màn đăng nhập đo chiều cao bằng IntrinsicHeight,
     // mà LayoutBuilder không trả được kích thước nội tại.
     return ExcludeSemantics(
-      child: Center(
-        child: ConstrainedBox(
-          // 336 = hai lần 168: mép phải thẻ đơn cách tâm 168px như bản HTML.
-          constraints: const BoxConstraints(maxWidth: 336),
-          child: AnimatedBuilder(
-            animation: _float,
-            builder: (context, _) {
-              final t = Curves.easeInOut.transform(_float.value);
-              return Stack(
-                fit: StackFit.expand,
-                clipBehavior: Clip.none,
-                children: [
-                  Align(
-                    // Chỗ trống thấp hơn thẻ (có thông báo, chữ phóng to…) thì thu nhỏ thay vì tràn.
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      // Đệm cho phần thẻ nghiêng và trôi lên xuống, khỏi chạm logo / lời chào.
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        child: Transform.translate(
-                          offset: Offset(0, -6 * t),
-                          child: Transform.rotate(
-                            angle: -4 * math.pi / 180,
-                            child: const SizedBox(width: 268, child: _RevenueCard()),
+      child: RepaintBoundary(
+        child: Center(
+          child: ConstrainedBox(
+            // 336 = hai lần 168: mép phải thẻ đơn cách tâm 168px như bản HTML.
+            constraints: const BoxConstraints(maxWidth: 336),
+            child: AnimatedBuilder(
+              animation: _float,
+              builder: (context, _) {
+                final t = Curves.easeInOut.transform(_float.value);
+                return Stack(
+                  fit: StackFit.expand,
+                  clipBehavior: Clip.none,
+                  children: [
+                    Align(
+                      // Chỗ trống thấp hơn thẻ (có thông báo, chữ phóng to…) thì thu nhỏ thay vì tràn.
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        // Đệm cho phần thẻ nghiêng và trôi lên xuống, khỏi chạm logo / lời chào.
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          child: Transform.translate(
+                            offset: Offset(0, -6 * t),
+                            child: Transform.rotate(
+                              angle: -4 * math.pi / 180,
+                              child: const RepaintBoundary(child: SizedBox(width: 268, child: _RevenueCard())),
+                            ),
                           ),
                         ),
                       ),
                     ),
-                  ),
-                  // Đáy thẻ đơn nằm ở 94% chiều cao vùng minh hoạ (bottom: 6%).
-                  FractionallySizedBox(
-                    heightFactor: .94,
-                    alignment: Alignment.topCenter,
-                    child: Align(
-                      alignment: Alignment.bottomRight,
-                      child: Transform.translate(
-                        offset: Offset(0, 5 * t),
-                        child: Transform.rotate(angle: 3 * math.pi / 180, child: const _OrderCard()),
+                    // Đáy thẻ đơn nằm ở 94% chiều cao vùng minh hoạ (bottom: 6%).
+                    FractionallySizedBox(
+                      heightFactor: .94,
+                      alignment: Alignment.topCenter,
+                      child: Align(
+                        alignment: Alignment.bottomRight,
+                        child: Transform.translate(
+                          offset: Offset(0, 5 * t),
+                          child: Transform.rotate(
+                            angle: 3 * math.pi / 180,
+                            child: const RepaintBoundary(child: _OrderCard()),
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-                ],
-              );
-            },
+                  ],
+                );
+              },
+            ),
           ),
         ),
       ),
@@ -327,50 +334,46 @@ class _RevenueCard extends StatelessWidget {
         radius: 20,
         shadow: BoxShadow(color: Color(0x8C0A001E), offset: Offset(0, 20), blurRadius: 40, spreadRadius: -12),
       ),
-      child: ClipRRect(
-        borderRadius: r,
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: Container(
-            padding: const EdgeInsets.fromLTRB(18, 16, 18, 12),
-            decoration: BoxDecoration(
-              borderRadius: r,
-              border: Border.all(color: const Color(0x29FFFFFF)),
-              gradient: const LinearGradient(
-                begin: Alignment(-.35, -1),
-                end: Alignment(.35, 1),
-                colors: [Color(0x29FFFFFF), Color(0x0DFFFFFF)],
+      // Không dùng BackdropFilter: nền dưới thẻ chỉ là dải màu chuyển mịn, làm mờ
+      // gần như không đổi hình mà là thứ tốn GPU nhất màn.
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(18, 16, 18, 12),
+        decoration: BoxDecoration(
+          borderRadius: r,
+          border: Border.all(color: const Color(0x29FFFFFF)),
+          gradient: const LinearGradient(
+            begin: Alignment(-.35, -1),
+            end: Alignment(.35, 1),
+            colors: [Color(0x29FFFFFF), Color(0x0DFFFFFF)],
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Doanh thu hôm nay', style: TextStyle(color: Color(0xB3FFFFFF), fontSize: 12)),
+            const SizedBox(height: 2),
+            const Text(
+              '12.450.000 ₫',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 22,
+                fontWeight: FontWeight.w700,
+                letterSpacing: -.2,
+                fontFeatures: [FontFeature.tabularFigures()],
               ),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Doanh thu hôm nay', style: TextStyle(color: Color(0xB3FFFFFF), fontSize: 12)),
-                const SizedBox(height: 2),
-                const Text(
-                  '12.450.000 ₫',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: -.2,
-                    fontFeatures: [FontFeature.tabularFigures()],
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(color: const Color(0x2EFFC20F), borderRadius: BorderRadius.circular(99)),
-                  child: const Text(
-                    '▲ 18% so với hôm qua',
-                    style: TextStyle(color: AppColors.accent, fontSize: 11.5, fontWeight: FontWeight.w600),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                SvgPicture.string(_spark, width: double.infinity, height: 46, fit: BoxFit.fill),
-              ],
+            const SizedBox(height: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(color: const Color(0x2EFFC20F), borderRadius: BorderRadius.circular(99)),
+              child: const Text(
+                '▲ 18% so với hôm qua',
+                style: TextStyle(color: AppColors.accent, fontSize: 11.5, fontWeight: FontWeight.w600),
+              ),
             ),
-          ),
+            const SizedBox(height: 8),
+            SvgPicture.string(_spark, width: double.infinity, height: 46, fit: BoxFit.fill),
+          ],
         ),
       ),
     );
