@@ -147,19 +147,26 @@ const _user = {
   'role': {'id': 1, 'name': 'super_admin', 'display_name': 'Super Admin'},
 };
 
-Session _session() => Session.fromLogin({
+Session _session({int? chiNhanhId}) => Session.fromLogin({
   'access_token': 'a',
   'refresh_token': 'r',
   'user': {..._user, 'access_areas': 'quan_ly,thu_ngan'},
   'tenant': {'id': 2, 'code': 'test', 'name': 'Cửa hàng chính'},
+  'chi_nhanh_id': chiNhanhId,
 });
 
-Future<(_MemoryStore, _Api)> _open(WidgetTester t, {_Api? api, Size size = const Size(390, 844)}) async {
+Future<(_MemoryStore, _Api)> _open(
+  WidgetTester t, {
+  _Api? api,
+  Size size = const Size(390, 844),
+  int? chiNhanhId,
+  bool thisMonth = false,
+}) async {
   t.view.physicalSize = size;
   t.view.devicePixelRatio = 1;
   addTearDown(t.view.reset);
   final a = api ?? _Api();
-  final store = _MemoryStore(_session());
+  final store = _MemoryStore(_session(chiNhanhId: chiNhanhId));
   await t.pumpWidget(
     ProviderScope(
       overrides: [
@@ -177,6 +184,10 @@ Future<(_MemoryStore, _Api)> _open(WidgetTester t, {_Api? api, Size size = const
   await t.tap(find.byKey(const Key('area_quan_ly')));
   await t.pump(ChooseWorkspaceScreen.goingDelay);
   await _settle(t);
+  if (thisMonth) {
+    await t.tap(find.text('Tháng'));
+    await _settle(t);
+  }
   return (store, a);
 }
 
@@ -230,8 +241,32 @@ void main() {
     });
   });
 
-  testWidgets('Tổng quan tháng này: số khớp bản thiết kế, việc cần chú ý, số đơn đang xử lý', (t) async {
+  testWidgets('vào màn: mặc định HÔM NAY + chi nhánh chính (không gộp tất cả)', (t) async {
     final (_, api) = await _open(t);
+
+    expect(find.text('17/10/2026'), findsOneWidget);
+    expect(find.text('theo giờ'), findsOneWidget);
+    // Không có chi nhánh loại Công ty → chi nhánh chính là id nhỏ nhất (2).
+    expect(find.text('Cửa hàng chính'), findsWidgets);
+    expect(_heroText(t), '0');
+    expect(find.text('▼ 100%'), findsWidgets);
+    final rev = api.calls.where((c) => c.path.endsWith('/reports/revenue') && c.queryParameters['group_by'] == 'day');
+    expect(rev.every((c) => c.queryParameters['shop_id'] == '2'), isTrue);
+    expect(rev.any((c) => c.queryParameters['from'] == '2026-10-17'), isTrue);
+    expect(rev.any((c) => c.queryParameters['shop_id'] == '0'), isFalse);
+  });
+
+  testWidgets('đã chọn chi nhánh ở màn chọn nơi làm việc thì xem đúng chi nhánh đó', (t) async {
+    final (_, api) = await _open(t, chiNhanhId: 5);
+    expect(find.text('Chi nhánh 2'), findsWidgets);
+    expect(
+      api.calls.where((c) => c.path.endsWith('/reports/orders')).every((c) => c.queryParameters['shop_id'] == '5'),
+      isTrue,
+    );
+  });
+
+  testWidgets('Tổng quan tháng này: số khớp bản thiết kế, việc cần chú ý, số đơn đang xử lý', (t) async {
+    final (_, api) = await _open(t, thisMonth: true);
 
     // Thuần tháng 10 = 1.725.000.000 + 0 − 660.000; kỳ trước 172.000.000 − 10.120.000.
     expect(_heroText(t), '1,72 tỷ');
@@ -247,15 +282,15 @@ void main() {
     expect(find.textContaining('hoá đơn điện tử', findRichText: true), findsOneWidget);
     expect(find.textContaining('chưa thu tiền', findRichText: true), findsOneWidget);
 
-    // Mọi lượt gọi báo cáo mang shop_id=0 = xem gộp mọi chi nhánh.
     final rev = api.calls.where((c) => c.path.endsWith('/reports/revenue')).toList();
-    expect(rev.every((c) => c.queryParameters['shop_id'] == '0'), isTrue);
+    expect(rev.every((c) => c.queryParameters['shop_id'] == '2'), isTrue);
     expect(rev.any((c) => c.queryParameters['from'] == '2026-09-14'), isTrue, reason: 'kỳ trước cho đường xám');
     expect(t.takeException(), isNull);
   });
 
-  testWidgets('đổi kỳ: Hôm nay gọi lại API ngày 17/10; Khác → Tháng trước', (t) async {
-    final (_, api) = await _open(t);
+  testWidgets('đổi kỳ: Tháng rồi Hôm nay gọi lại API ngày 17/10; Khác → Tháng trước', (t) async {
+    final (_, api) = await _open(t, thisMonth: true);
+    api.calls.clear();
 
     await t.tap(find.text('Hôm nay'));
     await _settle(t);
@@ -285,10 +320,17 @@ void main() {
     await _settle(t);
     expect(find.text('Chi nhánh 2'), findsWidgets);
     expect(api.calls.any((c) => c.path.endsWith('/reports/orders') && c.queryParameters['shop_id'] == '5'), isTrue);
+
+    await t.tap(find.byKey(const Key('branch_filter')));
+    await _settle(t);
+    await t.tap(find.byKey(const Key('dash_branch_0')));
+    await _settle(t);
+    expect(find.text('Tất cả chi nhánh'), findsWidgets);
+    expect(api.calls.any((c) => c.path.endsWith('/reports/orders') && c.queryParameters['shop_id'] == '0'), isTrue);
   });
 
   testWidgets('Bảng số mở ngăn kéo có đủ 17 ngày', (t) async {
-    await _open(t);
+    await _open(t, thisMonth: true);
     await t.tap(find.text('Bảng số'));
     await _settle(t);
     expect(find.text('Doanh thu thuần · Tháng này'), findsOneWidget);
@@ -338,7 +380,7 @@ void main() {
     await _settle(t, 3);
     final bar = t.widget<CollapsedAppBar>(find.byType(CollapsedAppBar));
     expect(bar.visible, isTrue);
-    expect(bar.periodLabel, 'Tháng này');
+    expect(bar.periodLabel, 'Hôm nay');
     expect(bar.alertCount, greaterThan(0));
   });
 
@@ -373,6 +415,32 @@ void main() {
     await _settle(t);
     await t.tap(find.byKey(const Key('account_logout')));
     await _settle(t);
+    expect(find.text('Đăng xuất?'), findsOneWidget);
+    await t.tap(find.byKey(const Key('logout_yes')));
+    await _settle(t);
+    expect(store.session, isNull);
+    expect(find.text('Đăng nhập'), findsOneWidget);
+  });
+
+  testWidgets('ngăn Thêm có Đăng xuất: hỏi lại; Ở lại thì giữ phiên, Đăng xuất thì về màn đăng nhập', (t) async {
+    final (store, _) = await _open(t);
+    await t.tap(find.text('Thêm'));
+    await _settle(t);
+    await t.scrollUntilVisible(find.byKey(const Key('more_logout')), 200, scrollable: find.byType(Scrollable).last);
+    await t.tap(find.byKey(const Key('more_logout')));
+    await _settle(t);
+    expect(find.text('Đăng xuất?'), findsOneWidget);
+    await t.tap(find.text('Ở lại'));
+    await _settle(t);
+    expect(store.session, isNotNull);
+
+    await t.tap(find.text('Thêm'));
+    await _settle(t);
+    await t.scrollUntilVisible(find.byKey(const Key('more_logout')), 200, scrollable: find.byType(Scrollable).last);
+    await t.tap(find.byKey(const Key('more_logout')));
+    await _settle(t);
+    await t.tap(find.byKey(const Key('logout_yes')));
+    await _settle(t);
     expect(store.session, isNull);
     expect(find.text('Đăng nhập'), findsOneWidget);
   });
@@ -384,7 +452,8 @@ void main() {
     api.revenueCode = 200;
     await t.tap(find.text('Thử lại'));
     await _settle(t);
-    expect(_heroText(t), '1,72 tỷ');
+    expect(_heroText(t), '0');
+    expect(find.text('▼ 100%'), findsWidgets);
   });
 
   testWidgets('máy hẹp 360×640: không tràn khung ở mọi thẻ', (t) async {

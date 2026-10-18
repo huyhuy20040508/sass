@@ -6,7 +6,7 @@ import '../../app/theme.dart';
 import '../../core/ui/app_icon.dart';
 import '../auth/auth_controller.dart';
 import '../workspace/workspace.dart';
-import '../workspace/workspace_widgets.dart' show initialsOf;
+import '../workspace/workspace_widgets.dart' show SheetButton, initialsOf;
 import 'dashboard/dashboard_data.dart';
 import 'dashboard/dashboard_screen.dart';
 import 'shell/shell_widgets.dart';
@@ -159,7 +159,7 @@ class _AdminShellState extends ConsumerState<AdminShell> {
       case 'profile':
         _soon('Thông tin tài khoản');
       case 'logout':
-        await ref.read(authProvider.notifier).logout();
+        await _confirmLogout();
     }
   }
 
@@ -273,23 +273,58 @@ class _AdminShellState extends ConsumerState<AdminShell> {
                 ),
               ),
             ),
+          // Đăng xuất để ở cuối "Thêm" — chỗ người dùng tìm đầu tiên; ngăn tài khoản (chạm ảnh) cũng có.
+          const SizedBox(height: 10),
+          SheetOption(
+            key: const Key('more_logout'),
+            label: 'Đăng xuất',
+            leading: AppIcons.logout,
+            danger: true,
+            onTap: () => Navigator.of(ctx).pop('__logout'),
+          ),
         ],
       ),
     );
     if (pick == null || !mounted) return;
-    pick == '__cashier' ? _toCashier() : _soon(pick);
+    switch (pick) {
+      case '__cashier':
+        _toCashier();
+      case '__logout':
+        await _confirmLogout();
+      default:
+        _soon(pick);
+    }
+  }
+
+  Future<void> _confirmLogout() async {
+    final yes = await showDashSheet<bool>(
+      context,
+      title: 'Đăng xuất?',
+      subtitle: 'Sai tài khoản hay sai tiệm thì đăng xuất rồi vào lại.',
+      body: (ctx) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SheetButton(
+            key: const Key('logout_yes'),
+            label: 'Đăng xuất',
+            icon: AppIcons.logout,
+            danger: true,
+            onTap: () => Navigator.of(ctx).pop(true),
+          ),
+          SheetButton(label: 'Ở lại', onTap: () => Navigator.of(ctx).pop(false)),
+        ],
+      ),
+    );
+    if (yes == true) await ref.read(authProvider.notifier).logout();
   }
 
   @override
   Widget build(BuildContext context) {
     final f = ref.watch(dashFilterProvider);
-    final data = ref.watch(dashboardProvider(f)).value;
+    final q = ref.watch(dashQueryProvider);
+    final data = q == null ? null : ref.watch(dashboardProvider(q)).value;
     final branches = ref.watch(dashBranchesProvider).value ?? const [];
-    final branchName = f.shopId == 0
-        ? 'Tất cả chi nhánh'
-        : branches
-              .firstWhere((b) => b.id == f.shopId, orElse: () => BranchOpt(f.shopId, 'Chi nhánh #${f.shopId}'))
-              .name;
+    final branchName = q == null ? '…' : branchLabel(q.shopId, branches);
     final pending = ref.watch(pendingOrdersProvider).value ?? 0;
     final home = _tab == AdminTab.home;
 

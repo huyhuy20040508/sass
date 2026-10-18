@@ -4,6 +4,7 @@ import '../../../core/api/api_client.dart';
 import '../../../core/api/api_exception.dart';
 import '../../../core/format/vn_number.dart';
 import '../../auth/auth_controller.dart';
+import '../../workspace/workspace.dart';
 
 /// Kỳ xem — cùng mã với Period của web_Shop.
 enum DashPeriod {
@@ -262,12 +263,16 @@ class DashboardData {
   }
 }
 
-/// Bộ lọc của màn Tổng quan: kỳ + chi nhánh (0 = tất cả).
+/// Bộ lọc của màn Tổng quan.
+///
+/// [shopId]: 0 = tất cả chi nhánh; null ở lựa chọn của người dùng = "mặc định"
+/// (xem [dashQueryProvider]); null ở bộ lọc đã giải = không gửi shop_id, API lấy
+/// chi nhánh đang làm.
 class DashFilter {
-  const DashFilter({this.period = DashPeriod.thisMonth, this.shopId = 0});
+  const DashFilter({this.period = DashPeriod.today, this.shopId});
 
   final DashPeriod period;
-  final int shopId;
+  final int? shopId;
 
   DashFilter copyWith({DashPeriod? period, int? shopId}) =>
       DashFilter(period: period ?? this.period, shopId: shopId ?? this.shopId);
@@ -279,6 +284,7 @@ class DashFilter {
   int get hashCode => Object.hash(period, shopId);
 }
 
+/// Lựa chọn của người dùng trên màn Tổng quan. Vào màn là xem HÔM NAY.
 final dashFilterProvider = NotifierProvider<DashFilterNotifier, DashFilter>(DashFilterNotifier.new);
 
 class DashFilterNotifier extends Notifier<DashFilter> {
@@ -290,21 +296,35 @@ class DashFilterNotifier extends Notifier<DashFilter> {
   void setShop(int id) => state = state.copyWith(shopId: id);
 }
 
+/// Bộ lọc thật gửi lên API. Chưa chọn chi nhánh thì xem chi nhánh ĐANG LÀM
+/// (chọn ở màn chọn nơi làm việc), chưa có nữa thì chi nhánh chính (trụ sở) —
+/// không mặc định gộp mọi chi nhánh. null = đang tải danh sách chi nhánh.
+final dashQueryProvider = Provider.autoDispose<DashFilter?>((ref) {
+  final c = ref.watch(dashFilterProvider);
+  if (c.shopId != null) return c;
+  final dangLam = ref.watch(authProvider.select((s) => s.value?.chiNhanhId));
+  if (dangLam != null) return c.copyWith(shopId: dangLam);
+  final br = ref.watch(dashBranchesProvider);
+  if (!br.hasValue) return null;
+  final chinh = br.value!.where((b) => b.isHq).firstOrNull;
+  return chinh == null ? c : c.copyWith(shopId: chinh.id);
+});
+
 /// Đồng hồ của màn Tổng quan — test thay bằng giờ cố định.
 final clockProvider = Provider<DateTime Function()>((_) => DateTime.now);
 
-class BranchOpt {
-  const BranchOpt(this.id, this.name);
+/// Tên chi nhánh đang xem cho đầu màn và thanh thu gọn.
+String branchLabel(int? shopId, List<Branch> branches) => switch (shopId) {
+  null => 'Chi nhánh đang làm',
+  0 => 'Tất cả chi nhánh',
+  final id => branches.where((b) => b.id == id).firstOrNull?.name ?? 'Chi nhánh #$id',
+};
 
-  final int id;
-  final String name;
-}
-
-/// Chi nhánh để lọc Tổng quan. Không có quyền xem danh sách thì chỉ còn "Tất cả".
-final dashBranchesProvider = FutureProvider.autoDispose<List<BranchOpt>>((ref) async {
+/// Chi nhánh để lọc Tổng quan (trụ sở đứng đầu). Không có quyền xem danh sách thì rỗng.
+final dashBranchesProvider = FutureProvider.autoDispose<List<Branch>>((ref) async {
   try {
     final raw = await ref.read(apiClientProvider).get<List<dynamic>>('/admin/chi-nhanh', query: {'active': 'true'});
-    return [for (final r in raw.whereType<Map>()) BranchOpt((r['id'] as num).toInt(), '${r['name'] ?? ''}')];
+    return parseBranches(raw);
   } on ApiException {
     return const [];
   }
@@ -327,7 +347,7 @@ Future<DashboardData> loadDashboard(ApiClient api, DashFilter f, DateTime now, R
   final (a, b) = f.period.range(now);
   final (pa, pb) = prevRange(a, b);
   final from = ymd(a), to = ymd(b), pFrom = ymd(pa), pTo = ymd(pb);
-  final shop = {'shop_id': '${f.shopId}'};
+  final shop = {if (f.shopId != null) 'shop_id': '${f.shopId}'};
   final ky = {'from': from, 'to': to, ...shop};
 
   Future<T> soft<T>(Future<T> Function() call, T fallback) async {
@@ -429,20 +449,25 @@ Future<DashboardData> loadDashboard(ApiClient api, DashFilter f, DateTime now, R
       for (var i = 0; i < _promoTabs.length; i++)
         _promoTabs[i]: ((promos[i]['rows'] as List?) ?? const []).whereType<Map>().toList(),
     },
-    branchNames: {for (final b in results[13] as List<BranchOpt>) b.id: b.name},
+    branchNames: {for (final b in results[13] as List<Branch>) b.id: b.name},
   );
 }
 
 /// Số đơn còn đang xử lý trong tháng — con số đỏ trên tab Đơn hàng.
 final pendingOrdersProvider = FutureProvider.autoDispose<int>((ref) async {
-  final f = ref.watch(dashFilterProvider);
+  final f = ref.watch(dashQueryProvider);
+  if (f == null) return 0;
   final now = ref.read(clockProvider)();
   try {
     final r = await ref
         .read(apiClientProvider)
         .get<Map<String, dynamic>>(
           '/admin/reports/orders',
-          query: {'from': ymd(DateTime(now.year, now.month)), 'to': ymd(now), 'shop_id': '${f.shopId}'},
+          query: {
+            'from': ymd(DateTime(now.year, now.month)),
+            'to': ymd(now),
+            if (f.shopId != null) 'shop_id': '${f.shopId}',
+          },
         );
     var n = 0;
     for (final s in ((r['by_status'] as List?) ?? const []).whereType<Map>()) {

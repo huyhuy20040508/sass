@@ -7,6 +7,7 @@ import '../../../core/api/api_exception.dart';
 import '../../../core/format/vn_number.dart';
 import '../../../core/ui/app_icon.dart';
 import '../../auth/auth_controller.dart';
+import '../../workspace/workspace.dart' show Branch;
 import '../../workspace/workspace_widgets.dart' show greetingFor, initialsOf;
 import '../shell/shell_widgets.dart';
 import 'dashboard_cards.dart';
@@ -73,7 +74,7 @@ class DashboardScreenState extends ConsumerState<DashboardScreen> {
   }
 
   Future<void> openBranchSheet() async {
-    final f = ref.read(dashFilterProvider);
+    final cur = ref.read(dashQueryProvider)?.shopId;
     final branches = await ref.read(dashBranchesProvider.future);
     if (!mounted) return;
     final id = await showDashSheet<int>(
@@ -82,11 +83,12 @@ class DashboardScreenState extends ConsumerState<DashboardScreen> {
       subtitle: 'Mọi số lọc theo chi nhánh này — trừ Tồn kho.',
       body: (ctx) => Column(
         children: [
-          for (final b in [const BranchOpt(0, 'Tất cả chi nhánh'), ...branches])
+          for (final b in [...branches, const Branch(id: 0, name: 'Tất cả chi nhánh')])
             SheetOption(
               key: Key('dash_branch_${b.id}'),
               label: b.name,
-              selected: f.shopId == b.id,
+              trailing: b.isHq ? 'Trụ sở' : null,
+              selected: cur == b.id,
               onTap: () => Navigator.of(ctx).pop(b.id),
             ),
         ],
@@ -101,7 +103,8 @@ class DashboardScreenState extends ConsumerState<DashboardScreen> {
   }
 
   Future<void> _refresh() async {
-    final f = ref.read(dashFilterProvider);
+    final f = ref.read(dashQueryProvider);
+    if (f == null) return;
     ref.invalidate(dashboardProvider(f));
     ref.invalidate(pendingOrdersProvider);
     try {
@@ -129,7 +132,8 @@ class DashboardScreenState extends ConsumerState<DashboardScreen> {
               'items': {'monthly_revenue_goal': '$so'},
             },
           );
-      ref.invalidate(dashboardProvider(ref.read(dashFilterProvider)));
+      final q = ref.read(dashQueryProvider);
+      if (q != null) ref.invalidate(dashboardProvider(q));
       if (mounted) showDashToast(context, 'Đã lưu mục tiêu ${compact(so)}');
     } on ApiException catch (e) {
       if (mounted) showDashToast(context, e.message);
@@ -144,17 +148,14 @@ class DashboardScreenState extends ConsumerState<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     final f = ref.watch(dashFilterProvider);
-    final async = ref.watch(dashboardProvider(f));
+    final q = ref.watch(dashQueryProvider);
+    final AsyncValue<DashboardData> async = q == null ? const AsyncLoading() : ref.watch(dashboardProvider(q));
     if (async.hasValue) _last = async.value;
     final data = async.value ?? _last;
     final session = ref.watch(authProvider).value;
     final now = ref.read(clockProvider)();
     final branches = ref.watch(dashBranchesProvider).value ?? const [];
-    final branchName = f.shopId == 0
-        ? 'Tất cả chi nhánh'
-        : branches
-              .firstWhere((b) => b.id == f.shopId, orElse: () => BranchOpt(f.shopId, 'Chi nhánh #${f.shopId}'))
-              .name;
+    final branchName = q == null ? '…' : branchLabel(q.shopId, branches);
     final (a, b) = f.period.range(now);
     final (pa, pb) = prevRange(a, b);
     final name = session?.user.tenHienThi ?? '';
@@ -205,7 +206,10 @@ class DashboardScreenState extends ConsumerState<DashboardScreen> {
                 style: const TextStyle(color: DashColors.text, fontSize: 14),
               ),
               TextButton(
-                onPressed: () => ref.invalidate(dashboardProvider(ref.read(dashFilterProvider))),
+                onPressed: () {
+                  final q = ref.read(dashQueryProvider);
+                  if (q != null) ref.invalidate(dashboardProvider(q));
+                },
                 child: const Text('Thử lại'),
               ),
             ],
