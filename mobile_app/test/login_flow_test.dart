@@ -395,7 +395,7 @@ void main() {
 
     // Có phiên thì vào màn chọn nơi làm việc trước, chọn khu rồi mới tới màn chính.
     expect(find.text('Vào khu vực'), findsOneWidget);
-    await t.tap(find.byKey(const Key('area_quan_ly')));
+    await t.tap(find.byKey(const Key('area_thu_ngan')));
     await t.pump(ChooseWorkspaceScreen.goingDelay);
     await _settle(t);
     expect(find.text('Shop Test'), findsOneWidget);

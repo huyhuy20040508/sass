@@ -43,7 +43,44 @@ enum AppIcons {
   ),
   cash(
     '<rect x="2.5" y="6" width="19" height="12" rx="2"/><circle cx="12" cy="12" r="2.6"/><path d="M6 9.5v.1M18 14.4v.1"/>',
-  );
+  ),
+  // Từ design/html/tong-quan-mobile.html
+  down('<path d="m6 9 6 6 6-6"/>'),
+  right('<path d="m9 6 6 6-6 6"/>'),
+  bell('<path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15Z"/><path d="M10 20.5a2 2 0 0 0 4 0"/>'),
+  home('<path d="M3.5 10.5 12 3.5l8.5 7V20a1 1 0 0 1-1 1H15v-6H9v6H4.5a1 1 0 0 1-1-1Z"/>'),
+  cart(
+    '<path d="M3 4h2.5l2.2 10.5h10.6L20.5 7H6.4"/><circle cx="9.5" cy="19" r="1.5"/><circle cx="17" cy="19" r="1.5"/>',
+  ),
+  box('<path d="m12 3 8.5 4.5v9L12 21l-8.5-4.5v-9Z"/><path d="m3.5 7.5 8.5 4.5 8.5-4.5M12 12v9"/>'),
+  menu('<path d="M4 7h16M4 12h16M4 17h16"/>'),
+  target('<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r=".8"/>'),
+  doc('<path d="M6 2.5h8.5L19 7v14.5H6Z"/><path d="M14 2.5V7h5M9 12h6M9 16h6"/>'),
+  wallet(
+    '<path d="M3.5 7.5h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1h-15a1 1 0 0 1-1-1Z"/><path d="M3.5 7.5 15.5 4v3.5M16 13.5h2"/>',
+  ),
+  chart('<path d="M4 20V4M4 20h16M8 16v-4M12 16V8M16 16v-6"/>'),
+  users(
+    '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.2a6.5 6.5 0 0 1 3.5 5.8"/>',
+  ),
+  returns('<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>'),
+  tag('<path d="M3.5 12.5V4.5a1 1 0 0 1 1-1h8l8 8-9 9Z"/><circle cx="8.5" cy="8.5" r="1.5"/>'),
+  ticket(
+    '<path d="M3.5 7.5a1 1 0 0 1 1-1h15a1 1 0 0 1 1 1V10a2 2 0 0 0 0 4v2.5a1 1 0 0 1-1 1h-15a1 1 0 0 1-1-1V14a2 2 0 0 0 0-4Z"/>'
+    '<path d="M14.5 6.5v11"/>',
+  ),
+  truck(
+    '<path d="M2.5 6.5h11v10h-11ZM13.5 10h4l3 3.2v3.3h-7"/><circle cx="6.5" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/>',
+  ),
+  clip('<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V2.5h6V4M8.5 10h7M8.5 14h7M8.5 18h4"/>'),
+  factory('<path d="M3 21V10l5 3V10l5 3V7l8 4v10Z"/><path d="M7 17h2M12 17h2M17 17h2"/>'),
+  gear(
+    '<circle cx="12" cy="12" r="3"/>'
+    '<path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/>',
+  ),
+  swapH('<path d="M7 4 3.5 7.5 7 11M3.5 7.5h13M17 20l3.5-3.5L17 13M20.5 16.5h-13"/>'),
+  refresh('<path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/>'),
+  news('<rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M7.5 9h9M7.5 12.5h9M7.5 16h5"/>');
 
   const AppIcons(this.paths);
 
