@@ -12,6 +12,7 @@ import 'package:selliotech/core/storage/session_store.dart';
 import 'package:selliotech/features/auth/auth_controller.dart';
 import 'package:selliotech/features/auth/login_screen.dart';
 import 'package:selliotech/features/auth/session.dart';
+import 'package:selliotech/features/workspace/choose_workspace_screen.dart';
 import 'package:selliotech/main.dart';
 
 class _MemoryStore extends SessionStore {
@@ -44,6 +45,7 @@ final _loginJson = {
     'username': 'admin',
     'full_name': 'Quản trị viên',
     'role': {'id': 1, 'name': 'super_admin', 'display_name': 'Chủ cửa hàng'},
+    'access_areas': 'quan_ly,thu_ngan',
   },
   'tenant': {'id': 2, 'code': 'test', 'name': 'Shop Test', 'status': 'active'},
   'chi_nhanh_id': 5,
@@ -57,6 +59,9 @@ class _FakeServer implements HttpClientAdapter {
 
   @override
   Future<ResponseBody> fetch(RequestOptions o, Stream<Uint8List>? _, Future<void>? _) async {
+    // Màn chọn nơi làm việc sau đăng nhập đọc hai đường này.
+    if (o.path.endsWith('/auth/me')) return _json(200, {'success': true, 'data': _loginJson['user']});
+    if (o.path.endsWith('/admin/chi-nhanh')) return _json(200, {'success': true, 'data': _branchesJson});
     final body = Map<String, dynamic>.from(o.data as Map);
     bodies.add(body);
     if (hold != null) await hold!.future;
@@ -81,9 +86,22 @@ class _FakeServer implements HttpClientAdapter {
     );
   }
 
+  ResponseBody _json(int code, Object body) => ResponseBody.fromString(
+    jsonEncode(body),
+    code,
+    headers: {
+      Headers.contentTypeHeader: ['application/json'],
+    },
+  );
+
   @override
   void close({bool force = false}) {}
 }
+
+const _branchesJson = [
+  {'id': 5, 'name': 'Cửa hàng Lê Lợi', 'branch_type': 2},
+  {'id': 7, 'name': 'Chi nhánh Quận 1', 'branch_type': 1},
+];
 
 const _remembered = RememberedLogin(shopCode: 'test', username: 'admin', displayName: 'Quản trị viên');
 
@@ -167,10 +185,33 @@ void main() {
     await _settle(t);
     expect(find.byKey(const Key('shop_code')), findsOneWidget);
     expect(_fieldText(t, 'shop_code'), '');
-    expect(find.text('Chào mừng trở lại'), findsNothing, reason: 'đang gõ ô mã nên đầu tím thu gọn');
     FocusManager.instance.primaryFocus?.unfocus();
     await _settle(t);
     expect(find.text('Chào mừng trở lại'), findsOneWidget);
+  });
+
+  testWidgets('Bàn phím hiện thì thu đầu tím; tắt bàn phím (Back) thì về bố cục thường, bỏ focus', (t) async {
+    await _open(t, store: _MemoryStore(remembered: _remembered));
+    final heroH = t.getTopLeft(find.byKey(const Key('username'))).dy;
+
+    await t.tap(find.byKey(const Key('password')));
+    t.view.viewInsets = const FakeViewPadding(bottom: 300);
+    await _settle(t);
+    expect(find.text('Chào Quản trị viên,'), findsNothing);
+
+    // Back trên Android: bàn phím tắt nhưng ô vẫn giữ focus.
+    t.view.viewInsets = FakeViewPadding.zero;
+    await _settle(t);
+    expect(find.text('Chào Quản trị viên,'), findsOneWidget);
+    expect(t.getTopLeft(find.byKey(const Key('username'))).dy, heroH, reason: 'không chừa khoảng trống');
+    expect(FocusManager.instance.primaryFocus?.context?.findAncestorWidgetOfExactType<TextField>(), isNull);
+  });
+
+  testWidgets('Chỉ focus mà không có bàn phím mềm (bàn phím rời) thì không thu đầu tím', (t) async {
+    await _open(t, store: _MemoryStore(remembered: _remembered));
+    await t.tap(find.byKey(const Key('password')));
+    await _settle(t);
+    expect(find.text('Chào Quản trị viên,'), findsOneWidget);
   });
 
   testWidgets('Thiếu thông tin: báo dưới từng ô, gõ vào thì hết báo, không gửi API', (t) async {
@@ -352,6 +393,11 @@ void main() {
     final store = _MemoryStore(session: Session.fromLogin(_loginJson), remembered: _remembered);
     await _open(t, store: store);
 
+    // Có phiên thì vào màn chọn nơi làm việc trước, chọn khu rồi mới tới màn chính.
+    expect(find.text('Vào khu vực'), findsOneWidget);
+    await t.tap(find.byKey(const Key('area_quan_ly')));
+    await t.pump(ChooseWorkspaceScreen.goingDelay);
+    await _settle(t);
     expect(find.text('Shop Test'), findsOneWidget);
     expect(find.text('Quản trị viên'), findsOneWidget);
     expect(find.text('Chủ cửa hàng · Chi nhánh #5'), findsOneWidget);

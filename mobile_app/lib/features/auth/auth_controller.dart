@@ -64,6 +64,15 @@ class AuthController extends AsyncNotifier<Session?> implements TokenSource {
 
   void publish(Session s) => state = AsyncData(s);
 
+  /// Ghi chi nhánh đang làm — từ đây mọi lượt gọi API mang X-Chi-Nhanh này.
+  Future<void> setChiNhanh(int? id) async {
+    final cur = state.value;
+    if (cur == null || cur.chiNhanhId == id) return;
+    final s = cur.withChiNhanh(id);
+    if (_luuPhien) await _store.write(s);
+    state = AsyncData(s);
+  }
+
   Future<void> logout() async {
     await _store.clear();
     _luuPhien = true;
