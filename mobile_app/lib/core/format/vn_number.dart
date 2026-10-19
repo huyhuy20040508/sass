@@ -25,16 +25,6 @@ String decimal(num n, int digits) {
   return frac.isEmpty ? '$neg$whole' : '$neg$whole,$frac';
 }
 
-/// Rút gọn tiền: 1,86 tỷ · 12,5 tr · 350k · 900.
-String compact(num n) {
-  final a = n.abs();
-  final s = n < 0 ? '−' : '';
-  if (a >= 1e9) return '$s${decimal(a / 1e9, 2)} tỷ';
-  if (a >= 1e6) return '$s${decimal(a / 1e6, 1)} tr';
-  if (a >= 1e3) return '$s${decimal(a / 1e3, 0)}k';
-  return '$s${dot(a)}';
-}
-
 /// Phần trăm: pct(31.8) → "31,8%".
 String pct(num n, [int digits = 1]) => '${decimal(n, digits)}%';
 

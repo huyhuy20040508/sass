@@ -285,7 +285,7 @@ void main() {
         sales.fold<num>(0, (a, r) => a + (r['tong_tien'] as num)) -
         ret.fold<num>(0, (a, r) => a + (r['tong_tien'] as num));
     final text = t.widget<Text>(find.byKey(const Key('orders_revenue'))).textSpan!.toPlainText();
-    expect(text, '${compact(revenue)} · ${sales.length} đơn');
+    expect(text, '${dot(revenue)} · ${sales.length} đơn');
 
     expect(find.text(dayLabel(DateTime(2026, 10, 16), _now)), findsOneWidget);
     expect(find.text('DH000073'), findsOneWidget);

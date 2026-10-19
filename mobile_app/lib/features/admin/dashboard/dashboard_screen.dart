@@ -134,7 +134,7 @@ class DashboardScreenState extends ConsumerState<DashboardScreen> {
           );
       final q = ref.read(dashQueryProvider);
       if (q != null) ref.invalidate(dashboardProvider(q));
-      if (mounted) showDashToast(context, 'Đã lưu mục tiêu ${compact(so)}');
+      if (mounted) showDashToast(context, 'Đã lưu mục tiêu ${dot(so)} đ');
     } on ApiException catch (e) {
       if (mounted) showDashToast(context, e.message);
     }

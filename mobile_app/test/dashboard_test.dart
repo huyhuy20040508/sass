@@ -201,14 +201,9 @@ String _heroText(WidgetTester t) => t.widget<Text>(find.byKey(const Key('hero_nu
 
 void main() {
   group('định dạng số', () {
-    test('chấm ngăn nghìn, phẩy thập phân, rút gọn tỷ/tr/k', () {
+    test('chấm ngăn nghìn, phẩy thập phân', () {
       expect(dot(1724340000), '1.724.340.000');
       expect(dot(-12500), '-12.500');
-      expect(compact(1724340000), '1,72 tỷ');
-      expect(compact(472740000), '472,7 tr');
-      expect(compact(350000), '350k');
-      expect(compact(900), '900');
-      expect(compact(-10000), '−10k');
       expect(pct(31.818181), '31,8%');
       expect(pct(965.2, 0), '965%');
       expect(decimal(-0.4, 1), '-0,4');
@@ -248,7 +243,7 @@ void main() {
     expect(find.text('theo giờ'), findsOneWidget);
     // Không có chi nhánh loại Công ty → chi nhánh chính là id nhỏ nhất (2).
     expect(find.text('Cửa hàng chính'), findsWidgets);
-    expect(_heroText(t), '0');
+    expect(_heroText(t), '0 đ');
     expect(find.text('▼ 100%'), findsWidgets);
     final rev = api.calls.where((c) => c.path.endsWith('/reports/revenue') && c.queryParameters['group_by'] == 'day');
     expect(rev.every((c) => c.queryParameters['shop_id'] == '2'), isTrue);
@@ -269,14 +264,15 @@ void main() {
     final (_, api) = await _open(t, thisMonth: true);
 
     // Thuần tháng 10 = 1.725.000.000 + 0 − 660.000; kỳ trước 172.000.000 − 10.120.000.
-    expect(_heroText(t), '1,72 tỷ');
+    // Tiền ghi số đầy đủ, không rút gọn tr/tỷ.
+    expect(_heroText(t), '1.724.340.000 đ');
     expect(find.text('▲ 965%'), findsOneWidget);
-    expect(find.textContaining('kỳ trước 161,9 tr · 1.724.340.000 đ'), findsOneWidget);
-    expect(find.text('472,7 tr'), findsOneWidget);
+    expect(find.text('kỳ trước 161.880.000 đ'), findsOneWidget);
+    expect(find.text('472.740.000'), findsOneWidget);
     expect(find.text('30'), findsWidgets);
-    expect(find.text('3,5 tr'), findsOneWidget, reason: 'nhập hàng chỉ cộng phiếu không huỷ/nháp');
+    expect(find.text('3.500.000'), findsOneWidget, reason: 'nhập hàng chỉ cộng phiếu không huỷ/nháp');
     expect(find.text('2 phiếu'), findsOneWidget);
-    expect(find.text('Chưa đặt mục tiêu\nTháng này đã đạt 1,72 tỷ thuần.', findRichText: true), findsOneWidget);
+    expect(find.text('Chưa đặt mục tiêu\nTháng này đã đạt 1.724.340.000 đ thuần.', findRichText: true), findsOneWidget);
 
     expect(find.textContaining('ca lệch két', findRichText: true), findsOneWidget);
     expect(find.textContaining('hoá đơn điện tử', findRichText: true), findsOneWidget);
@@ -452,7 +448,7 @@ void main() {
     api.revenueCode = 200;
     await t.tap(find.text('Thử lại'));
     await _settle(t);
-    expect(_heroText(t), '0');
+    expect(_heroText(t), '0 đ');
     expect(find.text('▼ 100%'), findsWidgets);
   });
 

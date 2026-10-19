@@ -209,8 +209,6 @@ class RevenueCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final nay = data.now$, truoc = data.prev$;
-    final txt = compact(nay.net);
-    final m = RegExp(r'^(.*) (tỷ|tr)$').firstMatch(txt);
     final (cur, prev, labels) = series(data);
     return DashCard(
       child: Column(
@@ -228,30 +226,34 @@ class RevenueCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 2),
-          Text.rich(
-            TextSpan(
-              text: m?.group(1) ?? txt,
-              children: [
-                if (m != null)
+          // Số đầy đủ (không rút gọn tr/tỷ): hàng tỷ thì thu nhỏ cho vừa một dòng.
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text.rich(
+              TextSpan(
+                text: dot(nay.net),
+                children: const [
                   TextSpan(
-                    text: ' ${m.group(2)}',
-                    style: const TextStyle(
+                    text: ' đ',
+                    style: TextStyle(
                       color: DashColors.muted,
                       fontSize: 22,
                       fontWeight: FontWeight.w600,
                       letterSpacing: -.2,
                     ),
                   ),
-              ],
-            ),
-            key: const Key('hero_num'),
-            style: const TextStyle(
-              color: DashColors.ink,
-              fontSize: 46,
-              fontWeight: FontWeight.w700,
-              letterSpacing: -1.6,
-              height: 1.05,
-              fontFeatures: _tnum,
+                ],
+              ),
+              key: const Key('hero_num'),
+              style: const TextStyle(
+                color: DashColors.ink,
+                fontSize: 40,
+                fontWeight: FontWeight.w700,
+                letterSpacing: -1.2,
+                height: 1.05,
+                fontFeatures: _tnum,
+              ),
             ),
           ),
           const SizedBox(height: 6),
@@ -262,7 +264,7 @@ class RevenueCard extends StatelessWidget {
             children: [
               DeltaChip(Delta.of(nay.net, truoc.net)),
               Text(
-                'kỳ trước ${compact(truoc.net)} · ${dot(nay.net)} đ',
+                'kỳ trước ${dot(truoc.net)} đ',
                 style: const TextStyle(color: DashColors.muted, fontSize: 12.5, fontFeatures: _tnum),
               ),
             ],
@@ -378,7 +380,7 @@ class MetricTiles extends StatelessWidget {
     final tiles = [
       (
         'Lợi nhuận gộp',
-        compact(nay.profit),
+        dot(nay.profit),
         Delta.of(nay.profit, truoc.profit),
         margin != null ? 'biên ${pct(margin, 0)}' : null,
         sp((b) => (b['profit'] as num?) ?? 0),
@@ -392,7 +394,7 @@ class MetricTiles extends StatelessWidget {
       ),
       (
         'Giá trị TB / đơn',
-        compact(aov),
+        dot(aov),
         Delta.of(aov, aovT),
         null,
         sp((b) {
@@ -402,7 +404,7 @@ class MetricTiles extends StatelessWidget {
       ),
       (
         'Tiền nhập hàng',
-        compact(mua.total),
+        dot(mua.total),
         Delta.of(mua.total, muaT.total),
         '${mua.count} phiếu',
         sp((b) => mua.byDay['${b['label']}'] ?? 0),
@@ -429,14 +431,18 @@ class MetricTiles extends StatelessWidget {
                         style: const TextStyle(color: DashColors.muted, fontSize: 12, fontWeight: FontWeight.w500),
                       ),
                       const SizedBox(height: 4),
-                      Text(
-                        value,
-                        style: const TextStyle(
-                          color: DashColors.ink,
-                          fontSize: 21,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: -.4,
-                          fontFeatures: _tnum,
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          value,
+                          style: const TextStyle(
+                            color: DashColors.ink,
+                            fontSize: 21,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -.4,
+                            fontFeatures: _tnum,
+                          ),
                         ),
                       ),
                       const SizedBox(height: 3),
@@ -501,10 +507,10 @@ class GoalCard extends StatelessWidget {
                         TextSpan(
                           children: [
                             TextSpan(
-                              text: compact(dat),
+                              text: dot(dat),
                               style: const TextStyle(color: DashColors.ink, fontSize: 18, fontWeight: FontWeight.w700),
                             ),
-                            TextSpan(text: ' / ${compact(goal)}'),
+                            TextSpan(text: ' / ${dot(goal)}'),
                           ],
                         ),
                         style: const TextStyle(color: DashColors.muted, fontSize: 12),
@@ -574,7 +580,7 @@ class GoalCard extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      'còn $con ngày · cần ${compact(math.max(0, goal - dat) / con)}/ngày',
+                      'còn $con ngày · cần ${dot(math.max(0, goal - dat) / con)}/ngày',
                       style: const TextStyle(color: DashColors.muted, fontSize: 12),
                     ),
                   ],
@@ -600,7 +606,7 @@ class GoalCard extends StatelessWidget {
                           text: 'Chưa đặt mục tiêu\n',
                           style: TextStyle(color: DashColors.ink, fontSize: 14, fontWeight: FontWeight.w700),
                         ),
-                        TextSpan(text: 'Tháng này đã đạt ${compact(dat)} thuần.'),
+                        TextSpan(text: 'Tháng này đã đạt ${dot(dat)} đ thuần.'),
                       ],
                     ),
                     style: const TextStyle(color: DashColors.muted, fontSize: 12.5, height: 1.4),
@@ -923,7 +929,7 @@ class _MixCardState extends State<MixCard> {
               children: [
                 Donut(
                   parts: [for (var i = 0; i < list.length; i++) (list[i].$2, colorOf(i, list[i].$4))],
-                  center: compact(tong),
+                  center: dot(tong),
                   caption: _kind == MixKind.promo ? 'tiền giảm' : 'tổng',
                 ),
                 const SizedBox(width: 16),
@@ -972,7 +978,7 @@ class _MixCardState extends State<MixCard> {
                               Padding(
                                 padding: const EdgeInsets.only(left: 18),
                                 child: Text(
-                                  '${compact(list[i].$2)} · ${list[i].$3}${_kind == MixKind.promo ? ' lượt' : ' đơn'}',
+                                  '${dot(list[i].$2)} · ${list[i].$3}${_kind == MixKind.promo ? ' lượt' : ' đơn'}',
                                   style: const TextStyle(color: DashColors.muted, fontSize: 11.5, fontFeatures: _tnum),
                                 ),
                               ),
@@ -1168,7 +1174,7 @@ class _TopProductsCardState extends State<TopProductsCard> {
                         ),
                         const SizedBox(width: 10),
                         Text(
-                          _byRevenue ? compact(v(items[i])) : dot(v(items[i])),
+                          dot(v(items[i])),
                           style: const TextStyle(
                             color: DashColors.ink,
                             fontSize: 13,
@@ -1180,26 +1186,30 @@ class _TopProductsCardState extends State<TopProductsCard> {
                     ),
                     Padding(
                       padding: const EdgeInsets.only(left: 44, top: 6),
-                      child: LayoutBuilder(
-                        builder: (context, c) => Row(
-                          children: [
-                            Container(
-                              width: math.max(2, (c.maxWidth - 70) * v(items[i]) / mx),
-                              height: 8,
-                              decoration: const BoxDecoration(
-                                color: DashColors.s1,
-                                borderRadius: BorderRadius.horizontal(right: Radius.circular(4)),
+                      // Thanh chiếm phần còn lại sau nhãn số — nhãn tiền đầy đủ dài ngắn tuỳ mặt hàng.
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: FractionallySizedBox(
+                              alignment: Alignment.centerLeft,
+                              widthFactor: math.max(.01, v(items[i]) / mx).toDouble(),
+                              child: Container(
+                                height: 8,
+                                decoration: const BoxDecoration(
+                                  color: DashColors.s1,
+                                  borderRadius: BorderRadius.horizontal(right: Radius.circular(4)),
+                                ),
                               ),
                             ),
-                            const SizedBox(width: 8),
-                            Text(
-                              _byRevenue
-                                  ? '${dot((items[i]['units'] as num?) ?? 0)} cái'
-                                  : compact((items[i]['revenue'] as num?) ?? 0),
-                              style: const TextStyle(color: DashColors.muted, fontSize: 11.5),
-                            ),
-                          ],
-                        ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            _byRevenue
+                                ? '${dot((items[i]['units'] as num?) ?? 0)} cái'
+                                : dot((items[i]['revenue'] as num?) ?? 0),
+                            style: const TextStyle(color: DashColors.muted, fontSize: 11.5, fontFeatures: _tnum),
+                          ),
+                        ],
                       ),
                     ),
                   ],

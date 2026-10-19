@@ -409,13 +409,17 @@ class OrdersSummaryCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 2),
-              Text(
-                value,
-                style: const TextStyle(
-                  color: OrderColors.ink,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                  fontFeatures: _tnum,
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  value,
+                  style: const TextStyle(
+                    color: OrderColors.ink,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    fontFeatures: _tnum,
+                  ),
                 ),
               ),
               Text(unit, style: const TextStyle(color: OrderColors.muted, fontSize: 11.5)),
@@ -439,38 +443,51 @@ class OrdersSummaryCard extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Doanh thu · ${timeLabel.toLowerCase()}',
-                      style: const TextStyle(color: OrderColors.muted, fontSize: 12.5),
-                    ),
-                    Text.rich(
-                      TextSpan(
-                        text: compact(s.revenue),
-                        children: [
+                // Doanh thu ghi số đầy đủ — dài thì thu nhỏ, nhường chỗ cho biểu đồ cột.
+                Expanded(
+                  flex: 3,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Doanh thu · ${timeLabel.toLowerCase()}',
+                        style: const TextStyle(color: OrderColors.muted, fontSize: 12.5),
+                      ),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text.rich(
                           TextSpan(
-                            text: ' · ${s.sales} đơn',
-                            style: const TextStyle(color: OrderColors.muted, fontSize: 13, fontWeight: FontWeight.w500),
+                            text: dot(s.revenue),
+                            children: [
+                              TextSpan(
+                                text: ' · ${s.sales} đơn',
+                                style: const TextStyle(
+                                  color: OrderColors.muted,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
+                          key: const Key('orders_revenue'),
+                          style: const TextStyle(
+                            color: OrderColors.ink,
+                            fontSize: 22,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -.4,
+                            height: 1.2,
+                            fontFeatures: _tnum,
+                          ),
+                        ),
                       ),
-                      key: const Key('orders_revenue'),
-                      style: const TextStyle(
-                        color: OrderColors.ink,
-                        fontSize: 22,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: -.4,
-                        height: 1.2,
-                        fontFeatures: _tnum,
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
                 if (s.days.length > 1) ...[
                   const SizedBox(width: 12),
                   Expanded(
+                    flex: 2,
                     child: Column(
                       children: [
                         SizedBox(
@@ -521,7 +538,7 @@ class OrdersSummaryCard extends StatelessWidget {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  kpi('unpaid', 'Chưa thu', OrderColors.orange.$2, compact(s.debt), '${s.debtOrders} đơn', first: true),
+                  kpi('unpaid', 'Chưa thu', OrderColors.orange.$2, dot(s.debt), '${s.debtOrders} đơn', first: true),
                   kpi('cancelled', 'Đã huỷ', OrderColors.neutral.$2, '${s.cancelled}', 'đơn'),
                   kpi('returned', 'Trả hàng', OrderColors.purple.$2, '${s.returned}', 'phiếu'),
                 ],

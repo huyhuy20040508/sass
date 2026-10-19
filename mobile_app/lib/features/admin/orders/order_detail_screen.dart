@@ -874,7 +874,7 @@ class _Actions extends ConsumerWidget {
     final next = ((o['next_statuses'] as List?) ?? const []).map((e) => '$e').toList();
     final acts = <(String, String, AppIcons, VoidCallback)>[];
     if (debt > 0 && status != 'cancelled') {
-      acts.add(('pay', 'Thu ${compact(debt)}', AppIcons.cash, () => _pay(context, ref, debt)));
+      acts.add(('pay', 'Thu ${dot(debt)}', AppIcons.cash, () => _pay(context, ref, debt)));
     }
     for (final s in next.where((s) => s != 'cancelled' && s != 'returned').take(1)) {
       acts.add(('st', statusTag(s).$1, AppIcons.check, () => _setStatus(context, ref, s)));

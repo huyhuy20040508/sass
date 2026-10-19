@@ -235,7 +235,7 @@ class DashboardData {
           '',
           '$chuaThu đơn',
           ' chưa thu tiền',
-        ], compact((orderTotals['unpaid_amount'] as num?) ?? 0)),
+        ], dot((orderTotals['unpaid_amount'] as num?) ?? 0)),
       );
     }
     if (shiftDiffTotal > 0) {
@@ -256,7 +256,7 @@ class DashboardData {
           '',
           '$shiftDiffTotal ca lệch két',
           ' trong 7 ngày',
-        ], 'Thiếu ${compact(-thieu)} · dư ${compact(du)}${vuot > 0 ? ' · $vuot ca vượt ${compact(nguong)}' : ''}'),
+        ], 'Thiếu ${dot(-thieu)} · dư ${dot(du)}${vuot > 0 ? ' · $vuot ca vượt ${dot(nguong)}' : ''}'),
       );
     }
     return out;

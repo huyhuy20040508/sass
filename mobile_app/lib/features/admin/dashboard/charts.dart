@@ -65,7 +65,7 @@ class _RevenueChartState extends State<RevenueChart> {
   void _pick(Offset p, double w) {
     final n = widget.current.length;
     if (n == 0) return;
-    final g = _RevenueGeom(w, n);
+    final g = _RevenueGeom(w, widget.current, widget.previous);
     final i = n == 1 ? 0 : ((p.dx - g.padL - 6) / g.stepX).round().clamp(0, n - 1);
     setState(() => _sel = i);
     _hide?.cancel();
@@ -80,7 +80,7 @@ class _RevenueChartState extends State<RevenueChart> {
     return LayoutBuilder(
       builder: (context, box) {
         final w = box.maxWidth;
-        final g = _RevenueGeom(w, widget.current.length);
+        final g = _RevenueGeom(w, widget.current, widget.previous);
         final i = _sel;
         return GestureDetector(
           behavior: HitTestBehavior.opaque,
@@ -171,11 +171,23 @@ class _Tip extends StatelessWidget {
 }
 
 class _RevenueGeom {
-  _RevenueGeom(this.w, this.n);
+  _RevenueGeom(this.w, List<num> cur, List<num> prev) : n = cur.length, padL = _axisWidth(cur, prev);
 
   final double w;
   final int n;
-  final padL = 34.0, padB = 20.0, padT = 8.0, h = RevenueChart.height;
+
+  /// Lề trái vừa đủ cho số đầy đủ dài nhất của trục (không rút gọn tr/tỷ).
+  final double padL;
+  final padB = 20.0, padT = 8.0, h = RevenueChart.height;
+
+  static double _axisWidth(List<num> cur, List<num> prev) {
+    final raw = [...cur, ...prev, 1].map((e) => e.toDouble()).reduce(math.max);
+    final tp = TextPainter(
+      text: TextSpan(text: dot(niceTicks(raw).$2), style: _tick),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    return math.max(34, tp.width + 10);
+  }
 
   double get stepX => n <= 1 ? 0 : (w - padL - 12) / (n - 1);
   double x(int i) => n == 1 ? padL + (w - padL) / 2 : padL + 6 + i * stepX;
@@ -193,7 +205,7 @@ class _RevenuePainter extends CustomPainter {
   void paint(Canvas c, Size size) {
     final n = cur.length;
     if (n == 0) return;
-    final g = _RevenueGeom(size.width, n);
+    final g = _RevenueGeom(size.width, cur, prev);
     final raw = [...cur, ...prev, 1].map((e) => e.toDouble()).reduce(math.max);
     final (step, max) = niceTicks(raw);
     double y(num v) => g.padT + (g.h - g.padT - g.padB) * (1 - v / max);
@@ -207,13 +219,7 @@ class _RevenuePainter extends CustomPainter {
         Offset(size.width, yy),
         Paint()..color = t == 0 ? const Color(0xFFDFE4EC) : DashColors.grid,
       );
-      _text(
-        c,
-        t == 0 ? '0' : compact(step * t).replaceAll(' ', ''),
-        Offset(g.padL - 6, yy),
-        _tick,
-        align: TextAlign.right,
-      );
+      _text(c, dot(step * t), Offset(g.padL - 6, yy), _tick, align: TextAlign.right);
     }
 
     if (prev.length > 1) {
@@ -283,12 +289,13 @@ class _RevenuePainter extends CustomPainter {
     if (cur[peak] > 0) {
       final o = Offset(g.x(peak), y(cur[peak]));
       _dot(c, o);
-      final align = o.dx > size.width - 40
+      // Số đầy đủ rộng ~70px: gần mép thì canh về phía trong cho khỏi bị cắt.
+      final align = o.dx > size.width - 45
           ? TextAlign.right
-          : o.dx < g.padL + 40
+          : o.dx < g.padL + 45
           ? TextAlign.left
           : TextAlign.center;
-      _text(c, compact(cur[peak]), Offset(o.dx.clamp(g.padL + 4, size.width - 4), o.dy - 14), _label, align: align);
+      _text(c, dot(cur[peak]), Offset(o.dx.clamp(g.padL + 4, size.width - 4), o.dy - 14), _label, align: align);
     }
 
     if (sel != null && !empty) {
@@ -412,9 +419,16 @@ class Donut extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              center,
-              style: const TextStyle(color: DashColors.ink, fontSize: 15, fontWeight: FontWeight.w700),
+            // Số đầy đủ có thể dài hơn lòng vòng tròn — thu nhỏ cho vừa.
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 92),
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  center,
+                  style: const TextStyle(color: DashColors.ink, fontSize: 15, fontWeight: FontWeight.w700),
+                ),
+              ),
             ),
             Text(caption, style: const TextStyle(color: DashColors.muted, fontSize: 10)),
           ],
