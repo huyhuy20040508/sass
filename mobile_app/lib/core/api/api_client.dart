@@ -36,7 +36,13 @@ class ApiClient {
 
   Future<T> post<T>(String path, {Object? body}) => _send(() => dio.post(path, data: body));
 
-  Future<T> put<T>(String path, {Object? body}) => _send(() => dio.put(path, data: body));
+  Future<T> put<T>(String path, {Object? body, Map<String, String>? headers}) => _send(
+    () => dio.put(
+      path,
+      data: body,
+      options: headers == null ? null : Options(headers: headers),
+    ),
+  );
 
   Future<T> delete<T>(String path) => _send(() => dio.delete(path));
 

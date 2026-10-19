@@ -1,12 +1,15 @@
 import 'dart:convert';
 import 'dart:math' as math;
 
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/api/api_client.dart';
+import '../../../core/api/api_exception.dart';
 import '../../../core/format/vn_text.dart';
 import '../../auth/auth_controller.dart';
+import '../dashboard/dashboard_data.dart' show defaultShopProvider;
 
 /// Tồn ≤ mốc này thì tô "sắp hết" — cùng mốc mặc định của trang Tồn kho (NormalizeLowStock).
 const lowStock = 5;
@@ -28,11 +31,12 @@ class StockRow {
 }
 
 class GoodsCategory {
-  const GoodsCategory({required this.id, required this.name, this.parentId});
+  const GoodsCategory({required this.id, required this.name, this.parentId, this.isActive = true});
 
   final int id;
   final String name;
   final int? parentId;
+  final bool isActive;
 }
 
 /// Một mặt hàng của danh sách: dòng GET /products (slim) + các dòng tồn của nó.
@@ -124,6 +128,7 @@ final goodsCatalogProvider = FutureProvider.autoDispose<GoodsCatalog>((ref) asyn
           id: (c['id'] as num).toInt(),
           name: '${c['name'] ?? ''}',
           parentId: (c['parent_id'] as num?)?.toInt(),
+          isActive: c['is_active'] != false,
         ),
     ],
   );
@@ -399,4 +404,143 @@ Future<void> setVariantPrice(WidgetRef ref, Map<String, dynamic> d, int variantI
       );
   ref.invalidate(goodsCatalogProvider);
   ref.invalidate(productDetailProvider(id));
+}
+
+/// Đơn vị tính đang dùng (id, tên). Không có quyền xem thì rỗng — ô Đơn vị tính ẩn đi.
+final goodsUnitsProvider = FutureProvider.autoDispose<List<(int, String)>>((ref) async {
+  try {
+    final rows = await ref
+        .read(apiClientProvider)
+        .get<List<dynamic>>('/admin/don-vi-tinh', query: {'page_size': '100'});
+    return [
+      for (final u in rows.whereType<Map>())
+        if (u['is_active'] != false) ((u['id'] as num).toInt(), '${u['name'] ?? ''}'),
+    ];
+  } on ApiException {
+    return const [];
+  }
+}, retry: _noRetry);
+
+/// Nhóm hàng xếp theo cây (cha rồi tới con), kèm độ sâu để thụt lề. Chỉ nhóm đang dùng.
+List<(GoodsCategory, int)> categoryTree(List<GoodsCategory> all) {
+  final active = [
+    for (final c in all)
+      if (c.isActive) c,
+  ];
+  final ids = {for (final c in active) c.id};
+  final out = <(GoodsCategory, int)>[];
+  void walk(int? parent, int depth) {
+    for (final c in active) {
+      // Nhóm có cha đã tắt thì đưa lên gốc, đừng để mất khỏi danh sách.
+      final p = c.parentId != null && ids.contains(c.parentId) ? c.parentId : null;
+      if (p == parent) {
+        out.add((c, depth));
+        walk(c.id, depth + 1);
+      }
+    }
+  }
+
+  walk(null, 0);
+  return out;
+}
+
+/// Đường dẫn sản phẩm từ tên — cùng kiểu slugify của web_Shop: bỏ dấu, gạch nối.
+String slugify(String s) => foldVn(s).replaceAll(RegExp(r'[^a-z0-9]+'), '-').replaceAll(RegExp(r'^-+|-+$'), '');
+
+/// Tải ảnh sản phẩm (POST /admin/products/anh, tối đa 5MB) → địa chỉ để gán thumbnail.
+Future<String> uploadProductImage(WidgetRef ref, List<int> bytes, String filename) async {
+  final res = await ref
+      .read(apiClientProvider)
+      .post<Map<String, dynamic>>(
+        '/admin/products/anh',
+        body: FormData.fromMap({'file': MultipartFile.fromBytes(bytes, filename: filename)}),
+      );
+  return '${res['url']}';
+}
+
+/// Sản phẩm mới khai trên mobile: hàng một phiên bản.
+class NewProduct {
+  const NewProduct({
+    required this.name,
+    required this.categoryId,
+    required this.price,
+    this.sku = '',
+    this.barcode = '',
+    this.cost,
+    this.unitId,
+    this.thumbnail = '',
+    this.openingStock = 0,
+  });
+
+  final String name;
+  final int categoryId;
+  final num price;
+  final String sku;
+  final String barcode;
+  final num? cost;
+  final int? unitId;
+  final String thumbnail;
+
+  /// Tồn ban đầu ở chi nhánh đang làm việc (0 = không ghi).
+  final int openingStock;
+
+  Map<String, dynamic> body(String slug) => {
+    'category_id': categoryId,
+    'name': name.trim(),
+    'slug': slug,
+    'sku': sku.trim(),
+    'base_price': price,
+    'cost_price': ?cost,
+    'unit_id': ?unitId,
+    'thumbnail': thumbnail,
+    'status': 'active',
+    // Gửi hẳn dòng phiên bản để mang mã vạch + giá; SKU phiên bản để trống = theo SKU sản phẩm.
+    'variants': [
+      {'barcode': barcode.trim(), 'price': price, 'is_default': true},
+    ],
+  };
+}
+
+/// Kết quả tạo: id sản phẩm + lỗi ghi tồn ban đầu (nếu có — sản phẩm vẫn đã tạo).
+typedef CreatedProduct = ({int id, String? stockError});
+
+/// Tạo sản phẩm (POST /admin/products) rồi ghi tồn ban đầu thành một phiếu nhập
+/// tay (PUT /admin/inventory/{phiên bản}, delta) — tồn kho chỉ đi qua nghiệp vụ kho.
+Future<CreatedProduct> createProduct(WidgetRef ref, NewProduct p) async {
+  final api = ref.read(apiClientProvider);
+  final base = slugify(p.name).isEmpty ? 'san-pham' : slugify(p.name);
+  Map<String, dynamic> d;
+  try {
+    d = await api.post<Map<String, dynamic>>('/admin/products', body: p.body(base));
+  } on ApiException catch (e) {
+    // Tên khác nhau nhưng bỏ dấu ra trùng ("Áo" / "Ao") thì trùng đường dẫn — thêm đuôi rồi thử lại một lần.
+    if (e.statusCode != 409 || !e.message.contains('slug')) rethrow;
+    final tail = DateTime.now().millisecondsSinceEpoch.toRadixString(36);
+    d = await api.post<Map<String, dynamic>>('/admin/products', body: p.body('$base-$tail'));
+  }
+  final id = (d['id'] as num).toInt();
+  String? stockError;
+  final vid = (((d['variants'] as List?) ?? const []).whereType<Map>().firstOrNull?['id'] as num?)?.toInt();
+  // Kho nhận tồn ban đầu = chi nhánh đang làm việc (phiên chưa chọn thì trụ sở) —
+  // API chỉnh kho bắt buộc biết chi nhánh qua X-Chi-Nhanh.
+  final shop = ref.read(defaultShopProvider).value;
+  if (p.openingStock > 0 && vid != null) {
+    try {
+      await api.put<Object?>(
+        '/admin/inventory/$vid',
+        headers: {'X-Chi-Nhanh': ?shop?.toString()},
+        body: {
+          'mode': 'delta',
+          'quantity': p.openingStock,
+          'type': 'import',
+          'unit_cost': ?p.cost,
+          'note': 'Tồn ban đầu khi thêm sản phẩm trên app',
+        },
+      );
+    } on ApiException catch (e) {
+      stockError = e.message;
+    }
+  }
+  ref.invalidate(goodsCatalogProvider);
+  return (id: id, stockError: stockError);
 }

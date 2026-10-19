@@ -11,6 +11,7 @@ import '../shell/shell_widgets.dart';
 import 'goods_data.dart';
 import 'goods_widgets.dart';
 import 'product_detail_screen.dart';
+import 'product_form_screen.dart';
 import 'scanner_screen.dart';
 
 /// Màn Hàng hoá theo design/html/hang-hoa-mobile.html (v5): danh sách gọn kiểu
@@ -66,6 +67,27 @@ class _GoodsScreenState extends ConsumerState<GoodsScreen> {
       if (mounted) showDashToast(context, 'Đã cập nhật danh sách');
     } on ApiException catch (e) {
       if (mounted) showDashToast(context, e.message);
+    }
+  }
+
+  Future<void> _add() async {
+    final res = await Navigator.of(
+      context,
+      rootNavigator: true,
+    ).push<CreatedProduct>(MaterialPageRoute(fullscreenDialog: true, builder: (_) => const ProductFormScreen()));
+    if (res == null || !mounted) return;
+    showDashToast(
+      context,
+      res.stockError == null
+          ? 'Đã thêm sản phẩm'
+          : 'Đã thêm sản phẩm, nhưng chưa ghi được tồn ban đầu: ${res.stockError}',
+    );
+    // Mở luôn chi tiết mặt hàng vừa tạo khi danh mục tải lại xong.
+    try {
+      final it = (await ref.read(goodsCatalogProvider.future)).byId(res.id);
+      if (it != null && mounted) _open(it);
+    } on ApiException {
+      // Danh mục chưa tải lại được — người dùng vẫn thấy thông báo đã thêm.
     }
   }
 
@@ -158,7 +180,7 @@ class _GoodsScreenState extends ConsumerState<GoodsScreen> {
               countOf: c == null ? null : (s) => base.where(s.has).length,
               shadow: _shadow,
               onScan: _scan,
-              onNew: () => showDashToast(context, 'Thêm sản phẩm trên mobile — sắp có'),
+              onNew: _add,
               onFilter: c == null ? null : () => _openFilter(c, serverIds),
               onStatus: (s) => _set(f.copyWith(status: s)),
             ),

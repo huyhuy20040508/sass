@@ -14,6 +14,8 @@ import 'package:selliotech/core/storage/session_store.dart';
 import 'package:selliotech/features/admin/dashboard/dashboard_data.dart' show clockProvider;
 import 'package:selliotech/features/admin/goods/goods_data.dart';
 import 'package:selliotech/features/admin/goods/goods_widgets.dart';
+import 'package:selliotech/features/admin/goods/product_form_screen.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:selliotech/features/admin/goods/scanner_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:selliotech/features/auth/auth_controller.dart';
@@ -107,6 +109,66 @@ class _Api implements HttpClientAdapter {
       ], q);
     }
     if (p.endsWith('/admin/inventory')) return _page(s['inventory'] as List, q);
+    if (p.endsWith('/admin/don-vi-tinh')) {
+      return _ok([
+        {'id': 1, 'name': 'Cái', 'is_active': true},
+        {'id': 2, 'name': 'Hộp', 'is_active': true},
+      ]);
+    }
+    if (p.endsWith('/admin/products/anh')) {
+      return _json(201, {
+        'success': true,
+        'data': {'url': '/uploads/2/a.jpg'},
+      });
+    }
+    if (p.endsWith('/admin/products') && o.method == 'POST') {
+      final b = Map<String, dynamic>.from(o.data as Map);
+      if (products.any((x) => '${x['name']}'.toLowerCase() == '${b['name']}'.toLowerCase())) {
+        return _json(422, {
+          'success': false,
+          'message': 'Dữ liệu không hợp lệ',
+          'errors': {'name': 'Tên mặt hàng này đã có trong cửa hàng'},
+        });
+      }
+      final v = Map<String, dynamic>.from((b['variants'] as List).first as Map);
+      final cat = (s['categories'] as List).cast<Map>().firstWhere((c) => c['id'] == b['category_id']);
+      final sku = '${b['sku']}'.isEmpty ? 'HH000099' : b['sku'];
+      final d = {
+        ...b,
+        'id': 50,
+        'sku': sku,
+        'category': cat,
+        'is_multi_variant': false,
+        'sold_count': 0,
+        'created_at': '2026-10-18T08:59:00+07:00',
+        'variants': [
+          {...v, 'id': 500, 'sku': sku, 'is_active': true, 'cost_price': null, 'stock_quantity': 0},
+        ],
+      };
+      (s['products'] as List).add(d);
+      (s['details'] as Map)['50'] = d;
+      (s['inventory'] as List).add({
+        'variant_id': 500,
+        'product_id': 50,
+        'product_name': b['name'],
+        'sku': sku,
+        'stock_quantity': 0,
+        'price': v['price'],
+        'cost_price': b['cost_price'],
+        'is_active': true,
+        'product_active': true,
+      });
+      return _json(201, {'success': true, 'data': d});
+    }
+    final adj = RegExp(r'/admin/inventory/(\d+)$').firstMatch(p);
+    if (adj != null && o.method == 'PUT') {
+      for (final r in (s['inventory'] as List).cast<Map>()) {
+        if ('${r['variant_id']}' == adj.group(1)) {
+          r['stock_quantity'] = (r['stock_quantity'] as num) + ((o.data as Map)['quantity'] as num);
+        }
+      }
+      return _ok({'after': 1});
+    }
     if (p.endsWith('/admin/inventory/cost')) {
       for (final it in ((o.data as Map)['items'] as List).cast<Map>()) {
         for (final r in (s['inventory'] as List).cast<Map>()) {
@@ -215,6 +277,7 @@ Future<_Api> _open(
         clockProvider.overrideWithValue(() => DateTime(2026, 10, 18, 9)),
         // Test không có camera — màn quét chỉ dùng ô nhập mã tay.
         scannerCameraProvider.overrideWithValue(false),
+        pickImageProvider.overrideWithValue((_) async => XFile.fromData(Uint8List.fromList([1, 2, 3]), name: 'a.jpg')),
         apiClientProvider.overrideWith(
           (ref) => ApiClient(ref.read(authProvider.notifier), dio: Dio()..httpClientAdapter = a),
         ),
@@ -567,6 +630,117 @@ void main() {
     await _settle(t, 3);
     final saved = (await SharedPreferences.getInstance()).getString('goods.filter');
     expect(saved, '{"status":"all","cats":[3],"sort":"priceAsc"}');
+  });
+
+  testWidgets('thêm sản phẩm: thiếu ô bắt buộc thì báo ngay tại ô, không gọi API', (t) async {
+    final api = await _open(t);
+    await t.tap(find.byTooltip('Thêm hàng hoá'));
+    await _settle(t);
+    expect(find.text('Thêm sản phẩm'), findsOneWidget);
+    await t.tap(find.byKey(const Key('form_save')));
+    await t.pump();
+    expect(find.text('Nhập tên sản phẩm'), findsOneWidget);
+    expect(find.text('Chọn nhóm hàng'), findsWidgets);
+    expect(find.text('Nhập giá bán'), findsOneWidget);
+    expect(api.calls.where((c) => c.method == 'POST'), isEmpty);
+    await t.enterText(find.byKey(const Key('form_name')), 'x');
+    await t.pump();
+    expect(find.text('Nhập tên sản phẩm'), findsNothing, reason: 'gõ vào thì lỗi ô đó biến mất');
+  });
+
+  testWidgets('thêm sản phẩm: ảnh, nhóm con, quét mã vạch, giá + lãi, tồn ban đầu → tạo, ghi kho, mở chi tiết', (
+    t,
+  ) async {
+    final api = await _open(t);
+    await t.tap(find.byTooltip('Thêm hàng hoá'));
+    await _settle(t);
+
+    await t.tap(find.byKey(const Key('form_image')));
+    await _settle(t, 5);
+    await t.tap(find.byKey(const Key('pick_gallery')));
+    await _settle(t, 5);
+    final up = api.calls.where((c) => c.path.endsWith('/admin/products/anh')).single;
+    expect(up.data, isA<FormData>());
+
+    await t.enterText(find.byKey(const Key('form_name')), 'Cáp sạc USB-C');
+    await t.tap(find.byKey(const Key('form_category')));
+    await _settle(t, 5);
+    await t.tap(find.byKey(const Key('cat_5')));
+    await _settle(t, 5);
+    expect(find.text('điện thoại'), findsOneWidget);
+    await t.tap(find.byKey(const Key('form_unit')));
+    await _settle(t, 5);
+    await t.tap(find.text('Hộp'));
+    await _settle(t, 5);
+
+    await t.tap(find.byTooltip('Quét mã vạch').last);
+    await _settle(t, 5);
+    await t.enterText(find.byKey(const Key('scan_manual')), '8930000000999');
+    await t.tap(find.byKey(const Key('scan_submit')));
+    await _settle(t, 12);
+    expect(find.byType(ScannerScreen), findsNothing, reason: 'nhận mã xong màn quét tự đóng');
+    expect(
+      find.descendant(of: find.byKey(const Key('form_barcode')), matching: find.text('8930000000999')),
+      findsOneWidget,
+      reason: 'mã quét được điền vào ô mã vạch',
+    );
+
+    await t.enterText(find.byKey(const Key('form_price')), '150000');
+    await t.enterText(find.byKey(const Key('form_cost')), '90000');
+    await t.pump();
+    expect(find.text('150.000'), findsOneWidget);
+    expect(
+      t.widget<Text>(find.byKey(const Key('form_gain'))).textSpan!.toPlainText(),
+      'Lãi mỗi sản phẩm: 60.000đ · 40%',
+    );
+    await t.ensureVisible(find.byKey(const Key('form_stock')));
+    await t.enterText(find.byKey(const Key('form_stock')), '5');
+    expect(find.textContaining('Ghi vào kho Cửa hàng chính'), findsOneWidget);
+
+    await t.tap(find.byKey(const Key('form_save')));
+    await _settle(t, 15);
+    final post = api.calls.where((c) => c.method == 'POST' && c.path.endsWith('/admin/products')).single;
+    final b = post.data as Map;
+    expect(b['name'], 'Cáp sạc USB-C');
+    expect(b['slug'], 'cap-sac-usb-c');
+    expect((b['category_id'], b['unit_id'], b['base_price'], b['cost_price']), (5, 2, 150000, 90000));
+    expect(b['thumbnail'], '/uploads/2/a.jpg');
+    expect(b['sku'], '', reason: 'để trống cho API tự sinh');
+    expect((b['variants'] as List).single, {'barcode': '8930000000999', 'price': 150000, 'is_default': true});
+
+    final adj = api.calls.where((c) => c.method == 'PUT' && c.path.endsWith('/admin/inventory/500')).single;
+    expect(adj.data, {
+      'mode': 'delta',
+      'quantity': 5,
+      'type': 'import',
+      'unit_cost': 90000,
+      'note': 'Tồn ban đầu khi thêm sản phẩm trên app',
+    });
+    expect(adj.headers['X-Chi-Nhanh'], '2');
+
+    expect(find.text('Đã thêm sản phẩm'), findsOneWidget);
+    expect(find.text('SKU: HH000099'), findsOneWidget, reason: 'mở thẳng chi tiết sản phẩm vừa tạo');
+    await t.tap(find.byTooltip('Quay lại'));
+    await _settle(t);
+    expect(_names(t).first, 'Cáp sạc USB-C');
+    expect(_pill(t, 50), 'Sắp hết · 5', reason: 'tồn ban đầu đã ghi vào kho');
+  });
+
+  testWidgets('thêm sản phẩm: trùng tên thì API báo đúng ô Tên', (t) async {
+    final api = await _open(t);
+    await t.tap(find.byTooltip('Thêm hàng hoá'));
+    await _settle(t);
+    await t.enterText(find.byKey(const Key('form_name')), 'iphone 15');
+    await t.tap(find.byKey(const Key('form_category')));
+    await _settle(t, 5);
+    await t.tap(find.byKey(const Key('cat_4')));
+    await _settle(t, 5);
+    await t.enterText(find.byKey(const Key('form_price')), '1000');
+    await t.tap(find.byKey(const Key('form_save')));
+    await _settle(t);
+    expect(find.text('Tên mặt hàng này đã có trong cửa hàng'), findsOneWidget);
+    expect(find.text('Thêm sản phẩm'), findsOneWidget, reason: 'vẫn ở form để sửa');
+    expect(api.calls.where((c) => c.method == 'PUT'), isEmpty);
   });
 
   testWidgets('lỗi tải: báo lỗi + Thử lại', (t) async {

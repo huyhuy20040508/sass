@@ -6,8 +6,10 @@
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Chọn ảnh sản phẩm từ thư viện.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>Dùng camera để quét mã vạch sản phẩm.</string>
+	<string>Dùng camera để quét mã vạch và chụp ảnh sản phẩm.</string>
 	<key>CFBundleDisplayName</key>
 	<string>Sellio Shop</string>
 	<key>CFBundleExecutable</key>
