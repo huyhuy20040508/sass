@@ -85,7 +85,15 @@ class ProductThumb extends StatelessWidget {
       height: size,
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(color: OrderColors.grid, borderRadius: BorderRadius.circular(radius), border: border),
-      child: url.isEmpty ? letter : Image.network(mediaUrl(url), fit: BoxFit.cover, errorBuilder: (_, _, _) => letter),
+      child: url.isEmpty
+          ? letter
+          : Image.network(
+              mediaUrl(url),
+              fit: BoxFit.cover,
+              // Bản web: ảnh ở tên miền khác không có CORS — lùi về thẻ <img> thay vì báo lỗi.
+              webHtmlElementStrategy: WebHtmlElementStrategy.fallback,
+              errorBuilder: (_, _, _) => letter,
+            ),
     );
   }
 }

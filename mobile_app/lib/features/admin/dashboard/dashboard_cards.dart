@@ -1242,7 +1242,15 @@ class _TopProductsCardState extends State<TopProductsCard> {
       height: 34,
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(color: DashColors.primarySoft, borderRadius: BorderRadius.circular(9)),
-      child: url.startsWith('http') ? Image.network(url, fit: BoxFit.cover, errorBuilder: (_, _, _) => letter) : letter,
+      child: url.startsWith('http')
+          ? Image.network(
+              url,
+              fit: BoxFit.cover,
+              // Bản web: ảnh ở tên miền khác không có CORS — lùi về thẻ <img> thay vì báo lỗi.
+              webHtmlElementStrategy: WebHtmlElementStrategy.fallback,
+              errorBuilder: (_, _, _) => letter,
+            )
+          : letter,
     );
   }
 }
