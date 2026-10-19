@@ -363,11 +363,11 @@ void main() {
     final cho = ['pending', 'confirmed', 'processing', 'shipping'].fold<int>(0, (a, k) => a + (bs[k] ?? 0));
     if (cho > 0) expect(find.text('$cho'), findsWidgets);
 
-    await t.tap(find.byKey(const Key('tab_goods')));
+    await t.tap(find.byKey(const Key('tab_pos')));
     await _settle(t, 3);
     expect(find.textContaining('chưa thiết kế', findRichText: true), findsOneWidget);
     expect(t.widget<CollapsedAppBar>(find.byType(CollapsedAppBar)).visible, isTrue);
-    expect(t.widget<CollapsedAppBar>(find.byType(CollapsedAppBar)).title, 'Hàng hoá');
+    expect(t.widget<CollapsedAppBar>(find.byType(CollapsedAppBar)).title, 'Bán hàng');
 
     await t.tap(find.byKey(const Key('tab_home')));
     await _settle(t, 3);

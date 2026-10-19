@@ -106,7 +106,12 @@ enum AppIcons {
   copy(
     '<rect x="8" y="8" width="12.5" height="12.5" rx="2"/>'
     '<path d="M16 8V5a1.5 1.5 0 0 0-1.5-1.5h-9A1.5 1.5 0 0 0 4 5v9a1.5 1.5 0 0 0 1.5 1.5H8"/>',
-  );
+  ),
+  image(
+    '<rect x="3.5" y="4.5" width="17" height="15" rx="2"/><circle cx="9" cy="10" r="1.8"/><path d="m4 17 5-4.5 4 3.5 3-2.5 4.5 3.5"/>',
+  ),
+  edit('<path d="M4 20h4L19 9l-4-4L4 16Z"/><path d="m13.5 6.5 4 4"/>'),
+  barcode('<path d="M4 5v14M7 5v14M10.5 5v14M13 5v14M16.5 5v14M20 5v14"/>');
 
   const AppIcons(this.paths);
 

@@ -266,7 +266,8 @@ class CollapsedAppBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final top = MediaQuery.paddingOf(context).top;
     return AnimatedSlide(
-      offset: visible ? Offset.zero : const Offset(0, -1.01),
+      // Ẩn thì đẩy quá hẳn chiều cao: đuôi mờ của bóng đổ tràn ~30px dưới thanh, chỉ -1 là vẫn lọt một vệt ở mép trên.
+      offset: visible ? Offset.zero : const Offset(0, -1.8),
       duration: const Duration(milliseconds: 280),
       curve: const Cubic(.2, .8, .2, 1),
       child: Container(

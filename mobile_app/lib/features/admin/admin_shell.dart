@@ -9,6 +9,7 @@ import '../workspace/workspace.dart';
 import '../workspace/workspace_widgets.dart' show SheetButton, initialsOf;
 import 'dashboard/dashboard_data.dart';
 import 'dashboard/dashboard_screen.dart';
+import 'goods/goods_screen.dart';
 import 'orders/orders_screen.dart';
 import 'shell/shell_widgets.dart';
 
@@ -27,6 +28,9 @@ class _AdminShellState extends ConsumerState<AdminShell> {
   final _dash = GlobalKey<DashboardScreenState>();
   AdminTab _tab = AdminTab.home;
   bool _scrolled = false;
+
+  /// Hàng hoá tải cả danh mục một lượt — chỉ dựng (và gọi API) khi mở tab lần đầu.
+  bool _goodsOpened = false;
 
   static const _functions = [
     (
@@ -67,6 +71,8 @@ class _AdminShellState extends ConsumerState<AdminShell> {
     return u != null &&
         WorkspaceArea.forUser(accessAreas: u.accessAreas, roleCode: u.roleCode).contains(WorkspaceArea.thuNgan);
   }
+
+  bool get _whiteHead => _tab == AdminTab.orders || _tab == AdminTab.goods;
 
   void _toCashier() => ref.read(currentAreaProvider.notifier).enter(WorkspaceArea.thuNgan);
 
@@ -330,14 +336,17 @@ class _AdminShellState extends ConsumerState<AdminShell> {
     final home = _tab == AdminTab.home;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: _tab == AdminTab.orders ? SystemUiOverlayStyle.dark : SystemUiOverlayStyle.light,
+      value: _whiteHead ? SystemUiOverlayStyle.dark : SystemUiOverlayStyle.light,
       child: Scaffold(
         backgroundColor: DashColors.page,
         // Thanh dưới ở bottomNavigationBar: thông báo nổi lên trên nó thay vì che các tab.
         bottomNavigationBar: AdminTabBar(
           current: _tab,
           orderCount: pending,
-          onTab: (t) => setState(() => _tab = t),
+          onTab: (t) => setState(() {
+            _tab = t;
+            _goodsOpened |= t == AdminTab.goods;
+          }),
           onMore: _openMore,
         ),
         body: Column(
@@ -360,8 +369,8 @@ class _AdminShellState extends ConsumerState<AdminShell> {
                           child: DashboardScreen(key: _dash, onAccount: _openAccount),
                         ),
                         OrdersScreen(onNewOrder: () => setState(() => _tab = AdminTab.pos)),
-                        for (final t in AdminTab.values.skip(2))
-                          SkeletonTab(key: Key('skeleton_${t.name}'), name: t.label),
+                        SkeletonTab(key: const Key('skeleton_pos'), name: AdminTab.pos.label),
+                        if (_goodsOpened) const GoodsScreen() else const SizedBox.shrink(),
                       ],
                     ),
                   ),
@@ -370,8 +379,8 @@ class _AdminShellState extends ConsumerState<AdminShell> {
                     right: 0,
                     top: 0,
                     child: CollapsedAppBar(
-                      // Đơn hàng có đầu trắng riêng — thanh navy chỉ cho Tổng quan (khi cuộn) và tab chưa có màn.
-                      visible: _tab != AdminTab.orders && (!home || _scrolled),
+                      // Đơn hàng, Hàng hoá có đầu trắng riêng — thanh navy chỉ cho Tổng quan (khi cuộn) và tab chưa có màn.
+                      visible: !_whiteHead && (!home || _scrolled),
                       title: _tab.label,
                       subtitle: branchName,
                       periodLabel: home ? f.period.label : null,
