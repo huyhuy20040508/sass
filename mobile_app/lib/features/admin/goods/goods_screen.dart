@@ -11,6 +11,7 @@ import '../shell/shell_widgets.dart';
 import 'goods_data.dart';
 import 'goods_widgets.dart';
 import 'product_detail_screen.dart';
+import 'scanner_screen.dart';
 
 /// Màn Hàng hoá theo design/html/hang-hoa-mobile.html (v5): danh sách gọn kiểu
 /// Sapo — ảnh · tên · SKU · giá · tồn, lọc theo trạng thái và nhóm hàng.
@@ -25,6 +26,16 @@ class _GoodsScreenState extends ConsumerState<GoodsScreen> {
   final _scroll = ScrollController();
   final _search = TextEditingController();
   Timer? _debounce;
+  bool _shadow = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _scroll.addListener(() {
+      final s = _scroll.offset > 4;
+      if (s != _shadow) setState(() => _shadow = s);
+    });
+  }
 
   @override
   void dispose() {
@@ -52,9 +63,30 @@ class _GoodsScreenState extends ConsumerState<GoodsScreen> {
     ref.invalidate(goodsSearchProvider);
     try {
       await ref.read(goodsCatalogProvider.future);
+      if (mounted) showDashToast(context, 'Đã cập nhật danh sách');
     } on ApiException catch (e) {
       if (mounted) showDashToast(context, e.message);
     }
+  }
+
+  Future<void> _scan() async {
+    GoodsItem? found;
+    await Navigator.of(context, rootNavigator: true).push(
+      MaterialPageRoute<void>(
+        fullscreenDialog: true,
+        builder: (_) => ScannerScreen(
+          onCode: (code) async {
+            try {
+              found = await lookupCode(ref, code);
+            } on ApiException {
+              found = null;
+            }
+            return found != null;
+          },
+        ),
+      ),
+    );
+    if (found != null && mounted) _open(found!);
   }
 
   void _open(GoodsItem it) => Navigator.of(
@@ -124,7 +156,8 @@ class _GoodsScreenState extends ConsumerState<GoodsScreen> {
               catCount: f.cats.length,
               status: f.status,
               countOf: c == null ? null : (s) => base.where(s.has).length,
-              onScan: () => showDashToast(context, 'Quét mã vạch để mở thẳng sản phẩm — sắp có'),
+              shadow: _shadow,
+              onScan: _scan,
               onNew: () => showDashToast(context, 'Thêm sản phẩm trên mobile — sắp có'),
               onFilter: c == null ? null : () => _openFilter(c, serverIds),
               onStatus: (s) => _set(f.copyWith(status: s)),
@@ -158,12 +191,8 @@ class _GoodsScreenState extends ConsumerState<GoodsScreen> {
       ]);
     }
     if (!cat.hasValue) {
-      return scroll(const [
-        Padding(
-          padding: EdgeInsets.all(40),
-          child: Center(child: CircularProgressIndicator(color: OrderColors.primary)),
-        ),
-      ]);
+      // Chừa đúng chỗ thanh "N sản phẩm" để danh sách hiện ra không bị giật.
+      return scroll(const [SizedBox(height: 44), GoodsSkeleton()]);
     }
 
     final rows = [...base.where(f.status.has)]..sort(f.sort.compare);
@@ -233,6 +262,7 @@ class _GoodsScreenState extends ConsumerState<GoodsScreen> {
 
 class _Header extends StatelessWidget {
   const _Header({
+    required this.shadow,
     required this.search,
     required this.onSearch,
     required this.onClear,
@@ -245,6 +275,7 @@ class _Header extends StatelessWidget {
     required this.onStatus,
   });
 
+  final bool shadow;
   final TextEditingController search;
   final ValueChanged<String> onSearch;
   final VoidCallback onClear;
@@ -259,11 +290,16 @@ class _Header extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final top = MediaQuery.paddingOf(context).top;
-    return Container(
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
       padding: EdgeInsets.only(top: top + 4),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: Colors.white,
-        boxShadow: [BoxShadow(color: OrderColors.line, offset: Offset(0, 1))],
+        boxShadow: [
+          const BoxShadow(color: OrderColors.line, offset: Offset(0, 1)),
+          if (shadow)
+            const BoxShadow(color: Color(0x4D0F172A), offset: Offset(0, 8), blurRadius: 18, spreadRadius: -12),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -358,6 +394,7 @@ class _Header extends StatelessWidget {
                           right: -2,
                           child: IgnorePointer(
                             child: Container(
+                              key: const Key('goods_filter_count'),
                               constraints: const BoxConstraints(minWidth: 15),
                               height: 15,
                               alignment: Alignment.center,

@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/api/api_client.dart';
 import '../../../core/format/vn_text.dart';
@@ -16,6 +18,8 @@ class StockRow {
   final Map<String, dynamic> j;
 
   int get productId => (j['product_id'] as num).toInt();
+  int get variantId => (j['variant_id'] as num).toInt();
+  String get name => '${j['variant_name'] ?? ''}';
   String get sku => '${j['sku'] ?? ''}';
   num get qty => (j['stock_quantity'] as num?) ?? 0;
   num get price => (j['price'] as num?) ?? 0;
@@ -47,6 +51,7 @@ class GoodsItem {
   int? get categoryId => ((category?['id'] ?? j['category_id']) as num?)?.toInt();
   String get categoryName => '${category?['name'] ?? ''}';
   int get sold => ((j['sold_count'] as num?) ?? 0).toInt();
+  bool get isSerial => j['is_serial'] == true;
   DateTime get createdAt => DateTime.tryParse('${j['created_at']}')?.toLocal() ?? DateTime(2000);
 
   List<StockRow> get variants => [
@@ -210,11 +215,42 @@ class GoodsFilter {
 
 final goodsFilterProvider = NotifierProvider<GoodsFilterNotifier, GoodsFilter>(GoodsFilterNotifier.new);
 
+/// Bộ lọc nhớ qua các lần mở app: trạng thái, nhóm hàng, sắp xếp (không nhớ từ khoá tìm).
 class GoodsFilterNotifier extends Notifier<GoodsFilter> {
-  @override
-  GoodsFilter build() => const GoodsFilter();
+  static const _key = 'goods.filter';
+  bool _touched = false;
 
-  void set(GoodsFilter f) => state = f;
+  @override
+  GoodsFilter build() {
+    _restore();
+    return const GoodsFilter();
+  }
+
+  Future<void> _restore() async {
+    try {
+      final raw = (await SharedPreferences.getInstance()).getString(_key);
+      // Người dùng đã chọn gì trong lúc chờ đọc thì giữ lựa chọn đó.
+      if (raw == null || _touched || !ref.mounted) return;
+      final m = jsonDecode(raw) as Map<String, dynamic>;
+      state = GoodsFilter(
+        status: GoodsStatus.values.asNameMap()[m['status']] ?? GoodsStatus.all,
+        cats: {for (final c in (m['cats'] as List? ?? const [])) (c as num).toInt()},
+        sort: GoodsSort.values.asNameMap()[m['sort']] ?? GoodsSort.newest,
+      );
+    } catch (_) {
+      // Không đọc được (máy chặn lưu, dữ liệu hỏng) thì dùng mặc định.
+    }
+  }
+
+  void set(GoodsFilter f) {
+    _touched = true;
+    state = f;
+    SharedPreferences.getInstance()
+        .then(
+          (p) => p.setString(_key, jsonEncode({'status': f.status.name, 'cats': f.cats.toList(), 'sort': f.sort.name})),
+        )
+        .catchError((_) => false);
+  }
 }
 
 /// Nhóm đã chọn kèm mọi nhóm con / cháu — chọn "Hàng bán" là thấy cả "Điện thoại" bên trong.
@@ -282,4 +318,85 @@ Future<void> setProductActive(WidgetRef ref, int id, bool active) async {
 Future<void> duplicateProduct(WidgetRef ref, int id) async {
   await ref.read(apiClientProvider).post<Object?>('/admin/products/$id/duplicate');
   ref.invalidate(goodsCatalogProvider);
+}
+
+/// Tra một mã vừa quét: khớp đúng SKU sản phẩm / phiên bản trong danh mục đã tải,
+/// không có thì hỏi API (bắt cả mã vạch). Nhiều kết quả hoặc không có thì null.
+Future<GoodsItem?> lookupCode(WidgetRef ref, String raw) async {
+  final code = raw.trim().toUpperCase();
+  if (code.isEmpty) return null;
+  final c = await ref.read(goodsCatalogProvider.future);
+  for (final it in c.items) {
+    if (it.sku.toUpperCase() == code || it.stockRows.any((r) => r.sku.toUpperCase() == code)) return it;
+  }
+  // Gọi thẳng API thay vì đọc goodsSearchProvider: provider tự huỷ khi không ai theo dõi.
+  final p = await ref
+      .read(apiClientProvider)
+      .getPage('/products', query: {'all': 'true', 'slim': 'true', 'keyword': raw.trim(), 'page_size': '2'});
+  return p.total == 1 ? c.byId(((p.data.first as Map)['id'] as num).toInt()) : null;
+}
+
+/// Khai giá vốn cho một phiên bản (PUT /admin/inventory/cost) — không ghi sổ kho.
+Future<void> setVariantCost(WidgetRef ref, int productId, int variantId, num cost) async {
+  await ref
+      .read(apiClientProvider)
+      .put<Object?>(
+        '/admin/inventory/cost',
+        body: {
+          'items': [
+            {'variant_id': variantId, 'cost_price': cost},
+          ],
+        },
+      );
+  ref.invalidate(goodsCatalogProvider);
+  ref.invalidate(productDetailProvider(productId));
+}
+
+/// Đổi giá bán một phiên bản. API không có đường sửa riêng giá: PUT /admin/products/{id}
+/// nhận lại cả mặt hàng, và danh sách `variants` gửi lên là ĐỒNG BỘ (vắng dòng nào là
+/// xoá dòng đó) — nên dựng lại đủ mọi trường từ chi tiết [d], chỉ thay giá của [variantId].
+Future<void> setVariantPrice(WidgetRef ref, Map<String, dynamic> d, int variantId, num price) async {
+  final id = (d['id'] as num).toInt();
+  final variants = [
+    for (final v in ((d['variants'] as List?) ?? const []).whereType<Map>())
+      {
+        'id': v['id'],
+        'sku': v['sku'] ?? '',
+        'barcode': v['barcode'] ?? '',
+        'name': v['name'] ?? '',
+        'attributes': [
+          for (final a in ((v['attributes'] as List?) ?? const []).whereType<Map>())
+            {'attribute_id': a['attribute_id'], 'value_id': a['value_id']},
+        ],
+        'is_default': v['is_default'],
+        'pos': v['pos'],
+        'price': (v['id'] as num).toInt() == variantId ? price : v['price'],
+        'cost_price': v['cost_price'],
+        'weight_gram': v['weight_gram'] ?? 0,
+        'image': v['image'] ?? '',
+        'is_active': v['is_active'],
+      },
+  ];
+  await ref
+      .read(apiClientProvider)
+      .put<Object?>(
+        '/admin/products/$id',
+        body: {
+          'category_id': d['category_id'] ?? (d['category'] as Map?)?['id'],
+          'name': d['name'],
+          'slug': d['slug'],
+          'sku': d['sku'],
+          'description': d['description'] ?? '',
+          'vat': d['vat'],
+          // Hàng một phiên bản: giá gốc của sản phẩm đi cùng giá phiên bản.
+          'base_price': d['is_multi_variant'] == true ? d['base_price'] : price,
+          'sale_price': d['sale_price'],
+          'cost_price': d['cost_price'],
+          'thumbnail': d['thumbnail'] ?? '',
+          'status': d['status'],
+          'variants': variants,
+        },
+      );
+  ref.invalidate(goodsCatalogProvider);
+  ref.invalidate(productDetailProvider(id));
 }

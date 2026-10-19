@@ -111,7 +111,8 @@ enum AppIcons {
     '<rect x="3.5" y="4.5" width="17" height="15" rx="2"/><circle cx="9" cy="10" r="1.8"/><path d="m4 17 5-4.5 4 3.5 3-2.5 4.5 3.5"/>',
   ),
   edit('<path d="M4 20h4L19 9l-4-4L4 16Z"/><path d="m13.5 6.5 4 4"/>'),
-  barcode('<path d="M4 5v14M7 5v14M10.5 5v14M13 5v14M16.5 5v14M20 5v14"/>');
+  barcode('<path d="M4 5v14M7 5v14M10.5 5v14M13 5v14M16.5 5v14M20 5v14"/>'),
+  bolt('<path d="M13 2.5 4.5 13.5h6.5L10 21.5l8.5-11H12Z"/>');
 
   const AppIcons(this.paths);
 

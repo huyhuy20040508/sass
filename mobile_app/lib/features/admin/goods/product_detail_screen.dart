@@ -39,30 +39,16 @@ class ProductDetailScreen extends ConsumerWidget {
             color: Colors.white,
             boxShadow: [BoxShadow(color: OrderColors.line, offset: Offset(0, -1))],
           ),
-          child: Row(
-            children: [
-              Expanded(
-                child: GoodsBtn(
-                  label: 'In mã vạch',
-                  icon: AppIcons.barcode,
-                  onTap: () => showDashToast(context, 'In tem mã vạch trên mobile — sắp có'),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: GoodsBtn(
-                  label: 'Sửa sản phẩm',
-                  icon: AppIcons.edit,
-                  primary: true,
-                  onTap: () => showDashToast(context, 'Sửa sản phẩm trên mobile — sắp có'),
-                ),
-              ),
-            ],
+          child: GoodsBtn(
+            label: 'Sửa sản phẩm',
+            icon: AppIcons.edit,
+            primary: true,
+            onTap: () => showDashToast(context, 'Sửa sản phẩm trên mobile — sắp có'),
           ),
         ),
         body: Column(
           children: [
-            _Head(onMore: () => _more(context, ref, it)),
+            const _Head(),
             Expanded(
               child: RefreshIndicator(
                 color: OrderColors.primary,
@@ -80,7 +66,8 @@ class ProductDetailScreen extends ConsumerWidget {
                   physics: const AlwaysScrollableScrollPhysics(),
                   padding: const EdgeInsets.only(bottom: 12),
                   children: [
-                    _hero(it),
+                    _hero(context, ref, it, d),
+                    _quick(context, ref, it),
                     _Block(title: 'Tồn kho', child: _stock(branches)),
                     ..._variants(it, d),
                     _Block(title: 'Thông tin', child: _info(it, d, detail)),
@@ -94,65 +81,210 @@ class ProductDetailScreen extends ConsumerWidget {
     );
   }
 
-  Widget _hero(GoodsItem it) => _Block(
-    first: true,
-    // Lưới giá tràn hết bề ngang khối nên khối này tự lo phần đệm.
-    flush: true,
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              GoodsImage(url: it.thumb, size: 96, radius: 12),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      it.name,
-                      style: const TextStyle(
-                        color: OrderColors.ink,
-                        fontSize: 17,
-                        fontWeight: FontWeight.w700,
-                        height: 1.35,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text('SKU: ${it.sku}', style: const TextStyle(color: OrderColors.muted, fontSize: 12.5)),
-                    const SizedBox(height: 8),
-                    _StatusDot(active: it.active),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-        Container(
-          decoration: const BoxDecoration(
-            border: Border(top: BorderSide(color: OrderColors.line)),
-          ),
-          child: IntrinsicHeight(
+  Widget _hero(BuildContext context, WidgetRef ref, GoodsItem it, Map<String, dynamic>? d) {
+    final n = it.variants.length;
+    final cost = it.cost;
+    final gain = cost == null ? null : it.minPrice - cost;
+    return _Block(
+      first: true,
+      // Lưới giá tràn hết bề ngang khối nên khối này tự lo phần đệm.
+      flush: true,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
             child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                GoodsImage(url: it.thumb, size: 104, radius: 14),
+                const SizedBox(width: 14),
                 Expanded(
-                  child: _PriceCell(label: 'Giá bán lẻ', value: priceText(it)),
-                ),
-                const VerticalDivider(width: 1, thickness: 1, color: OrderColors.line),
-                Expanded(
-                  child: _PriceCell(label: 'Giá vốn', value: it.cost == null ? null : dot(it.cost!)),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        it.name,
+                        style: const TextStyle(
+                          color: OrderColors.ink,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          height: 1.35,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text('SKU: ${it.sku}', style: const TextStyle(color: OrderColors.muted, fontSize: 12.5)),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 5,
+                        runSpacing: 5,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          _StatusDot(active: it.active),
+                          if (it.isSerial) const SmallTag('IMEI', OrderColors.purple),
+                          if (n > 1) SmallTag('$n phiên bản', (OrderColors.primarySoft, OrderColors.primaryInk)),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
           ),
+          Container(
+            decoration: const BoxDecoration(
+              border: Border(top: BorderSide(color: OrderColors.line)),
+            ),
+            child: IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(
+                    child: _PriceCell(
+                      key: const Key('edit_price'),
+                      label: 'Giá bán',
+                      value: priceText(it),
+                      color: OrderColors.primaryInk,
+                      onTap: () => _editMoney(context, ref, it, d, price: true),
+                    ),
+                  ),
+                  const VerticalDivider(width: 1, thickness: 1, color: OrderColors.line),
+                  Expanded(
+                    child: _PriceCell(
+                      key: const Key('edit_cost'),
+                      label: 'Giá vốn',
+                      value: cost == null ? null : dot(cost),
+                      onTap: () => _editMoney(context, ref, it, d, price: false),
+                    ),
+                  ),
+                  const VerticalDivider(width: 1, thickness: 1, color: OrderColors.line),
+                  Expanded(
+                    child: _PriceCell(
+                      key: const Key('gain_cell'),
+                      label: 'Lãi / sp',
+                      value: gain == null ? null : dot(gain),
+                      color: gain != null && gain < 0 ? OrderColors.red.$2 : OrderColors.green.$2,
+                      note: gain == null || it.minPrice <= 0 ? null : pct(gain / it.minPrice * 100),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Thao tác nhanh: 4 nút tròn có nhãn như app Sapo.
+  Widget _quick(BuildContext context, WidgetRef ref, GoodsItem it) {
+    Widget btn(String label, AppIcons icon, VoidCallback onTap, {bool danger = false, Key? key}) => Expanded(
+      child: InkWell(
+        key: key,
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Column(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: danger ? OrderColors.red.$1 : OrderColors.primarySoft,
+                  shape: BoxShape.circle,
+                ),
+                child: Center(
+                  child: AppIcon(icon, size: 21, color: danger ? OrderColors.red.$2 : OrderColors.primaryInk),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                label,
+                maxLines: 1,
+                style: const TextStyle(color: OrderColors.text, fontSize: 12, fontWeight: FontWeight.w500),
+              ),
+            ],
+          ),
         ),
-      ],
-    ),
-  );
+      ),
+    );
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+      color: Colors.white,
+      child: Row(
+        children: [
+          btn('Nhập hàng', AppIcons.truck, () => showDashToast(context, 'Tạo phiếu nhập trên mobile — sắp có')),
+          btn('In mã vạch', AppIcons.barcode, () => showDashToast(context, 'In tem mã vạch trên mobile — sắp có')),
+          btn(
+            'Sao chép',
+            AppIcons.copy,
+            () => _confirm(context, ref, it, copy: true),
+            key: const Key('product_duplicate'),
+          ),
+          btn(
+            it.active ? 'Ngừng bán' : 'Mở bán',
+            it.active ? AppIcons.eyeOff : AppIcons.eye,
+            () => _confirm(context, ref, it, copy: false),
+            danger: true,
+            key: const Key('product_toggle'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Sửa nhanh giá bán / giá vốn của phiên bản đầu (hàng nhiều phiên bản thì các
+  /// phiên bản khác sửa ở form Sửa sản phẩm).
+  Future<void> _editMoney(
+    BuildContext context,
+    WidgetRef ref,
+    GoodsItem it,
+    Map<String, dynamic>? d, {
+    required bool price,
+  }) async {
+    final dv = [
+      for (final v in ((d?['variants'] as List?) ?? const []).whereType<Map>())
+        if (v['is_active'] != false) v,
+    ];
+    final row = it.variants.firstOrNull;
+    final vid = row?.variantId ?? (dv.firstOrNull?['id'] as num?)?.toInt();
+    // Giá bán phải gửi lại cả mặt hàng — chờ chi tiết tải xong mới sửa được.
+    if (vid == null || (price && d == null)) {
+      return showDashToast(context, 'Đang tải chi tiết sản phẩm, thử lại sau giây lát');
+    }
+    final v = dv.where((x) => (x['id'] as num).toInt() == vid).firstOrNull;
+    final curPrice = (v?['price'] as num?) ?? row?.price ?? it.minPrice;
+    final curCost = row != null ? row.cost : v?['cost_price'] as num?;
+    final vName = '${v?['name'] ?? row?.name ?? ''}';
+    final n = await showModalBottomSheet<num>(
+      context: context,
+      isScrollControlled: true,
+      useRootNavigator: true,
+      backgroundColor: Colors.white,
+      barrierColor: const Color(0x73111827),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(18))),
+      builder: (_) => _MoneySheet(
+        price: price,
+        initial: price ? curPrice : curCost,
+        otherPrice: curPrice,
+        otherCost: curCost,
+        variantName: it.variants.length > 1 && vName.isNotEmpty ? vName : null,
+      ),
+    );
+    if (n == null || !context.mounted) return;
+    try {
+      if (price) {
+        await setVariantPrice(ref, d!, vid, n);
+      } else {
+        await setVariantCost(ref, it.id, vid, n);
+      }
+      if (context.mounted) showDashToast(context, price ? 'Đã lưu giá bán ${dot(n)} đ' : 'Đã lưu giá vốn ${dot(n)} đ');
+    } on ApiException catch (e) {
+      if (context.mounted) showDashToast(context, e.message);
+    }
+  }
 
   Widget _stock(AsyncValue<List<(String, num)>> branches) {
     if (branches.hasError && !branches.hasValue) {
@@ -343,33 +475,7 @@ class ProductDetailScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _more(BuildContext context, WidgetRef ref, GoodsItem it) async {
-    final pick = await showDashSheet<String>(
-      context,
-      title: 'Thao tác',
-      body: (ctx) => Column(
-        children: [
-          SheetOption(label: 'Nhập hàng', leading: AppIcons.truck, onTap: () => Navigator.of(ctx).pop('import')),
-          SheetOption(
-            key: const Key('product_duplicate'),
-            label: 'Sao chép sản phẩm',
-            leading: AppIcons.copy,
-            onTap: () => Navigator.of(ctx).pop('copy'),
-          ),
-          SheetOption(
-            key: const Key('product_toggle'),
-            label: it.active ? 'Ngừng bán' : 'Mở bán lại',
-            leading: it.active ? AppIcons.eyeOff : AppIcons.eye,
-            danger: it.active,
-            onTap: () => Navigator.of(ctx).pop('toggle'),
-          ),
-        ],
-      ),
-    );
-    if (pick == null || !context.mounted) return;
-    if (pick == 'import') return showDashToast(context, 'Tạo phiếu nhập trên mobile — sắp có');
-
-    final copy = pick == 'copy';
+  Future<void> _confirm(BuildContext context, WidgetRef ref, GoodsItem it, {required bool copy}) async {
     final ok = await showDashSheet<bool>(
       context,
       title: copy
@@ -428,9 +534,7 @@ class ProductDetailScreen extends ConsumerWidget {
 }
 
 class _Head extends StatelessWidget {
-  const _Head({required this.onMore});
-
-  final VoidCallback onMore;
+  const _Head();
 
   @override
   Widget build(BuildContext context) {
@@ -458,15 +562,8 @@ class _Head extends StatelessWidget {
               style: TextStyle(color: OrderColors.ink, fontSize: 16.5, fontWeight: FontWeight.w700),
             ),
           ),
-          IconButton(
-            key: const Key('product_more'),
-            tooltip: 'Thao tác khác',
-            constraints: const BoxConstraints.tightFor(width: 40, height: 40),
-            style: IconButton.styleFrom(tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-            padding: EdgeInsets.zero,
-            onPressed: onMore,
-            icon: const AppIcon(AppIcons.dots, size: 22, color: OrderColors.ink),
-          ),
+          // Cân tiêu đề vào giữa (thao tác đã ra hàng nút nhanh trong thân màn).
+          const SizedBox(width: 40),
         ],
       ),
     );
@@ -533,38 +630,266 @@ class _StatusDot extends StatelessWidget {
 }
 
 class _PriceCell extends StatelessWidget {
-  const _PriceCell({required this.label, required this.value});
+  const _PriceCell({super.key, required this.label, required this.value, this.color, this.note, this.onTap});
 
   final String label;
 
-  /// null = chưa khai (giá vốn).
+  /// null = chưa có (giá vốn chưa khai / chưa tính được lãi).
   final String? value;
+  final Color? color;
+  final String? note;
+
+  /// Có thì ô chạm để sửa (hiện bút chì cạnh nhãn).
+  final VoidCallback? onTap;
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: const TextStyle(color: OrderColors.muted, fontSize: 12)),
-        const SizedBox(height: 2),
-        value == null
-            ? Text(
-                'Chưa có',
-                style: TextStyle(color: OrderColors.orange.$2, fontSize: 13, fontWeight: FontWeight.w600),
-              )
-            : Text(
+  Widget build(BuildContext context) {
+    final body = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(label, style: const TextStyle(color: OrderColors.muted, fontSize: 12)),
+              if (onTap != null) ...[
+                const SizedBox(width: 4),
+                const AppIcon(AppIcons.edit, size: 13, color: OrderColors.primaryInk),
+              ],
+            ],
+          ),
+          const SizedBox(height: 2),
+          if (value == null)
+            Text(
+              onTap != null ? '+ Nhập' : '—',
+              style: TextStyle(
+                color: onTap != null ? OrderColors.primaryInk : OrderColors.orange.$2,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            )
+          else
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
                 value!,
-                style: const TextStyle(
-                  color: OrderColors.ink,
+                style: TextStyle(
+                  color: color ?? OrderColors.ink,
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
                   fontFeatures: tnum,
                 ),
               ),
-      ],
-    ),
-  );
+            ),
+          if (note != null)
+            Text(
+              note!,
+              style: TextStyle(color: color, fontSize: 11.5, fontWeight: FontWeight.w600),
+            ),
+        ],
+      ),
+    );
+    return onTap == null ? body : InkWell(onTap: onTap, child: body);
+  }
+}
+
+/// Ngăn nhập số tiền: tự chấm ngăn nghìn khi gõ, tính lãi ngay.
+class _MoneySheet extends StatefulWidget {
+  const _MoneySheet({
+    required this.price,
+    required this.initial,
+    required this.otherPrice,
+    required this.otherCost,
+    this.variantName,
+  });
+
+  /// true = sửa giá bán, false = giá vốn.
+  final bool price;
+  final num? initial;
+  final num otherPrice;
+  final num? otherCost;
+  final String? variantName;
+
+  @override
+  State<_MoneySheet> createState() => _MoneySheetState();
+}
+
+class _MoneySheetState extends State<_MoneySheet> {
+  late final _c = TextEditingController(text: widget.initial == null ? '' : dot(widget.initial!));
+  String? _err;
+
+  @override
+  void initState() {
+    super.initState();
+    _c.selection = TextSelection(baseOffset: 0, extentOffset: _c.text.length);
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  int get _val => int.tryParse(_c.text.replaceAll(RegExp(r'\D'), '')) ?? 0;
+
+  void _onChanged(String _) {
+    final n = _val;
+    final t = n == 0 ? '' : dot(n);
+    if (t != _c.text) {
+      _c.value = TextEditingValue(
+        text: t,
+        selection: TextSelection.collapsed(offset: t.length),
+      );
+    }
+    setState(() => _err = null);
+  }
+
+  void _save() {
+    if (widget.price && _val <= 0) return setState(() => _err = 'Giá bán phải lớn hơn 0.');
+    Navigator.of(context).pop(_val);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final mq = MediaQuery.of(context);
+    final price = widget.price ? _val : widget.otherPrice;
+    final cost = widget.price ? widget.otherCost : _val;
+    final gain = cost == null || price <= 0 ? null : price - cost;
+    return Padding(
+      padding: EdgeInsets.only(bottom: mq.viewInsets.bottom),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Center(
+            child: Container(
+              width: 40,
+              height: 5,
+              margin: const EdgeInsets.only(top: 10, bottom: 12),
+              decoration: BoxDecoration(color: const Color(0xFFD6DBE3), borderRadius: BorderRadius.circular(3)),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  widget.price ? 'Sửa giá bán' : 'Giá vốn',
+                  style: const TextStyle(color: OrderColors.ink, fontSize: 18, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 10),
+                Container(
+                  height: 56,
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: _err == null ? OrderColors.primary : OrderColors.red.$2, width: 1.5),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          key: const Key('money_input'),
+                          controller: _c,
+                          autofocus: true,
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
+                          onChanged: _onChanged,
+                          onSubmitted: (_) => _save(),
+                          style: const TextStyle(
+                            color: OrderColors.ink,
+                            fontSize: 24,
+                            fontWeight: FontWeight.w700,
+                            fontFeatures: tnum,
+                          ),
+                          decoration: const InputDecoration(
+                            isCollapsed: true,
+                            filled: false,
+                            border: InputBorder.none,
+                            enabledBorder: InputBorder.none,
+                            focusedBorder: InputBorder.none,
+                            hintText: '0',
+                            hintStyle: TextStyle(color: OrderColors.faint, fontSize: 24),
+                          ),
+                        ),
+                      ),
+                      const Text(
+                        'đ',
+                        style: TextStyle(color: OrderColors.muted, fontSize: 15, fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                  ),
+                ),
+                if (_err != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text(_err!, style: TextStyle(color: OrderColors.red.$2, fontSize: 12.5)),
+                  ),
+                if (gain != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 10),
+                    child: Text.rich(
+                      TextSpan(
+                        text: 'Lãi mỗi sản phẩm: ',
+                        children: [
+                          TextSpan(
+                            text: '${dot(gain)}đ · ${pct(gain / price * 100)}',
+                            style: TextStyle(
+                              color: gain > 0 ? OrderColors.green.$2 : OrderColors.red.$2,
+                              fontWeight: FontWeight.w700,
+                              fontFeatures: tnum,
+                            ),
+                          ),
+                        ],
+                      ),
+                      key: const Key('money_hint'),
+                      style: const TextStyle(color: OrderColors.muted, fontSize: 12.5),
+                    ),
+                  ),
+                if (widget.variantName != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 10),
+                    child: Text.rich(
+                      TextSpan(
+                        text: 'Áp cho phiên bản ',
+                        children: [
+                          TextSpan(
+                            text: widget.variantName,
+                            style: const TextStyle(color: OrderColors.ink, fontWeight: FontWeight.w700),
+                          ),
+                          const TextSpan(text: '. Các phiên bản khác sửa ở form Sửa sản phẩm.'),
+                        ],
+                      ),
+                      style: const TextStyle(color: OrderColors.muted, fontSize: 12.5, height: 1.5),
+                    ),
+                  ),
+                const SizedBox(height: 12),
+              ],
+            ),
+          ),
+          Container(
+            padding: EdgeInsets.fromLTRB(16, 12, 16, mq.viewPadding.bottom + 12),
+            decoration: const BoxDecoration(
+              border: Border(top: BorderSide(color: OrderColors.line)),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: GoodsBtn(label: 'Huỷ', onTap: () => Navigator.of(context).pop()),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: GoodsBtn(key: const Key('money_save'), label: 'Lưu', primary: true, onTap: _save),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _Loading extends StatelessWidget {
