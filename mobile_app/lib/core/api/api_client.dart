@@ -40,6 +40,16 @@ class ApiClient {
 
   Future<T> delete<T>(String path) => _send(() => dio.delete(path));
 
+  /// Cả khối phản hồi `{success, data, meta}` — khi cần đọc thêm trong `meta` (hàng tổng, số đếm).
+  Future<Map<String, dynamic>> getRaw(String path, {Map<String, dynamic>? query}) async {
+    try {
+      final body = (await dio.get(path, queryParameters: query)).data;
+      return body is Map ? Map<String, dynamic>.from(body) : <String, dynamic>{};
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
+
   /// Danh sách có phân trang: `data` + `meta {page, page_size, total, total_pages}`.
   Future<ApiPage> getPage(String path, {Map<String, dynamic>? query}) async {
     try {

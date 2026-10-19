@@ -296,18 +296,26 @@ class DashFilterNotifier extends Notifier<DashFilter> {
   void setShop(int id) => state = state.copyWith(shopId: id);
 }
 
-/// Bộ lọc thật gửi lên API. Chưa chọn chi nhánh thì xem chi nhánh ĐANG LÀM
-/// (chọn ở màn chọn nơi làm việc), chưa có nữa thì chi nhánh chính (trụ sở) —
-/// không mặc định gộp mọi chi nhánh. null = đang tải danh sách chi nhánh.
+/// Chi nhánh mặc định của các màn khu Quản trị: chi nhánh ĐANG LÀM (chọn ở màn
+/// chọn nơi làm việc), chưa có thì chi nhánh chính (trụ sở) — không mặc định gộp
+/// mọi chi nhánh. Giá trị null = không xem được danh sách chi nhánh, để API tự lấy
+/// chi nhánh đang làm. AsyncLoading = còn đang tải danh sách chi nhánh.
+final defaultShopProvider = Provider.autoDispose<AsyncValue<int?>>((ref) {
+  final dangLam = ref.watch(authProvider.select((s) => s.value?.chiNhanhId));
+  if (dangLam != null) return AsyncData(dangLam);
+  final br = ref.watch(dashBranchesProvider);
+  if (!br.hasValue) return const AsyncLoading();
+  return AsyncData(br.value!.where((b) => b.isHq).firstOrNull?.id);
+});
+
+/// Bộ lọc thật gửi lên API của Tổng quan. null = đang tải danh sách chi nhánh.
 final dashQueryProvider = Provider.autoDispose<DashFilter?>((ref) {
   final c = ref.watch(dashFilterProvider);
   if (c.shopId != null) return c;
-  final dangLam = ref.watch(authProvider.select((s) => s.value?.chiNhanhId));
-  if (dangLam != null) return c.copyWith(shopId: dangLam);
-  final br = ref.watch(dashBranchesProvider);
-  if (!br.hasValue) return null;
-  final chinh = br.value!.where((b) => b.isHq).firstOrNull;
-  return chinh == null ? c : c.copyWith(shopId: chinh.id);
+  final d = ref.watch(defaultShopProvider);
+  if (!d.hasValue) return null;
+  final id = d.value;
+  return id == null ? c : c.copyWith(shopId: id);
 });
 
 /// Đồng hồ của màn Tổng quan — test thay bằng giờ cố định.

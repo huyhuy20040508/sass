@@ -80,6 +80,31 @@ abstract final class DashColors {
   ];
 }
 
+/// Màu màn Đơn hàng (design/html/don-hang-mobile.html): đầu trắng, nhãn trạng thái
+/// nền nhạt + chữ đậm cùng họ màu.
+abstract final class OrderColors {
+  static const primary = Color(0xFF1677FF);
+  static const primaryInk = Color(0xFF0B5ED7);
+  static const primarySoft = Color(0xFFEAF3FF);
+  static const ink = Color(0xFF111827);
+  static const text = Color(0xFF374151);
+  static const muted = Color(0xFF6B7280);
+  static const faint = Color(0xFF9CA3AF);
+  static const line = Color(0xFFE8EBF0);
+  static const grid = Color(0xFFF0F2F5);
+  static const page = Color(0xFFF2F4F7);
+  static const navy = Color(0xFF0B1B3A);
+
+  static const green = (Color(0xFFE8F7EE), Color(0xFF0F7A3D));
+  static const orange = (Color(0xFFFFF3E0), Color(0xFFB45309));
+  static const blue = (Color(0xFFE8F1FF), Color(0xFF1D4ED8));
+  static const red = (Color(0xFFFDECEC), Color(0xFFB91C1C));
+  static const neutral = (Color(0xFFF1F2F4), Color(0xFF4B5563));
+  static const purple = (Color(0xFFF3ECFF), Color(0xFF6D28D9));
+
+  static const cardShadow = [BoxShadow(color: Color(0x0D111827), offset: Offset(0, 1), blurRadius: 2)];
+}
+
 const appFont = 'BeVietnamPro';
 
 ThemeData buildTheme() {

@@ -80,7 +80,33 @@ enum AppIcons {
   ),
   swapH('<path d="M7 4 3.5 7.5 7 11M3.5 7.5h13M17 20l3.5-3.5L17 13M20.5 16.5h-13"/>'),
   refresh('<path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/>'),
-  news('<rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M7.5 9h9M7.5 12.5h9M7.5 16h5"/>');
+  news('<rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M7.5 9h9M7.5 12.5h9M7.5 16h5"/>'),
+  // Từ design/html/don-hang-mobile.html
+  search('<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>'),
+  scan(
+    '<path d="M3.5 8V5a1.5 1.5 0 0 1 1.5-1.5h3M16 3.5h3A1.5 1.5 0 0 1 20.5 5v3M20.5 16v3a1.5 1.5 0 0 1-1.5 1.5h-3'
+    'M8 20.5H5A1.5 1.5 0 0 1 3.5 19v-3M7 8v8M10 8v8M13.5 8v8M17 8v8"/>',
+  ),
+  close('<path d="m6 6 12 12M18 6 6 18"/>'),
+  filter('<path d="M4 6h16M7 12h10M10 18h4"/>'),
+  sort('<path d="M7 4v16M3.5 16.5 7 20l3.5-3.5M17 20V4M13.5 7.5 17 4l3.5 3.5"/>'),
+  plus('<path d="M12 5v14M5 12h14"/>'),
+  globe('<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>'),
+  back('<path d="m15 5-7 7 7 7"/>'),
+  dots('<circle cx="5.5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="18.5" cy="12" r="1.4"/>'),
+  phone(
+    '<path d="M5 3.5h3.5l1.8 4.5-2.3 1.5a11 11 0 0 0 6.5 6.5l1.5-2.3 4.5 1.8V19a1.5 1.5 0 0 1-1.5 1.5A16 16 0 0 1 3.5 5 1.5 1.5 0 0 1 5 3.5Z"/>',
+  ),
+  print('<path d="M7 8V3.5h10V8"/><rect x="3.5" y="8" width="17" height="9" rx="2"/><path d="M7 14h10v6.5H7Z"/>'),
+  ban('<circle cx="12" cy="12" r="8.5"/><path d="m6 6 12 12"/>'),
+  share(
+    '<circle cx="18" cy="5.5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="18.5" r="2.5"/>'
+    '<path d="m8.2 10.8 7.6-4M8.2 13.2l7.6 4"/>',
+  ),
+  copy(
+    '<rect x="8" y="8" width="12.5" height="12.5" rx="2"/>'
+    '<path d="M16 8V5a1.5 1.5 0 0 0-1.5-1.5h-9A1.5 1.5 0 0 0 4 5v9a1.5 1.5 0 0 0 1.5 1.5H8"/>',
+  );
 
   const AppIcons(this.paths);
 

@@ -9,6 +9,7 @@ import '../workspace/workspace.dart';
 import '../workspace/workspace_widgets.dart' show SheetButton, initialsOf;
 import 'dashboard/dashboard_data.dart';
 import 'dashboard/dashboard_screen.dart';
+import 'orders/orders_screen.dart';
 import 'shell/shell_widgets.dart';
 
 /// Khung app của khu Quản trị: thanh dưới 5 mục, thanh navy thu gọn, ngăn tài khoản và "Thêm".
@@ -329,9 +330,16 @@ class _AdminShellState extends ConsumerState<AdminShell> {
     final home = _tab == AdminTab.home;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.light,
+      value: _tab == AdminTab.orders ? SystemUiOverlayStyle.dark : SystemUiOverlayStyle.light,
       child: Scaffold(
         backgroundColor: DashColors.page,
+        // Thanh dưới ở bottomNavigationBar: thông báo nổi lên trên nó thay vì che các tab.
+        bottomNavigationBar: AdminTabBar(
+          current: _tab,
+          orderCount: pending,
+          onTab: (t) => setState(() => _tab = t),
+          onMore: _openMore,
+        ),
         body: Column(
           children: [
             Expanded(
@@ -351,7 +359,8 @@ class _AdminShellState extends ConsumerState<AdminShell> {
                           },
                           child: DashboardScreen(key: _dash, onAccount: _openAccount),
                         ),
-                        for (final t in AdminTab.values.skip(1))
+                        OrdersScreen(onNewOrder: () => setState(() => _tab = AdminTab.pos)),
+                        for (final t in AdminTab.values.skip(2))
                           SkeletonTab(key: Key('skeleton_${t.name}'), name: t.label),
                       ],
                     ),
@@ -361,7 +370,8 @@ class _AdminShellState extends ConsumerState<AdminShell> {
                     right: 0,
                     top: 0,
                     child: CollapsedAppBar(
-                      visible: !home || _scrolled,
+                      // Đơn hàng có đầu trắng riêng — thanh navy chỉ cho Tổng quan (khi cuộn) và tab chưa có màn.
+                      visible: _tab != AdminTab.orders && (!home || _scrolled),
                       title: _tab.label,
                       subtitle: branchName,
                       periodLabel: home ? f.period.label : null,
@@ -373,7 +383,6 @@ class _AdminShellState extends ConsumerState<AdminShell> {
                 ],
               ),
             ),
-            AdminTabBar(current: _tab, orderCount: pending, onTab: (t) => setState(() => _tab = t), onMore: _openMore),
           ],
         ),
       ),
