@@ -337,7 +337,10 @@ class OrdersList extends AsyncNotifier<OrdersPage> {
   }
 
   Future<OrdersPage> _fetchRaw(int page) async {
+    // Đọc mọi thứ cần từ ref TRƯỚC khi chờ API: đổi bộ lọc giữa chừng thì provider
+    // này bị huỷ, đọc ref sau await là ném lỗi.
     final now = ref.read(clockProvider)();
+    final flag = ref.read(procStatusSupportedProvider.notifier);
     final res = await ref
         .read(apiClientProvider)
         .getRaw(
@@ -348,7 +351,7 @@ class OrdersList extends AsyncNotifier<OrdersPage> {
         .whereType<Map>()
         .map((m) => SoDonRow(Map<String, dynamic>.from(m)))
         .toList();
-    if (rows.isNotEmpty) ref.read(procStatusSupportedProvider.notifier).set(rows.first.j.containsKey('trang_thai_don'));
+    if (rows.isNotEmpty && ref.mounted) flag.set(rows.first.j.containsKey('trang_thai_don'));
     final meta = (res['meta'] as Map?) ?? const {};
     // Số theo tab: API đặt trong meta.tong.dem (bản vá sổ đơn cho mobile).
     final demRaw = (meta['tong'] as Map?)?['dem'] ?? meta['dem'];
@@ -368,10 +371,11 @@ class OrdersList extends AsyncNotifier<OrdersPage> {
     state = AsyncData(cur.copyWith(loadingMore: true));
     try {
       final next = await _fetch(cur.page + 1);
+      if (!ref.mounted) return;
       final more = next.data.whereType<Map>().map((m) => SoDonRow(Map<String, dynamic>.from(m)));
       state = AsyncData(cur.copyWith(rows: [...cur.rows, ...more], page: cur.page + 1, loadingMore: false));
     } on ApiException {
-      state = AsyncData(cur.copyWith(loadingMore: false));
+      if (ref.mounted) state = AsyncData(cur.copyWith(loadingMore: false));
     }
   }
 }
