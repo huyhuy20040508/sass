@@ -240,10 +240,11 @@ class DeviceSettingTest extends TestCase
 
         $res = $this->withSession($this->phien())->get(route('thu-ngan.ban-hang.phieu', ['id' => 88]))->assertOk();
 
-        $res->assertViewHas('khoGiay', '58')->assertViewHas('soBan', 2);
+        // Số bản của mẫu KHÔNG nhân bản phiếu: in đúng 1 bản trừ khi lệnh in xin thêm (?ban=).
+        $res->assertViewHas('khoGiay', '58')->assertViewHas('soBan', 1);
         $html = $res->getContent();
-        $this->assertSame(2, substr_count($html, 'Hẹn gặp lại!'), 'hai bản in phải có hai lời chào');
-        $this->assertSame(2, substr_count($html, '**********'));
+        $this->assertSame(1, substr_count($html, 'Hẹn gặp lại!'), 'mẫu đặt 2 bản vẫn chỉ in 1 bản');
+        $this->assertSame(1, substr_count($html, '**********'));
         $this->assertStringContainsString('Ốp lưng', $html);
         foreach (['Chị Lan', 'Thu Ngân A', '(Đen)', 'Cáp tặng', 'Gói quà giúp', 'Cảm ơn quý khách'] as $an) {
             $this->assertStringNotContainsString($an, $html, "dòng đã tắt vẫn in: {$an}");
