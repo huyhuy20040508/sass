@@ -51,13 +51,17 @@ bool _is(String path, String want) => path == want || path.endsWith('/api/v1$wan
 
 /// API giả cho màn Hàng hoá: /products, /admin/inventory, /categories, chi tiết, tồn chi nhánh.
 class _Api implements HttpClientAdapter {
-  _Api({this.productsCode = 200}) {
+  _Api({this.productsCode = 200, this.autoSku = true}) {
     // Một mã vạch chỉ có ở phiên bản — tìm phải qua API mới thấy.
     (details['4']!['variants'] as List).first['barcode'] = '8930000000017';
   }
 
   final int productsCode;
+
+  /// Quy tắc mã hàng hoá đang bật (SKU trống → API tự sinh).
+  final bool autoSku;
   final calls = <RequestOptions>[];
+  int _uploads = 0;
   final s = _snap();
 
   List<Map<String, dynamic>> get products => [for (final p in s['products'] as List) p as Map<String, dynamic>];
@@ -115,10 +119,56 @@ class _Api implements HttpClientAdapter {
         {'id': 2, 'name': 'Hộp', 'is_active': true},
       ]);
     }
+    if (p.endsWith('/admin/thuoc-tinh')) {
+      return _ok([
+        {
+          'id': 30,
+          'name': 'Màu',
+          'is_active': true,
+          'values': [
+            {'id': 301, 'name': 'Đen'},
+            {'id': 302, 'name': 'Trắng'},
+          ],
+        },
+        {
+          'id': 31,
+          'name': 'Dung lượng',
+          'is_active': true,
+          'values': [
+            {'id': 311, 'name': '128GB'},
+            {'id': 312, 'name': '256GB'},
+          ],
+        },
+      ]);
+    }
+    if (p.endsWith('/admin/thue')) {
+      return _ok([
+        {
+          'loai': 'mac-dinh',
+          'ten': 'Thuế mặc định',
+          'muc': [0, 8, 10],
+          'is_active': true,
+        },
+        {
+          'loai': 'ban-hang',
+          'ten': 'Thuế đơn bán hàng',
+          'muc': [0, 5, -1, -2],
+          'is_active': true,
+        },
+      ]);
+    }
+    if (p.endsWith('/admin/vi-tri')) return _ok(const []);
+    if (p.endsWith('/admin/quy-tac-ma')) {
+      return _ok({
+        'quy_tac': [
+          {'doc_type': 'hang-hoa', 'prefix': 'HH', 'is_active': autoSku},
+        ],
+      });
+    }
     if (p.endsWith('/admin/products/anh')) {
       return _json(201, {
         'success': true,
-        'data': {'url': '/uploads/2/a.jpg'},
+        'data': {'url': '/uploads/2/a${++_uploads}.jpg'},
       });
     }
     if (p.endsWith('/admin/products') && o.method == 'POST') {
@@ -130,34 +180,51 @@ class _Api implements HttpClientAdapter {
           'errors': {'name': 'Tên mặt hàng này đã có trong cửa hàng'},
         });
       }
-      final v = Map<String, dynamic>.from((b['variants'] as List).first as Map);
+      if (!autoSku && '${b['sku']}'.isEmpty) {
+        return _json(422, {
+          'success': false,
+          'message': 'Dữ liệu không hợp lệ',
+          'errors': {'sku': 'Nhập mã hàng hoá'},
+        });
+      }
       final cat = (s['categories'] as List).cast<Map>().firstWhere((c) => c['id'] == b['category_id']);
       final sku = '${b['sku']}'.isEmpty ? 'HH000099' : b['sku'];
+      final id = 50 + (s['products'] as List).length;
+      final vs = [
+        for (final (i, v) in (b['variants'] as List).cast<Map>().indexed)
+          {
+            ...v,
+            'id': id * 10 + i,
+            'sku': '${v['sku'] ?? ''}'.isEmpty ? sku : v['sku'],
+            'is_active': true,
+            'stock_quantity': 0,
+          },
+      ];
       final d = {
         ...b,
-        'id': 50,
+        'id': id,
         'sku': sku,
         'category': cat,
-        'is_multi_variant': false,
         'sold_count': 0,
         'created_at': '2026-10-18T08:59:00+07:00',
-        'variants': [
-          {...v, 'id': 500, 'sku': sku, 'is_active': true, 'cost_price': null, 'stock_quantity': 0},
-        ],
+        'variants': vs,
       };
       (s['products'] as List).add(d);
-      (s['details'] as Map)['50'] = d;
-      (s['inventory'] as List).add({
-        'variant_id': 500,
-        'product_id': 50,
-        'product_name': b['name'],
-        'sku': sku,
-        'stock_quantity': 0,
-        'price': v['price'],
-        'cost_price': b['cost_price'],
-        'is_active': true,
-        'product_active': true,
-      });
+      (s['details'] as Map)['$id'] = d;
+      for (final v in vs) {
+        (s['inventory'] as List).add({
+          'variant_id': v['id'],
+          'product_id': id,
+          'product_name': b['name'],
+          'variant_name': v['name'] ?? '',
+          'sku': v['sku'],
+          'stock_quantity': 0,
+          'price': v['price'],
+          'cost_price': v['cost_price'],
+          'is_active': true,
+          'product_active': b['status'] == 'active',
+        });
+      }
       return _json(201, {'success': true, 'data': d});
     }
     final adj = RegExp(r'/admin/inventory/(\d+)$').firstMatch(p);
@@ -278,6 +345,11 @@ Future<_Api> _open(
         // Test không có camera — màn quét chỉ dùng ô nhập mã tay.
         scannerCameraProvider.overrideWithValue(false),
         pickImageProvider.overrideWithValue((_) async => XFile.fromData(Uint8List.fromList([1, 2, 3]), name: 'a.jpg')),
+        pickImagesProvider.overrideWithValue(
+          (limit) async => [
+            for (var i = 0; i < (limit < 2 ? limit : 2); i++) XFile.fromData(Uint8List.fromList([i]), name: 'p$i.jpg'),
+          ],
+        ),
         apiClientProvider.overrideWith(
           (ref) => ApiClient(ref.read(authProvider.notifier), dio: Dio()..httpClientAdapter = a),
         ),
@@ -302,6 +374,25 @@ Future<void> _settle(WidgetTester t, [int n = 10]) async {
   for (var i = 0; i < n; i++) {
     await t.pump(const Duration(milliseconds: 100));
   }
+}
+
+Future<_Api> _openForm(WidgetTester t, {_Api? api}) async {
+  final a = await _open(t, api: api);
+  await t.tap(find.byTooltip('Thêm hàng hoá'));
+  await _settle(t);
+  expect(find.text('Thêm sản phẩm'), findsOneWidget);
+  return a;
+}
+
+/// Tên + nhóm "điện thoại" + giá — đủ để lưu.
+Future<void> _fillMinimal(WidgetTester t, String name, {required String price}) async {
+  await t.enterText(find.byKey(const Key('form_name')), name);
+  await t.tap(find.byKey(const Key('form_category')));
+  await _settle(t, 5);
+  await t.tap(find.byKey(const Key('cat_5')));
+  await _settle(t, 5);
+  await t.enterText(find.byKey(const Key('form_price')), price);
+  await t.pump();
 }
 
 /// Tên mặt hàng theo thứ tự đang hiện.
@@ -632,83 +723,178 @@ void main() {
     expect(saved, '{"status":"all","cats":[3],"sort":"priceAsc"}');
   });
 
-  testWidgets('thêm sản phẩm: thiếu ô bắt buộc thì báo ngay tại ô, không gọi API', (t) async {
-    final api = await _open(t);
-    await t.tap(find.byTooltip('Thêm hàng hoá'));
-    await _settle(t);
-    expect(find.text('Thêm sản phẩm'), findsOneWidget);
+  testWidgets('thêm sản phẩm: thiếu ô bắt buộc thì báo tại ô; giá 0 hợp lệ; đóng khi đã nhập thì hỏi lại', (t) async {
+    final api = await _openForm(t);
     await t.tap(find.byKey(const Key('form_save')));
     await t.pump();
     expect(find.text('Nhập tên sản phẩm'), findsOneWidget);
     expect(find.text('Chọn nhóm hàng'), findsWidgets);
     expect(find.text('Nhập giá bán'), findsOneWidget);
     expect(api.calls.where((c) => c.method == 'POST'), isEmpty);
+
     await t.enterText(find.byKey(const Key('form_name')), 'x');
+    await t.enterText(find.byKey(const Key('form_price')), '0');
     await t.pump();
     expect(find.text('Nhập tên sản phẩm'), findsNothing, reason: 'gõ vào thì lỗi ô đó biến mất');
+    expect(find.text('Nhập giá bán'), findsNothing, reason: 'giá 0 hợp lệ như PC');
+
+    await t.tap(find.byTooltip('Đóng'));
+    await _settle(t, 5);
+    expect(find.text('Bỏ sản phẩm đang nhập?'), findsOneWidget);
+    await t.tap(find.text('Nhập tiếp'));
+    await _settle(t, 5);
+    expect(find.text('Thêm sản phẩm'), findsOneWidget);
+    await t.tap(find.byTooltip('Đóng'));
+    await _settle(t, 5);
+    await t.tap(find.byKey(const Key('form_discard')));
+    await _settle(t, 10);
+    expect(find.text('Thêm sản phẩm'), findsNothing);
   });
 
-  testWidgets('thêm sản phẩm: ảnh, nhóm con, quét mã vạch, giá + lãi, tồn ban đầu → tạo, ghi kho, mở chi tiết', (
-    t,
-  ) async {
-    final api = await _open(t);
-    await t.tap(find.byTooltip('Thêm hàng hoá'));
-    await _settle(t);
+  testWidgets(
+    'thêm sản phẩm: ảnh, nhóm nhỏ nhất, giá + lãi, chi tiết (mã, quy đổi, VAT, công tắc, thẻ) → payload đúng',
+    (t) async {
+      final api = await _openForm(t);
+      await t.tap(find.byKey(const Key('form_image')));
+      await _settle(t, 5);
+      await t.tap(find.byKey(const Key('pick_gallery')));
+      await _settle(t, 5);
+      expect(api.calls.where((c) => c.path.endsWith('/admin/products/anh')), hasLength(2));
+      expect(find.text('Đại diện'), findsOneWidget);
+      expect(find.text('2/8'), findsOneWidget);
 
-    await t.tap(find.byKey(const Key('form_image')));
-    await _settle(t, 5);
-    await t.tap(find.byKey(const Key('pick_gallery')));
-    await _settle(t, 5);
-    final up = api.calls.where((c) => c.path.endsWith('/admin/products/anh')).single;
-    expect(up.data, isA<FormData>());
+      await t.enterText(find.byKey(const Key('form_name')), 'Cáp sạc USB-C');
+      await t.tap(find.byKey(const Key('form_category')));
+      await _settle(t, 5);
+      // Chỉ nhóm nhỏ nhất: "Hàng bán" / "Thiết bị điện tử" có nhóm con nên không chọn được.
+      expect(find.byKey(const Key('cat_2')), findsNothing);
+      expect(find.byKey(const Key('cat_4')), findsNothing);
+      expect(find.text('Hàng bán › Thiết bị điện tử'), findsOneWidget);
+      await t.tap(find.byKey(const Key('cat_5')));
+      await _settle(t, 5);
+      expect(find.text('Hàng bán › Thiết bị điện tử › điện thoại'), findsOneWidget);
 
-    await t.enterText(find.byKey(const Key('form_name')), 'Cáp sạc USB-C');
-    await t.tap(find.byKey(const Key('form_category')));
-    await _settle(t, 5);
-    await t.tap(find.byKey(const Key('cat_5')));
-    await _settle(t, 5);
-    expect(find.text('điện thoại'), findsOneWidget);
-    await t.tap(find.byKey(const Key('form_unit')));
-    await _settle(t, 5);
-    await t.tap(find.text('Hộp'));
-    await _settle(t, 5);
+      await t.enterText(find.byKey(const Key('form_price')), '150000');
+      await t.enterText(find.byKey(const Key('form_cost')), '90000');
+      await t.pump();
+      expect(find.text('150.000'), findsOneWidget);
+      expect(t.widget<Text>(find.byKey(const Key('form_gain'))).data, '60.000đ · 40%');
 
-    await t.tap(find.byTooltip('Quét mã vạch').last);
-    await _settle(t, 5);
-    await t.enterText(find.byKey(const Key('scan_manual')), '8930000000999');
-    await t.tap(find.byKey(const Key('scan_submit')));
-    await _settle(t, 12);
-    expect(find.byType(ScannerScreen), findsNothing, reason: 'nhận mã xong màn quét tự đóng');
-    expect(
-      find.descendant(of: find.byKey(const Key('form_barcode')), matching: find.text('8930000000999')),
-      findsOneWidget,
-      reason: 'mã quét được điền vào ô mã vạch',
-    );
+      expect(t.widget<Text>(find.byKey(const Key('form_more_sum'))).data, 'SKU tự sinh · VAT 0%');
+      await t.ensureVisible(find.byKey(const Key('form_more')));
+      await _settle(t, 4);
+      await t.tap(find.byKey(const Key('form_more')));
+      await _settle(t, 3);
 
-    await t.enterText(find.byKey(const Key('form_price')), '150000');
+      await t.ensureVisible(find.byTooltip('Quét mã vạch').last);
+      await _settle(t, 4);
+      await t.tap(find.byTooltip('Quét mã vạch').last);
+      await _settle(t, 5);
+      await t.enterText(find.byKey(const Key('scan_manual')), '8930000000999');
+      await t.tap(find.byKey(const Key('scan_submit')));
+      await _settle(t, 12);
+      expect(
+        find.descendant(of: find.byKey(const Key('form_barcode')), matching: find.text('8930000000999')),
+        findsOneWidget,
+      );
+
+      await t.ensureVisible(find.byKey(const Key('form_unit')));
+      await _settle(t, 4);
+      await t.tap(find.byKey(const Key('form_unit')));
+      await _settle(t, 5);
+      await t.tap(find.byKey(const Key('unit_1')));
+      await _settle(t, 5);
+      await t.ensureVisible(find.byKey(const Key('form_add_conv')));
+      await _settle(t, 4);
+      await t.tap(find.byKey(const Key('form_add_conv')));
+      await _settle(t, 5);
+      await t.tap(find.byKey(const Key('unit_2')));
+      await _settle(t, 5);
+      await t.enterText(find.byKey(const Key('conv_q_0')), '12');
+
+      await t.ensureVisible(find.byKey(const Key('form_sale')));
+      await _settle(t, 4);
+      await t.enterText(find.byKey(const Key('form_sale')), '200000');
+      await t.enterText(find.byKey(const Key('form_weight')), '50');
+      await t.ensureVisible(find.byKey(const Key('vat_10')));
+      await _settle(t, 4);
+      await t.tap(find.byKey(const Key('vat_10')));
+      await t.pump();
+      expect(t.widget<Text>(find.byKey(const Key('form_after_tax'))).data, '165.000đ');
+
+      await t.ensureVisible(find.byKey(const Key('sw_active')));
+      await _settle(t, 4);
+      await t.tap(find.byKey(const Key('sw_active')));
+      await t.tap(find.byKey(const Key('sw_serial')));
+      await t.pump();
+      await t.ensureVisible(find.byKey(const Key('form_branches')));
+      await _settle(t, 4);
+      await t.tap(find.byKey(const Key('form_branches')));
+      await _settle(t, 5);
+      await t.tap(find.text('Chi nhánh 2').last);
+      await t.pump();
+      await t.tap(find.text('Xong'));
+      await _settle(t, 5);
+      await t.ensureVisible(find.byKey(const Key('form_tag')));
+      await _settle(t, 4);
+      await t.enterText(find.byKey(const Key('form_tag')), 'hàng mới');
+      await t.testTextInput.receiveAction(TextInputAction.done);
+      await t.pump();
+      await t.enterText(find.byKey(const Key('form_desc')), 'Dây dài 1m');
+      await t.pump();
+      expect(
+        t.widget<Text>(find.byKey(const Key('form_more_sum'))).data,
+        'SKU tự sinh · VAT 10% · Cái +1 quy đổi · Lưu nháp · IMEI · 1 chi nhánh · 1 thẻ',
+      );
+
+      // Giá KM phải thấp hơn giá bán.
+      await t.tap(find.byKey(const Key('form_save')));
+      await _settle(t, 5);
+      expect(find.text('Giá khuyến mãi phải thấp hơn giá bán'), findsWidgets);
+      expect(api.calls.where((c) => c.method == 'POST' && c.path.endsWith('/admin/products')), isEmpty);
+      await t.enterText(find.byKey(const Key('form_sale')), '129000');
+
+      await t.tap(find.byKey(const Key('form_save')));
+      await _settle(t, 10);
+      final b = api.calls.where((c) => c.method == 'POST' && c.path.endsWith('/admin/products')).single.data as Map;
+      expect(b['name'], 'Cáp sạc USB-C');
+      expect(b['slug'], 'cap-sac-usb-c');
+      expect((b['category_id'], b['base_price'], b['cost_price'], b['sale_price']), (5, 150000, 90000, 129000));
+      expect(
+        (b['vat'], b['unit_id'], b['status'], b['is_serial'], b['is_stock_deducted']),
+        (10, 1, 'hidden', true, true),
+      );
+      expect(b['unit_conversions'], [
+        {'unit_id': 2, 'quantity': 12},
+      ]);
+      expect(b['shop_ids'], [5]);
+      expect(b['tags'], ['hàng mới']);
+      expect(b['description'], 'Dây dài 1m');
+      expect(b['thumbnail'], '/uploads/2/a1.jpg');
+      expect((b['images'] as List).map((i) => (i as Map)['url']), ['/uploads/2/a1.jpg', '/uploads/2/a2.jpg']);
+      expect(b['is_multi_variant'], false);
+      final v = (b['variants'] as List).single as Map;
+      expect((v['barcode'], v['price'], v['cost_price'], v['weight_gram']), ('8930000000999', 150000, 90000, 50));
+      expect(b['sku'], '', reason: 'để trống cho API tự sinh');
+
+      expect(find.text('Đã thêm sản phẩm'), findsOneWidget);
+      expect(t.widget<Text>(find.byKey(const Key('done_sub'))).data, 'Cáp sạc USB-C · HH000099');
+    },
+  );
+
+  testWidgets('thêm sản phẩm: ngăn "Đã thêm" — nhập tồn ban đầu ghi kho chi nhánh, rồi xem sản phẩm', (t) async {
+    final api = await _openForm(t);
+    await _fillMinimal(t, 'Cáp sạc USB-C', price: '150000');
     await t.enterText(find.byKey(const Key('form_cost')), '90000');
-    await t.pump();
-    expect(find.text('150.000'), findsOneWidget);
-    expect(
-      t.widget<Text>(find.byKey(const Key('form_gain'))).textSpan!.toPlainText(),
-      'Lãi mỗi sản phẩm: 60.000đ · 40%',
-    );
-    await t.ensureVisible(find.byKey(const Key('form_stock')));
-    await t.enterText(find.byKey(const Key('form_stock')), '5');
-    expect(find.textContaining('Ghi vào kho Cửa hàng chính'), findsOneWidget);
-
     await t.tap(find.byKey(const Key('form_save')));
-    await _settle(t, 15);
-    final post = api.calls.where((c) => c.method == 'POST' && c.path.endsWith('/admin/products')).single;
-    final b = post.data as Map;
-    expect(b['name'], 'Cáp sạc USB-C');
-    expect(b['slug'], 'cap-sac-usb-c');
-    expect((b['category_id'], b['unit_id'], b['base_price'], b['cost_price']), (5, 2, 150000, 90000));
-    expect(b['thumbnail'], '/uploads/2/a.jpg');
-    expect(b['sku'], '', reason: 'để trống cho API tự sinh');
-    expect((b['variants'] as List).single, {'barcode': '8930000000999', 'price': 150000, 'is_default': true});
-
-    final adj = api.calls.where((c) => c.method == 'PUT' && c.path.endsWith('/admin/inventory/500')).single;
+    await _settle(t, 10);
+    await t.tap(find.byKey(const Key('done_stock')));
+    await _settle(t, 5);
+    expect(find.text('Nhập hàng ban đầu'), findsWidgets);
+    await t.enterText(find.byKey(const Key('stock_0')), '5');
+    await t.tap(find.byKey(const Key('stock_save')));
+    await _settle(t, 10);
+    final adj = api.calls.where((c) => c.method == 'PUT' && RegExp(r'/admin/inventory/\d+$').hasMatch(c.path)).single;
     expect(adj.data, {
       'mode': 'delta',
       'quantity': 5,
@@ -717,30 +903,108 @@ void main() {
       'note': 'Tồn ban đầu khi thêm sản phẩm trên app',
     });
     expect(adj.headers['X-Chi-Nhanh'], '2');
+    expect(find.text('Đã nhập 5 vào kho'), findsOneWidget);
 
-    expect(find.text('Đã thêm sản phẩm'), findsOneWidget);
+    await t.tap(find.byKey(const Key('done_view')));
+    await _settle(t, 12);
     expect(find.text('SKU: HH000099'), findsOneWidget, reason: 'mở thẳng chi tiết sản phẩm vừa tạo');
     await t.tap(find.byTooltip('Quay lại'));
     await _settle(t);
     expect(_names(t).first, 'Cáp sạc USB-C');
-    expect(_pill(t, 50), 'Sắp hết · 5', reason: 'tồn ban đầu đã ghi vào kho');
+    expect(_pill(t, 55), 'Sắp hết · 5', reason: 'id mới = 50 + 5 mặt hàng có sẵn');
+  });
+
+  testWidgets('thêm sản phẩm nhiều phiên bản: tổ hợp, giá cộng thêm, mặc định, bỏ / sửa phiên bản', (t) async {
+    final api = await _openForm(t);
+    await _fillMinimal(t, 'iPhone 17', price: '10000000');
+    await t.ensureVisible(find.byKey(const Key('form_multi')));
+    await _settle(t, 4);
+    await t.tap(find.byKey(const Key('form_multi')));
+    await _settle(t, 5);
+    await t.tap(find.byKey(const Key('attr_30')));
+    await _settle(t, 5);
+    await t.tap(find.byKey(const Key('val_301')));
+    await t.tap(find.byKey(const Key('val_302')));
+    await t.pump();
+    await t.ensureVisible(find.byKey(const Key('form_add_attr')));
+    await _settle(t, 4);
+    await t.tap(find.byKey(const Key('form_add_attr')));
+    await _settle(t, 5);
+    await t.tap(find.byKey(const Key('attr_31')));
+    await _settle(t, 5);
+    await t.ensureVisible(find.byKey(const Key('val_311')));
+    await _settle(t, 4);
+    await t.tap(find.byKey(const Key('val_311')));
+    await t.tap(find.byKey(const Key('val_312')));
+    await t.pump();
+    await t.ensureVisible(find.byKey(const Key('extra_312')));
+    await _settle(t, 4);
+    await t.enterText(find.byKey(const Key('extra_312')), '2000000');
+    await t.pump();
+    expect(find.text('4 PHIÊN BẢN'), findsOneWidget);
+    for (final (k, price) in [('301-311', '10.000.000'), ('301-312', '12.000.000'), ('302-312', '12.000.000')]) {
+      expect(
+        find.descendant(of: find.byKey(Key('cprice_$k')), matching: find.text(price)),
+        findsOneWidget,
+        reason: 'giá $k = giá gốc + cộng thêm',
+      );
+    }
+    // Bỏ "Trắng / 128GB", sửa tay giá "Trắng / 256GB", gắn mã vạch riêng.
+    await t.ensureVisible(find.byKey(const Key('combo_302-311')));
+    await _settle(t, 4);
+    await t.tap(find.descendant(of: find.byKey(const Key('combo_302-311')), matching: find.byTooltip('Bỏ phiên bản')));
+    await t.pump();
+    expect(find.text('3 PHIÊN BẢN'), findsOneWidget);
+    await t.ensureVisible(find.byKey(const Key('cprice_302-312')));
+    await _settle(t, 4);
+    await t.enterText(find.byKey(const Key('cprice_302-312')), '12500000');
+    await t.enterText(find.byKey(const Key('cbar_302-312')), '8931');
+    await t.pump();
+
+    await t.tap(find.byKey(const Key('form_save')));
+    await _settle(t, 10);
+    final b = api.calls.where((c) => c.method == 'POST' && c.path.endsWith('/admin/products')).single.data as Map;
+    expect(b['is_multi_variant'], true);
+    final vs = (b['variants'] as List).cast<Map>();
+    expect(vs.map((v) => v['name']), ['Đen / 128GB', 'Đen / 256GB', 'Trắng / 256GB']);
+    expect(vs.map((v) => v['price']), [10000000, 12000000, 12500000]);
+    expect(vs.map((v) => v['is_default']), [true, false, false], reason: 'mặc định = tổ hợp toàn giá trị mặc định');
+    expect(vs[2]['barcode'], '8931');
+    expect(vs[0]['attributes'], [
+      {'attribute_id': 30, 'value_id': 301},
+      {'attribute_id': 31, 'value_id': 311},
+    ]);
+    expect(t.widget<Text>(find.byKey(const Key('done_sub'))).data, 'iPhone 17 · HH000099 · 3 phiên bản');
+  });
+
+  testWidgets('Lưu & thêm tiếp: báo đã thêm, form trống lại nhưng giữ nhóm hàng', (t) async {
+    final api = await _openForm(t);
+    await _fillMinimal(t, 'Món A', price: '1000');
+    await t.tap(find.byKey(const Key('form_save_more')));
+    await _settle(t, 10);
+    expect(api.calls.where((c) => c.method == 'POST' && c.path.endsWith('/admin/products')), hasLength(1));
+    expect(find.text('Đã thêm “Món A” (HH000099). Nhập sản phẩm tiếp theo.'), findsOneWidget);
+    expect(find.text('Món A'), findsNothing);
+    expect(find.text('Hàng bán › Thiết bị điện tử › điện thoại'), findsOneWidget);
+    expect(find.text('Thêm sản phẩm'), findsOneWidget);
   });
 
   testWidgets('thêm sản phẩm: trùng tên thì API báo đúng ô Tên', (t) async {
-    final api = await _open(t);
-    await t.tap(find.byTooltip('Thêm hàng hoá'));
-    await _settle(t);
-    await t.enterText(find.byKey(const Key('form_name')), 'iphone 15');
-    await t.tap(find.byKey(const Key('form_category')));
-    await _settle(t, 5);
-    await t.tap(find.byKey(const Key('cat_4')));
-    await _settle(t, 5);
-    await t.enterText(find.byKey(const Key('form_price')), '1000');
+    await _openForm(t);
+    await _fillMinimal(t, 'iphone 15', price: '1000');
     await t.tap(find.byKey(const Key('form_save')));
     await _settle(t);
     expect(find.text('Tên mặt hàng này đã có trong cửa hàng'), findsOneWidget);
     expect(find.text('Thêm sản phẩm'), findsOneWidget, reason: 'vẫn ở form để sửa');
-    expect(api.calls.where((c) => c.method == 'PUT'), isEmpty);
+  });
+
+  testWidgets('thêm sản phẩm: cửa hàng tắt tự sinh mã thì bắt nhập SKU ngay trên máy', (t) async {
+    final api = await _openForm(t, api: _Api(autoSku: false));
+    await _fillMinimal(t, 'Món mới', price: '1000');
+    await t.tap(find.byKey(const Key('form_save')));
+    await _settle(t, 5);
+    expect(find.text('Nhập mã hàng'), findsOneWidget, reason: 'chặn ngay trên máy, mở sẵn "Thêm chi tiết"');
+    expect(api.calls.where((c) => c.method == 'POST' && c.path.endsWith('/admin/products')), isEmpty);
   });
 
   testWidgets('lỗi tải: báo lỗi + Thử lại', (t) async {

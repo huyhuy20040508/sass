@@ -71,23 +71,17 @@ class _GoodsScreenState extends ConsumerState<GoodsScreen> {
   }
 
   Future<void> _add() async {
-    final res = await Navigator.of(
+    // Form tự báo "Đã thêm" và cho chọn bước tiếp; trả về id khi người dùng chọn "Xem sản phẩm".
+    final openId = await Navigator.of(
       context,
       rootNavigator: true,
-    ).push<CreatedProduct>(MaterialPageRoute(fullscreenDialog: true, builder: (_) => const ProductFormScreen()));
-    if (res == null || !mounted) return;
-    showDashToast(
-      context,
-      res.stockError == null
-          ? 'Đã thêm sản phẩm'
-          : 'Đã thêm sản phẩm, nhưng chưa ghi được tồn ban đầu: ${res.stockError}',
-    );
-    // Mở luôn chi tiết mặt hàng vừa tạo khi danh mục tải lại xong.
+    ).push<int>(MaterialPageRoute(fullscreenDialog: true, builder: (_) => const ProductFormScreen()));
+    if (openId == null || !mounted) return;
     try {
-      final it = (await ref.read(goodsCatalogProvider.future)).byId(res.id);
+      final it = (await ref.read(goodsCatalogProvider.future)).byId(openId);
       if (it != null && mounted) _open(it);
     } on ApiException {
-      // Danh mục chưa tải lại được — người dùng vẫn thấy thông báo đã thêm.
+      // Danh mục chưa tải lại được — ở lại danh sách.
     }
   }
 

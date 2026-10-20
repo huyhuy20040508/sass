@@ -112,7 +112,12 @@ enum AppIcons {
   ),
   edit('<path d="M4 20h4L19 9l-4-4L4 16Z"/><path d="m13.5 6.5 4 4"/>'),
   barcode('<path d="M4 5v14M7 5v14M10.5 5v14M13 5v14M16.5 5v14M20 5v14"/>'),
-  bolt('<path d="M13 2.5 4.5 13.5h6.5L10 21.5l8.5-11H12Z"/>');
+  bolt('<path d="M13 2.5 4.5 13.5h6.5L10 21.5l8.5-11H12Z"/>'),
+  camera(
+    '<path d="M4 8h3l1.5-2.5h7L17 8h3a1 1 0 0 1 1 1v9.5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Z"/>'
+    '<circle cx="12" cy="13.5" r="3.5"/>',
+  ),
+  trash('<path d="M4 7h16M9 7V4.5h6V7M6.5 7l1 13h9l1-13"/>');
 
   const AppIcons(this.paths);
 
