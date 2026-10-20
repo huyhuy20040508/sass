@@ -54,6 +54,25 @@ class _Api implements HttpClientAdapter {
   _Api({this.productsCode = 200, this.autoSku = true}) {
     // Một mã vạch chỉ có ở phiên bản — tìm phải qua API mới thấy.
     (details['4']!['variants'] as List).first['barcode'] = '8930000000017';
+    // Iphone 16: phiên bản mang tổ hợp thuộc tính như API thật (ảnh chụp thiết kế đã lược bỏ).
+    final v2 = (details['2']!['variants'] as List).first as Map;
+    v2['is_default'] = true;
+    v2['attributes'] = [
+      {
+        'attribute_id': 14,
+        'value_id': 91,
+        'attribute': {'name': 'Dung lượng lưu trữ'},
+        'value': {'name': '512GB'},
+      },
+      {
+        'attribute_id': 15,
+        'value_id': 96,
+        'attribute': {'name': 'RAM'},
+        'value': {'name': '8GB'},
+      },
+    ];
+    details['2']!['category_id'] = 4;
+    details['2']!['slug'] = 'iphone-16-pro-max';
   }
 
   final int productsCode;
@@ -242,6 +261,13 @@ class _Api implements HttpClientAdapter {
           if (r['variant_id'] == it['variant_id']) r['cost_price'] = it['cost_price'];
         }
       }
+      for (final it in ((o.data as Map)['items'] as List).cast<Map>()) {
+        for (final d in details.values) {
+          for (final v in (d['variants'] as List).cast<Map>()) {
+            if (v['id'] == it['variant_id']) v['cost_price'] = it['cost_price'];
+          }
+        }
+      }
       return _ok({'changed': 1});
     }
     if (p.endsWith('/categories')) return _ok(s['categories']);
@@ -273,7 +299,24 @@ class _Api implements HttpClientAdapter {
             if (r['variant_id'] == v['id']) r['price'] = v['price'];
           }
         }
+        // Ghi lại như API: trường của mặt hàng + phiên bản theo id (giữ tồn, thuộc tính).
+        final old = {for (final v in (d['variants'] as List).cast<Map>()) v['id']: v};
+        for (final k in ['name', 'base_price', 'sale_price', 'cost_price', 'vat', 'status', 'description', 'sku']) {
+          if (body.containsKey(k)) d[k] = body[k];
+        }
+        d['variants'] = [
+          for (final v in (body['variants'] as List).cast<Map>())
+            {...?old[v['id']], ...v, 'attributes': old[v['id']]?['attributes'] ?? v['attributes']},
+        ];
+        final p = products.firstWhere((x) => '${x['id']}' == m.group(1));
+        p['name'] = d['name'];
+        p['status'] = d['status'];
         return _ok(d);
+      }
+      if (m.group(2) == null && o.method == 'DELETE') {
+        (s['products'] as List).removeWhere((x) => '${(x as Map)['id']}' == m.group(1));
+        (s['inventory'] as List).removeWhere((x) => '${(x as Map)['product_id']}' == m.group(1));
+        return _ok(null);
       }
       if (m.group(2) == '/duplicate') {
         final src = products.firstWhere((x) => '${x['id']}' == m.group(1));
@@ -394,6 +437,9 @@ Future<void> _fillMinimal(WidgetTester t, String name, {required String price}) 
   await t.enterText(find.byKey(const Key('form_price')), price);
   await t.pump();
 }
+
+/// Danh sách cuộn của form (dưới nó còn danh sách chi tiết, dải ảnh ngang).
+Finder get _formScroll => find.descendant(of: find.byType(ProductFormScreen), matching: find.byType(Scrollable)).first;
 
 /// Tên mặt hàng theo thứ tự đang hiện.
 List<String> _names(WidgetTester t) => [for (final r in t.widgetList<GoodsRow>(find.byType(GoodsRow))) r.item.name];
@@ -559,30 +605,59 @@ void main() {
     expect(_names(t), ['iphone 15', 'Iphone 16 pro max', 'laptop asus gamming', 'Ốp lưng silicon', 'Sạc nhanh 20W']);
   });
 
-  testWidgets('chi tiết: giá, tồn theo chi nhánh + Tổng, phiên bản, thông tin', (t) async {
+  testWidgets('chi tiết (v9): giá gốc + lãi phiên bản mặc định, thuộc tính, thông tin như PC, công tắc bán hàng', (
+    t,
+  ) async {
     final api = await _open(t);
     await t.tap(find.byKey(const Key('goods_2')));
     await _settle(t);
     expect(find.text('Chi tiết sản phẩm'), findsOneWidget);
     expect(find.text('SKU: HH000001'), findsOneWidget);
-    expect(find.text('23.700.000'), findsOneWidget);
-    // Lãi / sp = 28.000.000 − 23.700.000, biên 15,4%.
+    // Giá bán = giá gốc base_price; lãi tính trên phiên bản mặc định 28.000.000 − 23.700.000.
+    expect(find.descendant(of: find.byKey(const Key('edit_price')), matching: find.text('25.000.000')), findsOneWidget);
+    expect(find.text('23.700.000'), findsWidgets);
     expect(find.text('4.300.000'), findsOneWidget);
     expect(find.text('15,4%'), findsOneWidget);
     expect(find.text('IMEI'), findsOneWidget);
+    expect(find.text('1 phiên bản'), findsOneWidget);
     for (final q in ['Nhập hàng', 'In mã vạch', 'Sao chép', 'Ngừng bán']) {
       expect(find.text(q), findsOneWidget, reason: 'nút nhanh $q');
     }
     expect(api.hit('/admin/inventory/chi-nhanh').single.queryParameters['keyword'], 'HH000001');
     expect(find.text('Cửa hàng chính'), findsOneWidget);
-    expect(find.text('Chi nhánh 2'), findsOneWidget);
     expect(find.text('Tổng'), findsOneWidget);
-    expect(find.text('Phiên bản (1)'), findsOneWidget, reason: 'hàng nhiều phiên bản thì liệt kê phiên bản');
-    await t.scrollUntilVisible(find.text('Ngày tạo'), 200);
-    expect(find.text('10%'), findsOneWidget);
-    expect(find.text('Có'), findsOneWidget);
-    expect(find.text('20/08/2026'), findsOneWidget);
-    expect(find.text('Sửa sản phẩm'), findsOneWidget);
+
+    await t.scrollUntilVisible(find.byKey(const Key('variant_1')), 200);
+    expect(find.text('Dung lượng lưu trữ'), findsOneWidget);
+    expect(find.text('RAM'), findsOneWidget);
+    expect(
+      find.textContaining('512GB / 8GB', findRichText: true),
+      findsOneWidget,
+      reason: 'tên phiên bản ghép giá trị thuộc tính',
+    );
+    expect(find.text('Mặc định'), findsOneWidget);
+    expect(find.text('Vốn 23.700.000 · Tồn 30'), findsOneWidget);
+
+    String kv(String k) => t
+        .widgetList<Text>(find.descendant(of: find.byKey(Key('kv_$k')), matching: find.byType(Text)))
+        .map((w) => w.data)
+        .join('|');
+    await t.scrollUntilVisible(find.byKey(const Key('product_meta')), 200);
+    expect(kv('Mã hàng'), 'Mã hàng|HH000001');
+    expect(kv('Mã vạch'), 'Mã vạch|Theo từng phiên bản');
+    expect(kv('Nhóm hàng'), 'Nhóm hàng|Hàng bán › Thiết bị điện tử');
+    expect(kv('Đơn vị tính'), 'Đơn vị tính|Chưa chọn');
+    expect(kv('Loại thuế'), 'Loại thuế|Thuế mặc định');
+    expect(kv('% VAT'), '% VAT|10%');
+    expect(kv('Giá sau thuế'), 'Giá sau thuế|27.500.000');
+    expect(kv('Vị trí'), 'Vị trí|Chưa xếp kệ');
+    expect(kv('Chi nhánh bán'), 'Chi nhánh bán|Tất cả chi nhánh');
+    expect(kv('Thẻ hàng hoá'), 'Thẻ hàng hoá|Chưa gắn');
+    expect(kv('Mô tả'), 'Mô tả|Chưa có');
+    for (final f in ['Đang bán_on', 'In tem_on', 'Trừ kho_on', 'Serial / IMEI_on']) {
+      expect(find.byKey(Key('flag_$f')), findsOneWidget, reason: f);
+    }
+    expect(t.widget<Text>(find.byKey(const Key('product_meta'))).data, startsWith('Đã bán 30 · Tạo 20/08/2026 · Sửa '));
 
     await t.tap(find.byTooltip('Quay lại'));
     await _settle(t);
@@ -594,8 +669,10 @@ void main() {
       findsOneWidget,
       reason: 'chưa có giá vốn thì chưa tính được lãi',
     );
-    expect(find.textContaining('Phiên bản ('), findsNothing, reason: 'hàng một phiên bản không lặp khối phiên bản');
-    expect(find.text('Tổng'), findsOneWidget);
+    expect(find.text('Dung lượng lưu trữ'), findsNothing, reason: 'hàng một phiên bản không có khối thuộc tính');
+    await t.scrollUntilVisible(find.byKey(const Key('product_meta')), 200);
+    expect(kv('Mã vạch'), 'Mã vạch|8930000000017');
+    expect(find.byKey(const Key('flag_Serial / IMEI_off')), findsOneWidget);
   });
 
   testWidgets('chi tiết: Ngừng bán có xác nhận, gửi is_active=false; danh sách cập nhật; sao chép gửi POST', (t) async {
@@ -611,7 +688,7 @@ void main() {
     expect(put.path, endsWith('/admin/products/2/status'));
     expect(put.data, {'is_active': false});
     expect(find.text('Đã ngừng bán Iphone 16 pro max'), findsOneWidget);
-    expect(find.text('Ngừng bán'), findsWidgets);
+    expect(find.text('Tạm ẩn'), findsOneWidget, reason: 'nhãn trạng thái theo API: hidden = Tạm ẩn');
 
     expect(find.text('Mở bán'), findsOneWidget, reason: 'nút nhanh đổi thành Mở bán');
     await t.tap(find.byKey(const Key('product_duplicate')));
@@ -654,36 +731,131 @@ void main() {
     expect(find.text('4.000.000'), findsOneWidget);
   });
 
-  testWidgets('sửa giá bán: chặn 0đ; gửi lại cả mặt hàng, giữ đủ phiên bản + thuộc tính', (t) async {
+  testWidgets('sửa giá bán = giá gốc: ô trống bị chặn; hàng nhiều phiên bản giữ giá riêng từng phiên bản', (t) async {
     final api = await _open(t);
     await t.tap(find.byKey(const Key('goods_2')));
     await _settle(t);
     await t.tap(find.byKey(const Key('edit_price')));
     await _settle(t, 5);
     expect(find.text('Sửa giá bán'), findsOneWidget);
+    expect(find.textContaining('Đây là giá gốc', findRichText: true), findsOneWidget);
     await t.enterText(find.byKey(const Key('money_input')), '');
     await t.pump();
     await t.tap(find.byKey(const Key('money_save')));
     await t.pump();
-    expect(find.text('Giá bán phải lớn hơn 0.'), findsOneWidget);
+    expect(find.text('Nhập giá bán.'), findsOneWidget);
     expect(api.calls.where((c) => c.method == 'PUT'), isEmpty);
 
-    await t.enterText(find.byKey(const Key('money_input')), '28500000');
+    await t.enterText(find.byKey(const Key('money_input')), '26000000');
     await t.pump();
     await t.tap(find.byKey(const Key('money_save')));
     await _settle(t);
     final put = api.calls.where((c) => c.method == 'PUT').single;
     expect(put.path, endsWith('/admin/products/2'));
     final body = put.data as Map;
-    final d = api.details['2']!;
-    final vs = (body['variants'] as List).cast<Map>();
-    expect(vs.map((v) => v['id']), [for (final v in d['variants'] as List) v['id']], reason: 'đủ mọi phiên bản');
-    expect(vs.first['price'], 28500000);
-    expect(vs.first['sku'], (d['variants'] as List).first['sku']);
-    expect(body['base_price'], d['base_price'], reason: 'hàng nhiều phiên bản giữ giá gốc');
-    expect((body['name'], body['status'], body['vat']), (d['name'], d['status'], d['vat']));
-    expect(find.text('Đã lưu giá bán 28.500.000 đ'), findsOneWidget);
-    expect(find.text('28.500.000'), findsWidgets);
+    final v = (body['variants'] as List).cast<Map>().single;
+    expect(body['base_price'], 26000000);
+    expect(
+      (v['id'], v['price'], v['name'], v['is_default']),
+      (1, 28000000, '24 tháng · Mới 100% (nguyên seal) · iOS · 8GB · 512GB', true),
+      reason: 'giữ id, giá riêng, tên, cờ mặc định của phiên bản',
+    );
+    expect(v['attributes'], [
+      {'attribute_id': 14, 'value_id': 91},
+      {'attribute_id': 15, 'value_id': 96},
+    ]);
+    expect(
+      (body['name'], body['status'], body['vat'], body['is_multi_variant']),
+      ('Iphone 16 pro max', 'active', 10, true),
+    );
+    expect(body.containsKey('images'), isFalse, reason: 'không đụng ảnh thì không gửi — API giữ nguyên');
+    expect(find.text('Đã lưu giá bán 26.000.000 đ'), findsOneWidget);
+    expect(find.descendant(of: find.byKey(const Key('edit_price')), matching: find.text('26.000.000')), findsOneWidget);
+  });
+
+  testWidgets('sửa sản phẩm: form đổ sẵn dữ liệu, lưu PUT giữ id + mã phiên bản; chi tiết cập nhật', (t) async {
+    final api = await _open(t);
+    await t.tap(find.byKey(const Key('goods_4')));
+    await _settle(t);
+    await t.tap(find.byKey(const Key('product_edit')));
+    await _settle(t, 12);
+    expect(find.text('Sửa sản phẩm'), findsWidgets);
+    expect(find.descendant(of: find.byKey(const Key('form_name')), matching: find.text('iphone 15')), findsOneWidget);
+    expect(find.text('Hàng bán › Thiết bị điện tử › điện thoại'), findsOneWidget);
+    expect(find.descendant(of: find.byKey(const Key('form_price')), matching: find.text('25.000.000')), findsOneWidget);
+    expect(find.text('Lưu thay đổi'), findsOneWidget);
+    expect(find.text('Lưu & thêm tiếp'), findsNothing);
+
+    await t.enterText(find.byKey(const Key('form_name')), 'iPhone 15 128GB');
+    await t.enterText(find.byKey(const Key('form_cost')), '21000000');
+    await t.pump();
+    await t.tap(find.byKey(const Key('form_save')));
+    await _settle(t, 12);
+    final put = api.calls.where((c) => c.method == 'PUT' && c.path.endsWith('/admin/products/4')).single;
+    final b = put.data as Map;
+    expect(
+      (b['name'], b['base_price'], b['cost_price'], b['category_id'], b['sku']),
+      ('iPhone 15 128GB', 25000000, 21000000, 5, 'HH000003'),
+    );
+    final v = (b['variants'] as List).cast<Map>().single;
+    expect(
+      (v['id'], v['sku'], v['barcode'], v['price'], v['cost_price']),
+      (3, 'HH000003', '8930000000017', 25000000, 21000000),
+    );
+    expect(b['is_multi_variant'], false);
+    expect(find.text('Đã lưu thay đổi'), findsOneWidget);
+    expect(find.text('iPhone 15 128GB'), findsOneWidget, reason: 'về chi tiết, tên mới');
+  });
+
+  testWidgets('sửa hàng nhiều phiên bản không đổi gì: lưu lại giữ nguyên phiên bản (id, tên, mặc định, giá)', (
+    t,
+  ) async {
+    final api = await _open(t);
+    await t.tap(find.byKey(const Key('goods_2')));
+    await _settle(t);
+    await t.tap(find.byKey(const Key('product_edit')));
+    await _settle(t, 12);
+    expect(find.text('1 PHIÊN BẢN'), findsOneWidget);
+    expect(find.textContaining('512GB / 8GB', findRichText: true), findsOneWidget);
+    await t.tap(find.byKey(const Key('form_save')));
+    await _settle(t, 12);
+    final b = api.calls.where((c) => c.method == 'PUT').single.data as Map;
+    final v = (b['variants'] as List).cast<Map>().single;
+    expect(
+      (v['id'], v['price'], v['is_default'], v['name'], v['sku']),
+      (
+        1,
+        28000000,
+        true,
+        '24 tháng · Mới 100% (nguyên seal) · iOS · 8GB · 512GB',
+        'HH000001-24-THANG-MOI-100%-(NGUYEN-SEAL)-IOS-8GB-512GB',
+      ),
+    );
+    expect(v['cost_price'], 23700000);
+    expect(b.containsKey('images'), isFalse);
+  });
+
+  testWidgets('xoá sản phẩm: hỏi lại (nhắc tồn), DELETE rồi về danh sách', (t) async {
+    final api = await _open(t);
+    await t.tap(find.byKey(const Key('goods_4')));
+    await _settle(t);
+    await t.tap(find.byKey(const Key('product_edit')));
+    await _settle(t, 12);
+    await t.tap(find.byKey(const Key('form_delete')));
+    await _settle(t, 5);
+    expect(find.text('Xoá sản phẩm?'), findsOneWidget);
+    expect(find.textContaining('còn tồn 6'), findsOneWidget);
+    await t.tap(find.text('Thôi'));
+    await _settle(t, 5);
+    expect(api.calls.where((c) => c.method == 'DELETE'), isEmpty);
+    await t.tap(find.byKey(const Key('form_delete')));
+    await _settle(t, 5);
+    await t.tap(find.byKey(const Key('form_delete_yes')));
+    await _settle(t, 15);
+    expect(api.calls.where((c) => c.method == 'DELETE').single.path, endsWith('/admin/products/4'));
+    expect(find.text('Đã xoá iphone 15'), findsOneWidget);
+    expect(find.text('Chi tiết sản phẩm'), findsNothing, reason: 'đóng cả chi tiết');
+    expect(_names(t), isNot(contains('iphone 15')));
   });
 
   testWidgets('quét mã: đúng SKU mở thẳng sản phẩm; mã vạch qua API; mã lạ thì báo và ở lại', (t) async {
@@ -1007,6 +1179,60 @@ void main() {
     expect(api.calls.where((c) => c.method == 'POST' && c.path.endsWith('/admin/products')), isEmpty);
   });
 
+  testWidgets('vuốt dòng sang trái: lộ Sửa / Xoá; chạm dòng đang mở thì đóng; chỉ mở một dòng', (t) async {
+    await _open(t);
+    final edit4 = find.byKey(const Key('swipe_edit_4'));
+    expect(edit4.hitTestable(), findsNothing, reason: 'chưa vuốt thì nút bị dòng che');
+    await t.drag(find.byKey(const Key('goods_4')), const Offset(-220, 0));
+    await _settle(t, 4);
+    expect(edit4.hitTestable(), findsOneWidget);
+    expect(find.byKey(const Key('swipe_delete_4')).hitTestable(), findsOneWidget);
+
+    // Chạm vào dòng đang mở: đóng lại, không mở chi tiết.
+    await t.tap(find.byKey(const Key('goods_4')), warnIfMissed: false);
+    await _settle(t, 4);
+    expect(find.text('Chi tiết sản phẩm'), findsNothing);
+    expect(edit4.hitTestable(), findsNothing);
+
+    // Mở dòng 4 rồi vuốt dòng 3: dòng 4 tự đóng.
+    await t.drag(find.byKey(const Key('goods_4')), const Offset(-220, 0));
+    await _settle(t, 4);
+    await t.drag(find.byKey(const Key('goods_3')), const Offset(-220, 0));
+    await _settle(t, 4);
+    expect(edit4.hitTestable(), findsNothing);
+    expect(find.byKey(const Key('swipe_edit_3')).hitTestable(), findsOneWidget);
+
+    // Vuốt ngắn rồi thả: bật về.
+    await t.drag(find.byKey(const Key('goods_7')), const Offset(-30, 0));
+    await _settle(t, 4);
+    expect(find.byKey(const Key('swipe_edit_7')).hitTestable(), findsNothing);
+  });
+
+  testWidgets('vuốt → Sửa mở form sửa đổ sẵn; vuốt → Xoá hỏi lại rồi xoá khỏi danh sách', (t) async {
+    final api = await _open(t);
+    await t.drag(find.byKey(const Key('goods_4')), const Offset(-220, 0));
+    await _settle(t, 4);
+    await t.tap(find.byKey(const Key('swipe_edit_4')));
+    await _settle(t, 12);
+    expect(find.text('Sửa sản phẩm'), findsWidgets);
+    expect(find.descendant(of: find.byKey(const Key('form_name')), matching: find.text('iphone 15')), findsOneWidget);
+    await t.tap(find.byTooltip('Đóng'));
+    await _settle(t, 10);
+
+    await t.drag(find.byKey(const Key('goods_4')), const Offset(-220, 0));
+    await _settle(t, 4);
+    await t.tap(find.byKey(const Key('swipe_delete_4')));
+    await _settle(t, 5);
+    expect(find.text('Xoá sản phẩm?'), findsOneWidget);
+    expect(find.textContaining('còn tồn 6'), findsOneWidget);
+    await t.tap(find.byKey(const Key('form_delete_yes')));
+    await _settle(t, 10);
+    expect(api.calls.where((c) => c.method == 'DELETE').single.path, endsWith('/admin/products/4'));
+    expect(find.text('Đã xoá iphone 15'), findsOneWidget);
+    expect(_names(t), isNot(contains('iphone 15')));
+    expect(_chipText(t, GoodsStatus.all), 'Tất cả 4');
+  });
+
   testWidgets('lỗi tải: báo lỗi + Thử lại', (t) async {
     await _open(t, api: _Api(productsCode: 500));
     expect(find.text('Không tải được hàng hoá'), findsOneWidget);
@@ -1025,7 +1251,16 @@ void main() {
     await _settle(t, 3);
     await t.tap(find.byKey(const Key('goods_2')));
     await _settle(t);
-    await t.scrollUntilVisible(find.text('Ngày tạo'), 200);
+    await t.scrollUntilVisible(find.byKey(const Key('product_meta')), 200);
+    expect(t.takeException(), isNull);
+    // Form sửa trên máy hẹp.
+    await t.tap(find.byKey(const Key('product_edit')));
+    await _settle(t, 12);
+    await t.scrollUntilVisible(find.byKey(const Key('form_more')), 200, scrollable: _formScroll);
+    await _settle(t, 4);
+    await t.tap(find.byKey(const Key('form_more')));
+    await _settle(t, 4);
+    await t.scrollUntilVisible(find.byKey(const Key('form_desc')), 200, scrollable: _formScroll);
     expect(t.takeException(), isNull);
   });
 }

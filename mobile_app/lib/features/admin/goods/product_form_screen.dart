@@ -37,6 +37,31 @@ final pickImagesProvider = Provider<Future<List<XFile>> Function(int limit)>(
 const _maxPics = 8;
 const _err = Color(0xFFC62828);
 
+/// Hỏi lại trước khi xoá mặt hàng (form sửa + vuốt ở danh sách dùng chung).
+Future<bool> confirmDeleteProduct(BuildContext context, {required String name, num stock = 0}) async =>
+    await showDashSheet<bool>(
+      context,
+      title: 'Xoá sản phẩm?',
+      subtitle: [
+        '“$name” sẽ không còn ở danh sách, quầy và web bán hàng. Đơn và sổ kho cũ vẫn giữ.',
+        if (stock > 0) 'Sản phẩm còn tồn ${dot(stock)} ở chi nhánh này.',
+      ].join(' '),
+      body: (ctx) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SheetButton(
+            key: const Key('form_delete_yes'),
+            label: 'Xoá sản phẩm',
+            icon: AppIcons.trash,
+            danger: true,
+            onTap: () => Navigator.of(ctx).pop(true),
+          ),
+          SheetButton(label: 'Thôi', onTap: () => Navigator.of(ctx).pop(false)),
+        ],
+      ),
+    ) ==
+    true;
+
 /// Gõ số: chỉ nhận chữ số, tự chấm ngăn nghìn.
 class _DotFormatter extends TextInputFormatter {
   const _DotFormatter();
@@ -59,9 +84,12 @@ num? _numOf(String s) {
 
 /// Thêm sản phẩm theo design/html/them-hang-mobile.html (v4): màn đầu chỉ ảnh · tên ·
 /// nhóm · giá; phiên bản bật bằng công tắc; mọi trường còn lại nằm trong "Thêm chi tiết".
-/// Đóng màn trả về id sản phẩm cần mở chi tiết (null = không mở).
+/// Thêm: đóng màn trả về id sản phẩm cần mở chi tiết (null = không mở).
+/// Sửa ([detail] = GET /admin/products/{id}): trả về 'saved' / 'deleted'.
 class ProductFormScreen extends ConsumerStatefulWidget {
-  const ProductFormScreen({super.key});
+  const ProductFormScreen({super.key, this.detail});
+
+  final Map<String, dynamic>? detail;
 
   @override
   ConsumerState<ProductFormScreen> createState() => _ProductFormScreenState();
@@ -94,6 +122,59 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
   bool _dirty = false;
   String _taxKey = '';
   Map<String, String> _bad = const {};
+
+  bool get _edit => widget.detail != null;
+
+  /// Form sửa chờ nạp nhóm hàng + danh mục chọn để dựng lại thuộc tính / đơn vị.
+  bool _loading = false;
+  bool _deleting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (_edit) {
+      _loading = true;
+      _load();
+    }
+  }
+
+  Future<void> _load() async {
+    final d = widget.detail!;
+    List<GoodsCategory> cats = const [];
+    var src = const FormSources();
+    try {
+      cats = (await ref.read(goodsCatalogProvider.future)).categories;
+      src = await ref.read(productFormSourcesProvider.future);
+    } on ApiException {
+      // Thiếu danh mục chọn vẫn sửa được — tên thuộc tính / đơn vị lấy từ chính mặt hàng.
+    }
+    if (!mounted) return;
+    final x = ProductDraft.fromDetail(d, categories: cats, src: src);
+    String money(num? v) => v == null ? '' : dot(v);
+    _name.text = x.name;
+    _price.text = money(x.price);
+    _cost.text = money(x.cost);
+    _sale.text = money(x.sale);
+    _weight.text = x.weight > 0 ? dot(x.weight) : '';
+    _sku.text = x.sku;
+    _barcode.text = x.barcode;
+    _desc.text = x.description;
+    for (final MapEntry(key: k, value: st) in x.states.entries) {
+      _c('p:$k', dot(st.price));
+      _c('b:$k', st.barcode);
+      _c('s:$k', st.sku);
+      _c('c:$k', st.cost == null ? '' : dot(st.cost!));
+    }
+    for (final (i, (_, q)) in x.convs.indexed) {
+      _c('q:$i', q > 0 ? '$q' : '');
+    }
+    setState(() {
+      _d = x;
+      // Mặt hàng chỉ lưu số VAT; loại thuế là loại đầu tiên có mức ấy (PC cũng suy như vậy).
+      _taxKey = src.taxes.where((t) => t.levels.contains(x.vat)).firstOrNull?.key ?? '';
+      _loading = false;
+    });
+  }
 
   @override
   void dispose() {
@@ -153,7 +234,12 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     for (final f in files.take(room)) {
       try {
         final url = await uploadProductImage(ref, await _bytes(f), f.name);
-        if (mounted) _touch(() => _d.images.add(url));
+        if (mounted) {
+          _touch(() {
+            _d.images.add(url);
+            _d.imagesTouched = true;
+          });
+        }
       } on ApiException catch (e) {
         if (mounted) _toast(e.message);
       } finally {
@@ -392,11 +478,18 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
   }
 
   Future<void> _save(FormSources src, {bool again = false}) async {
-    if (_saving || _savingMore) return;
+    if (_saving || _savingMore || _loading) return;
     if (_uploading > 0 || _uploadingVariant.isNotEmpty) return _toast('Đang tải ảnh lên, chờ chút rồi lưu');
     if (!_validate(src)) return;
     setState(() => again ? _savingMore = true : _saving = true);
     try {
+      if (_edit) {
+        await updateProduct(ref, _d.editId!, _d.payload());
+        if (!mounted) return;
+        _toast('Đã lưu thay đổi');
+        Navigator.of(context).pop('saved');
+        return;
+      }
       final d = await createProduct(ref, _d.payload());
       if (!mounted) return;
       final name = '${d['name'] ?? _d.name}', sku = '${d['sku'] ?? ''}';
@@ -491,6 +584,23 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     }
   }
 
+  Future<void> _delete() async {
+    final stock = ref.read(goodsCatalogProvider).value?.byId(_d.editId!)?.stock ?? 0;
+    final ok = await confirmDeleteProduct(context, name: _d.name, stock: stock);
+    if (ok != true || !mounted) return;
+    setState(() => _deleting = true);
+    try {
+      await deleteProduct(ref, _d.editId!);
+      if (!mounted) return;
+      _toast('Đã xoá ${_d.name}');
+      Navigator.of(context).pop('deleted');
+    } on ApiException catch (e) {
+      if (mounted) _toast(e.message);
+    } finally {
+      if (mounted) setState(() => _deleting = false);
+    }
+  }
+
   Future<void> _close() async {
     _readFields();
     if (!_dirty) return Navigator.of(context).pop();
@@ -549,18 +659,26 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
             child: Row(
               children: [
                 Expanded(
-                  child: _BigBtn(
-                    key: const Key('form_save_more'),
-                    label: 'Lưu & thêm tiếp',
-                    busy: _savingMore,
-                    onTap: () => _save(src, again: true),
-                  ),
+                  child: _edit
+                      ? _BigBtn(
+                          key: const Key('form_delete'),
+                          label: 'Xoá',
+                          danger: true,
+                          busy: _deleting,
+                          onTap: _delete,
+                        )
+                      : _BigBtn(
+                          key: const Key('form_save_more'),
+                          label: 'Lưu & thêm tiếp',
+                          busy: _savingMore,
+                          onTap: () => _save(src, again: true),
+                        ),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: _BigBtn(
                     key: const Key('form_save'),
-                    label: 'Lưu sản phẩm',
+                    label: _edit ? 'Lưu thay đổi' : 'Lưu sản phẩm',
                     primary: true,
                     busy: _saving,
                     onTap: () => _save(src),
@@ -585,11 +703,11 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                       onPressed: _close,
                       icon: const AppIcon(AppIcons.close, size: 22, color: OrderColors.ink),
                     ),
-                    const Expanded(
+                    Expanded(
                       child: Text(
-                        'Thêm sản phẩm',
+                        _edit ? 'Sửa sản phẩm' : 'Thêm sản phẩm',
                         textAlign: TextAlign.center,
-                        style: TextStyle(color: OrderColors.ink, fontSize: 17, fontWeight: FontWeight.w700),
+                        style: const TextStyle(color: OrderColors.ink, fontSize: 17, fontWeight: FontWeight.w700),
                       ),
                     ),
                     TextButton(
@@ -605,14 +723,19 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                   ],
                 ),
               ),
-              Expanded(
-                child: ListView(
-                  controller: _scroll,
-                  padding: const EdgeInsets.only(bottom: 12),
-                  keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-                  children: [_basics(cats), _variants(src), _details(src, tax, branches)],
+              if (_loading)
+                const Expanded(
+                  child: Center(child: CircularProgressIndicator(color: OrderColors.primary)),
+                )
+              else
+                Expanded(
+                  child: ListView(
+                    controller: _scroll,
+                    padding: const EdgeInsets.only(bottom: 12),
+                    keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                    children: [_basics(cats), _variants(src), _details(src, tax, branches)],
+                  ),
                 ),
-              ),
             ],
           ),
         ),
@@ -639,7 +762,14 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                     onTap: _addPics,
                   ),
                 for (final (i, u) in _d.images.indexed)
-                  _Pic(url: u, main: i == 0, onRemove: () => _touch(() => _d.images.removeAt(i))),
+                  _Pic(
+                    url: u,
+                    main: i == 0,
+                    onRemove: () => _touch(() {
+                      _d.images.removeAt(i);
+                      _d.imagesTouched = true;
+                    }),
+                  ),
                 for (var i = 0; i < _uploading; i++) const _Pic(url: ''),
               ],
             ),
@@ -717,6 +847,16 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
 
   Widget _variants(FormSources src) {
     final live = _d.multi ? _d.live : const <(Combo, ComboState)>[];
+    if (_d.rawVariants != null && !_d.multi) {
+      return _Blk(
+        child: Text(
+          'Sản phẩm có ${_d.rawVariants!.length} phiên bản chưa gắn thuộc tính — giữ nguyên khi lưu. '
+          'Sửa từng phiên bản ở web quản trị.',
+          key: const Key('form_raw_variants'),
+          style: const TextStyle(color: OrderColors.muted, fontSize: 12.5, height: 1.45),
+        ),
+      );
+    }
     return _Blk(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -824,7 +964,10 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                 on: p.values.contains(id),
                 fontSize: 12.5,
                 onTap: () {
-                  _touch(() => p.toggle(id));
+                  _touch(() {
+                    p.toggle(id);
+                    _d.defaultTouched = true;
+                  });
                   _clearBad('attrs');
                 },
               ),
@@ -845,7 +988,14 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
               padding: const EdgeInsets.symmetric(vertical: 4),
               child: Row(
                 children: [
-                  _Dot(key: Key('def_$v'), on: p.def == v, onTap: () => _touch(() => p.def = v)),
+                  _Dot(
+                    key: Key('def_$v'),
+                    on: p.def == v,
+                    onTap: () => _touch(() {
+                      p.def = v;
+                      _d.defaultTouched = true;
+                    }),
+                  ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text.rich(
@@ -1264,7 +1414,10 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                     hint: '0',
                     number: true,
                     suffix: 'g',
-                    onChanged: (_) => _dirty = true,
+                    onChanged: (_) {
+                      _dirty = true;
+                      _d.weightTouched = true;
+                    },
                   ),
                 ),
               ),
@@ -2517,16 +2670,30 @@ class _Gain extends StatelessWidget {
 }
 
 class _BigBtn extends StatelessWidget {
-  const _BigBtn({super.key, required this.label, required this.onTap, this.primary = false, this.busy = false});
+  const _BigBtn({
+    super.key,
+    required this.label,
+    required this.onTap,
+    this.primary = false,
+    this.busy = false,
+    this.danger = false,
+  });
 
   final String label;
   final VoidCallback onTap;
   final bool primary;
   final bool busy;
 
+  /// Nút phụ chữ đỏ (Xoá).
+  final bool danger;
+
   @override
   Widget build(BuildContext context) {
-    final fg = primary ? Colors.white : OrderColors.ink;
+    final fg = primary
+        ? Colors.white
+        : danger
+        ? _err
+        : OrderColors.ink;
     return Material(
       color: primary ? OrderColors.primary : Colors.white,
       shape: RoundedRectangleBorder(
@@ -2547,7 +2714,7 @@ class _BigBtn extends StatelessWidget {
               ],
               Flexible(
                 child: Text(
-                  busy ? 'Đang lưu' : label,
+                  busy ? (danger ? 'Đang xoá' : 'Đang lưu') : label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(color: fg, fontSize: 15, fontWeight: FontWeight.w600),

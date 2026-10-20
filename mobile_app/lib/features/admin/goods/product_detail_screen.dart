@@ -10,11 +10,40 @@ import '../../workspace/workspace_widgets.dart' show SheetButton;
 import '../shell/shell_widgets.dart';
 import 'goods_data.dart';
 import 'goods_widgets.dart';
+import 'product_form_data.dart';
+import 'product_form_screen.dart';
 
 String _dmy(DateTime t) => '${t.day.toString().padLeft(2, '0')}/${t.month.toString().padLeft(2, '0')}/${t.year}';
 
-/// Chi tiết sản phẩm kiểu Sapo: các khối trắng xếp liền — ảnh + giá, tồn theo
-/// chi nhánh, phiên bản, thông tin.
+const _statusLabel = {'active': 'Đang bán', 'hidden': 'Tạm ẩn', 'discontinued': 'Ngừng kinh doanh'};
+
+List<Map> _variantsOf(Map? d) => ((d?['variants'] as List?) ?? const []).whereType<Map>().toList();
+
+List<Map> _attrsOf(Map v) => ((v['attributes'] as List?) ?? const []).whereType<Map>().toList();
+
+/// Hàng nhiều phiên bản = có phiên bản mang tổ hợp thuộc tính (như PC).
+bool _isMulti(Map? d) => _variantsOf(d).any((v) => _attrsOf(v).isNotEmpty);
+
+Map? _defaultVariant(Map? d) {
+  final vs = _variantsOf(d);
+  return vs.where((v) => v['is_default'] == true).firstOrNull ?? (_isMulti(d) ? null : vs.firstOrNull);
+}
+
+String _valueName(Map a) => '${a['value'] is Map ? (a['value'] as Map)['name'] : a['value'] ?? ''}';
+
+String _attrName(Map a) => '${a['attribute'] is Map ? (a['attribute'] as Map)['name'] : a['name'] ?? ''}';
+
+/// Tên phiên bản theo giá trị thuộc tính "Đen / 128GB" (như PC); không có thuộc tính thì tên đang lưu.
+String _variantName(Map v, String product) {
+  final at = _attrsOf(v);
+  if (at.isNotEmpty) return at.map(_valueName).join(' / ');
+  final n = '${v['name'] ?? ''}';
+  return n.isEmpty ? product : n;
+}
+
+/// Chi tiết sản phẩm theo design/html/hang-hoa-mobile.html (v9) — cùng nội dung hộp
+/// "xem" của PC: ảnh + giá, thao tác nhanh, tồn theo chi nhánh, thuộc tính + phiên bản,
+/// thông tin (tab Chi tiết của PC), bốn công tắc bán hàng.
 class ProductDetailScreen extends ConsumerWidget {
   const ProductDetailScreen({super.key, required this.item});
 
@@ -24,9 +53,11 @@ class ProductDetailScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     // Đổi trạng thái xong danh mục tải lại → đọc bản mới của chính mặt hàng này.
-    final it = ref.watch(goodsCatalogProvider).value?.byId(item.id) ?? item;
+    final cat = ref.watch(goodsCatalogProvider).value;
+    final it = cat?.byId(item.id) ?? item;
     final detail = ref.watch(productDetailProvider(it.id));
     final branches = ref.watch(productBranchStockProvider((it.id, it.sku)));
+    final src = ref.watch(productFormSourcesProvider).value ?? const FormSources();
     final d = detail.value;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
@@ -40,10 +71,11 @@ class ProductDetailScreen extends ConsumerWidget {
             boxShadow: [BoxShadow(color: OrderColors.line, offset: Offset(0, -1))],
           ),
           child: GoodsBtn(
+            key: const Key('product_edit'),
             label: 'Sửa sản phẩm',
             icon: AppIcons.edit,
             primary: true,
-            onTap: () => showDashToast(context, 'Sửa sản phẩm trên mobile — sắp có'),
+            onTap: () => _edit(context, ref, d),
           ),
         ),
         body: Column(
@@ -69,8 +101,12 @@ class ProductDetailScreen extends ConsumerWidget {
                     _hero(context, ref, it, d),
                     _quick(context, ref, it),
                     _Block(title: 'Tồn kho', child: _stock(branches)),
-                    ..._variants(it, d),
-                    _Block(title: 'Thông tin', child: _info(it, d, detail)),
+                    if (_isMulti(d)) _attributes(it, d!),
+                    _Block(
+                      title: 'Thông tin',
+                      child: d == null ? _wait(detail) : _info(it, d, cat?.categories ?? const [], src),
+                    ),
+                    if (d != null) _flags(it, d),
                   ],
                 ),
               ),
@@ -81,10 +117,39 @@ class ProductDetailScreen extends ConsumerWidget {
     );
   }
 
+  Future<void> _edit(BuildContext context, WidgetRef ref, Map<String, dynamic>? d) async {
+    if (d == null) return showDashToast(context, 'Đang tải chi tiết sản phẩm, thử lại sau giây lát');
+    final r = await Navigator.of(
+      context,
+      rootNavigator: true,
+    ).push<Object?>(MaterialPageRoute(fullscreenDialog: true, builder: (_) => ProductFormScreen(detail: d)));
+    // Xoá xong thì chi tiết không còn gì để xem — về danh sách.
+    if (r == 'deleted' && context.mounted) Navigator.of(context).pop();
+  }
+
+  Widget _wait(AsyncValue<Map<String, dynamic>> detail) {
+    if (detail.hasError) {
+      final e = detail.error;
+      return Text(
+        e is ApiException ? e.message : 'Không tải được chi tiết sản phẩm.',
+        style: const TextStyle(color: OrderColors.muted, fontSize: 13),
+      );
+    }
+    return const _Loading();
+  }
+
   Widget _hero(BuildContext context, WidgetRef ref, GoodsItem it, Map<String, dynamic>? d) {
-    final n = it.variants.length;
-    final cost = it.cost;
-    final gain = cost == null ? null : it.minPrice - cost;
+    final multi = _isMulti(d);
+    final n = _variantsOf(d).length;
+    final status = '${d?['status'] ?? it.j['status'] ?? (it.active ? 'active' : 'hidden')}';
+    // Giá bán = giá gốc của mặt hàng (như ô Giá bán trên PC); chưa tải chi tiết thì tạm theo danh sách.
+    final base = (d?['base_price'] as num?) ?? it.minPrice;
+    // Lãi tính trên phiên bản mặc định (hàng nhiều phiên bản) hoặc giá gốc.
+    final def = _defaultVariant(d);
+    final gv = multi ? def ?? _variantsOf(d).firstOrNull : null;
+    final gp = gv == null ? base : ((gv['price'] as num?) ?? 0);
+    final gc = gv == null ? it.cost : gv['cost_price'] as num?;
+    final gain = gc == null || gp <= 0 ? null : gp - gc;
     return _Block(
       first: true,
       // Lưới giá tràn hết bề ngang khối nên khối này tự lo phần đệm.
@@ -97,14 +162,14 @@ class ProductDetailScreen extends ConsumerWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                GoodsImage(url: it.thumb, size: 104, radius: 14),
+                GoodsImage(url: '${d?['thumbnail'] ?? it.thumb}', size: 104, radius: 14),
                 const SizedBox(width: 14),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        it.name,
+                        '${d?['name'] ?? it.name}',
                         style: const TextStyle(
                           color: OrderColors.ink,
                           fontSize: 18,
@@ -113,16 +178,20 @@ class ProductDetailScreen extends ConsumerWidget {
                         ),
                       ),
                       const SizedBox(height: 4),
-                      Text('SKU: ${it.sku}', style: const TextStyle(color: OrderColors.muted, fontSize: 12.5)),
+                      Text(
+                        'SKU: ${d?['sku'] ?? it.sku}',
+                        style: const TextStyle(color: OrderColors.muted, fontSize: 12.5),
+                      ),
                       const SizedBox(height: 8),
                       Wrap(
                         spacing: 5,
                         runSpacing: 5,
                         crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
-                          _StatusDot(active: it.active),
-                          if (it.isSerial) const SmallTag('IMEI', OrderColors.purple),
-                          if (n > 1) SmallTag('$n phiên bản', (OrderColors.primarySoft, OrderColors.primaryInk)),
+                          _StatusDot(label: _statusLabel[status] ?? 'Đang bán', on: status == 'active'),
+                          if (d?['is_serial'] == true || (d == null && it.isSerial))
+                            const SmallTag('IMEI', OrderColors.purple),
+                          if (multi) SmallTag('$n phiên bản', (OrderColors.primarySoft, OrderColors.primaryInk)),
                         ],
                       ),
                     ],
@@ -143,7 +212,7 @@ class ProductDetailScreen extends ConsumerWidget {
                     child: _PriceCell(
                       key: const Key('edit_price'),
                       label: 'Giá bán',
-                      value: priceText(it),
+                      value: dot(base),
                       color: OrderColors.primaryInk,
                       onTap: () => _editMoney(context, ref, it, d, price: true),
                     ),
@@ -153,7 +222,7 @@ class ProductDetailScreen extends ConsumerWidget {
                     child: _PriceCell(
                       key: const Key('edit_cost'),
                       label: 'Giá vốn',
-                      value: cost == null ? null : dot(cost),
+                      value: it.cost == null ? null : dot(it.cost!),
                       onTap: () => _editMoney(context, ref, it, d, price: false),
                     ),
                   ),
@@ -164,7 +233,7 @@ class ProductDetailScreen extends ConsumerWidget {
                       label: 'Lãi / sp',
                       value: gain == null ? null : dot(gain),
                       color: gain != null && gain < 0 ? OrderColors.red.$2 : OrderColors.green.$2,
-                      note: gain == null || it.minPrice <= 0 ? null : pct(gain / it.minPrice * 100),
+                      note: gain == null ? null : pct(gain / gp * 100),
                     ),
                   ),
                 ],
@@ -235,8 +304,8 @@ class ProductDetailScreen extends ConsumerWidget {
     );
   }
 
-  /// Sửa nhanh giá bán / giá vốn của phiên bản đầu (hàng nhiều phiên bản thì các
-  /// phiên bản khác sửa ở form Sửa sản phẩm).
+  /// Sửa nhanh: giá bán = giá gốc (PUT cả mặt hàng); giá vốn = phiên bản mặc định
+  /// (PUT /admin/inventory/cost). Phiên bản khác sửa ở form Sửa sản phẩm.
   Future<void> _editMoney(
     BuildContext context,
     WidgetRef ref,
@@ -244,20 +313,17 @@ class ProductDetailScreen extends ConsumerWidget {
     Map<String, dynamic>? d, {
     required bool price,
   }) async {
-    final dv = [
-      for (final v in ((d?['variants'] as List?) ?? const []).whereType<Map>())
-        if (v['is_active'] != false) v,
-    ];
+    final multi = _isMulti(d);
+    final def = _defaultVariant(d) ?? _variantsOf(d).firstOrNull;
     final row = it.variants.firstOrNull;
-    final vid = row?.variantId ?? (dv.firstOrNull?['id'] as num?)?.toInt();
+    final vid = (def?['id'] as num?)?.toInt() ?? row?.variantId;
     // Giá bán phải gửi lại cả mặt hàng — chờ chi tiết tải xong mới sửa được.
-    if (vid == null || (price && d == null)) {
+    if (d == null && (price || vid == null)) {
       return showDashToast(context, 'Đang tải chi tiết sản phẩm, thử lại sau giây lát');
     }
-    final v = dv.where((x) => (x['id'] as num).toInt() == vid).firstOrNull;
-    final curPrice = (v?['price'] as num?) ?? row?.price ?? it.minPrice;
-    final curCost = row != null ? row.cost : v?['cost_price'] as num?;
-    final vName = '${v?['name'] ?? row?.name ?? ''}';
+    final base = (d?['base_price'] as num?) ?? it.minPrice;
+    final curCost = def != null ? def['cost_price'] as num? : row?.cost;
+    final gp = multi ? ((def?['price'] as num?) ?? base) : base;
     final n = await showModalBottomSheet<num>(
       context: context,
       isScrollControlled: true,
@@ -267,18 +333,33 @@ class ProductDetailScreen extends ConsumerWidget {
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(18))),
       builder: (_) => _MoneySheet(
         price: price,
-        initial: price ? curPrice : curCost,
-        otherPrice: curPrice,
+        initial: price ? base : curCost,
+        otherPrice: gp,
         otherCost: curCost,
-        variantName: it.variants.length > 1 && vName.isNotEmpty ? vName : null,
+        note: !multi
+            ? null
+            : price
+            ? const TextSpan(
+                text: 'Đây là giá gốc (như ô Giá bán trên PC). Giá riêng từng phiên bản giữ nguyên — sửa ở form Sửa sản phẩm.',
+              )
+            : TextSpan(
+                text: 'Áp cho phiên bản ',
+                children: [
+                  TextSpan(
+                    text: def == null ? '' : _variantName(def, it.name),
+                    style: const TextStyle(color: OrderColors.ink, fontWeight: FontWeight.w700),
+                  ),
+                  const TextSpan(text: '. Phiên bản khác sửa ở form Sửa sản phẩm.'),
+                ],
+              ),
       ),
     );
     if (n == null || !context.mounted) return;
     try {
       if (price) {
-        await setVariantPrice(ref, d!, vid, n);
+        await setBasePrice(ref, d!, n);
       } else {
-        await setVariantCost(ref, it.id, vid, n);
+        await setVariantCost(ref, it.id, vid!, n);
       }
       if (context.mounted) showDashToast(context, price ? 'Đã lưu giá bán ${dot(n)} đ' : 'Đã lưu giá vốn ${dot(n)} đ');
     } on ApiException catch (e) {
@@ -296,9 +377,6 @@ class ProductDetailScreen extends ConsumerWidget {
     }
     final rows = branches.value;
     if (rows == null) return const _Loading();
-    if (rows.isEmpty) {
-      return const Text('Chưa có tồn ở chi nhánh nào.', style: TextStyle(color: OrderColors.muted, fontSize: 13));
-    }
     final total = rows.fold<num>(0, (a, r) => a + r.$2);
     const head = TextStyle(color: OrderColors.muted, fontSize: 12, fontWeight: FontWeight.w500);
     TableRow line(String name, num q, {bool sum = false}) {
@@ -343,135 +421,345 @@ class ProductDetailScreen extends ConsumerWidget {
             ),
           ],
         ),
+        if (rows.isEmpty) line('Chưa có tồn', 0),
         for (final (name, q) in rows) line(name, q),
         if (rows.length > 1) line('Tổng', total, sum: true),
       ],
     );
   }
 
-  List<Widget> _variants(GoodsItem it, Map<String, dynamic>? d) {
-    final vs = [
-      for (final v in ((d?['variants'] as List?) ?? const []).whereType<Map>())
-        if (v['is_active'] != false) v,
-    ];
-    // Hàng một phiên bản: phiên bản chính là sản phẩm — không lặp lại khối này.
-    if (vs.isEmpty || (vs.length == 1 && d?['is_multi_variant'] != true)) return const [];
-    return [
-      _Block(
-        title: 'Phiên bản (${vs.length})',
-        child: Column(
+  /// Tab "Thuộc tính" của PC: mỗi thuộc tính một dòng (giá trị mặc định đánh dấu), dưới là các phiên bản.
+  Widget _attributes(GoodsItem it, Map<String, dynamic> d) {
+    final vs = _variantsOf(d);
+    final def = _defaultVariant(d);
+    final defVals = {for (final a in _attrsOf(def ?? const {})) (a['value_id'] as num).toInt()};
+    final attrs = <int, (String, List<(int, String)>)>{};
+    for (final v in vs) {
+      for (final a in _attrsOf(v)) {
+        final aid = (a['attribute_id'] as num).toInt(), vid = (a['value_id'] as num).toInt();
+        final x = attrs.putIfAbsent(aid, () => (_attrName(a), []));
+        if (!x.$2.any((e) => e.$1 == vid)) x.$2.add((vid, _valueName(a)));
+      }
+    }
+    return _Block(
+      titleWidget: Text.rich(
+        TextSpan(
+          text: 'Thuộc tính',
           children: [
-            for (final (i, v) in vs.indexed)
-              Container(
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                decoration: i == 0
-                    ? null
-                    : const BoxDecoration(
-                        border: Border(top: BorderSide(color: OrderColors.line)),
-                      ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    GoodsImage(url: '${v['image'] ?? ''}'.isEmpty ? it.thumb : '${v['image']}', size: 44, radius: 8),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '${v['name'] ?? ''}'.isEmpty ? it.name : '${v['name']}',
-                            style: const TextStyle(color: OrderColors.ink, fontSize: 13.5, fontWeight: FontWeight.w600),
-                          ),
-                          Text(
-                            '${v['sku'] ?? ''}',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(color: OrderColors.muted, fontSize: 12),
-                          ),
-                        ],
-                      ),
+            TextSpan(
+              text: '  ${vs.length} phiên bản',
+              style: const TextStyle(color: OrderColors.muted, fontSize: 12.5, fontWeight: FontWeight.w500),
+            ),
+          ],
+        ),
+        style: const TextStyle(color: OrderColors.ink, fontSize: 14.5, fontWeight: FontWeight.w700),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final (i, (name, vals)) in attrs.values.indexed)
+            Container(
+              padding: EdgeInsets.only(top: i == 0 ? 0 : 8, bottom: 8),
+              decoration: i == 0
+                  ? null
+                  : const BoxDecoration(
+                      border: Border(top: BorderSide(color: OrderColors.line)),
                     ),
-                    const SizedBox(width: 12),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: 110,
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 1),
+                      child: Text(name, style: const TextStyle(color: OrderColors.muted, fontSize: 13)),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Wrap(
+                      spacing: 4,
+                      runSpacing: 4,
                       children: [
-                        Text(
-                          dot((v['price'] as num?) ?? 0),
-                          style: const TextStyle(
-                            color: OrderColors.ink,
-                            fontSize: 13.5,
-                            fontWeight: FontWeight.w700,
-                            fontFeatures: tnum,
+                        for (final (vid, vn) in vals)
+                          defVals.contains(vid) ? _CheckTag(vn) : SmallTag(vn, (OrderColors.grid, OrderColors.muted)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          Container(
+            margin: const EdgeInsets.only(top: 4),
+            decoration: const BoxDecoration(
+              border: Border(top: BorderSide(color: OrderColors.line)),
+            ),
+            child: Column(
+              children: [
+                for (final (i, v) in vs.indexed)
+                  Container(
+                    key: Key('variant_${v['id']}'),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    decoration: i == 0
+                        ? null
+                        : const BoxDecoration(
+                            border: Border(top: BorderSide(color: OrderColors.line)),
+                          ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        GoodsImage(
+                          url: '${v['image'] ?? ''}'.isEmpty ? '${d['thumbnail'] ?? it.thumb}' : '${v['image']}',
+                          size: 44,
+                          radius: 8,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text.rich(
+                                TextSpan(
+                                  text: _variantName(v, it.name),
+                                  children: [
+                                    if (v['is_default'] == true)
+                                      const WidgetSpan(
+                                        alignment: PlaceholderAlignment.middle,
+                                        child: Padding(
+                                          padding: EdgeInsets.only(left: 4),
+                                          child: SmallTag('Mặc định', (
+                                            OrderColors.primarySoft,
+                                            OrderColors.primaryInk,
+                                          )),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                                style: const TextStyle(
+                                  color: OrderColors.ink,
+                                  fontSize: 13.5,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              Text(
+                                [
+                                  '${v['sku'] ?? ''}',
+                                  if ('${v['barcode'] ?? ''}'.isNotEmpty) '${v['barcode']}',
+                                ].join(' · '),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(color: OrderColors.muted, fontSize: 12),
+                              ),
+                            ],
                           ),
                         ),
-                        Text(
-                          'Tồn: ${dot((v['stock_quantity'] as num?) ?? 0)}',
-                          style: const TextStyle(color: OrderColors.muted, fontSize: 12, fontFeatures: tnum),
+                        const SizedBox(width: 12),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              dot((v['price'] as num?) ?? 0),
+                              style: const TextStyle(
+                                color: OrderColors.ink,
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w700,
+                                fontFeatures: tnum,
+                              ),
+                            ),
+                            Text(
+                              'Vốn ${v['cost_price'] == null ? '—' : dot(v['cost_price'] as num)}'
+                              ' · Tồn ${dot((v['stock_quantity'] as num?) ?? 0)}',
+                              style: const TextStyle(color: OrderColors.muted, fontSize: 12, fontFeatures: tnum),
+                            ),
+                          ],
                         ),
                       ],
                     ),
-                  ],
-                ),
-              ),
-          ],
-        ),
-      ),
-    ];
-  }
-
-  Widget _info(GoodsItem it, Map<String, dynamic>? d, AsyncValue<Map<String, dynamic>> detail) {
-    if (d == null) {
-      if (detail.hasError) {
-        final e = detail.error;
-        return Text(
-          e is ApiException ? e.message : 'Không tải được chi tiết sản phẩm.',
-          style: const TextStyle(color: OrderColors.muted, fontSize: 13),
-        );
-      }
-      return const _Loading();
-    }
-    final unit = '${(d['unit'] as Map?)?['name'] ?? ''}';
-    final cat = '${(d['category'] as Map?)?['name'] ?? it.categoryName}';
-    final created = DateTime.tryParse('${d['created_at']}')?.toLocal() ?? it.createdAt;
-    final kv = [
-      ('Nhóm hàng', cat.isEmpty ? '—' : cat),
-      ('Đơn vị tính', unit.isEmpty ? '—' : unit),
-      ('Thuế VAT', '${decimal((d['vat'] as num?) ?? 0, 2)}%'),
-      ('Quản lý IMEI/serial', d['is_serial'] == true ? 'Có' : 'Không'),
-      ('Đã bán', dot((d['sold_count'] as num?) ?? it.sold)),
-      ('Ngày tạo', _dmy(created)),
-    ];
-    return Column(
-      children: [
-        for (final (i, (k, v)) in kv.indexed)
-          Container(
-            padding: EdgeInsets.only(top: i == 0 ? 0 : 9, bottom: 9),
-            decoration: i == 0
-                ? null
-                : const BoxDecoration(
-                    border: Border(top: BorderSide(color: OrderColors.line)),
                   ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(k, style: const TextStyle(color: OrderColors.muted, fontSize: 13.5)),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    v,
-                    textAlign: TextAlign.right,
-                    style: const TextStyle(
-                      color: OrderColors.ink,
-                      fontSize: 13.5,
-                      fontWeight: FontWeight.w500,
-                      fontFeatures: tnum,
-                    ),
-                  ),
-                ),
               ],
             ),
           ),
-      ],
+        ],
+      ),
+    );
+  }
+
+  /// Tab "Chi tiết" của PC — đủ ô, đúng thứ tự; ô trống ghi rõ là trống chứ không giấu đi.
+  Widget _info(GoodsItem it, Map<String, dynamic> d, List<GoodsCategory> cats, FormSources src) {
+    final multi = _isMulti(d);
+    final def = _defaultVariant(d);
+    final vat = ((d['vat'] as num?) ?? 0).toInt();
+    final base = (d['base_price'] as num?) ?? 0;
+    final unit = '${(d['unit'] as Map?)?['name'] ?? ''}';
+    String unitName(int id) => src.units.where((u) => u.$1 == id).firstOrNull?.$2 ?? '#$id';
+    final convs = ((d['unit_conversions'] as List?) ?? const []).whereType<Map>().toList();
+    final catId = ((d['category_id'] ?? (d['category'] as Map?)?['id']) as num?)?.toInt();
+    final c = cats.where((x) => x.id == catId).firstOrNull;
+    final catText = c != null
+        ? [...categoryParents(c, cats), c.name].join(' › ')
+        : '${(d['category'] as Map?)?['name'] ?? it.categoryName}';
+    final tax = src.taxes.where((t) => t.levels.contains(vat)).firstOrNull?.name ?? '—';
+    final shops = ((d['shops'] as List?) ?? const []).whereType<Map>().map((s) => '${s['name']}').toList();
+    final tags = [for (final t in ((d['tags'] as List?) ?? const [])) t is Map ? '${t['name']}' : '$t'];
+    final desc = '${d['description'] ?? ''}'.trim();
+    final barcode = '${def?['barcode'] ?? ''}';
+    final loc = (d['location'] as Map?)?['name'];
+
+    Widget none(String t) => Text(
+      t,
+      textAlign: TextAlign.right,
+      style: const TextStyle(color: OrderColors.faint),
+    );
+    Widget val(String t) => Text(
+      t,
+      textAlign: TextAlign.right,
+      style: const TextStyle(color: OrderColors.ink, fontWeight: FontWeight.w500, fontFeatures: tnum),
+    );
+    final rows = <(String, Widget)>[
+      ('Mã hàng', val('${d['sku'] ?? it.sku}')),
+      ('Mã vạch', barcode.isNotEmpty ? val(barcode) : none(multi ? 'Theo từng phiên bản' : 'Chưa có')),
+      ('Nhóm hàng', catText.isEmpty ? none('—') : val(catText)),
+      ('Đơn vị tính', unit.isEmpty ? none('Chưa chọn') : val(unit)),
+      if (convs.isNotEmpty)
+        (
+          'Quy đổi đơn vị',
+          val(
+            convs
+                .map((q) => '1 ${unitName((q['unit_id'] as num).toInt())} = ${dot(q['quantity'] as num)} $unit')
+                .join('\n'),
+          ),
+        ),
+      ('Loại thuế', val(tax)),
+      ('% VAT', val(vatName(vat))),
+      ('Giá sau thuế', val(dot(vat > 0 ? (base * (100 + vat) / 100).round() : base))),
+      ('Vị trí', loc == null ? none('Chưa xếp kệ') : val('$loc')),
+      ('Chi nhánh bán', val(shops.isEmpty ? 'Tất cả chi nhánh' : shops.join(', '))),
+      (
+        'Thẻ hàng hoá',
+        tags.isEmpty
+            ? none('Chưa gắn')
+            : Wrap(
+                alignment: WrapAlignment.end,
+                spacing: 4,
+                runSpacing: 4,
+                children: [for (final t in tags) SmallTag(t, (OrderColors.grid, OrderColors.muted))],
+              ),
+      ),
+    ];
+    return DefaultTextStyle.merge(
+      style: const TextStyle(fontSize: 13.5),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final (i, (k, v)) in rows.indexed)
+            Container(
+              key: Key('kv_$k'),
+              padding: EdgeInsets.only(top: i == 0 ? 0 : 9, bottom: 9),
+              decoration: i == 0
+                  ? null
+                  : const BoxDecoration(
+                      border: Border(top: BorderSide(color: OrderColors.line)),
+                    ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(k, style: const TextStyle(color: OrderColors.muted)),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Align(alignment: Alignment.topRight, child: v),
+                  ),
+                ],
+              ),
+            ),
+          // Mô tả dài: nhãn trên, nội dung dưới.
+          Container(
+            key: const Key('kv_Mô tả'),
+            padding: const EdgeInsets.only(top: 9),
+            decoration: const BoxDecoration(
+              border: Border(top: BorderSide(color: OrderColors.line)),
+            ),
+            child: desc.isEmpty
+                ? Row(
+                    children: [
+                      const Text('Mô tả', style: TextStyle(color: OrderColors.muted)),
+                      const Spacer(),
+                      none('Chưa có'),
+                    ],
+                  )
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Mô tả', style: TextStyle(color: OrderColors.muted)),
+                      const SizedBox(height: 4),
+                      Text(desc, style: const TextStyle(color: OrderColors.ink, height: 1.45)),
+                    ],
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Bốn công tắc ở cột ảnh của form PC + dòng đã bán / ngày tạo / ngày sửa.
+  Widget _flags(GoodsItem it, Map<String, dynamic> d) {
+    DateTime? t(Object? v) => v == null ? null : DateTime.tryParse('$v')?.toLocal();
+    final created = t(d['created_at']) ?? it.createdAt, updated = t(d['updated_at']);
+    Widget flag(bool on, String label) => Container(
+      key: Key('flag_${label}_${on ? 'on' : 'off'}'),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+      decoration: BoxDecoration(
+        color: on ? const Color(0xFFE9F7EF) : OrderColors.grid,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          AppIcon(on ? AppIcons.check : AppIcons.close, size: 16, color: on ? OrderColors.green.$2 : OrderColors.faint),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: on ? OrderColors.green.$2 : OrderColors.faint,
+                fontSize: 13,
+                fontWeight: on ? FontWeight.w600 : FontWeight.w400,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    return _Block(
+      title: 'Bán hàng',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(child: flag(d['status'] == 'active', 'Đang bán')),
+              const SizedBox(width: 8),
+              Expanded(child: flag(d['print_label'] == true, 'In tem')),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(child: flag(d['is_stock_deducted'] != false, 'Trừ kho')),
+              const SizedBox(width: 8),
+              Expanded(child: flag(d['is_serial'] == true, 'Serial / IMEI')),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            [
+              'Đã bán ${dot((d['sold_count'] as num?) ?? it.sold)}',
+              'Tạo ${_dmy(created)}',
+              if (updated != null) 'Sửa ${_dmy(updated)}',
+            ].join(' · '),
+            key: const Key('product_meta'),
+            style: const TextStyle(color: OrderColors.faint, fontSize: 12),
+          ),
+        ],
+      ),
     );
   }
 
@@ -572,10 +860,11 @@ class _Head extends StatelessWidget {
 
 /// Khối trắng liền mép, cách khối trên 8.
 class _Block extends StatelessWidget {
-  const _Block({required this.child, this.title, this.first = false, this.flush = false});
+  const _Block({required this.child, this.title, this.titleWidget, this.first = false, this.flush = false});
 
   final Widget child;
   final String? title;
+  final Widget? titleWidget;
   final bool first;
 
   /// Không đệm — con tự đặt phần đệm (khối có phần tràn mép).
@@ -589,13 +878,15 @@ class _Block extends StatelessWidget {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (title != null)
+        if (title != null || titleWidget != null)
           Padding(
             padding: const EdgeInsets.only(bottom: 10),
-            child: Text(
-              title!,
-              style: const TextStyle(color: OrderColors.ink, fontSize: 14.5, fontWeight: FontWeight.w700),
-            ),
+            child:
+                titleWidget ??
+                Text(
+                  title!,
+                  style: const TextStyle(color: OrderColors.ink, fontSize: 14.5, fontWeight: FontWeight.w700),
+                ),
           ),
         child,
       ],
@@ -604,13 +895,14 @@ class _Block extends StatelessWidget {
 }
 
 class _StatusDot extends StatelessWidget {
-  const _StatusDot({required this.active});
+  const _StatusDot({required this.label, required this.on});
 
-  final bool active;
+  final String label;
+  final bool on;
 
   @override
   Widget build(BuildContext context) {
-    final c = active ? OrderColors.green.$2 : OrderColors.faint;
+    final c = on ? OrderColors.green.$2 : OrderColors.faint;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -621,7 +913,7 @@ class _StatusDot extends StatelessWidget {
         ),
         const SizedBox(width: 5),
         Text(
-          active ? 'Đang bán' : 'Ngừng bán',
+          label,
           style: TextStyle(color: c, fontSize: 12.5, fontWeight: FontWeight.w600),
         ),
       ],
@@ -701,7 +993,7 @@ class _MoneySheet extends StatefulWidget {
     required this.initial,
     required this.otherPrice,
     required this.otherCost,
-    this.variantName,
+    this.note,
   });
 
   /// true = sửa giá bán, false = giá vốn.
@@ -709,7 +1001,9 @@ class _MoneySheet extends StatefulWidget {
   final num? initial;
   final num otherPrice;
   final num? otherCost;
-  final String? variantName;
+
+  /// Ghi chú dưới ô (giá gốc / phiên bản được áp).
+  final InlineSpan? note;
 
   @override
   State<_MoneySheet> createState() => _MoneySheetState();
@@ -746,7 +1040,8 @@ class _MoneySheetState extends State<_MoneySheet> {
   }
 
   void _save() {
-    if (widget.price && _val <= 0) return setState(() => _err = 'Giá bán phải lớn hơn 0.');
+    // Như PC: chỉ chặn ô trống, giá 0 vẫn hợp lệ.
+    if (widget.price && _c.text.trim().isEmpty) return setState(() => _err = 'Nhập giá bán.');
     Navigator.of(context).pop(_val);
   }
 
@@ -848,20 +1143,12 @@ class _MoneySheetState extends State<_MoneySheet> {
                       style: const TextStyle(color: OrderColors.muted, fontSize: 12.5),
                     ),
                   ),
-                if (widget.variantName != null)
+                if (widget.note != null)
                   Padding(
                     padding: const EdgeInsets.only(top: 10),
                     child: Text.rich(
-                      TextSpan(
-                        text: 'Áp cho phiên bản ',
-                        children: [
-                          TextSpan(
-                            text: widget.variantName,
-                            style: const TextStyle(color: OrderColors.ink, fontWeight: FontWeight.w700),
-                          ),
-                          const TextSpan(text: '. Các phiên bản khác sửa ở form Sửa sản phẩm.'),
-                        ],
-                      ),
+                      widget.note!,
+                      key: const Key('money_note'),
                       style: const TextStyle(color: OrderColors.muted, fontSize: 12.5, height: 1.5),
                     ),
                   ),
@@ -904,6 +1191,31 @@ class _Loading extends StatelessWidget {
         height: 22,
         child: CircularProgressIndicator(strokeWidth: 2, color: OrderColors.primary),
       ),
+    ),
+  );
+}
+
+/// Giá trị mặc định của thuộc tính: thẻ xanh có dấu tick.
+class _CheckTag extends StatelessWidget {
+  const _CheckTag(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    height: 20,
+    padding: const EdgeInsets.symmetric(horizontal: 7),
+    decoration: BoxDecoration(color: OrderColors.primarySoft, borderRadius: BorderRadius.circular(6)),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const AppIcon(AppIcons.check, size: 12, color: OrderColors.primaryInk),
+        const SizedBox(width: 3),
+        Text(
+          text,
+          style: const TextStyle(color: OrderColors.primaryInk, fontSize: 11, fontWeight: FontWeight.w600),
+        ),
+      ],
     ),
   );
 }
