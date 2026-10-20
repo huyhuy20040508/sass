@@ -10,7 +10,9 @@ import '../../../core/ui/app_icon.dart';
 import '../shell/shell_widgets.dart';
 import 'goods_data.dart';
 import 'goods_widgets.dart';
+import '../../auth/auth_controller.dart';
 import 'product_detail_screen.dart';
+import 'product_form_data.dart';
 import 'product_form_screen.dart';
 import 'scanner_screen.dart';
 
@@ -82,6 +84,33 @@ class _GoodsScreenState extends ConsumerState<GoodsScreen> {
       if (it != null && mounted) _open(it);
     } on ApiException {
       // Danh mục chưa tải lại được — ở lại danh sách.
+    }
+  }
+
+  /// Vuốt → Sửa: tải chi tiết rồi mở form sửa.
+  Future<void> _editItem(GoodsItem it) async {
+    Map<String, dynamic> d;
+    try {
+      d = await ref.read(apiClientProvider).get<Map<String, dynamic>>('/admin/products/${it.id}');
+    } on ApiException catch (e) {
+      if (mounted) showDashToast(context, e.message);
+      return;
+    }
+    if (!mounted) return;
+    await Navigator.of(
+      context,
+      rootNavigator: true,
+    ).push<Object?>(MaterialPageRoute(fullscreenDialog: true, builder: (_) => ProductFormScreen(detail: d)));
+  }
+
+  /// Vuốt → Xoá: hỏi lại (kèm số tồn) rồi xoá.
+  Future<void> _deleteItem(GoodsItem it) async {
+    if (!await confirmDeleteProduct(context, name: it.name, stock: it.stock) || !mounted) return;
+    try {
+      await deleteProduct(ref, it.id);
+      if (mounted) showDashToast(context, 'Đã xoá ${it.name}');
+    } on ApiException catch (e) {
+      if (mounted) showDashToast(context, e.message);
     }
   }
 
@@ -269,7 +298,27 @@ class _GoodsScreenState extends ConsumerState<GoodsScreen> {
           );
         }
         final it = rows[i - 1];
-        final row = GoodsRow(key: Key('goods_${it.id}'), item: it, onTap: () => _open(it));
+        final row = SwipeRow(
+          key: ValueKey('swipe_${it.id}'),
+          onTap: () => _open(it),
+          actions: [
+            SwipeAction(
+              key: Key('swipe_edit_${it.id}'),
+              label: 'Sửa',
+              icon: AppIcons.edit,
+              color: OrderColors.primary,
+              onTap: () => _editItem(it),
+            ),
+            SwipeAction(
+              key: Key('swipe_delete_${it.id}'),
+              label: 'Xoá',
+              icon: AppIcons.trash,
+              color: const Color(0xFFD93025),
+              onTap: () => _deleteItem(it),
+            ),
+          ],
+          builder: (tap) => GoodsRow(key: Key('goods_${it.id}'), item: it, onTap: tap),
+        );
         return i == 1 ? row : Column(children: [const GoodsDivider(), row]);
       },
     );

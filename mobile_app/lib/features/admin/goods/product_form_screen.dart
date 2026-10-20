@@ -37,6 +37,31 @@ final pickImagesProvider = Provider<Future<List<XFile>> Function(int limit)>(
 const _maxPics = 8;
 const _err = Color(0xFFC62828);
 
+/// Hỏi lại trước khi xoá mặt hàng (form sửa + vuốt ở danh sách dùng chung).
+Future<bool> confirmDeleteProduct(BuildContext context, {required String name, num stock = 0}) async =>
+    await showDashSheet<bool>(
+      context,
+      title: 'Xoá sản phẩm?',
+      subtitle: [
+        '“$name” sẽ không còn ở danh sách, quầy và web bán hàng. Đơn và sổ kho cũ vẫn giữ.',
+        if (stock > 0) 'Sản phẩm còn tồn ${dot(stock)} ở chi nhánh này.',
+      ].join(' '),
+      body: (ctx) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SheetButton(
+            key: const Key('form_delete_yes'),
+            label: 'Xoá sản phẩm',
+            icon: AppIcons.trash,
+            danger: true,
+            onTap: () => Navigator.of(ctx).pop(true),
+          ),
+          SheetButton(label: 'Thôi', onTap: () => Navigator.of(ctx).pop(false)),
+        ],
+      ),
+    ) ==
+    true;
+
 /// Gõ số: chỉ nhận chữ số, tự chấm ngăn nghìn.
 class _DotFormatter extends TextInputFormatter {
   const _DotFormatter();
@@ -561,27 +586,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
 
   Future<void> _delete() async {
     final stock = ref.read(goodsCatalogProvider).value?.byId(_d.editId!)?.stock ?? 0;
-    final ok = await showDashSheet<bool>(
-      context,
-      title: 'Xoá sản phẩm?',
-      subtitle: [
-        '“${_d.name}” sẽ không còn ở danh sách, quầy và web bán hàng. Đơn và sổ kho cũ vẫn giữ.',
-        if (stock > 0) 'Sản phẩm còn tồn ${dot(stock)} ở chi nhánh này.',
-      ].join(' '),
-      body: (ctx) => Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          SheetButton(
-            key: const Key('form_delete_yes'),
-            label: 'Xoá sản phẩm',
-            icon: AppIcons.trash,
-            danger: true,
-            onTap: () => Navigator.of(ctx).pop(true),
-          ),
-          SheetButton(label: 'Thôi', onTap: () => Navigator.of(ctx).pop(false)),
-        ],
-      ),
-    );
+    final ok = await confirmDeleteProduct(context, name: _d.name, stock: stock);
     if (ok != true || !mounted) return;
     setState(() => _deleting = true);
     try {

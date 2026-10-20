@@ -1179,6 +1179,60 @@ void main() {
     expect(api.calls.where((c) => c.method == 'POST' && c.path.endsWith('/admin/products')), isEmpty);
   });
 
+  testWidgets('vuốt dòng sang trái: lộ Sửa / Xoá; chạm dòng đang mở thì đóng; chỉ mở một dòng', (t) async {
+    await _open(t);
+    final edit4 = find.byKey(const Key('swipe_edit_4'));
+    expect(edit4.hitTestable(), findsNothing, reason: 'chưa vuốt thì nút bị dòng che');
+    await t.drag(find.byKey(const Key('goods_4')), const Offset(-220, 0));
+    await _settle(t, 4);
+    expect(edit4.hitTestable(), findsOneWidget);
+    expect(find.byKey(const Key('swipe_delete_4')).hitTestable(), findsOneWidget);
+
+    // Chạm vào dòng đang mở: đóng lại, không mở chi tiết.
+    await t.tap(find.byKey(const Key('goods_4')), warnIfMissed: false);
+    await _settle(t, 4);
+    expect(find.text('Chi tiết sản phẩm'), findsNothing);
+    expect(edit4.hitTestable(), findsNothing);
+
+    // Mở dòng 4 rồi vuốt dòng 3: dòng 4 tự đóng.
+    await t.drag(find.byKey(const Key('goods_4')), const Offset(-220, 0));
+    await _settle(t, 4);
+    await t.drag(find.byKey(const Key('goods_3')), const Offset(-220, 0));
+    await _settle(t, 4);
+    expect(edit4.hitTestable(), findsNothing);
+    expect(find.byKey(const Key('swipe_edit_3')).hitTestable(), findsOneWidget);
+
+    // Vuốt ngắn rồi thả: bật về.
+    await t.drag(find.byKey(const Key('goods_7')), const Offset(-30, 0));
+    await _settle(t, 4);
+    expect(find.byKey(const Key('swipe_edit_7')).hitTestable(), findsNothing);
+  });
+
+  testWidgets('vuốt → Sửa mở form sửa đổ sẵn; vuốt → Xoá hỏi lại rồi xoá khỏi danh sách', (t) async {
+    final api = await _open(t);
+    await t.drag(find.byKey(const Key('goods_4')), const Offset(-220, 0));
+    await _settle(t, 4);
+    await t.tap(find.byKey(const Key('swipe_edit_4')));
+    await _settle(t, 12);
+    expect(find.text('Sửa sản phẩm'), findsWidgets);
+    expect(find.descendant(of: find.byKey(const Key('form_name')), matching: find.text('iphone 15')), findsOneWidget);
+    await t.tap(find.byTooltip('Đóng'));
+    await _settle(t, 10);
+
+    await t.drag(find.byKey(const Key('goods_4')), const Offset(-220, 0));
+    await _settle(t, 4);
+    await t.tap(find.byKey(const Key('swipe_delete_4')));
+    await _settle(t, 5);
+    expect(find.text('Xoá sản phẩm?'), findsOneWidget);
+    expect(find.textContaining('còn tồn 6'), findsOneWidget);
+    await t.tap(find.byKey(const Key('form_delete_yes')));
+    await _settle(t, 10);
+    expect(api.calls.where((c) => c.method == 'DELETE').single.path, endsWith('/admin/products/4'));
+    expect(find.text('Đã xoá iphone 15'), findsOneWidget);
+    expect(_names(t), isNot(contains('iphone 15')));
+    expect(_chipText(t, GoodsStatus.all), 'Tất cả 4');
+  });
+
   testWidgets('lỗi tải: báo lỗi + Thử lại', (t) async {
     await _open(t, api: _Api(productsCode: 500));
     expect(find.text('Không tải được hàng hoá'), findsOneWidget);

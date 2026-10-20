@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 
 import '../../../app/theme.dart';
 import '../../../core/format/vn_number.dart';
@@ -420,4 +421,127 @@ class GoodsChip extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Một nút hiện ra khi vuốt dòng sang trái.
+class SwipeAction {
+  const SwipeAction({required this.label, required this.icon, required this.color, required this.onTap, this.key});
+
+  final String label;
+  final AppIcons icon;
+  final Color color;
+  final VoidCallback onTap;
+  final Key? key;
+}
+
+/// Vuốt dòng sang trái để lộ các nút thao tác (Sửa, Xoá) — mỗi lúc chỉ mở một dòng.
+class SwipeRow extends StatefulWidget {
+  const SwipeRow({super.key, required this.builder, required this.actions, this.onTap});
+
+  /// Dựng dòng với lệnh chạm đã bọc: đang mở thì chạm là đóng lại, không gọi [onTap].
+  final Widget Function(VoidCallback onTap) builder;
+  final List<SwipeAction> actions;
+  final VoidCallback? onTap;
+
+  /// Dòng đang mở — mở dòng khác thì dòng này tự đóng.
+  static final open = ValueNotifier<Object?>(null);
+
+  static const actionWidth = 76.0;
+
+  @override
+  State<SwipeRow> createState() => _SwipeRowState();
+}
+
+class _SwipeRowState extends State<SwipeRow> with SingleTickerProviderStateMixin {
+  late final _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 180));
+  double get _max => SwipeRow.actionWidth * widget.actions.length;
+
+  @override
+  void initState() {
+    super.initState();
+    SwipeRow.open.addListener(_onOther);
+  }
+
+  @override
+  void dispose() {
+    SwipeRow.open.removeListener(_onOther);
+    if (SwipeRow.open.value == this) SwipeRow.open.value = null;
+    _c.dispose();
+    super.dispose();
+  }
+
+  void _onOther() {
+    if (SwipeRow.open.value != this && _c.value > 0) _c.animateTo(0, curve: Curves.easeOut);
+  }
+
+  void _settle(double velocity) {
+    final openIt = velocity < -300 || (velocity <= 300 && _c.value > .4);
+    _c.animateTo(openIt ? 1 : 0, curve: Curves.easeOut);
+    if (openIt) {
+      SwipeRow.open.value = this;
+    } else if (SwipeRow.open.value == this) {
+      SwipeRow.open.value = null;
+    }
+  }
+
+  void close() => _settle(1000);
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    // Trình đọc màn hình không vuốt được — đưa Sửa / Xoá thành thao tác của dòng.
+    customSemanticsActions: {for (final a in widget.actions) CustomSemanticsAction(label: a.label): a.onTap},
+    child: GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onHorizontalDragStart: (_) => SwipeRow.open.value = this,
+      onHorizontalDragUpdate: (d) => _c.value = (_c.value - d.primaryDelta! / _max).clamp(0.0, 1.0),
+      onHorizontalDragEnd: (d) => _settle(d.primaryVelocity ?? 0),
+      child: ClipRect(
+        child: AnimatedBuilder(
+          animation: _c,
+          builder: (context, child) => Stack(
+            children: [
+              Positioned.fill(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    for (final a in widget.actions)
+                      Material(
+                        color: a.color,
+                        child: InkWell(
+                          key: a.key,
+                          onTap: () {
+                            close();
+                            a.onTap();
+                          },
+                          child: SizedBox(
+                            width: SwipeRow.actionWidth,
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                AppIcon(a.icon, size: 20, color: Colors.white),
+                                const SizedBox(height: 4),
+                                Text(
+                                  a.label,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              Transform.translate(offset: Offset(-_max * _c.value, 0), child: child),
+            ],
+          ),
+          child: widget.builder(() => _c.value > 0 ? close() : widget.onTap?.call()),
+        ),
+      ),
+    ),
+  );
 }
