@@ -211,7 +211,7 @@
             </div>
             <div class="field">
                 <label for="tnInLaiBan">Số bản</label>
-                <input class="input t-num" id="tnInLaiBan" type="number" min="1" max="9" step="1" placeholder="Theo mẫu" style="max-width:140px">
+                <input class="input t-num" id="tnInLaiBan" type="number" min="1" max="9" step="1" value="1" style="max-width:140px">
             </div>
         </div>
         <div class="modal__foot">
@@ -318,7 +318,8 @@
         let nho = {};
         try { nho = JSON.parse(localStorage.getItem(KHOA_IN_LAI) || '{}'); } catch (err) { /* máy chặn lưu */ }
         chonKho(laDon || !/^a/.test(nho.kho || '') ? (nho.kho || '') : '');
-        $('tnInLaiBan').value = nho.ban || '';
+        // Số bản luôn về 1: nhớ số lần trước là lần sau F8 lại nhả nhiều tờ mà không ai để ý.
+        $('tnInLaiBan').value = 1;
         // Chồng lên hộp đang mở (vd "Đã thanh toán") thay vì đóng nó: in xong vẫn quay về đúng chỗ.
         if (!$('tnInLai').open) $('tnInLai').showModal();
         $('tnInLaiNut').focus();
@@ -328,13 +329,13 @@
         if (!inLai) return;
         const d = $('tnInLai').dataset;
         const kho = document.querySelector('#tnInLaiKho [aria-pressed="true"]')?.dataset.v || '';
-        const ban = Math.max(0, Math.min(9, parseInt($('tnInLaiBan').value, 10) || 0));
-        try { localStorage.setItem(KHOA_IN_LAI, JSON.stringify({ kho, ban: ban || '' })); } catch (err) { /* máy chặn lưu */ }
+        const ban = Math.max(1, Math.min(9, parseInt($('tnInLaiBan').value, 10) || 1));
+        try { localStorage.setItem(KHOA_IN_LAI, JSON.stringify({ kho })); } catch (err) { /* máy chặn lưu */ }
         const goc = inLai.loai === 'tra' ? d.urlTra : (/^a/.test(kho) ? d.urlA : d.urlPhieu);
         const u = new URL(goc.replace(/\/0\//, `/${inLai.id}/`), location.href);
         if (/^a/.test(kho)) u.searchParams.set('kho', kho);
         else if (kho) u.searchParams.set('paper', kho);
-        if (ban) u.searchParams.set('ban', String(ban));
+        if (ban > 1) u.searchParams.set('ban', String(ban));
         $('tnInLai').close();
         posIn(u.pathname + u.search);
     });

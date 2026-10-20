@@ -8,8 +8,9 @@ Flutter SDK trên máy chủ: `/opt/flutter` (3.47.7). Chưa có Android SDK nê
 flutter pub get
 flutter analyze
 flutter test   # test/flutter_test_config.dart nạp font thật để đo tràn khung cho đúng
-# Mặc định trỏ API thật; đổi bằng:
-flutter run --dart-define=API_BASE_URL=http://<máy-chủ>/api/v1
+# flutter run (debug/profile) đọc API dev https://huyshop.selliotech.store/api/v1 (dữ liệu như web huyshop);
+# flutter build apk --release đọc API prod https://api.selliotech.store/api/v1. Ghi đè:
+flutter run --dart-define=API_BASE_URL=https://<máy-chủ>/api/v1
 ```
 
 | Thư mục | Nội dung |

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../features/admin/admin_shell.dart';
 import '../features/auth/auth_controller.dart';
 import '../features/auth/login_screen.dart';
 import '../features/home/home_screen.dart';
@@ -35,11 +36,12 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/splash', builder: (_, _) => const _Splash()),
       GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
       GoRoute(path: chooseWorkspacePath, builder: (_, _) => const ChooseWorkspaceScreen()),
-      for (final a in WorkspaceArea.values)
-        GoRoute(
-          path: a.route,
-          builder: (_, _) => HomeScreen(area: a),
-        ),
+      GoRoute(path: WorkspaceArea.quanTri.route, builder: (_, _) => const AdminShell()),
+      // Khu Thu ngân chưa có thiết kế mobile — tạm dùng màn chính kiểm tra phiên.
+      GoRoute(
+        path: WorkspaceArea.thuNgan.route,
+        builder: (_, _) => const HomeScreen(area: WorkspaceArea.thuNgan),
+      ),
     ],
   );
 });

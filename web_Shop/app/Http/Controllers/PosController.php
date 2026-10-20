@@ -552,9 +552,9 @@ class PosController extends Controller
         $mau = $this->mauIn('hd', $chiNhanh);
 
         return view('v2::pos.receipt', $this->duLieuPhieu($don, $mau, $this->qrCuaDon($don, $mau)) + [
-            // ?paper= / ?ban= (nút "Đổi sang khổ…", hộp In lại) thắng khổ và số bản của mẫu.
+            // ?paper= (nút "Đổi sang khổ…", hộp In lại) thắng khổ của mẫu.
             'khoGiay' => self::khoGiay(request()->query('paper') ?? ($mau['settings']['kho'] ?? '80')),
-            'soBan' => self::soBan(request()->query('ban') ?? ($mau['settings']['ban'] ?? 1)),
+            'soBan' => self::soBan(request()->query('ban', 1)),
             'tuIn' => ! request()->boolean('nhung'),
         ]);
     }
@@ -568,7 +568,7 @@ class PosController extends Controller
 
         return view('v2::pos.invoice-a', $this->duLieuPhieu($don, $mau, $this->qrCuaDon($don, $mau)) + [
             'khoGiay' => $kho,
-            'soBan' => self::soBan(request()->query('ban') ?? ($mau['settings']['ban'] ?? 1)),
+            'soBan' => self::soBan(request()->query('ban', 1)),
             'tuIn' => ! request()->boolean('nhung'),
         ]);
     }
@@ -599,7 +599,7 @@ class PosController extends Controller
             'diaChi' => $this->api->settingString('store_address'),
             'hien' => self::hienTheoMau($mau),
             'khoGiay' => self::khoGiay(request()->query('paper') ?? ($caiDat['kho'] ?? '80')),
-            'soBan' => self::soBan(request()->query('ban') ?? ($caiDat['ban'] ?? 1)),
+            'soBan' => self::soBan(request()->query('ban', 1)),
             'tuIn' => ! request()->boolean('nhung'),
         ]);
     }
@@ -665,6 +665,11 @@ class PosController extends Controller
         return (string) $kho === '58' ? '58' : '80';
     }
 
+    /**
+     * Số bản do CHÍNH lệnh in quyết (?ban= của hộp In lại), mặc định 1 — không đọc
+     * "Số bản in" của mẫu. Ô đó nằm khuất trong cài đặt: bị đặt 4 (một lượt test
+     * ghi đè, 20/10/2026) là mỗi lần bấm nhả 4 tờ mà quầy không biết vì sao.
+     */
     public static function soBan(mixed $ban): int
     {
         return max(1, min(99, (int) $ban));

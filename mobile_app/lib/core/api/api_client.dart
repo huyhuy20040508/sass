@@ -36,9 +36,41 @@ class ApiClient {
 
   Future<T> post<T>(String path, {Object? body}) => _send(() => dio.post(path, data: body));
 
-  Future<T> put<T>(String path, {Object? body}) => _send(() => dio.put(path, data: body));
+  Future<T> put<T>(String path, {Object? body, Map<String, String>? headers}) => _send(
+    () => dio.put(
+      path,
+      data: body,
+      options: headers == null ? null : Options(headers: headers),
+    ),
+  );
 
   Future<T> delete<T>(String path) => _send(() => dio.delete(path));
+
+  /// Cả khối phản hồi `{success, data, meta}` — khi cần đọc thêm trong `meta` (hàng tổng, số đếm).
+  Future<Map<String, dynamic>> getRaw(String path, {Map<String, dynamic>? query}) async {
+    try {
+      final body = (await dio.get(path, queryParameters: query)).data;
+      return body is Map ? Map<String, dynamic>.from(body) : <String, dynamic>{};
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
+
+  /// Danh sách có phân trang: `data` + `meta {page, page_size, total, total_pages}`.
+  Future<ApiPage> getPage(String path, {Map<String, dynamic>? query}) async {
+    try {
+      final body = (await dio.get(path, queryParameters: query)).data;
+      final meta = body is Map ? body['meta'] : null;
+      int n(String k) => meta is Map ? ((meta[k] as num?) ?? 0).toInt() : 0;
+      return ApiPage(
+        data: body is Map ? (body['data'] as List?) ?? const [] : const [],
+        total: n('total'),
+        totalPages: n('total_pages'),
+      );
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
 
   Future<T> _send<T>(Future<Response> Function() call) async {
     try {
@@ -49,6 +81,14 @@ class ApiClient {
       throw ApiException.fromDio(e);
     }
   }
+}
+
+class ApiPage {
+  const ApiPage({required this.data, required this.total, required this.totalPages});
+
+  final List<dynamic> data;
+  final int total;
+  final int totalPages;
 }
 
 class _AuthInterceptor extends QueuedInterceptor {

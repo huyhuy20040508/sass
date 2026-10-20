@@ -1128,7 +1128,8 @@
                 (D.label_sizes || []).map(function (v) { return '<option value="' + v + '"' + (v === st.kho_tem ? ' selected' : '') + '>' + v.replace('x', ' × ') + ' mm</option>'; }).join('') + '</select></label>';
             if (m.cai_dat.cot) c += '<div class="tb-truong"><span>Số tem một hàng</span>' + doan('cot', [[1, '1'], [2, '2'], [3, '3']], st.cot) + '</div>';
             if (m.cai_dat.co) c += '<label class="tb-truong"><span>Cỡ chữ</span><input type="number" class="tsc-input" data-st="co" min="5" max="12" value="' + st.co + '" style="width:72px"' + khoa + '></label>';
-            if (m.cai_dat.ban) c += '<label class="tb-truong"><span>Số bản in</span><input type="number" class="tsc-input" data-st="ban" min="1" max="99" value="' + st.ban + '" style="width:72px"' + khoa + '></label>';
+            // Phiếu quầy in đúng số bản của lệnh bấm (hộp In lại) — không có ô số bản ở mẫu.
+            if (m.cai_dat.ban && !XEM_THAT[m.ma]) c += '<label class="tb-truong"><span>Số bản in</span><input type="number" class="tsc-input" data-st="ban" min="1" max="99" value="' + st.ban + '" style="width:72px"' + khoa + '></label>';
             $1('#tbMauChinh').innerHTML = c;
             $1('#tbMauNhom').innerHTML = m.nhom.map(function (g, gi) {
                 return '<div class="tb-nhom"><div class="tb-nhom-dau"><span>' + esc(g.ten) + '</span>' + (sua() ? '<button type="button" data-ca-nhom="' + gi + '">Bật cả nhóm</button>' : '') + '</div><div class="tb-o-luoi">' +

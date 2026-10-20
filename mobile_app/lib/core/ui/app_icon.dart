@@ -43,7 +43,81 @@ enum AppIcons {
   ),
   cash(
     '<rect x="2.5" y="6" width="19" height="12" rx="2"/><circle cx="12" cy="12" r="2.6"/><path d="M6 9.5v.1M18 14.4v.1"/>',
-  );
+  ),
+  // Từ design/html/tong-quan-mobile.html
+  down('<path d="m6 9 6 6 6-6"/>'),
+  right('<path d="m9 6 6 6-6 6"/>'),
+  bell('<path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15Z"/><path d="M10 20.5a2 2 0 0 0 4 0"/>'),
+  home('<path d="M3.5 10.5 12 3.5l8.5 7V20a1 1 0 0 1-1 1H15v-6H9v6H4.5a1 1 0 0 1-1-1Z"/>'),
+  cart(
+    '<path d="M3 4h2.5l2.2 10.5h10.6L20.5 7H6.4"/><circle cx="9.5" cy="19" r="1.5"/><circle cx="17" cy="19" r="1.5"/>',
+  ),
+  box('<path d="m12 3 8.5 4.5v9L12 21l-8.5-4.5v-9Z"/><path d="m3.5 7.5 8.5 4.5 8.5-4.5M12 12v9"/>'),
+  menu('<path d="M4 7h16M4 12h16M4 17h16"/>'),
+  target('<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r=".8"/>'),
+  doc('<path d="M6 2.5h8.5L19 7v14.5H6Z"/><path d="M14 2.5V7h5M9 12h6M9 16h6"/>'),
+  wallet(
+    '<path d="M3.5 7.5h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1h-15a1 1 0 0 1-1-1Z"/><path d="M3.5 7.5 15.5 4v3.5M16 13.5h2"/>',
+  ),
+  chart('<path d="M4 20V4M4 20h16M8 16v-4M12 16V8M16 16v-6"/>'),
+  users(
+    '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.2a6.5 6.5 0 0 1 3.5 5.8"/>',
+  ),
+  returns('<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>'),
+  tag('<path d="M3.5 12.5V4.5a1 1 0 0 1 1-1h8l8 8-9 9Z"/><circle cx="8.5" cy="8.5" r="1.5"/>'),
+  ticket(
+    '<path d="M3.5 7.5a1 1 0 0 1 1-1h15a1 1 0 0 1 1 1V10a2 2 0 0 0 0 4v2.5a1 1 0 0 1-1 1h-15a1 1 0 0 1-1-1V14a2 2 0 0 0 0-4Z"/>'
+    '<path d="M14.5 6.5v11"/>',
+  ),
+  truck(
+    '<path d="M2.5 6.5h11v10h-11ZM13.5 10h4l3 3.2v3.3h-7"/><circle cx="6.5" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/>',
+  ),
+  clip('<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V2.5h6V4M8.5 10h7M8.5 14h7M8.5 18h4"/>'),
+  factory('<path d="M3 21V10l5 3V10l5 3V7l8 4v10Z"/><path d="M7 17h2M12 17h2M17 17h2"/>'),
+  gear(
+    '<circle cx="12" cy="12" r="3"/>'
+    '<path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/>',
+  ),
+  swapH('<path d="M7 4 3.5 7.5 7 11M3.5 7.5h13M17 20l3.5-3.5L17 13M20.5 16.5h-13"/>'),
+  refresh('<path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/>'),
+  news('<rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M7.5 9h9M7.5 12.5h9M7.5 16h5"/>'),
+  // Từ design/html/don-hang-mobile.html
+  search('<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>'),
+  scan(
+    '<path d="M3.5 8V5a1.5 1.5 0 0 1 1.5-1.5h3M16 3.5h3A1.5 1.5 0 0 1 20.5 5v3M20.5 16v3a1.5 1.5 0 0 1-1.5 1.5h-3'
+    'M8 20.5H5A1.5 1.5 0 0 1 3.5 19v-3M7 8v8M10 8v8M13.5 8v8M17 8v8"/>',
+  ),
+  close('<path d="m6 6 12 12M18 6 6 18"/>'),
+  filter('<path d="M4 6h16M7 12h10M10 18h4"/>'),
+  sort('<path d="M7 4v16M3.5 16.5 7 20l3.5-3.5M17 20V4M13.5 7.5 17 4l3.5 3.5"/>'),
+  plus('<path d="M12 5v14M5 12h14"/>'),
+  globe('<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>'),
+  back('<path d="m15 5-7 7 7 7"/>'),
+  dots('<circle cx="5.5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="18.5" cy="12" r="1.4"/>'),
+  phone(
+    '<path d="M5 3.5h3.5l1.8 4.5-2.3 1.5a11 11 0 0 0 6.5 6.5l1.5-2.3 4.5 1.8V19a1.5 1.5 0 0 1-1.5 1.5A16 16 0 0 1 3.5 5 1.5 1.5 0 0 1 5 3.5Z"/>',
+  ),
+  print('<path d="M7 8V3.5h10V8"/><rect x="3.5" y="8" width="17" height="9" rx="2"/><path d="M7 14h10v6.5H7Z"/>'),
+  ban('<circle cx="12" cy="12" r="8.5"/><path d="m6 6 12 12"/>'),
+  share(
+    '<circle cx="18" cy="5.5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="18.5" r="2.5"/>'
+    '<path d="m8.2 10.8 7.6-4M8.2 13.2l7.6 4"/>',
+  ),
+  copy(
+    '<rect x="8" y="8" width="12.5" height="12.5" rx="2"/>'
+    '<path d="M16 8V5a1.5 1.5 0 0 0-1.5-1.5h-9A1.5 1.5 0 0 0 4 5v9a1.5 1.5 0 0 0 1.5 1.5H8"/>',
+  ),
+  image(
+    '<rect x="3.5" y="4.5" width="17" height="15" rx="2"/><circle cx="9" cy="10" r="1.8"/><path d="m4 17 5-4.5 4 3.5 3-2.5 4.5 3.5"/>',
+  ),
+  edit('<path d="M4 20h4L19 9l-4-4L4 16Z"/><path d="m13.5 6.5 4 4"/>'),
+  barcode('<path d="M4 5v14M7 5v14M10.5 5v14M13 5v14M16.5 5v14M20 5v14"/>'),
+  bolt('<path d="M13 2.5 4.5 13.5h6.5L10 21.5l8.5-11H12Z"/>'),
+  camera(
+    '<path d="M4 8h3l1.5-2.5h7L17 8h3a1 1 0 0 1 1 1v9.5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Z"/>'
+    '<circle cx="12" cy="13.5" r="3.5"/>',
+  ),
+  trash('<path d="M4 7h16M9 7V4.5h6V7M6.5 7l1 13h9l1-13"/>');
 
   const AppIcons(this.paths);
 

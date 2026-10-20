@@ -286,14 +286,14 @@ void main() {
     expect(find.byKey(const Key('area_quan_ly')), findsOneWidget);
   });
 
-  testWidgets('màn chính: nút đổi khu vực đưa về màn chọn', (t) async {
+  testWidgets('màn chính khu Thu ngân: nút đổi khu vực đưa về màn chọn', (t) async {
     await _open(t, _Api(branches: [_ba[1]]));
-    await t.tap(find.byKey(const Key('area_quan_ly')));
+    await t.tap(find.byKey(const Key('area_thu_ngan')));
     await t.pump(ChooseWorkspaceScreen.goingDelay);
     await _settle(t);
     expect(find.text('Vào khu vực'), findsNothing);
 
-    await t.tap(find.widgetWithText(TextButton, 'Quản trị'));
+    await t.tap(find.widgetWithText(TextButton, 'Thu ngân'));
     await _settle(t);
     expect(find.text('Vào khu vực'), findsOneWidget);
   });

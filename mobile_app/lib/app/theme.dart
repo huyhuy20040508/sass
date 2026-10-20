@@ -42,6 +42,69 @@ abstract final class NavyColors {
   );
 }
 
+/// Màu màn Tổng quan + khung app khu Quản trị (design/html/tong-quan-mobile.html).
+abstract final class DashColors {
+  static const navy = Color(0xFF0B1B3A);
+  static const navy2 = Color(0xFF14284F);
+  static const navy3 = Color(0xFF1D3A6E);
+  static const primary = Color(0xFF1890FF);
+  static const primaryDeep = Color(0xFF0D5FB3);
+  static const primarySoft = Color(0xFFE8F3FF);
+  static const ink = Color(0xFF0F172A);
+  static const text = Color(0xFF334155);
+  static const muted = Color(0xFF64748B);
+  static const faint = Color(0xFF94A3B8);
+  static const line = Color(0xFFE6EAF1);
+  static const grid = Color(0xFFEEF1F6);
+  static const page = Color(0xFFF3F5F9);
+
+  /// Màu chuỗi biểu đồ — bảng dataviz đã kiểm cho người mù màu, thứ tự cố định.
+  static const series = [Color(0xFF2A78D6), Color(0xFFEB6834), Color(0xFF1BAF7A), Color(0xFFEDA100), Color(0xFFE87BA4)];
+  static const seriesOther = Color(0xFFB8C0CC);
+  static const s1 = Color(0xFF2A78D6);
+  static const s1Soft = Color(0xFFCDE2FB);
+
+  /// Màu trạng thái: tách khỏi màu chuỗi, luôn đi kèm chữ.
+  static const good = Color(0xFF0CA30C);
+  static const warning = Color(0xFFFAB219);
+  static const serious = Color(0xFFEC835A);
+  static const critical = Color(0xFFD03B3B);
+  static const up = Color(0xFF157A34);
+  static const upSoft = Color(0xFFE7F5EC);
+  static const down = Color(0xFFC62828);
+  static const downSoft = Color(0xFFFDEEEE);
+
+  static const cardShadow = [
+    BoxShadow(color: Color(0x0D0F172A), offset: Offset(0, 1), blurRadius: 2),
+    BoxShadow(color: Color(0x400F172A), offset: Offset(0, 6), blurRadius: 20, spreadRadius: -14),
+  ];
+}
+
+/// Màu màn Đơn hàng (design/html/don-hang-mobile.html): đầu trắng, nhãn trạng thái
+/// nền nhạt + chữ đậm cùng họ màu.
+abstract final class OrderColors {
+  static const primary = Color(0xFF1677FF);
+  static const primaryInk = Color(0xFF0B5ED7);
+  static const primarySoft = Color(0xFFEAF3FF);
+  static const ink = Color(0xFF111827);
+  static const text = Color(0xFF374151);
+  static const muted = Color(0xFF6B7280);
+  static const faint = Color(0xFF9CA3AF);
+  static const line = Color(0xFFE8EBF0);
+  static const grid = Color(0xFFF0F2F5);
+  static const page = Color(0xFFF2F4F7);
+  static const navy = Color(0xFF0B1B3A);
+
+  static const green = (Color(0xFFE8F7EE), Color(0xFF0F7A3D));
+  static const orange = (Color(0xFFFFF3E0), Color(0xFFB45309));
+  static const blue = (Color(0xFFE8F1FF), Color(0xFF1D4ED8));
+  static const red = (Color(0xFFFDECEC), Color(0xFFB91C1C));
+  static const neutral = (Color(0xFFF1F2F4), Color(0xFF4B5563));
+  static const purple = (Color(0xFFF3ECFF), Color(0xFF6D28D9));
+
+  static const cardShadow = [BoxShadow(color: Color(0x0D111827), offset: Offset(0, 1), blurRadius: 2)];
+}
+
 const appFont = 'BeVietnamPro';
 
 ThemeData buildTheme() {

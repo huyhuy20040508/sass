@@ -6,8 +6,12 @@
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Chọn ảnh sản phẩm từ thư viện.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Dùng camera để quét mã vạch và chụp ảnh sản phẩm.</string>
 	<key>CFBundleDisplayName</key>
-	<string>Selliotech</string>
+	<string>Sellio Shop</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -15,7 +19,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>selliotech</string>
+	<string>Sellio Shop</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
