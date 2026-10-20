@@ -31,8 +31,13 @@ class ApiClient {
   final Dio dio;
   final TokenSource _tokens;
 
+  /// Chi nhánh cho riêng một lượt gọi: null = chi nhánh của phiên, 0 = cả cửa hàng
+  /// (không gửi X-Chi-Nhanh), số khác = đúng chi nhánh đó.
+  static Options? _branch(int? branch) => branch == null ? null : Options(extra: {_AuthInterceptor.branchKey: branch});
+
   /// Trả `data` trong khuôn `{success, data, meta}`.
-  Future<T> get<T>(String path, {Map<String, dynamic>? query}) => _send(() => dio.get(path, queryParameters: query));
+  Future<T> get<T>(String path, {Map<String, dynamic>? query, int? branch}) =>
+      _send(() => dio.get(path, queryParameters: query, options: _branch(branch)));
 
   Future<T> post<T>(String path, {Object? body}) => _send(() => dio.post(path, data: body));
 
@@ -47,9 +52,9 @@ class ApiClient {
   Future<T> delete<T>(String path) => _send(() => dio.delete(path));
 
   /// Cả khối phản hồi `{success, data, meta}` — khi cần đọc thêm trong `meta` (hàng tổng, số đếm).
-  Future<Map<String, dynamic>> getRaw(String path, {Map<String, dynamic>? query}) async {
+  Future<Map<String, dynamic>> getRaw(String path, {Map<String, dynamic>? query, int? branch}) async {
     try {
-      final body = (await dio.get(path, queryParameters: query)).data;
+      final body = (await dio.get(path, queryParameters: query, options: _branch(branch))).data;
       return body is Map ? Map<String, dynamic>.from(body) : <String, dynamic>{};
     } on DioException catch (e) {
       throw ApiException.fromDio(e);
@@ -57,9 +62,9 @@ class ApiClient {
   }
 
   /// Danh sách có phân trang: `data` + `meta {page, page_size, total, total_pages}`.
-  Future<ApiPage> getPage(String path, {Map<String, dynamic>? query}) async {
+  Future<ApiPage> getPage(String path, {Map<String, dynamic>? query, int? branch}) async {
     try {
-      final body = (await dio.get(path, queryParameters: query)).data;
+      final body = (await dio.get(path, queryParameters: query, options: _branch(branch))).data;
       final meta = body is Map ? body['meta'] : null;
       int n(String k) => meta is Map ? ((meta[k] as num?) ?? 0).toInt() : 0;
       return ApiPage(
@@ -98,13 +103,16 @@ class _AuthInterceptor extends QueuedInterceptor {
   final TokenSource _tokens;
 
   static const _daThuLai = 'da_thu_lai';
+  static const branchKey = 'chi_nhanh';
 
   @override
   void onRequest(RequestOptions o, RequestInterceptorHandler h) {
     final token = _tokens.accessToken;
     if (token != null) o.headers['Authorization'] = 'Bearer $token';
-    final cn = _tokens.chiNhanhId;
-    if (cn != null) o.headers['X-Chi-Nhanh'] = '$cn';
+    final pick = o.extra[branchKey] as int?;
+    final cn = pick ?? _tokens.chiNhanhId;
+    // Header gắn sẵn ở lượt gọi (vd ghi kho đúng chi nhánh) thì giữ nguyên.
+    if (!o.headers.containsKey('X-Chi-Nhanh') && cn != null && cn > 0) o.headers['X-Chi-Nhanh'] = '$cn';
     h.next(o);
   }
 

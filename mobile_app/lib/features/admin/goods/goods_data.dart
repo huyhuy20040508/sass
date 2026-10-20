@@ -5,11 +5,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/api/api_client.dart';
+import '../../../core/api/api_exception.dart';
 import '../../../core/format/vn_text.dart';
 import '../../auth/auth_controller.dart';
 
-/// Tồn ≤ mốc này thì tô "sắp hết" — cùng mốc mặc định của trang Tồn kho (NormalizeLowStock).
-const lowStock = 5;
+/// Mốc "sắp hết" mặc định khi chưa đọc được cài đặt — cùng NormalizeLowStock của API.
+const defaultLowStock = 5;
 
 /// Một phiên bản trong tồn kho chi nhánh đang làm việc (GET /admin/inventory).
 class StockRow {
@@ -41,10 +42,13 @@ class GoodsCategory {
 
 /// Một mặt hàng của danh sách: dòng GET /products (slim) + các dòng tồn của nó.
 class GoodsItem {
-  GoodsItem(this.j, this.stockRows);
+  GoodsItem(this.j, this.stockRows, {this.stockKnown = true});
 
   final Map<String, dynamic> j;
   final List<StockRow> stockRows;
+
+  /// Đã có số tồn của mặt hàng này (thiếu quyền xem tồn, hoặc trang tồn của nó chưa nạp tới → false).
+  final bool stockKnown;
 
   int get id => (j['id'] as num).toInt();
   String get name => '${j['name'] ?? ''}';
@@ -76,15 +80,209 @@ class GoodsItem {
 }
 
 class GoodsCatalog {
-  const GoodsCatalog({required this.items, required this.categories});
+  const GoodsCatalog({
+    required this.items,
+    required this.categories,
+    this.complete = true,
+    this.total = 0,
+    this.stockKnown = true,
+    this.lowStock = defaultLowStock,
+    this.loadError,
+  });
+
+  /// Lỗi khi nạp các trang sau (phần đã có vẫn dùng được).
+  final String? loadError;
 
   final List<GoodsItem> items;
   final List<GoodsCategory> categories;
+
+  /// Đã tải hết mọi trang (sản phẩm + tồn). Chưa hết thì danh sách đang lớn dần.
+  final bool complete;
+
+  /// Tổng số sản phẩm theo API (để ghi "đang tải 300/1.250").
+  final int total;
+
+  /// Đọc được tồn kho (thiếu quyền xem tồn thì không có — ẩn số tồn, không báo "Hết hàng" sai).
+  final bool stockKnown;
+
+  /// Mốc "sắp hết" của cửa hàng (Cài đặt → low_stock_threshold).
+  final int lowStock;
 
   GoodsItem? byId(int id) => items.where((x) => x.id == id).firstOrNull;
 }
 
 Duration? _noRetry(int _, Object _) => null;
+
+/// Chi nhánh đang xem ở màn Hàng hoá: null = chi nhánh làm việc của phiên,
+/// 0 = cả cửa hàng (tồn cộng mọi chi nhánh), số khác = đúng chi nhánh đó.
+final goodsBranchProvider = NotifierProvider<GoodsBranchNotifier, int?>(GoodsBranchNotifier.new);
+
+class GoodsBranchNotifier extends Notifier<int?> {
+  @override
+  int? build() => null;
+
+  void set(int? v) => state = v;
+}
+
+/// Tham số chi nhánh cho /products: lọc theo chi nhánh QUẢN LÝ mặt hàng (0 = không lọc).
+Map<String, String> _shopQuery(int? branch) => branch == null ? const {} : {'shop_id': '$branch'};
+
+const _pageSize = 100;
+
+/// Danh mục hàng + tồn + nhóm hàng, tải DẦN: trang đầu hiện ngay, các trang sau nạp
+/// nền và nối vào (shop vài nghìn mặt hàng không phải chờ tải hết mới thấy gì).
+/// Lọc / đếm / xếp làm trên máy: chip "Hết hàng" và nút "Xem N sản phẩm" cần số của
+/// mọi tổ hợp lọc, mà tồn lại nằm ở API khác (/admin/inventory) với sản phẩm.
+final goodsCatalogProvider = AsyncNotifierProvider.autoDispose<GoodsCatalogNotifier, GoodsCatalog>(
+  GoodsCatalogNotifier.new,
+  retry: _noRetry,
+);
+
+class GoodsCatalogNotifier extends AsyncNotifier<GoodsCatalog> {
+  /// Lượt tải hiện hành — đổi chi nhánh / làm mới thì lượt nạp nền cũ tự dừng.
+  int _gen = 0;
+
+  final _products = <Map<String, dynamic>>[];
+  final _stock = <int, List<StockRow>>{};
+  List<GoodsCategory> _cats = const [];
+  bool _stockKnown = true;
+  bool _stockDone = true;
+  int _low = defaultLowStock;
+
+  @override
+  Future<GoodsCatalog> build() async {
+    final gen = ++_gen;
+    final branch = ref.watch(goodsBranchProvider);
+    final api = ref.read(apiClientProvider);
+    _products.clear();
+    _stock.clear();
+
+    Future<ApiPage> products(int p) => api.getPage(
+      '/products',
+      query: {
+        'all': 'true',
+        'slim': 'true',
+        'sort': 'newest',
+        ..._shopQuery(branch),
+        'page': '$p',
+        'page_size': '$_pageSize',
+      },
+    );
+    Future<ApiPage?> stock(int p) async {
+      try {
+        return await api.getPage(
+          '/admin/inventory',
+          query: {'sort': 'newest', 'page': '$p', 'page_size': '$_pageSize'},
+          branch: branch,
+        );
+      } on ApiException catch (e) {
+        // Thiếu quyền xem tồn kho: danh sách vẫn dùng được, chỉ không có số tồn.
+        if (e.statusCode == 403) return null;
+        rethrow;
+      }
+    }
+
+    Future<int> low() async {
+      try {
+        final s = await api.get<Map<String, dynamic>>('/admin/settings');
+        return int.tryParse('${(s['values'] as Map?)?['low_stock_threshold'] ?? ''}') ?? defaultLowStock;
+      } on ApiException {
+        return defaultLowStock;
+      }
+    }
+
+    final (p1, s1, cats, lowStock) = await (
+      products(1),
+      stock(1),
+      api.getRaw('/categories', query: {'all': 'true'}),
+      low(),
+    ).wait;
+    _stockKnown = s1 != null;
+    _low = lowStock;
+    _cats = [
+      for (final c in ((cats['data'] as List?) ?? const []).whereType<Map>())
+        GoodsCategory(
+          id: (c['id'] as num).toInt(),
+          name: '${c['name'] ?? ''}',
+          parentId: (c['parent_id'] as num?)?.toInt(),
+          isActive: c['is_active'] != false,
+          vat: ((c['vat'] as num?) ?? 0).toInt(),
+        ),
+    ];
+    _addProducts(p1);
+    if (s1 != null) _addStock(s1);
+    final pPages = p1.totalPages, sPages = s1?.totalPages ?? 1;
+    _stockDone = sPages <= 1;
+    final done = pPages <= 1 && sPages <= 1;
+    if (!done) Future(() => _loadRest(gen, products, stock, pPages, sPages, p1.total));
+    return _snapshot(complete: done, total: p1.total);
+  }
+
+  void _addProducts(ApiPage p) {
+    for (final m in p.data.whereType<Map>()) {
+      _products.add(Map<String, dynamic>.from(m));
+    }
+  }
+
+  void _addStock(ApiPage p) {
+    for (final m in p.data.whereType<Map>()) {
+      final r = StockRow(Map<String, dynamic>.from(m));
+      (_stock[r.productId] ??= []).add(r);
+    }
+  }
+
+  GoodsCatalog _snapshot({required bool complete, required int total, String? error}) => GoodsCatalog(
+    items: [
+      for (final p in _products)
+        if (_stock[(p['id'] as num).toInt()] case final rows?)
+          GoodsItem(p, rows, stockKnown: _stockKnown)
+        else
+          // Chưa nạp tới trang tồn của nó thì chưa biết — đừng vội báo "Hết hàng".
+          GoodsItem(p, const [], stockKnown: _stockKnown && _stockDone),
+    ],
+    categories: _cats,
+    complete: complete,
+    total: total,
+    stockKnown: _stockKnown,
+    lowStock: _low,
+    loadError: error,
+  );
+
+  /// Nạp các trang còn lại, mỗi đợt 4 trang song song, đẩy danh sách mới lên sau mỗi đợt.
+  Future<void> _loadRest(
+    int gen,
+    Future<ApiPage> Function(int) products,
+    Future<ApiPage?> Function(int) stock,
+    int pPages,
+    int sPages,
+    int total,
+  ) async {
+    bool alive() => gen == _gen && ref.mounted;
+    try {
+      final last = math.max(pPages, _stockKnown ? sPages : 1);
+      for (var from = 2; from <= last; from += 4) {
+        final to = math.min(from + 3, last);
+        final batch = await (
+          Future.wait([for (var p = from; p <= math.min(to, pPages); p++) products(p)]),
+          Future.wait([
+            if (_stockKnown)
+              for (var p = from; p <= math.min(to, sPages); p++) stock(p),
+          ]),
+        ).wait;
+        if (!alive()) return;
+        batch.$1.forEach(_addProducts);
+        for (final s in batch.$2) {
+          if (s != null) _addStock(s);
+        }
+        _stockDone = to >= sPages;
+        state = AsyncData(_snapshot(complete: to >= last, total: total));
+      }
+    } on ApiException catch (e) {
+      // Lỗi giữa chừng: giữ phần đã có, ghi lỗi để người dùng kéo xuống tải lại.
+      if (alive()) state = AsyncData(_snapshot(complete: false, total: total, error: e.message));
+    }
+  }
+}
 
 /// Mọi trang của một danh sách có phân trang (≤ [maxPages] × 100 dòng).
 Future<List<Map<String, dynamic>>> _allPages(
@@ -93,7 +291,7 @@ Future<List<Map<String, dynamic>>> _allPages(
   Map<String, String> query, {
   int maxPages = 30,
 }) async {
-  Future<ApiPage> page(int p) => api.getPage(path, query: {...query, 'page': '$p', 'page_size': '100'});
+  Future<ApiPage> page(int p) => api.getPage(path, query: {...query, 'page': '$p', 'page_size': '$_pageSize'});
   final first = await page(1);
   final rest = await Future.wait([for (var p = 2; p <= math.min(first.totalPages, maxPages); p++) page(p)]);
   return [
@@ -102,43 +300,11 @@ Future<List<Map<String, dynamic>>> _allPages(
   ];
 }
 
-/// Cả danh mục hàng của chi nhánh đang làm việc + tồn + nhóm hàng. Tải một lần rồi
-/// lọc / đếm / xếp ngay trên máy: các chip trạng thái và nút "Xem N sản phẩm" cần
-/// số của mọi tổ hợp lọc, mà "Hết hàng" lại ghép từ hai API (sản phẩm + tồn).
-final goodsCatalogProvider = FutureProvider.autoDispose<GoodsCatalog>((ref) async {
-  final api = ref.read(apiClientProvider);
-  final res = await Future.wait<Object>([
-    _allPages(api, '/products', {'all': 'true', 'slim': 'true', 'sort': 'newest'}),
-    _allPages(api, '/admin/inventory', {}, maxPages: 50),
-    api.getRaw('/categories', query: {'all': 'true'}),
-  ]);
-  final stock = <int, List<StockRow>>{};
-  for (final m in res[1] as List<Map<String, dynamic>>) {
-    final r = StockRow(m);
-    (stock[r.productId] ??= []).add(r);
-  }
-  final cats = ((res[2] as Map)['data'] as List?) ?? const [];
-  return GoodsCatalog(
-    items: [
-      for (final p in res[0] as List<Map<String, dynamic>>) GoodsItem(p, stock[(p['id'] as num).toInt()] ?? const []),
-    ],
-    categories: [
-      for (final c in cats.whereType<Map>())
-        GoodsCategory(
-          id: (c['id'] as num).toInt(),
-          name: '${c['name'] ?? ''}',
-          parentId: (c['parent_id'] as num?)?.toInt(),
-          isActive: c['is_active'] != false,
-          vat: ((c['vat'] as num?) ?? 0).toInt(),
-        ),
-    ],
-  );
-}, retry: _noRetry);
-
 /// id mặt hàng khớp từ khoá theo API — bắt cả mã vạch / tên phiên bản mà danh
 /// sách rút gọn không có.
 final goodsSearchProvider = FutureProvider.autoDispose.family<Set<int>, String>((ref, q) async {
   final rows = await _allPages(ref.read(apiClientProvider), '/products', {
+    ..._shopQuery(ref.read(goodsBranchProvider)),
     'all': 'true',
     'slim': 'true',
     'keyword': q,
@@ -159,7 +325,7 @@ enum GoodsStatus {
   bool has(GoodsItem it) => switch (this) {
     all => true,
     active => it.active,
-    out => it.active && it.stock <= 0,
+    out => it.active && it.stockKnown && it.stock <= 0,
     hidden => !it.active,
   };
 }

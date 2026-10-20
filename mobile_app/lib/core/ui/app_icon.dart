@@ -117,7 +117,8 @@ enum AppIcons {
     '<path d="M4 8h3l1.5-2.5h7L17 8h3a1 1 0 0 1 1 1v9.5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Z"/>'
     '<circle cx="12" cy="13.5" r="3.5"/>',
   ),
-  trash('<path d="M4 7h16M9 7V4.5h6V7M6.5 7l1 13h9l1-13"/>');
+  trash('<path d="M4 7h16M9 7V4.5h6V7M6.5 7l1 13h9l1-13"/>'),
+  minus('<path d="M5 12h14"/>');
 
   const AppIcons(this.paths);
 

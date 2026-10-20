@@ -7,6 +7,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/theme.dart';
 import '../../../core/api/api_exception.dart';
 import '../../../core/ui/app_icon.dart';
+import '../../../core/format/vn_number.dart';
+import '../../auth/permissions.dart';
+import '../../workspace/workspace.dart' show Branch;
+import '../dashboard/dashboard_data.dart' show branchLabel, dashBranchesProvider, defaultShopProvider;
 import '../shell/shell_widgets.dart';
 import 'goods_data.dart';
 import 'goods_widgets.dart';
@@ -114,6 +118,28 @@ class _GoodsScreenState extends ConsumerState<GoodsScreen> {
     }
   }
 
+  Future<void> _pickBranch(List<Branch> branches, int? cur) async {
+    final id = await showDashSheet<int>(
+      context,
+      title: 'Xem chi nhánh',
+      body: (ctx) => Column(
+        children: [
+          for (final b in [...branches, const Branch(id: 0, name: 'Tất cả chi nhánh')])
+            SheetOption(
+              key: Key('goods_branch_${b.id}'),
+              label: b.name,
+              trailing: b.isHq ? 'Trụ sở' : null,
+              selected: cur == b.id,
+              onTap: () => Navigator.of(ctx).pop(b.id),
+            ),
+        ],
+      ),
+    );
+    if (id == null || id == cur) return;
+    ref.read(goodsBranchProvider.notifier).set(id);
+    if (_scroll.hasClients) _scroll.jumpTo(0);
+  }
+
   Future<void> _scan() async {
     GoodsItem? found;
     await Navigator.of(context, rootNavigator: true).push(
@@ -184,6 +210,9 @@ class _GoodsScreenState extends ConsumerState<GoodsScreen> {
     final serverIds = q.isEmpty ? null : ref.watch(goodsSearchProvider(q)).value;
     final c = cat.value;
     final base = c == null ? const <GoodsItem>[] : matchGoods(c, query: q, cats: f.cats, serverIds: serverIds);
+    final perms = permsOf(ref);
+    final branches = ref.watch(dashBranchesProvider).value ?? const [];
+    final shop = ref.watch(goodsBranchProvider) ?? ref.watch(defaultShopProvider).value;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.dark,
@@ -203,12 +232,19 @@ class _GoodsScreenState extends ConsumerState<GoodsScreen> {
               countOf: c == null ? null : (s) => base.where(s.has).length,
               shadow: _shadow,
               onScan: _scan,
-              onNew: _add,
+              onNew: perms.can(Quyen.themSanPham) ? _add : null,
+              branch: branches.length > 1 ? branchLabel(shop, branches) : null,
+              onBranch: () => _pickBranch(branches, shop),
+              showOut: c?.stockKnown ?? true,
               onFilter: c == null ? null : () => _openFilter(c, serverIds),
               onStatus: (s) => _set(f.copyWith(status: s)),
             ),
             Expanded(
-              child: RefreshIndicator(color: OrderColors.primary, onRefresh: _refresh, child: _body(f, cat, base)),
+              child: RefreshIndicator(
+                color: OrderColors.primary,
+                onRefresh: _refresh,
+                child: _body(f, cat, base, perms),
+              ),
             ),
           ],
         ),
@@ -216,7 +252,7 @@ class _GoodsScreenState extends ConsumerState<GoodsScreen> {
     );
   }
 
-  Widget _body(GoodsFilter f, AsyncValue<GoodsCatalog> cat, List<GoodsItem> base) {
+  Widget _body(GoodsFilter f, AsyncValue<GoodsCatalog> cat, List<GoodsItem> base, Perms perms) {
     Widget scroll(List<Widget> children) => ListView(
       controller: _scroll,
       physics: const AlwaysScrollableScrollPhysics(),
@@ -287,21 +323,44 @@ class _GoodsScreenState extends ConsumerState<GoodsScreen> {
       itemBuilder: (_, i) {
         if (i == 0) return meta;
         if (i == rows.length + 1) {
+          final c = cat.value!;
           return Padding(
-            padding: const EdgeInsets.fromLTRB(0, 16, 0, 6),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 6),
             child: Center(
-              child: Text(
-                'Đã hiện hết ${rows.length} sản phẩm',
-                style: const TextStyle(color: OrderColors.faint, fontSize: 12),
-              ),
+              child: c.loadError != null
+                  ? TextButton(
+                      key: const Key('goods_load_retry'),
+                      onPressed: _refresh,
+                      child: Text('Chưa tải hết: ${c.loadError} — chạm để tải lại', textAlign: TextAlign.center),
+                    )
+                  : !c.complete
+                  ? Row(
+                      key: const Key('goods_loading_more'),
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: OrderColors.primary),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Đang tải thêm… ${dot(c.items.length)}/${dot(c.total)} sản phẩm',
+                          style: const TextStyle(color: OrderColors.faint, fontSize: 12),
+                        ),
+                      ],
+                    )
+                  : Text(
+                      'Đã hiện hết ${rows.length} sản phẩm',
+                      style: const TextStyle(color: OrderColors.faint, fontSize: 12),
+                    ),
             ),
           );
         }
         final it = rows[i - 1];
-        final row = SwipeRow(
-          key: ValueKey('swipe_${it.id}'),
-          onTap: () => _open(it),
-          actions: [
+        final low = cat.value!.lowStock;
+        final actions = [
+          if (perms.can(Quyen.suaSanPham))
             SwipeAction(
               key: Key('swipe_edit_${it.id}'),
               label: 'Sửa',
@@ -309,6 +368,7 @@ class _GoodsScreenState extends ConsumerState<GoodsScreen> {
               color: OrderColors.primary,
               onTap: () => _editItem(it),
             ),
+          if (perms.can(Quyen.xoaSanPham))
             SwipeAction(
               key: Key('swipe_delete_${it.id}'),
               label: 'Xoá',
@@ -316,9 +376,16 @@ class _GoodsScreenState extends ConsumerState<GoodsScreen> {
               color: const Color(0xFFD93025),
               onTap: () => _deleteItem(it),
             ),
-          ],
-          builder: (tap) => GoodsRow(key: Key('goods_${it.id}'), item: it, onTap: tap),
-        );
+        ];
+        // Không có quyền sửa / xoá thì dòng không vuốt được.
+        final row = actions.isEmpty
+            ? GoodsRow(key: Key('goods_${it.id}'), item: it, low: low, onTap: () => _open(it))
+            : SwipeRow(
+                key: ValueKey('swipe_${it.id}'),
+                onTap: () => _open(it),
+                actions: actions,
+                builder: (tap) => GoodsRow(key: Key('goods_${it.id}'), item: it, low: low, onTap: tap),
+              );
         return i == 1 ? row : Column(children: [const GoodsDivider(), row]);
       },
     );
@@ -338,8 +405,17 @@ class _Header extends StatelessWidget {
     required this.onNew,
     required this.onFilter,
     required this.onStatus,
+    this.branch,
+    this.onBranch,
+    this.showOut = true,
   });
 
+  /// Tên chi nhánh đang xem (null = cửa hàng một chi nhánh, không hiện dòng chọn).
+  final String? branch;
+  final VoidCallback? onBranch;
+
+  /// Có số tồn thì mới có chip "Hết hàng".
+  final bool showOut;
   final bool shadow;
   final TextEditingController search;
   final ValueChanged<String> onSearch;
@@ -348,7 +424,9 @@ class _Header extends StatelessWidget {
   final GoodsStatus status;
   final int Function(GoodsStatus)? countOf;
   final VoidCallback onScan;
-  final VoidCallback onNew;
+
+  /// null = không có quyền thêm sản phẩm (ẩn nút +).
+  final VoidCallback? onNew;
   final VoidCallback? onFilter;
   final ValueChanged<GoodsStatus> onStatus;
 
@@ -375,20 +453,50 @@ class _Header extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(16, 0, 12, 0),
               child: Row(
                 children: [
-                  const Expanded(
-                    child: Text(
-                      'Hàng hoá',
-                      style: TextStyle(
-                        color: OrderColors.ink,
-                        fontSize: 21,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: -.4,
-                      ),
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Hàng hoá',
+                          style: TextStyle(
+                            color: OrderColors.ink,
+                            fontSize: 21,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -.4,
+                          ),
+                        ),
+                        if (branch != null)
+                          GestureDetector(
+                            key: const Key('goods_branch'),
+                            onTap: onBranch,
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const AppIcon(AppIcons.store, size: 14, color: OrderColors.muted),
+                                const SizedBox(width: 3),
+                                Flexible(
+                                  child: Text(
+                                    branch!,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(color: OrderColors.muted, fontSize: 12.5),
+                                  ),
+                                ),
+                                const SizedBox(width: 3),
+                                const AppIcon(AppIcons.down, size: 14, color: OrderColors.muted),
+                              ],
+                            ),
+                          ),
+                      ],
                     ),
                   ),
                   _IconBtn(icon: AppIcons.scan, tooltip: 'Quét mã vạch', onTap: onScan),
-                  const SizedBox(width: 8),
-                  _IconBtn(icon: AppIcons.plus, tooltip: 'Thêm hàng hoá', onTap: onNew, primary: true),
+                  if (onNew != null) ...[
+                    const SizedBox(width: 8),
+                    _IconBtn(icon: AppIcons.plus, tooltip: 'Thêm hàng hoá', onTap: onNew!, primary: true),
+                  ],
                 ],
               ),
             ),
@@ -491,16 +599,17 @@ class _Header extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             child: Row(
               children: [
-                for (final s in GoodsStatus.values) ...[
-                  if (s != GoodsStatus.all) const SizedBox(width: 6),
-                  GoodsChip(
-                    key: Key('goods_st_${s.name}'),
-                    label: s.label,
-                    count: countOf?.call(s),
-                    on: s == status,
-                    onTap: () => onStatus(s),
-                  ),
-                ],
+                for (final s in GoodsStatus.values)
+                  if (s != GoodsStatus.out || showOut) ...[
+                    if (s != GoodsStatus.all) const SizedBox(width: 6),
+                    GoodsChip(
+                      key: Key('goods_st_${s.name}'),
+                      label: s.label,
+                      count: countOf?.call(s),
+                      on: s == status,
+                      onTap: () => onStatus(s),
+                    ),
+                  ],
               ],
             ),
           ),

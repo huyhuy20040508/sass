@@ -13,7 +13,10 @@ import 'package:selliotech/core/net/online_provider.dart';
 import 'package:selliotech/core/storage/session_store.dart';
 import 'package:selliotech/features/admin/dashboard/dashboard_data.dart' show clockProvider;
 import 'package:selliotech/features/admin/goods/goods_data.dart';
+import 'package:selliotech/features/admin/goods/goods_screen.dart';
 import 'package:selliotech/features/admin/goods/goods_widgets.dart';
+import 'package:selliotech/features/admin/goods/label_print.dart';
+import 'package:pdf/pdf.dart';
 import 'package:selliotech/features/admin/goods/product_form_screen.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:selliotech/features/admin/goods/scanner_screen.dart';
@@ -51,7 +54,37 @@ bool _is(String path, String want) => path == want || path.endsWith('/api/v1$wan
 
 /// API giả cho màn Hàng hoá: /products, /admin/inventory, /categories, chi tiết, tồn chi nhánh.
 class _Api implements HttpClientAdapter {
-  _Api({this.productsCode = 200, this.autoSku = true}) {
+  _Api({
+    this.productsCode = 200,
+    this.autoSku = true,
+    this.perms,
+    this.lowStock,
+    this.inventoryCode = 200,
+    this.extraProducts = 0,
+    this.laterPageDelay = Duration.zero,
+  }) {
+    // Hàng giả thêm để thử tải dần nhiều trang.
+    for (var i = 0; i < extraProducts; i++) {
+      final id = 1000 + i;
+      (s['products'] as List).add({
+        'id': id,
+        'name': 'Hàng thêm $i',
+        'sku': 'X$id',
+        'status': 'active',
+        'is_active': true,
+        'base_price': 1000,
+        'created_at': '2026-01-01T00:00:00+07:00',
+        'category_id': 3,
+      });
+      (s['inventory'] as List).add({
+        'variant_id': id * 10,
+        'product_id': id,
+        'sku': 'X$id',
+        'stock_quantity': 50,
+        'price': 1000,
+        'is_active': true,
+      });
+    }
     // Một mã vạch chỉ có ở phiên bản — tìm phải qua API mới thấy.
     (details['4']!['variants'] as List).first['barcode'] = '8930000000017';
     // Iphone 16: phiên bản mang tổ hợp thuộc tính như API thật (ảnh chụp thiết kế đã lược bỏ).
@@ -76,6 +109,17 @@ class _Api implements HttpClientAdapter {
   }
 
   final int productsCode;
+
+  /// Quyền trả về ở /admin/quyen-cua-toi (null = không đọc được → coi như đủ quyền).
+  final List<String>? perms;
+
+  /// low_stock_threshold trong cài đặt (null = không đọc được).
+  final int? lowStock;
+  final int inventoryCode;
+  final int extraProducts;
+
+  /// Trang 2 trở đi trả chậm — để thấy danh sách hiện trang đầu trước.
+  final Duration laterPageDelay;
 
   /// Quy tắc mã hàng hoá đang bật (SKU trống → API tự sinh).
   final bool autoSku;
@@ -106,6 +150,24 @@ class _Api implements HttpClientAdapter {
     calls.add(o);
     final q = o.queryParameters;
     final p = o.path;
+    if ('${q['page'] ?? '1'}' != '1' && laterPageDelay > Duration.zero) await Future<void>.delayed(laterPageDelay);
+    if (p.endsWith('/admin/orders/pos/mau-in/tem')) {
+      return _ok({
+        'ma': 'tem',
+        'settings': {'kho_tem': '40x30', 'cot': 3, 'co': 9},
+        'options': {'ten': true, 'gia': true, 'donvitien': true, 'dvt': false, 'bienthe': true, 'nguoc': false},
+      });
+    }
+    if (p.endsWith('/admin/quyen-cua-toi')) {
+      if (perms == null) return _json(403, {'success': false, 'message': 'Không có quyền'});
+      return _ok({'toan_quyen': false, 'quyen': perms});
+    }
+    if (p.endsWith('/admin/settings')) {
+      if (lowStock == null) return _json(403, {'success': false, 'message': 'Không có quyền'});
+      return _ok({
+        'values': {'low_stock_threshold': '$lowStock'},
+      });
+    }
     if (p.endsWith('/auth/me')) {
       return _ok({'id': 1, 'username': 'admin', 'full_name': 'Quản trị viên', 'access_areas': 'quan_ly'});
     }
@@ -131,7 +193,10 @@ class _Api implements HttpClientAdapter {
           if (hit(x)) {...x}..remove('variants'),
       ], q);
     }
-    if (p.endsWith('/admin/inventory')) return _page(s['inventory'] as List, q);
+    if (p.endsWith('/admin/inventory')) {
+      if (inventoryCode != 200) return _json(inventoryCode, {'success': false, 'message': 'Không có quyền'});
+      return _page(s['inventory'] as List, q);
+    }
     if (p.endsWith('/admin/don-vi-tinh')) {
       return _ok([
         {'id': 1, 'name': 'Cái', 'is_active': true},
@@ -387,6 +452,7 @@ Future<_Api> _open(
         clockProvider.overrideWithValue(() => DateTime(2026, 10, 18, 9)),
         // Test không có camera — màn quét chỉ dùng ô nhập mã tay.
         scannerCameraProvider.overrideWithValue(false),
+        labelPrinterProvider.overrideWithValue(_printer),
         pickImageProvider.overrideWithValue((_) async => XFile.fromData(Uint8List.fromList([1, 2, 3]), name: 'a.jpg')),
         pickImagesProvider.overrideWithValue(
           (limit) async => [
@@ -437,6 +503,23 @@ Future<void> _fillMinimal(WidgetTester t, String name, {required String price}) 
   await t.enterText(find.byKey(const Key('form_price')), price);
   await t.pump();
 }
+
+/// Máy in giả: ghi lại lệnh in / chia sẻ; xem trước thay bằng khung trống (test không có pdf.js / raster).
+class _FakePrinter extends LabelPrinter {
+  final printed = <(Uint8List, PdfPageFormat)>[];
+  final shared = <Uint8List>[];
+
+  @override
+  Future<void> print(Uint8List pdf, String name, PdfPageFormat format) async => printed.add((pdf, format));
+
+  @override
+  Future<void> share(Uint8List pdf, String name) async => shared.add(pdf);
+
+  @override
+  Widget preview(Future<Uint8List> Function() build, String key) => SizedBox(key: Key('label_preview_$key'));
+}
+
+var _printer = _FakePrinter();
 
 /// Danh sách cuộn của form (dưới nó còn danh sách chi tiết, dải ảnh ngang).
 Finder get _formScroll => find.descendant(of: find.byType(ProductFormScreen), matching: find.byType(Scrollable)).first;
@@ -493,7 +576,7 @@ void main() {
     final low = GoodsItem(c.byId(4)!.j, [
       StockRow({'product_id': 4, 'variant_id': 3, 'sku': 'x', 'stock_quantity': 3, 'price': 1}),
     ]);
-    expect(stockPill(low).$3, 'Sắp hết · 3');
+    expect(stockPill(low)!.$3, 'Sắp hết · 3');
     expect(GoodsStatus.out.has(c.byId(8)!), isFalse, reason: 'ngừng bán thì không tính vào hết hàng');
   });
 
@@ -1231,6 +1314,150 @@ void main() {
     expect(find.text('Đã xoá iphone 15'), findsOneWidget);
     expect(_names(t), isNot(contains('iphone 15')));
     expect(_chipText(t, GoodsStatus.all), 'Tất cả 4');
+  });
+
+  testWidgets(
+    'quyền chỉ xem: ẩn nút Thêm, không vuốt Sửa/Xoá, chi tiết không có Sửa / sửa nhanh / Sao chép / Ngừng bán',
+    (t) async {
+      final api = await _open(t, api: _Api(perms: ['san-pham.xem']));
+      expect(find.byTooltip('Thêm hàng hoá'), findsNothing);
+      await t.drag(find.byKey(const Key('goods_4')), const Offset(-220, 0));
+      await _settle(t, 4);
+      expect(find.byKey(const Key('swipe_edit_4')), findsNothing);
+      await t.tap(find.byKey(const Key('goods_4')));
+      await _settle(t);
+      expect(find.text('Chi tiết sản phẩm'), findsOneWidget);
+      expect(find.byKey(const Key('product_edit')), findsNothing);
+      expect(find.byKey(const Key('product_duplicate')), findsNothing);
+      expect(find.byKey(const Key('product_toggle')), findsNothing);
+      await t.tap(find.byKey(const Key('edit_price')));
+      await _settle(t, 4);
+      expect(find.text('Sửa giá bán'), findsNothing, reason: 'không có quyền sửa thì ô giá không mở');
+      expect(api.calls.where((c) => c.method != 'GET'), isEmpty);
+    },
+  );
+
+  testWidgets('quyền sửa mà không có quyền xoá: vuốt chỉ có Sửa; form sửa không có nút Xoá', (t) async {
+    await _open(t, api: _Api(perms: ['san-pham.xem', 'san-pham.sua']));
+    await t.drag(find.byKey(const Key('goods_4')), const Offset(-220, 0));
+    await _settle(t, 4);
+    expect(find.byKey(const Key('swipe_edit_4')).hitTestable(), findsOneWidget);
+    expect(find.byKey(const Key('swipe_delete_4')), findsNothing);
+    await t.tap(find.byKey(const Key('swipe_edit_4')));
+    await _settle(t, 12);
+    expect(find.text('Lưu thay đổi'), findsOneWidget);
+    expect(find.byKey(const Key('form_delete')), findsNothing);
+    expect(find.byKey(const Key('form_image')), findsNothing, reason: 'tải ảnh cần quyền thêm sản phẩm');
+  });
+
+  testWidgets('mốc "sắp hết" theo cài đặt cửa hàng', (t) async {
+    await _open(t, api: _Api(lowStock: 10));
+    expect(_pill(t, 4), 'Sắp hết · 6', reason: 'tồn 6 ≤ mốc 10');
+  });
+
+  testWidgets('đổi chi nhánh: cả cửa hàng (không gửi X-Chi-Nhanh, shop_id=0) / đúng chi nhánh 5', (t) async {
+    final api = await _open(t);
+    Finder label(String t) => find.descendant(of: find.byKey(const Key('goods_branch')), matching: find.text(t));
+    expect(label('Cửa hàng chính'), findsOneWidget, reason: 'mặc định chi nhánh trụ sở');
+    await t.tap(find.byKey(const Key('goods_branch')));
+    await _settle(t, 5);
+    api.calls.clear();
+    await t.tap(find.byKey(const Key('goods_branch_0')));
+    await _settle(t);
+    expect(label('Tất cả chi nhánh'), findsOneWidget);
+    final inv = api.hit('/admin/inventory').first;
+    expect(inv.headers.containsKey('X-Chi-Nhanh'), isFalse, reason: 'không gửi header = tồn cả cửa hàng');
+    expect(api.hit('/products').first.queryParameters['shop_id'], '0');
+
+    await t.tap(find.byKey(const Key('goods_branch')));
+    await _settle(t, 5);
+    api.calls.clear();
+    await t.tap(find.byKey(const Key('goods_branch_5')));
+    await _settle(t);
+    expect(label('Chi nhánh 2'), findsOneWidget);
+    expect(api.hit('/admin/inventory').first.headers['X-Chi-Nhanh'], '5');
+    expect(api.hit('/products').first.queryParameters['shop_id'], '5');
+  });
+
+  testWidgets('tải dần: trang đầu hiện ngay kèm "Đang tải thêm", các trang sau nối vào', (t) async {
+    final api = await _open(t, api: _Api(extraProducts: 230, laterPageDelay: const Duration(seconds: 3)));
+    expect(find.byKey(const Key('goods_loading_more')), findsNothing, reason: 'chưa cuộn tới cuối');
+    expect(_chipText(t, GoodsStatus.all), 'Tất cả 100', reason: 'mới có trang đầu');
+    final list = find.descendant(of: find.byType(GoodsScreen), matching: find.byType(Scrollable)).last;
+    await t.scrollUntilVisible(find.byKey(const Key('goods_loading_more')), 2000, scrollable: list);
+    expect(find.text('Đang tải thêm… 100/235 sản phẩm'), findsOneWidget);
+    await t.pump(const Duration(seconds: 4));
+    await _settle(t, 5);
+    expect(_chipText(t, GoodsStatus.all), 'Tất cả 235');
+    expect(api.hit('/products').map((c) => c.queryParameters['page']).toSet(), {'1', '2', '3'});
+    await t.scrollUntilVisible(find.text('Đã hiện hết 235 sản phẩm'), 2000, scrollable: list);
+  });
+
+  testWidgets('thiếu quyền xem tồn: vẫn có danh sách, không chip "Hết hàng", không viên tồn sai', (t) async {
+    await _open(t, api: _Api(inventoryCode: 403));
+    expect(_names(t), hasLength(5));
+    expect(_chip(GoodsStatus.out), findsNothing);
+    expect(
+      find.descendant(of: find.byKey(const Key('goods_7')), matching: find.byKey(const Key('stock_pill'))),
+      findsNothing,
+    );
+    expect(_pill(t, 8), 'Ngừng bán');
+  });
+
+  test('PDF tem: mỗi trang một hàng tem, đủ số tem', () async {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    final items = [
+      const LabelItem(name: 'Iphone 16', variant: '512GB', code: '8930000000017', price: 28000000, qty: 4),
+      const LabelItem(name: 'Cáp sạc', code: 'HH000003', price: 150000),
+    ];
+    final pdf = await buildLabelsPdf(items, const LabelSettings(cols: 3), shop: 'Cửa hàng chính');
+    expect(utf8.decode(pdf.sublist(0, 5), allowMalformed: true), '%PDF-');
+    expect(
+      RegExp(r'/Type\s*/Page\b').allMatches(latin1.decode(pdf)).length,
+      2,
+      reason: '5 tem, 3 tem một hàng → 2 hàng',
+    );
+    expect(labelCodeOk('HH000001-24-THANG'), isTrue);
+    expect(labelCodeOk('Đen-128'), isFalse, reason: 'Code128 không nhận chữ có dấu');
+  });
+
+  testWidgets('in tem mã vạch: theo mẫu tem cửa hàng, chọn số tem, In gửi PDF đúng khổ; Chia sẻ PDF', (t) async {
+    _printer = _FakePrinter();
+    await _open(t);
+    await t.tap(find.byKey(const Key('goods_2')));
+    await _settle(t);
+    await t.tap(find.byKey(const Key('product_labels')));
+    await _settle(t, 10);
+    expect(find.text('In tem mã vạch'), findsOneWidget);
+    expect(find.text('512GB / 8GB'), findsOneWidget);
+    expect(find.text('HH000001-24-THANG-MOI-100%-(NGUYEN-SEAL)-IOS-8GB-512GB · 28.000.000đ'), findsOneWidget);
+    expect(
+      t.widget<GoodsChip>(find.byKey(const Key('label_size_40x30'))).on,
+      isTrue,
+      reason: 'khổ tem theo mẫu tem của cửa hàng',
+    );
+    expect(t.widget<GoodsChip>(find.byKey(const Key('label_cols_3'))).on, isTrue);
+    expect(find.text('In 1 tem'), findsOneWidget);
+    expect(find.byKey(const Key('label_long_warn')), findsOneWidget, reason: 'chưa có mã vạch, SKU 54 ký tự');
+    await t.tap(find.descendant(of: find.byKey(const Key('label_qty_0')), matching: find.byTooltip('Thêm')));
+    await t.pump();
+    expect(find.text('In 2 tem'), findsOneWidget);
+    await t.tap(find.byKey(const Key('label_size_50x30')));
+    await t.tap(find.byKey(const Key('label_cols_1')));
+    await t.pump();
+    await t.tap(find.byKey(const Key('label_print')));
+    await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 500)));
+    await _settle(t, 5);
+    expect(_printer.printed, hasLength(1));
+    final (pdf, format) = _printer.printed.single;
+    expect(format.width, closeTo(50 * PdfPageFormat.mm, .01));
+    expect(format.height, closeTo(30 * PdfPageFormat.mm, .01));
+    expect(RegExp(r'/Type\s*/Page\b').allMatches(latin1.decode(pdf)).length, 2, reason: '2 tem, 1 tem một hàng');
+
+    await t.tap(find.byKey(const Key('label_share')));
+    await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 500)));
+    await _settle(t, 5);
+    expect(_printer.shared, hasLength(1));
   });
 
   testWidgets('lỗi tải: báo lỗi + Thử lại', (t) async {
