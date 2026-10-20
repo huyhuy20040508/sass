@@ -10,9 +10,11 @@ import '../../../core/ui/app_icon.dart';
 import '../../../core/format/vn_number.dart';
 import '../../auth/permissions.dart';
 import '../../workspace/workspace.dart' show Branch;
+import '../../workspace/workspace_widgets.dart' show SheetButton;
 import '../dashboard/dashboard_data.dart' show branchLabel, dashBranchesProvider, defaultShopProvider;
 import '../shell/shell_widgets.dart';
 import 'goods_data.dart';
+import 'goods_reorder_screen.dart';
 import 'goods_widgets.dart';
 import '../../auth/auth_controller.dart';
 import 'product_detail_screen.dart';
@@ -34,6 +36,9 @@ class _GoodsScreenState extends ConsumerState<GoodsScreen> {
   final _search = TextEditingController();
   Timer? _debounce;
   bool _shadow = false;
+
+  /// Mặt hàng đang chọn (nhấn giữ một dòng để bắt đầu) — rỗng là không ở chế độ chọn.
+  final _picked = <int>{};
 
   @override
   void initState() {
@@ -118,6 +123,62 @@ class _GoodsScreenState extends ConsumerState<GoodsScreen> {
     }
   }
 
+  void _toggle(int id) => setState(() => _picked.contains(id) ? _picked.remove(id) : _picked.add(id));
+
+  Future<void> _bulkDelete(List<GoodsItem> picked) async {
+    final withStock = picked.where((it) => it.stockKnown && it.stock > 0).length;
+    final yes = await showDashSheet<bool>(
+      context,
+      title: 'Xoá ${picked.length} sản phẩm?',
+      subtitle: [
+        'Các sản phẩm đã chọn sẽ không còn ở danh sách, quầy và web bán hàng. Đơn và sổ kho cũ vẫn giữ.',
+        if (withStock > 0) '$withStock sản phẩm còn tồn ở chi nhánh này.',
+      ].join(' '),
+      body: (ctx) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SheetButton(
+            key: const Key('bulk_delete_yes'),
+            label: 'Xoá ${picked.length} sản phẩm',
+            icon: AppIcons.trash,
+            danger: true,
+            onTap: () => Navigator.of(ctx).pop(true),
+          ),
+          SheetButton(label: 'Thôi', onTap: () => Navigator.of(ctx).pop(false)),
+        ],
+      ),
+    );
+    if (yes != true || !mounted) return;
+    try {
+      final n = await bulkDeleteProducts(ref, [for (final it in picked) it.id]);
+      if (!mounted) return;
+      setState(_picked.clear);
+      showDashToast(context, 'Đã xoá $n sản phẩm');
+    } on ApiException catch (e) {
+      if (mounted) showDashToast(context, e.message);
+    }
+  }
+
+  Future<void> _reorder() async {
+    final c = ref.read(goodsCatalogProvider).value;
+    if (c == null) return;
+    if (!c.complete) {
+      showDashToast(context, 'Đang tải hết danh sách hàng — thử lại sau giây lát');
+      return;
+    }
+    var saved = false;
+    await Navigator.of(context, rootNavigator: true).push(
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            GoodsReorderScreen(items: [...c.items]..sort(GoodsSort.manualOrder), onSaved: () => saved = true),
+      ),
+    );
+    if (!mounted) return;
+    // Về xem ngay thứ tự vừa xếp.
+    if (_f.sort != GoodsSort.manual) _set(_f.copyWith(sort: GoodsSort.manual));
+    if (saved) ref.invalidate(goodsCatalogProvider);
+  }
+
   Future<void> _pickBranch(List<Branch> branches, int? cur) async {
     final id = await showDashSheet<int>(
       context,
@@ -166,10 +227,12 @@ class _GoodsScreenState extends ConsumerState<GoodsScreen> {
   ).push(MaterialPageRoute<void>(builder: (_) => ProductDetailScreen(item: it)));
 
   Future<void> _pickSort() async {
-    final s = await showDashSheet<GoodsSort>(
+    final canMove = permsOf(ref).can(Quyen.suaSanPham);
+    final s = await showDashSheet<Object>(
       context,
       title: 'Sắp xếp',
       body: (ctx) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           for (final o in GoodsSort.values)
             SheetOption(
@@ -178,10 +241,20 @@ class _GoodsScreenState extends ConsumerState<GoodsScreen> {
               selected: _f.sort == o,
               onTap: () => Navigator.of(ctx).pop(o),
             ),
+          if (canMove) ...[
+            const SizedBox(height: 8),
+            SheetButton(
+              key: const Key('goods_reorder'),
+              label: 'Đổi thứ tự hiển thị',
+              icon: AppIcons.sort,
+              onTap: () => Navigator.of(ctx).pop('reorder'),
+            ),
+          ],
         ],
       ),
     );
-    if (s != null) _set(_f.copyWith(sort: s));
+    if (s is GoodsSort) _set(_f.copyWith(sort: s));
+    if (s == 'reorder') await _reorder();
   }
 
   Future<void> _openFilter(GoodsCatalog c, Set<int>? serverIds) async {
@@ -213,46 +286,93 @@ class _GoodsScreenState extends ConsumerState<GoodsScreen> {
     final perms = permsOf(ref);
     final branches = ref.watch(dashBranchesProvider).value ?? const [];
     final shop = ref.watch(goodsBranchProvider) ?? ref.watch(defaultShopProvider).value;
+    final rows = [...base.where(f.status.has)]..sort(f.sort.compare);
+    // Chỉ tính những dòng còn đang hiện: đổi lọc rồi mà vẫn xoá cả hàng đã khuất là xoá mù.
+    final picked = [
+      for (final it in rows)
+        if (_picked.contains(it.id)) it,
+    ];
+    final selecting = _picked.isNotEmpty;
 
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.dark,
-      child: ColoredBox(
-        color: OrderColors.page,
-        child: Column(
-          children: [
-            _Header(
-              search: _search,
-              onSearch: _onSearch,
-              onClear: () {
-                _search.clear();
-                _onSearch('');
-              },
-              catCount: f.cats.length,
-              status: f.status,
-              countOf: c == null ? null : (s) => base.where(s.has).length,
-              shadow: _shadow,
-              onScan: _scan,
-              onNew: perms.can(Quyen.themSanPham) ? _add : null,
-              branch: branches.length > 1 ? branchLabel(shop, branches) : null,
-              onBranch: () => _pickBranch(branches, shop),
-              showOut: c?.stockKnown ?? true,
-              onFilter: c == null ? null : () => _openFilter(c, serverIds),
-              onStatus: (s) => _set(f.copyWith(status: s)),
-            ),
-            Expanded(
-              child: RefreshIndicator(
-                color: OrderColors.primary,
-                onRefresh: _refresh,
-                child: _body(f, cat, base, perms),
+    return PopScope(
+      canPop: !selecting,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) setState(_picked.clear);
+      },
+      child: AnnotatedRegion<SystemUiOverlayStyle>(
+        value: SystemUiOverlayStyle.dark,
+        child: ColoredBox(
+          color: OrderColors.page,
+          child: Column(
+            children: [
+              _Header(
+                selectBar: selecting
+                    ? _SelectBar(
+                        count: picked.length,
+                        all: picked.length == rows.length,
+                        onClose: () => setState(_picked.clear),
+                        onAll: () => setState(() {
+                          if (picked.length == rows.length) {
+                            _picked.clear();
+                          } else {
+                            _picked.addAll(rows.map((it) => it.id));
+                          }
+                        }),
+                      )
+                    : null,
+                search: _search,
+                onSearch: _onSearch,
+                onClear: () {
+                  _search.clear();
+                  _onSearch('');
+                },
+                catCount: f.cats.length,
+                status: f.status,
+                countOf: c == null ? null : (s) => base.where(s.has).length,
+                shadow: _shadow,
+                onScan: _scan,
+                onNew: perms.can(Quyen.themSanPham) ? _add : null,
+                branch: branches.length > 1 ? branchLabel(shop, branches) : null,
+                onBranch: () => _pickBranch(branches, shop),
+                showOut: c?.stockKnown ?? true,
+                onFilter: c == null ? null : () => _openFilter(c, serverIds),
+                onStatus: (s) => _set(f.copyWith(status: s)),
               ),
-            ),
-          ],
+              Expanded(
+                child: RefreshIndicator(
+                  color: OrderColors.primary,
+                  onRefresh: _refresh,
+                  child: _body(f, cat, rows, perms),
+                ),
+              ),
+              if (selecting)
+                Container(
+                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    boxShadow: [BoxShadow(color: OrderColors.line, offset: Offset(0, -1))],
+                  ),
+                  child: FilledButton.icon(
+                    key: const Key('goods_bulk_delete'),
+                    onPressed: picked.isEmpty ? null : () => _bulkDelete(picked),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFFD93025),
+                      minimumSize: const Size.fromHeight(46),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      textStyle: const TextStyle(fontFamily: appFont, fontSize: 15, fontWeight: FontWeight.w700),
+                    ),
+                    icon: const AppIcon(AppIcons.trash, size: 19, color: Colors.white),
+                    label: Text('Xoá ${picked.length} sản phẩm'),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _body(GoodsFilter f, AsyncValue<GoodsCatalog> cat, List<GoodsItem> base, Perms perms) {
+  Widget _body(GoodsFilter f, AsyncValue<GoodsCatalog> cat, List<GoodsItem> rows, Perms perms) {
     Widget scroll(List<Widget> children) => ListView(
       controller: _scroll,
       physics: const AlwaysScrollableScrollPhysics(),
@@ -276,7 +396,6 @@ class _GoodsScreenState extends ConsumerState<GoodsScreen> {
       return scroll(const [SizedBox(height: 44), GoodsSkeleton()]);
     }
 
-    final rows = [...base.where(f.status.has)]..sort(f.sort.compare);
     final meta = Padding(
       padding: const EdgeInsets.fromLTRB(16, 10, 12, 6),
       child: Row(
@@ -359,6 +478,18 @@ class _GoodsScreenState extends ConsumerState<GoodsScreen> {
         }
         final it = rows[i - 1];
         final low = cat.value!.lowStock;
+        if (_picked.isNotEmpty) {
+          final row = GoodsRow(
+            key: Key('goods_${it.id}'),
+            item: it,
+            low: low,
+            selected: _picked.contains(it.id),
+            onTap: () => _toggle(it.id),
+          );
+          return i == 1 ? row : Column(children: [const GoodsDivider(), row]);
+        }
+        // Nhấn giữ để chọn nhiều — chỉ để xoá hàng loạt, nên cần quyền xoá.
+        final hold = perms.can(Quyen.xoaSanPham) ? () => _toggle(it.id) : null;
         final actions = [
           if (perms.can(Quyen.suaSanPham))
             SwipeAction(
@@ -379,12 +510,13 @@ class _GoodsScreenState extends ConsumerState<GoodsScreen> {
         ];
         // Không có quyền sửa / xoá thì dòng không vuốt được.
         final row = actions.isEmpty
-            ? GoodsRow(key: Key('goods_${it.id}'), item: it, low: low, onTap: () => _open(it))
+            ? GoodsRow(key: Key('goods_${it.id}'), item: it, low: low, onTap: () => _open(it), onLongPress: hold)
             : SwipeRow(
                 key: ValueKey('swipe_${it.id}'),
                 onTap: () => _open(it),
                 actions: actions,
-                builder: (tap) => GoodsRow(key: Key('goods_${it.id}'), item: it, low: low, onTap: tap),
+                builder: (tap) =>
+                    GoodsRow(key: Key('goods_${it.id}'), item: it, low: low, onTap: tap, onLongPress: hold),
               );
         return i == 1 ? row : Column(children: [const GoodsDivider(), row]);
       },
@@ -394,6 +526,7 @@ class _GoodsScreenState extends ConsumerState<GoodsScreen> {
 
 class _Header extends StatelessWidget {
   const _Header({
+    this.selectBar,
     required this.shadow,
     required this.search,
     required this.onSearch,
@@ -409,6 +542,9 @@ class _Header extends StatelessWidget {
     this.onBranch,
     this.showOut = true,
   });
+
+  /// Đang chọn nhiều: thay hàng tiêu đề bằng thanh "Đã chọn n".
+  final Widget? selectBar;
 
   /// Tên chi nhánh đang xem (null = cửa hàng một chi nhánh, không hiện dòng chọn).
   final String? branch;
@@ -449,57 +585,59 @@ class _Header extends StatelessWidget {
         children: [
           SizedBox(
             height: 48,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 12, 0),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Hàng hoá',
-                          style: TextStyle(
-                            color: OrderColors.ink,
-                            fontSize: 21,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: -.4,
-                          ),
-                        ),
-                        if (branch != null)
-                          GestureDetector(
-                            key: const Key('goods_branch'),
-                            onTap: onBranch,
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const AppIcon(AppIcons.store, size: 14, color: OrderColors.muted),
-                                const SizedBox(width: 3),
-                                Flexible(
-                                  child: Text(
-                                    branch!,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(color: OrderColors.muted, fontSize: 12.5),
-                                  ),
-                                ),
-                                const SizedBox(width: 3),
-                                const AppIcon(AppIcons.down, size: 14, color: OrderColors.muted),
-                              ],
+            child:
+                selectBar ??
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 12, 0),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Hàng hoá',
+                              style: TextStyle(
+                                color: OrderColors.ink,
+                                fontSize: 21,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: -.4,
+                              ),
                             ),
-                          ),
+                            if (branch != null)
+                              GestureDetector(
+                                key: const Key('goods_branch'),
+                                onTap: onBranch,
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const AppIcon(AppIcons.store, size: 14, color: OrderColors.muted),
+                                    const SizedBox(width: 3),
+                                    Flexible(
+                                      child: Text(
+                                        branch!,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(color: OrderColors.muted, fontSize: 12.5),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 3),
+                                    const AppIcon(AppIcons.down, size: 14, color: OrderColors.muted),
+                                  ],
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      _IconBtn(icon: AppIcons.scan, tooltip: 'Quét mã vạch', onTap: onScan),
+                      if (onNew != null) ...[
+                        const SizedBox(width: 8),
+                        _IconBtn(icon: AppIcons.plus, tooltip: 'Thêm hàng hoá', onTap: onNew!, primary: true),
                       ],
-                    ),
+                    ],
                   ),
-                  _IconBtn(icon: AppIcons.scan, tooltip: 'Quét mã vạch', onTap: onScan),
-                  if (onNew != null) ...[
-                    const SizedBox(width: 8),
-                    _IconBtn(icon: AppIcons.plus, tooltip: 'Thêm hàng hoá', onTap: onNew!, primary: true),
-                  ],
-                ],
-              ),
-            ),
+                ),
           ),
           Container(
             height: 40,
@@ -617,6 +755,46 @@ class _Header extends StatelessWidget {
       ),
     );
   }
+}
+
+class _SelectBar extends StatelessWidget {
+  const _SelectBar({required this.count, required this.all, required this.onClose, required this.onAll});
+
+  final int count;
+  final bool all;
+  final VoidCallback onClose;
+  final VoidCallback onAll;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(4, 0, 8, 0),
+    child: Row(
+      children: [
+        IconButton(
+          key: const Key('goods_select_close'),
+          tooltip: 'Bỏ chọn',
+          onPressed: onClose,
+          icon: const AppIcon(AppIcons.close, size: 22, color: OrderColors.ink),
+        ),
+        Expanded(
+          child: Text(
+            'Đã chọn $count',
+            key: const Key('goods_select_count'),
+            style: const TextStyle(color: OrderColors.ink, fontSize: 18, fontWeight: FontWeight.w700),
+          ),
+        ),
+        TextButton(
+          key: const Key('goods_select_all'),
+          onPressed: onAll,
+          style: TextButton.styleFrom(
+            foregroundColor: OrderColors.primaryInk,
+            textStyle: const TextStyle(fontFamily: appFont, fontSize: 14, fontWeight: FontWeight.w600),
+          ),
+          child: Text(all ? 'Bỏ chọn tất cả' : 'Chọn tất cả'),
+        ),
+      ],
+    ),
+  );
 }
 
 class _IconBtn extends StatelessWidget {

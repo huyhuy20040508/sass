@@ -62,6 +62,9 @@ class GoodsItem {
   bool get isSerial => j['is_serial'] == true;
   DateTime get createdAt => DateTime.tryParse('${j['created_at']}')?.toLocal() ?? DateTime(2000);
 
+  /// Thứ tự người bán tự xếp (số lớn nằm trên) — cũng là thứ tự hàng ở quầy.
+  int get sortNo => ((j['sort'] as num?) ?? 0).toInt();
+
   List<StockRow> get variants => [
     for (final r in stockRows)
       if (r.active) r,
@@ -332,10 +335,12 @@ enum GoodsStatus {
 
 enum GoodsSort {
   newest('Mới nhất'),
+  manual('Thứ tự tự xếp'),
   nameAsc('Tên A→Z'),
   nameDesc('Tên Z→A'),
   priceAsc('Giá tăng dần'),
   priceDesc('Giá giảm dần'),
+  groupAsc('Nhóm hàng A→Z'),
   bestSelling('Bán chạy');
 
   const GoodsSort(this.label);
@@ -344,12 +349,28 @@ enum GoodsSort {
 
   int compare(GoodsItem a, GoodsItem b) => switch (this) {
     newest => b.createdAt.compareTo(a.createdAt),
+    manual => manualOrder(a, b),
     nameAsc => compareVn(a.name, b.name),
     nameDesc => compareVn(b.name, a.name),
     priceAsc => a.minPrice.compareTo(b.minPrice),
     priceDesc => b.maxPrice.compareTo(a.maxPrice),
+    groupAsc => _byGroup(a, b),
     bestSelling => b.sold.compareTo(a.sold),
   };
+
+  /// Cùng ORDER BY mặc định của API: sort giảm dần, trùng thì id giảm dần.
+  static int manualOrder(GoodsItem a, GoodsItem b) {
+    final c = b.sortNo.compareTo(a.sortNo);
+    return c != 0 ? c : b.id.compareTo(a.id);
+  }
+
+  /// Hàng chưa có nhóm xuống cuối; trong một nhóm thì theo tên.
+  static int _byGroup(GoodsItem a, GoodsItem b) {
+    final ea = a.categoryName.isEmpty, eb = b.categoryName.isEmpty;
+    if (ea != eb) return ea ? 1 : -1;
+    final c = compareVn(a.categoryName, b.categoryName);
+    return c != 0 ? c : compareVn(a.name, b.name);
+  }
 }
 
 class GoodsFilter {
@@ -507,6 +528,22 @@ Future<GoodsItem?> lookupCode(WidgetRef ref, String raw) async {
       .getPage('/products', query: {'all': 'true', 'slim': 'true', 'keyword': raw.trim(), 'page_size': '2'});
   return p.total == 1 ? c.byId(((p.data.first as Map)['id'] as num).toInt()) : null;
 }
+
+/// Xoá nhiều mặt hàng trong MỘT lượt gọi — API chạy một giao dịch: hoặc xoá hết, hoặc không xoá gì.
+/// Trả số mặt hàng đã xoá.
+Future<int> bulkDeleteProducts(WidgetRef ref, List<int> ids) async {
+  final d = await ref
+      .read(apiClientProvider)
+      .post<Map<String, dynamic>>('/admin/products/bulk-delete', body: {'ids': ids});
+  ref.invalidate(goodsCatalogProvider);
+  return ((d['deleted'] as num?) ?? ids.length).toInt();
+}
+
+/// Ghi lại thứ tự cho đúng những mặt hàng [ids] (phần tử đầu nằm trên). API hoán vị
+/// các số `sort` mà chính mấy dòng này đang giữ — nên chỉ cần gửi đoạn vừa đổi chỗ,
+/// mọi mặt hàng ngoài đoạn giữ nguyên vị trí.
+Future<void> reorderProducts(WidgetRef ref, List<int> ids) =>
+    ref.read(apiClientProvider).put<Object?>('/admin/products/sap-xep', body: {'ids': ids});
 
 /// Khai giá vốn cho một phiên bản (PUT /admin/inventory/cost) — không ghi sổ kho.
 Future<void> setVariantCost(WidgetRef ref, int productId, int variantId, num cost) async {

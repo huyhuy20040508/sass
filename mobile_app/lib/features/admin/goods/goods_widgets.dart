@@ -61,10 +61,21 @@ class GoodsImage extends StatelessWidget {
 
 /// Một dòng danh sách kiểu Sapo: ảnh · tên + SKU · nhóm + thẻ · giá + viên tồn.
 class GoodsRow extends StatelessWidget {
-  const GoodsRow({super.key, required this.item, required this.onTap, this.low = defaultLowStock});
+  const GoodsRow({
+    super.key,
+    required this.item,
+    required this.onTap,
+    this.low = defaultLowStock,
+    this.onLongPress,
+    this.selected,
+  });
 
   final GoodsItem item;
   final VoidCallback onTap;
+  final VoidCallback? onLongPress;
+
+  /// null = không ở chế độ chọn nhiều; có giá trị thì hiện ô tick đầu dòng.
+  final bool? selected;
 
   /// Mốc "sắp hết" của cửa hàng.
   final int low;
@@ -76,14 +87,31 @@ class GoodsRow extends StatelessWidget {
     final pill = stockPill(it, low: low, known: it.stockKnown);
     // Hàng ngừng bán: làm mờ ảnh + tên, giá và viên trạng thái vẫn rõ.
     final dim = it.active ? 1.0 : .55;
+    final on = selected ?? false;
     return Material(
-      color: Colors.white,
+      color: on ? OrderColors.primarySoft : Colors.white,
       child: InkWell(
         onTap: onTap,
+        onLongPress: onLongPress,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           child: Row(
             children: [
+              if (selected != null) ...[
+                Container(
+                  key: Key('goods_check_${it.id}'),
+                  width: 22,
+                  height: 22,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: on ? OrderColors.primary : Colors.white,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: on ? OrderColors.primary : const Color(0xFFC3CAD5), width: 1.6),
+                  ),
+                  child: on ? const AppIcon(AppIcons.check, size: 14, color: Colors.white) : null,
+                ),
+                const SizedBox(width: 12),
+              ],
               Opacity(
                 opacity: dim,
                 child: GoodsImage(url: it.thumb),
