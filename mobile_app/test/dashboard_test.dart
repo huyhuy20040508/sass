@@ -380,15 +380,32 @@ void main() {
     expect(bar.alertCount, greaterThan(0));
   });
 
-  testWidgets('ngăn Thêm: lưới chức năng; chạm chức năng chưa có thì báo', (t) async {
+  testWidgets('ngăn Thêm: chia module như Quản trị PC; mục có màn thì mở tab, chưa có thì báo', (t) async {
     await _open(t);
     await t.tap(find.text('Thêm'));
     await _settle(t);
     expect(find.text('Tất cả chức năng'), findsOneWidget);
-    expect(find.text('Nhà cung cấp'), findsOneWidget);
-    await t.tap(find.text('Báo cáo'));
+    for (final m in ['thong_ke', 'hang_hoa', 'kho', 'thu_chi', 'nhan_su', 'crm', 'bao_cao', 'cai_dat']) {
+      expect(find.byKey(Key('more_mod_$m')), findsOneWidget, reason: m);
+    }
+    // Đang ở Tổng quan nên module Thống kê mở sẵn; Kho thì chưa.
+    expect(find.text('Hoá đơn điện tử'), findsOneWidget);
+    expect(find.text('Nhà cung cấp'), findsNothing);
+
+    await t.tap(find.byKey(const Key('more_mod_kho')));
     await _settle(t);
-    expect(find.text('Báo cáo — màn chưa thiết kế'), findsOneWidget);
+    expect(find.text('Nhà cung cấp'), findsOneWidget);
+    expect(find.text('Điều chỉnh tồn kho'), findsOneWidget);
+    await t.tap(find.text('Nhà cung cấp'));
+    await _settle(t);
+    expect(find.text('Nhà cung cấp — màn chưa thiết kế'), findsOneWidget);
+
+    await t.tap(find.text('Thêm'));
+    await _settle(t);
+    await t.tap(find.text('Quản lý đơn hàng'));
+    await _settle(t);
+    expect(find.text('Tất cả chức năng'), findsNothing);
+    expect(t.widget<AdminTabBar>(find.byType(AdminTabBar)).current, AdminTab.orders);
   });
 
   testWidgets('ngăn tài khoản: sang khu Thu ngân; đăng xuất về màn đăng nhập', (t) async {
