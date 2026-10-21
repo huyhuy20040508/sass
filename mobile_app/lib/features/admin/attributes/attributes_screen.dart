@@ -17,18 +17,6 @@ import 'attributes_data.dart';
 
 const _ok = Color(0xFF0F7A3D), _okBg = Color(0xFFE9F7EF);
 
-enum _St {
-  all('Tất cả'),
-  on('Đang bật'),
-  off('Đã tắt');
-
-  const _St(this.label);
-
-  final String label;
-
-  bool has(Attr a) => this == all || (this == on) == a.active;
-}
-
 /// Thuộc tính theo design/html/thuoc-tinh-mobile.html (v2): cùng chức năng "Danh sách
 /// thuộc tính" của PC (bảng Mã · Tên · Chi tiết · Trạng thái + hộp có bảng giá trị).
 /// Nằm trong khung app, mở từ Thêm.
@@ -45,7 +33,7 @@ class _AttributesScreenState extends ConsumerState<AttributesScreen> {
   final _search = TextEditingController();
   Timer? _debounce;
   String _q = '';
-  _St _st = _St.all;
+  ActiveFilter _st = ActiveFilter.all;
   Set<int>? _sel;
 
   @override
@@ -265,7 +253,7 @@ class _AttributesScreenState extends ConsumerState<AttributesScreen> {
     if (res == null || !mounted) return;
     final (a, isNew) = res;
     // Thêm mà để tắt trong lúc đang lọc "Đang bật": về Tất cả kẻo tưởng không lưu được.
-    if (isNew && !a.active && _st == _St.on) setState(() => _st = _St.all);
+    if (isNew && !a.active && _st == ActiveFilter.on) setState(() => _st = ActiveFilter.all);
     _toast('${isNew ? 'Đã thêm' : 'Đã cập nhật'} thuộc tính "${a.name}" · ${a.values.length} giá trị');
   }
 
@@ -282,7 +270,7 @@ class _AttributesScreenState extends ConsumerState<AttributesScreen> {
           ];
     final rows = [
       for (final a in pool)
-        if (_st.has(a)) a,
+        if (_st.has(a.active)) a,
     ];
     final sel = _sel;
     final picked = b == null || sel == null ? const <Attr>[] : [for (final id in sel) ?b.byId(id)];
@@ -304,7 +292,11 @@ class _AttributesScreenState extends ConsumerState<AttributesScreen> {
           color: OrderColors.page,
           child: Column(
             children: [
-              _Header(
+              KitListHeader(
+                title: 'Thuộc tính',
+                keyPrefix: 'attr',
+                addTooltip: 'Thêm thuộc tính',
+                searchHint: 'Tìm thuộc tính, mã hoặc giá trị',
                 selecting: sel != null,
                 onSelect: rows.isNotEmpty && perms.can(Quyen.xoaThuocTinh)
                     ? () => setState(() => _sel = sel == null ? <int>{} : null)
@@ -317,7 +309,7 @@ class _AttributesScreenState extends ConsumerState<AttributesScreen> {
                   setState(() => _q = '');
                 },
                 st: _st,
-                counts: {for (final s in _St.values) s: pool.where(s.has).length},
+                counts: {for (final s in ActiveFilter.values) s: pool.where((a) => s.has(a.active)).length},
                 onSt: (s) => setState(() => _st = s),
               ),
               Expanded(
@@ -359,13 +351,13 @@ class _AttributesScreenState extends ConsumerState<AttributesScreen> {
                           icon: _q.isNotEmpty ? AppIcons.search : AppIcons.tag,
                           title: _q.isNotEmpty
                               ? 'Không có thuộc tính nào khớp “$_q”'
-                              : _st == _St.off
+                              : _st == ActiveFilter.off
                               ? 'Không có thuộc tính nào đang tắt'
                               : 'Chưa có thuộc tính nào',
                           text: _q.isNotEmpty
                               ? 'Thử từ khác, hoặc thêm thuộc tính mới.'
                               : 'Thuộc tính như Màu sắc, Size… dùng để tạo phiên bản sản phẩm.',
-                          action: _q.isEmpty && _st != _St.off && perms.can(Quyen.themThuocTinh)
+                          action: _q.isEmpty && _st != ActiveFilter.off && perms.can(Quyen.themThuocTinh)
                               ? 'Thêm thuộc tính'
                               : null,
                           onAction: () => _openForm(b),
@@ -430,192 +422,6 @@ class _AttributesScreenState extends ConsumerState<AttributesScreen> {
       ),
     );
   }
-}
-
-class _Header extends StatelessWidget {
-  const _Header({
-    required this.selecting,
-    required this.onSelect,
-    required this.onAdd,
-    required this.search,
-    required this.onSearch,
-    required this.onClear,
-    required this.st,
-    required this.counts,
-    required this.onSt,
-  });
-
-  final bool selecting;
-  final VoidCallback? onSelect;
-  final VoidCallback? onAdd;
-  final TextEditingController search;
-  final ValueChanged<String> onSearch;
-  final VoidCallback onClear;
-  final _St st;
-  final Map<_St, int> counts;
-  final ValueChanged<_St> onSt;
-
-  @override
-  Widget build(BuildContext context) {
-    final top = MediaQuery.paddingOf(context).top;
-    return Container(
-      padding: EdgeInsets.only(top: top + 4, bottom: 10),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        boxShadow: [BoxShadow(color: OrderColors.line, offset: Offset(0, 1))],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          SizedBox(
-            height: 48,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 10, 0),
-              child: Row(
-                children: [
-                  const Expanded(
-                    child: Text(
-                      'Thuộc tính',
-                      style: TextStyle(
-                        color: OrderColors.ink,
-                        fontSize: 21,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: -.4,
-                      ),
-                    ),
-                  ),
-                  if (onSelect != null)
-                    TextButton(
-                      key: const Key('attr_select'),
-                      onPressed: onSelect,
-                      style: TextButton.styleFrom(
-                        foregroundColor: OrderColors.primaryInk,
-                        minimumSize: const Size(0, 36),
-                        padding: const EdgeInsets.symmetric(horizontal: 10),
-                        textStyle: const TextStyle(fontFamily: appFont, fontSize: 14.5, fontWeight: FontWeight.w600),
-                      ),
-                      child: Text(selecting ? 'Xong' : 'Chọn'),
-                    ),
-                  if (onAdd != null)
-                    KitIconBtn(icon: AppIcons.plus, tooltip: 'Thêm thuộc tính', onTap: onAdd!, primary: true),
-                ],
-              ),
-            ),
-          ),
-          Container(
-            height: 40,
-            margin: const EdgeInsets.fromLTRB(12, 2, 12, 0),
-            padding: const EdgeInsets.only(left: 12, right: 6),
-            decoration: BoxDecoration(color: OrderColors.grid, borderRadius: BorderRadius.circular(10)),
-            child: Row(
-              children: [
-                const AppIcon(AppIcons.search, color: OrderColors.faint),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: TextField(
-                    key: const Key('attr_search'),
-                    controller: search,
-                    onChanged: onSearch,
-                    textInputAction: TextInputAction.search,
-                    style: const TextStyle(color: OrderColors.ink, fontSize: 16),
-                    decoration: const InputDecoration(
-                      isCollapsed: true,
-                      filled: false,
-                      border: InputBorder.none,
-                      enabledBorder: InputBorder.none,
-                      focusedBorder: InputBorder.none,
-                      hintText: 'Tìm thuộc tính, mã hoặc giá trị',
-                      hintStyle: TextStyle(color: OrderColors.faint, fontSize: 16),
-                    ),
-                  ),
-                ),
-                if (search.text.isNotEmpty)
-                  SizedBox(
-                    width: 28,
-                    height: 28,
-                    child: IconButton(
-                      tooltip: 'Xoá tìm',
-                      padding: EdgeInsets.zero,
-                      onPressed: onClear,
-                      icon: const AppIcon(AppIcons.close, size: 18, color: OrderColors.muted),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-            child: Row(
-              children: [
-                for (final s in _St.values) ...[
-                  if (s != _St.all) const SizedBox(width: 8),
-                  _StChip(
-                    key: Key('attr_st_${s.name}'),
-                    label: s.label,
-                    count: counts[s] ?? 0,
-                    on: s == st,
-                    onTap: () => onSt(s),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Chip lọc trạng thái: chọn thì nền navy (PC gọi "Đang dùng" — đổi chữ cho khỏi lẫn
-/// với "dùng ở n sản phẩm").
-class _StChip extends StatelessWidget {
-  const _StChip({super.key, required this.label, required this.count, required this.on, required this.onTap});
-
-  final String label;
-  final int count;
-  final bool on;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) => Semantics(
-    selected: on,
-    button: true,
-    child: Material(
-      color: on ? OrderColors.navy : Colors.white,
-      shape: StadiumBorder(side: BorderSide(color: on ? OrderColors.navy : OrderColors.line)),
-      child: InkWell(
-        customBorder: const StadiumBorder(),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                label,
-                style: TextStyle(
-                  color: on ? Colors.white : OrderColors.text,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(width: 6),
-              Text(
-                '$count',
-                style: TextStyle(
-                  color: on ? const Color(0xFFB9C6DD) : OrderColors.faint,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  fontFeatures: const [FontFeature.tabularFigures()],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    ),
-  );
 }
 
 class _AttrRow extends StatelessWidget {

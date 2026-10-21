@@ -125,7 +125,8 @@ enum AppIcons {
   folder(
     '<path d="M3.5 6.5a1.5 1.5 0 0 1 1.5-1.5h4.5l2 2.5H19a1.5 1.5 0 0 1 1.5 1.5v8.5A1.5 1.5 0 0 1 19 19H5a1.5 1.5 0 0 1-1.5-1.5Z"/>',
   ),
-  sub('<path d="M6 4v10a2 2 0 0 0 2 2h10"/><path d="m15 12 4 4-4 4"/>');
+  sub('<path d="M6 4v10a2 2 0 0 0 2 2h10"/><path d="m15 12 4 4-4 4"/>'),
+  scale('<path d="M12 4v16M5 20h14M6 7h12M6 7l-3 7a3 3 0 0 0 6 0ZM18 7l-3 7a3 3 0 0 0 6 0Z"/>');
 
   const AppIcons(this.paths);
 

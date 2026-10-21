@@ -30,6 +30,9 @@ abstract final class Quyen {
   static const themThuocTinh = 'thuoc-tinh.them';
   static const suaThuocTinh = 'thuoc-tinh.sua';
   static const xoaThuocTinh = 'thuoc-tinh.xoa';
+  static const themDonVi = 'don-vi-tinh.them';
+  static const suaDonVi = 'don-vi-tinh.sua';
+  static const xoaDonVi = 'don-vi-tinh.xoa';
 }
 
 final permsProvider = FutureProvider<Perms>((ref) async {
