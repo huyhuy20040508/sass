@@ -5,6 +5,7 @@ import '../../../core/ui/app_icon.dart';
 import '../../printer/printer_settings_screen.dart';
 import '../attributes/attributes_screen.dart';
 import '../categories/categories_screen.dart';
+import '../taxes/taxes_screen.dart';
 import '../units/units_screen.dart';
 import 'shell_widgets.dart' show AdminTab;
 
@@ -33,6 +34,7 @@ class MoreHost {
 Widget _categories(MoreHost host) => CategoriesScreen(host: host);
 Widget _attributes(MoreHost host) => AttributesScreen(host: host);
 Widget _units(MoreHost host) => UnitsScreen(host: host);
+Widget _taxes(MoreHost host) => TaxesScreen(host: host);
 
 class MoreModule {
   const MoreModule(this.code, this.title, this.icon, this.items);
@@ -57,7 +59,7 @@ const moreModules = [
     MoreItem('Nhóm hàng hoá', null, null, _categories),
     MoreItem('Thuộc tính', null, null, _attributes),
     MoreItem('Đơn vị tính', null, null, _units),
-    MoreItem('Quản lý thuế'),
+    MoreItem('Quản lý thuế', null, null, _taxes),
   ]),
   MoreModule('kho', 'Kho', AppIcons.store, [
     MoreItem('Tồn kho chi nhánh'),

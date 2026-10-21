@@ -33,6 +33,7 @@ abstract final class Quyen {
   static const themDonVi = 'don-vi-tinh.them';
   static const suaDonVi = 'don-vi-tinh.sua';
   static const xoaDonVi = 'don-vi-tinh.xoa';
+  static const suaThue = 'thue.sua';
 }
 
 final permsProvider = FutureProvider<Perms>((ref) async {
