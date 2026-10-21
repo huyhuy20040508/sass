@@ -2,14 +2,19 @@ import 'package:flutter/material.dart';
 
 import '../../../app/theme.dart';
 import '../../../core/ui/app_icon.dart';
+import '../../printer/printer_settings_screen.dart';
 import 'shell_widgets.dart' show AdminTab;
 
-/// Một mục con trong module; [tab] là tab app đã có màn — null thì chưa làm.
+/// Một mục con trong module; [tab] là tab app đã có màn, [page] là màn mở chồng
+/// lên (không phải tab) — cả hai null thì chưa làm.
 class MoreItem {
-  const MoreItem(this.name, [this.tab]);
+  const MoreItem(this.name, [this.tab, this.page]);
 
   final String name;
   final AdminTab? tab;
+  final Widget Function()? page;
+
+  bool get ready => tab != null || page != null;
 }
 
 class MoreModule {
@@ -67,7 +72,7 @@ const moreModules = [
   MoreModule('cai_dat', 'Cài đặt', AppIcons.gear, [
     MoreItem('Chi nhánh'),
     MoreItem('Phương thức thanh toán'),
-    MoreItem('Cài đặt thiết bị'),
+    MoreItem('Cài đặt thiết bị', null, printerSettingsPage),
   ]),
 ];
 
@@ -97,7 +102,7 @@ class _MoreModulesState extends State<MoreModules> {
   );
 
   Widget _module(MoreModule m, bool open) {
-    final ready = m.items.where((i) => i.tab != null).length;
+    final ready = m.items.where((i) => i.ready).length;
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
@@ -172,7 +177,7 @@ class _MoreModulesState extends State<MoreModules> {
   }
 
   Widget _item(MoreItem i) {
-    final ready = i.tab != null;
+    final ready = i.ready;
     return InkWell(
       borderRadius: BorderRadius.circular(12),
       onTap: () => widget.onPick(i),

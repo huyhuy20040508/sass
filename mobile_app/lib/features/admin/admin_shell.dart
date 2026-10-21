@@ -10,6 +10,7 @@ import '../workspace/workspace_widgets.dart' show SheetButton, initialsOf;
 import 'dashboard/dashboard_data.dart';
 import 'dashboard/dashboard_screen.dart';
 import 'goods/goods_screen.dart';
+import 'orders/orders_data.dart';
 import 'orders/orders_screen.dart';
 import 'shell/more_menu.dart';
 import 'shell/shell_widgets.dart';
@@ -44,6 +45,17 @@ class _AdminShellState extends ConsumerState<AdminShell> {
   void _toCashier() => ref.read(currentAreaProvider.notifier).enter(WorkspaceArea.thuNgan);
 
   void _soon(String name) => showDashToast(context, '$name — màn chưa thiết kế');
+
+  /// Bấm số đỏ trên tab Đơn hàng thì mở thẳng chỗ ĐANG CÓ mấy đơn ấy: số đỏ
+  /// đếm cả tháng, mà màn Đơn hàng mở sẵn ở "Hôm nay" — bấm vào rồi thấy danh
+  /// sách trống là chuyện cũ hay gặp.
+  ///
+  /// Chỉ nhảy khi người dùng CHƯA tự lọc gì: họ đã chọn kỳ hay tab riêng thì
+  /// lựa chọn ấy là của họ, không được đè.
+  void _theoSoDo(UnfinishedOrders chuaXong) {
+    final moi = chuaXong.locKhiBam(ref.read(ordersFilterProvider));
+    if (moi != null) ref.read(ordersFilterProvider.notifier).set(moi);
+  }
 
   void _goHome(VoidCallback then) {
     if (_tab == AdminTab.home) return then();
@@ -212,6 +224,8 @@ class _AdminShellState extends ConsumerState<AdminShell> {
           _tab = tab;
           _goodsOpened |= tab == AdminTab.goods;
         });
+      case MoreItem(:final page?):
+        await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => page()));
       case MoreItem(:final name):
         _soon(name);
     }
@@ -246,7 +260,7 @@ class _AdminShellState extends ConsumerState<AdminShell> {
     final data = q == null ? null : ref.watch(dashboardProvider(q)).value;
     final branches = ref.watch(dashBranchesProvider).value ?? const [];
     final branchName = q == null ? '…' : branchLabel(q.shopId, branches);
-    final pending = ref.watch(pendingOrdersProvider).value ?? 0;
+    final chuaXong = ref.watch(unfinishedOrdersProvider).value ?? const UnfinishedOrders();
     final home = _tab == AdminTab.home;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
@@ -256,8 +270,9 @@ class _AdminShellState extends ConsumerState<AdminShell> {
         // Thanh dưới ở bottomNavigationBar: thông báo nổi lên trên nó thay vì che các tab.
         bottomNavigationBar: AdminTabBar(
           current: _tab,
-          orderCount: pending,
+          orderCount: chuaXong.total,
           onTab: (t) => setState(() {
+            if (t == AdminTab.orders && _tab != t) _theoSoDo(chuaXong);
             _tab = t;
             _goodsOpened |= t == AdminTab.goods;
           }),

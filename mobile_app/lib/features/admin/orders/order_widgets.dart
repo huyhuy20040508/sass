@@ -405,7 +405,16 @@ class OrdersSummaryCard extends StatelessWidget {
                     decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle),
                   ),
                   const SizedBox(width: 5),
-                  Text(label, style: const TextStyle(color: OrderColors.muted, fontSize: 11.5)),
+                  // Co chữ lại thay vì để tràn: ở khổ 390px ba ô này đã tràn
+                  // sẵn 1px (bản phát hành không kẻ sọc nên không ai thấy, chỉ
+                  // mất một nét chữ cuối).
+                  Flexible(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(label, style: const TextStyle(color: OrderColors.muted, fontSize: 11.5)),
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 2),
@@ -443,14 +452,19 @@ class OrdersSummaryCard extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                // Doanh thu ghi số đầy đủ — dài thì thu nhỏ, nhường chỗ cho biểu đồ cột.
+                // Số tiền ghi đầy đủ — dài thì thu nhỏ, nhường chỗ cho biểu đồ cột.
                 Expanded(
                   flex: 3,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // KHÔNG gọi là "doanh thu": số này là tổng tiền trên đơn —
+                      // gồm VAT và gồm cả đơn chưa thu — nên luôn lớn hơn doanh
+                      // thu thuần ở Tổng quan (tiền hàng − giảm, không VAT, chỉ
+                      // đơn hoàn thành). Hai chỗ cùng một chữ mà hai con số khác
+                      // nhau thì người đọc tưởng phần mềm tính sai.
                       Text(
-                        'Doanh thu · ${timeLabel.toLowerCase()}',
+                        'Tổng tiền đơn · ${timeLabel.toLowerCase()}',
                         style: const TextStyle(color: OrderColors.muted, fontSize: 12.5),
                       ),
                       FittedBox(
@@ -461,13 +475,25 @@ class OrdersSummaryCard extends StatelessWidget {
                             text: dot(s.revenue),
                             children: [
                               TextSpan(
-                                text: ' · ${s.sales} đơn',
+                                // "đơn bán" chứ không trống trơn "đơn": số tiền
+                                // bên trái đã trừ phiếu trả, mà phiếu trả không
+                                // nằm trong con số này.
+                                text: ' · ${s.sales} đơn bán',
                                 style: const TextStyle(
                                   color: OrderColors.muted,
                                   fontSize: 13,
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
+                              if (s.returned > 0)
+                                TextSpan(
+                                  text: ' · ${s.returned} phiếu trả',
+                                  style: const TextStyle(
+                                    color: OrderColors.muted,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
                             ],
                           ),
                           key: const Key('orders_revenue'),
@@ -480,6 +506,11 @@ class OrdersSummaryCard extends StatelessWidget {
                             fontFeatures: _tnum,
                           ),
                         ),
+                      ),
+                      // Nói ra chỗ khác với Tổng quan, ngay dưới con số.
+                      const Text(
+                        'gồm VAT và đơn chưa thu',
+                        style: TextStyle(color: OrderColors.faint, fontSize: 11.5),
                       ),
                     ],
                   ),

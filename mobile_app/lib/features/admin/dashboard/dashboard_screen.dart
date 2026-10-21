@@ -6,6 +6,7 @@ import '../../../app/theme.dart';
 import '../../../core/api/api_exception.dart';
 import '../../../core/format/vn_number.dart';
 import '../../../core/ui/app_icon.dart';
+import '../../../core/ui/money_input.dart';
 import '../../auth/auth_controller.dart';
 import '../../workspace/workspace.dart' show Branch;
 import '../../workspace/workspace_widgets.dart' show greetingFor, initialsOf;
@@ -106,7 +107,7 @@ class DashboardScreenState extends ConsumerState<DashboardScreen> {
     final f = ref.read(dashQueryProvider);
     if (f == null) return;
     ref.invalidate(dashboardProvider(f));
-    ref.invalidate(pendingOrdersProvider);
+    ref.invalidate(unfinishedOrdersProvider);
     try {
       await ref.read(dashboardProvider(f).future);
       if (mounted) showDashToast(context, 'Đã cập nhật số liệu');
@@ -308,7 +309,7 @@ class _GoalFormState extends State<_GoalForm> {
   }
 
   void _save() {
-    final v = int.tryParse(_ctl.text);
+    final v = undot(_ctl.text);
     if (v != null && v > 0) Navigator.of(context).pop(v);
   }
 
@@ -323,8 +324,17 @@ class _GoalFormState extends State<_GoalForm> {
           controller: _ctl,
           autofocus: true,
           keyboardType: TextInputType.number,
-          inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(15)],
-          decoration: const InputDecoration(hintText: 'Ví dụ 500000000', suffixText: 'đ'),
+          // Cùng cách với ô "Thu tiền": tiền gõ tới đâu chấm tới đó.
+          inputFormatters: [const MoneyInputFormatter(), LengthLimitingTextInputFormatter(19)],
+          cursorColor: DashColors.primary,
+          decoration: const InputDecoration(
+            hintText: 'Ví dụ 500.000.000',
+            suffixText: 'đ',
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.all(Radius.circular(12)),
+              borderSide: BorderSide(color: DashColors.primary, width: 2),
+            ),
+          ),
           onSubmitted: (_) => _save(),
         ),
         const SizedBox(height: 12),

@@ -24,7 +24,9 @@ class AdminTabBar extends StatelessWidget {
   final ValueChanged<AdminTab> onTab;
   final VoidCallback onMore;
 
-  /// Số đỏ trên Đơn hàng = đơn còn đang xử lý.
+  /// Số đỏ trên Đơn hàng = đơn CHƯA XONG (chờ xác nhận + đang xử lý).
+  /// Không gọi là "đang xử lý": màn Đơn hàng có hẳn một tab tên vậy mà
+  /// KHÔNG gồm đơn chờ xác nhận — đọc số đỏ xong vào đó là thấy trống.
   final int orderCount;
 
   static const height = 66.0;
@@ -91,7 +93,7 @@ class _TabButton extends StatelessWidget {
     return Semantics(
       button: true,
       selected: active,
-      label: badge > 0 ? '$label, $badge đơn đang xử lý' : label,
+      label: badge > 0 ? '$label, $badge đơn chưa xong' : label,
       excludeSemantics: true,
       child: InkResponse(
         onTap: onTap,

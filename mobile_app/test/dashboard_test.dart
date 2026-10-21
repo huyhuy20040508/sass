@@ -216,7 +216,19 @@ void main() {
       final now = DateTime(2026, 1, 15);
       expect(DashPeriod.lastMonth.range(now), (DateTime(2025, 12), DateTime(2025, 12, 31)));
       expect(DashPeriod.days7.range(now), (DateTime(2026, 1, 9), DateTime(2026, 1, 15)));
-      expect(prevRange(DateTime(2026, 10, 1), DateTime(2026, 10, 17)), (DateTime(2026, 9, 14), DateTime(2026, 9, 30)));
+      // KB #86: kỳ mùng 1 gọn trong tháng so cùng kỳ tháng trước — bảng y hệt bài Go / PHP.
+      for (final (tu, den, pTu, pDen) in [
+        ('2026-10-01', '2026-10-17', '2026-09-01', '2026-09-17'),
+        ('2026-09-01', '2026-09-30', '2026-08-01', '2026-08-31'),
+        ('2026-03-01', '2026-03-31', '2026-02-01', '2026-02-28'),
+        ('2026-03-01', '2026-03-30', '2026-02-01', '2026-02-28'),
+        ('2026-01-01', '2026-01-15', '2025-12-01', '2025-12-15'),
+        ('2026-10-01', '2026-10-07', '2026-09-24', '2026-09-30'),
+        ('2026-10-05', '2026-10-19', '2026-09-20', '2026-10-04'),
+        ('2026-09-01', '2026-10-19', '2026-07-14', '2026-08-31'),
+      ]) {
+        expect(prevRange(DateTime.parse(tu), DateTime.parse(den)), (DateTime.parse(pTu), DateTime.parse(pDen)), reason: '$tu → $den');
+      }
       expect(prevRange(DateTime(2026, 10, 17), DateTime(2026, 10, 17)), (
         DateTime(2026, 10, 16),
         DateTime(2026, 10, 16),
@@ -263,11 +275,11 @@ void main() {
   testWidgets('Tổng quan tháng này: số khớp bản thiết kế, việc cần chú ý, số đơn đang xử lý', (t) async {
     final (_, api) = await _open(t, thisMonth: true);
 
-    // Thuần tháng 10 = 1.725.000.000 + 0 − 660.000; kỳ trước 172.000.000 − 10.120.000.
+    // Thuần tháng 10 = 1.725.000.000 + 0 − 660.000; kỳ trước = CÙNG KỲ tháng 9 (01/09–17/09, KB #86).
     // Tiền ghi số đầy đủ, không rút gọn tr/tỷ.
     expect(_heroText(t), '1.724.340.000 đ');
-    expect(find.text('▲ 965%'), findsOneWidget);
-    expect(find.text('kỳ trước 161.880.000 đ'), findsOneWidget);
+    expect(find.text('▲ 1.267%'), findsOneWidget);
+    expect(find.text('kỳ trước 126.146.500 đ'), findsOneWidget);
     expect(find.text('472.740.000'), findsOneWidget);
     expect(find.text('30'), findsWidgets);
     expect(find.text('3.500.000'), findsOneWidget, reason: 'nhập hàng chỉ cộng phiếu không huỷ/nháp');
@@ -280,7 +292,7 @@ void main() {
 
     final rev = api.calls.where((c) => c.path.endsWith('/reports/revenue')).toList();
     expect(rev.every((c) => c.queryParameters['shop_id'] == '2'), isTrue);
-    expect(rev.any((c) => c.queryParameters['from'] == '2026-09-14'), isTrue, reason: 'kỳ trước cho đường xám');
+    expect(rev.any((c) => c.queryParameters['from'] == '2026-09-01'), isTrue, reason: 'kỳ trước cho đường xám');
     expect(t.takeException(), isNull);
   });
 
@@ -332,6 +344,21 @@ void main() {
     expect(find.text('Doanh thu thuần · Tháng này'), findsOneWidget);
     expect(find.text('01/10'), findsWidgets);
     expect(find.text('17/10'), findsWidgets);
+  });
+
+  testWidgets('kỳ một ngày: biểu đồ + Bảng số theo giờ là tiền THUẦN, không gồm VAT (KB #81)', (t) async {
+    await _open(t);
+    await t.tap(find.byKey(const Key('period_more')));
+    await _settle(t);
+    await t.tap(find.byKey(const Key('period_yesterday')));
+    await _settle(t);
+    await t.tap(find.text('Bảng số'));
+    await _settle(t);
+    // 16/10: 9h tiền hàng 44.000.000 (gồm VAT 48.400.000), 10h 215.000.000 (234.000.000).
+    expect(find.text('44.000.000'), findsWidgets);
+    expect(find.text('215.000.000'), findsWidgets);
+    expect(find.text('48.400.000'), findsNothing);
+    expect(find.text('234.000.000'), findsNothing);
   });
 
   testWidgets('đặt mục tiêu: PUT /admin/settings rồi hiện thước tiến độ', (t) async {

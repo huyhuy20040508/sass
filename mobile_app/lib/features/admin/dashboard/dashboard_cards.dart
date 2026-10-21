@@ -198,7 +198,7 @@ class RevenueCard extends StatelessWidget {
   /// Chuỗi vẽ biểu đồ: theo giờ nếu kỳ 1 ngày, theo ngày nếu dài hơn.
   static (List<num>, List<num>, List<String>) series(DashboardData d) {
     if (d.oneDay) {
-      final cur = d.hourly('revenue');
+      final cur = d.hourlyNet();
       return (cur, const [], [for (var i = 0; i < cur.length; i++) '${7 + i}h']);
     }
     final cur = [for (final b in d.buckets) Money.of(b).net];
@@ -315,7 +315,7 @@ class RevenueTable extends StatelessWidget {
     const td = TextStyle(color: DashColors.ink, fontSize: 13, fontFeatures: _tnum);
     final rows = <List<String>>[];
     if (data.oneDay) {
-      final h = data.hourly('revenue');
+      final h = data.hourlyNet();
       for (var i = 0; i < h.length; i++) {
         rows.add(['${7 + i}h', dot(h[i])]);
       }
@@ -738,9 +738,14 @@ class StatusCard extends StatelessWidget {
 
   final DashboardData data;
 
+  /// Nhóm trạng thái — ĐÚNG các tab của màn Đơn hàng (OrderTab.ofStatus) và
+  /// cùng màu với nhãn trạng thái ở đó (chờ xác nhận cam, đang xử lý xanh).
+  /// Trước đây gộp `pending` vào "Đang xử lý": thẻ này đếm 1 đơn "đang xử lý"
+  /// mà mở màn Đơn hàng thì tab Đang xử lý trống trơn, đơn nằm ở Chờ xác nhận.
   static const groups = [
     (['completed', 'delivered'], 'Hoàn thành', DashColors.good),
-    (['pending', 'confirmed', 'processing', 'shipping'], 'Đang xử lý', DashColors.warning),
+    (['pending'], 'Chờ xác nhận', DashColors.warning),
+    (['confirmed', 'processing', 'shipping'], 'Đang xử lý', DashColors.primary),
     (['returned'], 'Trả hàng', DashColors.serious),
     (['cancelled'], 'Đã huỷ', DashColors.critical),
   ];

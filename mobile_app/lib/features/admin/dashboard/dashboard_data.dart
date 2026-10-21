@@ -5,6 +5,7 @@ import '../../../core/api/api_exception.dart';
 import '../../../core/format/vn_number.dart';
 import '../../auth/auth_controller.dart';
 import '../../workspace/workspace.dart';
+import '../orders/orders_data.dart';
 
 /// Kỳ xem — cùng mã với Period của web_Shop.
 enum DashPeriod {
@@ -33,9 +34,18 @@ enum DashPeriod {
 String ymd(DateTime d) =>
     '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
-/// Kỳ trước cùng độ dài, ngay sát trước — DashboardController::khoangTruoc.
+/// Kỳ để so — cùng luật với API (ReportPeriod.Prev) và PC (khoangTruoc): kỳ mùng 1
+/// gọn trong một tháng, dài hơn 7 ngày thì so cùng kỳ tháng trước (kẹp cuối tháng,
+/// trọn tháng so trọn tháng); còn lại so cùng độ dài, ngay sát trước.
 (DateTime, DateTime) prevRange(DateTime from, DateTime to) {
   final n = to.difference(from).inDays + 1;
+  if (from.day == 1 && n > 7 && from.year == to.year && from.month == to.month) {
+    final tu = DateTime(from.year, from.month - 1);
+    final cuoiThangTruoc = DateTime(from.year, from.month, 0);
+    final tronThang = DateTime(to.year, to.month, to.day + 1).day == 1;
+    final den = DateTime(tu.year, tu.month, n);
+    return (tu, tronThang || den.isAfter(cuoiThangTruoc) ? cuoiThangTruoc : den);
+  }
   return (from.subtract(Duration(days: n)), from.subtract(const Duration(days: 1)));
 }
 
@@ -171,10 +181,16 @@ class DashboardData {
   num setting(String k, num fallback) => num.tryParse('${settings[k] ?? ''}') ?? fallback;
 
   /// Một mảng theo giờ 7h–22h từ orders.by_hour.
-  List<num> hourly(String field) {
+  List<num> hourly(String field) => _hourly((r) => (r[field] as num?) ?? 0);
+
+  /// Doanh thu thuần theo giờ — cùng công thức Money với kỳ nhiều ngày; field
+  /// 'revenue' của by_hour GỒM VAT nên không dùng cho thẻ "Doanh thu thuần".
+  List<num> hourlyNet() => _hourly((r) => Money.of(r).net);
+
+  List<num> _hourly(num Function(Map) value) {
     final m = <int, num>{};
     for (final r in ((orders['by_hour'] as List?) ?? const []).whereType<Map>()) {
-      m[int.tryParse('${r['key']}') ?? -1] = (r[field] as num?) ?? 0;
+      m[int.tryParse('${r['key']}') ?? -1] = value(r);
     }
     return [for (var h = 7; h <= 22; h++) m[h] ?? 0];
   }
@@ -192,7 +208,13 @@ class DashboardData {
       final mo = DateTime.tryParse('${c['opened_at'] ?? ''}');
       if (mo == null) continue;
       final gio = now.difference(mo).inMinutes / 60;
-      final ten = '${c['employee_name'] ?? ''}';
+      // employee_name là NGƯỜI TRỰC KÉT, chỉ có khi mở ca chọn người khác
+      // người mở (employee_id null thì API không trả trường này). Thiếu nhánh
+      // dự phòng là dòng cảnh báo mất hẳn tên: " đang mở ca". Cùng cách lấy
+      // như bên PC — DashboardController::caDangMo().
+      final ten = '${c['employee_name'] ?? ''}'.trim().isNotEmpty
+          ? '${c['employee_name']}'
+          : '${c['opened_by_name'] ?? ''}';
       final cn = branchNames[(c['shop_id'] as num?)?.toInt()] ?? '';
       if (gioNguong > 0 && gio >= gioNguong) {
         final bao = gio >= 48 ? '${gio ~/ 24} ngày' : '${gio.floor()} giờ';
@@ -461,10 +483,49 @@ Future<DashboardData> loadDashboard(ApiClient api, DashFilter f, DateTime now, R
   );
 }
 
-/// Số đơn còn đang xử lý trong tháng — con số đỏ trên tab Đơn hàng.
-final pendingOrdersProvider = FutureProvider.autoDispose<int>((ref) async {
+/// Đơn CHƯA XONG trong tháng — con số đỏ trên tab Đơn hàng.
+///
+/// Tách sẵn hai nhóm thay vì một tổng: số đỏ cần tổng, còn lượt bấm vào nó cần
+/// biết mở tab nào của màn Đơn hàng — chờ xác nhận và đang xử lý là hai tab
+/// khác nhau ở đó.
+class UnfinishedOrders {
+  const UnfinishedOrders({this.pending = 0, this.doing = 0});
+
+  /// Chờ xác nhận.
+  final int pending;
+
+  /// Đã xác nhận + đang chuẩn bị + đang giao.
+  final int doing;
+
+  int get total => pending + doing;
+
+  /// Tab của màn Đơn hàng chứa đúng tập này; cả hai nhóm cùng có đơn thì không
+  /// tab nào chứa đủ, mở "Tất cả".
+  OrderTab get tab => switch ((pending > 0, doing > 0)) {
+    (true, false) => OrderTab.pending,
+    (false, true) => OrderTab.doing,
+    _ => OrderTab.all,
+  };
+
+  /// Bộ lọc nên mở khi bấm số đỏ — null = cứ để nguyên màn Đơn hàng.
+  ///
+  /// Số đỏ đếm CẢ THÁNG còn màn Đơn hàng mở sẵn ở "Hôm nay", nên bấm vào mà
+  /// không đổi kỳ thì hay ra danh sách trống. Đổi kỳ sang Tháng này + nhảy đúng
+  /// tab. Người dùng đã tự chọn tab/kỳ/bộ lọc nào rồi thì KHÔNG đè lên.
+  OrdersFilter? locKhiBam(OrdersFilter dangDung) {
+    if (total == 0) return null;
+    final sach =
+        dangDung.tab == OrderTab.all &&
+        dangDung.time == OrderTime.today &&
+        dangDung.query.isEmpty &&
+        dangDung.filterCount == 0;
+    return sach ? dangDung.copyWith(tab: tab, time: OrderTime.thisMonth) : null;
+  }
+}
+
+final unfinishedOrdersProvider = FutureProvider.autoDispose<UnfinishedOrders>((ref) async {
   final f = ref.watch(dashQueryProvider);
-  if (f == null) return 0;
+  if (f == null) return const UnfinishedOrders();
   final now = ref.read(clockProvider)();
   try {
     final r = await ref
@@ -477,14 +538,15 @@ final pendingOrdersProvider = FutureProvider.autoDispose<int>((ref) async {
             if (f.shopId != null) 'shop_id': '${f.shopId}',
           },
         );
-    var n = 0;
+    var cho = 0;
+    var dang = 0;
     for (final s in ((r['by_status'] as List?) ?? const []).whereType<Map>()) {
-      if (const {'pending', 'confirmed', 'processing', 'shipping'}.contains(s['key'])) {
-        n += ((s['orders'] as num?) ?? 0).toInt();
-      }
+      final n = ((s['orders'] as num?) ?? 0).toInt();
+      if (s['key'] == 'pending') cho += n;
+      if (const {'confirmed', 'processing', 'shipping'}.contains(s['key'])) dang += n;
     }
-    return n;
+    return UnfinishedOrders(pending: cho, doing: dang);
   } on ApiException {
-    return 0;
+    return const UnfinishedOrders();
   }
 }, retry: _noRetry);

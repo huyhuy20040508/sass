@@ -49,6 +49,7 @@ dependencies:
   pdf: ^3.13.1
   printing: ^5.15.1
   barcode: ^2.2.9
+  print_bluetooth_thermal: ^1.2.5
   share_plus: ^13.3.1
   file_picker: ^13.1.0
 
