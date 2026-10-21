@@ -34,13 +34,24 @@ class _AdminShellState extends ConsumerState<AdminShell> {
   /// Hàng hoá tải cả danh mục một lượt — chỉ dựng (và gọi API) khi mở tab lần đầu.
   bool _goodsOpened = false;
 
+  /// Màn mở từ "Thêm" nằm trong khung (vd Nhóm hàng) — phủ lên tab, thanh dưới giữ nguyên.
+  MoreItem? _view;
+
+  late final _host = MoreHost(goTab: _goTab, close: () => setState(() => _view = null));
+
+  void _goTab(AdminTab t) => setState(() {
+    _view = null;
+    _tab = t;
+    _goodsOpened |= t == AdminTab.goods;
+  });
+
   bool get _canCashier {
     final u = ref.read(authProvider).value?.user;
     return u != null &&
         WorkspaceArea.forUser(accessAreas: u.accessAreas, roleCode: u.roleCode).contains(WorkspaceArea.thuNgan);
   }
 
-  bool get _whiteHead => _tab == AdminTab.orders || _tab == AdminTab.goods;
+  bool get _whiteHead => _view != null || _tab == AdminTab.orders || _tab == AdminTab.goods;
 
   void _toCashier() => ref.read(currentAreaProvider.notifier).enter(WorkspaceArea.thuNgan);
 
@@ -220,10 +231,9 @@ class _AdminShellState extends ConsumerState<AdminShell> {
       case '__logout':
         await _confirmLogout();
       case MoreItem(:final tab?):
-        setState(() {
-          _tab = tab;
-          _goodsOpened |= tab == AdminTab.goods;
-        });
+        _goTab(tab);
+      case MoreItem(view: _?):
+        setState(() => _view = pick);
       case MoreItem(:final page?):
         await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => page()));
       case MoreItem(:final name):
@@ -270,12 +280,12 @@ class _AdminShellState extends ConsumerState<AdminShell> {
         // Thanh dưới ở bottomNavigationBar: thông báo nổi lên trên nó thay vì che các tab.
         bottomNavigationBar: AdminTabBar(
           current: _tab,
+          moreActive: _view != null,
           orderCount: chuaXong.total,
-          onTab: (t) => setState(() {
+          onTab: (t) {
             if (t == AdminTab.orders && _tab != t) _theoSoDo(chuaXong);
-            _tab = t;
-            _goodsOpened |= t == AdminTab.goods;
-          }),
+            _goTab(t);
+          },
           onMore: _openMore,
         ),
         body: Column(
@@ -303,6 +313,10 @@ class _AdminShellState extends ConsumerState<AdminShell> {
                       ],
                     ),
                   ),
+                  if (_view case MoreItem(:final name, view: final build?))
+                    Positioned.fill(
+                      child: KeyedSubtree(key: ValueKey('more_view_$name'), child: build(_host)),
+                    ),
                   Positioned(
                     left: 0,
                     right: 0,

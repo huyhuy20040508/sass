@@ -120,7 +120,12 @@ enum AppIcons {
     '<circle cx="12" cy="13.5" r="3.5"/>',
   ),
   trash('<path d="M4 7h16M9 7V4.5h6V7M6.5 7l1 13h9l1-13"/>'),
-  minus('<path d="M5 12h14"/>');
+  minus('<path d="M5 12h14"/>'),
+  layers('<path d="m12 3.5 8.5 4.5-8.5 4.5L3.5 8Z"/><path d="m3.5 12 8.5 4.5 8.5-4.5M3.5 16l8.5 4.5 8.5-4.5"/>'),
+  folder(
+    '<path d="M3.5 6.5a1.5 1.5 0 0 1 1.5-1.5h4.5l2 2.5H19a1.5 1.5 0 0 1 1.5 1.5v8.5A1.5 1.5 0 0 1 19 19H5a1.5 1.5 0 0 1-1.5-1.5Z"/>',
+  ),
+  sub('<path d="M6 4v10a2 2 0 0 0 2 2h10"/><path d="m15 12 4 4-4 4"/>');
 
   const AppIcons(this.paths);
 
