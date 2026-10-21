@@ -98,6 +98,8 @@ enum AppIcons {
     '<path d="M5 3.5h3.5l1.8 4.5-2.3 1.5a11 11 0 0 0 6.5 6.5l1.5-2.3 4.5 1.8V19a1.5 1.5 0 0 1-1.5 1.5A16 16 0 0 1 3.5 5 1.5 1.5 0 0 1 5 3.5Z"/>',
   ),
   print('<path d="M7 8V3.5h10V8"/><rect x="3.5" y="8" width="17" height="9" rx="2"/><path d="M7 14h10v6.5H7Z"/>'),
+  bluetooth('<path d="m7 7 10 10-5 4.5v-19L17 7 7 17"/>'),
+  wifi('<path d="M2 8.8a15 15 0 0 1 20 0M5.2 12.4a10 10 0 0 1 13.6 0M8.5 15.9a5 5 0 0 1 7 0M12 19.5h.01"/>'),
   ban('<circle cx="12" cy="12" r="8.5"/><path d="m6 6 12 12"/>'),
   share(
     '<circle cx="18" cy="5.5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="18.5" r="2.5"/>'
@@ -117,7 +119,8 @@ enum AppIcons {
     '<path d="M4 8h3l1.5-2.5h7L17 8h3a1 1 0 0 1 1 1v9.5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Z"/>'
     '<circle cx="12" cy="13.5" r="3.5"/>',
   ),
-  trash('<path d="M4 7h16M9 7V4.5h6V7M6.5 7l1 13h9l1-13"/>');
+  trash('<path d="M4 7h16M9 7V4.5h6V7M6.5 7l1 13h9l1-13"/>'),
+  minus('<path d="M5 12h14"/>');
 
   const AppIcons(this.paths);
 

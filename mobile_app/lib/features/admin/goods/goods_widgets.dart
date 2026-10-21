@@ -9,11 +9,13 @@ import 'goods_data.dart';
 
 const tnum = [FontFeature.tabularFigures()];
 
-/// Viên tồn kho: (nền, chữ, nhãn) — ngừng bán xám, hết đỏ, sắp hết (≤ [lowStock]) cam, còn xanh.
-(Color, Color, String) stockPill(GoodsItem it) {
+/// Viên tồn kho: (nền, chữ, nhãn) — ngừng bán xám, hết đỏ, sắp hết (≤ [low]) cam, còn xanh.
+/// Chưa có số tồn (thiếu quyền / đang tải) thì null.
+(Color, Color, String)? stockPill(GoodsItem it, {int low = defaultLowStock, bool known = true}) {
   if (!it.active) return (OrderColors.grid, OrderColors.muted, 'Ngừng bán');
+  if (!known) return null;
   if (it.stock <= 0) return (OrderColors.red.$1, OrderColors.red.$2, 'Hết hàng');
-  if (it.stock <= lowStock) return (OrderColors.orange.$1, OrderColors.orange.$2, 'Sắp hết · ${dot(it.stock)}');
+  if (it.stock <= low) return (OrderColors.orange.$1, OrderColors.orange.$2, 'Sắp hết · ${dot(it.stock)}');
   return (OrderColors.green.$1, OrderColors.green.$2, 'Tồn ${dot(it.stock)}');
 }
 
@@ -59,26 +61,57 @@ class GoodsImage extends StatelessWidget {
 
 /// Một dòng danh sách kiểu Sapo: ảnh · tên + SKU · nhóm + thẻ · giá + viên tồn.
 class GoodsRow extends StatelessWidget {
-  const GoodsRow({super.key, required this.item, required this.onTap});
+  const GoodsRow({
+    super.key,
+    required this.item,
+    required this.onTap,
+    this.low = defaultLowStock,
+    this.onLongPress,
+    this.selected,
+  });
 
   final GoodsItem item;
   final VoidCallback onTap;
+  final VoidCallback? onLongPress;
+
+  /// null = không ở chế độ chọn nhiều; có giá trị thì hiện ô tick đầu dòng.
+  final bool? selected;
+
+  /// Mốc "sắp hết" của cửa hàng.
+  final int low;
 
   @override
   Widget build(BuildContext context) {
     final it = item;
     final n = it.variants.length;
-    final (bg, fg, label) = stockPill(it);
+    final pill = stockPill(it, low: low, known: it.stockKnown);
     // Hàng ngừng bán: làm mờ ảnh + tên, giá và viên trạng thái vẫn rõ.
     final dim = it.active ? 1.0 : .55;
+    final on = selected ?? false;
     return Material(
-      color: Colors.white,
+      color: on ? OrderColors.primarySoft : Colors.white,
       child: InkWell(
         onTap: onTap,
+        onLongPress: onLongPress,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           child: Row(
             children: [
+              if (selected != null) ...[
+                Container(
+                  key: Key('goods_check_${it.id}'),
+                  width: 22,
+                  height: 22,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: on ? OrderColors.primary : Colors.white,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: on ? OrderColors.primary : const Color(0xFFC3CAD5), width: 1.6),
+                  ),
+                  child: on ? const AppIcon(AppIcons.check, size: 14, color: Colors.white) : null,
+                ),
+                const SizedBox(width: 12),
+              ],
               Opacity(
                 opacity: dim,
                 child: GoodsImage(url: it.thumb),
@@ -136,28 +169,30 @@ class GoodsRow extends StatelessWidget {
                       fontFeatures: tnum,
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  Container(
-                    key: const Key('stock_pill'),
-                    height: 22,
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(11)),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          width: 6,
-                          height: 6,
-                          decoration: BoxDecoration(color: fg, shape: BoxShape.circle),
-                        ),
-                        const SizedBox(width: 5),
-                        Text(
-                          label,
-                          style: TextStyle(color: fg, fontSize: 12, fontWeight: FontWeight.w700, fontFeatures: tnum),
-                        ),
-                      ],
+                  if (pill case (final bg, final fg, final label)) ...[
+                    const SizedBox(height: 4),
+                    Container(
+                      key: const Key('stock_pill'),
+                      height: 22,
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(11)),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 6,
+                            height: 6,
+                            decoration: BoxDecoration(color: fg, shape: BoxShape.circle),
+                          ),
+                          const SizedBox(width: 5),
+                          Text(
+                            label,
+                            style: TextStyle(color: fg, fontSize: 12, fontWeight: FontWeight.w700, fontFeatures: tnum),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ],

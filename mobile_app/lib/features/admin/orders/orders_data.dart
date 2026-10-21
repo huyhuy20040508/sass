@@ -1,4 +1,3 @@
-import 'dart:math' as math;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -415,20 +414,16 @@ final ordersSummaryProvider = FutureProvider.autoDispose.family<OrdersSummary, O
   final now = ref.read(clockProvider)();
   // Thẻ tổng tính trên cả kỳ đang xem — không theo tab.
   final base = f.copyWith(tab: OrderTab.all);
-  Future<ApiPage> page(Set<String> st, {int size = 1, int p = 1, Map<String, String> extra = const {}}) => api.getPage(
+  Future<ApiPage> page(Set<String> st, {int size = 1}) => api.getPage(
     '/admin/orders/so-don',
-    query: {
-      ...base.query$(now, statuses: st),
-      ...extra,
-      'page': '$p',
-      'page_size': '$size',
-    },
+    query: {...base.query$(now, statuses: st), 'page_size': '$size'},
   );
-  Future<Map<String, dynamic>> tong(Set<String> st) async {
+  Future<Map<String, dynamic>> tong(Set<String> st, {Map<String, String> extra = const {}}) async {
     final r = await api.getRaw(
       '/admin/orders/so-don',
       query: {
         ...base.query$(now, statuses: st),
+        ...extra,
         'page_size': '1',
       },
     );
@@ -436,45 +431,24 @@ final ordersSummaryProvider = FutureProvider.autoDispose.family<OrdersSummary, O
   }
 
   const ban = {'paid', 'unpaid', 'partial'};
-  final r =
-      f.time.range(now) ??
-      (
-        DateTime(now.year, now.month, now.day).subtract(const Duration(days: 13)),
-        DateTime(now.year, now.month, now.day),
-      );
-  final nDays = math.min(14, r.$2.difference(r.$1).inDays + 1);
-  final days = [for (var i = nDays - 1; i >= 0; i--) r.$2.subtract(Duration(days: i))];
 
   final res = await Future.wait<Object>([
-    tong(ban),
+    // meta.tong.theo_ngay: đơn bán cộng theo ngày trên CẢ kỳ — một lượt cho biểu đồ cột.
+    tong(ban, extra: const {'theo_ngay': '1'}),
     // Trạng thái sổ `returned` gồm cả phiếu trả LẪN đơn đã bị trả: đơn vẫn là đơn
     // bán (cộng), chỉ phiếu trả mới trừ — phải tách theo cột `loai`.
     page({'returned'}, size: 100),
     page({'cancelled'}),
     // Chưa thu: cộng con_no từ danh sách (meta chưa có tổng nợ).
     page({'unpaid', 'partial'}, size: 100),
-    // Biểu đồ cột: đơn bán trong ≤ 14 ngày cuối của kỳ.
-    Future.wait([
-      for (var p = 1; p <= 3; p++)
-        page(ban, size: 100, p: p, extra: {'from_date': ymd(days.first), 'to_date': ymd(days.last)}),
-    ]),
     tong({'unpaid', 'partial'}),
   ]);
   final sales = res[0] as Map<String, dynamic>;
   final retRows = (res[1] as ApiPage).data.whereType<Map>().map((m) => SoDonRow(Map<String, dynamic>.from(m))).toList();
   final phieu = retRows.where((r) => r.isReturn), donTra = retRows.where((r) => !r.isReturn);
   final unpaid = res[3] as ApiPage;
-  final unpaidTong = (res[5] as Map<String, dynamic>)['con_no'] as num? ?? 0;
-  final perDay = {for (final d in days) ymd(d): 0 as num};
-  final seen = <int>{};
-  for (final pg in res[4] as List<ApiPage>) {
-    for (final m in pg.data.whereType<Map>()) {
-      final row = SoDonRow(Map<String, dynamic>.from(m));
-      if (row.isReturn || !seen.add(row.id)) continue;
-      final k = ymd(row.createdAt);
-      if (perDay.containsKey(k)) perDay[k] = perDay[k]! + row.total;
-    }
-  }
+  final unpaidTong = (res[4] as Map<String, dynamic>)['con_no'] as num? ?? 0;
+  final (days, perDay) = _cotTheoKy(f.time.range(now), now, sales['theo_ngay']);
   return OrdersSummary(
     revenue:
         ((sales['tong_tien'] as num?) ?? 0) +
@@ -490,9 +464,32 @@ final ordersSummaryProvider = FutureProvider.autoDispose.family<OrdersSummary, O
     returned: phieu.length,
     returnedRows: (res[1] as ApiPage).total,
     days: days,
-    perDay: [for (final d in days) perDay[ymd(d)]!],
+    perDay: perDay,
   );
 }, retry: _noRetry);
+
+/// Cột biểu đồ của thẻ tổng: phủ ĐỦ kỳ đang xem (Tất cả: từ ngày có đơn đầu tiên),
+/// mỗi cột một ngày; kỳ dài hơn 31 ngày thì mỗi cột một tuần (ngày đầu tuần làm nhãn).
+(List<DateTime>, List<num>) _cotTheoKy((DateTime, DateTime)? range, DateTime now, Object? theoNgay) {
+  final tien = <String, num>{};
+  for (final d in (theoNgay is List ? theoNgay : const []).whereType<Map>()) {
+    tien['${d['ngay']}'] = (d['tong_tien'] as num?) ?? 0;
+  }
+  final homNay = DateTime(now.year, now.month, now.day);
+  final dau = range?.$1 ?? (tien.isEmpty ? homNay : DateTime.parse((tien.keys.toList()..sort()).first));
+  final cuoi = range?.$2 ?? homNay;
+  final n = cuoi.difference(dau).inDays + 1;
+  final buoc = n > 31 ? 7 : 1;
+  final days = <DateTime>[], perDay = <num>[];
+  for (var i = 0; i < n; i += buoc) {
+    final batDau = DateTime(dau.year, dau.month, dau.day + i);
+    days.add(batDau);
+    perDay.add([
+      for (var j = 0; j < buoc && i + j < n; j++) tien[ymd(DateTime(dau.year, dau.month, dau.day + i + j))] ?? 0,
+    ].fold<num>(0, (a, b) => a + b));
+  }
+  return (days, perDay);
+}
 
 /// Chi tiết một đơn (GET /admin/orders/{id}). Giữ trong bộ nhớ khi còn dùng —
 /// thẻ đơn đọc ảnh món + trạng thái từ đây khi dòng sổ chưa có.

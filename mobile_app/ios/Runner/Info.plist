@@ -8,6 +8,10 @@
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Chọn ảnh sản phẩm từ thư viện.</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Kết nối máy in hoá đơn Bluetooth để in phiếu từ điện thoại.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Gửi phiếu tới máy in hoá đơn trong cùng mạng Wi-Fi.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Dùng camera để quét mã vạch và chụp ảnh sản phẩm.</string>
 	<key>CFBundleDisplayName</key>

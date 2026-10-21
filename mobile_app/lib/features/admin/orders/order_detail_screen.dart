@@ -7,7 +7,9 @@ import '../../../app/theme.dart';
 import '../../../core/api/api_exception.dart';
 import '../../../core/format/vn_number.dart';
 import '../../../core/ui/app_icon.dart';
+import '../../../core/ui/money_input.dart';
 import '../../auth/auth_controller.dart';
+import '../../printer/print_sheet.dart';
 import '../../workspace/workspace_widgets.dart' show initialsOf;
 import '../shell/shell_widgets.dart';
 import 'order_widgets.dart';
@@ -40,7 +42,7 @@ class OrderDetailScreen extends ConsumerWidget {
                   _ActBtn(
                     label: 'In phiếu trả',
                     icon: AppIcons.print,
-                    onTap: () => showDashToast(context, 'In trên mobile — sắp có'),
+                    onTap: () => openPrintSheet(context, ref, code: row.code, returnId: row.id),
                   ),
                 ],
               )
@@ -787,15 +789,20 @@ class _ActBtn extends StatelessWidget {
               AppIcon(icon, size: 19, color: primary ? Colors.white : OrderColors.ink),
               if (!square) ...[
                 const SizedBox(width: 6),
+                // Co chữ chứ không cắt: nhãn nút Thu mang số tiền ("Thu
+                // 24.200.000") nên dấu … cắt mất đuôi số, đọc thành số khác.
                 Flexible(
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: primary ? Colors.white : OrderColors.ink,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      style: TextStyle(
+                        color: primary ? Colors.white : OrderColors.ink,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ),
@@ -880,7 +887,7 @@ class _Actions extends ConsumerWidget {
       acts.add(('st', statusTag(s).$1, AppIcons.check, () => _setStatus(context, ref, s)));
     }
     void soon(String t) => showDashToast(context, t);
-    acts.add(('print', 'In hoá đơn', AppIcons.print, () => soon('In trên mobile — sắp có')));
+    acts.add(('print', 'In hoá đơn', AppIcons.print, () => openPrintSheet(context, ref, code: row.code, order: o)));
     if (row.canEInvoice && row.ledgerStatus == 'paid') {
       acts.add(('etax', 'Xuất HĐĐT', AppIcons.doc, () => soon('Xuất HĐĐT trên mobile — sắp có')));
     }
@@ -890,7 +897,9 @@ class _Actions extends ConsumerWidget {
     acts.add(('copy', 'Sao chép đơn', AppIcons.copy, () => soon('Tạo đơn mới cùng sản phẩm → màn Bán hàng — sắp có')));
 
     final main = acts.take(2).toList(), rest = acts.skip(2).toList();
-    final canCancel = o['can_cancel'] == true;
+    // can_cancel của API là cờ KHÁCH tự huỷ trên web bán hàng (đường quản trị luôn
+    // false) — quản trị huỷ được hay không theo next_statuses, như bản PC.
+    final canCancel = next.contains('cancelled');
     bool isPrimary(int i) =>
         (i == 0 && (main[0].$1 == 'pay' || main[0].$1 == 'st')) || (i == 1 && main[0].$1 == 'print');
 
@@ -952,7 +961,7 @@ class _PaySheet extends StatefulWidget {
 }
 
 class _PaySheetState extends State<_PaySheet> {
-  late final _ctl = TextEditingController(text: '${widget.debt.round()}');
+  late final _ctl = TextEditingController(text: dot(widget.debt));
   String _method = 'cash';
   String? _err;
 
@@ -963,7 +972,7 @@ class _PaySheetState extends State<_PaySheet> {
   }
 
   void _ok() {
-    final v = int.tryParse(_ctl.text);
+    final v = undot(_ctl.text);
     if (v == null || v <= 0) return setState(() => _err = 'Nhập số tiền thu');
     // Thu quá phần còn nợ thì API cũng từ chối (422) — báo ngay ở đây cho khỏi chờ.
     if (v > widget.debt) return setState(() => _err = 'Không thu quá ${dot(widget.debt)} đ còn nợ');
@@ -1000,17 +1009,25 @@ class _PaySheetState extends State<_PaySheet> {
             key: const Key('pay_amount'),
             controller: _ctl,
             keyboardType: TextInputType.number,
-            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            inputFormatters: const [MoneyInputFormatter()],
             style: const TextStyle(
               color: OrderColors.ink,
               fontSize: 26,
               fontWeight: FontWeight.w700,
               fontFeatures: _tnum,
             ),
+            // Viền + con trỏ theo màu của khu Quản trị: theme chung vẫn mang
+            // màu tím của màn đăng nhập, để nguyên thì ô đang gõ viền tím giữa
+            // một màn navy–xanh.
+            cursorColor: OrderColors.primary,
             decoration: InputDecoration(
               suffixText: 'đ',
               errorText: _err,
               helperText: 'Còn phải thu ${dot(widget.debt)} đ',
+              focusedBorder: const OutlineInputBorder(
+                borderRadius: BorderRadius.all(Radius.circular(12)),
+                borderSide: BorderSide(color: OrderColors.primary, width: 2),
+              ),
             ),
           ),
           const SizedBox(height: 14),
@@ -1021,13 +1038,14 @@ class _PaySheetState extends State<_PaySheet> {
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
+            runSpacing: 8,
             children: [
               for (final (k, v) in const [
                 ('cash', 'Tiền mặt'),
                 ('bank_transfer', 'Chuyển khoản'),
                 ('card', 'Quẹt thẻ'),
               ])
-                ChoiceChip(label: Text(v), selected: _method == k, onSelected: (_) => setState(() => _method = k)),
+                _MethodChip(label: v, on: _method == k, onTap: () => setState(() => _method = k)),
             ],
           ),
           const SizedBox(height: 16),
@@ -1041,6 +1059,45 @@ class _PaySheetState extends State<_PaySheet> {
       ),
     );
   }
+}
+
+/// Chip hình thức thu tiền. Tự vẽ chứ không dùng ChoiceChip: chip của Material 3
+/// khi chọn thì nền tím nhạt (secondaryContainer) — lạc hẳn khỏi bảng màu navy
+/// + xanh của app. Hình dáng giống dải chip kỳ ở màn Đơn hàng.
+class _MethodChip extends StatelessWidget {
+  const _MethodChip({required this.label, required this.on, required this.onTap});
+
+  final String label;
+  final bool on;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: on ? OrderColors.primary : Colors.white,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(16),
+      side: BorderSide(color: on ? OrderColors.primary : OrderColors.line),
+    ),
+    child: InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: onTap,
+      // Center(widthFactor: 1) chứ không Container(alignment:): đặt alignment là
+      // Container nở hết bề ngang Wrap cho sẵn, ba chip thành ba hàng.
+      child: SizedBox(
+        height: 34,
+        child: Center(
+          widthFactor: 1,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: Text(
+              label,
+              style: TextStyle(color: on ? Colors.white : OrderColors.text, fontSize: 13, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
 }
 
 class _CancelSheet extends StatefulWidget {

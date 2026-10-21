@@ -12,8 +12,10 @@ import '../../workspace/workspace_widgets.dart' show SheetButton;
 import '../dashboard/dashboard_data.dart' show dashBranchesProvider;
 import '../orders/order_widgets.dart' show mediaUrl;
 import '../shell/shell_widgets.dart';
+import '../../auth/permissions.dart';
 import 'goods_data.dart';
 import 'goods_widgets.dart';
+import 'label_print.dart';
 import 'product_form_data.dart';
 import 'scanner_screen.dart';
 
@@ -547,7 +549,8 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
       isScrollControlled: true,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(18))),
-      builder: (ctx) => _DoneSheet(name: name, sku: sku, variants: variants.length),
+      builder: (ctx) =>
+          _DoneSheet(name: name, sku: sku, variants: variants.length, canStock: permsOf(ref).can(Quyen.suaTonKho)),
     );
     if (!mounted) return;
     switch (pick) {
@@ -555,7 +558,10 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
         await _openingStock(variants);
         if (mounted) await _done(d, name, sku, variants);
       case 'label':
-        _toast('In tem mã vạch trên mobile — sắp có');
+        await Navigator.of(
+          context,
+          rootNavigator: true,
+        ).push<void>(MaterialPageRoute(builder: (_) => LabelPrintScreen(items: labelItemsOf(d))));
         if (mounted) await _done(d, name, sku, variants);
       case 'view':
         Navigator.of(context).pop(id);
@@ -637,6 +643,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
   Widget build(BuildContext context) {
     final src = ref.watch(productFormSourcesProvider).value ?? const FormSources();
     final cats = ref.watch(goodsCatalogProvider).value?.categories ?? const [];
+    final perms = permsOf(ref);
     final branches = ref.watch(dashBranchesProvider).value ?? const [];
     final tax = src.taxes.firstWhere((t) => t.key == _taxKey, orElse: () => src.taxes.first);
     final top = MediaQuery.paddingOf(context).top;
@@ -658,23 +665,25 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
             ),
             child: Row(
               children: [
-                Expanded(
-                  child: _edit
-                      ? _BigBtn(
-                          key: const Key('form_delete'),
-                          label: 'Xoá',
-                          danger: true,
-                          busy: _deleting,
-                          onTap: _delete,
-                        )
-                      : _BigBtn(
-                          key: const Key('form_save_more'),
-                          label: 'Lưu & thêm tiếp',
-                          busy: _savingMore,
-                          onTap: () => _save(src, again: true),
-                        ),
-                ),
-                const SizedBox(width: 10),
+                if (!_edit || perms.can(Quyen.xoaSanPham)) ...[
+                  Expanded(
+                    child: _edit
+                        ? _BigBtn(
+                            key: const Key('form_delete'),
+                            label: 'Xoá',
+                            danger: true,
+                            busy: _deleting,
+                            onTap: _delete,
+                          )
+                        : _BigBtn(
+                            key: const Key('form_save_more'),
+                            label: 'Lưu & thêm tiếp',
+                            busy: _savingMore,
+                            onTap: () => _save(src, again: true),
+                          ),
+                  ),
+                  const SizedBox(width: 10),
+                ],
                 Expanded(
                   child: _BigBtn(
                     key: const Key('form_save'),
@@ -755,7 +764,8 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
             child: ListView(
               scrollDirection: Axis.horizontal,
               children: [
-                if (_d.images.length + _uploading < _maxPics)
+                // Tải ảnh đi qua quyền thêm sản phẩm (router.go) — không có thì không bày ô thêm ảnh.
+                if (_d.images.length + _uploading < _maxPics && permsOf(ref).can(Quyen.themSanPham))
                   _AddPic(
                     key: const Key('form_image'),
                     label: _d.images.isEmpty ? 'Thêm ảnh' : '${_d.images.length}/$_maxPics',
@@ -1676,11 +1686,14 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
 // ---------- Ngăn sau khi lưu ----------
 
 class _DoneSheet extends StatelessWidget {
-  const _DoneSheet({required this.name, required this.sku, required this.variants});
+  const _DoneSheet({required this.name, required this.sku, required this.variants, this.canStock = true});
 
   final String name;
   final String sku;
   final int variants;
+
+  /// Có quyền chỉnh kho (nhập tồn ban đầu).
+  final bool canStock;
 
   @override
   Widget build(BuildContext context) {
@@ -1754,7 +1767,7 @@ class _DoneSheet extends StatelessWidget {
             style: const TextStyle(color: OrderColors.muted, fontSize: 13),
           ),
           const SizedBox(height: 16),
-          next('stock', AppIcons.truck, 'Nhập hàng ban đầu', 'Sản phẩm mới đang tồn 0'),
+          if (canStock) next('stock', AppIcons.truck, 'Nhập hàng ban đầu', 'Sản phẩm mới đang tồn 0'),
           next('label', AppIcons.barcode, 'In tem mã vạch', 'Dán lên sản phẩm để quét ở quầy'),
           next('view', AppIcons.eye, 'Xem sản phẩm', 'Mở chi tiết vừa tạo'),
           Container(

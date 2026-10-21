@@ -10,7 +10,9 @@ import '../workspace/workspace_widgets.dart' show SheetButton, initialsOf;
 import 'dashboard/dashboard_data.dart';
 import 'dashboard/dashboard_screen.dart';
 import 'goods/goods_screen.dart';
+import 'orders/orders_data.dart';
 import 'orders/orders_screen.dart';
+import 'shell/more_menu.dart';
 import 'shell/shell_widgets.dart';
 
 /// Khung app của khu Quản trị: thanh dưới 5 mục, thanh navy thu gọn, ngăn tài khoản và "Thêm".
@@ -32,40 +34,6 @@ class _AdminShellState extends ConsumerState<AdminShell> {
   /// Hàng hoá tải cả danh mục một lượt — chỉ dựng (và gọi API) khi mở tab lần đầu.
   bool _goodsOpened = false;
 
-  static const _functions = [
-    (
-      'Bán hàng',
-      [
-        ('Đơn hàng', AppIcons.receipt),
-        ('Trả hàng', AppIcons.returns),
-        ('Khách hàng', AppIcons.users),
-        ('Ca làm việc', AppIcons.clock),
-      ],
-    ),
-    (
-      'Hàng hoá & kho',
-      [
-        ('Hàng hoá', AppIcons.box),
-        ('Tồn kho', AppIcons.store),
-        ('Nhập hàng', AppIcons.truck),
-        ('Kiểm kho', AppIcons.clip),
-        ('Nhà cung cấp', AppIcons.factory),
-        ('Trả hàng NCC', AppIcons.returns),
-      ],
-    ),
-    ('Marketing', [('Khuyến mại', AppIcons.tag), ('Voucher', AppIcons.ticket), ('Bài viết', AppIcons.news)]),
-    (
-      'Quản lý',
-      [
-        ('Báo cáo', AppIcons.chart),
-        ('Nhân viên', AppIcons.user),
-        ('Chi nhánh', AppIcons.store),
-        ('Phân quyền', AppIcons.shield),
-        ('Cài đặt', AppIcons.gear),
-      ],
-    ),
-  ];
-
   bool get _canCashier {
     final u = ref.read(authProvider).value?.user;
     return u != null &&
@@ -77,6 +45,17 @@ class _AdminShellState extends ConsumerState<AdminShell> {
   void _toCashier() => ref.read(currentAreaProvider.notifier).enter(WorkspaceArea.thuNgan);
 
   void _soon(String name) => showDashToast(context, '$name — màn chưa thiết kế');
+
+  /// Bấm số đỏ trên tab Đơn hàng thì mở thẳng chỗ ĐANG CÓ mấy đơn ấy: số đỏ
+  /// đếm cả tháng, mà màn Đơn hàng mở sẵn ở "Hôm nay" — bấm vào rồi thấy danh
+  /// sách trống là chuyện cũ hay gặp.
+  ///
+  /// Chỉ nhảy khi người dùng CHƯA tự lọc gì: họ đã chọn kỳ hay tab riêng thì
+  /// lựa chọn ấy là của họ, không được đè.
+  void _theoSoDo(UnfinishedOrders chuaXong) {
+    final moi = chuaXong.locKhiBam(ref.read(ordersFilterProvider));
+    if (moi != null) ref.read(ordersFilterProvider.notifier).set(moi);
+  }
 
   void _goHome(VoidCallback then) {
     if (_tab == AdminTab.home) return then();
@@ -171,73 +150,15 @@ class _AdminShellState extends ConsumerState<AdminShell> {
   }
 
   Future<void> _openMore() async {
-    final pick = await showDashSheet<String>(
+    final pick = await showDashSheet<Object>(
       context,
       title: 'Tất cả chức năng',
+      subtitle: 'Theo module như Quản trị trên máy tính',
       body: (ctx) => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          for (final (group, items) in _functions)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(4, 4, 4, 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    group.toUpperCase(),
-                    style: const TextStyle(
-                      color: DashColors.muted,
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: .7,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  GridView.count(
-                    crossAxisCount: 4,
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    mainAxisSpacing: 6,
-                    crossAxisSpacing: 6,
-                    childAspectRatio: .9,
-                    children: [
-                      for (final (name, icon) in items)
-                        InkWell(
-                          borderRadius: BorderRadius.circular(14),
-                          onTap: () => Navigator.of(ctx).pop(name),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Container(
-                                width: 44,
-                                height: 44,
-                                alignment: Alignment.center,
-                                decoration: BoxDecoration(
-                                  color: DashColors.primarySoft,
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                                child: AppIcon(icon, size: 21, color: DashColors.primaryDeep),
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                name,
-                                textAlign: TextAlign.center,
-                                maxLines: 2,
-                                style: const TextStyle(
-                                  color: DashColors.text,
-                                  fontSize: 11.5,
-                                  fontWeight: FontWeight.w500,
-                                  height: 1.25,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
+          MoreModules(current: _tab, onPick: (i) => Navigator.of(ctx).pop(i)),
+          const SizedBox(height: 8),
           if (_canCashier)
             Material(
               borderRadius: BorderRadius.circular(14),
@@ -298,8 +219,15 @@ class _AdminShellState extends ConsumerState<AdminShell> {
         _toCashier();
       case '__logout':
         await _confirmLogout();
-      default:
-        _soon(pick);
+      case MoreItem(:final tab?):
+        setState(() {
+          _tab = tab;
+          _goodsOpened |= tab == AdminTab.goods;
+        });
+      case MoreItem(:final page?):
+        await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => page()));
+      case MoreItem(:final name):
+        _soon(name);
     }
   }
 
@@ -332,7 +260,7 @@ class _AdminShellState extends ConsumerState<AdminShell> {
     final data = q == null ? null : ref.watch(dashboardProvider(q)).value;
     final branches = ref.watch(dashBranchesProvider).value ?? const [];
     final branchName = q == null ? '…' : branchLabel(q.shopId, branches);
-    final pending = ref.watch(pendingOrdersProvider).value ?? 0;
+    final chuaXong = ref.watch(unfinishedOrdersProvider).value ?? const UnfinishedOrders();
     final home = _tab == AdminTab.home;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
@@ -342,8 +270,9 @@ class _AdminShellState extends ConsumerState<AdminShell> {
         // Thanh dưới ở bottomNavigationBar: thông báo nổi lên trên nó thay vì che các tab.
         bottomNavigationBar: AdminTabBar(
           current: _tab,
-          orderCount: pending,
+          orderCount: chuaXong.total,
           onTab: (t) => setState(() {
+            if (t == AdminTab.orders && _tab != t) _theoSoDo(chuaXong);
             _tab = t;
             _goodsOpened |= t == AdminTab.goods;
           }),

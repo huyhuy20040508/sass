@@ -7,6 +7,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:selliotech/app/theme.dart';
 import 'package:selliotech/core/api/api_client.dart';
 import 'package:selliotech/core/format/vn_number.dart';
 import 'package:selliotech/core/net/online_provider.dart';
@@ -139,6 +140,20 @@ class _Api implements HttpClientAdapter {
             'tong_tien': rows.fold<num>(0, (a, r) => a + (r['tong_tien'] as num)),
             // Bản vá sổ đơn: tổng nợ + số theo tab nằm trong meta.tong.
             if (procSupported) 'con_no': rows.fold<num>(0, (a, r) => a + (r['con_no'] as num)),
+            if (q['theo_ngay'] == '1')
+              'theo_ngay': [
+                for (final ngay in {
+                  for (final r in rows)
+                    if (r['loai'] == 'don') '${r['created_at']}'.substring(0, 10),
+                })
+                  {
+                    'ngay': ngay,
+                    'so_dong': rows.where((r) => r['loai'] == 'don' && '${r['created_at']}'.startsWith(ngay)).length,
+                    'tong_tien': rows
+                        .where((r) => r['loai'] == 'don' && '${r['created_at']}'.startsWith(ngay))
+                        .fold<num>(0, (a, r) => a + (r['tong_tien'] as num)),
+                  },
+              ],
             if (procSupported)
               'dem': {
                 for (final g in ['pending', 'doing', 'done'])
@@ -285,7 +300,12 @@ void main() {
         sales.fold<num>(0, (a, r) => a + (r['tong_tien'] as num)) -
         ret.fold<num>(0, (a, r) => a + (r['tong_tien'] as num));
     final text = t.widget<Text>(find.byKey(const Key('orders_revenue'))).textSpan!.toPlainText();
-    expect(text, '${dot(revenue)} · ${sales.length} đơn');
+    // "đơn bán" + "phiếu trả" tách ra: con số tiền đã TRỪ phiếu trả nên không
+    // được đếm chung một chữ "đơn" (lỗi 84).
+    expect(text, '${dot(revenue)} · ${sales.length} đơn bán · ${ret.length} phiếu trả');
+    expect(find.textContaining('Tổng tiền đơn · tháng này'), findsOneWidget);
+    expect(find.text('gồm VAT và đơn chưa thu'), findsOneWidget);
+    expect(find.textContaining('Doanh thu · '), findsNothing, reason: 'số này không phải doanh thu thuần');
 
     expect(find.text(dayLabel(DateTime(2026, 10, 16), _now)), findsOneWidget);
     expect(find.text('DH000073'), findsOneWidget);
@@ -377,6 +397,15 @@ void main() {
 
     await t.tap(find.byKey(const Key('act_pay')));
     await _settle(t);
+
+    // Ô tiền mở sẵn số CÓ CHẤM như mọi số tiền khác trong app, và chip đang
+    // chọn mang màu nhấn của màn — không phải nền tím của ChoiceChip (lỗi 87).
+    expect(t.widget<TextField>(find.byKey(const Key('pay_amount'))).controller!.text, '24.200.000');
+    final chip = t.widget<Material>(
+      find.ancestor(of: find.text('Tiền mặt'), matching: find.byType(Material)).first,
+    );
+    expect(chip.color, OrderColors.primary);
+
     await t.enterText(find.byKey(const Key('pay_amount')), '99999999');
     await t.tap(find.byKey(const Key('pay_ok')));
     await t.pump();
@@ -414,6 +443,36 @@ void main() {
     expect(api.calls.lastWhere((c) => c.path.endsWith('/status')).data, {'status': 'cancelled', 'note': 'Khách đổi ý'});
     expect(find.text('Đã huỷ'), findsWidgets);
     expect(find.text('Khách đổi ý'), findsOneWidget);
+  });
+
+  testWidgets('đơn QR treo (DH000051): huỷ theo next_statuses dù can_cancel = false (KB #83)', (t) async {
+    final api = _Api();
+    api.details['900045']!
+      ..['next_statuses'] = ['cancelled']
+      ..['can_cancel'] = false;
+    await _open(t, api: api, time: OrderTime.all);
+    await t.scrollUntilVisible(_card('don', 900045), 400, scrollable: find.byType(Scrollable).last);
+    await t.tap(_card('don', 900045));
+    await _settle(t);
+
+    await t.tap(find.byKey(const Key('act_more')));
+    await _settle(t);
+    await t.tap(find.byKey(const Key('act_cancel')));
+    await _settle(t);
+    await t.enterText(find.byKey(const Key('cancel_reason')), 'Khách bỏ không quét QR');
+    await t.tap(find.byKey(const Key('cancel_ok')));
+    await _settle(t);
+    expect(api.calls.lastWhere((c) => c.path.endsWith('/status')).data, {'status': 'cancelled', 'note': 'Khách bỏ không quét QR'});
+  });
+
+  testWidgets('thẻ tổng: biểu đồ phủ đủ kỳ từ meta.tong.theo_ngay, không tải trang để tự cộng (KB #85)', (t) async {
+    final api = await _open(t, time: OrderTime.thisMonth);
+    // Tháng này tới 18/10: trục chạy 01/10 → 18/10, không còn cắt 14 ngày cuối.
+    expect(find.text('01/10'), findsWidgets);
+    expect(find.text('18/10'), findsWidgets);
+    final tongTheoNgay = api.soDon().where((c) => c.queryParameters['theo_ngay'] == '1');
+    expect(tongTheoNgay.map((c) => c.queryParameters['from_date']), contains('2026-10-01'));
+    expect(api.soDon().where((c) => c.queryParameters['page'] == '2' || c.queryParameters['page'] == '3'), isEmpty);
   });
 
   testWidgets('phiếu trả: chi tiết gọn, không gọi API đơn', (t) async {

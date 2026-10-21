@@ -8,8 +8,10 @@ import '../../../core/format/vn_number.dart';
 import '../../../core/ui/app_icon.dart';
 import '../../workspace/workspace_widgets.dart' show SheetButton;
 import '../shell/shell_widgets.dart';
+import '../../auth/permissions.dart';
 import 'goods_data.dart';
 import 'goods_widgets.dart';
+import 'label_print.dart';
 import 'product_form_data.dart';
 import 'product_form_screen.dart';
 
@@ -59,25 +61,29 @@ class ProductDetailScreen extends ConsumerWidget {
     final branches = ref.watch(productBranchStockProvider((it.id, it.sku)));
     final src = ref.watch(productFormSourcesProvider).value ?? const FormSources();
     final d = detail.value;
+    final perms = permsOf(ref);
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.dark,
       child: Scaffold(
         backgroundColor: OrderColors.page,
-        bottomNavigationBar: Container(
-          padding: EdgeInsets.fromLTRB(12, 10, 12, MediaQuery.viewPaddingOf(context).bottom + 10),
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            boxShadow: [BoxShadow(color: OrderColors.line, offset: Offset(0, -1))],
-          ),
-          child: GoodsBtn(
-            key: const Key('product_edit'),
-            label: 'Sửa sản phẩm',
-            icon: AppIcons.edit,
-            primary: true,
-            onTap: () => _edit(context, ref, d),
-          ),
-        ),
+        // Không có quyền sửa thì không có chân màn.
+        bottomNavigationBar: !perms.can(Quyen.suaSanPham)
+            ? null
+            : Container(
+                padding: EdgeInsets.fromLTRB(12, 10, 12, MediaQuery.viewPaddingOf(context).bottom + 10),
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  boxShadow: [BoxShadow(color: OrderColors.line, offset: Offset(0, -1))],
+                ),
+                child: GoodsBtn(
+                  key: const Key('product_edit'),
+                  label: 'Sửa sản phẩm',
+                  icon: AppIcons.edit,
+                  primary: true,
+                  onTap: () => _edit(context, ref, d),
+                ),
+              ),
         body: Column(
           children: [
             const _Head(),
@@ -98,8 +104,8 @@ class ProductDetailScreen extends ConsumerWidget {
                   physics: const AlwaysScrollableScrollPhysics(),
                   padding: const EdgeInsets.only(bottom: 12),
                   children: [
-                    _hero(context, ref, it, d),
-                    _quick(context, ref, it),
+                    _hero(context, ref, it, d, perms),
+                    _quick(context, ref, it, perms),
                     _Block(title: 'Tồn kho', child: _stock(branches)),
                     if (_isMulti(d)) _attributes(it, d!),
                     _Block(
@@ -115,6 +121,16 @@ class ProductDetailScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _labels(BuildContext context, WidgetRef ref, GoodsItem it) async {
+    final d = ref.read(productDetailProvider(it.id)).value;
+    final items = labelItemsOf(d, it);
+    if (items.isEmpty) return showDashToast(context, 'Đang tải chi tiết sản phẩm, thử lại sau giây lát');
+    await Navigator.of(
+      context,
+      rootNavigator: true,
+    ).push<void>(MaterialPageRoute(builder: (_) => LabelPrintScreen(items: items)));
   }
 
   Future<void> _edit(BuildContext context, WidgetRef ref, Map<String, dynamic>? d) async {
@@ -138,7 +154,7 @@ class ProductDetailScreen extends ConsumerWidget {
     return const _Loading();
   }
 
-  Widget _hero(BuildContext context, WidgetRef ref, GoodsItem it, Map<String, dynamic>? d) {
+  Widget _hero(BuildContext context, WidgetRef ref, GoodsItem it, Map<String, dynamic>? d, Perms perms) {
     final multi = _isMulti(d);
     final n = _variantsOf(d).length;
     final status = '${d?['status'] ?? it.j['status'] ?? (it.active ? 'active' : 'hidden')}';
@@ -214,7 +230,7 @@ class ProductDetailScreen extends ConsumerWidget {
                       label: 'Giá bán',
                       value: dot(base),
                       color: OrderColors.primaryInk,
-                      onTap: () => _editMoney(context, ref, it, d, price: true),
+                      onTap: perms.can(Quyen.suaSanPham) ? () => _editMoney(context, ref, it, d, price: true) : null,
                     ),
                   ),
                   const VerticalDivider(width: 1, thickness: 1, color: OrderColors.line),
@@ -223,7 +239,7 @@ class ProductDetailScreen extends ConsumerWidget {
                       key: const Key('edit_cost'),
                       label: 'Giá vốn',
                       value: it.cost == null ? null : dot(it.cost!),
-                      onTap: () => _editMoney(context, ref, it, d, price: false),
+                      onTap: perms.can(Quyen.giaVon) ? () => _editMoney(context, ref, it, d, price: false) : null,
                     ),
                   ),
                   const VerticalDivider(width: 1, thickness: 1, color: OrderColors.line),
@@ -246,7 +262,7 @@ class ProductDetailScreen extends ConsumerWidget {
   }
 
   /// Thao tác nhanh: 4 nút tròn có nhãn như app Sapo.
-  Widget _quick(BuildContext context, WidgetRef ref, GoodsItem it) {
+  Widget _quick(BuildContext context, WidgetRef ref, GoodsItem it, Perms perms) {
     Widget btn(String label, AppIcons icon, VoidCallback onTap, {bool danger = false, Key? key}) => Expanded(
       child: InkWell(
         key: key,
@@ -285,20 +301,22 @@ class ProductDetailScreen extends ConsumerWidget {
       child: Row(
         children: [
           btn('Nhập hàng', AppIcons.truck, () => showDashToast(context, 'Tạo phiếu nhập trên mobile — sắp có')),
-          btn('In mã vạch', AppIcons.barcode, () => showDashToast(context, 'In tem mã vạch trên mobile — sắp có')),
-          btn(
-            'Sao chép',
-            AppIcons.copy,
-            () => _confirm(context, ref, it, copy: true),
-            key: const Key('product_duplicate'),
-          ),
-          btn(
-            it.active ? 'Ngừng bán' : 'Mở bán',
-            it.active ? AppIcons.eyeOff : AppIcons.eye,
-            () => _confirm(context, ref, it, copy: false),
-            danger: true,
-            key: const Key('product_toggle'),
-          ),
+          btn('In mã vạch', AppIcons.barcode, () => _labels(context, ref, it), key: const Key('product_labels')),
+          if (perms.can(Quyen.themSanPham))
+            btn(
+              'Sao chép',
+              AppIcons.copy,
+              () => _confirm(context, ref, it, copy: true),
+              key: const Key('product_duplicate'),
+            ),
+          if (perms.can(Quyen.suaSanPham))
+            btn(
+              it.active ? 'Ngừng bán' : 'Mở bán',
+              it.active ? AppIcons.eyeOff : AppIcons.eye,
+              () => _confirm(context, ref, it, copy: false),
+              danger: true,
+              key: const Key('product_toggle'),
+            ),
         ],
       ),
     );

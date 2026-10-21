@@ -14,6 +14,15 @@ String dot(num n) {
   return r < 0 ? '-$b' : b.toString();
 }
 
+/// "24.200.000" → 24200000; chuỗi không có chữ số nào → null.
+///
+/// Đi cùng [dot] cho các ô nhập tiền: người gõ thấy số có chấm, còn mã đọc ra
+/// số thô để gửi API.
+int? undot(String s) {
+  final so = s.replaceAll(RegExp(r'[^0-9]'), '');
+  return so.isEmpty ? null : int.tryParse(so);
+}
+
 /// Số thập phân tối đa [digits] chữ số, bỏ số 0 thừa: 12.50 → "12,5".
 String decimal(num n, int digits) {
   final f = n.toStringAsFixed(digits);
