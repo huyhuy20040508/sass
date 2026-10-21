@@ -14,9 +14,8 @@ import '../goods/goods_data.dart';
 import '../goods/product_form_data.dart' show vatName;
 import '../shell/more_menu.dart' show MoreHost;
 import '../shell/shell_widgets.dart';
+import '../shell/list_kit.dart';
 import 'categories_data.dart';
-
-const _low = Color(0xFFB45309), _lowBg = Color(0xFFFFF4E5), _out = Color(0xFFB91C1C);
 
 /// Nhóm hàng hoá theo design/html/nhom-hang-mobile.html (v3): cùng chức năng màn "Quản lý
 /// nhóm hàng hoá" của PC (cây bên trái + bảng nhóm con), đổi sang chạm vào từng tầng.
@@ -89,23 +88,8 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
     });
   }
 
-  void _toast(String text, {String? action, VoidCallback? onAction}) {
-    final m = ScaffoldMessenger.of(context);
-    m.hideCurrentSnackBar();
-    m.showSnackBar(
-      SnackBar(
-        content: Text(text, style: const TextStyle(fontFamily: appFont, fontSize: 13)),
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: OrderColors.ink,
-        duration: Duration(milliseconds: action == null ? 2600 : 4500),
-        margin: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        action: action == null
-            ? null
-            : SnackBarAction(label: action, textColor: const Color(0xFF8EC5FF), onPressed: onAction ?? () {}),
-      ),
-    );
-  }
+  void _toast(String text, {String? action, VoidCallback? onAction}) =>
+      showActionToast(context, text, action: action, onAction: onAction);
 
   /// Bật/tắt qua ⋯ (dòng không có công tắc — chạm nhầm lúc cuộn là tắt mất nhóm), có Hoàn tác.
   Future<void> _setActive(Category c, bool on) async {
@@ -148,7 +132,7 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
       subtitle: [c.code, if (k > 0) '$k nhóm con', '${dot(p)} sản phẩm'].join(' · '),
       body: (ctx) {
         Widget item(String key, AppIcons icon, String label, {String? note, bool danger = false, bool off = false}) =>
-            _ActionRow(
+            KitActionRow(
               key: Key('cat_act_$key'),
               icon: icon,
               label: label,
@@ -235,7 +219,7 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
               ),
             ),
           if (no.isNotEmpty)
-            _Warn(
+            KitWarn(
               key: const Key('cat_del_skip'),
               text: 'Bỏ qua ${no.length} nhóm: ${no.map((c) => '${c.name} (${t.whyNotDelete(c)})').join(', ')}.',
             ),
@@ -243,15 +227,15 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
           Row(
             children: [
               Expanded(
-                child: _Btn(label: 'Huỷ', onTap: () => Navigator.of(ctx).pop(false)),
+                child: KitBtn(label: 'Huỷ', onTap: () => Navigator.of(ctx).pop(false)),
               ),
               const SizedBox(width: 10),
               Expanded(
-                child: _Btn(
+                child: KitBtn(
                   key: const Key('cat_del_yes'),
                   label: ok.length > 1 ? 'Xoá ${ok.length} nhóm' : 'Xoá',
                   icon: AppIcons.trash,
-                  color: _out,
+                  color: kOut,
                   onTap: ok.isEmpty ? null : () => Navigator.of(ctx).pop(true),
                 ),
               ),
@@ -321,7 +305,7 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           for (final r in t.roots)
-            _ActionRow(
+            KitActionRow(
               key: Key('cat_pick_${r.id}'),
               icon: AppIcons.layers,
               label: r.name,
@@ -417,7 +401,7 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
                     padding: const EdgeInsets.only(bottom: 24),
                     children: [
                       if (t == null && async.hasError)
-                        _Empty(
+                        KitEmpty(
                           icon: AppIcons.alert,
                           title: 'Không tải được nhóm hàng',
                           text: async.error is ApiException
@@ -442,7 +426,8 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
                 ),
               ),
               if (sel != null && t != null)
-                _SelBar(
+                KitSelBar(
+                  keyPrefix: 'cat',
                   count: picked.length,
                   onCancel: () => setState(() => _sel = null),
                   onDelete: picked.isEmpty ? null : () => _askDelete(picked, t),
@@ -633,7 +618,7 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
         Container(
           margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
           padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
-          decoration: BoxDecoration(color: _lowBg, borderRadius: BorderRadius.circular(12)),
+          decoration: BoxDecoration(color: kLowBg, borderRadius: BorderRadius.circular(12)),
           child: Row(
             children: [
               const AppIcon(AppIcons.eyeOff, size: 18, color: Color(0xFF7C4A03)),
@@ -650,7 +635,7 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
                   onPressed: () => _setActive(c, true),
                   style: TextButton.styleFrom(
                     backgroundColor: Colors.white,
-                    foregroundColor: _low,
+                    foregroundColor: kLow,
                     minimumSize: const Size(0, 34),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
                     textStyle: const TextStyle(fontFamily: appFont, fontSize: 13, fontWeight: FontWeight.w700),
@@ -702,12 +687,13 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
           ],
         )
       else
-        _Empty(
+        KitEmpty(
           icon: AppIcons.folder,
           title: 'Chưa có nhóm con',
           text:
               '${own > 0 ? 'Nhóm này đang chứa ${dot(own)} sản phẩm. ' : ''}Thêm nhóm con để chia nhỏ hàng trong ${c.name}.',
           action: canAdd ? 'Thêm nhóm con' : null,
+          actionKey: const Key('cat_empty_action'),
           onAction: () => _openForm(t, parentId: c.id),
         ),
     ];
@@ -729,7 +715,7 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
         ),
       ),
       if (rs.isEmpty)
-        _Empty(
+        KitEmpty(
           icon: AppIcons.search,
           title: 'Không có nhóm nào khớp “$_q”',
           text: 'Thử tên ngắn hơn, hoặc thêm nhóm mới.',
@@ -797,7 +783,7 @@ class _Header extends StatelessWidget {
               padding: EdgeInsets.fromLTRB(onBack == null ? 16 : 6, 0, 10, 0),
               child: Row(
                 children: [
-                  if (onBack != null) _IconBtn(icon: AppIcons.back, tooltip: 'Quay lại', onTap: onBack!),
+                  if (onBack != null) KitIconBtn(icon: AppIcons.back, tooltip: 'Quay lại', onTap: onBack!),
                   Expanded(
                     child: Text(
                       title,
@@ -824,8 +810,9 @@ class _Header extends StatelessWidget {
                       ),
                       child: Text(selecting ? 'Xong' : 'Chọn'),
                     ),
-                  if (onMore != null) _IconBtn(icon: AppIcons.dots, tooltip: 'Thao tác với nhóm này', onTap: onMore!),
-                  if (onAdd != null) _IconBtn(icon: AppIcons.plus, tooltip: 'Thêm nhóm', onTap: onAdd!, primary: true),
+                  if (onMore != null) KitIconBtn(icon: AppIcons.dots, tooltip: 'Thao tác với nhóm này', onTap: onMore!),
+                  if (onAdd != null)
+                    KitIconBtn(icon: AppIcons.plus, tooltip: 'Thêm nhóm', onTap: onAdd!, primary: true),
                 ],
               ),
             ),
@@ -918,33 +905,6 @@ class _Crumb extends StatelessWidget {
           color: current ? OrderColors.ink : OrderColors.primaryInk,
           fontSize: 13,
           fontWeight: current ? FontWeight.w700 : FontWeight.w500,
-        ),
-      ),
-    ),
-  );
-}
-
-class _IconBtn extends StatelessWidget {
-  const _IconBtn({required this.icon, required this.tooltip, required this.onTap, this.primary = false});
-
-  final AppIcons icon;
-  final String tooltip;
-  final VoidCallback onTap;
-  final bool primary;
-
-  @override
-  Widget build(BuildContext context) => Tooltip(
-    message: tooltip,
-    child: Material(
-      color: primary ? OrderColors.primary : Colors.transparent,
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: onTap,
-        child: SizedBox(
-          width: 40,
-          height: 40,
-          child: Center(child: AppIcon(icon, size: 22, color: primary ? Colors.white : OrderColors.ink)),
         ),
       ),
     ),
@@ -1081,7 +1041,7 @@ class _CatRow extends StatelessWidget {
                             if (!on)
                               const WidgetSpan(
                                 alignment: PlaceholderAlignment.middle,
-                                child: Padding(padding: EdgeInsets.only(left: 6), child: _OffChip()),
+                                child: Padding(padding: EdgeInsets.only(left: 6), child: OffChip()),
                               ),
                           ],
                         ),
@@ -1152,20 +1112,6 @@ class _CatRow extends StatelessWidget {
   }
 }
 
-class _OffChip extends StatelessWidget {
-  const _OffChip();
-
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-    decoration: BoxDecoration(color: _lowBg, borderRadius: BorderRadius.circular(5)),
-    child: const Text(
-      'Ngừng dùng',
-      style: TextStyle(color: _low, fontSize: 10.5, fontWeight: FontWeight.w700),
-    ),
-  );
-}
-
 class _LinkBtn extends StatelessWidget {
   const _LinkBtn({super.key, required this.label, required this.onTap});
 
@@ -1190,231 +1136,6 @@ class _LinkBtn extends StatelessWidget {
       ),
     ),
   );
-}
-
-class _Empty extends StatelessWidget {
-  const _Empty({required this.icon, required this.title, required this.text, this.action, this.onAction});
-
-  final AppIcons icon;
-  final String title;
-  final String text;
-  final String? action;
-  final VoidCallback? onAction;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    margin: const EdgeInsets.symmetric(horizontal: 12),
-    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 28),
-    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14)),
-    child: Column(
-      children: [
-        Container(
-          width: 52,
-          height: 52,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(color: OrderColors.grid, borderRadius: BorderRadius.circular(16)),
-          child: AppIcon(icon, size: 26, color: OrderColors.faint),
-        ),
-        const SizedBox(height: 10),
-        Text(
-          title,
-          textAlign: TextAlign.center,
-          style: const TextStyle(color: OrderColors.ink, fontSize: 15, fontWeight: FontWeight.w700),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          text,
-          textAlign: TextAlign.center,
-          style: const TextStyle(color: OrderColors.muted, fontSize: 13),
-        ),
-        if (action != null) ...[
-          const SizedBox(height: 14),
-          OutlinedButton.icon(
-            key: const Key('cat_empty_action'),
-            onPressed: onAction,
-            style: OutlinedButton.styleFrom(
-              foregroundColor: OrderColors.primaryInk,
-              side: const BorderSide(color: OrderColors.primary),
-              minimumSize: const Size(0, 42),
-              padding: const EdgeInsets.symmetric(horizontal: 18),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(11)),
-              textStyle: const TextStyle(fontFamily: appFont, fontSize: 14, fontWeight: FontWeight.w600),
-            ),
-            icon: const AppIcon(AppIcons.plus, size: 18, color: OrderColors.primaryInk),
-            label: Text(action!),
-          ),
-        ],
-      ],
-    ),
-  );
-}
-
-class _SelBar extends StatelessWidget {
-  const _SelBar({required this.count, required this.onCancel, required this.onDelete});
-
-  final int count;
-  final VoidCallback onCancel;
-  final VoidCallback? onDelete;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-    decoration: const BoxDecoration(
-      color: Colors.white,
-      boxShadow: [
-        BoxShadow(color: OrderColors.line, offset: Offset(0, -1)),
-        BoxShadow(color: Color(0x400F172A), offset: Offset(0, -10), blurRadius: 24, spreadRadius: -16),
-      ],
-    ),
-    child: Row(
-      children: [
-        Expanded(
-          child: Text(
-            'Đã chọn $count',
-            key: const Key('cat_sel_count'),
-            style: const TextStyle(color: OrderColors.ink, fontSize: 14, fontWeight: FontWeight.w600),
-          ),
-        ),
-        _Btn(label: 'Huỷ', onTap: onCancel),
-        const SizedBox(width: 10),
-        _Btn(key: const Key('cat_sel_delete'), label: 'Xoá', icon: AppIcons.trash, color: _out, onTap: onDelete),
-      ],
-    ),
-  );
-}
-
-class _Btn extends StatelessWidget {
-  const _Btn({super.key, required this.label, required this.onTap, this.icon, this.color});
-
-  final String label;
-  final VoidCallback? onTap;
-  final AppIcons? icon;
-
-  /// null = nút viền trắng.
-  final Color? color;
-
-  @override
-  Widget build(BuildContext context) {
-    final fill = color;
-    final fg = fill == null ? OrderColors.ink : Colors.white;
-    return Opacity(
-      opacity: onTap == null ? .45 : 1,
-      child: Material(
-        color: fill ?? Colors.white,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: fill == null ? const BorderSide(color: OrderColors.line) : BorderSide.none,
-        ),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(12),
-          onTap: onTap,
-          child: Container(
-            height: 46,
-            padding: const EdgeInsets.symmetric(horizontal: 18),
-            alignment: Alignment.center,
-            // Chữ dài (vd "Xoá 12 nhóm" trên máy hẹp) thì co lại, không tràn nút.
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (icon != null) ...[AppIcon(icon!, size: 18, color: fg), const SizedBox(width: 6)],
-                  Text(
-                    label,
-                    style: TextStyle(color: fg, fontSize: 15, fontWeight: FontWeight.w600),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ActionRow extends StatelessWidget {
-  const _ActionRow({
-    super.key,
-    required this.icon,
-    required this.label,
-    required this.onTap,
-    this.note,
-    this.danger = false,
-    this.off = false,
-  });
-
-  final AppIcons icon;
-  final String label;
-  final String? note;
-  final bool danger;
-
-  /// Không làm được (vẫn chạm được để nghe lý do).
-  final bool off;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final fg = off
-        ? OrderColors.faint
-        : danger
-        ? _out
-        : OrderColors.ink;
-    return InkWell(
-      borderRadius: BorderRadius.circular(12),
-      onTap: onTap,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 50),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          child: Row(
-            children: [
-              AppIcon(icon, size: 20, color: off || danger ? fg : OrderColors.muted),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(label, style: TextStyle(color: fg, fontSize: 15)),
-                    if (note != null) Text(note!, style: const TextStyle(color: OrderColors.faint, fontSize: 12)),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _Warn extends StatelessWidget {
-  const _Warn({super.key, required this.text, this.error = false});
-
-  final String text;
-  final bool error;
-
-  @override
-  Widget build(BuildContext context) {
-    final fg = error ? const Color(0xFF7F1D1D) : const Color(0xFF7C4A03);
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: error ? const Color(0xFFFDECEC) : _lowBg,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          AppIcon(AppIcons.alert, size: 20, color: fg),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(text, style: TextStyle(color: fg, fontSize: 13, height: 1.5)),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 // ---------- Hộp Thêm / Sửa — khuôn hộp #modalMenuCategory của PC ----------
@@ -1473,7 +1194,7 @@ class _CategoryFormState extends ConsumerState<CategoryForm> {
             TextButton(
               key: const Key('cat_confirm_yes'),
               onPressed: () => Navigator.of(ctx).pop(true),
-              child: Text(yes, style: const TextStyle(color: _out)),
+              child: Text(yes, style: const TextStyle(color: kOut)),
             ),
           ],
         ),
@@ -1682,9 +1403,9 @@ class _CategoryFormState extends ConsumerState<CategoryForm> {
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
                           Expanded(
-                            child: _Field(
+                            child: KitField(
                               label: 'Mã nhóm',
-                              child: _Input(
+                              child: KitInput(
                                 key: const Key('cat_f_code'),
                                 controller: _code,
                                 enabled: false,
@@ -1696,7 +1417,7 @@ class _CategoryFormState extends ConsumerState<CategoryForm> {
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const _Label('Trạng thái'),
+                              const KitLabel('Trạng thái'),
                               SizedBox(
                                 height: 48,
                                 child: Switch(
@@ -1714,12 +1435,13 @@ class _CategoryFormState extends ConsumerState<CategoryForm> {
                         ],
                       ),
                       const SizedBox(height: 14),
-                      _Field(
+                      KitField(
                         label: 'Tên nhóm',
+                        errorKey: const Key('cat_f_name_err'),
                         required: true,
                         counter: '${_name.text.length}/150',
                         error: _nameErr,
-                        child: _Input(
+                        child: KitInput(
                           key: const Key('cat_f_name'),
                           controller: _name,
                           hint: 'Nhập tên nhóm hàng hoá',
@@ -1733,7 +1455,7 @@ class _CategoryFormState extends ConsumerState<CategoryForm> {
                         ),
                       ),
                       const SizedBox(height: 14),
-                      const _Label('% VAT'),
+                      const KitLabel('% VAT'),
                       Wrap(
                         spacing: 6,
                         runSpacing: 6,
@@ -1788,7 +1510,7 @@ class _CategoryFormState extends ConsumerState<CategoryForm> {
                               key: const Key('cat_kids_clear'),
                               onPressed: _clearKids,
                               style: TextButton.styleFrom(
-                                foregroundColor: _out,
+                                foregroundColor: kOut,
                                 minimumSize: const Size(0, 30),
                                 padding: const EdgeInsets.symmetric(horizontal: 4),
                                 textStyle: const TextStyle(
@@ -1832,7 +1554,7 @@ class _CategoryFormState extends ConsumerState<CategoryForm> {
                               ),
                               const SizedBox(width: 8),
                               Expanded(
-                                child: _Input(
+                                child: KitInput(
                                   key: Key('cat_kid_$i'),
                                   controller: _ctl(k),
                                   hint: 'Tên nhóm con',
@@ -1873,7 +1595,7 @@ class _CategoryFormState extends ConsumerState<CategoryForm> {
                           child: Text(
                             _kidsMsg!,
                             key: const Key('cat_kids_msg'),
-                            style: const TextStyle(color: _out, fontSize: 12.5),
+                            style: const TextStyle(color: kOut, fontSize: 12.5),
                           ),
                         ),
                       const SizedBox(height: 10),
@@ -1910,7 +1632,7 @@ class _CategoryFormState extends ConsumerState<CategoryForm> {
                           ),
                         ),
                       ),
-                      if (_err != null) ...[const SizedBox(height: 12), _Warn(text: _err!, error: true)],
+                      if (_err != null) ...[const SizedBox(height: 12), KitWarn(text: _err!, error: true)],
                     ],
                   ),
                 ),
@@ -1923,143 +1645,29 @@ class _CategoryFormState extends ConsumerState<CategoryForm> {
                 child: Row(
                   children: [
                     Expanded(
-                      child: _Btn(label: 'Huỷ', onTap: _saving ? null : _leave),
+                      child: KitBtn(label: 'Huỷ', onTap: _saving ? null : _leave),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: _saving
-                          ? const _Btn(
+                          ? const KitBtn(
                               key: Key('cat_f_save'),
                               label: 'Đang lưu…',
                               color: OrderColors.primary,
                               onTap: null,
                             )
-                          : _Btn(key: const Key('cat_f_save'), label: 'Lưu', color: OrderColors.primary, onTap: _save),
+                          : KitBtn(
+                              key: const Key('cat_f_save'),
+                              label: 'Lưu',
+                              color: OrderColors.primary,
+                              onTap: _save,
+                            ),
                     ),
                   ],
                 ),
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _Label extends StatelessWidget {
-  const _Label(this.text);
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: 6),
-    child: Text(
-      text,
-      style: const TextStyle(color: OrderColors.ink, fontSize: 13.5, fontWeight: FontWeight.w600),
-    ),
-  );
-}
-
-class _Field extends StatelessWidget {
-  const _Field({required this.label, required this.child, this.required = false, this.counter, this.error});
-
-  final String label;
-  final Widget child;
-  final bool required;
-  final String? counter;
-  final String? error;
-
-  @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      Padding(
-        padding: const EdgeInsets.only(bottom: 6),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text.rich(
-                TextSpan(
-                  text: label,
-                  children: [
-                    if (required)
-                      const TextSpan(
-                        text: ' *',
-                        style: TextStyle(color: _out),
-                      ),
-                  ],
-                ),
-                style: const TextStyle(color: OrderColors.ink, fontSize: 13.5, fontWeight: FontWeight.w600),
-              ),
-            ),
-            if (counter != null) Text(counter!, style: const TextStyle(color: OrderColors.faint, fontSize: 12)),
-          ],
-        ),
-      ),
-      child,
-      if (error != null)
-        Padding(
-          padding: const EdgeInsets.only(top: 6),
-          child: Text(
-            error!,
-            key: const Key('cat_f_name_err'),
-            style: const TextStyle(color: _out, fontSize: 12.5),
-          ),
-        ),
-    ],
-  );
-}
-
-class _Input extends StatelessWidget {
-  const _Input({
-    super.key,
-    required this.controller,
-    this.hint,
-    this.enabled = true,
-    this.bad = false,
-    this.onChanged,
-    this.maxLength,
-    this.autofocus = false,
-    this.height = 48,
-    this.fontSize = 16,
-  });
-
-  final TextEditingController controller;
-  final String? hint;
-  final bool enabled;
-  final bool bad;
-  final ValueChanged<String>? onChanged;
-  final int? maxLength;
-  final bool autofocus;
-  final double height;
-  final double fontSize;
-
-  @override
-  Widget build(BuildContext context) {
-    OutlineInputBorder border(Color c, [double w = 1.5]) => OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: BorderSide(color: c, width: w),
-    );
-    return SizedBox(
-      height: height,
-      child: TextField(
-        controller: controller,
-        enabled: enabled,
-        autofocus: autofocus,
-        onChanged: onChanged,
-        inputFormatters: [if (maxLength != null) LengthLimitingTextInputFormatter(maxLength)],
-        style: TextStyle(color: enabled ? OrderColors.ink : OrderColors.muted, fontSize: fontSize),
-        decoration: InputDecoration(
-          hintText: hint,
-          hintStyle: TextStyle(color: OrderColors.faint, fontSize: fontSize),
-          filled: true,
-          fillColor: enabled ? Colors.white : OrderColors.grid,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 14),
-          enabledBorder: border(bad ? _out : OrderColors.line),
-          disabledBorder: border(OrderColors.line),
-          focusedBorder: border(bad ? _out : OrderColors.primary),
         ),
       ),
     );

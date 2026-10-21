@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../app/theme.dart';
 import '../../../core/ui/app_icon.dart';
 import '../../printer/printer_settings_screen.dart';
+import '../attributes/attributes_screen.dart';
 import '../categories/categories_screen.dart';
 import 'shell_widgets.dart' show AdminTab;
 
@@ -29,6 +30,7 @@ class MoreHost {
 }
 
 Widget _categories(MoreHost host) => CategoriesScreen(host: host);
+Widget _attributes(MoreHost host) => AttributesScreen(host: host);
 
 class MoreModule {
   const MoreModule(this.code, this.title, this.icon, this.items);
@@ -51,7 +53,7 @@ const moreModules = [
   MoreModule('hang_hoa', 'Hàng hoá', AppIcons.box, [
     MoreItem('Hàng hoá', AdminTab.goods),
     MoreItem('Nhóm hàng hoá', null, null, _categories),
-    MoreItem('Thuộc tính'),
+    MoreItem('Thuộc tính', null, null, _attributes),
     MoreItem('Đơn vị tính'),
     MoreItem('Quản lý thuế'),
   ]),
