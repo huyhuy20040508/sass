@@ -13,6 +13,7 @@ import 'package:selliotech/core/net/online_provider.dart';
 import 'package:selliotech/core/storage/session_store.dart';
 import 'package:selliotech/features/admin/dashboard/dashboard_data.dart' show clockProvider;
 import 'package:selliotech/features/admin/goods/goods_data.dart';
+import 'package:selliotech/features/admin/goods/goods_io.dart';
 import 'package:selliotech/features/admin/goods/goods_screen.dart';
 import 'package:selliotech/features/admin/goods/goods_widgets.dart';
 import 'package:selliotech/features/admin/goods/label_print.dart';
@@ -203,8 +204,8 @@ class _Api implements HttpClientAdapter {
     }
     if (p.endsWith('/admin/don-vi-tinh')) {
       return _ok([
-        {'id': 1, 'name': 'Cái', 'is_active': true},
-        {'id': 2, 'name': 'Hộp', 'is_active': true},
+        {'id': 1, 'code': 'CAI', 'name': 'Cái', 'is_active': true},
+        {'id': 2, 'code': 'HOP', 'name': 'Hộp', 'is_active': true},
       ]);
     }
     if (p.endsWith('/admin/thuoc-tinh')) {
@@ -486,6 +487,8 @@ Future<_Api> _open(
         // Test không có camera — màn quét chỉ dùng ô nhập mã tay.
         scannerCameraProvider.overrideWithValue(false),
         labelPrinterProvider.overrideWithValue(_printer),
+        pickCsvProvider.overrideWithValue(() async => _csvToPick),
+        saveFileProvider.overrideWithValue((bytes, name) async => _saved.add((name, bytes))),
         pickImageProvider.overrideWithValue((_) async => XFile.fromData(Uint8List.fromList([1, 2, 3]), name: 'a.jpg')),
         pickImagesProvider.overrideWithValue(
           (limit) async => [
@@ -553,6 +556,19 @@ class _FakePrinter extends LabelPrinter {
 }
 
 var _printer = _FakePrinter();
+
+/// Tệp "chọn" khi bấm Nhập từ file, và các tệp app đưa ra (tên, nội dung).
+(String, Uint8List)? _csvToPick;
+final _saved = <(String, Uint8List)>[];
+
+List<List<String>> _savedCsv() => parseCsv(utf8.decode(_saved.last.$2));
+
+Future<void> _more(WidgetTester t, String key) async {
+  await t.tap(find.byTooltip('Tác vụ khác'));
+  await _settle(t, 5);
+  await t.tap(find.byKey(Key(key)));
+  await _settle(t);
+}
 
 /// Danh sách cuộn của form (dưới nó còn danh sách chi tiết, dải ảnh ngang).
 Finder get _formScroll => find.descendant(of: find.byType(ProductFormScreen), matching: find.byType(Scrollable)).first;
@@ -866,6 +882,145 @@ void main() {
     expect(find.text('Thứ tự tự xếp'), findsOneWidget);
     // Danh sách tải lại, đúng thứ tự vừa kéo (API đã đánh số lại nhóm trùng số).
     expect(_names(t), ['iphone 15', 'Iphone 16 pro max', 'Sạc nhanh 20W', 'Ốp lưng silicon', 'laptop asus gamming']);
+  });
+
+  test('CSV: ô có dấu phẩy / ngoặc kép / xuống dòng, BOM, CRLF — ghi ra đọc lại y nguyên', () {
+    final rows = [
+      ['a', 'b,c', 'say "hi"', 'x\ny'],
+      ['Ốp lưng', '', '1.000', 'Đen,Trắng'],
+    ];
+    final bytes = csvBytes(rows);
+    expect(bytes.sublist(0, 3), [0xEF, 0xBB, 0xBF]);
+    expect(parseCsv(utf8.decode(bytes)), rows);
+    expect(parseCsv('﻿name,vat\r\n\r\nÁo,8\r\n'), [
+      ['name', 'vat'],
+      ['Áo', '8'],
+    ]);
+  });
+
+  test('nhập: mã hàng kiểu PC khi tắt tự đánh mã; tra mã ĐVT/vị trí không phân biệt hoa thường', () {
+    expect(importSku('Ốp lưng silicon', math.Random(1)), matches(RegExp(r'^OLS-\d{4}$')));
+    expect(importSku('Nón', math.Random(1)), matches(RegExp(r'^NON-\d{4}$')));
+    final rows = buildImportRows(
+      [
+        importColumns,
+        ['Áo thun', '3', 'cai', '', '', '120000', '', 'Mới, Hot', 'S;M'],
+      ],
+      unitByCode: {'CAI': 1},
+      locByCode: const {},
+      autoSku: false,
+      rnd: math.Random(1),
+    );
+    final b = rows.single.body!;
+    expect(b['unit_id'], 1);
+    expect(b['vat'], isNull);
+    expect(b['cost_price'], isNull);
+    expect(b['tags'], ['Mới', 'Hot']);
+    expect((b['variants'] as List).map((v) => (v as Map)['name']), ['S', 'M']);
+    expect((b['variants'] as List).first['sku'], '${b['sku']}-S');
+  });
+
+  testWidgets('tác vụ khác: xuất đúng những món đang xem ra CSV, cột như PC', (t) async {
+    _saved.clear();
+    await _open(t);
+    await _more(t, 'goods_more_export');
+    expect(_saved.single.$1, matches(RegExp(r'^hang-hoa-\d{8}-\d{6}\.csv$')));
+    var csv = _savedCsv();
+    expect(csv.first, [
+      'Mã SP',
+      'Mã hàng',
+      'Tên hàng hóa',
+      'Nhóm hàng hóa',
+      'ĐVT',
+      'Vị trí',
+      'VAT',
+      'Giá bán',
+      'Giá vốn',
+      // Tồn là của chi nhánh đang xem — ghi tên kho vào tiêu đề như PC.
+      'Tồn kho (Cửa hàng chính)',
+      'Chi nhánh',
+      'Thẻ',
+      'Số biến thể',
+      'Trạng thái',
+    ]);
+    expect(csv, hasLength(6));
+    expect(csv.map((r) => r[2]).skip(1), _names(t));
+
+    await t.tap(_chip(GoodsStatus.hidden));
+    await _settle(t, 3);
+    await _more(t, 'goods_more_export');
+    csv = _savedCsv();
+    expect(csv, hasLength(2));
+    expect(csv[1][0], 'SP000008');
+    expect(csv[1][2], 'Sạc nhanh 20W');
+    expect(csv[1].last, 'Không hoạt động');
+  });
+
+  testWidgets('tác vụ khác: tải file mẫu nhập hàng (đúng cột PC)', (t) async {
+    _saved.clear();
+    await _open(t);
+    await _more(t, 'goods_more_template');
+    expect(_saved.single.$1, 'mau-nhap-hang-hoa.csv');
+    expect(_savedCsv().first, importColumns);
+  });
+
+  testWidgets('nhập file: hỏi lại, gửi dòng đúng ở trạng thái tạm ẩn, liệt kê dòng sai + lý do', (t) async {
+    final api = await _open(t);
+    _csvToPick = (
+      'hang.csv',
+      csvBytes([
+        importColumns,
+        ['Cáp sạc type-C', '5', 'CAI', '', '10', '90000', '40000', 'Phụ kiện', ''],
+        ['Thiếu nhóm', '', '', '', '', '1000', '', '', ''],
+        ['Sai đơn vị', '5', 'THUNG', '', '', '1000', '', '', ''],
+        ['Iphone 16 pro max', '5', '', '', '', '1000', '', '', ''],
+      ]),
+    );
+    await _more(t, 'goods_more_import');
+    expect(find.text('Nhập 2 mặt hàng?'), findsOneWidget);
+    expect(find.textContaining('2 dòng sai'), findsOneWidget);
+    await t.tap(find.byKey(const Key('import_yes')));
+    await _settle(t);
+    await _settle(t);
+
+    final posts = api.calls.where((c) => c.method == 'POST' && c.path.endsWith('/admin/products')).toList();
+    expect(posts, hasLength(2));
+    final b = posts.first.data as Map;
+    expect(b['name'], 'Cáp sạc type-C');
+    expect(b['status'], 'hidden');
+    expect(b['unit_id'], 1);
+    expect(b['vat'], 10);
+    expect(b['cost_price'], 40000);
+    expect(b['tags'], ['Phụ kiện']);
+    expect(b['sku'], '');
+
+    expect(find.text('Đã nhập 1 mặt hàng'), findsOneWidget);
+    expect(find.text('Dòng 3 (Thiếu nhóm): thiếu hoặc sai category_id.'), findsOneWidget);
+    expect(find.text('Dòng 4 (Sai đơn vị): không có đơn vị tính mã "THUNG".'), findsOneWidget);
+    // Trùng tên: lấy đúng câu lỗi của trường từ API, không phải "Dữ liệu không hợp lệ".
+    expect(find.text('Dòng 5 (Iphone 16 pro max): Tên mặt hàng này đã có trong cửa hàng'), findsOneWidget);
+    await t.tap(find.byKey(const Key('import_done')));
+    await _settle(t);
+    await t.tap(_chip(GoodsStatus.hidden));
+    await _settle(t, 3);
+    expect(_names(t), contains('Cáp sạc type-C'));
+  });
+
+  testWidgets('tác vụ khác theo quyền: chỉ xem thì chỉ còn Xuất file', (t) async {
+    await _open(t, api: _Api(perms: ['san-pham.xem']));
+    await t.tap(find.byTooltip('Tác vụ khác'));
+    await _settle(t, 5);
+    expect(find.byKey(const Key('goods_more_export')), findsOneWidget);
+    expect(find.byKey(const Key('goods_more_reorder')), findsNothing);
+    expect(find.byKey(const Key('goods_more_import')), findsNothing);
+    expect(find.byKey(const Key('goods_more_template')), findsNothing);
+  });
+
+  testWidgets('tác vụ khác → Đổi thứ tự hiển thị mở màn kéo thả', (t) async {
+    await _open(t);
+    await _more(t, 'goods_more_reorder');
+    expect(find.text('Đổi thứ tự hiển thị'), findsOneWidget);
+    expect(find.byType(ReorderableDragStartListener), findsNWidgets(5));
   });
 
   testWidgets('đổi thứ tự lỗi: dòng về chỗ cũ, báo lỗi', (t) async {

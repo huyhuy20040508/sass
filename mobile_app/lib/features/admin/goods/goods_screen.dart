@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -14,6 +15,7 @@ import '../../workspace/workspace_widgets.dart' show SheetButton;
 import '../dashboard/dashboard_data.dart' show branchLabel, dashBranchesProvider, defaultShopProvider;
 import '../shell/shell_widgets.dart';
 import 'goods_data.dart';
+import 'goods_io.dart';
 import 'goods_reorder_screen.dart';
 import 'goods_widgets.dart';
 import '../../auth/auth_controller.dart';
@@ -157,6 +159,185 @@ class _GoodsScreenState extends ConsumerState<GoodsScreen> {
     } on ApiException catch (e) {
       if (mounted) showDashToast(context, e.message);
     }
+  }
+
+  /// Các việc PC để ở nút "Nâng cao" + hai mũi tên thứ tự — gom một chỗ cho dễ thấy.
+  Future<void> _openMore(List<GoodsItem> rows, int? shop, List<Branch> branches) async {
+    final perms = permsOf(ref);
+    final pick = await showDashSheet<String>(
+      context,
+      title: 'Tác vụ khác',
+      body: (ctx) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (perms.can(Quyen.suaSanPham))
+            SheetOption(
+              key: const Key('goods_more_reorder'),
+              label: 'Đổi thứ tự hiển thị',
+              leading: AppIcons.sort,
+              onTap: () => Navigator.of(ctx).pop('reorder'),
+            ),
+          if (perms.can(Quyen.themSanPham)) ...[
+            SheetOption(
+              key: const Key('goods_more_import'),
+              label: 'Nhập hàng từ file CSV',
+              leading: AppIcons.doc,
+              onTap: () => Navigator.of(ctx).pop('import'),
+            ),
+            SheetOption(
+              key: const Key('goods_more_template'),
+              label: 'Tải file mẫu nhập hàng',
+              leading: AppIcons.down,
+              onTap: () => Navigator.of(ctx).pop('template'),
+            ),
+          ],
+          SheetOption(
+            key: const Key('goods_more_export'),
+            label: 'Xuất ${dot(rows.length)} sản phẩm ra file CSV',
+            leading: AppIcons.share,
+            onTap: () => Navigator.of(ctx).pop('export'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted) return;
+    switch (pick) {
+      case 'reorder':
+        await _reorder();
+      case 'import':
+        await _import();
+      case 'template':
+        await _save(importTemplate(), 'mau-nhap-hang-hoa.csv');
+      case 'export':
+        await _export(rows, branches.length > 1 || shop == 0 ? branchLabel(shop, branches) : null);
+    }
+  }
+
+  Future<void> _save(Uint8List bytes, String name) async {
+    try {
+      await ref.read(saveFileProvider)(bytes, name);
+    } catch (_) {
+      if (mounted) showDashToast(context, 'Không lưu được tệp trên máy này');
+    }
+  }
+
+  Future<void> _export(List<GoodsItem> rows, String? stockLabel) async {
+    if (rows.isEmpty) return showDashToast(context, 'Không có sản phẩm nào để xuất');
+    showDashToast(context, 'Đang chuẩn bị tệp ${dot(rows.length)} sản phẩm…');
+    final Uint8List bytes;
+    try {
+      bytes = await exportGoodsCsv(ref, rows: rows, stockLabel: stockLabel);
+    } on ApiException catch (e) {
+      if (mounted) showDashToast(context, e.message);
+      return;
+    }
+    final n = DateTime.now();
+    String two(int v) => '$v'.padLeft(2, '0');
+    await _save(
+      bytes,
+      'hang-hoa-${n.year}${two(n.month)}${two(n.day)}-${two(n.hour)}${two(n.minute)}${two(n.second)}.csv',
+    );
+  }
+
+  Future<void> _import() async {
+    final picked = await ref.read(pickCsvProvider)();
+    if (picked == null || !mounted) return;
+    final (file, bytes) = picked;
+    final csv = parseCsv(utf8.decode(bytes, allowMalformed: true));
+    if (csv.isEmpty || !csv.first.map((h) => h.trim().toLowerCase()).contains('name')) {
+      return showDashToast(context, 'Tệp không đúng mẫu: thiếu cột name. Tải file mẫu để xem cách điền.');
+    }
+    final List<ImportRow> rows;
+    try {
+      final (units, locs) = await importLookups(ref);
+      final autoSku = (await ref.read(productFormSourcesProvider.future)).autoSku;
+      rows = buildImportRows(csv, unitByCode: units, locByCode: locs, autoSku: autoSku);
+    } on ApiException catch (e) {
+      if (mounted) showDashToast(context, e.message);
+      return;
+    }
+    if (!mounted) return;
+    if (rows.isEmpty) return showDashToast(context, 'Tệp không có dòng hàng nào');
+    final good = rows.where((r) => r.body != null).length;
+    final yes = await showDashSheet<bool>(
+      context,
+      title: 'Nhập $good mặt hàng?',
+      subtitle: [
+        'Từ tệp $file. Mặt hàng nhập vào ở trạng thái tạm ẩn, tồn kho 0 — kiểm lại rồi mới cho bán.',
+        if (rows.length > good) '${rows.length - good} dòng sai sẽ được liệt kê sau khi nhập.',
+      ].join(' '),
+      body: (ctx) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SheetButton(
+            key: const Key('import_yes'),
+            label: good > 0 ? 'Nhập $good mặt hàng' : 'Xem dòng sai',
+            icon: AppIcons.doc,
+            onTap: () => Navigator.of(ctx).pop(true),
+          ),
+          SheetButton(label: 'Thôi', onTap: () => Navigator.of(ctx).pop(false)),
+        ],
+      ),
+    );
+    if (yes != true || !mounted) return;
+
+    final done = ValueNotifier(0);
+    final nav = Navigator.of(context, rootNavigator: true);
+    unawaited(
+      showDialog<void>(
+        context: context,
+        useRootNavigator: true,
+        barrierDismissible: false,
+        builder: (_) => PopScope(
+          canPop: false,
+          child: AlertDialog(
+            content: ValueListenableBuilder<int>(
+              valueListenable: done,
+              builder: (_, n, _) => Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text('Đang nhập $n/${rows.length} dòng…', key: const Key('import_progress')),
+                  const SizedBox(height: 12),
+                  LinearProgressIndicator(value: rows.isEmpty ? null : n / rows.length, color: OrderColors.primary),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    final res = await runImport(ref, rows, onProgress: (n) => done.value = n);
+    nav.pop();
+    done.dispose();
+    if (!mounted) return;
+    await showDashSheet<void>(
+      context,
+      title: res.ok > 0 ? 'Đã nhập ${res.ok} mặt hàng' : 'Chưa nhập được mặt hàng nào',
+      subtitle: [
+        if (res.ok > 0) 'Đang ở trạng thái tạm ẩn, tồn kho 0 — xem ở chip "Ngừng bán".',
+        if (res.errors.isNotEmpty) '${res.errors.length} dòng chưa nhập được:',
+      ].join(' '),
+      body: (ctx) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final e in res.errors.take(20))
+            Padding(
+              padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
+              child: Text(e, style: const TextStyle(color: Color(0xFFC62828), fontSize: 13.5)),
+            ),
+          if (res.errors.length > 20)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
+              child: Text(
+                '…và ${res.errors.length - 20} dòng khác.',
+                style: const TextStyle(color: OrderColors.muted, fontSize: 13.5),
+              ),
+            ),
+          SheetButton(key: const Key('import_done'), label: 'Đóng', onTap: () => Navigator.of(ctx).pop()),
+        ],
+      ),
+    );
   }
 
   Future<void> _reorder() async {
@@ -331,6 +512,7 @@ class _GoodsScreenState extends ConsumerState<GoodsScreen> {
                 countOf: c == null ? null : (s) => base.where(s.has).length,
                 shadow: _shadow,
                 onScan: _scan,
+                onMore: c == null ? null : () => _openMore(rows, shop, branches),
                 onNew: perms.can(Quyen.themSanPham) ? _add : null,
                 branch: branches.length > 1 ? branchLabel(shop, branches) : null,
                 onBranch: () => _pickBranch(branches, shop),
@@ -535,6 +717,7 @@ class _Header extends StatelessWidget {
     required this.status,
     required this.countOf,
     required this.onScan,
+    this.onMore,
     required this.onNew,
     required this.onFilter,
     required this.onStatus,
@@ -560,6 +743,9 @@ class _Header extends StatelessWidget {
   final GoodsStatus status;
   final int Function(GoodsStatus)? countOf;
   final VoidCallback onScan;
+
+  /// Ngăn "Tác vụ khác": đổi thứ tự, nhập / xuất tệp. null = danh mục chưa tải xong.
+  final VoidCallback? onMore;
 
   /// null = không có quyền thêm sản phẩm (ẩn nút +).
   final VoidCallback? onNew;
@@ -630,6 +816,10 @@ class _Header extends StatelessWidget {
                           ],
                         ),
                       ),
+                      if (onMore != null) ...[
+                        _IconBtn(icon: AppIcons.dots, tooltip: 'Tác vụ khác', onTap: onMore!),
+                        const SizedBox(width: 2),
+                      ],
                       _IconBtn(icon: AppIcons.scan, tooltip: 'Quét mã vạch', onTap: onScan),
                       if (onNew != null) ...[
                         const SizedBox(width: 8),

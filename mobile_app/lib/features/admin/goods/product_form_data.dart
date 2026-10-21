@@ -544,7 +544,8 @@ Future<String> uploadProductImage(WidgetRef ref, List<int> bytes, String filenam
 }
 
 /// Tạo sản phẩm (POST /admin/products) → mặt hàng vừa tạo (kèm SKU sinh ra + phiên bản).
-Future<Map<String, dynamic>> createProduct(WidgetRef ref, Map<String, dynamic> body) async {
+/// [refresh] false: nơi gọi tạo nhiều mặt hàng liền nhau (nhập tệp) tự tải lại danh sách một lần ở cuối.
+Future<Map<String, dynamic>> createProduct(WidgetRef ref, Map<String, dynamic> body, {bool refresh = true}) async {
   final api = ref.read(apiClientProvider);
   Map<String, dynamic> d;
   try {
@@ -555,7 +556,7 @@ Future<Map<String, dynamic>> createProduct(WidgetRef ref, Map<String, dynamic> b
     final tail = DateTime.now().millisecondsSinceEpoch.toRadixString(36);
     d = await api.post<Map<String, dynamic>>('/admin/products', body: {...body, 'slug': '${body['slug']}-$tail'});
   }
-  ref.invalidate(goodsCatalogProvider);
+  if (refresh) ref.invalidate(goodsCatalogProvider);
   return d;
 }
 
