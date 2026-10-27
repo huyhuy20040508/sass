@@ -18,9 +18,19 @@ enum AdminTab {
 
 /// Thanh dưới kiểu Material 3: viên chỉ báo sau icon mục đang mở, Bán hàng nổi giữa.
 class AdminTabBar extends StatelessWidget {
-  const AdminTabBar({super.key, required this.current, required this.onTab, required this.onMore, this.orderCount = 0});
+  const AdminTabBar({
+    super.key,
+    required this.current,
+    required this.onTab,
+    required this.onMore,
+    this.orderCount = 0,
+    this.moreActive = false,
+  });
 
   final AdminTab current;
+
+  /// Đang ở một màn mở từ "Thêm" (vd Nhóm hàng): sáng tab Thêm — đúng đường người dùng đã đi.
+  final bool moreActive;
   final ValueChanged<AdminTab> onTab;
   final VoidCallback onMore;
 
@@ -49,11 +59,17 @@ class AdminTabBar extends StatelessWidget {
           _item(AdminTab.home),
           _item(AdminTab.orders, badge: orderCount),
           Expanded(
-            child: _PosTab(active: current == AdminTab.pos, onTap: () => onTab(AdminTab.pos)),
+            child: _PosTab(active: !moreActive && current == AdminTab.pos, onTap: () => onTab(AdminTab.pos)),
           ),
           _item(AdminTab.goods),
           Expanded(
-            child: _TabButton(label: 'Thêm', icon: AppIcons.menu, active: false, onTap: onMore),
+            child: _TabButton(
+              key: const Key('tab_more'),
+              label: 'Thêm',
+              icon: AppIcons.menu,
+              active: moreActive,
+              onTap: onMore,
+            ),
           ),
         ],
       ),
@@ -65,7 +81,7 @@ class AdminTabBar extends StatelessWidget {
       key: Key('tab_${t.name}'),
       label: t.label,
       icon: t.icon,
-      active: current == t,
+      active: !moreActive && current == t,
       badge: badge,
       onTap: () => onTab(t),
     ),

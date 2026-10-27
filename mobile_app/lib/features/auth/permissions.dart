@@ -24,6 +24,16 @@ abstract final class Quyen {
   static const xoaSanPham = 'san-pham.xoa';
   static const giaVon = 'ton-kho.gia-von';
   static const suaTonKho = 'ton-kho.sua';
+  static const themNhom = 'danh-muc.them';
+  static const suaNhom = 'danh-muc.sua';
+  static const xoaNhom = 'danh-muc.xoa';
+  static const themThuocTinh = 'thuoc-tinh.them';
+  static const suaThuocTinh = 'thuoc-tinh.sua';
+  static const xoaThuocTinh = 'thuoc-tinh.xoa';
+  static const themDonVi = 'don-vi-tinh.them';
+  static const suaDonVi = 'don-vi-tinh.sua';
+  static const xoaDonVi = 'don-vi-tinh.xoa';
+  static const suaThue = 'thue.sua';
 }
 
 final permsProvider = FutureProvider<Perms>((ref) async {

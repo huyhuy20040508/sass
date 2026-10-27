@@ -107,6 +107,12 @@ abstract final class OrderColors {
 
 const appFont = 'BeVietnamPro';
 
+/// Theme của MÀN ĐĂNG NHẬP — tím + vàng của logo Sellio.
+///
+/// Chỉ còn dùng cho màn đăng nhập: khu Quản trị và khu Thu ngân đã đổi hẳn sang
+/// navy + xanh, mà màu mặc định của Material (viền ô đang gõ, con trỏ, vệt bôi
+/// đen, gợn chạm, chip) lại lấy từ theme — để nguyên là giữa một màn navy có
+/// một ô viền tím.
 ThemeData buildTheme() {
   final scheme = ColorScheme.fromSeed(
     seedColor: AppColors.brand,
@@ -137,6 +143,60 @@ ThemeData buildTheme() {
         borderSide: BorderSide(color: AppColors.brand, width: 2),
       ),
     ),
+    filledButtonTheme: FilledButtonThemeData(
+      style: FilledButton.styleFrom(
+        minimumSize: const Size.fromHeight(52),
+        shape: const RoundedRectangleBorder(borderRadius: radius),
+        textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+      ),
+    ),
+  );
+}
+
+
+/// Theme của KHU LÀM VIỆC (Quản trị + Thu ngân) — navy và xanh.
+///
+/// Đặt làm theme của cả app, rồi bọc riêng màn đăng nhập bằng [buildTheme]:
+/// màn chi tiết đơn, màn hàng hoá, hộp in… đều mở bằng Navigator.push nên KHÔNG
+/// thừa hưởng Theme bọc trong cây widget — bọc từng màn thì sót, mà sót một màn
+/// là lại thấy tím.
+ThemeData buildAdminTheme() {
+  final scheme = ColorScheme.fromSeed(
+    seedColor: DashColors.primary,
+    primary: DashColors.primary,
+    secondary: DashColors.navy,
+    error: DashColors.critical,
+  );
+  const radius = BorderRadius.all(Radius.circular(12));
+  return ThemeData(
+    colorScheme: scheme,
+    fontFamily: appFont,
+    scaffoldBackgroundColor: DashColors.page,
+    textTheme: const TextTheme().apply(bodyColor: DashColors.text, displayColor: DashColors.ink),
+    appBarTheme: const AppBarTheme(backgroundColor: DashColors.navy, foregroundColor: Colors.white),
+    // Con trỏ và vệt bôi đen của MỌI ô nhập trong khu làm việc.
+    textSelectionTheme: const TextSelectionThemeData(
+      cursorColor: DashColors.primary,
+      selectionHandleColor: DashColors.primary,
+      selectionColor: DashColors.primarySoft,
+    ),
+    inputDecorationTheme: const InputDecorationTheme(
+      filled: true,
+      fillColor: DashColors.grid,
+      border: OutlineInputBorder(borderRadius: radius, borderSide: BorderSide(color: DashColors.line)),
+      enabledBorder: OutlineInputBorder(borderRadius: radius, borderSide: BorderSide(color: DashColors.line)),
+      focusedBorder: OutlineInputBorder(borderRadius: radius, borderSide: BorderSide(color: DashColors.primary, width: 2)),
+    ),
+    chipTheme: const ChipThemeData(
+      backgroundColor: Colors.white,
+      selectedColor: DashColors.primary,
+      checkmarkColor: Colors.white,
+      secondarySelectedColor: DashColors.primary,
+      labelStyle: TextStyle(color: DashColors.text, fontSize: 13, fontWeight: FontWeight.w600),
+      secondaryLabelStyle: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+      side: BorderSide(color: DashColors.line),
+    ),
+    progressIndicatorTheme: const ProgressIndicatorThemeData(color: DashColors.primary),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
         minimumSize: const Size.fromHeight(52),

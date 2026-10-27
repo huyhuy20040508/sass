@@ -255,6 +255,7 @@ func TestCaLamViec_ChuaMoCaThiQuayBiChan(t *testing.T) {
 	biChan("đổi hàng", h.goi(t, a.token, http.MethodPost, "/api/v1/admin/orders/pos/doi-hang", map[string]any{
 		"order_id":       donTienMat,
 		"tra":            []map[string]any{{"order_item_id": dongCu, "quantity": 1}},
+		"moi":            []map[string]any{{"product_variant_id": a.bienThe, "quantity": 1}},
 		"payment_method": "cash",
 	}))
 	biChan("bán lại sau khi đóng ca", ban("cash"))
@@ -490,7 +491,10 @@ func dongHangDauTien(t *testing.T, h *heThong, c *cuaHang, orderID uint) uint {
 	return uint(items[0].(map[string]any)["id"].(float64))
 }
 
-// TestDoiHang_KhachTraLaiNhieuHonThiCuaHangTraTien — chênh lệch âm ghi CHI vào sổ quỹ.
+// TestDoiHang_TraHangKhongLayGiThiTraLaiTien — KB #93: đổi mà không lấy món
+// nào bị chặn 422 ở ô `moi` và KHÔNG ghi gì (không đơn rỗng 0đ, không phiếu,
+// không sổ quỹ); trả hàng thuần đi đường /admin/quay/tra-hang, tiền mặt hoàn
+// ra khỏi két như cũ.
 func TestDoiHang_TraHangKhongLayGiThiTraLaiTien(t *testing.T) {
 	h := dungHeThong(t)
 	a, _ := haiCuaHang(t, h)
@@ -502,26 +506,36 @@ func TestDoiHang_TraHangKhongLayGiThiTraLaiTien(t *testing.T) {
 	})
 	donCu := uint(doc(t, res)["order_id"].(float64))
 	dongCu := dongHangDauTien(t, h, a, donCu)
+	demDon := func() (n int64) {
+		h.db.WithContext(ctxThoat()).Raw("SELECT COUNT(*) FROM orders WHERE tenant_id = ?", a.id).Scan(&n)
+		return
+	}
+	truoc := demDon()
 
-	// Trả lại, không lấy gì: cửa hàng trả lại 90.000.
 	res = h.goi(t, a.token, http.MethodPost, "/api/v1/admin/orders/pos/doi-hang", map[string]any{
 		"order_id":       donCu,
 		"tra":            []map[string]any{{"order_item_id": dongCu, "quantity": 1}},
 		"moi":            []map[string]any{},
 		"payment_method": "cash",
 	})
-	if res.ma != http.StatusCreated {
-		t.Fatalf("trả hàng không lấy gì phải hợp lệ, đang trả %d\n%s", res.ma, catBot(res.than))
+	if res.ma != http.StatusUnprocessableEntity || !strings.Contains(res.than, `"moi"`) || !strings.Contains(res.than, "quay/tra-hang") {
+		t.Fatalf("đổi không lấy món nào phải 422 ở ô moi kèm lối trả hàng, đang trả %d\n%s", res.ma, catBot(res.than))
 	}
-	if got := doc(t, res)["chenh_lech"].(float64); got != -90000 {
-		t.Fatalf("chênh lệch phải là -90000 (cửa hàng trả lại), đang là %v", got)
+	if sau := demDon(); sau != truoc {
+		t.Fatalf("bị chặn thì không được sinh đơn nào (trước %d, sau %d)", truoc, sau)
+	}
+	ca := doc(t, h.goi(t, a.token, http.MethodGet, "/api/v1/admin/ca-lam-viec/hien-tai", nil))
+	if ca["tong_chi"].(float64) != 0 {
+		t.Fatalf("bị chặn thì két không được chi gì, đang chi %v", ca["tong_chi"])
 	}
 
-	// Sổ quỹ: thu 90.000 lúc bán, chi 90.000 lúc trả → về 0.
-	ca := doc(t, h.goi(t, a.token, http.MethodGet, "/api/v1/admin/ca-lam-viec/hien-tai", nil))
+	// Trả hàng thuần ở quầy: cửa hàng trả lại 90.000, sổ quỹ thu 90.000 / chi 90.000.
+	if r := traQuay(t, h, a.token, donCu, dongCu, 1, nil); r.ma != http.StatusCreated {
+		t.Fatalf("trả hàng ở quầy trả %d\n%s", r.ma, catBot(r.than))
+	}
+	ca = doc(t, h.goi(t, a.token, http.MethodGet, "/api/v1/admin/ca-lam-viec/hien-tai", nil))
 	if ca["tong_thu"].(float64) != 90000 || ca["tong_chi"].(float64) != 90000 {
-		t.Fatalf("sổ quỹ phải là thu 90000 / chi 90000, đang là %v/%v",
-			ca["tong_thu"], ca["tong_chi"])
+		t.Fatalf("sổ quỹ phải là thu 90000 / chi 90000, đang là %v/%v", ca["tong_thu"], ca["tong_chi"])
 	}
 }
 

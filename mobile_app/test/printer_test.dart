@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:selliotech/core/api/api_client.dart';
 import 'package:selliotech/features/printer/escpos.dart';
+import 'package:selliotech/features/admin/shell/more_menu.dart';
 import 'package:selliotech/features/printer/print_service.dart';
 import 'package:selliotech/features/printer/print_sheet.dart';
 import 'package:selliotech/features/printer/printer_config.dart';
@@ -34,6 +35,17 @@ class _Link implements PrinterLink {
     if (loi != null) throw loi!;
     return paired_;
   }
+}
+
+/// Gói Bluetooth của bản web ném lỗi NGOÀI Exception (thiếu kênh nền tảng);
+/// tầng PrinterLink gom lại thành một câu người đọc hiểu được.
+class _LinkVo implements PrinterLink {
+  @override
+  Future<void> send(PrinterConfig c, List<int> bytes) async {}
+
+  @override
+  Future<List<PairedPrinter>> paired() async =>
+      throw const PrinterException('Không đọc được Bluetooth — bật Bluetooth và cấp quyền rồi thử lại.');
 }
 
 /// Chữ của mọi dòng, để so bằng chuỗi.
@@ -417,6 +429,58 @@ void main() {
       await t.tap(find.byKey(const Key('printer_bt_scan')));
       await t.pumpAndSettle();
       expect(find.text('Điện thoại chưa ghép đôi máy Bluetooth nào.'), findsOneWidget);
+    });
+  });
+
+  /// Lỗi 97: màn này mở bằng Navigator.push trong khi bốn màn cùng menu Thêm là
+  /// view nằm trong khung app (thanh dưới vẫn hiện, tab Thêm sáng). Và bản web
+  /// bấm "Xem máy in đã ghép đôi" thì gói Bluetooth ném lỗi NGOÀI Exception nên
+  /// không ai bắt — màn im lặng, người dùng tưởng bấm hụt.
+  group('Cài đặt thiết bị nằm trong khung app', () {
+    test('menu Thêm khai màn này là view, không phải màn mở chồng', () {
+      final muc = moreModules.expand((m) => m.items).firstWhere((i) => i.name == 'Cài đặt thiết bị');
+
+      expect(muc.view, isNotNull, reason: 'phải là view như Nhóm hàng hoá / Đơn vị tính');
+      expect(muc.page, isNull);
+      expect(muc.ready, isTrue);
+    });
+
+    testWidgets('nút lùi gọi host.close() chứ không bật khỏi Navigator', (t) async {
+      SharedPreferences.setMockInitialValues(const {});
+      var dong = 0;
+      await t.pumpWidget(
+        ProviderScope(
+          overrides: [printerLinkProvider.overrideWithValue(_Link())],
+          child: MaterialApp(
+            home: PrinterSettingsScreen(host: MoreHost(goTab: (_) {}, close: () => dong++)),
+          ),
+        ),
+      );
+      await t.pumpAndSettle();
+
+      await t.tap(find.byTooltip('Quay lại'));
+      await t.pumpAndSettle();
+
+      expect(dong, 1);
+      // Vẫn còn trên màn — khung app mới là chỗ quyết định hiện gì tiếp theo.
+      expect(find.text('Máy in hoá đơn'), findsOneWidget);
+    });
+
+    testWidgets('Bluetooth ném lỗi lạ (bản web) thì vẫn có câu báo, không im lặng', (t) async {
+      SharedPreferences.setMockInitialValues(const {});
+      await t.pumpWidget(
+        ProviderScope(
+          overrides: [printerLinkProvider.overrideWithValue(_LinkVo())],
+          child: const MaterialApp(home: PrinterSettingsScreen()),
+        ),
+      );
+      await t.pumpAndSettle();
+
+      await t.tap(find.byKey(const Key('printer_bt_scan')));
+      await t.pumpAndSettle();
+
+      expect(find.text('Không đọc được Bluetooth — bật Bluetooth và cấp quyền rồi thử lại.'), findsOneWidget);
+      expect(t.takeException(), isNull);
     });
   });
 }

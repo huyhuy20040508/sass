@@ -152,6 +152,9 @@ var (
 	ErrVoucherExpired          = errors.New("mã giảm giá đã hết hạn")
 	ErrVoucherOutOfUses        = errors.New("mã giảm giá đã hết lượt sử dụng")
 	ErrVoucherUserLimitReached = errors.New("bạn đã dùng hết số lượt của mã này")
+	// ErrVoucherSaiKhach: mã riêng của một khách (mã sinh nhật) mà đơn không gắn
+	// đúng khách ấy.
+	ErrVoucherSaiKhach = errors.New("mã này chỉ dùng cho đúng khách được tặng")
 	// Đơn chưa đạt mức tối thiểu. Lỗi này được bọc kèm số tiền còn thiếu để khách
 	// biết phải mua thêm bao nhiêu.
 	ErrVoucherMinOrder = errors.New("đơn hàng chưa đạt giá trị tối thiểu của mã")
@@ -193,6 +196,8 @@ var (
 	// Trả hàng
 	// Đơn chưa giao tới tay khách, hoặc đã quá hạn đổi trả.
 	ErrReturnNotAllowed = errors.New("đơn hàng này không nằm trong diện trả hàng")
+	// ErrReturnDeduction — khấu trừ lớn hơn tiền hàng trả.
+	ErrReturnDeduction = errors.New("khấu trừ lớn hơn tiền hàng trả")
 	// Số lượng trả vượt quá số đã mua trừ đi số đã trả ở các phiếu trước.
 	ErrReturnQtyExceeded = errors.New("số lượng trả vượt quá số còn trả được")
 	// Không chọn món nào, hoặc mọi món chọn đều số lượng 0.
@@ -385,3 +390,10 @@ var (
 	// một hợp đồng MỚI, không phải là mở lại cái cũ.
 	ErrHopDongDaHuy = errors.New("hợp đồng này đã huỷ")
 )
+
+// LoiTraQuay — đơn không trả được ở quầy, kèm câu nói rõ vì sao (HĐĐT, còn nợ,
+// quá hạn…) để màn hình in nguyên văn. Là một ErrReturnNotAllowed.
+type LoiTraQuay struct{ Cau string }
+
+func (e *LoiTraQuay) Error() string { return e.Cau }
+func (e *LoiTraQuay) Unwrap() error { return ErrReturnNotAllowed }

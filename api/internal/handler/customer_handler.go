@@ -11,6 +11,7 @@ import (
 
 	"sass-api/internal/domain"
 	"sass-api/internal/dto"
+	"sass-api/internal/middleware"
 	"sass-api/internal/service"
 	"sass-api/pkg/response"
 )
@@ -39,6 +40,9 @@ func NewCustomerHandler(svc service.CustomerService) *CustomerHandler {
 // @Param			age_from		query	int		false	"Tuổi từ"
 // @Param			age_to			query	int		false	"Tuổi đến"
 // @Param			birthday_days	query	int		false	"Sinh nhật trong N ngày tới, tính cả hôm nay"
+// @Param			only_debt		query	int		false	"1 = chỉ khách còn nợ (> 0), cùng công thức cột still_in_debt"
+// @Param			bo_da_chuc		query	int		false	"1 = bỏ khách đã được chúc mùa sinh nhật này (quà sinh nhật ở quầy)"
+// @Param			hen_hom_nay		query	int		false	"1 = chỉ khách có ghi chú hẹn hôm nay (sổ ghi chú khách)"
 // @Param			birthday_from	query	string	false	"Sinh nhật từ ngày (YYYY-MM-DD, chỉ xét tháng-ngày)"
 // @Param			birthday_to		query	string	false	"Sinh nhật đến ngày (YYYY-MM-DD, chỉ xét tháng-ngày)"
 // @Param			last_tx_days	query	int		false	"Đơn gần nhất trong N ngày qua"
@@ -52,6 +56,23 @@ func NewCustomerHandler(svc service.CustomerService) *CustomerHandler {
 // @Security		BearerAuth
 // @Router			/admin/customers [get]
 func (h *CustomerHandler) List(c *gin.Context) {
+	if items, p, ok := h.lietKe(c); ok {
+		response.Paginated(c, items, p)
+	}
+}
+
+// ListQuay — danh sách khách ở quầy: cùng bộ lọc với List, meta kèm co_the_sua
+// (Laravel không giữ bộ quyền, như co_the_lap của Thu chi / co_the_tra của Trả hàng).
+func (h *CustomerHandler) ListQuay(c *gin.Context) {
+	if items, p, ok := h.lietKe(c); ok {
+		c.JSON(http.StatusOK, response.Body{Success: true, Data: items, Meta: dto.KhachHangQuayMeta{
+			Pagination: p,
+			CoTheSua:   middleware.CoQuyen(c, "khach-hang.sua"),
+		}})
+	}
+}
+
+func (h *CustomerHandler) lietKe(c *gin.Context) (any, response.Pagination, bool) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "10"))
 	if page < 1 {
@@ -78,7 +99,7 @@ func (h *CustomerHandler) List(c *gin.Context) {
 	items, total, err := h.svc.List(c.Request.Context(), filter)
 	if err != nil {
 		response.Error(c, http.StatusInternalServerError, "Lỗi truy vấn danh sách khách hàng")
-		return
+		return nil, response.Pagination{}, false
 	}
 
 	totalPages := 1
@@ -86,12 +107,12 @@ func (h *CustomerHandler) List(c *gin.Context) {
 		totalPages = int((total + int64(pageSize) - 1) / int64(pageSize))
 	}
 
-	response.Paginated(c, items, response.Pagination{
+	return items, response.Pagination{
 		Page:       page,
 		PageSize:   pageSize,
 		Total:      total,
 		TotalPages: totalPages,
-	})
+	}, true
 }
 
 // @Summary		Thống kê khách hàng
@@ -423,6 +444,15 @@ func locCRM(c *gin.Context, f *domain.CustomerFilter, homNay time.Time) {
 	f.PointFrom, f.PointTo = so("point_from"), so("point_to")
 	if n := so("rank_id"); n != nil {
 		f.RankID = uint(*n)
+	}
+
+	f.ChiConNo = c.Query("only_debt") == "1"
+	if c.Query("bo_da_chuc") == "1" {
+		tu := homNay.AddDate(0, 0, -domain.MuaSinhNhatNgay)
+		f.BoDaChucTu = &tu
+	}
+	if c.Query("hen_hom_nay") == "1" {
+		f.HenNgay = homNay.Format("2006-01-02")
 	}
 
 	f.LastTxFrom, f.LastTxTo = ngay("last_tx_from"), ngay("last_tx_to")

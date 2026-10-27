@@ -3,19 +3,38 @@ import 'package:flutter/material.dart';
 import '../../../app/theme.dart';
 import '../../../core/ui/app_icon.dart';
 import '../../printer/printer_settings_screen.dart';
+import '../attributes/attributes_screen.dart';
+import '../categories/categories_screen.dart';
+import '../taxes/taxes_screen.dart';
+import '../units/units_screen.dart';
 import 'shell_widgets.dart' show AdminTab;
 
 /// Một mục con trong module; [tab] là tab app đã có màn, [page] là màn mở chồng
-/// lên (không phải tab) — cả hai null thì chưa làm.
+/// lên (không phải tab), [view] là màn nằm TRONG khung app (thanh dưới vẫn hiện, tab
+/// Thêm sáng) — cả ba null thì chưa làm.
 class MoreItem {
-  const MoreItem(this.name, [this.tab, this.page]);
+  const MoreItem(this.name, [this.tab, this.page, this.view]);
 
   final String name;
   final AdminTab? tab;
   final Widget Function()? page;
+  final Widget Function(MoreHost host)? view;
 
-  bool get ready => tab != null || page != null;
+  bool get ready => tab != null || page != null || view != null;
 }
+
+/// Khung app cho màn [MoreItem.view]: sang một tab, hoặc rời màn (nút lùi ở màn đầu).
+class MoreHost {
+  const MoreHost({required this.goTab, required this.close});
+
+  final void Function(AdminTab tab) goTab;
+  final VoidCallback close;
+}
+
+Widget _categories(MoreHost host) => CategoriesScreen(host: host);
+Widget _attributes(MoreHost host) => AttributesScreen(host: host);
+Widget _units(MoreHost host) => UnitsScreen(host: host);
+Widget _taxes(MoreHost host) => TaxesScreen(host: host);
 
 class MoreModule {
   const MoreModule(this.code, this.title, this.icon, this.items);
@@ -37,10 +56,10 @@ const moreModules = [
   ]),
   MoreModule('hang_hoa', 'Hàng hoá', AppIcons.box, [
     MoreItem('Hàng hoá', AdminTab.goods),
-    MoreItem('Nhóm hàng hoá'),
-    MoreItem('Thuộc tính'),
-    MoreItem('Đơn vị tính'),
-    MoreItem('Quản lý thuế'),
+    MoreItem('Nhóm hàng hoá', null, null, _categories),
+    MoreItem('Thuộc tính', null, null, _attributes),
+    MoreItem('Đơn vị tính', null, null, _units),
+    MoreItem('Quản lý thuế', null, null, _taxes),
   ]),
   MoreModule('kho', 'Kho', AppIcons.store, [
     MoreItem('Tồn kho chi nhánh'),
@@ -72,7 +91,7 @@ const moreModules = [
   MoreModule('cai_dat', 'Cài đặt', AppIcons.gear, [
     MoreItem('Chi nhánh'),
     MoreItem('Phương thức thanh toán'),
-    MoreItem('Cài đặt thiết bị', null, printerSettingsPage),
+    MoreItem('Cài đặt thiết bị', null, null, printerSettingsView),
   ]),
 ];
 
@@ -96,9 +115,7 @@ class _MoreModulesState extends State<MoreModules> {
   @override
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      for (final m in moreModules) _module(m, _open.contains(m.code)),
-    ],
+    children: [for (final m in moreModules) _module(m, _open.contains(m.code))],
   );
 
   Widget _module(MoreModule m, bool open) {
@@ -125,10 +142,7 @@ class _MoreModulesState extends State<MoreModules> {
                     width: 40,
                     height: 40,
                     alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: DashColors.primarySoft,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
+                    decoration: BoxDecoration(color: DashColors.primarySoft, borderRadius: BorderRadius.circular(12)),
                     child: AppIcon(m.icon, size: 20, color: DashColors.primaryDeep),
                   ),
                   const SizedBox(width: 12),

@@ -47,13 +47,13 @@ func (r *reportRepository) CrmOrderTotals(ctx context.Context, p domain.ReportPe
 }
 
 // CrmBuyerOrders — từng đơn CÓ hồ sơ khách trong kỳ, cũ trước. "Còn nợ" tính
-// như sổ khách (user_repository): đơn chưa thu đủ thì cả tiền đơn là nợ.
+// như sổ khách (user_repository): tổng đơn trừ phần đã thu (daThuCuaDon).
 func (r *reportRepository) CrmBuyerOrders(ctx context.Context, p domain.ReportPeriod, f domain.CrmFilter) ([]domain.CrmBuyerOrder, error) {
 	var rows []domain.CrmBuyerOrder
 	err := r.crmOrders(ctx, p, f).
 		Where("o.user_id IS NOT NULL").
 		Select(`o.user_id, o.created_at, o.total_amount AS total,
-			CASE WHEN o.payment_status = ? THEN 0 ELSE o.total_amount END AS unpaid`, domain.OrderPaymentPaid).
+			o.total_amount - (` + daThuCuaDon("o") + `) AS unpaid`).
 		Order("o.created_at, o.id").
 		Scan(&rows).Error
 
@@ -254,7 +254,7 @@ func (r *reportRepository) CrmCare(ctx context.Context, p domain.ReportPeriod, f
 		Where("o.deleted_at IS NULL").
 		Where("o.status NOT IN ?", deadStatuses).
 		Where("o.user_id IS NOT NULL").
-		Where("o.payment_status <> ?", domain.OrderPaymentPaid)
+		Where("o.total_amount > (" + daThuCuaDon("o") + ")")
 	if p.ShopID > 0 {
 		no = no.Where("o.shop_id = ?", p.ShopID)
 	}
@@ -265,7 +265,7 @@ func (r *reportRepository) CrmCare(ctx context.Context, p domain.ReportPeriod, f
 		N   int64
 		Sum float64
 	}
-	if err := no.Select("COUNT(DISTINCT o.user_id) AS n, COALESCE(SUM(o.total_amount), 0) AS sum").Scan(&tienNo).Error; err != nil {
+	if err := no.Select("COUNT(DISTINCT o.user_id) AS n, COALESCE(SUM(o.total_amount - (" + daThuCuaDon("o") + ")), 0) AS sum").Scan(&tienNo).Error; err != nil {
 		return out, err
 	}
 	out.Debtors, out.DebtAmount = tienNo.N, tienNo.Sum

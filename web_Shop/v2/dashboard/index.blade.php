@@ -84,7 +84,8 @@
         [
             'nhan' => 'Lợi nhuận gộp', 'so' => $tienKpi($kpi['profit']).' đ', 'day_du' => $tien($kpi['profit']).' đ',
             'tip' => 'Lợi nhuận gộp = Tiền hàng − Giảm giá − Giá vốn hàng đã bán (không tính phí vận chuyển)', 'chip' => $chip($kpi['so']['profit']),
-            'phu' => $kpi['margin'] !== null ? 'Biên lãi '.$phanTram($kpi['margin']) : null, 'phu2' => null,
+            'phu' => $kpi['margin'] !== null ? 'Biên lãi '.$phanTram($kpi['margin']) : null,
+            'phu2' => $kpi['thieu_gia_von_sp'] > 0 ? 'Chưa tính '.$kpi['thieu_gia_von_sp'].' sp thiếu giá vốn ('.$tien($kpi['thieu']).' đ)' : null,
             'mau' => '#16a34a', 'link' => route('admin.reports.profit', $ky), 'spark' => 'profit', 'icon' => 'ic_estimated_revenue.svg',
         ],
         [

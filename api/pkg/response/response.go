@@ -79,6 +79,10 @@ const (
 	// MaChuaMoCa: bán / thu tiền ở quầy khi chi nhánh chưa mở ca. Màn quầy khoá lại
 	// và mời mở ca ngay tại chỗ.
 	MaChuaMoCa = "CHUA_MO_CA"
+	// MaCanDuyetChi / MaSaiDuyetChi: phiếu chi ở quầy vượt hạn mức — chưa có / sai
+	// tài khoản chủ hoặc quản trị duyệt. Hộp lập phiếu mở ô nhập tài khoản.
+	MaCanDuyetChi = "CAN_DUYET_CHI"
+	MaSaiDuyetChi = "SAI_DUYET_CHI"
 )
 
 // ErrorMa trả lỗi kèm MÃ máy đọc được trong `errors.ma`.

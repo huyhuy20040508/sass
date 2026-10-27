@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"sass-api/internal/domain"
@@ -80,6 +81,7 @@ func returnableFrom(items []domain.OrderItem, held map[uint]int) []domain.Return
 			VariantName:      it.VariantName,
 			Thumbnail:        it.Thumbnail,
 			UnitPrice:        it.UnitPrice,
+			IsGift:           it.IsGift,
 			Quantity:         it.Quantity,
 			ReturnedQuantity: taken,
 			RemainQuantity:   remain,
@@ -107,7 +109,8 @@ func (r *orderReturnRepository) Returnable(ctx context.Context, orderID uint) (*
 	return &o, returnableFrom(o.Items, held), nil
 }
 
-func (r *orderReturnRepository) List(ctx context.Context, f domain.ReturnFilter) ([]domain.OrderReturn, int64, error) {
+// locPhieu dựng phần WHERE dùng chung cho danh sách và thẻ tổng của quầy.
+func (r *orderReturnRepository) locPhieu(ctx context.Context, f domain.ReturnFilter) *gorm.DB {
 	q := r.db.WithContext(ctx).Model(&domain.OrderReturn{})
 
 	// Cắt theo chi nhánh đang làm việc. Đường GHI ở Create đã cẩn thận đúng
@@ -148,6 +151,25 @@ func (r *orderReturnRepository) List(ctx context.Context, f domain.ReturnFilter)
 		q = q.Where("order_returns.created_at <= ?", f.ToDate+" 23:59:59")
 	}
 
+	if f.FromTime != "" {
+		q = q.Where("order_returns.created_at >= ?", f.FromTime)
+	}
+	if f.RequestedBy != "" {
+		q = q.Where("order_returns.requested_by = ?", f.RequestedBy)
+	}
+	switch f.Kind {
+	case "refund":
+		q = q.Where("order_returns.exchange_order_id IS NULL")
+	case "swap":
+		q = q.Where("order_returns.exchange_order_id IS NOT NULL")
+	}
+
+	return q
+}
+
+func (r *orderReturnRepository) List(ctx context.Context, f domain.ReturnFilter) ([]domain.OrderReturn, int64, error) {
+	q := r.locPhieu(ctx, f)
+
 	var total int64
 	if err := q.Count(&total).Error; err != nil {
 		return nil, 0, err
@@ -177,7 +199,7 @@ func (r *orderReturnRepository) List(ctx context.Context, f domain.ReturnFilter)
 	var list []domain.OrderReturn
 	// Preload Order để bảng danh sách hiện được mã đơn + người nhận mà không phải
 	// gọi thêm một vòng request cho từng dòng.
-	err := q.Preload("Items").Preload("Order").Find(&list).Error
+	err := q.Preload("Items").Preload("Order").Preload("ExchangeOrder.Items").Find(&list).Error
 	return list, total, err
 }
 
@@ -313,45 +335,11 @@ func (r *orderReturnRepository) Create(
 			return err
 		}
 
-		items := rt.Items
-		rt.Items = nil
-		rt.OrderID = o.ID
-		rt.ReturnCode = fmt.Sprintf("TMP%d", time.Now().UnixNano())
-		if err := tx.Create(rt).Error; err != nil {
-			return err
-		}
-		ma, err := maChungTu(ctx, tx, domain.LoaiTraHangKhach, rt.ShopID, &domain.OrderReturn{}, "return_code",
-			fmt.Sprintf("RT%s%04d", time.Now().Format("20060102"), rt.ID))
-		if err != nil {
-			return err
-		}
-		rt.ReturnCode = ma
-		if err := tx.Model(rt).Update("return_code", rt.ReturnCode).Error; err != nil {
-			return err
-		}
-
-		for i := range items {
-			items[i].ReturnID = rt.ID
-		}
-		if len(items) > 0 {
-			if err := tx.Create(&items).Error; err != nil {
-				return err
-			}
-		}
-		rt.Items = items
-
 		note := "Khách gửi yêu cầu trả hàng"
 		if rt.RequestedBy == "admin" {
 			note = "Nhân viên lập phiếu trả hàng"
 		}
-		history := &domain.OrderReturnHistory{
-			ReturnID:   rt.ID,
-			FromStatus: "",
-			ToStatus:   rt.Status,
-			Note:       note,
-			ChangedBy:  rt.HandledBy,
-		}
-		if err := tx.Create(history).Error; err != nil {
+		if err := ghiPhieuMoi(ctx, tx, &o, rt, note); err != nil {
 			return err
 		}
 
@@ -361,6 +349,208 @@ func (r *orderReturnRepository) Create(
 	})
 
 	return created, err
+}
+
+// ghiPhieuMoi lưu một phiếu trả vừa dựng: mã chứng từ, các món và mốc lịch sử
+// đầu tiên. Chạy trong transaction của người gọi, đơn đã khoá.
+func ghiPhieuMoi(ctx context.Context, tx *gorm.DB, o *domain.Order, rt *domain.OrderReturn, note string) error {
+	items := rt.Items
+	rt.Items = nil
+	rt.OrderID = o.ID
+	rt.ReturnCode = fmt.Sprintf("TMP%d", time.Now().UnixNano())
+	if err := tx.Create(rt).Error; err != nil {
+		return err
+	}
+	ma, err := maChungTu(ctx, tx, domain.LoaiTraHangKhach, rt.ShopID, &domain.OrderReturn{}, "return_code",
+		fmt.Sprintf("RT%s%04d", time.Now().Format("20060102"), rt.ID))
+	if err != nil {
+		return err
+	}
+	rt.ReturnCode = ma
+	if err := tx.Model(rt).Update("return_code", rt.ReturnCode).Error; err != nil {
+		return err
+	}
+
+	for i := range items {
+		items[i].ReturnID = rt.ID
+	}
+	if len(items) > 0 {
+		if err := tx.Create(&items).Error; err != nil {
+			return err
+		}
+	}
+	rt.Items = items
+
+	return tx.Create(&domain.OrderReturnHistory{
+		ReturnID:   rt.ID,
+		FromStatus: "",
+		ToStatus:   rt.Status,
+		Note:       note,
+		ChangedBy:  rt.HandledBy,
+	}).Error
+}
+
+// coHoaDonTx — cùng điều kiện với nút HĐĐT của sổ đơn: tờ hỏng không tính.
+func coHoaDonTx(tx *gorm.DB, orderID uint) (bool, error) {
+	var n int64
+	err := tx.Model(&domain.EtaxInvoice{}).
+		Where("order_id = ? AND status <> ?", orderID, domain.HoaDonHong).
+		Count(&n).Error
+
+	return n > 0, err
+}
+
+func (r *orderReturnRepository) CoHoaDon(ctx context.Context, orderID uint) (bool, error) {
+	return coHoaDonTx(r.db.WithContext(ctx), orderID)
+}
+
+func (r *orderReturnRepository) ChiNhanhDangLam(ctx context.Context) (uint, error) {
+	return chiNhanhCuaRequest(ctx, r.db)
+}
+
+// TraTaiQuay — xem chú thích ở domain.OrderReturnRepository. Dùng lại đúng các
+// hàm của luồng nhận hàng / hoàn tiền (restockReturn, settleOrderIfFullyReturned,
+// recordRefund) nên trả ở quầy không thể lệch với trả qua màn Quản trị.
+func (r *orderReturnRepository) TraTaiQuay(
+	ctx context.Context,
+	orderID uint,
+	build func(o *domain.Order, remain map[uint]domain.ReturnableItem, coHoaDon bool) (*domain.OrderReturn, error),
+) (*domain.OrderReturn, error) {
+	shopID, err := chiNhanhCuaRequest(ctx, r.db)
+	if err != nil {
+		return nil, err
+	}
+
+	var created *domain.OrderReturn
+	err = r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// Hoàn tiền là tiền ra khỏi két — chưa mở ca thì không trả, như bán.
+		if err := chanChuaMoCa(tx, shopID); err != nil {
+			return err
+		}
+
+		var o domain.Order
+		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Preload("Items", func(q *gorm.DB) *gorm.DB { return q.Order("id ASC") }).
+			First(&o, orderID).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return domain.ErrNotFound
+		}
+		if err != nil {
+			return err
+		}
+		// Đơn của chi nhánh khác: hàng phải về đúng kho đã xuất nó, và tiền hoàn
+		// ra từ két của chi nhánh đó — quầy này không trả hộ.
+		if o.ShopID != shopID {
+			return domain.ErrNotFound
+		}
+
+		held, err := heldQuantities(tx, orderID, returnHoldsStatuses, 0)
+		if err != nil {
+			return err
+		}
+		remain := make(map[uint]domain.ReturnableItem, len(o.Items))
+		for _, it := range returnableFrom(o.Items, held) {
+			remain[it.OrderItemID] = it
+		}
+		coHD, err := coHoaDonTx(tx, orderID)
+		if err != nil {
+			return err
+		}
+
+		rt, err := build(&o, remain, coHD)
+		if err != nil {
+			return err
+		}
+		rt.ShopID = o.ShopID
+		if err := ghiPhieuMoi(ctx, tx, &o, rt, "Trả hàng tại quầy — nhận hàng và hoàn tiền"); err != nil {
+			return err
+		}
+
+		var actor uint
+		if rt.HandledBy != nil {
+			actor = *rt.HandledBy
+		}
+		if err := restockReturn(tx, rt); err != nil {
+			return err
+		}
+		if err := settleOrderIfFullyReturned(tx, rt, actor); err != nil {
+			return err
+		}
+		if rt.RefundAmount > 0 {
+			if err := recordRefund(tx, rt, actor); err != nil {
+				return err
+			}
+		}
+
+		rt.Order = &o
+		created = rt
+		return nil
+	})
+
+	return created, err
+}
+
+// DonTraQuay — số món / đã trả / HĐĐT tính bằng câu con để một lượt đọc là đủ
+// dựng cả danh sách (tenant_id khai trong câu con: plugin chỉ chèn cho bảng chính).
+func (r *orderReturnRepository) DonTraQuay(ctx context.Context, keyword string, tu time.Time, limit int) ([]domain.DonTraQuay, error) {
+	shopID, err := chiNhanhCuaRequest(ctx, r.db)
+	if err != nil {
+		return nil, err
+	}
+
+	q := r.db.WithContext(ctx).Model(&domain.Order{}).
+		Select(`orders.id, orders.order_code, orders.created_at, orders.recipient_name, orders.recipient_phone,
+			orders.total_amount, orders.payment_method, orders.payment_status, orders.status, orders.delivered_at,
+			(SELECT COUNT(*) FROM order_items i WHERE i.order_id = orders.id AND i.tenant_id = orders.tenant_id AND i.is_gift = 0) AS so_mon,
+			(SELECT COALESCE(SUM(i.quantity), 0) FROM order_items i WHERE i.order_id = orders.id AND i.tenant_id = orders.tenant_id AND i.is_gift = 0) AS so_luong,
+			(SELECT COALESCE(SUM(ri.quantity), 0) FROM order_return_items ri
+				JOIN order_returns rr ON rr.id = ri.return_id AND rr.deleted_at IS NULL
+				JOIN order_items i ON i.id = ri.order_item_id AND i.is_gift = 0
+				WHERE rr.order_id = orders.id AND rr.tenant_id = orders.tenant_id AND rr.status IN ?) AS da_tra,
+			EXISTS (SELECT 1 FROM etax_invoices e WHERE e.order_id = orders.id AND e.tenant_id = orders.tenant_id AND e.status <> ?) AS co_hoa_don`,
+			returnHoldsStatuses, domain.HoaDonHong).
+		Where("orders.shop_id = ?", shopID).
+		Where("orders.status IN ?", []string{domain.OrderStatusDelivered, domain.OrderStatusCompleted, domain.OrderStatusReturned})
+
+	if kw := strings.TrimSpace(keyword); kw != "" {
+		like := "%" + kw + "%"
+		so := "%" + strings.ReplaceAll(kw, " ", "") + "%"
+		q = q.Where("(orders.order_code LIKE ? OR orders.recipient_name LIKE ? OR REPLACE(orders.recipient_phone, ' ', '') LIKE ?)", like, like, so)
+	} else {
+		q = q.Where("orders.created_at >= ?", tu)
+	}
+
+	var out []domain.DonTraQuay
+	err = q.Order("orders.id DESC").Limit(limit).Scan(&out).Error
+
+	return out, err
+}
+
+func (r *orderReturnRepository) TongQuay(ctx context.Context, f domain.ReturnFilter) (domain.TongTraQuay, error) {
+	var t domain.TongTraQuay
+	err := r.locPhieu(ctx, f).Select(
+		"COUNT(*) AS so_phieu, "+
+			"COUNT(order_returns.exchange_order_id) AS so_doi, "+
+			"COALESCE(SUM(order_returns.refund_amount), 0) AS tien_hoan, "+
+			"COALESCE(SUM(CASE WHEN order_returns.refund_method = ? THEN order_returns.refund_amount ELSE 0 END), 0) AS tien_mat_hoan",
+		domain.PaymentMethodCash,
+	).Scan(&t).Error
+	if err != nil {
+		return t, err
+	}
+
+	var mon struct {
+		SoMon     int64
+		SoMonNhap int64
+	}
+	err = r.db.WithContext(ctx).Model(&domain.OrderReturnItem{}).
+		Select("COALESCE(SUM(order_return_items.quantity), 0) AS so_mon, "+
+			"COALESCE(SUM(CASE WHEN r.restock THEN order_return_items.quantity ELSE 0 END), 0) AS so_mon_nhap").
+		Joins("JOIN (?) r ON r.id = order_return_items.return_id", r.locPhieu(ctx, f).Select("order_returns.id, order_returns.restock")).
+		Scan(&mon).Error
+	t.SoMon, t.SoMonNhap = mon.SoMon, mon.SoMonNhap
+
+	return t, err
 }
 
 func (r *orderReturnRepository) LockAndUpdate(

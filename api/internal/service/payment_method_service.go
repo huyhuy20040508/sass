@@ -1088,6 +1088,12 @@ func (s *paymentMethodService) XoaChiTiet(ctx context.Context, methodID, detailI
 		} else if n > 0 {
 			return loiPT(409, fmt.Sprintf("Đã có %d đơn thu bằng dòng này nên không xoá được — tắt trạng thái thay vì xoá.", n))
 		}
+		if n, err := s.repo.SoPhieuThuChiDung(ctx, d.ID); err != nil {
+			// Chưa chạy migration 0095 thì chưa có cột — coi như chưa có phiếu.
+			logger.Warn("không đếm được phiếu thu chi dùng tài khoản", zap.Uint("detail_id", d.ID), zap.Error(err))
+		} else if n > 0 {
+			return loiPT(409, fmt.Sprintf("Đã có %d phiếu thu chi ghi tài khoản này nên không xoá được — tắt trạng thái thay vì xoá.", n))
+		}
 		if err := tx.XoaChiTiet(d.ID); err != nil {
 			return err
 		}

@@ -2,6 +2,7 @@ package apitest
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -56,7 +57,7 @@ type quyTC struct {
 func lapPhieuTC(t *testing.T, h *heThong, token string, than map[string]any) (int, phieuTC) {
 	t.Helper()
 
-	res := h.goi(t, token, http.MethodPost, "/api/v1/admin/thu-chi", than)
+	res := h.goi(t, token, http.MethodPost, "/api/v1/admin/thu-chi", voiLoaiTC(t, h, token, than))
 
 	var body struct {
 		Data phieuTC `json:"data"`
@@ -71,9 +72,55 @@ func thuTienMat(soTien float64) map[string]any {
 	return map[string]any{"type": 0, "amount": soTien, "payment_method": "cash"}
 }
 
+// lyDoXoa — thân DELETE phiếu thu chi: xoá bắt buộc lý do (KB #17).
+var lyDoXoa = map[string]any{"reason": "Xoá thử"}
+
 // chiTienMat là phiếu chi tiền mặt.
 func chiTienMat(soTien float64) map[string]any {
 	return map[string]any{"type": 1, "amount": soTien, "payment_method": "cash"}
+}
+
+// voiLoaiTC gắn phân loại vào thân phiếu tay chưa khai — phiếu tay bắt buộc có
+// phân loại (KB #78). Lấy một phân loại cùng vế của cửa hàng cầm token, chưa có
+// thì gieo thẳng vào DB: token thu ngân không có quyền tạo phân loại.
+func voiLoaiTC(t *testing.T, h *heThong, token string, than map[string]any) map[string]any {
+	t.Helper()
+	// Sửa phiếu bắt buộc lý do (KB #17); lượt lập bỏ qua ô này.
+	if _, co := than["reason"]; !co {
+		than["reason"] = "Sửa thử"
+	}
+	if _, co := than["category_id"]; co {
+		return than
+	}
+	phan := strings.Split(token, ".")
+	if len(phan) != 3 {
+		t.Fatalf("token không phải JWT: %q", token)
+	}
+	tho, err := base64.RawURLEncoding.DecodeString(phan[1])
+	if err != nil {
+		t.Fatalf("không đọc được token: %v", err)
+	}
+	var claims struct {
+		TID uint `json:"tid"`
+	}
+	_ = json.Unmarshal(tho, &claims)
+	loai := uint8(0)
+	if v, _ := than["type"].(int); v == 1 {
+		loai = 1
+	}
+
+	ctx := tenant.WithID(context.Background(), claims.TID)
+	var l domain.LoaiThuChi
+	if err := h.db.WithContext(ctx).Where("type = ? AND name = ?", loai, "Phân loại thử").First(&l).Error; err != nil {
+		l = domain.LoaiThuChi{Type: loai, Name: "Phân loại thử"}
+		tao(t, h.db, ctx, &l)
+	}
+	ra := make(map[string]any, len(than)+1)
+	for k, v := range than {
+		ra[k] = v
+	}
+	ra["category_id"] = l.ID
+	return ra
 }
 
 // docThuChi đọc sổ. query là phần sau dấu ? (có thể rỗng).
@@ -285,7 +332,7 @@ func TestThuChi_PhieuCuaNguoiKhac(t *testing.T) {
 	if len(ds) != 1 || ds[0].Locked {
 		t.Fatalf("có quyền lẻ rồi thì cờ locked phải tắt, nhận %+v", ds)
 	}
-	if res := h.goi(t, hai, http.MethodDelete, duong, nil); res.ma != http.StatusOK {
+	if res := h.goi(t, hai, http.MethodDelete, duong, lyDoXoa); res.ma != http.StatusOK {
 		t.Fatalf("có quyền lẻ thì phải xoá được, nhận %d — %s", res.ma, catBot(res.than))
 	}
 }
@@ -373,7 +420,7 @@ func TestThuChi_CaDaDongThiKhoaVoiMoiNguoi(t *testing.T) {
 	}
 
 	duong := fmt.Sprintf("/api/v1/admin/thu-chi/%d", p.ID)
-	if res := h.goi(t, a.token, http.MethodPut, duong, chiTienMat(999000)); res.ma != http.StatusConflict {
+	if res := h.goi(t, a.token, http.MethodPut, duong, voiLoaiTC(t, h, a.token, chiTienMat(999000))); res.ma != http.StatusConflict {
 		t.Fatalf("CHỦ TIỆM sửa phiếu của ca đã đóng cũng phải bị chặn 409, nhận %d\n%s", res.ma, catBot(res.than))
 	}
 	if res := h.goi(t, a.token, http.MethodDelete, duong, nil); res.ma != http.StatusConflict {
@@ -417,7 +464,7 @@ func TestThuChi_XoaPhieuThiGoLuonDongSoQuy(t *testing.T) {
 	_, p := lapPhieuTC(t, h, a.token, thuTienMat(400000))
 
 	duong := fmt.Sprintf("/api/v1/admin/thu-chi/%d", p.ID)
-	if res := h.goi(t, a.token, http.MethodDelete, duong, nil); res.ma != http.StatusOK {
+	if res := h.goi(t, a.token, http.MethodDelete, duong, lyDoXoa); res.ma != http.StatusOK {
 		t.Fatalf("xoá phiếu trả %d\n%s", res.ma, catBot(res.than))
 	}
 
@@ -437,9 +484,9 @@ func TestThuChi_SuaPhuongThucThiNanLaiKet(t *testing.T) {
 	_, p := lapPhieuTC(t, h, a.token, thuTienMat(200000))
 
 	duong := fmt.Sprintf("/api/v1/admin/thu-chi/%d", p.ID)
-	res := h.goi(t, a.token, http.MethodPut, duong, map[string]any{
+	res := h.goi(t, a.token, http.MethodPut, duong, voiLoaiTC(t, h, a.token, map[string]any{
 		"type": 0, "amount": 200000, "payment_method": "transfer",
-	})
+	}))
 	if res.ma != http.StatusOK {
 		t.Fatalf("sửa phiếu trả %d\n%s", res.ma, catBot(res.than))
 	}
@@ -481,7 +528,7 @@ func TestThuChi_DoiDoiTuongThiDonCotCu(t *testing.T) {
 
 	// Bỏ đối tượng đi: cả loại lẫn id phải sạch.
 	duong := fmt.Sprintf("/api/v1/admin/thu-chi/%d", p.ID)
-	res = h.goi(t, a.token, http.MethodPut, duong, thuTienMat(50000))
+	res = h.goi(t, a.token, http.MethodPut, duong, voiLoaiTC(t, h, a.token, thuTienMat(50000)))
 	if res.ma != http.StatusOK {
 		t.Fatalf("sửa phiếu trả %d\n%s", res.ma, catBot(res.than))
 	}
@@ -617,7 +664,7 @@ func TestThuChi_BanHangDeRaPhieuThu(t *testing.T) {
 	if res := h.goi(t, a.token, http.MethodDelete, duong, nil); res.ma != http.StatusConflict {
 		t.Fatalf("xoá phiếu tự sinh phải bị chặn 409, nhận %d", res.ma)
 	}
-	if res := h.goi(t, a.token, http.MethodPut, duong, thuTienMat(1)); res.ma != http.StatusConflict {
+	if res := h.goi(t, a.token, http.MethodPut, duong, voiLoaiTC(t, h, a.token, thuTienMat(1))); res.ma != http.StatusConflict {
 		t.Fatalf("sửa phiếu tự sinh phải bị chặn 409, nhận %d", res.ma)
 	}
 }
@@ -835,10 +882,10 @@ func TestThuChi_BonViecTachRieng(t *testing.T) {
 	if res := h.goi(t, hai, http.MethodGet, "/api/v1/admin/thu-chi", nil); res.ma != http.StatusOK {
 		t.Fatalf("có thu-chi.xem thì phải đọc được sổ, nhận %d", res.ma)
 	}
-	if res := h.goi(t, hai, http.MethodPost, "/api/v1/admin/thu-chi", thuTienMat(10000)); res.ma != http.StatusForbidden {
+	if res := h.goi(t, hai, http.MethodPost, "/api/v1/admin/thu-chi", voiLoaiTC(t, h, hai, thuTienMat(10000))); res.ma != http.StatusForbidden {
 		t.Fatalf("chỉ có quyền XEM mà lập được phiếu, nhận %d\n%s", res.ma, catBot(res.than))
 	}
-	if res := h.goi(t, hai, http.MethodPut, duongPhieu, thuTienMat(20000)); res.ma != http.StatusForbidden {
+	if res := h.goi(t, hai, http.MethodPut, duongPhieu, voiLoaiTC(t, h, hai, thuTienMat(20000))); res.ma != http.StatusForbidden {
 		t.Fatalf("chỉ có quyền XEM mà sửa được phiếu, nhận %d\n%s", res.ma, catBot(res.than))
 	}
 	if res := h.goi(t, hai, http.MethodDelete, duongPhieu, nil); res.ma != http.StatusForbidden {
@@ -852,7 +899,7 @@ func TestThuChi_BonViecTachRieng(t *testing.T) {
 		t.Fatalf("có thu-chi.them thì phải lập được phiếu, nhận %d", ma)
 	}
 	duongCua := fmt.Sprintf("/api/v1/admin/thu-chi/%d", cua.ID)
-	if res := h.goi(t, hai, http.MethodPut, duongCua, thuTienMat(31000)); res.ma != http.StatusForbidden {
+	if res := h.goi(t, hai, http.MethodPut, duongCua, voiLoaiTC(t, h, hai, thuTienMat(31000))); res.ma != http.StatusForbidden {
 		t.Fatalf("chưa có thu-chi.sua mà sửa được phiếu CỦA CHÍNH MÌNH, nhận %d", res.ma)
 	}
 	if res := h.goi(t, hai, http.MethodDelete, duongCua, nil); res.ma != http.StatusForbidden {
@@ -861,7 +908,7 @@ func TestThuChi_BonViecTachRieng(t *testing.T) {
 
 	// Cấp quyền SỬA: sửa được phiếu của mình, vẫn chưa xoá được.
 	giaoQuyen(t, h, a, "quantri2", "thu-chi.sua")
-	if res := h.goi(t, hai, http.MethodPut, duongCua, thuTienMat(31000)); res.ma != http.StatusOK {
+	if res := h.goi(t, hai, http.MethodPut, duongCua, voiLoaiTC(t, h, hai, thuTienMat(31000))); res.ma != http.StatusOK {
 		t.Fatalf("có thu-chi.sua thì phải sửa được phiếu của mình, nhận %d\n%s", res.ma, catBot(res.than))
 	}
 	if res := h.goi(t, hai, http.MethodDelete, duongCua, nil); res.ma != http.StatusForbidden {
@@ -870,7 +917,7 @@ func TestThuChi_BonViecTachRieng(t *testing.T) {
 
 	// Cấp quyền XOÁ: giờ mới xoá được.
 	giaoQuyen(t, h, a, "quantri2", "thu-chi.xoa")
-	if res := h.goi(t, hai, http.MethodDelete, duongCua, nil); res.ma != http.StatusOK {
+	if res := h.goi(t, hai, http.MethodDelete, duongCua, lyDoXoa); res.ma != http.StatusOK {
 		t.Fatalf("có thu-chi.xoa thì phải xoá được, nhận %d\n%s", res.ma, catBot(res.than))
 	}
 }
@@ -925,7 +972,7 @@ func TestThuChi_XoaNguoiNop(t *testing.T) {
 	}
 
 	if res := h.goi(t, a.token, http.MethodDelete,
-		fmt.Sprintf("%s/%d", duong, tao.Data.ID), nil); res.ma != http.StatusOK {
+		fmt.Sprintf("%s/%d", duong, tao.Data.ID), lyDoXoa); res.ma != http.StatusOK {
 		t.Fatalf("xoá người nộp phải trả 200, nhận %d\n%s", res.ma, catBot(res.than))
 	}
 

@@ -263,7 +263,7 @@ class _GoodsScreenState extends ConsumerState<GoodsScreen> {
       context,
       title: 'Nhập $good mặt hàng?',
       subtitle: [
-        'Từ tệp $file. Mặt hàng nhập vào ở trạng thái tạm ẩn, tồn kho 0 — kiểm lại rồi mới cho bán.',
+        'Từ tệp $file. Mặt hàng nhập vào ở trạng thái ngừng bán, tồn kho 0 — kiểm lại rồi mới cho bán.',
         if (rows.length > good) '${rows.length - good} dòng sai sẽ được liệt kê sau khi nhập.',
       ].join(' '),
       body: (ctx) => Column(
@@ -315,7 +315,7 @@ class _GoodsScreenState extends ConsumerState<GoodsScreen> {
       context,
       title: res.ok > 0 ? 'Đã nhập ${res.ok} mặt hàng' : 'Chưa nhập được mặt hàng nào',
       subtitle: [
-        if (res.ok > 0) 'Đang ở trạng thái tạm ẩn, tồn kho 0 — xem ở chip "Ngừng bán".',
+        if (res.ok > 0) 'Đang ở trạng thái ngừng bán, tồn kho 0 — xem ở chip "Ngừng bán".',
         if (res.errors.isNotEmpty) '${res.errors.length} dòng chưa nhập được:',
       ].join(' '),
       body: (ctx) => Column(

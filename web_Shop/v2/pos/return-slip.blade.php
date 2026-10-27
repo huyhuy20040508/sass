@@ -12,6 +12,16 @@
     $luc = fn ($t) => $t ? \Illuminate\Support\Carbon::parse($t)->format('H:i d/m/Y') : '';
     $hep = $khoGiay === '58';
     $maPhieu = (string) ($tra['return_code'] ?? '');
+
+    // Lượt ĐỔI HÀNG: khách trả món cũ và lấy món mới ngay, tiền đi qua CHÊNH
+    // LỆCH chứ không qua phiếu hoàn (API đặt refund_amount = 0, refund_method =
+    // none). In theo khuôn phiếu hoàn thì tờ giấy ghi "HOÀN LẠI 0" trong khi két
+    // vừa chi ra — hoặc vừa thu thêm — một khoản thật.
+    $donMoi = (array) ($tra['exchange_order'] ?? []);
+    $laDoi = $donMoi !== [];
+    $tienTra = (float) ($tra['items_amount'] ?? 0) - (float) ($tra['deduction'] ?? 0);
+    $tienMoi = (float) ($donMoi['total_amount'] ?? 0);
+    $chenh = round($tienMoi - $tienTra);
 @endphp
 <!DOCTYPE html>
 <html lang="vi">
@@ -62,7 +72,7 @@
             @if($hien('diachi') && $diaChi !== '')<div class="nho">{{ $diaChi }}</div>@endif
         </div>
         <div class="ke"></div>
-        <div class="tieu-de">PHIẾU TRẢ HÀNG</div>
+        <div class="tieu-de">{{ $laDoi ? 'PHIẾU ĐỔI HÀNG' : 'PHIẾU TRẢ HÀNG' }}</div>
         @if($hien('maphieu') || $hien('tgtra'))
             <div class="dong nho">
                 <span>{{ $hien('maphieu') ? 'Số: '.$maPhieu : '' }}</span>
@@ -76,6 +86,7 @@
         @if($hien('sohd') || $hien('tg') || $hien('thungan') || $hien('khach') || $hien('pttt'))
             <div class="ke"></div>
             <div class="nho"><b>Đơn gốc</b>{{ $hien('sohd') ? ': '.($don['order_code'] ?? '') : '' }}</div>
+            @if($laDoi && $hien('sohd') && filled($donMoi['order_code'] ?? null))<div class="nho"><b>Đơn mới</b>: {{ $donMoi['order_code'] }}</div>@endif
             @if($hien('tg') && filled($don['placed_at'] ?? $don['created_at'] ?? null))<div class="nho">Thanh toán lúc: {{ $luc($don['placed_at'] ?? $don['created_at']) }}</div>@endif
             @if($hien('thungan') && filled($don['created_by_name'] ?? null))<div class="nho">Thu ngân: {{ $don['created_by_name'] }}</div>@endif
             @if($hien('khach') && filled($don['recipient_name'] ?? null))<div class="nho">Khách: {{ $don['recipient_name'] }}</div>@endif
@@ -83,6 +94,7 @@
         @endif
 
         <div class="ke"></div>
+        @if($laDoi)<div class="nho"><b>KHÁCH TRẢ LẠI</b></div>@endif
         @foreach(($tra['items'] ?? []) as $it)
             @php $bt = trim((string) ($it['variant_name'] ?? '')); @endphp
             <div class="mon">
@@ -94,16 +106,47 @@
             </div>
         @endforeach
 
+        @if($laDoi)
+            <div class="ke"></div>
+            <div class="nho"><b>KHÁCH LẤY VỀ</b></div>
+            @foreach(($donMoi['items'] ?? []) as $it)
+                @php $bt = trim((string) ($it['variant_name'] ?? '')); @endphp
+                <div class="mon">
+                    <div class="mon-ten">{{ $it['product_name'] ?? '' }}{{ $hien('bienthe') && $bt !== '' ? ' ('.$bt.')' : '' }}</div>
+                    <div class="dong">
+                        <span>{{ (int) ($it['quantity'] ?? 0) }}{{ $hien('dvt') && filled($it['unit_name'] ?? null) ? ' '.$it['unit_name'] : '' }} × {{ $so($it['unit_price'] ?? 0) }}</span>
+                        <span>{{ $so($it['total_price'] ?? ((float) ($it['unit_price'] ?? 0) * (int) ($it['quantity'] ?? 0))) }}</span>
+                    </div>
+                </div>
+            @endforeach
+        @endif
+
         <div class="ke-dam"></div>
-        @if((float) ($tra['deduction'] ?? 0) > 0)
+        @if($laDoi)
+            {{-- Ba dòng này mới là chứng từ của khoản tiền thật sự đổi tay. --}}
             <div class="dong"><span>Tiền hàng trả</span><span>{{ $so($tra['items_amount'] ?? 0) }}</span></div>
-            <div class="dong"><span>Khấu trừ</span><span>-{{ $so($tra['deduction']) }}</span></div>
-        @endif
-        @if($hien('tienhoan'))
-            <div class="dong tong"><span>HOÀN LẠI</span><span>{{ $so($tra['refund_amount'] ?? 0) }}</span></div>
-        @endif
-        @if($hien('pthoan') && filled($tra['refund_method'] ?? null))
-            <div class="dong"><span>Hình thức hoàn</span><span>{{ \App\Http\Controllers\ReturnController::REFUND_METHODS[$tra['refund_method']] ?? $tra['refund_method'] }}</span></div>
+            @if((float) ($tra['deduction'] ?? 0) > 0)
+                <div class="dong"><span>Khấu trừ</span><span>-{{ $so($tra['deduction']) }}</span></div>
+            @endif
+            <div class="dong"><span>Tiền hàng mới</span><span>{{ $so($tienMoi) }}</span></div>
+            <div class="dong tong">
+                <span>{{ $chenh > 0 ? 'KHÁCH TRẢ THÊM' : ($chenh < 0 ? 'TRẢ LẠI KHÁCH' : 'KHÔNG CHÊNH LỆCH') }}</span>
+                <span>{{ $so(abs($chenh)) }}</span>
+            </div>
+            @if($chenh != 0 && $hien('pthoan') && filled($donMoi['payment_method'] ?? null))
+                <div class="dong"><span>Hình thức</span><span>{{ \App\Http\Controllers\OrderController::tenHinhThuc($donMoi['payment_method']) }}</span></div>
+            @endif
+        @else
+            @if((float) ($tra['deduction'] ?? 0) > 0)
+                <div class="dong"><span>Tiền hàng trả</span><span>{{ $so($tra['items_amount'] ?? 0) }}</span></div>
+                <div class="dong"><span>Khấu trừ</span><span>-{{ $so($tra['deduction']) }}</span></div>
+            @endif
+            @if($hien('tienhoan'))
+                <div class="dong tong"><span>HOÀN LẠI</span><span>{{ $so($tra['refund_amount'] ?? 0) }}</span></div>
+            @endif
+            @if($hien('pthoan') && filled($tra['refund_method'] ?? null))
+                <div class="dong"><span>Hình thức hoàn</span><span>{{ \App\Http\Controllers\ReturnController::REFUND_METHODS[$tra['refund_method']] ?? $tra['refund_method'] }}</span></div>
+            @endif
         @endif
         <div class="ke-dam"></div>
         @if($hien('lydo') && filled($tra['reason'] ?? null))

@@ -54,10 +54,26 @@ func (r *orderRepository) SoDon(ctx context.Context, f domain.OrderFilter) ([]do
 		COALESCE(SUM(chuyen_khoan), 0) AS chuyen_khoan,
 		COALESCE(SUM(quet_the), 0) AS quet_the,
 		COALESCE(SUM(qr_tu_dong), 0) AS qr_tu_dong,
-		COALESCE(SUM(khac), 0) AS khac`).
+		COALESCE(SUM(khac), 0) AS khac,
+		COALESCE(SUM(con_no), 0) AS con_no`).
 		Scan(&tong).Error
 	if err != nil {
 		return nil, domain.TongSoDon{}, err
+	}
+	// Đếm cho các tab TRƯỚC khi thoát sớm: tab đang xem rỗng không có nghĩa tab khác rỗng.
+	if tong.Dem, err = r.demTheoNhom(ctx, f); err != nil {
+		return nil, domain.TongSoDon{}, err
+	}
+	if f.TheoNgay {
+		tong.TheoNgay = []domain.TongNgaySoDon{}
+		err = union().
+			Select("DATE_FORMAT(created_at, '%Y-%m-%d') AS ngay, COUNT(*) AS so_dong, COALESCE(SUM(tong_tien), 0) AS tong_tien").
+			Where("loai = ?", "don").
+			Group("ngay").Order("ngay").
+			Scan(&tong.TheoNgay).Error
+		if err != nil {
+			return nil, domain.TongSoDon{}, err
+		}
 	}
 	if tong.SoDong == 0 {
 		return []domain.DongSoDon{}, tong, nil
@@ -81,8 +97,108 @@ func (r *orderRepository) SoDon(ctx context.Context, f domain.OrderFilter) ([]do
 	if err != nil {
 		return nil, domain.TongSoDon{}, err
 	}
+	if err = r.ganAnhMon(ctx, rows); err != nil {
+		return nil, domain.TongSoDon{}, err
+	}
 
 	return rows, tong, nil
+}
+
+// nhomXuLy: nhóm trạng thái xử lý của tab mobile → các orders.status thuộc nhóm.
+var nhomXuLy = map[string][]string{
+	"pending":   {"pending"},
+	"doing":     {"confirmed", "processing", "shipping"},
+	"done":      {"completed", "delivered"},
+	"cancelled": {"cancelled"},
+	"returned":  {"returned"},
+}
+
+// locNhomXuLy lọc đơn bán theo nhóm trạng thái xử lý. Nhóm lạ thì không trả dòng
+// nào — đoán bừa thành "tất cả" là bày ra danh sách sai mà không ai biết.
+func locNhomXuLy(q *gorm.DB, nhom string) *gorm.DB {
+	if nhom == "" {
+		return q
+	}
+	ds, ok := nhomXuLy[nhom]
+	if !ok {
+		return q.Where("1 = 0")
+	}
+
+	return q.Where("orders.status IN ?", ds)
+}
+
+// demTheoNhom đếm số dòng của từng tab trên cùng bộ lọc, bỏ điều kiện nhóm.
+func (r *orderRepository) demTheoNhom(ctx context.Context, f domain.OrderFilter) (map[string]int64, error) {
+	f.TrangThaiDon = ""
+	var theoTrangThai []struct {
+		TrangThaiDon string
+		N            int64
+	}
+	err := r.db.WithContext(ctx).
+		Table("(?) AS d", r.cauDonBan(ctx, f)).
+		Select("trang_thai_don, COUNT(*) AS n").
+		Group("trang_thai_don").
+		Scan(&theoTrangThai).Error
+	if err != nil {
+		return nil, err
+	}
+	var phieuTra int64
+	if err = r.db.WithContext(ctx).Table("(?) AS t", r.cauPhieuTra(ctx, f)).Count(&phieuTra).Error; err != nil {
+		return nil, err
+	}
+
+	dem := map[string]int64{"pending": 0, "doing": 0, "done": 0, "cancelled": 0, "returned": phieuTra}
+	for _, d := range theoTrangThai {
+		for nhom, ds := range nhomXuLy {
+			if slices.Contains(ds, d.TrangThaiDon) {
+				dem[nhom] += d.N
+			}
+		}
+	}
+
+	return dem, nil
+}
+
+// ganAnhMon gắn tối đa 3 ảnh món đầu cho các đơn bán trong trang — một câu cho
+// cả trang chứ không một câu mỗi đơn.
+func (r *orderRepository) ganAnhMon(ctx context.Context, rows []domain.DongSoDon) error {
+	var ids []uint
+	for _, d := range rows {
+		if d.Loai == "don" {
+			ids = append(ids, d.ID)
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	var anh []struct {
+		OrderID   uint
+		Thumbnail string
+	}
+	err := r.db.WithContext(ctx).Model(&domain.OrderItem{}).
+		Select("order_id, thumbnail").
+		Where("order_id IN ? AND thumbnail <> ''", ids).
+		Order("order_id, id").
+		Scan(&anh).Error
+	if err != nil {
+		return err
+	}
+	theoDon := map[uint][]string{}
+	for _, a := range anh {
+		if len(theoDon[a.OrderID]) < 3 {
+			theoDon[a.OrderID] = append(theoDon[a.OrderID], a.Thumbnail)
+		}
+	}
+	for i := range rows {
+		if rows[i].Loai == "don" {
+			rows[i].AnhMon = theoDon[rows[i].ID]
+			if rows[i].AnhMon == nil {
+				rows[i].AnhMon = []string{}
+			}
+		}
+	}
+
+	return nil
 }
 
 // sapXep đổi mã sắp xếp của giao diện thành mệnh đề ORDER BY trên bảng union.
@@ -246,7 +362,15 @@ func (r *orderRepository) cauDonBan(ctx context.Context, f domain.OrderFilter) *
 			` + trangThaiDon + ` AS trang_thai,
 			COALESCE(nt.full_name, '') AS nguoi_tao,
 			orders.created_at AS created_at,
-			orders.updated_at AS updated_at`)
+			orders.updated_at AS updated_at,
+			orders.status AS trang_thai_don,
+			(SELECT COUNT(*) FROM order_items oi
+				WHERE oi.order_id = orders.id AND oi.tenant_id = orders.tenant_id) AS so_mon,
+			(SELECT COALESCE(SUM(oi.quantity), 0) FROM order_items oi
+				WHERE oi.order_id = orders.id AND oi.tenant_id = orders.tenant_id) AS so_luong,
+			COALESCE((SELECT oi.product_name FROM order_items oi
+				WHERE oi.order_id = orders.id AND oi.tenant_id = orders.tenant_id
+				ORDER BY oi.id LIMIT 1), '') AS ten_mon_dau`)
 
 	if f.Keyword != "" {
 		q = q.Where("orders.order_code LIKE ?", "%"+f.Keyword+"%")
@@ -256,6 +380,7 @@ func (r *orderRepository) cauDonBan(ctx context.Context, f domain.OrderFilter) *
 		q = q.Where("(orders.recipient_name LIKE ? OR orders.recipient_phone LIKE ?)", kw, kw)
 	}
 	q = locTrangThaiSo(q, f.Status)
+	q = locNhomXuLy(q, f.TrangThaiDon)
 	q = locHoaDonDienTu(q, f.HoaDonDienTu)
 	q = locNhieu(q, "orders.payment_status", f.PaymentStatus)
 	q = locPhuongThucDon(q, f.PaymentMethod)
@@ -313,13 +438,21 @@ func (r *orderRepository) cauPhieuTra(ctx context.Context, f domain.OrderFilter)
 			'` + domain.TrangThaiSoTraHang + `' AS trang_thai,
 			COALESCE(nt.full_name, '') AS nguoi_tao,
 			order_returns.created_at AS created_at,
-			order_returns.updated_at AS updated_at`).
+			order_returns.updated_at AS updated_at,
+			'` + domain.TrangThaiSoTraHang + `' AS trang_thai_don,
+			0 AS so_mon,
+			0 AS so_luong,
+			'' AS ten_mon_dau`).
 		Where("order_returns.status IN (" + phieuDaTra + ")")
 
 	// Bộ lọc TRẠNG THÁI: phiếu trả chỉ thuộc về đúng một lựa chọn — "Trả hàng".
 	// Người dùng lọc trạng thái khác mà vẫn thấy phiếu trả chen vào thì con số
 	// dưới chân bảng không khớp với thứ họ vừa chọn.
 	if !chonTraHang(f.Status) {
+		return q.Where("1 = 0")
+	}
+	// Phiếu trả chỉ thuộc nhóm "returned".
+	if f.TrangThaiDon != "" && f.TrangThaiDon != domain.TrangThaiSoTraHang {
 		return q.Where("1 = 0")
 	}
 

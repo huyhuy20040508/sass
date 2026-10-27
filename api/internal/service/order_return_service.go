@@ -73,6 +73,12 @@ type OrderReturnService interface {
 	UpdateStatus(ctx context.Context, id uint, req *dto.ReturnStatusRequest, actorID uint) (*ReturnDetail, error)
 	Settle(ctx context.Context, id uint, req *dto.ReturnSettleRequest, actorID uint) (*ReturnDetail, error)
 	UpdateNote(ctx context.Context, id uint, note string) (*ReturnDetail, error)
+
+	// Quầy — trả hàng một bước ở module Thu ngân.
+	DonTraQuay(ctx context.Context, keyword string, soNgay int) ([]domain.DonTraQuay, error)
+	TraDuocTaiQuay(ctx context.Context, orderID uint) (*ReturnableOrder, error)
+	TraTaiQuay(ctx context.Context, req *dto.TraTaiQuayRequest, actorID uint) (*ReturnDetail, error)
+	TongQuay(ctx context.Context, f domain.ReturnFilter) (domain.TongTraQuay, error)
 }
 
 type orderReturnService struct {
@@ -161,6 +167,7 @@ func (s *orderReturnService) returnable(ctx context.Context, orderID uint, selfS
 	if err != nil {
 		return nil, err
 	}
+	ganTienDaTra(o, items)
 
 	ok, reason := s.returnEligibility(ctx, o, selfService)
 	if ok {
@@ -181,12 +188,48 @@ func (s *orderReturnService) returnable(ctx context.Context, orderID uint, selfS
 
 // ---------- Tạo phiếu ----------
 
+// tienDaTraTheoDong — số khách THỰC trả cho cả từng dòng: thành tiền dòng (đã
+// trừ bớt của chính dòng) trừ phần giảm giá cả đơn chia về dòng ấy, cộng thuế
+// của dòng. Chia bằng ĐÚNG hàm hoá đơn điện tử dùng (chiaGiamGia) — voucher,
+// khuyến mại, giảm theo hạng, điểm và giảm tay cả đơn đều nằm trong
+// DiscountAmount. Trước đây hoàn theo unit_price × SL (giá TRƯỚC giảm): đơn có
+// giảm 10% thì khách trả lại hàng được hoàn dư đúng 10% ấy.
+func tienDaTraTheoDong(o *domain.Order) map[uint]float64 {
+	chia := chiaGiamGia(o)
+	out := make(map[uint]float64, len(o.Items))
+	for i, it := range o.Items {
+		v := it.TotalPrice - chia[i] + it.VatAmount
+		if v < 0 {
+			v = 0
+		}
+		out[it.ID] = v
+	}
+
+	return out
+}
+
+func ganTienDaTra(o *domain.Order, items []domain.ReturnableItem) {
+	daTra := tienDaTraTheoDong(o)
+	for i := range items {
+		items[i].PaidTotal = daTra[items[i].OrderItemID]
+	}
+}
+
+// tienHoanDong — tiền hoàn của qty món trên một dòng đã mua tong món.
+func tienHoanDong(daTra float64, qty, tong int) float64 {
+	if tong <= 0 {
+		return 0
+	}
+
+	return lamTron(daTra * float64(qty) / float64(tong))
+}
+
 // buildLines chụp lại thông tin sản phẩm từ đơn gốc cho các dòng client chọn và
 // tính tiền hàng của phiếu.
 //
-// Giá lấy từ order_items chứ không nhận từ client: khách khai giá là khách tự
-// quyết định mình được hoàn bao nhiêu.
-func buildLines(items []dto.ReturnItemRequest, remain map[uint]domain.ReturnableItem) ([]domain.OrderReturnItem, float64, error) {
+// Giá lấy từ đơn gốc chứ không nhận từ client: khách khai giá là khách tự quyết
+// định mình được hoàn bao nhiêu. daTra = tienDaTraTheoDong của đơn đó.
+func buildLines(items []dto.ReturnItemRequest, remain map[uint]domain.ReturnableItem, daTra map[uint]float64) ([]domain.OrderReturnItem, float64, error) {
 	// Gộp dòng trùng để kiểm tra theo TỔNG số lượng, tránh hai dòng cùng một món
 	// đều lọt qua rồi trả vượt số đã mua.
 	merged := make(map[uint]int, len(items))
@@ -216,7 +259,7 @@ func buildLines(items []dto.ReturnItemRequest, remain map[uint]domain.Returnable
 			return nil, 0, domain.ErrReturnQtyExceeded
 		}
 
-		total := src.UnitPrice * float64(qty)
+		total := tienHoanDong(daTra[oid], qty, src.Quantity)
 		amount += total
 		lines = append(lines, domain.OrderReturnItem{
 			OrderItemID:      src.OrderItemID,
@@ -226,7 +269,7 @@ func buildLines(items []dto.ReturnItemRequest, remain map[uint]domain.Returnable
 			VariantSKU:       src.VariantSKU,
 			VariantName:      src.VariantName,
 			Thumbnail:        src.Thumbnail,
-			UnitPrice:        src.UnitPrice,
+			UnitPrice:        tienHoanDong(daTra[oid], 1, src.Quantity),
 			Quantity:         qty,
 			TotalPrice:       total,
 		})
@@ -258,7 +301,7 @@ func (s *orderReturnService) CreateMine(ctx context.Context, userID uint, req *d
 			return nil, domain.ErrReturnNotAllowed
 		}
 
-		lines, amount, err := buildLines(req.Items, remain)
+		lines, amount, err := buildLines(req.Items, remain, tienDaTraTheoDong(o))
 		if err != nil {
 			return nil, err
 		}
@@ -307,7 +350,7 @@ func (s *orderReturnService) CreateByAdmin(ctx context.Context, req *dto.ReturnA
 			return nil, domain.ErrReturnNotAllowed
 		}
 
-		lines, amount, err := buildLines(req.Items, remain)
+		lines, amount, err := buildLines(req.Items, remain, tienDaTraTheoDong(o))
 		if err != nil {
 			return nil, err
 		}
@@ -640,6 +683,156 @@ func (s *orderReturnService) UpdateNote(ctx context.Context, id uint, note strin
 		return nil, err
 	}
 	return s.detail(ctx, rt)
+}
+
+// ---------- Quầy ----------
+
+// lyDoKhongTraTaiQuay — luật trả hàng ở QUẦY, khác luồng quản trị ở chỗ chặn
+// thẳng trên máy chủ những đơn mà trước đây chỉ giao diện chặn. Trả rỗng = trả
+// được. conTra là số món chính (không tính quà) còn trả được.
+//
+//   - Đơn có HĐĐT: trả hàng phải kèm hoá đơn điều chỉnh — việc của Quản trị.
+//   - Đơn chưa thu đủ: hoàn tiền cho phần khách chưa trả là chi khống.
+//   - Hạn returnWindowDays ngày từ lúc khách nhận hàng (đơn quầy: lúc bán), như
+//     hạn khách tự gửi yêu cầu trên web; quá hạn thì Quản trị lập phiếu.
+func lyDoKhongTraTaiQuay(o *domain.Order, coHoaDon bool, conTra int, now time.Time) string {
+	switch {
+	case o.Status == domain.OrderStatusReturned || (conTra <= 0 && (o.Status == domain.OrderStatusDelivered || o.Status == domain.OrderStatusCompleted)):
+		return "Mọi món của đơn đã trả hết."
+	case o.Status != domain.OrderStatusDelivered && o.Status != domain.OrderStatusCompleted:
+		return "Đơn chưa giao tới khách — huỷ đơn thay vì trả hàng."
+	case coHoaDon:
+		return "Đơn đã có HĐĐT — trả hàng phải kèm hoá đơn điều chỉnh, làm ở Quản trị."
+	case o.PaymentStatus != domain.OrderPaymentPaid:
+		return "Đơn còn nợ — thu đủ ở Lịch sử rồi mới trả hàng."
+	}
+
+	moc := o.CreatedAt
+	if o.DeliveredAt != nil {
+		moc = *o.DeliveredAt
+	}
+	if now.After(moc.AddDate(0, 0, returnWindowDays)) {
+		return "Quá hạn trả hàng " + strconv.Itoa(returnWindowDays) + " ngày (mua " + moc.Format("02/01/2006") + ") — nhờ Quản trị lập phiếu."
+	}
+
+	return ""
+}
+
+func conTraMonChinh(remain []domain.ReturnableItem) int {
+	n := 0
+	for _, it := range remain {
+		if !it.IsGift {
+			n += it.RemainQuantity
+		}
+	}
+
+	return n
+}
+
+func (s *orderReturnService) DonTraQuay(ctx context.Context, keyword string, soNgay int) ([]domain.DonTraQuay, error) {
+	if soNgay <= 0 || soNgay > 90 {
+		soNgay = 7
+	}
+	now := time.Now()
+	dau := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).AddDate(0, 0, -soNgay)
+
+	ds, err := s.repo.DonTraQuay(ctx, keyword, dau, 50)
+	if err != nil {
+		return nil, err
+	}
+	for i := range ds {
+		d := &ds[i]
+		o := domain.Order{Status: d.Status, PaymentStatus: d.PaymentStatus, CreatedAt: d.CreatedAt, DeliveredAt: d.DeliveredAt}
+		d.LyDoChan = lyDoKhongTraTaiQuay(&o, d.CoHoaDon, d.SoLuong-d.DaTra, now)
+	}
+
+	return ds, nil
+}
+
+func (s *orderReturnService) TraDuocTaiQuay(ctx context.Context, orderID uint) (*ReturnableOrder, error) {
+	shopID, err := s.repo.ChiNhanhDangLam(ctx)
+	if err != nil {
+		return nil, err
+	}
+	o, items, err := s.repo.Returnable(ctx, orderID)
+	if err != nil {
+		return nil, err
+	}
+	if o.ShopID != shopID {
+		return nil, domain.ErrNotFound
+	}
+	coHD, err := s.repo.CoHoaDon(ctx, orderID)
+	if err != nil {
+		return nil, err
+	}
+	ganTienDaTra(o, items)
+	why := lyDoKhongTraTaiQuay(o, coHD, conTraMonChinh(items), time.Now())
+
+	return &ReturnableOrder{Order: o, Items: items, Returnable: why == "", Reason: why}, nil
+}
+
+func (s *orderReturnService) TraTaiQuay(ctx context.Context, req *dto.TraTaiQuayRequest, actorID uint) (*ReturnDetail, error) {
+	rt, err := s.repo.TraTaiQuay(ctx, req.OrderID, func(o *domain.Order, remain map[uint]domain.ReturnableItem, coHoaDon bool) (*domain.OrderReturn, error) {
+		con := make([]domain.ReturnableItem, 0, len(remain))
+		for _, it := range remain {
+			con = append(con, it)
+		}
+		if why := lyDoKhongTraTaiQuay(o, coHoaDon, conTraMonChinh(con), time.Now()); why != "" {
+			return nil, &domain.LoiTraQuay{Cau: why}
+		}
+
+		lines, amount, err := buildLines(req.Items, remain, tienDaTraTheoDong(o))
+		if err != nil {
+			return nil, err
+		}
+		if req.Deduction > amount {
+			return nil, domain.ErrReturnDeduction
+		}
+
+		restock := true
+		if req.Restock != nil {
+			restock = *req.Restock
+		}
+		now := time.Now()
+		rt := &domain.OrderReturn{
+			UserID: o.UserID,
+			// Hàng đang trên tay người bán và tiền đưa khách ngay — phiếu sinh ra ở
+			// trạng thái cuối, không qua duyệt (bản cũ ở quầy cũng một bước).
+			Status:       domain.ReturnStatusRefunded,
+			Reason:       req.Reason,
+			ReasonNote:   strings.TrimSpace(req.ReasonNote),
+			RequestedBy:  "admin",
+			RefundMethod: req.RefundMethod,
+			ItemsAmount:  amount,
+			Deduction:    req.Deduction,
+			RefundAmount: refundTotal(amount, 0, req.Deduction),
+			Restock:      restock,
+			ApprovedAt:   &now,
+			ReceivedAt:   &now,
+			RefundedAt:   &now,
+			Items:        lines,
+		}
+		if actorID > 0 {
+			id := actorID
+			rt.HandledBy = &id
+		}
+
+		return rt, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	s.notifyCustomer(ctx, rt, "return_status",
+		"Đã hoàn tiền trả hàng "+rt.ReturnCode,
+		"Cửa hàng đã nhận hàng trả và hoàn "+formatVND(rt.RefundAmount)+".")
+	s.signal(ctx, rt)
+
+	return s.detail(ctx, rt)
+}
+
+func (s *orderReturnService) TongQuay(ctx context.Context, f domain.ReturnFilter) (domain.TongTraQuay, error) {
+	return s.repo.TongQuay(ctx, f)
 }
 
 // ---------- Helper ----------

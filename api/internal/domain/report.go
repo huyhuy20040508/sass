@@ -58,11 +58,29 @@ func (p ReportPeriod) Days() int {
 	return d
 }
 
-// Prev trả kỳ liền trước, CÙNG ĐỘ DÀI, kết thúc ngay trước kỳ này.
+// Prev trả kỳ để so sánh.
+//
+// Mặc định: CÙNG ĐỘ DÀI, kết thúc ngay trước kỳ này. Riêng kỳ bắt đầu mùng 1,
+// nằm gọn trong một tháng và dài hơn 7 ngày ("tháng này đến hôm nay", "tháng
+// trước") thì so với CÙNG KỲ THÁNG TRƯỚC — người xem đọc nó là "so với tháng
+// trước", còn 19 ngày liền trước thì vắt ngang hai tháng (KB #86, như bản v2
+// subMonthNoOverflow). Cùng số ngày tính từ mùng 1, kẹp ở cuối tháng trước; xem
+// trọn tháng thì so trọn tháng trước. Hôm nay / 7 ngày rơi vào mùng 1 vẫn so
+// liền trước. PC (DashboardController::khoangTruoc) và app (prevRange) theo
+// đúng luật này.
 func (p ReportPeriod) Prev() ReportPeriod {
 	n := p.Days()
+	from, to := p.From.AddDate(0, 0, -n), p.From
+	cuoi := p.To.AddDate(0, 0, -1)
+	if p.From.Day() == 1 && n > 7 && cuoi.Year() == p.From.Year() && cuoi.Month() == p.From.Month() {
+		from = p.From.AddDate(0, -1, 0)
+		to = from.AddDate(0, 0, n)
+		if to.After(p.From) || p.To.Day() == 1 {
+			to = p.From
+		}
+	}
 	return ReportPeriod{
-		From: p.From.AddDate(0, 0, -n), To: p.From,
+		From: from, To: to,
 		ShopID: p.ShopID, Channel: p.Channel, PaymentMethods: p.PaymentMethods,
 	}
 }
@@ -84,6 +102,12 @@ type ReportSlice struct {
 	Orders  int64   `json:"orders"`
 	Units   int64   `json:"units"`
 	Revenue float64 `json:"revenue"`
+	// Thành phần của Revenue (cùng cột với ReportBucket) — để màn ghi "doanh thu
+	// thuần" tính được đúng công thức của kỳ nhiều ngày thay vì vẽ số GỒM VAT.
+	// Chỉ các lát cắt theo cột của đơn (giờ, thứ, kênh, nguồn) có.
+	Subtotal float64 `json:"subtotal,omitempty"`
+	Discount float64 `json:"discount,omitempty"`
+	Shipping float64 `json:"shipping,omitempty"`
 }
 
 // ShopProfitSlice — lãi gộp của MỘT chi nhánh trong kỳ.
@@ -124,6 +148,17 @@ type ReportTotals struct {
 	// CardFee — phí quẹt thẻ cửa hàng chịu. KHÔNG trừ vào Profit (lãi gộp theo
 	// hàng); màn nào cần lãi sau phí thì tự trừ và nói rõ.
 	CardFee float64 `json:"card_fee"`
+	// ThieuGiaVon — dòng bán CHƯA có giá vốn (hàng tặng 0đ không tính): Cost coi
+	// chúng là 0 nên toàn bộ tiền hàng của chúng nằm trong Profit. Màn nào in lãi
+	// / biên lãi phải trừ ra hoặc nói rõ (KB #98) — không thì "biên 100%".
+	ThieuGiaVon ThieuGiaVon `json:"thieu_gia_von"`
+}
+
+// ThieuGiaVon — phần doanh thu chưa tính được lãi vì chưa khai giá vốn.
+type ThieuGiaVon struct {
+	SoDong   int64   `json:"so_dong"`
+	SoLuong  int64   `json:"so_luong"`
+	TienHang float64 `json:"tien_hang"`
 }
 
 // ReportBucket — một mốc trên trục thời gian.

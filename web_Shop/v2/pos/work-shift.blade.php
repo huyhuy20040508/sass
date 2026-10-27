@@ -60,6 +60,8 @@
 
     $ca = $chon['ca'] ?? null;
     $soQuy = $chon['so_quy'] ?? [];
+    // Phiếu thu chi của ca đã bị sửa / xoá (nhật ký) — người đóng ca cần biết.
+    $thuChiSua = $chon['thu_chi_sua'] ?? [];
     $dt = $chon['doanh_thu'] ?? [];
     $dangMo = $ca && empty($ca['closed_at']);
 
@@ -263,8 +265,14 @@
                             <div class="is-diff is-{{ $lechCls($lech) }}"><dt>Chênh lệch</dt><dd>{{ abs($lech) < 0.5 ? 'Khớp' : $sgn($lech) }}</dd></div>
                         @endunless
                     </dl>
+                    @if((float) ($ca['da_nop_ve'] ?? 0) > 0)
+                        <p class="ca-nop-ve"><i class="fa-solid fa-building-columns"></i>Đã nộp về công ty trong ca: <b>{{ $vnd($ca['da_nop_ve']) }}</b> <span>— nằm trong "Chi tiền mặt", không phải chi phí</span></p>
+                    @endif
                     @if($ngoaiTruocCa)
                         <div class="ca-alert ca-alert--warn"><i class="fa-solid fa-triangle-exclamation"></i><span>{{ count($ngoaiTruocCa) }} khoản tiền mặt phát sinh trước giờ mở ca không nằm trong “Tiền theo sổ”. <button type="button" class="link-btn" data-open="caNgoai">Xem</button></span></div>
+                    @endif
+                    @if($thuChiSua)
+                        <div class="ca-alert ca-alert--warn"><i class="fa-solid fa-pen-to-square"></i><span>{{ count($thuChiSua) }} lượt sửa / xoá phiếu thu chi trong ca. <button type="button" class="link-btn" data-open="caThuChiSua">Xem</button></span></div>
                     @endif
                     @if(! $dangMo && abs($lech) >= 0.5)
                         <div class="ca-alert ca-alert--{{ $lech < 0 ? 'danger' : 'warn' }}"><i class="fa-solid fa-scale-unbalanced"></i><span><b>{{ $lechChu($lech) }}.</b> {{ ($ca['close_note'] ?? '') !== '' ? $ca['close_note'] : 'Không ghi lý do.' }}</span></div>
@@ -437,6 +445,34 @@
 @endsection
 
 @push('modals')
+    {{-- Phiếu thu chi của ca đã bị sửa / xoá --}}
+    @if($thuChiSua)
+        <dialog class="modal" id="caThuChiSua" aria-labelledby="caThuChiSuaT">
+            <div class="modal__head"><h2 id="caThuChiSuaT">Phiếu thu chi đã sửa / xoá trong ca</h2><button type="button" class="icon-btn" aria-label="Đóng" data-tn-close><i class="fa-solid fa-xmark"></i></button></div>
+            <div class="modal__body">
+                <ol class="ca-tc-sua">
+                    @foreach($thuChiSua as $n)
+                        @php
+                            $c = $n['changes'] ?? [];
+                            $xoa = ($n['action'] ?? '') === 'thu_chi.xoa';
+                            $moi = $c['so_tien_moi'] ?? null;
+                        @endphp
+                        <li class="{{ $xoa ? 'is-xoa' : '' }}">
+                            <div class="ca-tc-sua__dau"><b>{{ $xoa ? 'Xoá' : 'Sửa' }} {{ ($c['ma'] ?? '') !== '' ? $c['ma'] : '#'.($n['phieu_id'] ?? '') }}</b><span>{{ $gio($n['at'] ?? null) }} · {{ $n['by_name'] ?? '' }}</span></div>
+                            <div class="ca-tc-sua__tien">{{ (int) ($c['loai'] ?? 1) === 0 ? 'Thu' : 'Chi' }}
+                                @if($xoa) {{ $vnd($c['so_tien_cu'] ?? 0) }} (đã xoá)
+                                @elseif($moi !== null && (float) $moi !== (float) ($c['so_tien_cu'] ?? 0)) <s>{{ $vnd($c['so_tien_cu'] ?? 0) }}</s> → <b>{{ $vnd($moi) }}</b>
+                                @else {{ $vnd($c['so_tien_cu'] ?? 0) }} (không đổi số tiền)
+                                @endif
+                            </div>
+                            <div class="ca-tc-sua__ly">Lý do: {{ $n['reason'] ?? '' }}</div>
+                        </li>
+                    @endforeach
+                </ol>
+            </div>
+        </dialog>
+    @endif
+
     {{-- Mở ca --}}
     <dialog class="modal" id="caMo" aria-labelledby="caMoT">
         <form method="dialog" data-mo-form novalidate>
@@ -851,6 +887,7 @@
             <div class="ca-kv"><span>Tiền đầu ca</span><span class="num">${vnd(soCa.opening_cash)}</span></div>
             <div class="ca-kv"><span>+ Thu tiền mặt</span><span class="num" style="color:var(--c-success)">${vnd(soCa.tong_thu)}</span></div>
             <div class="ca-kv"><span>− Chi tiền mặt</span><span class="num" style="color:var(--c-danger)">${vnd(soCa.tong_chi)}</span></div>
+            ${soCa.da_nop_ve ? `<div class="ca-kv"><span style="padding-left:12px">trong đó đã nộp về công ty</span><span class="num">${vnd(soCa.da_nop_ve)}</span></div>` : ''}
             <div class="ca-kv"><span><b>= Tiền theo sổ</b></span><span class="num">${vndKet(theoSo())}</span></div>
             <div class="ca-kv is-diff ${lop}"><span><b>Chênh lệch</b></span><span class="num">${lech == null ? '—' : lech === 0 ? 'Khớp' : `${sgn(lech)} (${lech < 0 ? 'thiếu' : 'dư'})`}</span></div>`;
         $('[data-dong-ghi-nhan]').textContent = lech ? 'Lý do chênh lệch *' : 'Ghi chú đóng ca';
@@ -860,7 +897,11 @@
             soCa = await goi(CA.url.hienTai);
         } catch (err) { soCa = null; }
         if (!soCa) { posToast('Ca này đã được đóng ở máy khác. Đang tải lại…', 'error'); setTimeout(() => veTrang(), 1500); return; }
-        soCa.opening_cash = +soCa.opening_cash || 0; soCa.tong_thu = +soCa.tong_thu || 0; soCa.tong_chi = +soCa.tong_chi || 0;
+        soCa.opening_cash = +soCa.opening_cash || 0; soCa.tong_thu = +soCa.tong_thu || 0; soCa.tong_chi = +soCa.tong_chi || 0; soCa.da_nop_ve = +soCa.da_nop_ve || 0;
+        // Gợi ý sẵn số đã nộp: phần ấy đã ra khỏi két, giao về chủ chỉ còn phần đang đếm.
+        $('.ca-ban-giao__goi-y').textContent = soCa.da_nop_ve
+            ? `Trong ca đã nộp về công ty ${vnd(soCa.da_nop_ve)} (đã trừ khỏi két). Giao về chủ + giữ lại = tiền đếm được bây giờ.`
+            : 'Mặc định giao hết. Nhập số giữ lại (tiền lẻ để thối) thì phần giao tự tính; hai ô cộng lại phải bằng tiền đếm được.';
         $('[data-dong-id]').textContent = `#${soCa.id}`;
         $('[data-dong-ai]').textContent = soCa.employee_name || soCa.opened_by_name || '';
         $('[data-dong-mo]').textContent = gioNgay(new Date(soCa.opened_at));

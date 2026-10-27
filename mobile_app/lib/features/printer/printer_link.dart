@@ -82,9 +82,19 @@ class DeviceLink implements PrinterLink {
 
   @override
   Future<List<PairedPrinter>> paired() async {
-    await _canDung();
-    final ds = await PrintBluetoothThermal.pairedBluetooths;
-    return [for (final b in ds) PairedPrinter(b.name, b.macAdress)];
+    try {
+      await _canDung();
+      final ds = await PrintBluetoothThermal.pairedBluetooths;
+      return [for (final b in ds) PairedPrinter(b.name, b.macAdress)];
+    } on PrinterException {
+      rethrow;
+    } catch (_) {
+      // Gói Bluetooth ném đủ kiểu NGOÀI Exception: MissingPluginException trên
+      // bản web (không có kênh nền tảng), PlatformException khi thiếu quyền,
+      // Error khi máy không có Bluetooth. Không gom lại thì màn im lặng, người
+      // dùng bấm "Xem máy in đã ghép đôi" mà không thấy gì xảy ra.
+      throw const PrinterException('Không đọc được Bluetooth — bật Bluetooth và cấp quyền rồi thử lại.');
+    }
   }
 }
 

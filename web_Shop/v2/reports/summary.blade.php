@@ -210,6 +210,10 @@
                                         <div class="th-luoi">
                                             <span class="nhan">Thu</span><span class="so">{{ $so['phieu_thu'] }}</span>
                                             <span class="nhan">Chi</span><span class="so">{{ $so['phieu_chi'] }}</span>
+                                            @if($so['nop_ve'] > 0)
+                                                {{-- Nộp về công ty: chuyển két, không phải chi phí — không trừ vào Tổng thu chi. --}}
+                                                <span class="nhan" title="Không tính vào chi phí">Nộp về công ty</span><span class="so">{{ $so['phieu_nop_ve'] }} · {{ $tien($so['nop_ve']) }}đ</span>
+                                            @endif
                                         </div>
                                         @include('v2::reports._thu-chi-ngoai-loc', ['channel' => $filters['channel']])
                                     </td>

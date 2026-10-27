@@ -257,7 +257,7 @@
                         @endunless
                     </div>
                 @else
-                    <form method="POST" action="{{ route('platform.customer-orders.contracts.luu', data_get($hd, 'id')) }}">
+                    <form method="POST" action="{{ route('platform.khach-hang-order.hop-dong.luu', data_get($hd, 'id')) }}">
                         @csrf
                         <div class="panel-body">
                             <div class="grid2">
@@ -368,7 +368,7 @@
                 </button>
             </div>
 
-            <form method="POST" action="{{ route('platform.customer-orders.contracts.doi-mat-khau', data_get($hd, 'id')) }}">
+            <form method="POST" action="{{ route('platform.khach-hang-order.hop-dong.doi-mat-khau', data_get($hd, 'id')) }}">
                 @csrf
 
                 <div class="sheet-body">

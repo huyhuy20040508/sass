@@ -207,6 +207,13 @@ func (r *paymentMethodRepository) SoDonDung(ctx context.Context, detailID uint) 
 	return n, err
 }
 
+func (r *paymentMethodRepository) SoPhieuThuChiDung(ctx context.Context, detailID uint) (int64, error) {
+	var n int64
+	err := r.db.WithContext(ctx).Model(&domain.ThuChi{}).Where("bank_account_id = ?", detailID).Count(&n).Error
+
+	return n, err
+}
+
 type pmTx struct {
 	tx     *gorm.DB
 	shopID uint

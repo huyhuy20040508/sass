@@ -95,6 +95,8 @@ type CaLamViec struct {
 	ClosedName   string  `json:"closed_by_name,omitempty" gorm:"-"`
 	TongThu      float64 `json:"tong_thu" gorm:"-"`
 	TongChi      float64 `json:"tong_chi" gorm:"-"`
+	// DaNopVe — tiền đã nộp về công ty trong ca (đã nằm trong TongChi).
+	DaNopVe      float64 `json:"da_nop_ve" gorm:"-"`
 	SoDonTienMat int64   `json:"so_don_tien_mat" gorm:"-"`
 }
 
@@ -345,6 +347,10 @@ type CaLamViecRepository interface {
 	GanMaChungTu(ctx context.Context, ds []SoQuy) error
 	// DoanhThuCa gộp đơn quầy thuộc khoảng thời gian của một ca.
 	DoanhThuCa(ctx context.Context, caID uint) (DoanhThuCa, error)
+	// NopVeTrongCa — tổng phiếu "nộp về công ty" của ca.
+	NopVeTrongCa(ctx context.Context, caID uint) (float64, error)
+	// ThuChiSuaTrongCa — phiếu thu chi của ca đã bị sửa / xoá (nhật ký), mới nhất trước.
+	ThuChiSuaTrongCa(ctx context.Context, caID uint) ([]NhatKyThuChi, error)
 	// NguoiMoCa liệt kê những người đã mở ca ở chi nhánh (0 = mọi chi nhánh).
 	NguoiMoCa(ctx context.Context, shopID uint) ([]NguoiTrucCa, error)
 	// NhanVienTruc — nhân sự đang làm được giao chi nhánh (shop_ids NULL = mọi chi nhánh).

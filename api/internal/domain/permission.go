@@ -333,7 +333,7 @@ var DanhMucQuyen = []KhuQuyen{
 						Viec: []string{QuyenXem, QuyenThem, QuyenSua},
 						Le: []QuyenLe{
 							{Ma: "doanh-thu", Ten: "Xem doanh thu"},
-							{Ma: "doi-hang", Ten: "Đổi hàng tại quầy"},
+							{Ma: "doi-hang", Ten: "Đổi / trả hàng tại quầy"},
 						},
 					},
 					{

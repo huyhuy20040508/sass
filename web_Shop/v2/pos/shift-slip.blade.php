@@ -90,6 +90,9 @@
         <div class="dong"><span>Tiền đầu ca</span><span>{{ $so($ca['opening_cash'] ?? 0) }}</span></div>
         <div class="dong"><span>+ Thu tiền mặt</span><span>{{ $so($ca['tong_thu'] ?? 0) }}</span></div>
         <div class="dong"><span>- Chi tiền mặt</span><span>{{ $so($ca['tong_chi'] ?? 0) }}</span></div>
+        @if((float) ($ca['da_nop_ve'] ?? 0) > 0)
+            <div class="dong nho"><span>&nbsp;&nbsp;Đã nộp về công ty trong ca</span><span>{{ $so($ca['da_nop_ve']) }}</span></div>
+        @endif
         <div class="dong dam"><span>= Tiền theo sổ</span><span>{{ $so($theoSo) }}</span></div>
         @if($dongCa)
             <div class="dong dam"><span>Tiền đếm được</span><span>{{ $so($ca['counted_cash'] ?? 0) }}</span></div>

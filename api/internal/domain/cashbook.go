@@ -48,6 +48,9 @@ type ThuChi struct {
 	PayerID    *uint  `json:"-"`
 
 	PaymentMethod string `json:"payment_method"`
+	// BankAccountID — tài khoản của phiếu CHUYỂN KHOẢN (payment_method_details loại
+	// bank_transfer, migration 0095). Ghi sau lượt chèn như AdjustsID.
+	BankAccountID *uint `json:"bank_account_id" gorm:"<-:update"`
 	// Attachment là ĐƯỜNG DẪN đầy đủ tới tệp (Shop Admin đẩy tệp lên rồi gửi
 	// địa chỉ), nên tên trong JSON nói đúng thứ nó chứa.
 	Attachment string `json:"attachment_url"`
@@ -55,12 +58,22 @@ type ThuChi struct {
 
 	Source   string `json:"source"`
 	SourceID *uint  `json:"source_id"`
+	// Kind — "" = thu / chi thường; ThuChiNopVe = nộp tiền về công ty (migration
+	// 0096): ghi như phiếu chi tiền mặt nhưng KHÔNG phải chi phí.
+	Kind string `json:"kind" gorm:"<-:update"`
+	// AdjustsID — phiếu ĐIỀU CHỈNH cho một phiếu của ca đã đóng (migration 0094).
+	// Ghi sau lượt chèn (<-:update) như ApprovedBy: phiếu tự sinh không đụng tới.
+	AdjustsID *uint `json:"adjusts_id" gorm:"<-:update"`
 
 	// ShiftID nil = lúc lập không ca nào mở. Vẫn ghi phiếu bình thường, giống
 	// cash_entries: chặn lại thì một buổi quên mở ca là không ai ghi được khoản
 	// chi nào, mà cái giá đó lớn hơn hẳn lợi ích của việc ép đúng quy trình.
 	ShiftID   *uint `json:"shift_id"`
 	CreatedBy *uint `json:"created_by"`
+	// ApprovedBy / ApprovedAt — chủ / quản trị duyệt phiếu chi vượt hạn mức ở quầy
+	// (migration 0093). Ghi sau lượt chèn (<-:update): phiếu tự sinh không đụng tới.
+	ApprovedBy *uint      `json:"approved_by" gorm:"<-:update"`
+	ApprovedAt *time.Time `json:"approved_at" gorm:"<-:update"`
 
 	CreatedAt time.Time      `json:"created_at"`
 	UpdatedAt time.Time      `json:"updated_at"`
@@ -77,8 +90,25 @@ type ThuChi struct {
 	// viên mở ra là ô ấy trống, lưu lại một cái là mất người nộp.
 	PayerRefID    *uint  `json:"payer_id" gorm:"-"`
 	CreatedByName string `json:"created_by_name" gorm:"-"`
+	// ApprovedByName — tên người duyệt phiếu chi vượt hạn mức ở quầy (khi có).
+	ApprovedByName string `json:"approved_by_name,omitempty" gorm:"-"`
 	// SourceCode là mã chứng từ gốc của phiếu tự sinh (mã đơn, mã phiếu mua…).
 	SourceCode string `json:"source_code" gorm:"-"`
+
+	// BankAccountLabel — "VCB · 0123456789 · NGUYEN VAN A" để hiện và xuất Excel.
+	BankAccountLabel string `json:"bank_account_label,omitempty" gorm:"-"`
+	// AdjustsCode — mã phiếu gốc; DieuChinhBoi — các phiếu điều chỉnh trỏ về phiếu
+	// này. Hai chiều để khung chi tiết nối được cả hai phía.
+	AdjustsCode  string          `json:"adjusts_code,omitempty" gorm:"-"`
+	DieuChinhBoi []ThuChiLienKet `json:"adjusted_by,omitempty" gorm:"-"`
+	// CoTheDieuChinh — phiếu tay khoá vì ca đã đóng: chỉ còn đường lập phiếu điều chỉnh.
+	CoTheDieuChinh bool `json:"can_adjust" gorm:"-"`
+
+	// SuaLanCuoi — lượt sửa gần nhất (activity_logs), cho dòng "Sửa lần cuối …".
+	SuaLanCuoi *ThuChiSuaCuoi `json:"last_edit,omitempty" gorm:"-"`
+	// NhatKy — service dựng, repository ghi CÙNG giao dịch với lượt sửa / xoá:
+	// sửa xong mà mất dòng nhật ký là đúng chỗ hở người ta cần bịt.
+	NhatKy *ActivityLog `json:"-" gorm:"-"`
 
 	// Locked = phiếu này không ai sửa hay xoá được nữa, LockedReason nói vì sao.
 	// Tính ở tầng service theo ba lớp khoá — xem ThuChiKhoa.
@@ -169,11 +199,26 @@ type ThuChiTongKet struct {
 	TongThu float64 `json:"total_income"`
 	TongChi float64 `json:"total_expense"`
 	CuoiKy  float64 `json:"end_balance"`
+	// Phần TIỀN MẶT của tổng thu / tổng chi — thứ thật sự ra vào két. Màn quầy
+	// đối chiếu với két theo sổ của ca; chuyển khoản không qua két nên gộp vào
+	// là số không khớp tiền đếm được.
+	TienMatThu float64 `json:"cash_income"`
+	TienMatChi float64 `json:"cash_expense"`
+	// Số phiếu mỗi vế — số trên tab Thu / Chi của màn quầy.
+	SoPhieuThu int64 `json:"income_count"`
+	SoPhieuChi int64 `json:"expense_count"`
 }
 
 // ThuChiFilter — tham số lọc / phân trang khi liệt kê.
 type ThuChiFilter struct {
 	Keyword string // mã phiếu
+	// TimRong — ô tìm của màn quầy: mã phiếu, mô tả, hoặc tên người nộp/nhận.
+	// Tách khỏi Keyword vì ô "Mã phiếu" của màn quản trị chỉ tìm theo mã.
+	TimRong string
+	// ShiftID — chỉ phiếu của một ca (tab "Ca này" ở quầy). 0 = không lọc.
+	ShiftID uint
+	// BankAccountID — chỉ phiếu ghi vào tài khoản này (đối sao kê). 0 = không lọc.
+	BankAccountID uint
 	// Type: nhiều giá trị ngăn bởi dấu phẩy ("0", "1", "0,1"). Rỗng = cả hai vế.
 	Type string
 	// CategoryID — id phân loại, nhiều giá trị ngăn bởi dấu phẩy.
@@ -191,6 +236,75 @@ type ThuChiFilter struct {
 	PageSize  int
 }
 
+// ThuChiNopVe — Kind của phiếu nộp tiền về công ty giữa ca.
+const ThuChiNopVe = "deposit"
+
+// Nhật ký sửa / xoá phiếu thu chi (bảng activity_logs, subject_type income_expense).
+const (
+	NhatKyThuChiLoai = "income_expense"
+	NhatKyThuChiSua  = "thu_chi.sua"
+	NhatKyThuChiXoa  = "thu_chi.xoa"
+)
+
+// ThuChiLienKet — mã + id của một phiếu liên quan (điều chỉnh / bị điều chỉnh).
+type ThuChiLienKet struct {
+	ID   uint   `json:"id"`
+	Code string `json:"code"`
+}
+
+// ThuChiSuaCuoi — tóm tắt lượt sửa gần nhất của một phiếu.
+type ThuChiSuaCuoi struct {
+	Luc       time.Time `json:"at"`
+	NguoiSua  string    `json:"by_name"`
+	SoTienCu  float64   `json:"amount_old"`
+	SoTienMoi float64   `json:"amount_new"`
+	LyDo      string    `json:"reason"`
+}
+
+// ThayDoiThuChi — phần `properties` của một dòng nhật ký: giá trị trước / sau.
+// Lượt xoá chỉ có vế cũ.
+type ThayDoiThuChi struct {
+	Ma          string   `json:"ma"`
+	Loai        uint8    `json:"loai"`
+	Ca          *uint    `json:"ca"`
+	SoTienCu    float64  `json:"so_tien_cu"`
+	SoTienMoi   *float64 `json:"so_tien_moi,omitempty"`
+	PhanLoaiCu  string   `json:"phan_loai_cu"`
+	PhanLoaiMoi *string  `json:"phan_loai_moi,omitempty"`
+	HinhThucCu  string   `json:"hinh_thuc_cu"`
+	HinhThucMoi *string  `json:"hinh_thuc_moi,omitempty"`
+	MoTaCu      string   `json:"mo_ta_cu"`
+	MoTaMoi     *string  `json:"mo_ta_moi,omitempty"`
+}
+
+// NhatKyThuChi — một dòng nhật ký sửa / xoá phiếu, đọc ra cho màn hình.
+type NhatKyThuChi struct {
+	ID       uint          `json:"id"`
+	PhieuID  uint          `json:"phieu_id"`
+	HanhDong string        `json:"action"`
+	Luc      time.Time     `json:"at"`
+	NguoiSua string        `json:"by_name"`
+	LyDo     string        `json:"reason"`
+	ThayDoi  ThayDoiThuChi `json:"changes"`
+}
+
+// NguoiDuyetThuChi — đủ để kiểm một lượt duyệt: vai trò, trạng thái, mật khẩu băm.
+type NguoiDuyetThuChi struct {
+	ID           uint
+	Role         string
+	Status       string
+	PasswordHash string
+}
+
+// LoiDuyetChi — phiếu chi ở quầy vượt hạn mức mà chưa có / sai người duyệt.
+// Ma ra errors.ma để màn quầy biết mở ô nhập tài khoản quản lý.
+type LoiDuyetChi struct {
+	Ma, Cau string
+	Khoa    bool // sai quá nhiều lần → 429
+}
+
+func (e *LoiDuyetChi) Error() string { return e.Cau }
+
 // ThuChiNguoiXem — người đang đọc danh sách, để tính lớp khoá "phiếu của người
 // khác". Tách thành struct thay vì hai tham số rời: nơi gọi hay đảo nhầm hai
 // giá trị cùng kiểu.
@@ -200,8 +314,65 @@ type ThuChiNguoiXem struct {
 	QuanLy bool
 }
 
+// ThuChiNhanVien — một dòng của ô "Người nộp / nhận" ở quầy: tài khoản nhân viên
+// cùng vai để ghi `payer_type` đúng như hộp lập phiếu của quản trị.
+type ThuChiNhanVien struct {
+	ID        uint   `json:"id"`
+	Name      string `json:"name"`
+	PayerType string `json:"payer_type"`
+}
+
+// ThuChiDanhMucQuay — đủ ba danh mục cho hộp lập phiếu ở quầy trong một lượt
+// gọi. Ba đường riêng của chúng nằm sau cửa Quản lý, người chỉ có cửa Thu ngân
+// không gọi được.
+type ThuChiDanhMucQuay struct {
+	PhanLoai []LoaiThuChi     `json:"phan_loai"`
+	NhanVien []ThuChiNhanVien `json:"nhan_vien"`
+	NguoiNop []NguoiNopThuChi `json:"nguoi_nop"`
+	// PhanLoaiNhanh — id phân loại cho dãy viên chọn của hộp lập phiếu, đúng thứ tự
+	// hiện (cả thu lẫn chi, màn lọc theo vế); PhanLoaiGhim — phần chủ ghim ở Cài đặt.
+	PhanLoaiNhanh []uint `json:"phan_loai_nhanh"`
+	PhanLoaiGhim  []uint `json:"phan_loai_ghim"`
+	// MauPhieu — mẫu phiếu nhanh chủ khai ở Cài đặt → Quầy bán hàng.
+	MauPhieu []MauPhieuThuChi `json:"mau_phieu"`
+	// TaiKhoan — tài khoản ngân hàng đang bật của chi nhánh, cho phiếu chuyển khoản.
+	TaiKhoan []TaiKhoanThuChi `json:"tai_khoan"`
+}
+
+// TaiKhoanThuChi — một tài khoản ngân hàng (payment_method_details bank_transfer).
+type TaiKhoanThuChi struct {
+	ID          uint   `json:"id"`
+	ShopID      uint   `json:"shop_id"`
+	ChiNhanh    string `json:"branch_name"`
+	Nhan        string `json:"label"`
+	NganHang    string `json:"bank_name"`
+	SoTaiKhoan  string `json:"bank_account"`
+	ChuTaiKhoan string `json:"bank_account_name"`
+	DangBat     bool   `json:"status"`
+	MacDinh     bool   `json:"is_default"`
+}
+
+// MauPhieuThuChi — một mẫu phiếu nhanh đã giải phân loại theo danh mục của tiệm;
+// PhanLoai nil = không khớp loại nào, thu ngân tự chọn.
+type MauPhieuThuChi struct {
+	Ten      string  `json:"ten"`
+	Loai     uint8   `json:"loai"`
+	PhanLoai *uint   `json:"phan_loai"`
+	MoTa     string  `json:"mo_ta"`
+	SoTien   float64 `json:"so_tien"`
+}
+
 // ThuChiRepository — truy cập bảng income_expenses và income_expense_payers.
 type ThuChiRepository interface {
+	// PhanLoaiHayDung — id phân loại của phiếu LẬP TAY ở chi nhánh từ mốc `tu`,
+	// nhiều phiếu nhất trước.
+	PhanLoaiHayDung(ctx context.Context, shopID uint, tu time.Time) ([]uint, error)
+	// TaiKhoanNganHang — tài khoản bank_transfer của chi nhánh (shopID 0 = mọi chi
+	// nhánh); chiDangBat = bỏ dòng đã tắt.
+	TaiKhoanNganHang(ctx context.Context, shopID uint, chiDangBat bool) ([]TaiKhoanThuChi, error)
+	// NguoiDuyet tra tài khoản theo tên đăng nhập (trong cửa hàng của phiên) để
+	// duyệt phiếu chi; nil = không có.
+	NguoiDuyet(ctx context.Context, username string) (*NguoiDuyetThuChi, error)
 	// List trả về danh sách đã cắt trang, tổng số dòng, và bốn ô thống kê quỹ
 	// của CẢ bộ lọc (không phải của riêng trang đang xem).
 	List(ctx context.Context, f ThuChiFilter) ([]ThuChi, int64, ThuChiTongKet, error)
@@ -210,7 +381,10 @@ type ThuChiRepository interface {
 	// Update đọc-sửa-ghi dưới khoá dòng. mutate nhận phiếu đang khoá và trả về
 	// danh sách cột cần ghi.
 	Update(ctx context.Context, id uint, mutate func(t *ThuChi) ([]string, error)) (*ThuChi, error)
-	Delete(ctx context.Context, id uint) error
+	// Delete xoá phiếu và ghi `nhatKy` (nếu có) trong cùng giao dịch.
+	Delete(ctx context.Context, id uint, nhatKy *ActivityLog) error
+	// NhatKy — nhật ký sửa / xoá của một phiếu, mới nhất trước.
+	NhatKy(ctx context.Context, phieuID uint) ([]NhatKyThuChi, error)
 
 	// ChiNhanhMacDinh là chi nhánh của request: con số ghim trong header, hoặc
 	// chi nhánh duy nhất của cửa hàng. Không xác định được thì lỗi — phiếu thu
@@ -223,6 +397,14 @@ type ThuChiRepository interface {
 	CaDaDong(ctx context.Context, shiftID uint) (bool, error)
 
 	ListNguoiNop(ctx context.Context, keyword string) ([]NguoiNopThuChi, error)
+	PhanLoai(ctx context.Context) ([]LoaiThuChi, error)
+	// TimPhanLoai tra một phân loại TRONG cửa hàng của phiên; nil khi không có
+	// (kể cả id của cửa hàng khác — khoá ngoại không chặn được chuyện đó).
+	TimPhanLoai(ctx context.Context, id uint) (*LoaiThuChi, error)
+	// CoDoiTuong — id người nộp / nhận có thật trong cửa hàng, đúng bảng theo loại.
+	CoDoiTuong(ctx context.Context, loai string, id uint) (bool, error)
+	// NhanVien — tài khoản đang hoạt động có cửa Quản lý hoặc Thu ngân.
+	NhanVien(ctx context.Context) ([]ThuChiNhanVien, error)
 	// TonTaiNguoiNopTen xét trên dòng chưa xoá, để khai lại tên đã xoá vẫn được.
 	TonTaiNguoiNopTen(ctx context.Context, name string) (bool, error)
 	CreateNguoiNop(ctx context.Context, n *NguoiNopThuChi) error

@@ -1,0 +1,15 @@
+/* Hộp Thu nợ dùng chung của quầy (v2/pos/_thu-no.blade.php) — màn Lịch sử và khung
+   chi tiết khách. Các lớp hs-* này hộp "Thu bằng cách khác" của Lịch sử cũng dùng.
+   Biến màu đặt ngay trên hộp: ở màn Khách hàng hộp không nằm trong .hs-page. */
+.tn-debt { --hs-line: #e6e9ef; --hs-line-2: #d6dbe4; --hs-ink: #1f2433; --hs-sub: #5b6271; }
+.hs-form { display: grid; gap: var(--s-4); }
+.hs-sumbox { display: grid; gap: 6px; padding: 10px 12px; border: 1px solid var(--hs-line); border-radius: 6px; background: #fafbfc; }
+.hs-kv { display: flex; justify-content: space-between; gap: var(--s-3); color: var(--hs-sub); }
+.hs-kv b { color: var(--hs-ink); font-weight: 500; }
+.hs-kv.is-owe { padding-top: 6px; border-top: 1px solid var(--hs-line); color: #9a5200; font-weight: 700; }
+.hs-kv.is-owe b { color: #9a5200; font-weight: 700; font-size: var(--fs-lg); }
+.hs-pm-pick { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: var(--s-2); }
+.hs-pm-pick button { display: flex; align-items: center; gap: 8px; min-height: 42px; padding: 0 12px; border: 1px solid var(--hs-line-2); border-radius: 6px; background: #fff; color: var(--hs-ink); white-space: nowrap; }
+.hs-pm-pick button[aria-pressed="true"] { border-color: var(--c-navy); background: #f1f5fb; color: var(--c-navy); font-weight: 500; box-shadow: inset 0 0 0 1px var(--c-navy); }
+.hs-err { color: var(--c-danger); font-size: var(--fs-xs); }
+.hs-err[hidden] { display: none; }

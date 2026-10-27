@@ -1321,6 +1321,8 @@ type OrderReturn struct {
 	Items []OrderReturnItem `json:"items,omitempty" gorm:"foreignKey:ReturnID"`
 	// Order chỉ được nạp ở luồng danh sách/chi tiết để hiển thị mã đơn, người nhận.
 	Order *Order `json:"order,omitempty" gorm:"foreignKey:OrderID"`
+	// ExchangeOrder — đơn mới của lượt đổi hàng; chỉ nạp khi màn quầy cần.
+	ExchangeOrder *Order `json:"exchange_order,omitempty" gorm:"foreignKey:ExchangeOrderID"`
 
 	CreatedAt time.Time      `json:"created_at"`
 	UpdatedAt time.Time      `json:"updated_at"`
@@ -1633,6 +1635,8 @@ type Setting struct {
 type ActivityLog struct {
 	ID uint `json:"id" gorm:"primaryKey"`
 	TenantOwned
+	// ShopID — chi nhánh phát sinh (cột NOT NULL DEFAULT 1: không khai là ghi nhầm chi nhánh 1).
+	ShopID      uint      `json:"shop_id"`
 	UserID      *uint     `json:"user_id"`
 	Action      string    `json:"action"`
 	SubjectType string    `json:"subject_type"`

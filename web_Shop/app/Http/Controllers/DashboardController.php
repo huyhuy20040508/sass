@@ -343,10 +343,13 @@ class DashboardController extends Controller
      */
     protected function kpi(array $doanhThu, array $donHang, array $muaHang): array
     {
+        // Hàng chưa khai giá vốn: API coi giá vốn = 0 nên cả tiền hàng nằm trong
+        // profit. Lãi + biên lãi ở đây chỉ tính phần đã có giá vốn (KB #98).
         $tien = function (array $t): array {
             $gop = (float) ($t['subtotal'] ?? 0) + (float) ($t['shipping'] ?? 0);
+            $thieu = (float) ($t['thieu_gia_von']['tien_hang'] ?? 0);
 
-            return ['gross' => $gop, 'net' => $gop - (float) ($t['discount'] ?? 0), 'profit' => (float) ($t['profit'] ?? 0), 'orders' => (int) ($t['orders'] ?? 0)];
+            return ['gross' => $gop, 'net' => $gop - (float) ($t['discount'] ?? 0), 'profit' => (float) ($t['profit'] ?? 0) - $thieu, 'orders' => (int) ($t['orders'] ?? 0), 'thieu' => $thieu];
         };
         $nay = $tien($doanhThu['totals'] ?? []);
         $truoc = $tien($doanhThu['prev'] ?? []);
@@ -362,7 +365,8 @@ class DashboardController extends Controller
             'purchase_count' => $muaHang['soPhieu'],
             'purchase_paid' => $muaHang['daTra'],
             'purchase_items' => $muaHang['matHang'],
-            'margin' => $nay['net'] > 0 ? $nay['profit'] / $nay['net'] * 100 : null,
+            'margin' => $nay['net'] - $nay['thieu'] > 0 ? $nay['profit'] / ($nay['net'] - $nay['thieu']) * 100 : null,
+            'thieu_gia_von_sp' => (int) ($doanhThu['totals']['thieu_gia_von']['so_luong'] ?? 0),
             'aov' => (float) ($doanhThu['totals']['aov'] ?? 0),
             'units_per_order' => (float) ($donHang['totals']['units_per_order'] ?? 0),
             'purchase_cost' => $muaHang['tien'],
@@ -628,14 +632,25 @@ class DashboardController extends Controller
     }
 
     /**
-     * Kỳ liền trước CÙNG ĐỘ DÀI, kết thúc ngay trước kỳ đang xem — đúng cách
-     * API tính `prev` (ReportPeriod.Prev) để nét đứt và ô KPI so cùng một kỳ.
+     * Kỳ để so — ĐÚNG luật API tính `prev` (ReportPeriod.Prev) để nét đứt và ô
+     * KPI so cùng một kỳ: kỳ mùng 1 gọn trong một tháng, dài hơn 7 ngày thì so
+     * cùng kỳ tháng trước (kẹp cuối tháng, trọn tháng so trọn tháng); còn lại so
+     * cùng độ dài liền trước.
      *
      * @return array{0: string, 1: string}
      */
     protected function khoangTruoc(string $from, string $to): array
     {
         $soNgay = (int) round((strtotime($to) - strtotime($from)) / 86400) + 1;
+
+        if (date('d', strtotime($from)) === '01' && $soNgay > 7 && substr($from, 0, 7) === substr($to, 0, 7)) {
+            $tu = date('Y-m-d', strtotime($from.' -1 month'));
+            $cuoiThangTruoc = date('Y-m-d', strtotime($from.' -1 day'));
+            $tronThang = $to === date('Y-m-t', strtotime($to));
+            $den = date('Y-m-d', strtotime($tu.' +'.($soNgay - 1).' days'));
+
+            return [$tu, $tronThang || $den > $cuoiThangTruoc ? $cuoiThangTruoc : $den];
+        }
 
         return [date('Y-m-d', strtotime($from.' -'.$soNgay.' days')), date('Y-m-d', strtotime($from.' -1 day'))];
     }

@@ -111,6 +111,9 @@ func (s *caLamViecService) trangTri(ctx context.Context, ca *domain.CaLamViec) (
 		return nil, err
 	}
 	ca.TongThu, ca.TongChi, ca.SoDonTienMat = tk.TongThu, tk.TongChi, tk.SoDonTienMat
+	if ca.DaNopVe, err = s.repo.NopVeTrongCa(ctx, ca.ID); err != nil {
+		return nil, err
+	}
 	s.gánTên(ctx, ca)
 	return ca, nil
 }
@@ -314,7 +317,11 @@ func (s *caLamViecService) ChiTiet(ctx context.Context, id uint) (*dto.CaChiTiet
 	if err != nil {
 		return nil, err
 	}
-	return &dto.CaChiTietResponse{Ca: ca, SoQuy: dong, DoanhThu: &dt}, nil
+	sua, err := s.repo.ThuChiSuaTrongCa(ctx, ca.ID)
+	if err != nil {
+		return nil, err
+	}
+	return &dto.CaChiTietResponse{Ca: ca, SoQuy: dong, DoanhThu: &dt, ThuChiSua: sua}, nil
 }
 
 func (s *caLamViecService) NgoaiCaHomNay(ctx context.Context) ([]domain.SoQuy, error) {

@@ -17,7 +17,10 @@ class SelliotechApp extends ConsumerWidget {
     return MaterialApp.router(
       title: 'Sellio Shop',
       debugShowCheckedModeBanner: false,
-      theme: buildTheme(),
+      // Theme của khu làm việc là MẶC ĐỊNH, màn đăng nhập tự bọc theme tím
+      // của nó (xem router) — màn mở bằng Navigator.push không thừa hưởng
+      // Theme bọc trong cây widget, nên khu nào nhiều màn thì khu ấy làm gốc.
+      theme: buildAdminTheme(),
       routerConfig: ref.watch(routerProvider),
       locale: const Locale('vi'),
       supportedLocales: const [Locale('vi'), Locale('en')],

@@ -117,6 +117,8 @@ type PaymentMethodRepository interface {
 	GhiDonDung(ctx context.Context, orderID uint, detailID *uint, phi float64) error
 	// SoDonDung đếm đơn đã thu bằng một chi tiết — có đơn thì không cho xoá.
 	SoDonDung(ctx context.Context, detailID uint) (int64, error)
+	// SoPhieuThuChiDung đếm phiếu thu chi ghi tài khoản này (migration 0095).
+	SoPhieuThuChiDung(ctx context.Context, detailID uint) (int64, error)
 }
 
 // PaymentMethodTx — các lượt ghi bên trong PaymentMethodRepository.Ghi.

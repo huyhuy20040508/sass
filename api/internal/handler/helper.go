@@ -3,6 +3,7 @@ package handler
 
 import (
 	"errors"
+	"net/http"
 	"strconv"
 	"strings"
 
@@ -91,6 +92,8 @@ func voucherUseError(c *gin.Context, err error) bool {
 		response.Error(c, 422, "Mã giảm giá đã hết lượt sử dụng")
 	case errors.Is(err, domain.ErrVoucherUserLimitReached):
 		response.Error(c, 422, "Bạn đã dùng hết số lượt của mã này")
+	case errors.Is(err, domain.ErrVoucherSaiKhach):
+		response.Error(c, 422, "Mã này là quà riêng của một khách — chọn đúng khách được tặng rồi áp mã")
 	case errors.Is(err, domain.ErrVoucherNoCategory):
 		response.Error(c, 422, "Mã giảm giá không áp dụng cho hàng trong đơn")
 	case errors.Is(err, domain.ErrVoucherMinOrder):
@@ -134,6 +137,16 @@ func handleServiceError(c *gin.Context, err error) {
 	var theoO *service.LoiTheoO
 	if errors.As(err, &theoO) {
 		response.ValidationError(c, theoO.Fields)
+
+		return
+	}
+	var duyet *domain.LoiDuyetChi
+	if errors.As(err, &duyet) {
+		ma := http.StatusUnprocessableEntity
+		if duyet.Khoa {
+			ma = http.StatusTooManyRequests
+		}
+		response.ErrorMa(c, ma, duyet.Ma, duyet.Cau)
 
 		return
 	}

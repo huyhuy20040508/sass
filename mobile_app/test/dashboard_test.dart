@@ -6,11 +6,15 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:selliotech/app/theme.dart';
 import 'package:selliotech/core/api/api_client.dart';
 import 'package:selliotech/core/format/vn_number.dart';
 import 'package:selliotech/core/net/online_provider.dart';
 import 'package:selliotech/core/storage/session_store.dart';
 import 'package:selliotech/features/admin/admin_shell.dart';
+import 'package:selliotech/features/admin/dashboard/dashboard_cards.dart';
+import 'package:selliotech/features/admin/orders/orders_data.dart';
+import 'package:selliotech/features/admin/orders/orders_screen.dart';
 import 'package:selliotech/features/admin/dashboard/dashboard_data.dart';
 import 'package:selliotech/features/admin/shell/shell_widgets.dart';
 import 'package:selliotech/features/auth/auth_controller.dart';
@@ -296,6 +300,17 @@ void main() {
     expect(t.takeException(), isNull);
   });
 
+  testWidgets('lợi nhuận gộp không tính hàng thiếu giá vốn là lãi (KB #98)', (t) async {
+    final tong = (_snap['ranges']['this-month']['revenue']['totals'] as Map);
+    tong['thieu_gia_von'] = {'so_dong': 1, 'so_luong': 1, 'tien_hang': 25000000};
+    addTearDown(() => tong.remove('thieu_gia_von'));
+    await _open(t, thisMonth: true);
+    // 472.740.000 − 25.000.000 hàng chưa khai giá vốn.
+    expect(find.text('447.740.000'), findsOneWidget);
+    expect(find.text('chưa tính 1 sp thiếu giá vốn'), findsOneWidget);
+    expect(find.text('472.740.000'), findsNothing);
+  });
+
   testWidgets('đổi kỳ: Tháng rồi Hôm nay gọi lại API ngày 17/10; Khác → Tháng trước', (t) async {
     final (_, api) = await _open(t, thisMonth: true);
     api.calls.clear();
@@ -503,5 +518,53 @@ void main() {
       await _settle(t, 2);
       expect(t.takeException(), isNull);
     }
+  });
+
+  /// Lỗi 94: khu làm việc đã navy + xanh mà màu mặc định của Material vẫn lấy
+  /// từ theme tím của màn đăng nhập.
+  testWidgets('khu Quản trị dùng bộ màu navy–xanh, không phải tím đăng nhập', (t) async {
+    await _open(t);
+
+    final mau = Theme.of(t.element(find.byType(AdminShell))).colorScheme;
+    expect(mau.primary, DashColors.primary);
+    expect(mau.primary, isNot(AppColors.brand));
+  });
+
+  /// Lỗi 89: bấm dòng nào ở thẻ "Cần chú ý" cũng chỉ ra một câu thông báo.
+  /// Dòng "đơn chưa thu tiền" nay mở thẳng màn Đơn hàng, lọc sẵn đơn còn nợ và
+  /// GIỮ NGUYÊN kỳ đang xem — bắt người ta chọn lại kỳ là mất công vô ích.
+  testWidgets('chạm dòng "đơn chưa thu tiền" mở màn Đơn hàng lọc sẵn, cùng kỳ', (t) async {
+    await _open(t, thisMonth: true);
+
+    // Gọi thẳng onTap của thẻ thay vì chạm toạ độ: dòng cảnh báo nằm giữa một
+    // màn cuộn dài, kéo tới nơi thì nó lọt dưới thanh đầu đang phủ lên nội
+    // dung, chạm vào là trúng thanh ấy. Hàng VẪN phải bấm được — câu dưới canh
+    // chỗ đó.
+    final dong = find.textContaining('chưa thu tiền', findRichText: true);
+    expect(find.ancestor(of: dong, matching: find.byType(InkWell)), findsOneWidget);
+    final the = t.widget<AlertsCard>(find.byType(AlertsCard));
+    the.onTap(the.alerts.firstWhere((a) => a.kind == AlertKind.unpaid));
+    await _settle(t);
+
+    expect(find.byType(OrdersScreen), findsOneWidget);
+    final f = ProviderScope.containerOf(
+      t.element(find.byType(AdminShell)),
+    ).read(ordersFilterProvider);
+    expect(f.pays, {'unpaid', 'partial'});
+    expect(f.tab, OrderTab.all);
+    expect(f.time, OrderTime.thisMonth, reason: 'giữ kỳ của Tổng quan');
+  });
+
+  /// Mấy dòng còn lại chưa có màn trên điện thoại — vẫn báo một câu, không mở
+  /// đại một chỗ không liên quan.
+  testWidgets('chạm dòng ca lệch két thì vẫn chỉ báo một câu', (t) async {
+    await _open(t, thisMonth: true);
+
+    final the = t.widget<AlertsCard>(find.byType(AlertsCard));
+    the.onTap(the.alerts.firstWhere((a) => a.kind == AlertKind.cashDiff));
+    await _settle(t);
+
+    expect(find.byType(OrdersScreen), findsNothing);
+    expect(find.textContaining('màn chưa thiết kế'), findsOneWidget);
   });
 }

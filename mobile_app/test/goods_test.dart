@@ -930,6 +930,10 @@ void main() {
       'Mã SP',
       'Mã hàng',
       'Tên hàng hóa',
+      // Hàng nhiều phiên bản xuất mỗi phiên bản một dòng (lỗi 95) — bộ số giả ở
+      // đây lược `variants` khỏi danh sách nên mỗi mặt hàng vẫn một dòng; phần
+      // tách dòng và lấy giá phiên bản nằm ở test/goods_export_test.dart.
+      'Phiên bản',
       'Nhóm hàng hóa',
       'ĐVT',
       'Vị trí',
@@ -1128,7 +1132,10 @@ void main() {
     expect(put.path, endsWith('/admin/products/2/status'));
     expect(put.data, {'is_active': false});
     expect(find.text('Đã ngừng bán Iphone 16 pro max'), findsOneWidget);
-    expect(find.text('Tạm ẩn'), findsOneWidget, reason: 'nhãn trạng thái theo API: hidden = Tạm ẩn');
+    // MỘT tên cho một trạng thái: chip ở danh sách, chấm ở đây và nút đều là
+    // "Ngừng bán" — trước đây chấm ghi "Tạm ẩn", đọc ra như hai thứ (lỗi 99).
+    expect(find.text('Ngừng bán'), findsWidgets);
+    expect(find.text('Tạm ẩn'), findsNothing);
 
     expect(find.text('Mở bán'), findsOneWidget, reason: 'nút nhanh đổi thành Mở bán');
     await t.tap(find.byKey(const Key('product_duplicate')));

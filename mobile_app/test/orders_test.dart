@@ -299,10 +299,13 @@ void main() {
     final revenue =
         sales.fold<num>(0, (a, r) => a + (r['tong_tien'] as num)) -
         ret.fold<num>(0, (a, r) => a + (r['tong_tien'] as num));
-    final text = t.widget<Text>(find.byKey(const Key('orders_revenue'))).textSpan!.toPlainText();
-    // "đơn bán" + "phiếu trả" tách ra: con số tiền đã TRỪ phiếu trả nên không
-    // được đếm chung một chữ "đơn" (lỗi 84).
-    expect(text, '${dot(revenue)} · ${sales.length} đơn bán · ${ret.length} phiếu trả');
+    // Tiền một dòng, số đơn một dòng riêng cỡ chữ cố định (lỗi 84 + 99):
+    // "đơn bán" chứ không trống trơn "đơn" vì tiền đã TRỪ phiếu trả.
+    expect(t.widget<Text>(find.byKey(const Key('orders_revenue'))).data, dot(revenue));
+    expect(
+      t.widget<Text>(find.byKey(const Key('orders_counts'))).data,
+      '${sales.length} đơn bán · ${ret.length} phiếu trả',
+    );
     expect(find.textContaining('Tổng tiền đơn · tháng này'), findsOneWidget);
     expect(find.text('gồm VAT và đơn chưa thu'), findsOneWidget);
     expect(find.textContaining('Doanh thu · '), findsNothing, reason: 'số này không phải doanh thu thuần');

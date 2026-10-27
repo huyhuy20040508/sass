@@ -422,40 +422,67 @@ class ProductController extends Controller
             // nói về kho nào, mà tệp thì rời khỏi màn hình rồi.
             $tenKho = CurrentBranch::ten();
             fputcsv($out, [
-                'Mã SP', 'Mã hàng', 'Tên hàng hóa', 'Nhóm hàng hóa', 'ĐVT', 'Vị trí',
+                'Mã SP', 'Mã hàng', 'Tên hàng hóa', 'Phiên bản', 'Nhóm hàng hóa', 'ĐVT', 'Vị trí',
                 'VAT', 'Giá bán', 'Giá vốn',
                 $tenKho !== null ? 'Tồn kho ('.$tenKho.')' : 'Tồn kho',
                 'Chi nhánh', 'Thẻ', 'Số biến thể', 'Trạng thái',
             ]);
             foreach ($all as $p) {
                 $variants = array_values($p['variants'] ?? []);
-                $stock = collect($variants)->sum('stock_quantity');
-                fputcsv($out, [
-                    'SP'.str_pad((string) ($p['id'] ?? ''), 6, '0', STR_PAD_LEFT),
-                    $p['sku'] ?? '',
-                    $p['name'] ?? '',
-                    data_get($p, 'category.name', ''),
-                    data_get($p, 'unit.name', ''),
-                    // Mã + tên: người cầm tệp đi soạn hàng đọc mã trên kệ, còn tên là
-                    // để đối chiếu khi mã dán bị mờ.
-                    trim(data_get($p, 'location.code', '').' '.data_get($p, 'location.name', '')),
-                    self::vatText($p['vat'] ?? 0),
-                    (int) ($p['base_price'] ?? 0),
-                    // Ô trống = chưa khai giá vốn. Không đổi thành 0, người đọc file sẽ
-                    // tưởng hàng này giá vốn bằng không.
-                    isset($p['cost_price']) && $p['cost_price'] !== null ? (int) $p['cost_price'] : '',
-                    $stock,
-                    // Ô trống = mọi chi nhánh, đúng như trên bảng.
-                    self::chiNhanhText($p),
-                    collect($p['tags'] ?? [])->pluck('name')->implode(', '),
-                    // Hàng đơn có đúng một dòng mặc định — đếm ra 1 thì ghi 0 cho khỏi
-                    // hiểu nhầm là "có một biến thể".
-                    empty($p['is_multi_variant']) ? 0 : count($variants),
-                    $statuses[self::mucTrangThai($p['status'] ?? (! empty($p['is_active']) ? 'active' : 'hidden'))],
-                ]);
+                foreach (self::dongXuat($p) as $v) {
+                    fputcsv($out, [
+                        'SP'.str_pad((string) ($p['id'] ?? ''), 6, '0', STR_PAD_LEFT),
+                        $v['sku'] ?? $p['sku'] ?? '',
+                        $p['name'] ?? '',
+                        $v['name'] ?? '',
+                        data_get($p, 'category.name', ''),
+                        data_get($p, 'unit.name', ''),
+                        // Mã + tên: người cầm tệp đi soạn hàng đọc mã trên kệ, còn tên là
+                        // để đối chiếu khi mã dán bị mờ.
+                        trim(data_get($p, 'location.code', '').' '.data_get($p, 'location.name', '')),
+                        self::vatText($p['vat'] ?? 0),
+                        (int) ($v['price'] ?? $p['base_price'] ?? 0),
+                        // Ô trống = chưa khai giá vốn. Không đổi thành 0, người đọc file sẽ
+                        // tưởng hàng này giá vốn bằng không.
+                        ($v['cost_price'] ?? $p['cost_price'] ?? null) !== null ? (int) ($v['cost_price'] ?? $p['cost_price']) : '',
+                        $v['stock_quantity'] ?? collect($variants)->sum('stock_quantity'),
+                        // Ô trống = mọi chi nhánh, đúng như trên bảng.
+                        self::chiNhanhText($p),
+                        collect($p['tags'] ?? [])->pluck('name')->implode(', '),
+                        // Hàng đơn có đúng một dòng mặc định — đếm ra 1 thì ghi 0 cho khỏi
+                        // hiểu nhầm là "có một biến thể".
+                        empty($p['is_multi_variant']) ? 0 : count($variants),
+                        $statuses[self::mucTrangThai($p['status'] ?? (! empty($p['is_active']) ? 'active' : 'hidden'))],
+                    ]);
+                }
             }
             fclose($out);
         }, $filename, ['Content-Type' => 'text/csv; charset=UTF-8']);
+    }
+
+    /**
+     * Các DÒNG cần xuất cho một mặt hàng — hàng nhiều phiên bản thì mỗi phiên
+     * bản một dòng.
+     *
+     * Giá bán thật nằm ở `product_variants.price`; `products.base_price` chỉ là
+     * giá gốc lúc tạo và không được đồng bộ khi sửa giá phiên bản. Xuất
+     * base_price thì tệp ghi 18.000.000 trong khi quầy bán 22.000.000 — sửa tệp
+     * rồi nhập lại là giá sai đi theo. Hàng ĐƠN cũng lấy giá của dòng mặc định
+     * vì hai số ấy có thể đã lệch từ lâu mà màn hình chỉ hiện một giá.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    protected static function dongXuat(array $p): array
+    {
+        $vs = array_values(array_filter($p['variants'] ?? [], 'is_array'));
+
+        if (! empty($p['is_multi_variant'])) {
+            return $vs !== [] ? $vs : [[]];
+        }
+
+        // Hàng đơn giữ nguyên MÃ HÀNG của mặt hàng (mã phiên bản mặc định
+        // thường trùng, nhưng cột này xưa nay là mã mặt hàng).
+        return [$vs !== [] ? ['name' => '', 'sku' => null] + $vs[0] : []];
     }
 
     /** Tải file CSV mẫu để nhập hàng hóa. */

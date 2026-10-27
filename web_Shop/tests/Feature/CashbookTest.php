@@ -491,6 +491,20 @@ class CashbookTest extends TestCase
             && str_contains($request->url(), '/admin/thu-chi'));
     }
 
+    /** KB #78: phiếu lập tay thiếu phân loại bị chặn trước khi gọi API. */
+    public function test_phieu_tay_bat_buoc_phan_loai(): void
+    {
+        $this->fakeApi();
+
+        $this->withSession($this->phien())
+            ->postJson(route('admin.cashbook.store'), ['type' => 1, 'amount' => 20000000, 'payment_method' => 'cash'])
+            ->assertStatus(422)
+            ->assertJsonPath('errors.category_id.0', 'Chọn phân loại cho phiếu.');
+
+        Http::assertNotSent(fn ($request) => $request->method() === 'POST'
+            && str_contains($request->url(), '/admin/thu-chi'));
+    }
+
     /** Lượt hỏng trả về ĐÚNG mã của API, không quy hết về 422. */
     public function test_ma_loi_giu_theo_api(): void
     {
@@ -500,7 +514,7 @@ class CashbookTest extends TestCase
         ]);
 
         $this->withSession($this->phien())
-            ->deleteJson(route('admin.cashbook.destroy', 99))
+            ->deleteJson(route('admin.cashbook.destroy', 99), ['reason' => 'Lập trùng'])
             ->assertStatus(404)
             ->assertJsonPath('message', 'Không tìm thấy phiếu.');
     }
@@ -523,7 +537,7 @@ class CashbookTest extends TestCase
         ]);
 
         $this->withSession($this->phien())
-            ->deleteJson(route('admin.cashbook.destroy', 99))
+            ->deleteJson(route('admin.cashbook.destroy', 99), ['reason' => 'Lập trùng'])
             ->assertStatus(403)
             ->assertJsonPath('message', 'Bạn không được giao việc này');
     }

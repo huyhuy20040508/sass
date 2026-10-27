@@ -29,6 +29,12 @@ trait ApiJsonReply
 
         if (! $res->successful()) {
             $tra = ['message' => $res->json('message') ?: $cauMacDinh];
+            // Lỗi theo ô của API mang câu chung "Dữ liệu không hợp lệ"; câu dùng được
+            // nằm ở ô — đưa câu của ô đầu tiên lên, hộp quầy chỉ có một dòng báo lỗi.
+            $o = array_filter((array) $res->json('errors'), fn ($v, $k) => $k !== 'ma' && is_string($v) && $v !== '', ARRAY_FILTER_USE_BOTH);
+            if ($res->status() === 422 && $o && $tra['message'] === 'Dữ liệu không hợp lệ') {
+                $tra['message'] = (string) reset($o);
+            }
             // Mã máy đọc (errors.ma) đi theo: màn hình rẽ nhánh theo mã, không theo câu chữ.
             if ($ma = $res->json('errors.ma')) {
                 $tra['errors'] = ['ma' => $ma];

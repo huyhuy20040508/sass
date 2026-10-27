@@ -370,7 +370,7 @@ class ProductDraft {
   /// id mặt hàng đang sửa (null = thêm mới).
   int? editId;
 
-  /// Trạng thái lúc mở form: tắt "Đang bán" thì giữ mức cũ (tạm ẩn / ngừng kinh doanh).
+  /// Trạng thái lúc mở form: tắt "Đang bán" thì giữ mức cũ (ngừng bán / ngừng kinh doanh).
   String statusOrig = 'active';
 
   /// Dòng phiên bản duy nhất của hàng một phiên bản (khi sửa).

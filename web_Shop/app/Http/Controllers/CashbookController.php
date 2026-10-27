@@ -197,6 +197,7 @@ class CashbookController extends Controller
             'nhanVien' => $this->danhMucNhanVien(),
             'phanLoai' => $this->danhMucPhanLoai(),
             'nhaCungCap' => $this->danhMucNhaCungCap(),
+            'taiKhoan' => $this->danhMucTaiKhoan(),
         ]);
 
         return $error ? $view->with('error', $error) : $view;
@@ -224,7 +225,7 @@ class CashbookController extends Controller
 
         $hang = [[
             'STT', 'Mã phiếu', 'Loại thu chi', 'Số tiền', 'Chi nhánh', 'Người nộp/nhận',
-            'Người tạo', 'Phân loại thu chi', 'Phương thức thanh toán', 'Nguồn phát sinh',
+            'Người tạo', 'Phân loại thu chi', 'Phương thức thanh toán', 'Tài khoản', 'Nguồn phát sinh',
             'Thời gian ghi nhận', 'Mô tả',
         ]];
         foreach ($list as $i => $p) {
@@ -238,6 +239,7 @@ class CashbookController extends Controller
                 (string) ($p['created_by_name'] ?? ''),
                 (string) ($p['category_name'] ?? ''),
                 (string) ($p['payment_method_name'] ?? (self::PHUONG_THUC[$p['payment_method'] ?? ''] ?? '')),
+                (string) ($p['bank_account_label'] ?? ''),
                 self::NGUON[$p['source'] ?? 'manual'] ?? '',
                 ! empty($p['created_at']) ? date('d-m-Y', strtotime((string) $p['created_at'])) : '',
                 (string) ($p['note'] ?? ''),
@@ -379,7 +381,7 @@ class CashbookController extends Controller
      */
     public function update(Request $request, int $id)
     {
-        $data = $this->validated($request);
+        $data = $this->validated($request) + ['reason' => $this->lyDo($request, 'sửa')];
 
         return $this->send(
             fn () => $this->api->suaThuChi($id, $data),
@@ -391,16 +393,41 @@ class CashbookController extends Controller
     /** Xoá một phiếu. */
     public function destroy(Request $request, int $id)
     {
+        $lyDo = $this->lyDo($request, 'xoá');
+
         return $this->send(
-            fn () => $this->api->xoaThuChi($id),
+            fn () => $this->api->xoaThuChi($id, $lyDo),
             'Đã xoá phiếu.',
             $request
         );
     }
 
+    /** JSON: nhật ký sửa / xoá của một phiếu (hộp "Nhật ký" ở khung chi tiết). */
+    public function nhatKy(int $id)
+    {
+        try {
+            $res = $this->api->nhatKyThuChi($id);
+        } catch (\Throwable $e) {
+            return response()->json(['message' => 'Không kết nối được API.'], 502);
+        }
+
+        return $res->successful()
+            ? response()->json(['data' => $res->json('data') ?? []])
+            : response()->json(['message' => $res->json('message') ?: 'Không tải được nhật ký.'], $res->status() === 500 ? 502 : $res->status());
+    }
+
     // ---------------------------------------------------------------------
     // Trợ giúp
     // ---------------------------------------------------------------------
+
+    /** Lý do sửa / xoá phiếu — bắt buộc, vào nhật ký (API kiểm lại). */
+    protected function lyDo(Request $request, string $viec): string
+    {
+        return trim((string) $request->validate(
+            ['reason' => ['required', 'string', 'max:200']],
+            ['reason.required' => 'Ghi lý do '.$viec.' phiếu.', 'reason.max' => 'Lý do tối đa 200 ký tự.']
+        )['reason']);
+    }
 
     /**
      * Kiểm dữ liệu hộp lập phiếu. API kiểm lại tất cả; lượt này chỉ để người
@@ -411,13 +438,17 @@ class CashbookController extends Controller
         $du = $request->validate([
             'type' => ['required', 'in:'.self::LOAI_THU.','.self::LOAI_CHI],
             'amount' => ['required', 'numeric', 'gt:0'],
-            'category_id' => ['nullable', 'integer'],
+            'category_id' => ['required', 'integer', 'min:1'],
             'payer_type' => ['nullable', 'in:'.implode(',', array_keys(self::DOI_TUONG))],
             'payer_id' => ['nullable', 'integer'],
             'payment_method' => ['required', 'in:'.implode(',', array_keys(self::PHUONG_THUC))],
             // Đường dẫn tệp, KHÔNG phải tệp: hộp thoại đã đẩy tệp lên qua dinhKem()
             // và cầm về URL trước khi bấm Lưu.
             'attachment' => ['nullable', 'string', 'max:2048'],
+            // Lập phiếu điều chỉnh cho một phiếu của ca đã đóng — API kiểm phiếu gốc.
+            'adjusts_id' => ['nullable', 'integer', 'min:1'],
+            // Tài khoản của phiếu chuyển khoản — API kiểm thuộc chi nhánh / bắt buộc.
+            'bank_account_id' => ['nullable', 'integer', 'min:1'],
             'note' => ['nullable', 'string', 'max:200'],
         ], [
             'type.required' => 'Chọn phiếu thu hay phiếu chi.',
@@ -425,6 +456,7 @@ class CashbookController extends Controller
             'amount.required' => 'Nhập số tiền.',
             'amount.numeric' => 'Số tiền phải là số.',
             'amount.gt' => 'Số tiền phải lớn hơn 0.',
+            'category_id.*' => 'Chọn phân loại cho phiếu.',
             'payment_method.required' => 'Chọn phương thức thanh toán.',
             'payment_method.in' => 'Phương thức thanh toán không hợp lệ.',
             'note.max' => 'Mô tả dài quá 200 ký tự.',
@@ -438,13 +470,14 @@ class CashbookController extends Controller
         return [
             'type' => (int) $du['type'],
             'amount' => (float) $du['amount'],
-            'category_id' => (int) ($du['category_id'] ?? 0) ?: null,
+            'category_id' => (int) $du['category_id'],
             'payer_type' => $du['payer_type'] ?? null,
             'payer_id' => (int) ($du['payer_id'] ?? 0) ?: null,
             'payment_method' => $du['payment_method'],
             'attachment' => trim((string) ($du['attachment'] ?? '')),
             'note' => trim((string) ($du['note'] ?? '')),
-        ];
+        ] + (empty($du['adjusts_id']) ? [] : ['adjusts_id' => (int) $du['adjusts_id']])
+          + ($du['payment_method'] === 'transfer' && ! empty($du['bank_account_id']) ? ['bank_account_id' => (int) $du['bank_account_id']] : []);
     }
 
     /** Bộ lọc của trang, đã gạn giá trị lạ. */
@@ -462,6 +495,8 @@ class CashbookController extends Controller
             'category_id' => $this->locNhieuSo($request->query('category_id')),
             'source' => $this->locNhieu($request->query('source'), array_keys(self::NGUON_LOC)),
             'created_by' => $this->locNhieuSo($request->query('created_by')),
+            // Đối sao kê: chỉ phiếu ghi vào một tài khoản ngân hàng.
+            'bank_account_id' => max(0, (int) $request->query('bank_account_id', 0)) ?: '',
             // Chưa gõ gì thì lấy tháng này, đúng như v2 tự điền sẵn hai ô ngày.
             'from_date' => $request->has('from_date')
                 ? $this->ngayLoc($request->query('from_date'))
@@ -483,11 +518,43 @@ class CashbookController extends Controller
             'category_id' => $f['category_id'],
             'source' => $f['source'],
             'created_by' => $f['created_by'],
+            'bank_account_id' => $f['bank_account_id'],
             'from_date' => $f['from_date'],
             'to_date' => $f['to_date'],
             'page' => $f['page'],
             'page_size' => $f['page_size'],
         ];
+    }
+
+    /** Ô "Tài khoản" của khung lọc — mọi tài khoản (cả đã tắt) trong phạm vi chi nhánh. */
+    protected function danhMucTaiKhoan(): array
+    {
+        try {
+            $res = $this->api->thuChiTaiKhoan();
+
+            // Chỉ giữ dòng đúng khuôn tài khoản: dòng lạ mà lọt vào thì cả trang sập.
+            return $res->successful()
+                ? array_values(array_filter((array) $res->json('data'), fn ($t) => is_array($t) && isset($t['id'], $t['label'])))
+                : [];
+        } catch (\Throwable $e) {
+            Log::warning('Load tai khoan thu chi failed', ['msg' => $e->getMessage()]);
+
+            return [];
+        }
+    }
+
+    /** JSON: tài khoản đang bật của chi nhánh lập phiếu (ô "Tài khoản" của hộp lập phiếu). */
+    public function taiKhoanLap()
+    {
+        try {
+            $res = $this->api->thuChiTaiKhoan(['cho' => 'lap']);
+        } catch (\Throwable $e) {
+            return response()->json(['message' => 'Không kết nối được API.'], 502);
+        }
+
+        return $res->successful()
+            ? response()->json(['data' => $res->json('data') ?? []])
+            : response()->json(['message' => $res->json('message') ?: 'Không tải được tài khoản.'], $res->status() === 500 ? 502 : $res->status());
     }
 
     /** Ô "Người tạo" của khung lọc. */

@@ -115,7 +115,7 @@
                         — ngừng bán
                     @endif
                 </div>
-                <form method="POST" action="{{ route('platform.customer-orders.package-features.luu', $id_goi) }}">
+                <form method="POST" action="{{ route('platform.khach-hang-order.tinh-nang-goi.luu', $id_goi) }}">
                     @csrf
                     <div class="panel-body">
                         <div class="row g-3">

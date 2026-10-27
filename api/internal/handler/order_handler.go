@@ -348,6 +348,8 @@ func (h *OrderHandler) List(c *gin.Context) {
 // @Param			created_by		query		string	false	"Id người lập, ngăn bởi dấu phẩy"
 // @Param			from_date		query		string	false	"Từ ngày (YYYY-MM-DD)"
 // @Param			to_date			query		string	false	"Đến ngày (YYYY-MM-DD)"
+// @Param			trang_thai_don	query		string	false	"Nhóm trạng thái xử lý: pending|doing|done|cancelled|returned"
+// @Param			theo_ngay		query		int		false	"1 = thêm meta.tong.theo_ngay (đơn bán cộng theo ngày, cả kỳ)"
 // @Param			sort			query		string	false	"updated|newest|oldest|total_desc|total_asc (mặc định updated: vừa đụng tới)"
 // @Param			page			query		int		false	"Trang (mặc định 1)"
 // @Param			page_size		query		int		false	"Số dòng/trang (mặc định 20, tối đa 100)"
@@ -412,6 +414,8 @@ func (h *OrderHandler) locSoDon(c *gin.Context) (domain.OrderFilter, int, int) {
 		Channel:       c.Query("channel"),
 		CreatedBy:     c.Query("created_by"),
 		HoaDonDienTu:  c.Query("etax"),
+		TrangThaiDon:  c.Query("trang_thai_don"),
+		TheoNgay:      c.Query("theo_ngay") == "1",
 		ShopID:        chiNhanhLoc(c),
 		FromDate:      c.Query("from_date"),
 		ToDate:        c.Query("to_date"),
@@ -883,6 +887,12 @@ func orderID(c *gin.Context) (uint, error) {
 
 func respondOrderError(c *gin.Context, err error, fallback string) {
 	if loiChiNhanh(c, err) {
+		return
+	}
+	// Đổi hàng đi qua cùng luật trả ở quầy — câu nói rõ vì sao đơn không đổi được.
+	var quay *domain.LoiTraQuay
+	if errors.As(err, &quay) {
+		response.Error(c, http.StatusConflict, quay.Cau)
 		return
 	}
 

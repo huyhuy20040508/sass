@@ -30,6 +30,10 @@ type SummaryCashbook struct {
 	// phiếu chuyển khoản không đi qua két.
 	CashIncome  float64 `json:"cash_income"`
 	CashExpense float64 `json:"cash_expense"`
+	// Deposit — tiền nộp về công ty: không nằm trong Expense (không phải chi phí),
+	// nhưng có trong CashExpense (két giảm thật).
+	Deposit      float64 `json:"deposit"`
+	DepositCount int64   `json:"deposit_count"`
 }
 
 // SummaryReturns — hàng khách trả lại trong ngày. Chỉ tính phiếu đã NHẬN HÀNG

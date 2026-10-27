@@ -69,12 +69,11 @@
 @section('content')
     <div id="hsCauHinh" hidden
          data-detail-url="{{ route('thu-ngan.don-hang.chiTiet', ['id' => 0]) }}"
-         data-debt-url="{{ route('thu-ngan.don-hang.thuNo', ['id' => 0]) }}"
          data-receipt-url="{{ route('thu-ngan.ban-hang.phieu', ['id' => 0]) }}"
          data-einvoice-url="{{ route('thu-ngan.ban-hang.hoaDon', ['id' => 0]) }}"
          data-switch-url="{{ route('thu-ngan.ban-hang.doiHinhThuc', ['id' => 0]) }}"
          data-cancel-qr-url="{{ route('thu-ngan.ban-hang.huyQr', ['id' => 0]) }}"
-         data-returns-url="{{ $coQuanLy ? route('admin.returns.index') : '' }}"
+         data-returns-url="{{ route('thu-ngan.tra-hang.index') }}"
          data-admin-orders-url="{{ $coQuanLy ? route('admin.orders.index') : '' }}"
          data-branch="{{ $tenChiNhanh }}"
          data-statuses='@json($O::STATUSES)'
@@ -307,41 +306,8 @@
 @endsection
 
 @push('modals')
-    {{-- Thu nợ --}}
-    <dialog class="modal" id="hsDebt" aria-labelledby="hsDebtT">
-        <form method="dialog" data-debt-form>
-            <div class="modal__head"><h2 id="hsDebtT">Thu nợ · <span data-debt-code></span></h2><button type="button" class="icon-btn" aria-label="Đóng" data-tn-close><i class="fa-solid fa-xmark"></i></button></div>
-            <div class="modal__body hs-form">
-                <div class="hs-sumbox">
-                    <div class="hs-kv"><span>Tổng đơn</span><b class="t-num" data-debt-total></b></div>
-                    <div class="hs-kv"><span>Đã thu</span><b class="t-num" data-debt-paid></b></div>
-                    <div class="hs-kv is-owe"><span>Còn nợ</span><b class="t-num" data-debt-owe></b></div>
-                </div>
-                <div class="field">
-                    <span class="label">Hình thức</span>
-                    <div class="hs-pm-pick" data-debt-pm>
-                        <button type="button" aria-pressed="true" data-v="cash"><i class="fa-solid fa-money-bill-wave"></i>Tiền mặt</button>
-                        <button type="button" aria-pressed="false" data-v="bank_transfer"><i class="fa-solid fa-building-columns"></i>Chuyển khoản</button>
-                        <button type="button" aria-pressed="false" data-v="card"><i class="fa-solid fa-credit-card"></i>Quẹt thẻ</button>
-                    </div>
-                    <span class="hint">Tiền mặt vào sổ quỹ của ca đang mở.</span>
-                </div>
-                <div class="field">
-                    <label for="hsDebtAmt">Số tiền thu lần này</label>
-                    <input class="input t-num" id="hsDebtAmt" inputmode="numeric" autocomplete="off" data-debt-amt>
-                    <span class="hs-err" data-debt-err hidden></span>
-                </div>
-                <div class="field">
-                    <label for="hsDebtNote">Ghi chú</label>
-                    <input class="input" id="hsDebtNote" maxlength="255" autocomplete="off" placeholder="Không bắt buộc" data-debt-note>
-                </div>
-            </div>
-            <div class="modal__foot">
-                <button type="button" class="btn btn--ghost" data-tn-close>Huỷ</button>
-                <button type="submit" class="btn btn--primary" data-debt-ok>Ghi lượt thu</button>
-            </div>
-        </form>
-    </dialog>
+    {{-- Thu nợ — hộp dùng chung với khung chi tiết khách --}}
+    @include('v2::pos._thu-no')
 
     {{-- Thu đơn chờ QR bằng cách khác --}}
     <dialog class="modal" id="hsQr" aria-labelledby="hsQrT">
@@ -378,6 +344,7 @@
 
 @push('styles')
     <link rel="stylesheet" href="{{ asset('v2/css/pos-v3/orders.css') }}?v={{ filemtime(public_path('v2/css/pos-v3/orders.css')) }}">
+    <link rel="stylesheet" href="{{ asset('v2/css/pos-v3/thu-no.css') }}?v={{ filemtime(public_path('v2/css/pos-v3/thu-no.css')) }}">
 @endpush
 
 @push('scripts')
@@ -468,8 +435,7 @@
             thuNo: !choQr(r) && st !== 'cancelled' && Number(r.con_no) > 0,
             hoaDon: coHd ? { ok: false, why: `Đã có hoá đơn${etax.invoice_no ? ` số ${etax.invoice_no}` : ''}.` }
                 : r.xuat_duoc_hoa_don ? { ok: true } : { ok: false, why: 'Chỉ xuất cho đơn đã thu tiền, chưa huỷ, chưa trả hàng.' },
-            traHang: !cfg.returnsUrl ? { ok: false, why: 'Trả hàng làm ở khu Quản trị — cần cửa Quản lý.' }
-                : coHd ? { ok: false, why: 'Đơn đã có HĐĐT — trả hàng phải kèm hoá đơn điều chỉnh.' }
+            traHang: coHd ? { ok: false, why: 'Đơn đã có HĐĐT — trả hàng phải kèm hoá đơn điều chỉnh, làm ở Quản trị.' }
                     : st === 'partial' ? { ok: false, why: 'Đơn còn nợ — thu đủ rồi mới trả hàng.' }
                         : ['paid', 'returned'].includes(st) ? { ok: true } : { ok: false, why: 'Chỉ trả hàng cho đơn đã thanh toán.' },
         };
@@ -508,11 +474,11 @@
                 <div class="hs-d-body hs-anim" style="border-top:1px solid var(--hs-line)"><div role="tabpanel">
                     <dl class="hs-tot"><div><dt>Hình thức hoàn</dt><dd>${esc(tenPm(r.phuong_thuc) || '—')}</dd></div>
                     <div class="is-grand"><dt>Hoàn cho khách</dt><dd class="t-num" style="color:var(--c-danger)">−${vnd(r.tong_tien)}</dd></div></dl>
-                    <div class="hs-alert hs-alert--info"><i class="fa-solid fa-circle-info"></i><span>Phiếu trả hàng do ${esc(r.nguoi_tao || 'quản lý')} xử lý. Món trả và đơn gốc xem ở Quản trị → Trả hàng.</span></div>
+                    <div class="hs-alert hs-alert--info"><i class="fa-solid fa-circle-info"></i><span>Phiếu trả hàng do ${esc(r.nguoi_tao || 'nhân viên')} xử lý. Món trả xem ở màn Trả hàng.</span></div>
                 </div></div>
                 <div class="hs-d-foot"><div class="hs-actions">
                     <button type="button" class="btn btn--primary" data-act="print"><i class="fa-solid fa-print"></i>In phiếu trả</button>
-                    ${cfg.returnsUrl ? `<a class="btn btn--soft" href="${esc(cfg.returnsUrl)}?keyword=${encodeURIComponent(r.ma)}"><i class="fa-solid fa-up-right-from-square"></i>Mở ở Quản trị</a>` : '<p class="hs-why"><i class="fa-solid fa-circle-info"></i>Chi tiết phiếu trả cần cửa Quản lý.</p>'}
+                    <a class="btn btn--soft" href="${esc(cfg.returnsUrl)}?q=${encodeURIComponent(r.ma)}"><i class="fa-solid fa-rotate-left"></i>Xem ở Trả hàng</a>
                 </div></div>`;
             paper.classList.toggle('is-swap', !!doiDon);
             return;
@@ -578,7 +544,7 @@
         if (L.thuNo && L.inLai.ok) phu.push('<button type="button" class="btn btn--soft" data-act="print"><i class="fa-solid fa-print"></i>In lại</button>');
         if (!choQr(r) && r.trang_thai !== 'cancelled') {
             phu.push(L.traHang.ok
-                ? `<a class="btn btn--soft" href="${esc(cfg.returnsUrl)}" data-act-link="return"><i class="fa-solid fa-rotate-left"></i>Trả hàng</a>`
+                ? `<a class="btn btn--soft" href="${esc(cfg.returnsUrl)}?don=${encodeURIComponent(r.id)}" data-act-link="return"><i class="fa-solid fa-rotate-left"></i>Trả hàng</a>`
                 : `<button type="button" class="btn btn--soft" aria-disabled="true" title="${esc(L.traHang.why)}" data-act="return-why"><i class="fa-solid fa-rotate-left"></i>Trả hàng</button>`);
         }
         const menu = [
@@ -625,7 +591,6 @@
     }
 
     /* ------------------------------------------------------------ thao tác */
-    const parseMoney = (s) => Number(String(s).replace(/\D/g, '')) || 0;
     const chonNut = (box, v) => $$('button', box).forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === v)));
     const daChon = (box) => $('[aria-pressed="true"]', box)?.dataset.v;
     const dongMenu = () => $$('[data-menu]').forEach((m) => { m.hidden = true; });
@@ -656,18 +621,7 @@
         } else if (ten === 'return-why') {
             posToast(luat(r, don, dangMo.etax).traHang.why, 'error');
         } else if (ten === 'debt') {
-            const d = $('#hsDebt');
-            $('[data-debt-code]', d).textContent = r.ma;
-            $('[data-debt-total]', d).textContent = vnd(r.tong_tien);
-            $('[data-debt-paid]', d).textContent = vnd(r.da_thu);
-            $('[data-debt-owe]', d).textContent = vnd(r.con_no);
-            $('[data-debt-amt]', d).value = num(r.con_no);
-            $('[data-debt-note]', d).value = '';
-            $('[data-debt-err]', d).hidden = true;
-            $('[data-debt-ok]', d).disabled = false;
-            chonNut($('[data-debt-pm]', d), 'cash');
-            d.showModal();
-            $('[data-debt-amt]', d).select();
+            window.posThuNo(r, (v) => taiLai(r.id, `Đã ghi ${vnd(v)} cho ${r.ma}${v >= Number(r.con_no) ? ' — đơn đã thu đủ' : ''}.`));
         } else if (ten === 'qr') {
             $('[data-qr-total]').textContent = vnd(r.tong_tien);
             chonNut($('[data-qr-pm]'), 'cash');
@@ -688,32 +642,6 @@
         }
     }
 
-    $('[data-debt-amt]').addEventListener('input', (e) => {
-        const v = parseMoney(e.target.value);
-        e.target.value = v ? num(v) : '';
-        const owe = Number(dangMo?.row.con_no) || 0;
-        const err = $('[data-debt-err]');
-        err.hidden = v > 0 && v <= owe;
-        err.textContent = v > owe ? `Vượt số còn nợ (${vnd(owe)}).` : 'Nhập số tiền thu.';
-        $('[data-debt-ok]').disabled = !err.hidden;
-    });
-    $('[data-debt-form]').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const r = dangMo.row;
-        const v = parseMoney($('[data-debt-amt]').value);
-        if (v <= 0 || v > Number(r.con_no)) return;
-        const nut = $('[data-debt-ok]');
-        nut.disabled = true;
-        try {
-            await goi(url(cfg.debtUrl, r.id), { method: 'POST', body: JSON.stringify({ amount: v, payment_method: daChon($('[data-debt-pm]')), note: $('[data-debt-note]').value.trim() }) });
-            taiLai(r.id, `Đã ghi ${vnd(v)} cho ${r.ma}${v >= Number(r.con_no) ? ' — đơn đã thu đủ' : ''}.`);
-        } catch (err) {
-            nut.disabled = false;
-            const el = $('[data-debt-err]');
-            el.hidden = false;
-            el.textContent = err.message;
-        }
-    });
     $('[data-qr-form]').addEventListener('submit', async (e) => {
         e.preventDefault();
         const r = dangMo.row;

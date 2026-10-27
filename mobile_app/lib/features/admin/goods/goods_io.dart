@@ -171,6 +171,7 @@ Future<Uint8List> exportGoodsCsv(WidgetRef ref, {required List<GoodsItem> rows, 
       'Mã SP',
       'Mã hàng',
       'Tên hàng hóa',
+      'Phiên bản',
       'Nhóm hàng hóa',
       'ĐVT',
       'Vị trí',
@@ -185,27 +186,60 @@ Future<Uint8List> exportGoodsCsv(WidgetRef ref, {required List<GoodsItem> rows, 
     ],
     for (final it in rows)
       if (full[it.id] case final p?)
-        [
-          'SP${'${it.id}'.padLeft(6, '0')}',
-          p['sku'] ?? '',
-          p['name'] ?? '',
-          (p['category'] as Map?)?['name'] ?? '',
-          (p['unit'] as Map?)?['name'] ?? unitName[(p['unit_id'] as num?)?.toInt()] ?? '',
-          (p['location'] as Map?) != null
-              ? '${p['location']['code'] ?? ''} ${p['location']['name'] ?? ''}'.trim()
-              : locName[(p['location_id'] as num?)?.toInt()] ?? '',
-          vatName(((p['vat'] as num?) ?? 0).toInt()),
-          ((p['base_price'] as num?) ?? 0).toInt(),
-          // Ô trống = chưa khai giá vốn — ghi 0 thì người đọc tưởng giá vốn bằng không.
-          (p['cost_price'] as num?)?.toInt() ?? '',
-          it.stockKnown ? it.stock : '',
-          // Ô trống = mọi chi nhánh, như trên PC.
-          names(p['shops']),
-          names(p['tags']),
-          p['is_multi_variant'] == true ? ((p['variants'] as List?) ?? const []).length : 0,
-          it.active ? 'Hoạt động' : 'Không hoạt động',
-        ],
+        // Hàng nhiều phiên bản: MỖI PHIÊN BẢN MỘT DÒNG. Giá bán thật nằm ở
+        // product_variants.price, còn products.base_price chỉ là giá gốc lúc
+        // tạo — xuất base_price thì tệp ghi 18.000.000 trong khi quầy bán
+        // 22.000.000, sửa tệp rồi nhập lại là giá sai đi theo.
+        for (final v in _dongXuat(p))
+          [
+            'SP${'${it.id}'.padLeft(6, '0')}',
+            v['sku'] ?? p['sku'] ?? '',
+            p['name'] ?? '',
+            v['name'] ?? '',
+            (p['category'] as Map?)?['name'] ?? '',
+            (p['unit'] as Map?)?['name'] ?? unitName[(p['unit_id'] as num?)?.toInt()] ?? '',
+            (p['location'] as Map?) != null
+                ? '${p['location']['code'] ?? ''} ${p['location']['name'] ?? ''}'.trim()
+                : locName[(p['location_id'] as num?)?.toInt()] ?? '',
+            vatName(((p['vat'] as num?) ?? 0).toInt()),
+            (((v['price'] ?? p['base_price']) as num?) ?? 0).toInt(),
+            // Ô trống = chưa khai giá vốn — ghi 0 thì người đọc tưởng giá vốn bằng không.
+            ((v['cost_price'] ?? p['cost_price']) as num?)?.toInt() ?? '',
+            _tonXuat(it, v),
+            // Ô trống = mọi chi nhánh, như trên PC.
+            names(p['shops']),
+            names(p['tags']),
+            p['is_multi_variant'] == true ? ((p['variants'] as List?) ?? const []).length : 0,
+            it.active ? 'Hoạt động' : 'Không hoạt động',
+          ],
   ]);
+}
+
+/// Các dòng cần xuất cho một mặt hàng.
+///
+/// Hàng ĐƠN: một dòng, cột Phiên bản để trống, nhưng giá vẫn lấy của phiên bản
+/// mặc định — base_price và giá phiên bản có thể đã lệch nhau từ lâu mà không ai
+/// thấy, vì hàng đơn chỉ hiện một giá trên màn.
+List<Map> _dongXuat(Map p) {
+  final vs = ((p['variants'] as List?) ?? const []).whereType<Map>().toList();
+  if (p['is_multi_variant'] == true) {
+    return vs.isEmpty ? [const {}] : vs;
+  }
+  return [
+    // Giữ nguyên MÃ HÀNG của mặt hàng cho hàng đơn (mã phiên bản mặc định
+    // thường trùng, nhưng cột ấy xưa nay là mã mặt hàng).
+    if (vs.isEmpty) const {} else {...vs.first, 'name': '', 'sku': null},
+  ];
+}
+
+/// Tồn của ĐÚNG phiên bản ở dòng này; không có số tồn thì để trống chứ không
+/// ghi 0 — "chưa biết" và "hết hàng" là hai chuyện khác nhau.
+Object _tonXuat(GoodsItem it, Map v) {
+  if (!it.stockKnown) return '';
+  final id = (v['id'] as num?)?.toInt();
+  if (id == null) return it.stock;
+  final dong = it.stockRows.where((r) => r.variantId == id);
+  return dong.isEmpty ? it.stock : dong.first.qty;
 }
 
 // ---------- Nhập ----------

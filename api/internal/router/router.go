@@ -48,12 +48,16 @@ type Handlers struct {
 	Customer *handler.CustomerHandler
 	// NhomKhach: bảng tra "Nhóm khách hàng" của màn Khách hàng.
 	NhomKhach *handler.CustomerGroupHandler
-	Order     *handler.OrderHandler
-	Return    *handler.OrderReturnHandler
-	Notif     *handler.NotificationHandler
-	Stock     *handler.InventoryHandler
-	Setting   *handler.SettingHandler
-	User      *handler.UserHandler
+	// GhiChuKhach: sổ ghi chú khách của khung chi tiết khách ở quầy.
+	GhiChuKhach *handler.GhiChuKhachHandler
+	// QuaSinhNhat: "Tạo mã sinh nhật" / "Đã chúc" ở danh sách Sinh nhật 7 ngày của quầy.
+	QuaSinhNhat *handler.QuaSinhNhatHandler
+	Order       *handler.OrderHandler
+	Return      *handler.OrderReturnHandler
+	Notif       *handler.NotificationHandler
+	Stock       *handler.InventoryHandler
+	Setting     *handler.SettingHandler
+	User        *handler.UserHandler
 	// ChiNhanh là các ĐIỂM BÁN của chính cửa hàng (bảng `shops`), không phải
 	// khách hàng của nền tảng — xem domain.ChiNhanh. Luôn có mặt: đây là dữ liệu
 	// data plane, không phụ thuộc control plane.
@@ -582,11 +586,23 @@ func New(
 			q.Dat(manage, http.MethodGet, "/thu-chi", "thu-chi.xem", h.ThuChi.List)
 			q.Dat(manage, http.MethodPost, "/thu-chi", "thu-chi.them", h.ThuChi.Create)
 			q.Dat(manage, http.MethodGet, "/thu-chi/:id", "thu-chi.xem", h.ThuChi.Get)
+			q.Dat(manage, http.MethodGet, "/thu-chi/:id/nhat-ky", "thu-chi.xem", h.ThuChi.NhatKy)
+			q.Dat(manage, http.MethodGet, "/thu-chi/tai-khoan", "thu-chi.xem", h.ThuChi.TaiKhoan)
 			q.Dat(manage, http.MethodPut, "/thu-chi/:id", "thu-chi.sua", h.ThuChi.Update)
 			q.Dat(manage, http.MethodDelete, "/thu-chi/:id", "thu-chi.xoa", h.ThuChi.Delete)
 			q.Dat(manage, http.MethodGet, "/nguoi-nop-thu-chi", "thu-chi.xem", h.ThuChi.ListNguoiNop)
 			q.Dat(manage, http.MethodPost, "/nguoi-nop-thu-chi", "thu-chi.them", h.ThuChi.CreateNguoiNop)
 			q.Dat(manage, http.MethodDelete, "/nguoi-nop-thu-chi/:id", "thu-chi.xoa", h.ThuChi.DeleteNguoiNop)
+			// Thu chi ở quầy — chỉ phiếu của chính mình, mọi lượt ghi đòi ca đang mở.
+			// Đọc theo quyền xem ca: thu ngân chưa được ghi két vẫn xem lại phiếu cũ.
+			q.Dat(quay, http.MethodGet, "/quay/thu-chi", "ca-lam-viec.xem", h.ThuChi.ListQuay)
+			q.Dat(quay, http.MethodGet, "/quay/thu-chi/danh-muc", "so-quy.them", h.ThuChi.DanhMucQuay)
+			q.Dat(quay, http.MethodGet, "/quay/thu-chi/:id", "ca-lam-viec.xem", h.ThuChi.GetQuay)
+			q.Dat(quay, http.MethodGet, "/quay/thu-chi/:id/nhat-ky", "ca-lam-viec.xem", h.ThuChi.NhatKyQuay)
+			q.Dat(quay, http.MethodPost, "/quay/thu-chi", "so-quy.them", h.ThuChi.CreateQuay)
+			q.Dat(quay, http.MethodPut, "/quay/thu-chi/:id", "so-quy.them", h.ThuChi.UpdateQuay)
+			q.Dat(quay, http.MethodDelete, "/quay/thu-chi/:id", "so-quy.them", h.ThuChi.DeleteQuay)
+			q.Dat(quay, http.MethodPost, "/quay/nguoi-nop-thu-chi", "so-quy.them", h.ThuChi.CreateNguoiNop)
 
 			// Công nợ. Quyền riêng `cong-no.xem`: sổ này bày tên và số điện thoại
 			// người đại diện bên bán cùng số tiền còn nợ từng nhà cung cấp — ai
@@ -747,6 +763,8 @@ func New(
 			// Phiếu trả hàng in lại từ màn Đơn hàng của quầy: thu ngân không có quyền
 			// vào /returns (nhóm quản lý) nhưng in phiếu cho khách là việc của quầy.
 			q.Dat(quay, http.MethodGet, "/orders/pos/tra-hang/:id", "don-hang.xem", h.Return.Get)
+			// Đơn còn nợ của một khách: khung chi tiết khách ở quầy bày nút Thu từng đơn.
+			q.Dat(quay, http.MethodGet, "/orders/pos/khach-hang/:id/con-no", "don-hang.xem", h.Order.ConNoKhach)
 			// QR tự động ở quầy: màn thu ngân hỏi tiền đã về chưa, và huỷ mã khi khách đổi ý.
 			q.Dat(quay, http.MethodGet, "/orders/pos/payments/:code", "don-hang.them", h.Payment.Status)
 			q.Dat(quay, http.MethodPost, "/orders/pos/:id/huy-qr", "don-hang.them", h.Order.POSHuyQR)
@@ -776,11 +794,33 @@ func New(
 			// Khách hàng của chủ tiệm (nhóm manage) — người chỉ có cửa Thu ngân gõ tìm
 			// khách quen ở đó thì không ra ai. Hai đường này chỉ đọc danh sách và thêm
 			// hồ sơ gọn; sửa, xoá, đặt mật khẩu vẫn đóng.
-			q.Dat(quay, http.MethodGet, "/orders/pos/khach-hang", "don-hang.them", h.Customer.List)
+			q.Dat(quay, http.MethodGet, "/orders/pos/khach-hang", "don-hang.them", h.Customer.ListQuay)
 			q.Dat(quay, http.MethodGet, "/orders/pos/thanh-vien", "don-hang.them", h.ThanhVien.POS)
 			q.Dat(quay, http.MethodPost, "/orders/pos/khach-hang", "don-hang.them", h.Customer.TaoTaiQuay)
+			// CRM ở quầy — CÙNG handler với Quản trị → Khách hàng, chỉ mở thêm cho cửa
+			// Thu ngân: xem một khách và nhóm khách theo quyền tra khách ở quầy, thêm
+			// khách đủ ô như Quản trị theo quyền thêm nhanh đang có; SỬA vẫn đòi
+			// `khach-hang.sua` — chủ tiệm giao cho ai thì người ấy sửa được hồ sơ.
+			q.Dat(quay, http.MethodGet, "/orders/pos/khach-hang/:id", "don-hang.them", h.Customer.Get)
+			q.Dat(quay, http.MethodPost, "/orders/pos/khach-hang/day-du", "don-hang.them", h.Customer.Create)
+			q.Dat(quay, http.MethodPut, "/orders/pos/khach-hang/:id", "khach-hang.sua", h.Customer.Update)
+			q.Dat(quay, http.MethodGet, "/orders/pos/nhom-khach", "don-hang.them", h.NhomKhach.List)
+			// Sổ ghi chú khách: quầy là nơi nói chuyện với khách nên ai tra được khách
+			// ở quầy thì ghi được; xoá chỉ dòng của chính mình (service chặn).
+			q.Dat(quay, http.MethodGet, "/orders/pos/khach-hang/:id/ghi-chu", "don-hang.them", h.GhiChuKhach.List)
+			q.Dat(quay, http.MethodPost, "/orders/pos/khach-hang/:id/ghi-chu", "don-hang.them", h.GhiChuKhach.Them)
+			q.Dat(quay, http.MethodDelete, "/orders/pos/khach-hang/:id/ghi-chu/:note", "don-hang.them", h.GhiChuKhach.Xoa)
+			// Quà sinh nhật: phát mã theo mẫu chủ tiệm khai ở Cài đặt, chỉ trong mùa
+			// sinh nhật của khách và một lần một mùa — service chặn cả hai.
+			q.Dat(quay, http.MethodPost, "/orders/pos/khach-hang/:id/ma-sinh-nhat", "don-hang.them", h.QuaSinhNhat.TangMa)
+			q.Dat(quay, http.MethodPost, "/orders/pos/khach-hang/:id/da-chuc", "don-hang.them", h.QuaSinhNhat.DaChuc)
 			// Đổi hàng: nhận hàng cũ + bán hàng mới + ghi chênh lệch, một giao dịch.
 			q.Dat(quay, http.MethodPost, "/orders/pos/doi-hang", "don-hang.doi-hang", h.Order.POSDoiHang)
+			// Trả hàng ở quầy — một bước, chỉ đơn của chi nhánh đang làm.
+			q.Dat(quay, http.MethodGet, "/quay/tra-hang", "don-hang.xem", h.Return.ListQuay)
+			q.Dat(quay, http.MethodGet, "/quay/tra-hang/don", "don-hang.doi-hang", h.Return.DonTraQuay)
+			q.Dat(quay, http.MethodGet, "/quay/tra-hang/don/:id", "don-hang.doi-hang", h.Return.TraDuocTaiQuay)
+			q.Dat(quay, http.MethodPost, "/quay/tra-hang", "don-hang.doi-hang", h.Return.TraTaiQuay)
 			// Sổ chứng từ của màn Quản lý đơn hàng. Đứng TRƯỚC "/orders/:id" trong
 			// tệp này cho dễ đọc; gin tự ưu tiên đoạn tĩnh nên thứ tự không đổi
 			// hành vi, nhưng người đọc thì cần thấy nó không phải một id.
