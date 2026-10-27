@@ -33,6 +33,9 @@ const (
 	// giao diện dựng ô chọn. Khác Bool ở chỗ hai lựa chọn có TÊN RIÊNG, không
 	// phải bật/tắt một câu: "FIFO" và "FEFO" không cái nào là "tắt cái kia".
 	SettingTypeSelect = "select"
+	// SettingTypeIDList — danh sách id cách nhau dấu phẩy ("24,14,2"), tối đa
+	// settingDef.MaxNum phần tử; giao diện dựng ô chọn nhiều.
+	SettingTypeIDList = "id_list"
 )
 
 // Khối trong một trang cấu hình. Nhóm quyết định trang nào, khối quyết định phần
@@ -45,6 +48,8 @@ const (
 	SettingSectionMethods = "methods"
 	SettingSectionBank    = "bank"
 	SettingSectionTax     = "tax"
+	// SettingSectionBirthday — mẫu mã sinh nhật của nhóm Quầy bán hàng.
+	SettingSectionBirthday = "birthday"
 )
 
 // Nhóm cấu hình — mỗi nhóm là MỘT trang bên trang quản trị, và là giá trị của bộ
@@ -106,6 +111,20 @@ const (
 	SettingMonthlyRevenueGoal   = "monthly_revenue_goal"
 	SettingShiftDiffAlert       = "shift_diff_alert_threshold"
 	SettingShiftOpenAlertHours  = "shift_open_alert_hours"
+)
+
+// SettingPOSCashbookPinnedTypes — id loại thu chi ghim lên đầu dãy phân loại của
+// hộp lập phiếu ở quầy, dạng "24,14,2".
+const SettingPOSCashbookPinnedTypes = "pos_cashbook_pinned_types"
+
+// Mẫu "Tạo mã sinh nhật" ở màn Khách hàng của quầy: mỗi lần bấm sinh MỘT mã dùng
+// một lần cho đúng khách ấy theo các ô này. Giá trị 0 = chưa bật.
+const (
+	SettingBirthdayVoucherType     = "birthday_voucher_type"
+	SettingBirthdayVoucherValue    = "birthday_voucher_value"
+	SettingBirthdayVoucherMax      = "birthday_voucher_max"
+	SettingBirthdayVoucherMinOrder = "birthday_voucher_min_order"
+	SettingBirthdayVoucherDays     = "birthday_voucher_days"
 )
 
 // Thứ tự rút lô khi xuất kho — bản v2 gọi là thông số `inventory_valuation`.
@@ -366,9 +385,55 @@ var settingRegistry = []settingDef{
 		Default: "24", Required: true, MaxNum: 720,
 	},
 	{
+		// Nút mẫu ở hộp lập phiếu của quầy — bấm là điền sẵn, chỉ còn sửa số tiền.
+		Key: SettingPOSCashbookTemplates, Group: SettingGroupPOS, Type: SettingTypeMauPhieu,
+		Label:   "Mẫu phiếu nhanh ở quầy",
+		Default: mauPhieuMacDinh, Max: 4000,
+	},
+	{
+		// Phiếu chi ở quầy lớn hơn số này cần chủ / quản trị duyệt (nhập tài khoản).
+		// 0 = không giới hạn — tính năng mới không tự chặn quầy đang chạy.
+		Key: SettingPOSCashbookExpenseLimit, Group: SettingGroupPOS, Type: SettingTypeNumber,
+		Label:   "Hạn mức phiếu chi ở quầy (đ)",
+		Default: "0", Required: true, MaxNum: 1_000_000_000_000,
+	},
+	{
+		// Ghim sẵn cho thu ngân thấy ở hộp lập phiếu; chỗ trống còn lại lấy loại hay
+		// dùng của chi nhánh. 12 = 6 viên thu + 6 viên chi.
+		Key: SettingPOSCashbookPinnedTypes, Group: SettingGroupPOS, Type: SettingTypeIDList,
+		Label:   "Phân loại ghim ở hộp lập phiếu thu chi (quầy)",
+		Default: "", Max: 200, MaxNum: 12,
+	},
+	{
 		Key: SettingStaffDefaultPassword, Group: SettingGroupPOS, Type: SettingTypeText,
 		Label:   "Mật khẩu mặc định cấp cho nhân viên",
 		Default: "", Max: 72,
+	},
+	// Mặc định TẮT (mức giảm 0): tặng tiền là quyết định của chủ tiệm, bản cài
+	// sẵn không tự phát mã giảm giá.
+	{
+		Key: SettingBirthdayVoucherType, Group: SettingGroupPOS, Section: SettingSectionBirthday, Type: SettingTypeSelect,
+		Label: "Kiểu giảm", Default: domain.DiscountPercentage, Required: true,
+		Options: []settingOption{
+			{Value: domain.DiscountPercentage, Label: "Phần trăm tiền hàng"},
+			{Value: domain.DiscountFixed, Label: "Số tiền cố định"},
+		},
+	},
+	{
+		Key: SettingBirthdayVoucherValue, Group: SettingGroupPOS, Section: SettingSectionBirthday, Type: SettingTypeNumber,
+		Label: "Mức giảm", Default: "0", Required: true, MaxNum: 1_000_000_000,
+	},
+	{
+		Key: SettingBirthdayVoucherMax, Group: SettingGroupPOS, Section: SettingSectionBirthday, Type: SettingTypeNumber,
+		Label: "Giảm tối đa (đ)", Default: "0", Required: true, MaxNum: 1_000_000_000,
+	},
+	{
+		Key: SettingBirthdayVoucherMinOrder, Group: SettingGroupPOS, Section: SettingSectionBirthday, Type: SettingTypeNumber,
+		Label: "Đơn tối thiểu (đ)", Default: "0", Required: true, MaxNum: 1_000_000_000,
+	},
+	{
+		Key: SettingBirthdayVoucherDays, Group: SettingGroupPOS, Section: SettingSectionBirthday, Type: SettingTypeNumber,
+		Label: "Hạn dùng (ngày)", Default: "30", Required: true, MaxNum: 365,
 	},
 
 	// ----- Tổng quan -----
@@ -777,6 +842,22 @@ func validateSettingValue(d settingDef, value string) string {
 		}
 		if d.MaxNum > 0 && n > d.MaxNum {
 			return "Giá trị tối đa là " + formatMaxNum(d.MaxNum)
+		}
+	case SettingTypeMauPhieu:
+		return kiemMauPhieu(value)
+	case SettingTypeIDList:
+		gap := map[string]bool{}
+		for _, p := range strings.Split(value, ",") {
+			if n, err := strconv.ParseUint(p, 10, 64); err != nil || n == 0 {
+				return "Danh sách chỉ gồm mã số, cách nhau dấu phẩy"
+			}
+			if gap[p] {
+				return "Một mục được chọn hai lần"
+			}
+			gap[p] = true
+		}
+		if d.MaxNum > 0 && float64(len(gap)) > d.MaxNum {
+			return "Chọn tối đa " + formatMaxNum(d.MaxNum) + " mục"
 		}
 	case SettingTypeEmail:
 		if _, err := mail.ParseAddress(value); err != nil {

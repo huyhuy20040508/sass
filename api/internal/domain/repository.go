@@ -94,6 +94,14 @@ type CustomerFilter struct {
 	// LastTxFrom / LastTxTo: đơn GẦN NHẤT của khách rơi vào khoảng này.
 	LastTxFrom *time.Time
 	LastTxTo   *time.Time
+	// ChiConNo: chỉ khách còn nợ (> 0), đúng công thức cột "Còn nợ" (KB #95).
+	ChiConNo bool
+	// HenNgay (YYYY-MM-DD): chỉ khách có ghi chú loại "hẹn" vào ngày này — nút lọc
+	// "Có hẹn hôm nay" của quầy (migration 0097).
+	HenNgay string
+	// BoDaChucTu: bỏ khách đã có mốc chúc sinh nhật từ thời điểm này (nút lọc Sinh
+	// nhật 7 ngày của quầy, migration 0098). nil = không bỏ.
+	BoDaChucTu *time.Time
 	// PointFrom / PointTo: điểm tích luỹ; RankID: hạng thành viên (0 = mọi hạng).
 	PointFrom *int
 	PointTo   *int
@@ -230,6 +238,13 @@ type OrderFilter struct {
 	// "khong", hoặc cả hai ngăn bởi dấu phẩy (= không lọc, vì mọi đơn đều rơi vào
 	// một trong hai).
 	HoaDonDienTu string
+	// TrangThaiDon lọc theo NHÓM trạng thái xử lý của sổ chứng từ:
+	// pending | doing (confirmed, processing, shipping) | done (completed,
+	// delivered) | cancelled | returned (đơn bị trả + phiếu trả).
+	TrangThaiDon string
+	// TheoNgay: sổ đơn cộng thêm meta.tong.theo_ngay. Chỉ tính khi được xin —
+	// lật trang danh sách không cần, mà câu GROUP BY chạy trên cả kỳ.
+	TheoNgay bool
 	// ShopID cắt danh sách theo CHI NHÁNH phát sinh đơn. 0 = không cắt (xem gộp
 	// cả cửa hàng) — chỉ nên dùng ở báo cáo và khi người dùng chủ động chọn.
 	// Handler đặt sẵn theo chi nhánh đang làm việc; không cắt thì người đứng ở
@@ -318,6 +333,8 @@ type OrderRepository interface {
 	GhiLuotThu(ctx context.Context, p *OrderPayment) error
 	// LuotThuCuaDon liệt kê các lượt thu đã ghi của một đơn.
 	LuotThuCuaDon(ctx context.Context, orderID uint) ([]OrderPayment, error)
+	// DonConNoCuaKhach — các đơn một khách còn nợ, cũ trước. Xem DonConNo.
+	DonConNoCuaKhach(ctx context.Context, userID uint) ([]DonConNo, error)
 	// PhiTheCuaDon trả nil khi đơn không có phí quẹt thẻ.
 	PhiTheCuaDon(ctx context.Context, orderID uint) (*PhiTheDon, error)
 	FindByID(ctx context.Context, id uint) (*Order, error)
@@ -415,6 +432,12 @@ type ReturnFilter struct {
 	UserID   *uint  // lọc phiếu của một khách hàng
 	FromDate string // YYYY-MM-DD (theo created_at)
 	ToDate   string // YYYY-MM-DD
+	// FromTime — mốc giờ "YYYY-MM-DD HH:MM:SS" (tab "Ca này" ở quầy: từ lúc mở ca).
+	FromTime string
+	// RequestedBy — "admin" = phiếu nhân viên lập (quầy chỉ xem loại này).
+	RequestedBy string
+	// Kind — "refund" = trả lấy tiền, "swap" = đổi hàng (có exchange_order_id).
+	Kind     string
 	Sort     string // newest | oldest | amount_desc | amount_asc
 	Page     int
 	PageSize int
@@ -433,6 +456,36 @@ type ReturnStats struct {
 	RefundedAmount float64 `json:"refunded_amount"`
 }
 
+// TongTraQuay — thẻ tổng màn Trả hàng ở quầy, cộng trên CẢ bộ lọc.
+type TongTraQuay struct {
+	SoPhieu     int64   `json:"count"`
+	SoDoi       int64   `json:"swap_count"`
+	SoMon       int64   `json:"item_quantity"`
+	SoMonNhap   int64   `json:"restock_quantity"`
+	TienHoan    float64 `json:"refund_amount"`
+	TienMatHoan float64 `json:"cash_refund_amount"`
+}
+
+// DonTraQuay — một dòng ở bước "chọn đơn" của màn Trả hàng quầy. LyDoChan rỗng =
+// trả được; khác rỗng là câu hiện ngay dưới đơn (luật ở service, không ở đây).
+type DonTraQuay struct {
+	ID             uint       `json:"id"`
+	OrderCode      string     `json:"order_code"`
+	CreatedAt      time.Time  `json:"created_at"`
+	RecipientName  string     `json:"recipient_name"`
+	RecipientPhone string     `json:"recipient_phone"`
+	TotalAmount    float64    `json:"total_amount"`
+	PaymentMethod  string     `json:"payment_method"`
+	PaymentStatus  string     `json:"payment_status"`
+	Status         string     `json:"status"`
+	SoMon          int        `json:"item_count"`
+	SoLuong        int        `json:"quantity"`
+	DaTra          int        `json:"returned_quantity"`
+	CoHoaDon       bool       `json:"has_einvoice"`
+	DeliveredAt    *time.Time `json:"-"`
+	LyDoChan       string     `json:"blocked_reason" gorm:"-"`
+}
+
 // ReturnableItem — một dòng hàng của đơn kèm số lượng CÒN trả được.
 // Số còn lại = số đã mua trừ số đang nằm trong các phiếu trả chưa bị từ chối/huỷ,
 // nên khách không thể trả cùng một món hai lần qua hai phiếu.
@@ -445,6 +498,10 @@ type ReturnableItem struct {
 	VariantName      string  `json:"variant_name"`
 	Thumbnail        string  `json:"thumbnail"`
 	UnitPrice        float64 `json:"unit_price"`
+	// PaidTotal — số khách THỰC trả cho cả dòng (đã trừ giảm giá dòng + phần giảm
+	// giá cả đơn, cộng thuế). Tiền hoàn của k món = PaidTotal × k / Quantity.
+	PaidTotal        float64 `json:"paid_total"`
+	IsGift           bool    `json:"is_gift"`
 	Quantity         int     `json:"quantity"`          // số đã mua
 	ReturnedQuantity int     `json:"returned_quantity"` // số đang/đã trả
 	RemainQuantity   int     `json:"remain_quantity"`   // số còn trả được
@@ -482,6 +539,20 @@ type OrderReturnRepository interface {
 	// khoá, kèm món), mutate rồi trả về: mốc lịch sử cần ghi, danh sách CỘT cần
 	// lưu, và cờ tác dụng phụ cần chạy trong cùng transaction.
 	LockAndUpdate(ctx context.Context, id uint, apply func(r *OrderReturn) (*OrderReturnHistory, []string, *ReturnEffects, error)) (*OrderReturn, error)
+
+	// TraTaiQuay — trả hàng ở quầy trong MỘT transaction: chặn khi chi nhánh chưa
+	// mở ca, khoá đơn (phải thuộc chi nhánh của request), lập phiếu đã nhận +
+	// đã hoàn, nhập kho, khép đơn nếu trả hết, ghi hoàn tiền (sổ thanh toán, sổ
+	// quỹ, thu chi). build nhận thêm cờ đơn đã có HĐĐT.
+	TraTaiQuay(ctx context.Context, orderID uint, build func(o *Order, remain map[uint]ReturnableItem, coHoaDon bool) (*OrderReturn, error)) (*OrderReturn, error)
+	// DonTraQuay — đơn của chi nhánh request cho bước chọn đơn: tìm theo mã / SĐT /
+	// tên (mọi ngày) hoặc mọi đơn từ `tu` khi từ khoá rỗng.
+	DonTraQuay(ctx context.Context, keyword string, tu time.Time, limit int) ([]DonTraQuay, error)
+	// CoHoaDon — đơn đã có tờ HĐĐT còn hiệu lực (tờ hỏng không tính).
+	CoHoaDon(ctx context.Context, orderID uint) (bool, error)
+	// ChiNhanhDangLam — chi nhánh của request, lỗi khi không xác định được.
+	ChiNhanhDangLam(ctx context.Context) (uint, error)
+	TongQuay(ctx context.Context, f ReturnFilter) (TongTraQuay, error)
 }
 
 // ReturnEffects mô tả các tác dụng phụ phải chạy CÙNG transaction với việc đổi
@@ -1253,6 +1324,8 @@ type VoucherRepository interface {
 	// FindByCode tra mã khách vừa nhập (đã chuẩn hoá chữ hoa). Chỉ đọc, không khoá
 	// — việc chốt lượt nằm trong giao dịch đặt hàng.
 	FindByCode(ctx context.Context, code string) (*Voucher, error)
+	// ChuMaRieng — khách được tặng riêng mã này (customer_birthday_gifts); 0 = mã chung.
+	ChuMaRieng(ctx context.Context, voucherID uint) (uint, error)
 	// CountUsageByUser đếm số lượt MỘT KHÁCH đã tiêu của mã, để so với
 	// usage_limit_per_user.
 	//
@@ -1285,6 +1358,24 @@ type SettingRepository interface {
 	// thêm mới. Nhận []Setting chứ không phải map[string]string vì dòng thêm mới
 	// cần cả `group` — nhóm do registry của service quyết định.
 	Upsert(ctx context.Context, items []Setting) error
+}
+
+// DonConNo — một đơn khách còn nợ, cho khung chi tiết khách ở quầy.
+//
+// Còn nợ tính đúng công thức cột "Còn nợ" của CRM (tổng đơn trừ daThuCuaDon) nên
+// cộng các dòng lại ra đúng con số in trên danh sách khách. ThuDuoc = đơn thuộc
+// chi nhánh đang làm việc: thu nợ đơn của chi nhánh khác bị GhiLuotThu chặn, nên
+// vẫn bày ra cho đủ con số nhưng không mời bấm Thu.
+type DonConNo struct {
+	ID          uint      `json:"id"`
+	OrderCode   string    `json:"order_code"`
+	ShopID      uint      `json:"shop_id"`
+	TenChiNhanh string    `json:"ten_chi_nhanh"`
+	TongTien    float64   `json:"tong_tien"`
+	DaThu       float64   `json:"da_thu"`
+	ConNo       float64   `json:"con_no"`
+	CreatedAt   time.Time `json:"created_at"`
+	ThuDuoc     bool      `json:"thu_duoc" gorm:"-"`
 }
 
 // DongSoDon là MỘT DÒNG của sổ chứng từ bán hàng (màn Quản lý đơn hàng).
@@ -1349,6 +1440,18 @@ type DongSoDon struct {
 
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+
+	// TrangThaiDon là trạng thái XỬ LÝ (orders.status) — khác TrangThai ở trên là
+	// trạng thái của SỔ (đã thu / còn nợ / huỷ / trả). Phiếu trả luôn là "returned".
+	// App mobile chia tab Chờ xác nhận / Đang xử lý / Hoàn tất theo cột này.
+	TrangThaiDon string `json:"trang_thai_don"`
+	// SoMon, SoLuong, TenMonDau, AnhMon: tóm tắt món cho thẻ đơn mobile — đọc sẵn
+	// ở đây để danh sách không phải gọi chi tiết từng đơn. Phiếu trả để trống.
+	SoMon     int    `json:"so_mon"`
+	SoLuong   int    `json:"so_luong"`
+	TenMonDau string `json:"ten_mon_dau"`
+	// AnhMon: tối đa 3 ảnh món đầu (bỏ món không ảnh), đọc một lượt cho cả trang.
+	AnhMon []string `json:"anh_mon" gorm:"-"`
 }
 
 // TongSoDon là hàng TỔNG của sổ chứng từ — cộng trên MỌI dòng khớp bộ lọc, không
@@ -1366,6 +1469,22 @@ type TongSoDon struct {
 	QuetThe     float64 `json:"quet_the"`
 	QRTuDong    float64 `json:"qr_tu_dong"`
 	Khac        float64 `json:"khac"`
+
+	// ConNo: tổng còn phải thu trên mọi dòng khớp bộ lọc (ô "Chưa thu" của mobile).
+	ConNo float64 `json:"con_no"`
+	// Dem: số dòng theo nhóm trạng thái xử lý (pending | doing | done | cancelled
+	// | returned), tính trên CÙNG bộ lọc nhưng bỏ điều kiện nhóm — số trên các tab.
+	Dem map[string]int64 `json:"dem,omitempty" gorm:"-"`
+	// TheoNgay: đơn bán (không gồm phiếu trả) cộng theo ngày tạo trên CẢ kỳ khớp
+	// bộ lọc — biểu đồ cột của mobile, thay cho tự cộng từ vài trang danh sách.
+	TheoNgay []TongNgaySoDon `json:"theo_ngay,omitempty" gorm:"-"`
+}
+
+// TongNgaySoDon — một ngày của meta.tong.theo_ngay.
+type TongNgaySoDon struct {
+	Ngay     string  `json:"ngay"`
+	SoDong   int64   `json:"so_dong"`
+	TongTien float64 `json:"tong_tien"`
 }
 
 // Bốn NHÓM phương thức của quầy (CacLoaiPT) cộng nhóm "Khác" — NGUỒN DUY NHẤT

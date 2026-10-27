@@ -461,7 +461,15 @@ func respondReturnError(c *gin.Context, err error, fallback string) {
 		return
 	}
 
+	var quay *domain.LoiTraQuay
 	switch {
+	case errors.As(err, &quay):
+		response.Error(c, http.StatusConflict, quay.Cau)
+	case errors.Is(err, domain.ErrChuaMoCa):
+		response.ErrorMa(c, http.StatusConflict, response.MaChuaMoCa,
+			"Chi nhánh chưa mở ca — mở ca rồi mới trả hàng, hoàn tiền cho khách.")
+	case errors.Is(err, domain.ErrReturnDeduction):
+		response.Error(c, http.StatusUnprocessableEntity, "Khấu trừ lớn hơn tiền hàng trả.")
 	case errors.Is(err, domain.ErrNotFound):
 		response.Error(c, http.StatusNotFound, "Không tìm thấy phiếu trả hàng hoặc đơn hàng")
 	case errors.Is(err, domain.ErrReturnNotAllowed):
@@ -483,4 +491,129 @@ func respondReturnError(c *gin.Context, err error, fallback string) {
 	default:
 		response.Error(c, http.StatusInternalServerError, fallback)
 	}
+}
+
+// ---------- Quầy ----------
+//
+// Màn Trả hàng của module Thu ngân: phiếu một bước (nhận hàng + hoàn tiền ngay),
+// đơn chặn ở máy chủ khi có HĐĐT / còn nợ / quá hạn / khác chi nhánh, chưa mở ca
+// thì 409 CHUA_MO_CA. Quyền ghi là `don-hang.doi-hang` ("Đổi / trả hàng tại
+// quầy") — thu ngân vốn có; bộ `tra-hang.*` là sổ trả hàng của cả cửa hàng.
+
+// ListQuay godoc
+//
+//	@Summary		Sổ phiếu trả ở quầy
+//	@Description	Phiếu do nhân viên lập ở chi nhánh đang làm, kèm đơn gốc và đơn đổi. `meta` = phân trang + thẻ tổng trên cả bộ lọc.
+//	@Tags			Thu ngân - Trả hàng
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			keyword		query		string	false	"Mã phiếu / mã đơn / tên / SĐT"
+//	@Param			kind		query		string	false	"refund | swap"
+//	@Param			from_time	query		string	false	"YYYY-MM-DD HH:MM:SS — từ lúc mở ca"
+//	@Param			from_date	query		string	false	"YYYY-MM-DD"
+//	@Param			to_date		query		string	false	"YYYY-MM-DD"
+//	@Success		200			{object}	response.Body{data=[]domain.OrderReturn,meta=dto.TraHangQuayMeta}
+//	@Router			/admin/quay/tra-hang [get]
+func (h *OrderReturnHandler) ListQuay(c *gin.Context) {
+	f, page, size := returnFilterFrom(c, 50, 200)
+	f.RequestedBy = "admin"
+	f.FromTime = c.Query("from_time")
+	f.Kind = c.Query("kind")
+	f.Status = ""
+	f.Reason = ""
+	f.Sort = ""
+
+	list, total, err := h.svc.List(c.Request.Context(), f)
+	if err != nil {
+		respondReturnError(c, err, "Lỗi tải phiếu trả hàng")
+		return
+	}
+	tongF := f
+	tongF.Kind = ""
+	tong, err := h.svc.TongQuay(c.Request.Context(), tongF)
+	if err != nil {
+		respondReturnError(c, err, "Lỗi tải phiếu trả hàng")
+		return
+	}
+
+	pages := 1
+	if total > 0 {
+		pages = int((total + int64(size) - 1) / int64(size))
+	}
+	c.JSON(http.StatusOK, response.Body{Success: true, Data: list, Meta: dto.TraHangQuayMeta{
+		Pagination:  response.Pagination{Page: page, PageSize: size, Total: total, TotalPages: pages},
+		TongTraQuay: tong,
+		CoTheTra:    middleware.CoQuyen(c, "don-hang.doi-hang"),
+	}})
+}
+
+// DonTraQuay godoc
+//
+//	@Summary		Đơn để chọn ở bước 1 của Trả hàng quầy
+//	@Description	Có từ khoá (mã đơn / SĐT / tên) thì tìm mọi ngày; không thì đơn của `days` ngày gần nhất (mặc định 7). Mỗi đơn kèm `blocked_reason` khi không trả được ở quầy.
+//	@Tags			Thu ngân - Trả hàng
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			q		query		string	false	"Mã đơn, SĐT hoặc tên khách"
+//	@Param			days	query		int		false	"Số ngày gần nhất, 1–90"
+//	@Success		200		{object}	response.Body{data=[]domain.DonTraQuay}
+//	@Router			/admin/quay/tra-hang/don [get]
+func (h *OrderReturnHandler) DonTraQuay(c *gin.Context) {
+	ngay, _ := strconv.Atoi(c.DefaultQuery("days", "7"))
+	ds, err := h.svc.DonTraQuay(c.Request.Context(), c.Query("q"), ngay)
+	if err != nil {
+		respondReturnError(c, err, "Lỗi tìm đơn")
+		return
+	}
+	response.OK(c, ds)
+}
+
+// TraDuocTaiQuay godoc
+//
+//	@Summary	Món còn trả được của một đơn, theo luật quầy
+//	@Description	Như /admin/orders/{id}/returnable, thêm `paid_total` mỗi dòng (số khách thực trả) và luật quầy trong `returnable` / `reason`.
+//	@Tags		Thu ngân - Trả hàng
+//	@Produce	json
+//	@Security	BearerAuth
+//	@Param		id	path		int	true	"ID đơn hàng"
+//	@Success	200	{object}	response.Body{data=service.ReturnableOrder}
+//	@Router		/admin/quay/tra-hang/don/{id} [get]
+func (h *OrderReturnHandler) TraDuocTaiQuay(c *gin.Context) {
+	id, err := orderID(c)
+	if err != nil {
+		response.Error(c, http.StatusBadRequest, "ID đơn hàng không hợp lệ")
+		return
+	}
+	res, err := h.svc.TraDuocTaiQuay(c.Request.Context(), id)
+	if err != nil {
+		respondReturnError(c, err, "Lỗi tải món còn trả được")
+		return
+	}
+	response.OK(c, res)
+}
+
+// TraTaiQuay godoc
+//
+//	@Summary		Trả hàng tại quầy (một bước)
+//	@Description	Nhận hàng, nhập kho (nếu `restock`), khép đơn khi đã trả hết và hoàn tiền ngay — một giao dịch. Tiền hoàn = số khách thực trả cho các món (đã trừ giảm giá) − khấu trừ. Tiền mặt vào sổ quỹ ca + phiếu chi tự sinh.
+//	@Tags			Thu ngân - Trả hàng
+//	@Accept			json
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			body	body		dto.TraTaiQuayRequest	true	"Phiếu trả"
+//	@Success		201		{object}	response.Body{data=service.ReturnDetail}
+//	@Failure		409		{object}	response.Body
+//	@Failure		422		{object}	response.Body
+//	@Router			/admin/quay/tra-hang [post]
+func (h *OrderReturnHandler) TraTaiQuay(c *gin.Context) {
+	var req dto.TraTaiQuayRequest
+	if !bindJSON(c, &req) {
+		return
+	}
+	res, err := h.svc.TraTaiQuay(c.Request.Context(), &req, currentUserID(c))
+	if err != nil {
+		respondReturnError(c, err, "Lỗi trả hàng")
+		return
+	}
+	response.CreatedMessage(c, "Đã trả hàng", res)
 }

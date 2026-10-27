@@ -17,6 +17,16 @@ enum DashPeriod {
 
   const DashPeriod(this.label);
 
+  /// Kỳ tương ứng bên màn Đơn hàng — hai màn có cùng năm mốc, nên nhảy sang thì
+  /// giữ nguyên kỳ đang xem, đừng bắt người ta chọn lại.
+  OrderTime get orderTime => switch (this) {
+    DashPeriod.today => OrderTime.today,
+    DashPeriod.yesterday => OrderTime.yesterday,
+    DashPeriod.days7 => OrderTime.days7,
+    DashPeriod.thisMonth => OrderTime.thisMonth,
+    DashPeriod.lastMonth => OrderTime.lastMonth,
+  };
+
   final String label;
 
   (DateTime, DateTime) range(DateTime now) {

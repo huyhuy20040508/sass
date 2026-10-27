@@ -98,6 +98,11 @@ a.ca-now[aria-current="true"] { border-color: var(--c-orange); }
 .ca-d-time b { color: var(--c-ink); font-family: var(--font-mono); }
 .ca-d-top .ca-st { margin-left: auto; }
 
+/* Dòng "Đã nộp về công ty trong ca" ngay dưới dải két. */
+.ca-nop-ve { margin: 6px var(--s-4) 0; color: var(--c-ink); font-size: var(--fs-sm); }
+.ca-nop-ve i { margin-right: 6px; color: var(--c-navy); }
+.ca-nop-ve b { font-family: var(--font-mono); }
+.ca-nop-ve span { color: var(--c-muted); }
 /* Dải két: đầu ca + thu − chi = theo sổ (+ đếm được, chênh). Đây là con số cả màn sinh ra để chốt. */
 .ca-till { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); margin: 0 var(--s-4); border: 1px solid var(--c-line); border-radius: var(--r-lg); overflow: hidden; }
 .ca-till > div { display: grid; gap: 2px; padding: 10px var(--s-3); border-right: 1px solid var(--c-line); }
@@ -283,6 +288,13 @@ a.ca-now[aria-current="true"] { border-color: var(--c-orange); }
 .ca-done__ic { display: grid; place-items: center; width: 64px; height: 64px; border-radius: 50%; background: var(--c-success-soft); color: var(--c-success); font-size: 30px; }
 .ca-done h3 { margin: 0; color: var(--c-ink); font-size: var(--fs-xl); }
 .ca-done .ca-box { width: 100%; text-align: left; }
+/* Phiếu thu chi đã sửa / xoá trong ca (nhật ký). */
+.ca-tc-sua { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.ca-tc-sua li { padding: 8px var(--s-3); border: 1px solid var(--c-line); border-radius: var(--r-lg); }
+.ca-tc-sua li.is-xoa { background: #fdf7f7; }
+.ca-tc-sua__dau { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+.ca-tc-sua__dau span, .ca-tc-sua s { color: var(--c-muted); font-size: var(--fs-sm); }
+.ca-tc-sua__tien { font-family: var(--font-mono); }
 .ca-outside { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
 .ca-outside li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--s-2); align-items: center; padding: 8px var(--s-3); border: 1px solid var(--c-line); border-radius: var(--r-lg); }
 .ca-outside .t { font-family: var(--font-mono); color: var(--c-ink); }

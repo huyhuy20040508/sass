@@ -114,6 +114,89 @@ class PrintSlipTest extends TestCase
         }
     }
 
+    /**
+     * Lượt ĐỔI HÀNG in ra phải nói được khoản tiền thật sự đổi tay.
+     *
+     * Phiếu đổi đi theo khuôn phiếu hoàn thì tờ giấy ghi "HOÀN LẠI 0 · Hình
+     * thức hoàn: Không hoàn tiền (đổi hàng)" — đúng theo cột trong sổ (API đặt
+     * refund_amount = 0, tiền đi qua chênh lệch) nhưng sai với việc vừa xảy ra:
+     * khách cầm về 8.800.000 từ két. Không dòng nào ghi món khách lấy về, số
+     * chênh, hay mã đơn mới, mà luồng quầy chỉ in đúng một tờ này.
+     *
+     * API chi tiết phiếu KHÔNG kèm `exchange_order` (chỉ danh sách phiếu mới
+     * preload) nên màn in phải hỏi thêm một lượt — bài này canh cả lượt gọi ấy.
+     */
+    public function test_phieu_doi_hang_in_hang_lay_ve_va_so_chenh(): void
+    {
+        Http::fake([
+            '*/admin/orders/pos/tra-hang/14' => Http::response(['data' => [
+                'return_code' => 'TKH000012', 'shop_id' => 2, 'exchange_order_id' => 900080,
+                'refund_method' => 'none', 'refund_amount' => 0, 'items_amount' => 30800000, 'deduction' => 0,
+                'items' => [['order_item_id' => 501, 'product_name' => 'Iphone 16 pro max', 'quantity' => 1, 'unit_price' => 30800000, 'total_price' => 30800000]],
+                'order' => ['order_code' => 'DH000085', 'items' => [['id' => 501, 'unit_name' => 'Cái']]],
+            ]]),
+            '*/admin/orders/900080' => Http::response(['data' => [
+                'order_code' => 'DH000086', 'total_amount' => 22000000, 'payment_method' => 'cash',
+                'items' => [['product_name' => 'Laptop Asus', 'variant_name' => 'RTX 3050', 'quantity' => 1, 'unit_price' => 22000000, 'total_price' => 22000000]],
+            ]]),
+            '*/admin/orders/pos/mau-in/tra' => Http::response(['data' => ['options' => [], 'settings' => ['kho' => '80']]]),
+            '*' => Http::response(['data' => []]),
+        ]);
+
+        $html = $this->withSession($this->phien())->get(route('thu-ngan.tra-hang.phieu', ['id' => 14]))->assertOk()->getContent();
+
+        foreach (['PHIẾU ĐỔI HÀNG', 'KHÁCH TRẢ LẠI', 'KHÁCH LẤY VỀ', 'Laptop Asus', 'DH000085', 'DH000086',
+            'Tiền hàng trả', '30.800.000', 'Tiền hàng mới', '22.000.000', 'TRẢ LẠI KHÁCH', '8.800.000'] as $can) {
+            $this->assertStringContainsString($can, $html, "thiếu: {$can}");
+        }
+
+        // Không còn hai dòng nói sai việc: hoàn 0 và "không hoàn tiền".
+        $this->assertStringNotContainsString('HOÀN LẠI', $html);
+        $this->assertStringNotContainsString('Không hoàn tiền', $html);
+        Http::assertSent(fn (HttpRequest $r) => str_ends_with($r->url(), '/admin/orders/900080'));
+    }
+
+    /** Chiều ngược lại: hàng mới đắt hơn thì khách bù thêm. */
+    public function test_phieu_doi_hang_mon_moi_dat_hon_thi_ghi_khach_tra_them(): void
+    {
+        Http::fake([
+            '*/admin/orders/pos/tra-hang/15' => Http::response(['data' => [
+                'return_code' => 'TKH000013', 'shop_id' => 2, 'exchange_order_id' => 900090,
+                'refund_method' => 'none', 'refund_amount' => 0, 'items_amount' => 5000000,
+                'items' => [['order_item_id' => 1, 'product_name' => 'Tai nghe', 'quantity' => 1, 'unit_price' => 5000000, 'total_price' => 5000000]],
+                'order' => ['order_code' => 'DH000090', 'items' => []],
+            ]]),
+            '*/admin/orders/900090' => Http::response(['data' => [
+                'order_code' => 'DH000091', 'total_amount' => 7500000, 'payment_method' => 'bank_transfer',
+                'items' => [['product_name' => 'Loa', 'quantity' => 1, 'unit_price' => 7500000, 'total_price' => 7500000]],
+            ]]),
+            '*' => Http::response(['data' => []]),
+        ]);
+
+        $html = $this->withSession($this->phien())->get(route('thu-ngan.tra-hang.phieu', ['id' => 15]))->assertOk()->getContent();
+
+        $this->assertStringContainsString('KHÁCH TRẢ THÊM', $html);
+        $this->assertStringContainsString('2.500.000', $html);
+        $this->assertStringContainsString('Chuyển khoản', $html, 'phải ghi tiền đi đường nào');
+    }
+
+    /** Hỏi đơn mới mà API hỏng thì vẫn in được phiếu — thiếu khối còn hơn không có tờ nào. */
+    public function test_doi_hang_api_don_moi_hong_van_in_duoc(): void
+    {
+        Http::fake([
+            '*/admin/orders/pos/tra-hang/16' => Http::response(['data' => [
+                'return_code' => 'TKH000014', 'shop_id' => 2, 'exchange_order_id' => 900099,
+                'refund_method' => 'none', 'refund_amount' => 0, 'items_amount' => 100000,
+                'items' => [], 'order' => ['order_code' => 'DH000099', 'items' => []],
+            ]]),
+            '*/admin/orders/900099' => Http::response(['message' => 'Lỗi'], 500),
+            '*' => Http::response(['data' => []]),
+        ]);
+
+        $html = $this->withSession($this->phien())->get(route('thu-ngan.tra-hang.phieu', ['id' => 16]))->assertOk()->getContent();
+        $this->assertStringContainsString('TKH000014', $html);
+    }
+
     public function test_phieu_tra_khong_doc_duoc_thi_404(): void
     {
         Http::fake(['*/admin/orders/pos/tra-hang/7' => Http::response(['message' => 'Không tìm thấy'], 404), '*' => Http::response(['data' => []])]);

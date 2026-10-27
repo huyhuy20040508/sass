@@ -330,6 +330,29 @@
         .set-combo-empty { margin: 0; padding: 12px; font-size: 12px; color: #8c8c8c; line-height: 1.5; }
 
         .set-hint { margin: 4px 0 0; font-size: 11px; color: #8c8c8c; line-height: 1.5; }
+
+        /* Bảng soạn mẫu phiếu nhanh: mỗi mẫu một hàng. */
+        .set-mau { display: grid; gap: 6px; }
+        .set-mau-head, .set-mau-row { display: grid; grid-template-columns: minmax(130px, 1.1fr) 72px minmax(170px, 1.3fr) minmax(140px, 1.3fr) 150px 34px; gap: 6px; align-items: center; }
+        .set-mau-head span { font-size: 11px; color: #8c8c8c; white-space: nowrap; }
+        .set-mau-row .set-input { min-width: 0; }
+        .set-mau-row .set-mau-tien { text-align: right; }
+        .set-mau-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+        .set-mau-tools .set-hint { margin: 0; }
+        @media (max-width: 900px) {
+            .set-mau-head { display: none; }
+            .set-mau-row { grid-template-columns: minmax(0, 1fr) 76px; padding: 8px; border: 1px solid #f0f0f0; border-radius: 6px; }
+            .set-mau-row [data-k=phan_loai], .set-mau-row [data-k=mo_ta] { grid-column: 1 / -1; }
+        }
+
+        /* Ô chọn nhiều (phân loại ghim): mỗi bên một hàng viên tick. */
+        .set-pins { display: grid; gap: 10px; }
+        /* Nhãn treo bên trái để hàng viên xuống dòng vẫn thẳng cột với hàng đầu. */
+        .set-pins-group { position: relative; display: flex; flex-wrap: wrap; gap: 6px; padding-left: 78px; min-height: 28px; }
+        .set-pins-title { position: absolute; left: 0; top: 6px; font-size: 12px; color: #595959; }
+        .set-pin { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid #d9d9d9; border-radius: 999px; font-size: 12px; cursor: pointer; }
+        .set-pin:has(input:checked) { border-color: #1890ff; background: #e6f4ff; color: #0958d9; }
+        .set-pin input { margin: 0; }
         .set-error { margin: 4px 0 0; font-size: 11px; color: #ff4d4f; line-height: 1.5; }
 
         /* Ô ảnh logo */

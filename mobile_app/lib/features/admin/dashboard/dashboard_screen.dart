@@ -10,6 +10,7 @@ import '../../../core/ui/money_input.dart';
 import '../../auth/auth_controller.dart';
 import '../../workspace/workspace.dart' show Branch;
 import '../../workspace/workspace_widgets.dart' show greetingFor, initialsOf;
+import '../orders/orders_data.dart';
 import '../shell/shell_widgets.dart';
 import 'dashboard_cards.dart';
 import 'dashboard_data.dart';
@@ -17,10 +18,14 @@ import 'dashboard_data.dart';
 /// Màn Tổng quan khu Quản trị theo design/html/tong-quan-mobile.html — cùng
 /// nguồn số và công thức với Tổng quan PC (DashboardController).
 class DashboardScreen extends ConsumerStatefulWidget {
-  const DashboardScreen({super.key, required this.onAccount});
+  const DashboardScreen({super.key, required this.onAccount, required this.onUnpaid});
 
   /// Chạm ảnh đại diện — khung app mở ngăn tài khoản.
   final VoidCallback onAccount;
+
+  /// Chạm dòng "đơn chưa thu tiền" ở thẻ Cần chú ý — khung app mở màn Đơn hàng
+  /// lọc sẵn đơn còn nợ, giữ nguyên kỳ đang xem.
+  final void Function(OrderTime ky) onUnpaid;
 
   /// Phần thẻ đè lên đáy đầu navy (margin-top: -60px của bản HTML).
   static const overlap = 60.0;
@@ -249,7 +254,12 @@ class DashboardScreenState extends ConsumerState<DashboardScreen> {
             AlertsCard(
               key: _alertsKey,
               alerts: d.alerts,
-              onTap: (a) => showDashToast(context, 'Mở danh sách ở màn tương ứng — màn chưa thiết kế'),
+              // Chỉ dòng "đơn chưa thu tiền" có màn để tới; mấy dòng kia (ca,
+              // tồn kho, hoá đơn điện tử) chưa có màn trên điện thoại nên vẫn
+              // báo một câu — mở đại một chỗ không liên quan còn tệ hơn.
+              onTap: (a) => a.kind == AlertKind.unpaid
+                  ? widget.onUnpaid(d.period.orderTime)
+                  : showDashToast(context, 'Mở danh sách ở màn tương ứng — màn chưa thiết kế'),
             ),
             gap,
             StatusCard(data: d),
@@ -326,15 +336,7 @@ class _GoalFormState extends State<_GoalForm> {
           keyboardType: TextInputType.number,
           // Cùng cách với ô "Thu tiền": tiền gõ tới đâu chấm tới đó.
           inputFormatters: [const MoneyInputFormatter(), LengthLimitingTextInputFormatter(19)],
-          cursorColor: DashColors.primary,
-          decoration: const InputDecoration(
-            hintText: 'Ví dụ 500.000.000',
-            suffixText: 'đ',
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.all(Radius.circular(12)),
-              borderSide: BorderSide(color: DashColors.primary, width: 2),
-            ),
-          ),
+          decoration: const InputDecoration(hintText: 'Ví dụ 500.000.000', suffixText: 'đ'),
           onSubmitted: (_) => _save(),
         ),
         const SizedBox(height: 12),

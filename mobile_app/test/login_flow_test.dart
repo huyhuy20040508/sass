@@ -6,6 +6,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:selliotech/app/theme.dart';
 import 'package:selliotech/core/api/api_client.dart';
 import 'package:selliotech/core/net/online_provider.dart';
 import 'package:selliotech/core/storage/session_store.dart';
@@ -169,6 +170,11 @@ void main() {
     expect(find.text('Ghi nhớ đăng nhập'), findsOneWidget);
     expect(find.text('Quên mật khẩu?'), findsOneWidget);
     expect(find.text('Liên hệ Sellio'), findsOneWidget);
+
+    // Màn này giữ bộ màu tím + vàng của logo, dù theme gốc của app nay là navy
+    // của khu làm việc (lỗi 94).
+    final mau = Theme.of(t.element(find.byKey(const Key('shop_code')))).colorScheme;
+    expect(mau.primary, AppColors.brand);
   });
 
   testWidgets('Đã nhớ cửa hàng: thẻ cửa hàng + lời chào theo tên; Đổi thì về ô nhập mã', (t) async {
@@ -398,9 +404,11 @@ void main() {
     await t.tap(find.byKey(const Key('area_thu_ngan')));
     await t.pump(ChooseWorkspaceScreen.goingDelay);
     await _settle(t);
+    // Màn chờ của khu Thu ngân: tên cửa hàng + TÊN chi nhánh đang làm ở đầu
+    // màn, người đang đăng nhập ghi một dòng ở cuối (lỗi 88).
     expect(find.text('Shop Test'), findsOneWidget);
-    expect(find.text('Quản trị viên'), findsOneWidget);
-    expect(find.text('Chủ cửa hàng · Chi nhánh #5'), findsOneWidget);
+    expect(find.text('Cửa hàng Lê Lợi'), findsOneWidget);
+    expect(find.text('Đang đăng nhập: Quản trị viên · Chủ cửa hàng'), findsOneWidget);
 
     await t.tap(find.byTooltip('Đăng xuất'));
     await _settle(t);

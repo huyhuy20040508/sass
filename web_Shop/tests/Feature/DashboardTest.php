@@ -111,6 +111,20 @@ class DashboardTest extends TestCase
         $this->assertStringContainsString('Giảm giá −66.600', $html);
     }
 
+    /** KB #98: hàng chưa khai giá vốn không được tính là lãi — trừ khỏi lãi + biên, ghi chú rõ. */
+    public function test_loi_nhuan_gop_tru_hang_thieu_gia_von(): void
+    {
+        $this->fakeApi(['subtotal' => 125_000_000, 'shipping' => 0, 'discount' => 0, 'profit' => 45_000_000,
+            'thieu_gia_von' => ['so_dong' => 1, 'so_luong' => 1, 'tien_hang' => 25_000_000]]);
+
+        $html = $this->html();
+
+        // Lãi phần đã có giá vốn = 45 tr − 25 tr = 20 tr; biên = 20 / (125 − 25) = 20%.
+        $this->assertStringContainsString('20.000.000', $html);
+        $this->assertStringContainsString('Biên lãi 20%', $html);
+        $this->assertStringContainsString('Chưa tính 1 sp thiếu giá vốn (25.000.000 đ)', $html);
+    }
+
     /** Phiếu nháp và phiếu huỷ không phải tiền đã mua — API cũng tính vậy. */
     public function test_chi_phi_mua_hang_bo_phieu_nhap_va_huy(): void
     {
@@ -848,5 +862,25 @@ class DashboardTest extends TestCase
 
         $this->assertStringContainsString('>▲ 40<', $html);
         $this->assertStringContainsString('sản phẩm · 1 mặt hàng', $html);
+    }
+
+    /** KB #86: cùng luật kỳ so sánh với API (ReportPeriod.Prev) — bảng y hệt bài Go. */
+    public function test_ky_so_sanh_cung_ky_thang_truoc(): void
+    {
+        $m = new \ReflectionMethod(\App\Http\Controllers\DashboardController::class, 'khoangTruoc');
+        $c = app(\App\Http\Controllers\DashboardController::class);
+        foreach ([
+            ['2026-10-01', '2026-10-19', '2026-09-01', '2026-09-19'],
+            ['2026-09-01', '2026-09-30', '2026-08-01', '2026-08-31'],
+            ['2026-03-01', '2026-03-31', '2026-02-01', '2026-02-28'],
+            ['2026-03-01', '2026-03-30', '2026-02-01', '2026-02-28'],
+            ['2026-01-01', '2026-01-15', '2025-12-01', '2025-12-15'],
+            ['2026-10-01', '2026-10-01', '2026-09-30', '2026-09-30'],
+            ['2026-10-01', '2026-10-07', '2026-09-24', '2026-09-30'],
+            ['2026-10-05', '2026-10-19', '2026-09-20', '2026-10-04'],
+            ['2026-09-01', '2026-10-19', '2026-07-14', '2026-08-31'],
+        ] as [$tu, $den, $prevTu, $prevDen]) {
+            $this->assertSame([$prevTu, $prevDen], $m->invoke($c, $tu, $den), "$tu → $den");
+        }
     }
 }

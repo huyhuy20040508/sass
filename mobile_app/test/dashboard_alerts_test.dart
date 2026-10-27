@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:selliotech/features/admin/dashboard/dashboard_cards.dart';
 import 'package:selliotech/features/admin/dashboard/dashboard_data.dart';
+import 'package:selliotech/features/admin/orders/orders_data.dart';
 
 /// Thẻ "Cần chú ý" — dòng ca đang mở.
 ///
@@ -118,5 +119,18 @@ void main() {
 
     expect(find.textContaining('Nguyễn Quốc Huy Hoàng Long đang mở ca', findRichText: true), findsOneWidget);
     expect(find.textContaining('quochuy · 1 giờ'), findsOneWidget);
+  });
+
+  /// Lỗi 89: bấm dòng nào ở thẻ "Cần chú ý" cũng chỉ hiện một câu thông báo.
+  /// Dòng "đơn chưa thu tiền" có màn để tới (Đơn hàng, lọc đơn còn nợ) nên phải
+  /// mở thẳng; mấy dòng kia chưa có màn trên điện thoại nên vẫn báo một câu.
+  group('kỳ đem sang màn Đơn hàng', () {
+    test('năm mốc của Tổng quan ứng đúng năm mốc bên Đơn hàng', () {
+      expect(DashPeriod.today.orderTime, OrderTime.today);
+      expect(DashPeriod.yesterday.orderTime, OrderTime.yesterday);
+      expect(DashPeriod.days7.orderTime, OrderTime.days7);
+      expect(DashPeriod.thisMonth.orderTime, OrderTime.thisMonth);
+      expect(DashPeriod.lastMonth.orderTime, OrderTime.lastMonth);
+    });
   });
 }

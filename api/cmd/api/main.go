@@ -448,6 +448,7 @@ func main() {
 	hub := realtime.NewHub()
 	notifSvc := service.NewNotificationService(notifRepo, hub)
 	caSvc.DungCanhBaoLech(notifSvc, settingSvc)
+	thuChiSvc.DungCaiDat(settingSvc)
 	// Cổng thanh toán PayOS. Dựng TRƯỚC orderSvc vì đặt hàng cần nó để xin link;
 	// chiều ngược lại paymentSvc chỉ dùng orderRepo nên hai bên không tham chiếu vòng.
 	paymentSvc := service.NewPaymentService(paymentRepo, orderRepo, payosClient, cfg.PayOS, sepayClient, notifSvc, etaxSvc)
@@ -491,6 +492,8 @@ func main() {
 		Tep:           handler.NewTepHandler(cfg.App.UploadDir, cfg.App.BaseURL),
 		Customer:      handler.NewCustomerHandler(customerSvc),
 		NhomKhach:     handler.NewCustomerGroupHandler(nhomKhachSvc),
+		GhiChuKhach:   handler.NewGhiChuKhachHandler(service.NewGhiChuKhachService(repository.NewGhiChuKhachRepository(db))),
+		QuaSinhNhat:   handler.NewQuaSinhNhatHandler(service.NewQuaSinhNhatService(repository.NewQuaSinhNhatRepository(db), settingSvc)),
 		Order:         handler.NewOrderHandler(orderSvc),
 		Return:        handler.NewOrderReturnHandler(returnSvc),
 		Notif:         handler.NewNotificationHandler(notifSvc, hub),

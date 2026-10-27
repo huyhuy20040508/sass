@@ -117,6 +117,9 @@ class SummaryReportController extends Controller
             'thu_chi' => $thu - $chi,
             'quy_thu' => (float) data_get($bao, 'cashbook.cash_income', 0),
             'quy_chi' => (float) data_get($bao, 'cashbook.cash_expense', 0),
+            // Nộp về công ty — ngoài "chi" (không phải chi phí), trong quy_chi (két giảm).
+            'nop_ve' => (float) data_get($bao, 'cashbook.deposit', 0),
+            'phieu_nop_ve' => (int) data_get($bao, 'cashbook.deposit_count', 0),
             'so_don' => (int) data_get($bao, 'totals.orders', 0),
             'doanh_thu' => (float) data_get($bao, 'totals.revenue', 0),
             'hinh_thuc' => $hinhThuc,

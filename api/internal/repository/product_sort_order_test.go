@@ -153,3 +153,46 @@ func TestSapXepLaiHangHoa(t *testing.T) {
 		t.Fatalf("lượt bị từ chối không được ghi gì: A = %d", got)
 	}
 }
+
+// Dữ liệu cũ để nhiều mặt hàng chung một số thứ tự: kéo thả vẫn phải ăn.
+//
+// PHÁ THỬ: bỏ nhánh coSoTrung trong SapXepLai thì ba mặt hàng cùng số 7 nhận lại
+// đúng 7·7·7 — trên bảng vẫn C · B · A (xếp theo id), A không lên được đầu.
+func TestSapXepLaiHangHoa_TrungSo(t *testing.T) {
+	db := testDB(t)
+	repo := NewProductRepository(db)
+	ctx := ctxTest()
+
+	// Trên bảng: E (100) · C · B · A (cùng 7, xếp theo id giảm) · F (3).
+	a := newProduct(t, db, "sp-trung-so-a", "TEST-TS-A")
+	b := newProduct(t, db, "sp-trung-so-b", "TEST-TS-B")
+	c := newProduct(t, db, "sp-trung-so-c", "TEST-TS-C")
+	e := newProduct(t, db, "sp-trung-so-e", "TEST-TS-E")
+	f := newProduct(t, db, "sp-trung-so-f", "TEST-TS-F")
+	for id, so := range map[uint]int{a.ID: 7, b.ID: 7, c.ID: 7, e.ID: 100, f.ID: 3} {
+		if err := db.WithContext(ctxTest()).Model(&domain.Product{}).
+			Where("id = ?", id).UpdateColumn("sort", so).Error; err != nil {
+			t.Fatalf("không đặt được thứ tự ban đầu: %v", err)
+		}
+	}
+	docSort := func(id uint) int {
+		var p domain.Product
+		if err := db.WithContext(ctxTest()).First(&p, id).Error; err != nil {
+			t.Fatalf("không đọc lại được mặt hàng: %v", err)
+		}
+		return p.Sort
+	}
+
+	// Kéo A lên đầu nhóm: A · C · B.
+	if err := repo.SapXepLai(ctx, []uint{a.ID, c.ID, b.ID}); err != nil {
+		t.Fatalf("sắp xếp lại lỗi: %v", err)
+	}
+	sa, sc, sb, se, sf := docSort(a.ID), docSort(c.ID), docSort(b.ID), docSort(e.ID), docSort(f.ID)
+	if !(sa > sc && sc > sb) {
+		t.Fatalf("phải ra A > C > B, nhận A=%d C=%d B=%d", sa, sc, sb)
+	}
+	// Mặt hàng ngoài lượt kéo vẫn đứng đúng chỗ so với cả nhóm.
+	if !(se > sa && sb > sf) {
+		t.Fatalf("E phải trên, F phải dưới cả nhóm: E=%d A=%d B=%d F=%d", se, sa, sb, sf)
+	}
+}

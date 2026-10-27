@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 
 	"gorm.io/gorm"
@@ -70,6 +71,21 @@ func (r *thuChiRepository) loc(ctx context.Context, f domain.ThuChiFilter, theoN
 	if kw := strings.TrimSpace(f.Keyword); kw != "" {
 		q = q.Where("code LIKE ?", "%"+kw+"%")
 	}
+	if kw := strings.TrimSpace(f.TimRong); kw != "" {
+		like := "%" + kw + "%"
+		q = q.Where(
+			"(code LIKE ? OR note LIKE ? OR payer_id IN (?) OR employee_id IN (?))",
+			like, like,
+			r.db.WithContext(ctx).Model(&domain.NguoiNopThuChi{}).Unscoped().Select("id").Where("name LIKE ? OR phone LIKE ?", like, like),
+			r.db.WithContext(ctx).Model(&domain.User{}).Unscoped().Select("id").Where("full_name LIKE ?", like),
+		)
+	}
+	if f.BankAccountID > 0 {
+		q = q.Where("bank_account_id = ?", f.BankAccountID)
+	}
+	if f.ShiftID > 0 {
+		q = q.Where("shift_id = ?", f.ShiftID)
+	}
 	if f.ShopID > 0 {
 		q = q.Where("shop_id = ?", f.ShopID)
 	}
@@ -110,23 +126,37 @@ func (r *thuChiRepository) loc(ctx context.Context, f domain.ThuChiFilter, theoN
 	return q
 }
 
-// tongTheoVe cộng SUM(amount) tách theo vế thu / chi trong MỘT lượt đọc.
+type tongVe struct {
+	Thu        float64
+	Chi        float64
+	TienMatThu float64
+	TienMatChi float64
+	SoThu      int64
+	SoChi      int64
+}
+
+// tongTheoVe cộng SUM(amount) tách theo vế thu / chi (và phần tiền mặt của mỗi
+// vế) trong MỘT lượt đọc.
 //
 // Một câu truy vấn chứ không hai: hai câu thì giữa chúng có thể có một phiếu vừa
 // được ghi, và bảng in ra tổng thu của một thời điểm cộng tổng chi của thời điểm
 // khác — số không cân mà không ai giải thích được.
-func tongTheoVe(q *gorm.DB) (thu, chi float64, err error) {
-	var row struct {
-		Thu float64
-		Chi float64
-	}
-	err = q.Select(
+func tongTheoVe(q *gorm.DB) (tongVe, error) {
+	var row tongVe
+	err := q.Select(
 		"COALESCE(SUM(CASE WHEN type = ? THEN amount ELSE 0 END), 0) AS thu, "+
-			"COALESCE(SUM(CASE WHEN type = ? THEN amount ELSE 0 END), 0) AS chi",
+			"COALESCE(SUM(CASE WHEN type = ? THEN amount ELSE 0 END), 0) AS chi, "+
+			"COALESCE(SUM(CASE WHEN type = ? AND payment_method = ? THEN amount ELSE 0 END), 0) AS tien_mat_thu, "+
+			"COALESCE(SUM(CASE WHEN type = ? AND payment_method = ? THEN amount ELSE 0 END), 0) AS tien_mat_chi, "+
+			"COUNT(CASE WHEN type = ? THEN 1 END) AS so_thu, "+
+			"COUNT(CASE WHEN type = ? THEN 1 END) AS so_chi",
+		domain.ThuChiPhieuThu, domain.ThuChiPhieuChi,
+		domain.ThuChiPhieuThu, domain.ThuChiTienMat,
+		domain.ThuChiPhieuChi, domain.ThuChiTienMat,
 		domain.ThuChiPhieuThu, domain.ThuChiPhieuChi,
 	).Scan(&row).Error
 
-	return row.Thu, row.Chi, err
+	return row, err
 }
 
 // List trả về trang đang xem + tổng số dòng + bốn ô quỹ.
@@ -146,20 +176,22 @@ func (r *thuChiRepository) List(
 	}
 
 	// Trong khoảng đang xem.
-	thu, chi, err := tongTheoVe(r.loc(ctx, f, true))
+	trong, err := tongTheoVe(r.loc(ctx, f, true))
 	if err != nil {
 		return nil, 0, tk, err
 	}
-	tk.TongThu, tk.TongChi = thu, chi
+	tk.TongThu, tk.TongChi = trong.Thu, trong.Chi
+	tk.TienMatThu, tk.TienMatChi = trong.TienMatThu, trong.TienMatChi
+	tk.SoPhieuThu, tk.SoPhieuChi = trong.SoThu, trong.SoChi
 
 	// Trước khoảng đang xem — chỉ khi có mốc bắt đầu.
 	if d := strings.TrimSpace(f.FromDate); d != "" {
 		qTruoc := r.loc(ctx, f, false).Where("created_at < ?", d+" 00:00:00")
-		thuTruoc, chiTruoc, err := tongTheoVe(qTruoc)
+		truoc, err := tongTheoVe(qTruoc)
 		if err != nil {
 			return nil, 0, tk, err
 		}
-		tk.DauKy = thuTruoc - chiTruoc
+		tk.DauKy = truoc.Thu - truoc.Chi
 	}
 	tk.CuoiKy = tk.DauKy + tk.TongThu - tk.TongChi
 
@@ -214,6 +246,9 @@ func (r *thuChiRepository) trangTri(ctx context.Context, list []domain.ThuChi) e
 		if t.CreatedBy != nil {
 			userIDs = append(userIDs, *t.CreatedBy)
 		}
+		if t.ApprovedBy != nil {
+			userIDs = append(userIDs, *t.ApprovedBy)
+		}
 		if t.EmployeeID != nil {
 			userIDs = append(userIDs, *t.EmployeeID)
 		}
@@ -250,6 +285,18 @@ func (r *thuChiRepository) trangTri(ctx context.Context, list []domain.ThuChi) e
 	if err != nil {
 		return err
 	}
+	suaCuoi, err := suaLanCuoiThuChi(r.db.WithContext(ctx), list)
+	if err != nil {
+		return err
+	}
+	maGoc, dieuChinh, err := lienKetDieuChinh(r.db.WithContext(ctx), list)
+	if err != nil {
+		return err
+	}
+	nhanTK, err := r.nhanTaiKhoan(ctx, list)
+	if err != nil {
+		return err
+	}
 
 	for i := range list {
 		t := &list[i]
@@ -259,6 +306,17 @@ func (r *thuChiRepository) trangTri(ctx context.Context, list []domain.ThuChi) e
 		}
 		if t.CreatedBy != nil {
 			t.CreatedByName = tenNguoi[*t.CreatedBy]
+		}
+		if t.ApprovedBy != nil {
+			t.ApprovedByName = tenNguoi[*t.ApprovedBy]
+		}
+		t.SuaLanCuoi = suaCuoi[t.ID]
+		if t.AdjustsID != nil {
+			t.AdjustsCode = maGoc[*t.AdjustsID]
+		}
+		t.DieuChinhBoi = dieuChinh[t.ID]
+		if t.BankAccountID != nil {
+			t.BankAccountLabel = nhanTK[*t.BankAccountID]
 		}
 
 		// Gộp ba cột id về một: tên để in ra bảng, id để hộp Sửa chọn lại đúng
@@ -517,6 +575,26 @@ func (r *thuChiRepository) Create(ctx context.Context, t *domain.ThuChi) error {
 		if err := translateThuChiErr(tx.Create(t).Error); err != nil {
 			return err
 		}
+		if t.ApprovedBy != nil {
+			if err := tx.Model(t).Select("ApprovedBy", "ApprovedAt").Updates(t).Error; err != nil {
+				return err
+			}
+		}
+		if t.Kind != "" {
+			if err := tx.Model(t).Select("Kind").Updates(t).Error; err != nil {
+				return err
+			}
+		}
+		if t.BankAccountID != nil {
+			if err := tx.Model(t).Select("BankAccountID").Updates(t).Error; err != nil {
+				return err
+			}
+		}
+		if t.AdjustsID != nil {
+			if err := tx.Model(t).Select("AdjustsID").Updates(t).Error; err != nil {
+				return err
+			}
+		}
 
 		return dongBoSoQuy(tx, t)
 	})
@@ -554,6 +632,11 @@ func (r *thuChiRepository) Update(
 				return err
 			}
 		}
+		if t.NhatKy != nil {
+			if err := tx.Create(t.NhatKy).Error; err != nil {
+				return err
+			}
+		}
 
 		ra = &t
 
@@ -577,12 +660,17 @@ func (r *thuChiRepository) Update(
 // quỹ thì không được giữ — nó là tiền đang nằm trong két của ca, để lại là đóng
 // ca xong đếm thừa đúng bằng số vừa xoá. Phiếu của ca ĐÃ ĐÓNG không tới được
 // đây: lớp khoá chặn từ tầng service.
-func (r *thuChiRepository) Delete(ctx context.Context, id uint) error {
+func (r *thuChiRepository) Delete(ctx context.Context, id uint, nhatKy *domain.ActivityLog) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		err := tx.Where("reference_type = ? AND reference_id = ?", domain.SoQuyTuThuChi, id).
 			Delete(&domain.SoQuy{}).Error
 		if err != nil {
 			return err
+		}
+		if nhatKy != nil {
+			if err := tx.Create(nhatKy).Error; err != nil {
+				return err
+			}
 		}
 
 		return translateThuChiErr(tx.Delete(&domain.ThuChi{}, id).Error)
@@ -651,6 +739,77 @@ func (r *thuChiRepository) ListNguoiNop(ctx context.Context, keyword string) ([]
 	}
 
 	return list, nil
+}
+
+// PhanLoai — cùng thứ tự với màn Loại thu chi (id tăng dần), xem loaiThuChiRepository.List.
+func (r *thuChiRepository) PhanLoai(ctx context.Context) ([]domain.LoaiThuChi, error) {
+	var list []domain.LoaiThuChi
+	err := r.db.WithContext(ctx).Order("id ASC").Find(&list).Error
+
+	return list, err
+}
+
+func (r *thuChiRepository) TimPhanLoai(ctx context.Context, id uint) (*domain.LoaiThuChi, error) {
+	var l domain.LoaiThuChi
+	err := r.db.WithContext(ctx).Where("id = ?", id).Limit(1).Find(&l).Error
+	if err != nil || l.ID == 0 {
+		return nil, err
+	}
+
+	return &l, nil
+}
+
+func (r *thuChiRepository) CoDoiTuong(ctx context.Context, loai string, id uint) (bool, error) {
+	var model any
+	switch loai {
+	case domain.ThuChiDoiTuongQuanLy, domain.ThuChiDoiTuongThuNgan:
+		model = &domain.User{}
+	case domain.ThuChiDoiTuongNCC:
+		model = &domain.NhaCungCap{}
+	case domain.ThuChiDoiTuongKhac:
+		model = &domain.NguoiNopThuChi{}
+	default:
+		return false, nil
+	}
+	var n int64
+	err := r.db.WithContext(ctx).Model(model).Where("id = ?", id).Count(&n).Error
+
+	return n > 0, err
+}
+
+// NhanVien gắn `payer_type` theo cửa vào (domain.CuaVao, kể cả tài khoản lập
+// trước 0015 có cột cửa rỗng): có cửa Quản lý thì là quản lý, như ô "Loại đối
+// tượng" của màn quản trị.
+func (r *thuChiRepository) NhanVien(ctx context.Context) ([]domain.ThuChiNhanVien, error) {
+	var rows []struct {
+		ID          uint
+		Name        string
+		AccessAreas string
+		RoleID      uint
+	}
+	err := r.db.WithContext(ctx).Model(&domain.User{}).
+		Select("id, full_name AS name, COALESCE(access_areas, '') AS access_areas, role_id").
+		Where("status = ? AND role_id <> ?", "active", domain.CustomerRoleID).
+		Order("full_name ASC").
+		Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]domain.ThuChiNhanVien, 0, len(rows))
+	for _, u := range rows {
+		cua := domain.CuaVao(u.AccessAreas, u.RoleID)
+		if len(cua) == 0 {
+			continue
+		}
+		vai := domain.ThuChiDoiTuongThuNgan
+		if slices.Contains(cua, domain.CuaQuanLy) {
+			vai = domain.ThuChiDoiTuongQuanLy
+		}
+		out = append(out, domain.ThuChiNhanVien{ID: u.ID, Name: u.Name, PayerType: vai})
+	}
+
+	return out, nil
 }
 
 // TonTaiNguoiNopTen so bằng LOWER(...) COLLATE utf8mb4_bin, cùng luật với loại

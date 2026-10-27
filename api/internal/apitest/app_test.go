@@ -356,6 +356,8 @@ func dungHeThongVoi(t *testing.T, banHang, dieuHanh bool) *heThong {
 	notifSvc := service.NewNotificationService(notifRepo, hub)
 	caSvc := service.NewCaLamViecService(caRepo, userRepo, chiNhanhRepo)
 	caSvc.DungCanhBaoLech(notifSvc, settingSvc)
+	thuChiSvc := service.NewThuChiService(repository.NewThuChiRepository(db), quyTacMaRepo)
+	thuChiSvc.DungCaiDat(settingSvc)
 	// Hoá đơn điện tử: hộp mã hoá rỗng và client trỏ máy chủ thật. Bộ test hiện
 	// chưa chạm nhóm này; dựng sớm vì đơn hàng và thanh toán móc vào nó.
 	etaxSvc := service.NewEtaxService(
@@ -399,11 +401,14 @@ func dungHeThongVoi(t *testing.T, banHang, dieuHanh bool) *heThong {
 				service.NewNhomQuyenService(repository.NewQuyenRepository(db), userRepo)),
 			QuyTacMa: handler.NewQuyTacMaHandler(
 				service.NewQuyTacMaService(quyTacMaRepo, chiNhanhRepo)),
-			ThietBi:    handler.NewThietBiHandler(service.NewThietBiService(repository.NewThietBiRepository(db))),
-			Thue:       handler.NewThueHandler(service.NewThueService(thueRepo)),
-			DonViTinh:  handler.NewDonViTinhHandler(service.NewDonViTinhService(donViTinhRepo, quyTacMaRepo)),
-			LoaiThuChi: handler.NewLoaiThuChiHandler(service.NewLoaiThuChiService(loaiThuChiRepo)),
-			ThuChi:     handler.NewThuChiHandler(service.NewThuChiService(repository.NewThuChiRepository(db), quyTacMaRepo)),
+			ThietBi:     handler.NewThietBiHandler(service.NewThietBiService(repository.NewThietBiRepository(db))),
+			Thue:        handler.NewThueHandler(service.NewThueService(thueRepo)),
+			DonViTinh:   handler.NewDonViTinhHandler(service.NewDonViTinhService(donViTinhRepo, quyTacMaRepo)),
+			LoaiThuChi:  handler.NewLoaiThuChiHandler(service.NewLoaiThuChiService(loaiThuChiRepo)),
+			NhomKhach:   handler.NewCustomerGroupHandler(service.NewCustomerGroupService(repository.NewCustomerGroupRepository(db))),
+			GhiChuKhach: handler.NewGhiChuKhachHandler(service.NewGhiChuKhachService(repository.NewGhiChuKhachRepository(db))),
+			QuaSinhNhat: handler.NewQuaSinhNhatHandler(service.NewQuaSinhNhatService(repository.NewQuaSinhNhatRepository(db), settingSvc)),
+			ThuChi:      handler.NewThuChiHandler(thuChiSvc),
 			CongNo: handler.NewCongNoHandler(
 				service.NewCongNoService(repository.NewCongNoRepository(db), phieuMuaHangRepo)),
 			ViTri:        handler.NewViTriHandler(service.NewViTriService(viTriRepo, quyTacMaRepo)),

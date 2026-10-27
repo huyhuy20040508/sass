@@ -4,6 +4,9 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BannerController;
 use App\Http\Controllers\PosController;
 use App\Http\Controllers\WorkShiftController;
+use App\Http\Controllers\CounterCashbookController;
+use App\Http\Controllers\CounterReturnController;
+use App\Http\Controllers\CounterCrmController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\BranchController;
 use App\Http\Controllers\ChooseWorkspaceController;
@@ -641,6 +644,8 @@ Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:quan_ly', 'chi.v2'])->
         Route::post('/cashbook/entries', [CashbookController::class, 'store'])->name('cashbook.store');
         Route::put('/cashbook/entries/{id}', [CashbookController::class, 'update'])->whereNumber('id')->name('cashbook.update');
         Route::delete('/cashbook/entries/{id}', [CashbookController::class, 'destroy'])->whereNumber('id')->name('cashbook.destroy');
+        Route::get('/cashbook/entries/{id}/log', [CashbookController::class, 'nhatKy'])->whereNumber('id')->name('cashbook.nhatKy');
+        Route::get('/cashbook/entries/bank-accounts', [CashbookController::class, 'taiKhoanLap'])->name('cashbook.taiKhoan');
 
         // Công nợ. CHỈ có đường đọc và một đường ghi lượt trả — khoản nợ không
         // có bảng riêng, nó là phiếu mua đã duyệt còn thiếu tiền. Xem
@@ -791,6 +796,25 @@ Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:thu_ngan'])->prefix('c
         ->whereNumber('id')->name('ban-hang.phieu');
     Route::get('/sales/{id}/invoice', [PosController::class, 'hoaDonA'])
         ->whereNumber('id')->name('ban-hang.hoaDonA');
+    // CRM — Danh sách khách hàng của Quản trị cắt bớt cho quầy (cùng handler, cùng quyền sửa).
+    Route::get('/customers', [CounterCrmController::class, 'index'])->name('crm.index');
+    Route::post('/customers', [CounterCrmController::class, 'store'])->name('crm.store');
+    Route::put('/customers/{id}', [CounterCrmController::class, 'update'])->whereNumber('id')->name('crm.update');
+    Route::get('/customers/{id}/orders', [CounterCrmController::class, 'donHang'])->whereNumber('id')->name('crm.donHang');
+    Route::get('/customers/{id}/con-no', [CounterCrmController::class, 'conNo'])->whereNumber('id')->name('crm.conNo');
+    Route::post('/customers/{id}/birthday-voucher', [CounterCrmController::class, 'tangMaSinhNhat'])->whereNumber('id')->name('crm.tangMaSinhNhat');
+    Route::post('/customers/{id}/birthday-greeted', [CounterCrmController::class, 'daChucSinhNhat'])->whereNumber('id')->name('crm.daChucSinhNhat');
+    Route::get('/customers/{id}/notes', [CounterCrmController::class, 'ghiChu'])->whereNumber('id')->name('crm.ghiChu');
+    Route::post('/customers/{id}/notes', [CounterCrmController::class, 'themGhiChu'])->whereNumber('id')->name('crm.themGhiChu');
+    Route::delete('/customers/{id}/notes/{note}', [CounterCrmController::class, 'xoaGhiChu'])->whereNumber(['id', 'note'])->name('crm.xoaGhiChu');
+
+    // Trả hàng — phiếu một bước ở quầy (hoàn tiền hoặc đổi hàng).
+    Route::get('/returns', [CounterReturnController::class, 'index'])->name('tra-hang.index');
+    Route::post('/returns', [CounterReturnController::class, 'store'])->name('tra-hang.store');
+    // /orders, /exchange đứng TRƯỚC /{id} để không bị hiểu là một id.
+    Route::get('/returns/orders', [CounterReturnController::class, 'donHang'])->name('tra-hang.don');
+    Route::get('/returns/orders/{id}', [CounterReturnController::class, 'monTra'])->whereNumber('id')->name('tra-hang.mon');
+    Route::post('/returns/exchange', [CounterReturnController::class, 'doiHang'])->name('tra-hang.doi');
     Route::get('/returns/{id}/slip', [PosController::class, 'phieuTra'])
         ->whereNumber('id')->name('tra-hang.phieu');
 
@@ -805,6 +829,17 @@ Route::middleware(['admin.auth', 'admin.khoa', 'admin.cua:thu_ngan'])->prefix('c
     Route::get('/shifts/summary-slip', [WorkShiftController::class, 'phieuTongHop'])->name('ca-lam-viec.phieuTongHop');
     Route::get('/shifts/{id}/slip', [WorkShiftController::class, 'phieu'])->whereNumber('id')->name('ca-lam-viec.phieu');
     Route::get('/shifts/{id}', [WorkShiftController::class, 'show'])->whereNumber('id')->name('ca-lam-viec.show');
+
+    // Thu chi — phiếu thu / chi lập tay ở quầy, chỉ phiếu của chính mình.
+    Route::get('/cash-book', [CounterCashbookController::class, 'index'])->name('thu-chi.index');
+    Route::post('/cash-book', [CounterCashbookController::class, 'store'])->name('thu-chi.store');
+    // /payers, /attachment đứng TRƯỚC /{id} để không bị hiểu là một id.
+    Route::post('/cash-book/payers', [CounterCashbookController::class, 'taoNguoiNop'])->name('thu-chi.taoNguoiNop');
+    Route::post('/cash-book/attachment', [CounterCashbookController::class, 'dinhKem'])->name('thu-chi.dinhKem');
+    Route::put('/cash-book/{id}', [CounterCashbookController::class, 'update'])->whereNumber('id')->name('thu-chi.update');
+    Route::delete('/cash-book/{id}', [CounterCashbookController::class, 'destroy'])->whereNumber('id')->name('thu-chi.destroy');
+    Route::get('/cash-book/{id}/receipt', [CounterCashbookController::class, 'bienNhan'])->whereNumber('id')->name('thu-chi.bienNhan');
+    Route::get('/cash-book/{id}/log', [CounterCashbookController::class, 'nhatKy'])->whereNumber('id')->name('thu-chi.nhatKy');
 
     // Lịch sử đơn — chỉ những đơn bán ra từ chính module này, để tra lại và in lại
     // phiếu. Khác trang Đơn hàng bên quản trị: ở đó là đơn giao hàng cần xử lý,

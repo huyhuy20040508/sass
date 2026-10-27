@@ -389,6 +389,7 @@ class PosController extends Controller
             'items.*.quantity' => 'required|integer|min:1|max:99',
             'code' => 'required|string|max:50',
             'phone' => 'nullable|string|max:20',
+            'user_id' => 'nullable|integer|min:0',
         ]);
 
         return $this->jsonTuApi(fn () => $this->api->posVoucher([
@@ -398,6 +399,7 @@ class PosController extends Controller
             ], $data['items']),
             'code' => strtoupper(trim($data['code'])),
             'phone' => trim((string) ($data['phone'] ?? '')),
+            'user_id' => (int) ($data['user_id'] ?? 0),
         ]), 'Không kiểm được mã giảm giá.');
     }
 
@@ -589,6 +591,21 @@ class PosController extends Controller
         // Dòng trả không chụp ĐVT: lấy theo dòng của đơn gốc.
         $dvt = collect($tra['order']['items'] ?? [])->pluck('unit_name', 'id');
         $tra['items'] = array_map(fn ($it) => $it + ['unit_name' => (string) ($dvt[$it['order_item_id'] ?? 0] ?? '')], (array) ($tra['items'] ?? []));
+
+        // Lượt ĐỔI HÀNG: phiếu phải ghi cả hàng khách lấy về và số tiền chênh.
+        // API chi tiết phiếu chỉ trả `exchange_order_id` (danh sách phiếu mới
+        // preload cả đơn mới), nên hỏi thêm một lượt. Hỏng thì bỏ qua: in thiếu
+        // khối ấy vẫn hơn là không in được phiếu nào.
+        if (empty($tra['exchange_order']) && filled($tra['exchange_order_id'] ?? null)) {
+            try {
+                $moi = $this->api->order((int) $tra['exchange_order_id']);
+                if ($moi->successful()) {
+                    $tra['exchange_order'] = $moi->json('data') ?? [];
+                }
+            } catch (\Throwable $e) {
+                Log::warning('Thu ngan: tai don doi hang that bai', ['id' => $tra['exchange_order_id'], 'msg' => $e->getMessage()]);
+            }
+        }
 
         $mau = $this->mauIn('tra', (int) ($tra['shop_id'] ?? 0));
         $caiDat = (array) ($mau['settings'] ?? []);

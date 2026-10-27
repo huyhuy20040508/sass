@@ -95,7 +95,7 @@ class SettingsController extends Controller
             return back()->withInput()->with('error', $message);
         }
 
-        return redirect()->route('platform.settings.payment')
+        return redirect()->route('platform.cai-dat.thanh-toan')
             ->with('success', 'Đã lưu cấu hình thanh toán.');
     }
 }

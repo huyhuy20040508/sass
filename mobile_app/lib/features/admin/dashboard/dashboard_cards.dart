@@ -372,7 +372,17 @@ class MetricTiles extends StatelessWidget {
   Widget build(BuildContext context) {
     final nay = data.now$, truoc = data.prev$;
     final mua = data.purchases, muaT = data.purchasesPrev;
-    final margin = nay.net > 0 ? nay.profit / nay.net * 100 : null;
+    // Hàng chưa khai giá vốn: API coi giá vốn = 0 nên cả tiền hàng của nó nằm
+    // trong profit ("biên 100%"). Lãi + biên chỉ tính phần đã có giá vốn (KB #98).
+    (num, int) thieu(Object? t) {
+      final m = (t is Map ? t['thieu_gia_von'] : null) as Map?;
+      return (((m?['tien_hang']) as num?) ?? 0, ((m?['so_luong'] as num?) ?? 0).toInt());
+    }
+    final (thieuTien, thieuSp) = thieu(data.revenue['totals']);
+    final (thieuTienT, _) = thieu(data.revenue['prev']);
+    final lai = nay.profit - thieuTien, laiT = truoc.profit - thieuTienT;
+    final coGiaVon = nay.net - thieuTien;
+    final margin = coGiaVon > 0 ? lai / coGiaVon * 100 : null;
     final aov = nay.orders > 0 ? nay.net / nay.orders : 0;
     final aovT = truoc.orders > 0 ? truoc.net / truoc.orders : 0;
     List<num>? sp(num Function(Map) f) => data.oneDay ? null : [for (final b in data.buckets) f(b)];
@@ -380,9 +390,9 @@ class MetricTiles extends StatelessWidget {
     final tiles = [
       (
         'Lợi nhuận gộp',
-        dot(nay.profit),
-        Delta.of(nay.profit, truoc.profit),
-        margin != null ? 'biên ${pct(margin, 0)}' : null,
+        dot(lai),
+        Delta.of(lai, laiT),
+        thieuSp > 0 ? 'chưa tính $thieuSp sp thiếu giá vốn' : (margin != null ? 'biên ${pct(margin, 0)}' : null),
         sp((b) => (b['profit'] as num?) ?? 0),
       ),
       (

@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -189,9 +190,9 @@ func (r *userRepository) ListCustomers(ctx context.Context, f domain.CustomerFil
 		// trùng ở quầy thôi nói hai thứ khác nhau. Hồ sơ cũ đã lỡ lưu
 		// "0909 000 111" vẫn tìm ra bằng "0909000111".
 		kwSo := "%" + boNganCach.Replace(f.Keyword) + "%"
-		q = q.Where("(full_name LIKE ? OR email LIKE ? OR phone LIKE ?"+
+		q = q.Where("(full_name LIKE ? OR email LIKE ? OR phone LIKE ? OR customer_code LIKE ?"+
 			" OR REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(phone, ' ', ''), '.', ''), '-', ''), '(', ''), ')', '') LIKE ?)",
-			kw, kw, kw, kwSo)
+			kw, kw, kw, kw, kwSo)
 	}
 
 	if f.Status != "" && f.Status != "all" {
@@ -371,15 +372,31 @@ func (r *userRepository) CountActiveByRole(ctx context.Context, roleID, excludeI
 const spentSubQuery = `SELECT COALESCE(SUM(o.total_amount), 0) FROM orders o
 	WHERE o.user_id = users.id AND o.deleted_at IS NULL AND o.status NOT IN ('cancelled', 'returned')`
 
+// daThuCuaDon — số ĐÃ THU của một đơn (bí danh / tên bảng `o`), cùng định nghĩa với
+// cột "Đã thu" của sổ đơn: đơn đã thu đủ (paid, cả refunded — xem daThuDu) tính
+// bằng tổng đơn (tiền thu một lần lúc bán không đi qua order_payments), đơn chưa
+// đủ cộng các lượt thu, kẹp không vượt tổng đơn. Trước đây đơn chưa đủ tính là 0 — khách trả một phần mà hồ sơ, cột xếp
+// theo nợ và báo cáo CRM vẫn ghi nợ cả đơn, lệch với "Còn nợ" của sổ đơn.
+//
+// tenant_id khai trong câu con: plugin lọc cửa hàng chỉ chèn cho bảng chính.
+func daThuCuaDon(o string) string {
+	return fmt.Sprintf(`CASE WHEN %[1]s.payment_status IN ('paid', 'refunded') THEN %[1]s.total_amount
+		ELSE LEAST(%[1]s.total_amount, COALESCE((SELECT SUM(p.amount) FROM order_payments p
+			WHERE p.order_id = %[1]s.id AND p.tenant_id = %[1]s.tenant_id AND p.deleted_at IS NULL), 0)) END`, o)
+}
+
 // Ba câu con cho cột sắp xếp của màn CRM — cùng tập đơn và cùng cách tính với
 // AggregateCustomerOrders, để thứ tự khớp đúng con số in trên bảng.
 const (
 	donHopLe = `FROM orders o WHERE o.user_id = users.id AND o.deleted_at IS NULL
 		AND o.status NOT IN ('cancelled', 'returned')`
 	ordersSubQuery = `SELECT COUNT(*) ` + donHopLe
-	paidSubQuery   = `SELECT COALESCE(SUM(CASE WHEN o.payment_status = 'paid' THEN o.total_amount ELSE 0 END), 0) ` + donHopLe
-	debtSubQuery   = `SELECT GREATEST(COALESCE(SUM(CASE WHEN o.payment_status = 'paid' THEN 0 ELSE o.total_amount END), 0), 0) ` + donHopLe
 	lastTxSubQuery = `SELECT MAX(o.created_at) ` + donHopLe
+)
+
+var (
+	paidSubQuery = `SELECT COALESCE(SUM(` + daThuCuaDon("o") + `), 0) ` + donHopLe
+	debtSubQuery = `SELECT GREATEST(COALESCE(SUM(o.total_amount - (` + daThuCuaDon("o") + `)), 0), 0) ` + donHopLe
 )
 
 // locKhachCRM áp các ô lọc của màn CRM → Khách hàng.
@@ -452,6 +469,21 @@ func locKhachCRM(q *gorm.DB, f domain.CustomerFilter) *gorm.DB {
 	if f.LastTxTo != nil {
 		q = q.Where("("+lastTxSubQuery+") <= ?", f.LastTxTo.Format("2006-01-02")+" 23:59:59")
 	}
+	if f.ChiConNo {
+		q = q.Where("(" + debtSubQuery + ") > 0")
+	}
+	if f.BoDaChucTu != nil && coSoSinhNhat(q) {
+		q = q.Where(`NOT EXISTS (SELECT 1 FROM customer_birthday_gifts g WHERE g.customer_id = users.id
+			AND g.tenant_id = users.tenant_id AND g.created_at >= ?)`, *f.BoDaChucTu)
+	}
+	if f.HenNgay != "" {
+		if coSoGhiChu(q) {
+			q = q.Where(`EXISTS (SELECT 1 FROM customer_notes n WHERE n.customer_id = users.id AND n.tenant_id = users.tenant_id
+				AND n.deleted_at IS NULL AND n.type = ? AND n.due_date = ?)`, domain.GhiChuHen, f.HenNgay)
+		} else {
+			q = q.Where("1 = 0")
+		}
+	}
 
 	return q
 }
@@ -496,8 +528,9 @@ func (r *userRepository) AggregateCustomerOrders(ctx context.Context, userIDs []
 		TotalPaid   float64
 		LastOrderAt *time.Time
 	}
-	// "Đã thanh toán" là tổng tiền của những đơn ĐÃ THU (payment_status = paid);
-	// phần còn lại của tổng mua chính là còn nợ. Không có sổ nợ khách riêng, và
+	// "Đã thanh toán" là số đã thu của từng đơn (daThuCuaDon — đơn thu đủ cả
+	// tiền, đơn thu một phần cộng các lượt thu); phần còn lại của tổng mua chính là
+	// còn nợ. Không có sổ nợ khách riêng, và
 	// cố ý không đẻ ra: hai nguồn sự thật cho cùng một con số thì sớm muộn cũng
 	// lệch nhau, mà sổ đơn mới là chỗ tiền thật sự đi qua.
 	//
@@ -506,7 +539,7 @@ func (r *userRepository) AggregateCustomerOrders(ctx context.Context, userIDs []
 		Select(`user_id,
 			COUNT(*) AS total_orders,
 			COALESCE(SUM(total_amount), 0) AS total_spent,
-			COALESCE(SUM(CASE WHEN payment_status = 'paid' THEN total_amount ELSE 0 END), 0) AS total_paid,
+			COALESCE(SUM(`+daThuCuaDon("orders")+`), 0) AS total_paid,
 			MAX(created_at) AS last_order_at`).
 		Where("user_id IN ?", userIDs).
 		Where("deleted_at IS NULL").

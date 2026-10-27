@@ -17,7 +17,10 @@ import 'product_form_screen.dart';
 
 String _dmy(DateTime t) => '${t.day.toString().padLeft(2, '0')}/${t.month.toString().padLeft(2, '0')}/${t.year}';
 
-const _statusLabel = {'active': 'Đang bán', 'hidden': 'Tạm ẩn', 'discontinued': 'Ngừng kinh doanh'};
+/// MỘT tên cho một trạng thái: danh sách gọi chip là "Ngừng bán", nút ở màn
+/// này cũng là "Ngừng bán" — chấm trạng thái mà ghi "Tạm ẩn" thì người đọc
+/// tưởng là hai thứ khác nhau.
+const _statusLabel = {'active': 'Đang bán', 'hidden': 'Ngừng bán', 'discontinued': 'Ngừng kinh doanh'};
 
 List<Map> _variantsOf(Map? d) => ((d?['variants'] as List?) ?? const []).whereType<Map>().toList();
 

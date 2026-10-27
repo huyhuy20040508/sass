@@ -146,15 +146,25 @@ func (r *reportRepository) Totals(ctx context.Context, p domain.ReportPeriod) (d
 		return out, err
 	}
 
+	var thieu domain.ThieuGiaVon
+	err = r.items(ctx, p).
+		Select("COUNT(*) AS so_dong, COALESCE(SUM(oi.quantity), 0) AS so_luong, COALESCE(SUM(oi.total_price), 0) AS tien_hang").
+		Where(costExpr + " <= 0 AND oi.total_price > 0").
+		Scan(&thieu).Error
+	if err != nil {
+		return out, err
+	}
+
 	out = domain.ReportTotals{
-		Orders:   money.Orders,
-		Revenue:  money.Revenue,
-		Subtotal: money.Subtotal,
-		Discount: money.Discount,
-		Shipping: money.Shipping,
-		Units:    goods.Units,
-		Cost:     goods.Cost,
-		CardFee:  money.CardFee,
+		ThieuGiaVon: thieu,
+		Orders:      money.Orders,
+		Revenue:     money.Revenue,
+		Subtotal:    money.Subtotal,
+		Discount:    money.Discount,
+		Shipping:    money.Shipping,
+		Units:       goods.Units,
+		Cost:        goods.Cost,
+		CardFee:     money.CardFee,
 	}
 	out.Profit = out.Subtotal - out.Discount - out.Cost
 	if out.Orders > 0 {
@@ -317,12 +327,19 @@ func (r *reportRepository) ByShipping(ctx context.Context, p domain.ReportPeriod
 // không có đường cho dữ liệu người dùng lọt vào câu truy vấn. limit <= 0 = lấy hết.
 func (r *reportRepository) sliceByOrderColumn(ctx context.Context, p domain.ReportPeriod, column string, limit int) ([]domain.ReportSlice, error) {
 	var rows []struct {
-		Key     string
-		Orders  int64
-		Revenue float64
+		Key      string
+		Orders   int64
+		Revenue  float64
+		Subtotal float64
+		Discount float64
+		Shipping float64
 	}
 	q := r.orders(ctx, p).
-		Select(column + " AS `key`, COUNT(*) AS orders, COALESCE(SUM(o.total_amount), 0) AS revenue").
+		Select(column + ` AS ` + "`key`" + `, COUNT(*) AS orders,
+			COALESCE(SUM(o.total_amount), 0) AS revenue,
+			COALESCE(SUM(o.subtotal_amount), 0) AS subtotal,
+			COALESCE(SUM(o.discount_amount), 0) AS discount,
+			COALESCE(SUM(o.shipping_fee), 0) AS shipping`).
 		Group(column).
 		Order("orders DESC")
 	if limit > 0 {
@@ -334,7 +351,10 @@ func (r *reportRepository) sliceByOrderColumn(ctx context.Context, p domain.Repo
 
 	out := make([]domain.ReportSlice, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, domain.ReportSlice{Key: row.Key, Orders: row.Orders, Revenue: row.Revenue})
+		out = append(out, domain.ReportSlice{
+			Key: row.Key, Orders: row.Orders, Revenue: row.Revenue,
+			Subtotal: row.Subtotal, Discount: row.Discount, Shipping: row.Shipping,
+		})
 	}
 	return out, nil
 }

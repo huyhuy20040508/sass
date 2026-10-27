@@ -2,7 +2,9 @@ package service
 
 import (
 	"context"
+	"errors"
 	"strings"
+	"time"
 
 	"sass-api/internal/domain"
 	"sass-api/internal/dto"
@@ -18,16 +20,29 @@ type ThuChiService interface {
 	GetByID(ctx context.Context, id uint, nguoi domain.ThuChiNguoiXem) (*domain.ThuChi, error)
 	Create(ctx context.Context, req *dto.ThuChiRequest, actorID uint) (*domain.ThuChi, error)
 	Update(ctx context.Context, id uint, req *dto.ThuChiRequest, nguoi domain.ThuChiNguoiXem) (*domain.ThuChi, error)
-	Delete(ctx context.Context, id uint, nguoi domain.ThuChiNguoiXem) error
+	// Delete — lyDo bắt buộc, ghi vào nhật ký cùng giao dịch.
+	Delete(ctx context.Context, id uint, nguoi domain.ThuChiNguoiXem, lyDo string) error
+	NhatKy(ctx context.Context, id uint) ([]domain.NhatKyThuChi, error)
 
 	ListNguoiNop(ctx context.Context, keyword string) ([]domain.NguoiNopThuChi, error)
 	CreateNguoiNop(ctx context.Context, req *dto.NguoiNopThuChiRequest) (*domain.NguoiNopThuChi, error)
 	DeleteNguoiNop(ctx context.Context, id uint) error
+
+	// CaQuay — ca đang mở ở chi nhánh của request; ErrChuaMoCa khi chưa mở.
+	// Màn quầy chặn mọi lượt ghi bằng nó (luật 14/10), còn màn quản trị thì không.
+	CaQuay(ctx context.Context) (uint, error)
+	DanhMucQuay(ctx context.Context) (*domain.ThuChiDanhMucQuay, error)
+	// TaiKhoan — choLap: tài khoản đang bật của chi nhánh lập phiếu; không thì mọi
+	// tài khoản trong phạm vi shopLoc (0 = mọi chi nhánh) cho ô lọc.
+	TaiKhoan(ctx context.Context, choLap bool, shopLoc uint) ([]domain.TaiKhoanThuChi, error)
+	// DungCaiDat nối Cài đặt (phân loại ghim ở quầy) — gọi một lần lúc dựng ứng dụng.
+	DungCaiDat(c caiDatDoc)
 }
 
 type thuChiService struct {
 	repo   domain.ThuChiRepository
 	maRepo domain.QuyTacMaRepository
+	caiDat caiDatDoc
 }
 
 func NewThuChiService(repo domain.ThuChiRepository, maRepo domain.QuyTacMaRepository) ThuChiService {
@@ -100,6 +115,7 @@ func (s *thuChiService) danhDauKhoa(
 		if err := domain.ThuChiKhoa(t, daDong, nguoi); err != nil {
 			t.Locked = true
 			t.LockedReason = err.Error()
+			t.CoTheDieuChinh = errors.Is(err, domain.ErrThuChiCaDaDong)
 		}
 	}
 
@@ -122,6 +138,24 @@ func (s *thuChiService) Create(
 
 	// Con trỏ đã qua `binding:"required,oneof=0 1"` nên chắc chắn khác nil.
 	loai := *req.Type
+	goc, err := s.kiemPhieuGoc(ctx, req, shopID)
+	if err != nil {
+		return nil, err
+	}
+	if err := kiemNopVe(req); err != nil {
+		return nil, err
+	}
+	if err := s.kiemThamChieu(ctx, req, nil); err != nil {
+		return nil, err
+	}
+	taiKhoan, err := s.kiemTaiKhoan(ctx, req, shopID, nil)
+	if err != nil {
+		return nil, err
+	}
+	duyet, _, err := s.kiemDuyetChi(ctx, req, actorID, nil)
+	if err != nil {
+		return nil, err
+	}
 
 	t := &domain.ThuChi{
 		ShopID:        shopID,
@@ -138,6 +172,15 @@ func (s *thuChiService) Create(
 		t.CategoryID = &id
 	}
 	datDoiTuong(t, req.PayerType, req.PayerID)
+	if duyet != nil {
+		luc := time.Now()
+		t.ApprovedBy, t.ApprovedAt = duyet, &luc
+	}
+	if goc != nil {
+		t.AdjustsID = &goc.ID
+	}
+	t.Kind = req.Kind
+	t.BankAccountID = taiKhoan
 
 	// Ca trực chốt NGAY LÚC LẬP, không dò lại theo giờ về sau. v2 so `created_at`
 	// với khoảng [open_time, close_time] mỗi lần hiển thị, nên sửa lại giờ mở ca
@@ -177,6 +220,28 @@ func (s *thuChiService) Update(
 		if err := s.kiemKhoa(ctx, t, nguoi); err != nil {
 			return nil, err
 		}
+		// Loại phiếu chốt lúc lập: phiếu nộp về vẫn là nộp về, phiếu thường không đổi thành nộp về.
+		req.Kind = t.Kind
+		if err := kiemNopVe(req); err != nil {
+			return nil, err
+		}
+		if err := s.kiemThamChieu(ctx, req, t); err != nil {
+			return nil, err
+		}
+		lyDo, err := canLyDo(req.Reason, "sửa")
+		if err != nil {
+			return nil, err
+		}
+		taiKhoan, err := s.kiemTaiKhoan(ctx, req, t.ShopID, t)
+		if err != nil {
+			return nil, err
+		}
+		doiTaiKhoan := taiKhoan != nil || t.BankAccountID != nil
+		duyet, giu, err := s.kiemDuyetChi(ctx, req, nguoi.UserID, t)
+		if err != nil {
+			return nil, err
+		}
+		cu := *t
 
 		t.Type = loai
 		t.Amount = req.Amount
@@ -194,15 +259,28 @@ func (s *thuChiService) Update(
 		// Liệt kê tường minh từng cột: Updates với struct bỏ qua giá trị rỗng, mà
 		// "bỏ phân loại" hay "xoá ghi chú" đều là gán về rỗng — không khai ra thì
 		// hai thao tác ấy im lặng không có tác dụng.
-		return []string{
+		cot := []string{
 			"Type", "Amount", "CategoryID", "PayerType",
 			"EmployeeID", "SupplierID", "PayerID",
 			"PaymentMethod", "Attachment", "Note",
-		}, nil
+		}
+		if duyet != nil && !giu {
+			luc := time.Now()
+			t.ApprovedBy, t.ApprovedAt = duyet, &luc
+			cot = append(cot, "ApprovedBy", "ApprovedAt")
+		}
+		// Chỉ ghi cột khi có tài khoản cũ / mới: phiếu tiền mặt không đụng cột này.
+		if doiTaiKhoan {
+			t.BankAccountID = taiKhoan
+			cot = append(cot, "BankAccountID")
+		}
+		t.NhatKy = s.dungNhatKy(ctx, &cu, t, domain.NhatKyThuChiSua, lyDo, nguoi.UserID)
+
+		return cot, nil
 	})
 }
 
-func (s *thuChiService) Delete(ctx context.Context, id uint, nguoi domain.ThuChiNguoiXem) error {
+func (s *thuChiService) Delete(ctx context.Context, id uint, nguoi domain.ThuChiNguoiXem, lyDo string) error {
 	t, err := s.repo.FindByID(ctx, id)
 	if err != nil {
 		return err
@@ -210,8 +288,16 @@ func (s *thuChiService) Delete(ctx context.Context, id uint, nguoi domain.ThuChi
 	if err := s.kiemKhoa(ctx, t, nguoi); err != nil {
 		return err
 	}
+	lyDo, err = canLyDo(lyDo, "xoá")
+	if err != nil {
+		return err
+	}
 
-	return s.repo.Delete(ctx, id)
+	return s.repo.Delete(ctx, id, s.dungNhatKy(ctx, t, nil, domain.NhatKyThuChiXoa, lyDo, nguoi.UserID))
+}
+
+func (s *thuChiService) NhatKy(ctx context.Context, id uint) ([]domain.NhatKyThuChi, error) {
+	return s.repo.NhatKy(ctx, id)
 }
 
 // kiemKhoa tra trạng thái ca rồi chạy đúng luật khoá của domain.
@@ -228,6 +314,77 @@ func (s *thuChiService) kiemKhoa(
 	}
 
 	return domain.ThuChiKhoa(t, daDong, nguoi)
+}
+
+// kiemThamChieu — phân loại và người nộp / nhận phải thuộc cửa hàng của phiên,
+// phân loại phải đúng vế với phiếu. Khoá ngoại chỉ biết id có tồn tại ở BẤT KỲ
+// cửa hàng nào; màn web tự bày đúng danh sách nhưng app gọi thẳng API thì không.
+//
+// cu != nil (đang sửa): giữ nguyên phân loại / người nộp cũ thì không tra lại —
+// phân loại đã xoá mềm không được chặn việc sửa số tiền của phiếu cũ.
+func (s *thuChiService) kiemThamChieu(ctx context.Context, req *dto.ThuChiRequest, cu *domain.ThuChi) error {
+	loai := *req.Type
+	o := map[string]string{}
+
+	giuLoai := cu != nil && cu.CategoryID != nil && *cu.CategoryID == req.CategoryID && cu.Type == loai ||
+		req.LoaiGoc != nil && *req.LoaiGoc == req.CategoryID
+	switch {
+	case req.CategoryID == 0 && req.Kind == domain.ThuChiNopVe:
+		// Nộp về công ty không phải chi phí — không có phân loại chi phí nào để chọn.
+	case req.CategoryID == 0:
+		o["category_id"] = "Chọn phân loại cho phiếu."
+	case !giuLoai:
+		l, err := s.repo.TimPhanLoai(ctx, req.CategoryID)
+		switch {
+		case err != nil:
+			return err
+		case l == nil:
+			o["category_id"] = "Phân loại không tồn tại hoặc không thuộc cửa hàng."
+		case l.Type != loai:
+			o["category_id"] = "Phân loại này là loại " + tenVe(l.Type) + ", phiếu đang là phiếu " + tenVe(loai) + "."
+		}
+	}
+
+	if req.PayerType != "" && req.PayerID > 0 && !giuDoiTuong(cu, req.PayerType, req.PayerID) {
+		co, err := s.repo.CoDoiTuong(ctx, req.PayerType, req.PayerID)
+		if err != nil {
+			return err
+		}
+		if !co {
+			o["payer_id"] = "Người nộp / nhận không tồn tại hoặc không thuộc cửa hàng."
+		}
+	}
+
+	if len(o) > 0 {
+		return loiO(o)
+	}
+
+	return nil
+}
+
+func tenVe(loai uint8) string {
+	if loai == domain.ThuChiPhieuChi {
+		return "chi"
+	}
+
+	return "thu"
+}
+
+func giuDoiTuong(cu *domain.ThuChi, loai string, id uint) bool {
+	if cu == nil || cu.PayerType != loai {
+		return false
+	}
+	var cot *uint
+	switch loai {
+	case domain.ThuChiDoiTuongQuanLy, domain.ThuChiDoiTuongThuNgan:
+		cot = cu.EmployeeID
+	case domain.ThuChiDoiTuongNCC:
+		cot = cu.SupplierID
+	case domain.ThuChiDoiTuongKhac:
+		cot = cu.PayerID
+	}
+
+	return cot != nil && *cot == id
 }
 
 // datDoiTuong ghi id người nộp vào ĐÚNG một trong ba cột, và dọn hai cột kia.
@@ -272,6 +429,56 @@ func (s *thuChiService) sinhMa(ctx context.Context, loai uint8, shopID uint) (st
 	}
 
 	return s.maRepo.SinhMa(ctx, docType, shopID, nil)
+}
+
+// ---------- Quầy ----------
+
+func (s *thuChiService) CaQuay(ctx context.Context) (uint, error) {
+	shopID, err := s.repo.ChiNhanhMacDinh(ctx)
+	if err != nil {
+		return 0, err
+	}
+	ca, err := s.repo.CaDangMo(ctx, shopID)
+	if err != nil {
+		return 0, err
+	}
+	if ca == nil {
+		return 0, domain.ErrChuaMoCa
+	}
+
+	return *ca, nil
+}
+
+func (s *thuChiService) DanhMucQuay(ctx context.Context) (*domain.ThuChiDanhMucQuay, error) {
+	loai, err := s.repo.PhanLoai(ctx)
+	if err != nil {
+		return nil, err
+	}
+	nv, err := s.repo.NhanVien(ctx)
+	if err != nil {
+		return nil, err
+	}
+	nop, err := s.repo.ListNguoiNop(ctx, "")
+	if err != nil {
+		return nil, err
+	}
+
+	nhanh, ghim, err := s.phanLoaiNhanh(ctx, loai)
+	if err != nil {
+		return nil, err
+	}
+
+	shopID, err := s.repo.ChiNhanhMacDinh(ctx)
+	if err != nil {
+		return nil, err
+	}
+	tk, err := s.repo.TaiKhoanNganHang(ctx, shopID, true)
+	if err != nil {
+		return nil, err
+	}
+
+	return &domain.ThuChiDanhMucQuay{PhanLoai: loai, NhanVien: nv, NguoiNop: nop, PhanLoaiNhanh: nhanh, PhanLoaiGhim: ghim,
+		MauPhieu: s.mauPhieuQuay(ctx, loai), TaiKhoan: tk}, nil
 }
 
 // ---------- Người nộp ----------

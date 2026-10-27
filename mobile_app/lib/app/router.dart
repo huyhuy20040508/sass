@@ -5,9 +5,10 @@ import 'package:go_router/go_router.dart';
 import '../features/admin/admin_shell.dart';
 import '../features/auth/auth_controller.dart';
 import '../features/auth/login_screen.dart';
-import '../features/home/home_screen.dart';
+import '../features/cashier/cashier_screen.dart';
 import '../features/workspace/choose_workspace_screen.dart';
 import '../features/workspace/workspace.dart';
+import 'theme.dart';
 
 const chooseWorkspacePath = '/chon-noi-lam-viec';
 
@@ -34,14 +35,13 @@ final routerProvider = Provider<GoRouter>((ref) {
     },
     routes: [
       GoRoute(path: '/splash', builder: (_, _) => const _Splash()),
-      GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
+      // Màn đăng nhập giữ bộ màu tím + vàng của logo; mọi màn sau khi vào
+      // khu làm việc dùng theme navy mặc định.
+      GoRoute(path: '/login', builder: (_, _) => Theme(data: buildTheme(), child: const LoginScreen())),
       GoRoute(path: chooseWorkspacePath, builder: (_, _) => const ChooseWorkspaceScreen()),
       GoRoute(path: WorkspaceArea.quanTri.route, builder: (_, _) => const AdminShell()),
-      // Khu Thu ngân chưa có thiết kế mobile — tạm dùng màn chính kiểm tra phiên.
-      GoRoute(
-        path: WorkspaceArea.thuNgan.route,
-        builder: (_, _) => const HomeScreen(area: WorkspaceArea.thuNgan),
-      ),
+      // Khu Thu ngân chưa có thiết kế mobile — màn chờ nói rõ đang thiếu gì.
+      GoRoute(path: WorkspaceArea.thuNgan.route, builder: (_, _) => const CashierScreen()),
     ],
   );
 });

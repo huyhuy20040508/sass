@@ -82,7 +82,15 @@ class SettingController extends Controller
         'default_shipping_fee' => 'Phí thu khi đơn chưa đạt ngưỡng miễn phí bên dưới.',
         'free_shipping_threshold' => 'Đơn từ mức này trở lên được miễn phí vận chuyển. Đặt 0 = miễn phí mọi đơn.',
         'low_stock_threshold' => 'Biến thể còn tồn từ mức này trở xuống bị xếp vào nhóm "sắp hết" ở trang Tồn kho.',
+        'pos_cashbook_pinned_types' => 'Hiện đầu dãy phân loại ở hộp Lập phiếu của màn Thu ngân → Thu chi, tối đa 6 mỗi bên. Chỗ còn trống tự lấy loại chi nhánh hay dùng nhất 30 ngày qua; các loại khác vẫn chọn được ở "Loại khác…".',
         'shift_open_alert_hours' => 'Ca đang mở quá số giờ này mà chưa đóng thì hiện dải nhắc vàng ở màn Bán hàng, Điều phối ca và thẻ Cần chú ý ở Tổng quan — chỉ nhắc, không chặn bán. Đặt 0 = tắt nhắc.',
+        'pos_cashbook_templates' => 'Hiện thành nút ở đầu hộp Lập phiếu (Thu ngân → Thu chi): bấm là điền sẵn loại phiếu, phân loại, mô tả và số tiền gợi ý — thu ngân chỉ còn sửa số tiền rồi Lưu. Tối đa 6 mẫu. Phân loại "tự dò" chọn loại thu chi có tên khớp gợi ý; không khớp thì thu ngân tự chọn.',
+        'birthday_voucher_type' => 'Mẫu cho nút "Tạo mã" ở Thu ngân → Khách hàng → Sinh nhật 7 ngày: mỗi lần bấm sinh MỘT mã dùng một lần, chỉ đúng khách ấy dùng được, rồi khách rời danh sách tới mùa sinh nhật năm sau. Mã hiện ở Khuyến mại → Mã giảm giá với mô tả "Quà sinh nhật · tên khách" để đếm mã đã dùng.',
+        'birthday_voucher_value' => 'Theo phần trăm thì từ 1 đến 100; theo số tiền thì là số đồng giảm. Đặt 0 = chưa tặng mã (nút "Tạo mã" báo cần khai ở đây; "Đã chúc" vẫn dùng được).',
+        'birthday_voucher_max' => 'Chỉ áp cho kiểu phần trăm: giảm không quá số này. Đặt 0 = không giới hạn.',
+        'birthday_voucher_min_order' => 'Tiền hàng tối thiểu để dùng mã. Đặt 0 = đơn nào cũng dùng được.',
+        'birthday_voucher_days' => 'Mã dùng được tới hết ngày thứ N tính cả hôm tặng (tối đa 365).',
+        'pos_cashbook_expense_limit' => 'Phiếu chi lập hoặc sửa ở màn Thu ngân → Thu chi lớn hơn số này thì phải có chủ hoặc quản trị viên nhập tài khoản để duyệt; phiếu ghi lại người duyệt. Phiếu thu và màn Quản trị → Thu chi không bị chặn. Đặt 0 = không giới hạn.',
         'shift_diff_alert_threshold' => 'Đóng ca mà tiền đếm được lệch so với sổ QUÁ mức này (thiếu hay dư đều tính) thì chuông của quản lý và chủ cửa hàng nhận một thông báo: ca nào, ai trực, thiếu/dư bao nhiêu, kèm nút mở tờ ca. Đặt 0 = lệch một đồng cũng báo.',
         'pos_staff_discount_limit' => 'Nhân viên bán tại quầy được tự bớt giá từng món tới mức này. Bấm cao hơn thì hệ thống từ chối bán và bảo họ gọi quản lý. Bạn và các quản trị viên KHÔNG bị con số này chặn. Đặt 0 = nhân viên không được tự bớt đồng nào.',
         'payment_cod_enabled' => 'Khách trả tiền cho shipper lúc nhận hàng. Tắt đi thì lựa chọn này biến mất khỏi trang thanh toán.',
@@ -111,6 +119,7 @@ class SettingController extends Controller
         'methods' => 'Hình thức nhận tiền',
         'bank' => 'Tài khoản nhận chuyển khoản',
         'tax' => 'Chế độ thuế',
+        'birthday' => 'Mã sinh nhật',
     ];
 
     /**
@@ -130,11 +139,15 @@ class SettingController extends Controller
         'low_stock_threshold' => 'sản phẩm',
         'pos_staff_discount_limit' => '%',
         'shift_diff_alert_threshold' => '₫',
+        'pos_cashbook_expense_limit' => '₫',
         'shift_open_alert_hours' => 'giờ',
+        'birthday_voucher_max' => '₫',
+        'birthday_voucher_min_order' => '₫',
+        'birthday_voucher_days' => 'ngày',
     ];
 
     /** Khoá dạng số nhưng là TIỀN — ô nhập tự chấm phân cách hàng nghìn. */
-    public const MONEY_KEYS = ['default_shipping_fee', 'free_shipping_threshold', 'shift_diff_alert_threshold'];
+    public const MONEY_KEYS = ['default_shipping_fee', 'free_shipping_threshold', 'shift_diff_alert_threshold', 'pos_cashbook_expense_limit', 'birthday_voucher_max', 'birthday_voucher_min_order'];
 
     /**
      * Ngân hàng Việt Nam — danh sách chọn cho ô "Ngân hàng".
@@ -364,6 +377,9 @@ class SettingController extends Controller
      */
     protected function options(string $key): array
     {
+        if ($key === 'pos_cashbook_pinned_types' || $key === 'pos_cashbook_templates') {
+            return $this->loaiThuChiDeGhim();
+        }
         if ($key !== 'bank_name') {
             return [];
         }
@@ -373,6 +389,22 @@ class SettingController extends Controller
             'label' => $b[1],
             'code' => $b[2],
         ], self::BANKS);
+    }
+
+    /** Loại thu chi cho ô ghim; API hỏng / thiếu quyền xem thì rỗng — view lùi về ô gõ mã. */
+    protected function loaiThuChiDeGhim(): array
+    {
+        try {
+            $res = $this->api->loaiThuChi();
+        } catch (\Throwable $e) {
+            Log::warning('Load loai thu chi for pin failed', ['msg' => $e->getMessage()]);
+
+            return [];
+        }
+
+        return $res->successful()
+            ? array_map(fn (array $l) => ['value' => (string) $l['id'], 'label' => (string) $l['name'], 'type' => (int) $l['type']], (array) $res->json('data'))
+            : [];
     }
 
     /**
@@ -386,7 +418,10 @@ class SettingController extends Controller
     {
         $out = [];
         foreach ($items as $key => $value) {
-            $value = is_array($value) ? '' : trim((string) $value);
+            // Ô chọn nhiều (kiểu id_list) gửi mảng id → "24,14,2".
+            $value = is_array($value)
+                ? implode(',', array_filter(array_map('trim', $value), fn ($v) => ctype_digit($v)))
+                : trim((string) $value);
             if (in_array($key, self::MONEY_KEYS, true)) {
                 $value = preg_replace('/[^0-9]/', '', $value) ?? '';
             }

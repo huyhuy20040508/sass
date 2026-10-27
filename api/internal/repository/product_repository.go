@@ -558,6 +558,19 @@ func (r *productRepository) SapXepLai(ctx context.Context, ids []uint) error {
 			return domain.ErrNotFound
 		}
 
+		// Nhiều mặt hàng chung một số (dữ liệu cũ, nhập hàng loạt) thì hoán vị trong
+		// tập số ấy không đổi được gì: dòng cùng số vẫn xếp theo id, kéo thả xong hàng
+		// nằm nguyên chỗ mà máy vẫn báo đã lưu. Gặp trùng thì đánh số lại cả cửa hàng
+		// MỘT lần (giữ đúng trình tự đang hiện) rồi mới hoán vị.
+		if coSoTrung(ds) {
+			if err := danhSoLaiThuTu(tx); err != nil {
+				return err
+			}
+			if err := tx.Select("id, sort").Where("id IN ?", ids).Find(&ds).Error; err != nil {
+				return err
+			}
+		}
+
 		soCu := make([]int, 0, len(ds))
 		for _, p := range ds {
 			soCu = append(soCu, p.Sort)
@@ -572,6 +585,52 @@ func (r *productRepository) SapXepLai(ctx context.Context, ids []uint) error {
 		}
 		return nil
 	})
+}
+
+func coSoTrung(ds []domain.Product) bool {
+	daCo := make(map[int]bool, len(ds))
+	for _, p := range ds {
+		if daCo[p.Sort] {
+			return true
+		}
+		daCo[p.Sort] = true
+	}
+	return false
+}
+
+// danhSoLaiThuTu đánh lại sort của mọi mặt hàng thành 1..n theo đúng trình tự
+// đang hiện (sort giảm dần, trùng thì id giảm dần). Chỉ ghi những dòng đổi số,
+// mỗi lượt UPDATE một khối 500 dòng bằng CASE — không lặp một lệnh mỗi dòng.
+func danhSoLaiThuTu(tx *gorm.DB) error {
+	var ds []domain.Product
+	if err := tx.Select("id, sort").Order("sort ASC, id ASC").Find(&ds).Error; err != nil {
+		return err
+	}
+	const khoi = 500
+	for dau := 0; dau < len(ds); dau += khoi {
+		var (
+			ca   strings.Builder
+			args []any
+			ids  []uint
+		)
+		ca.WriteString("CASE id")
+		for i, p := range ds[dau:min(dau+khoi, len(ds))] {
+			if so := dau + i + 1; p.Sort != so {
+				ca.WriteString(" WHEN ? THEN ?")
+				args = append(args, p.ID, so)
+				ids = append(ids, p.ID)
+			}
+		}
+		if len(ids) == 0 {
+			continue
+		}
+		ca.WriteString(" END")
+		if err := tx.Model(&domain.Product{}).Where("id IN ?", ids).
+			UpdateColumn("sort", gorm.Expr(ca.String(), args...)).Error; err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // ThuTuKeTiep trả số thứ tự cho mặt hàng mới: lớn hơn mọi giá trị đang có, để

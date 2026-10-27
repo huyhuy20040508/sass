@@ -932,6 +932,8 @@
         // Đổi khách là bỏ số điểm đang định đổi của khách trước.
         cur().tv = { hang: Number(k?.rank_id) || 0, diem: Number(k?.points) || 0, dung: 0 };
         luu(); veKhach(); capNhatTien();
+        // Đổi khách thì mã riêng của khách trước không còn hợp lệ — hỏi lại mã đang áp.
+        tinhLaiMaGiam();
     };
 
     // Cặp nút VNĐ / % (giảm cả đơn và phụ thu).
@@ -1918,6 +1920,8 @@
                 code: ma,
                 // Hạn mức "mỗi khách N lượt" nhận ra khách vãng lai bằng số điện thoại.
                 phone: (cur().sdt || '').trim(),
+                // Mã riêng (quà sinh nhật) chỉ nhận đúng khách được tặng.
+                user_id: Number(cur().cusId) || 0,
             }),
         });
         const j = await r.json().catch(() => ({}));

@@ -42,7 +42,7 @@
     @endif
 
     <div class="ct-grid">
-        <form method="POST" action="{{ route('platform.settings.payment.luu') }}" class="panel">
+        <form method="POST" action="{{ route('platform.cai-dat.thanh-toan.luu') }}" class="panel">
             @csrf
             <div class="panel-head">Hình thức nhận tiền</div>
             <div class="panel-body">

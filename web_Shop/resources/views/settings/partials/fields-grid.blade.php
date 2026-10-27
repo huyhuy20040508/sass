@@ -21,7 +21,7 @@
 
             // Ô chữ dài (địa chỉ, lời dặn) trải trọn một hàng: nhét
             // vào ô hẹp bằng ô hotline thì phải kéo ngang mới đọc hết.
-            $wide = $f['type'] === 'text' && $maxLen >= 200;
+            $wide = ($f['type'] === 'text' && $maxLen >= 200) || in_array($f['type'], ['id_list', 'cashbook_templates'], true);
         @endphp
 
         @if($f['type'] === 'bool')
@@ -92,6 +92,103 @@
                             </option>
                         @endforeach
                     </select>
+                @elseif($f['type'] === 'cashbook_templates')
+                    {{-- Bảng soạn mẫu phiếu nhanh: JS dựng từng dòng từ JSON trong ô ẩn và
+                         ghi ngược lại mỗi lần sửa; không có JS thì gửi nguyên giá trị cũ. --}}
+                    <input type="hidden" name="{{ $name }}" id="{{ $id }}" value="{{ is_string($val) && $val !== '' ? $val : '[]' }}" data-mau-json>
+                    <div class="set-mau" data-mau data-mac-dinh="{{ $f['default'] ?? '[]' }}" data-loai='@json($options)'>
+                        <div class="set-mau-head" aria-hidden="true"><span>Tên nút</span><span>Loại</span><span>Phân loại</span><span>Mô tả sẵn</span><span>Số tiền gợi ý</span><span></span></div>
+                        <div class="set-mau-rows" data-mau-rows></div>
+                        <div class="set-mau-tools">
+                            <button type="button" class="set-btn-ghost" data-mau-them>+ Thêm mẫu</button>
+                            <button type="button" class="set-btn-ghost" data-mau-goc>Khôi phục gợi ý mặc định</button>
+                            <span class="set-hint" data-mau-dem></span>
+                        </div>
+                    </div>
+                    @once
+                    <script>
+                    document.addEventListener('DOMContentLoaded', () => {
+                        const TOI_DA = 6;
+                        const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+                        const so = (n) => (Number(n) || 0) ? Math.round(Number(n)).toLocaleString('vi-VN') : '';
+                        document.querySelectorAll('[data-mau]').forEach((hop) => {
+                            const o = hop.previousElementSibling;
+                            const loai = JSON.parse(hop.dataset.loai || '[]');
+                            const docJson = (s) => { try { const v = JSON.parse(s); return Array.isArray(v) ? v : []; } catch (e) { return []; } };
+                            let ds = docJson(o.value);
+                            const ghi = () => {
+                                o.value = JSON.stringify(ds.map((m) => ({ ten: m.ten.trim(), loai: +m.loai, phan_loai: +m.phan_loai || 0, ...(m.goi_y && !(+m.phan_loai) ? { goi_y: m.goi_y } : {}), mo_ta: m.mo_ta, so_tien: +m.so_tien || 0 })));
+                                hop.querySelector('[data-mau-them]').disabled = ds.length >= TOI_DA;
+                                hop.querySelector('[data-mau-dem]').textContent = `${ds.length}/${TOI_DA} mẫu`;
+                            };
+                            const chonLoai = (m) => {
+                                const dau = m.goi_y ? `Tự dò: ${esc(m.goi_y.split('|').join(', '))}` : '— Thu ngân tự chọn —';
+                                return `<option value="0">${dau}</option>` + loai.filter((l) => +l.type === +m.loai)
+                                    .map((l) => `<option value="${esc(l.value)}"${+l.value === +m.phan_loai ? ' selected' : ''}>${esc(l.label)}</option>`).join('');
+                            };
+                            const ve = () => {
+                                hop.querySelector('[data-mau-rows]').innerHTML = ds.map((m, i) => `
+                                    <div class="set-mau-row" data-i="${i}">
+                                        <input class="set-input" maxlength="30" aria-label="Tên nút mẫu ${i + 1}" value="${esc(m.ten)}" data-k="ten" placeholder="vd. Trả ship">
+                                        <select class="set-input" aria-label="Loại phiếu mẫu ${i + 1}" data-k="loai"><option value="1"${+m.loai === 1 ? ' selected' : ''}>Chi</option><option value="0"${+m.loai === 0 ? ' selected' : ''}>Thu</option></select>
+                                        <select class="set-input" aria-label="Phân loại mẫu ${i + 1}" data-k="phan_loai">${chonLoai(m)}</select>
+                                        <input class="set-input" maxlength="200" aria-label="Mô tả sẵn mẫu ${i + 1}" value="${esc(m.mo_ta)}" data-k="mo_ta">
+                                        <input class="set-input set-mau-tien" inputmode="numeric" aria-label="Số tiền gợi ý mẫu ${i + 1}" value="${so(m.so_tien)}" data-k="so_tien" placeholder="Để trống">
+                                        <button type="button" class="set-btn-ghost set-btn-danger" aria-label="Xoá mẫu ${i + 1}" data-mau-xoa>×</button>
+                                    </div>`).join('');
+                                ghi();
+                            };
+                            hop.addEventListener('input', (e) => {
+                                const k = e.target.dataset.k;
+                                const row = e.target.closest('[data-i]');
+                                if (!k || !row) return;
+                                const m = ds[+row.dataset.i];
+                                if (k === 'so_tien') {
+                                    const n = Number(e.target.value.replace(/\D/g, '').slice(0, 13)) || 0;
+                                    e.target.value = so(n);
+                                    m.so_tien = n;
+                                } else {
+                                    m[k] = e.target.value;
+                                }
+                                if (k === 'loai') { m.phan_loai = 0; m.goi_y = ''; e.target.closest('[data-i]').querySelector('[data-k=phan_loai]').innerHTML = chonLoai(m); }
+                                ghi();
+                            });
+                            hop.addEventListener('click', (e) => {
+                                if (e.target.closest('[data-mau-xoa]')) { ds.splice(+e.target.closest('[data-i]').dataset.i, 1); ve(); return; }
+                                if (e.target.closest('[data-mau-them]') && ds.length < TOI_DA) {
+                                    ds.push({ ten: '', loai: 1, phan_loai: 0, mo_ta: '', so_tien: 0 });
+                                    ve();
+                                    hop.querySelector('.set-mau-row:last-child [data-k=ten]').focus();
+                                    return;
+                                }
+                                if (e.target.closest('[data-mau-goc]') && window.confirm('Thay các mẫu đang có bằng 5 mẫu gợi ý mặc định?')) {
+                                    ds = docJson(hop.dataset.macDinh);
+                                    ve();
+                                }
+                            });
+                            ve();
+                        });
+                    });
+                    </script>
+                    @endonce
+                @elseif($f['type'] === 'id_list' && $options !== [])
+                    {{-- Ô chọn nhiều: ô ẩn rỗng đứng trước để bỏ hết tick vẫn gửi
+                         lên (= xoá danh sách), giống công tắc ở trên. --}}
+                    @php $chon = array_map('strval', is_array($val) ? $val : explode(',', (string) $val)); @endphp
+                    <input type="hidden" name="{{ $name }}[]" value="">
+                    <div class="set-pins" id="{{ $id }}">
+                        @foreach(['Phiếu thu' => 0, 'Phiếu chi' => 1] as $nhan => $loai)
+                            <div class="set-pins-group">
+                                <span class="set-pins-title">{{ $nhan }}</span>
+                                @foreach(array_filter($options, fn ($o) => $o['type'] === $loai) as $o)
+                                    <label class="set-pin">
+                                        <input type="checkbox" name="{{ $name }}[]" value="{{ $o['value'] }}" @checked(in_array($o['value'], $chon, true))>
+                                        <span>{{ $o['label'] }}</span>
+                                    </label>
+                                @endforeach
+                            </div>
+                        @endforeach
+                    </div>
                 @elseif($options !== [])
                     {{-- Ô chọn có tìm kiếm. Vẫn là <input type="text"> chứ
                          không phải <select>: danh sách ngân hàng dài mấy chục

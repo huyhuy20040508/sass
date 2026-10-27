@@ -35,6 +35,14 @@ func (s *orderService) POSDoiHang(
 	if len(req.Tra) == 0 {
 		return nil, domain.ErrEmptyCart
 	}
+	// Không lấy món nào thì đây là TRẢ HÀNG, không phải đổi (KB #93): dựng tiếp sẽ
+	// ra một đơn rỗng 0đ "đã thanh toán" lẫn vào sổ đơn và báo cáo. Đường trả hàng
+	// ở quầy ghi phiếu trả + hoàn tiền + sổ quỹ đầy đủ.
+	if len(req.Moi) == 0 {
+		return nil, loiO(map[string]string{
+			"moi": "Chọn ít nhất một món khách lấy về. Khách chỉ trả hàng thì dùng Trả hàng (POST /admin/quay/tra-hang).",
+		})
+	}
 
 	// Hạn quyền giảm giá áp cho hàng MỚI y như một lượt bán thường: đổi hàng
 	// không phải cửa sau để bấm mức giảm mà bán thẳng thì không được phép.
@@ -60,6 +68,12 @@ func (s *orderService) POSDoiHang(
 	restock := true
 	if req.Restock != nil {
 		restock = *req.Restock
+	}
+
+	// Cùng luật trả ở quầy (HĐĐT, còn nợ, quá hạn, chi nhánh khác) — đổi hàng là
+	// trả hàng cộng một lượt bán, cửa sau này trước đây không kiểm gì.
+	if err := s.kiemDoiTaiQuay(ctx, req.OrderID); err != nil {
+		return nil, err
 	}
 
 	var (
@@ -88,6 +102,7 @@ func (s *orderService) POSDoiHang(
 				rt.HandledBy = &actorID
 			}
 
+			daTra := tienDaTraTheoDong(cu)
 			for _, t := range req.Tra {
 				con, ok := conTraDuoc[t.OrderItemID]
 				if !ok {
@@ -98,7 +113,7 @@ func (s *orderService) POSDoiHang(
 						domain.ErrReturnQtyExceeded, con.ProductName, con.RemainQuantity)
 				}
 
-				line := con.UnitPrice * float64(t.Quantity)
+				line := tienHoanDong(daTra[con.OrderItemID], t.Quantity, con.Quantity)
 				tienTra += line
 				rt.Items = append(rt.Items, domain.OrderReturnItem{
 					OrderItemID:      con.OrderItemID,
@@ -108,7 +123,7 @@ func (s *orderService) POSDoiHang(
 					VariantSKU:       con.VariantSKU,
 					VariantName:      con.VariantName,
 					Thumbnail:        con.Thumbnail,
-					UnitPrice:        con.UnitPrice,
+					UnitPrice:        tienHoanDong(daTra[con.OrderItemID], 1, con.Quantity),
 					Quantity:         t.Quantity,
 					TotalPrice:       line,
 				})
@@ -124,7 +139,6 @@ func (s *orderService) POSDoiHang(
 			if err != nil {
 				return nil, nil, nil, err
 			}
-			tienMoi = subtotal
 
 			now := time.Now()
 			don := &domain.Order{
@@ -142,8 +156,17 @@ func (s *orderService) POSDoiHang(
 				Items:          items,
 				SubtotalAmount: subtotal,
 				ShippingFee:    0,
-				TotalAmount:    subtotal,
 			}
+			// Thuế của hàng mới như một lượt bán ở quầy (KB #91): tienTra đã GỒM thuế
+			// khách trả cho món cũ, nên tiền món mới cũng phải gồm thuế — so hai số
+			// khác gốc là thu thiếu / trả thừa đúng bằng tiền thuế.
+			thueDong, tongThue := thueCuaDon(don, nil)
+			for i := range don.Items {
+				don.Items[i].VatAmount = thueDong[i]
+			}
+			don.VatAmount = tongThue
+			don.TotalAmount = subtotal + tongThue
+			tienMoi = don.TotalAmount
 
 			// ----- Chênh lệch -----
 			chenh := math.Round(tienMoi - tienTra)
@@ -210,6 +233,35 @@ func (s *orderService) POSDoiHang(
 		ChangeAmount:   thoi,
 		Message:        msg,
 	}, nil
+}
+
+// kiemDoiTaiQuay kiểm trước, ngoài giao dịch: HĐĐT, đã thu đủ, hạn và chi nhánh
+// không đổi trong vài giây của một lượt bấm; số còn trả được thì repository kiểm
+// lại dưới khoá.
+func (s *orderService) kiemDoiTaiQuay(ctx context.Context, orderID uint) error {
+	if s.returnRepo == nil {
+		return nil
+	}
+	shopID, err := s.returnRepo.ChiNhanhDangLam(ctx)
+	if err != nil {
+		return err
+	}
+	o, items, err := s.returnRepo.Returnable(ctx, orderID)
+	if err != nil {
+		return err
+	}
+	if o.ShopID != shopID {
+		return domain.ErrNotFound
+	}
+	coHD, err := s.returnRepo.CoHoaDon(ctx, orderID)
+	if err != nil {
+		return err
+	}
+	if why := lyDoKhongTraTaiQuay(o, coHD, conTraMonChinh(items), time.Now()); why != "" {
+		return &domain.LoiTraQuay{Cau: why}
+	}
+
+	return nil
 }
 
 // chuoiHoacMacDinh trả về chuỗi đã bỏ khoảng trắng, rơi về mặc định nếu rỗng.

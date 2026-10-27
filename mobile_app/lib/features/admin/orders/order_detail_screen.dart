@@ -1016,18 +1016,10 @@ class _PaySheetState extends State<_PaySheet> {
               fontWeight: FontWeight.w700,
               fontFeatures: _tnum,
             ),
-            // Viền + con trỏ theo màu của khu Quản trị: theme chung vẫn mang
-            // màu tím của màn đăng nhập, để nguyên thì ô đang gõ viền tím giữa
-            // một màn navy–xanh.
-            cursorColor: OrderColors.primary,
             decoration: InputDecoration(
               suffixText: 'đ',
               errorText: _err,
               helperText: 'Còn phải thu ${dot(widget.debt)} đ',
-              focusedBorder: const OutlineInputBorder(
-                borderRadius: BorderRadius.all(Radius.circular(12)),
-                borderSide: BorderSide(color: OrderColors.primary, width: 2),
-              ),
             ),
           ),
           const SizedBox(height: 14),

@@ -194,7 +194,7 @@
 
     {{-- ---------- CHẾ ĐỘ 2: cửa hàng đã có ---------- --}}
     @if (count($cuaHangChuaKy))
-        <form method="POST" action="{{ route('platform.customer-orders.contracts.ky') }}"
+        <form method="POST" action="{{ route('platform.khach-hang-order.hop-dong.ky') }}"
               data-form-che-do="cu" hidden>
             @csrf
 

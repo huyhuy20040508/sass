@@ -467,36 +467,17 @@ class OrdersSummaryCard extends StatelessWidget {
                         'Tổng tiền đơn · ${timeLabel.toLowerCase()}',
                         style: const TextStyle(color: OrderColors.muted, fontSize: 12.5),
                       ),
+                      // CHỈ số tiền mới nằm trong FittedBox: nhét cả số đơn vào
+                      // cùng hàng thì tiền dài một chút là cả cụm bị thu nhỏ,
+                      // "49 đơn bán · 13 phiếu trả" co lại gần như không đọc
+                      // được trên máy 390px.
                       FittedBox(
                         fit: BoxFit.scaleDown,
                         alignment: Alignment.centerLeft,
-                        child: Text.rich(
-                          TextSpan(
-                            text: dot(s.revenue),
-                            children: [
-                              TextSpan(
-                                // "đơn bán" chứ không trống trơn "đơn": số tiền
-                                // bên trái đã trừ phiếu trả, mà phiếu trả không
-                                // nằm trong con số này.
-                                text: ' · ${s.sales} đơn bán',
-                                style: const TextStyle(
-                                  color: OrderColors.muted,
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                              if (s.returned > 0)
-                                TextSpan(
-                                  text: ' · ${s.returned} phiếu trả',
-                                  style: const TextStyle(
-                                    color: OrderColors.muted,
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                            ],
-                          ),
+                        child: Text(
+                          dot(s.revenue),
                           key: const Key('orders_revenue'),
+                          maxLines: 1,
                           style: const TextStyle(
                             color: OrderColors.ink,
                             fontSize: 22,
@@ -505,6 +486,18 @@ class OrdersSummaryCard extends StatelessWidget {
                             height: 1.2,
                             fontFeatures: _tnum,
                           ),
+                        ),
+                      ),
+                      Text(
+                        // "đơn bán" chứ không trống trơn "đơn": số tiền ở trên
+                        // đã trừ phiếu trả, mà phiếu trả không nằm trong đó.
+                        '${s.sales} đơn bán${s.returned > 0 ? ' · ${s.returned} phiếu trả' : ''}',
+                        key: const Key('orders_counts'),
+                        style: const TextStyle(
+                          color: OrderColors.muted,
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w500,
+                          fontFeatures: _tnum,
                         ),
                       ),
                       // Nói ra chỗ khác với Tổng quan, ngay dưới con số.

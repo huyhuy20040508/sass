@@ -46,19 +46,26 @@ void main() {
     expect(find.text('gồm VAT và đơn chưa thu'), findsOneWidget);
   });
 
-  testWidgets('đếm riêng đơn bán và phiếu trả', (t) async {
+  /// Số đơn ở DÒNG RIÊNG, cỡ chữ cố định: nằm chung hàng với số tiền thì tiền
+  /// dài một chút là FittedBox thu nhỏ cả cụm, đọc không ra (lỗi 99).
+  testWidgets('đếm riêng đơn bán và phiếu trả, tách khỏi dòng tiền', (t) async {
     await _bay(t, _s());
 
-    final chu = t.widget<Text>(find.byKey(const Key('orders_revenue'))).textSpan!.toPlainText();
-    expect(chu, '2.016.079.000 · 35 đơn bán · 3 phiếu trả');
+    expect(t.widget<Text>(find.byKey(const Key('orders_revenue'))).data, '2.016.079.000');
+    expect(t.widget<Text>(find.byKey(const Key('orders_counts'))).data, '35 đơn bán · 3 phiếu trả');
+
+    // Dòng số đơn KHÔNG nằm trong FittedBox — cỡ chữ không đổi theo độ dài tiền.
+    expect(
+      find.ancestor(of: find.byKey(const Key('orders_counts')), matching: find.byType(FittedBox)),
+      findsNothing,
+    );
   });
 
   /// Kỳ không có phiếu trả nào thì đừng bày "0 phiếu trả" cho dài dòng.
   testWidgets('không có phiếu trả thì chỉ ghi số đơn bán', (t) async {
     await _bay(t, _s(returned: 0));
 
-    final chu = t.widget<Text>(find.byKey(const Key('orders_revenue'))).textSpan!.toPlainText();
-    expect(chu, '2.016.079.000 · 35 đơn bán');
+    expect(t.widget<Text>(find.byKey(const Key('orders_counts'))).data, '35 đơn bán');
   });
 
   /// Khổ hẹp 390px: ba đoạn chữ dài hơn trước, không được tràn khung.

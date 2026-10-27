@@ -445,14 +445,20 @@ class CustomerOrderController extends Controller
         // Không đọc được thì về danh sách kèm lời giải thích, đừng dựng một trang
         // chi tiết trống trơn: trang đó không có gì để xem và cũng không nói được
         // vì sao trống.
-        if ($loi) {
+        $hd = data_get($data, 'hop_dong') ?: [];
+
+        // Rỗng cũng về danh sách, không chỉ khi API báo lỗi: API trả 200 với thân
+        // không có `hop_dong` (đổi dạng payload, hoặc hợp đồng vừa bị xoá) thì
+        // trang chi tiết dựng với $hd = [] và chết ở `route(..., $hd['id'])` —
+        // 500 thay vì câu "không tìm thấy".
+        if ($loi || ! $hd) {
             return redirect()
                 ->route('platform.khach-hang-order.nguoi-dung-thu')
-                ->with('error', $loi);
+                ->with('error', $loi ?: 'Không tìm thấy hợp đồng này.');
         }
 
         return view('customer-orders.detail', [
-            'hd' => data_get($data, 'hop_dong') ?: [],
+            'hd' => $hd,
             'ghiDuoc' => in_array(data_get(session('api.user'), 'role'), ['owner', 'operator'], true),
         ]);
     }

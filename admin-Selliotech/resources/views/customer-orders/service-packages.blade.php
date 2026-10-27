@@ -29,7 +29,7 @@
             <span class="muted">·</span>
             <span>{{ $dang_ban }} đang bán</span>
             <span class="spacer"></span>
-            <a href="{{ route('platform.customer-orders.package-features') }}" class="btn btn-plum">Sửa tính năng gói</a>
+            <a href="{{ route('platform.khach-hang-order.tinh-nang-goi') }}" class="btn btn-plum">Sửa tính năng gói</a>
         </div>
 
         @if (count($plans))
@@ -83,7 +83,7 @@
                                     <button type="button" class="btn-mini is-primary"
                                             data-sua
                                             data-id="{{ data_get($p, 'id') }}"
-                                            data-action="{{ route('platform.customer-orders.service-packages.luu', ['plan' => data_get($p, 'id')]) }}"
+                                            data-action="{{ route('platform.khach-hang-order.goi-dich-vu.luu', ['plan' => data_get($p, 'id')]) }}"
                                             data-ma="{{ data_get($p, 'code') }}"
                                             data-chu-ky="{{ data_get($p, 'billing_cycle') === 'nam' ? 'Theo năm' : 'Theo tháng' }}"
                                             data-ten="{{ data_get($p, 'name') }}"

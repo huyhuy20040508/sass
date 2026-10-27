@@ -32,7 +32,7 @@
         </button>
     </div>
 
-    <form method="POST" data-mau="{{ route('platform.customer-orders.contracts.gia-han', ['hopDong' => '__ID__']) }}">
+    <form method="POST" data-mau="{{ route('platform.khach-hang-order.hop-dong.gia-han', ['hopDong' => '__ID__']) }}">
         @csrf
 
         <div class="sheet-body">
@@ -84,7 +84,7 @@
         </button>
     </div>
 
-    <form method="POST" data-mau="{{ route('platform.customer-orders.contracts.huy', ['hopDong' => '__ID__']) }}">
+    <form method="POST" data-mau="{{ route('platform.khach-hang-order.hop-dong.huy', ['hopDong' => '__ID__']) }}">
         @csrf
 
         <div class="sheet-body">

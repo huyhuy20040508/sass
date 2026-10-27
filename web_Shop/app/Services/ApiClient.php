@@ -197,9 +197,9 @@ class ApiClient
         return $this->send('PUT', $uri, $data);
     }
 
-    public function delete(string $uri): Response
+    public function delete(string $uri, array $data = []): Response
     {
-        return $this->send('DELETE', $uri);
+        return $this->send('DELETE', $uri, $data);
     }
 
     /**
@@ -293,7 +293,7 @@ class ApiClient
         return match (strtoupper($method)) {
             'POST' => $req->post($uri, $payload),
             'PUT' => $req->put($uri, $payload),
-            'DELETE' => $req->delete($uri),
+            'DELETE' => $req->delete($uri, $payload),
             default => $req->get($uri, $payload),
         };
     }
@@ -1231,6 +1231,64 @@ class ApiClient
     public function posKhachHang(array $query = []): Response
     {
         return $this->get('/admin/orders/pos/khach-hang', $query);
+    }
+
+    /** CRM quầy — cùng handler với /admin/customers/{id}. */
+    public function posKhachHangChiTiet(int $id): Response
+    {
+        return $this->get("/admin/orders/pos/khach-hang/{$id}");
+    }
+
+    /** CRM quầy — đơn khách còn nợ, cũ trước, kèm tong_con_no (khung chi tiết: nút Thu). */
+    public function posConNoKhach(int $id): Response
+    {
+        return $this->get("/admin/orders/pos/khach-hang/{$id}/con-no");
+    }
+
+    /** CRM quầy — sổ ghi chú khách (chăm sóc / hẹn / cảnh báo), mới trước. */
+    public function posGhiChuKhach(int $id): Response
+    {
+        return $this->get("/admin/orders/pos/khach-hang/{$id}/ghi-chu");
+    }
+
+    public function posThemGhiChuKhach(int $id, array $data): Response
+    {
+        return $this->post("/admin/orders/pos/khach-hang/{$id}/ghi-chu", $data);
+    }
+
+    /** Chỉ người ghi xoá được — API trả 403 với người khác. */
+    public function posXoaGhiChuKhach(int $id, int $note): Response
+    {
+        return $this->delete("/admin/orders/pos/khach-hang/{$id}/ghi-chu/{$note}");
+    }
+
+    /** CRM quầy — sinh mã sinh nhật dùng một lần cho đúng khách (mẫu ở Cài đặt). */
+    public function posTangMaSinhNhat(int $id): Response
+    {
+        return $this->post("/admin/orders/pos/khach-hang/{$id}/ma-sinh-nhat");
+    }
+
+    /** CRM quầy — chỉ ghi mốc đã chúc sinh nhật, không phát mã. */
+    public function posDaChucSinhNhat(int $id): Response
+    {
+        return $this->post("/admin/orders/pos/khach-hang/{$id}/da-chuc");
+    }
+
+    /** CRM quầy — thêm khách đủ ô như Quản trị (cùng handler POST /admin/customers). */
+    public function posTaoKhachDayDu(array $payload): Response
+    {
+        return $this->post('/admin/orders/pos/khach-hang/day-du', $payload);
+    }
+
+    /** CRM quầy — sửa khách, vẫn đòi quyền khach-hang.sua của Quản trị. */
+    public function posSuaKhach(int $id, array $payload): Response
+    {
+        return $this->put("/admin/orders/pos/khach-hang/{$id}", $payload);
+    }
+
+    public function posNhomKhach(array $query = []): Response
+    {
+        return $this->get('/admin/orders/pos/nhom-khach', $query);
     }
 
     /**
@@ -2506,9 +2564,22 @@ class ApiClient
         return $this->put("/admin/thu-chi/{$id}", $payload);
     }
 
-    public function xoaThuChi(int $id): Response
+    /** Xoá phiếu thu chi — lý do bắt buộc, vào nhật ký. */
+    public function xoaThuChi(int $id, string $lyDo): Response
     {
-        return $this->delete("/admin/thu-chi/{$id}");
+        return $this->delete("/admin/thu-chi/{$id}", ['reason' => $lyDo]);
+    }
+
+    /** Tài khoản ngân hàng cho phiếu chuyển khoản — ['cho' => 'lap']: chỉ tài khoản đang bật của chi nhánh lập phiếu. */
+    public function thuChiTaiKhoan(array $query = []): Response
+    {
+        return $this->get('/admin/thu-chi/tai-khoan', $query);
+    }
+
+    /** Nhật ký sửa / xoá của một phiếu thu chi. */
+    public function nhatKyThuChi(int $id): Response
+    {
+        return $this->get("/admin/thu-chi/{$id}/nhat-ky");
     }
 
     /** Người nộp / người nhận vãng lai — không phải nhân viên, không phải NCC. */
@@ -2525,6 +2596,79 @@ class ApiClient
     public function xoaNguoiNopThuChi(int $id): Response
     {
         return $this->delete("/admin/nguoi-nop-thu-chi/{$id}");
+    }
+
+    /** Trả hàng ở quầy: phiếu nhân viên lập ở chi nhánh đang làm; meta = thẻ tổng + co_the_tra. */
+    public function traHangQuay(array $query = []): Response
+    {
+        return $this->get('/admin/quay/tra-hang', $query);
+    }
+
+    /** Bước chọn đơn: có `q` thì tìm mọi ngày, không thì `days` ngày gần nhất. */
+    public function donTraQuay(array $query = []): Response
+    {
+        return $this->get('/admin/quay/tra-hang/don', $query);
+    }
+
+    /** Món còn trả được + paid_total + luật quầy (returnable / reason). */
+    public function traDuocTaiQuay(int $orderId): Response
+    {
+        return $this->get("/admin/quay/tra-hang/don/{$orderId}");
+    }
+
+    /** Trả một bước: nhận hàng + nhập kho + hoàn tiền. */
+    public function traTaiQuay(array $payload): Response
+    {
+        return $this->post('/admin/quay/tra-hang', $payload);
+    }
+
+    /** Đổi hàng: phiếu trả + đơn mới + chênh lệch trong một giao dịch. */
+    public function doiHangQuay(array $payload): Response
+    {
+        return $this->post('/admin/orders/pos/doi-hang', $payload);
+    }
+
+    /** Thu chi ở quầy: chỉ phiếu mình lập tay; meta kèm ca_dang_mo + co_the_lap. */
+    public function thuChiQuay(array $query = []): Response
+    {
+        return $this->get('/admin/quay/thu-chi', $query);
+    }
+
+    /** Phân loại + nhân viên + người nộp cho hộp lập phiếu ở quầy, một lượt. */
+    public function danhMucThuChiQuay(): Response
+    {
+        return $this->get('/admin/quay/thu-chi/danh-muc');
+    }
+
+    /** Một phiếu của quầy (chỉ phiếu mình lập tay) — để in biên nhận. */
+    public function thuChiQuayMot(int $id): Response
+    {
+        return $this->get("/admin/quay/thu-chi/{$id}");
+    }
+
+    public function taoThuChiQuay(array $payload): Response
+    {
+        return $this->post('/admin/quay/thu-chi', $payload);
+    }
+
+    public function suaThuChiQuay(int $id, array $payload): Response
+    {
+        return $this->put("/admin/quay/thu-chi/{$id}", $payload);
+    }
+
+    public function xoaThuChiQuay(int $id, string $lyDo): Response
+    {
+        return $this->delete("/admin/quay/thu-chi/{$id}", ['reason' => $lyDo]);
+    }
+
+    public function nhatKyThuChiQuay(int $id): Response
+    {
+        return $this->get("/admin/quay/thu-chi/{$id}/nhat-ky");
+    }
+
+    public function taoNguoiNopThuChiQuay(array $payload): Response
+    {
+        return $this->post('/admin/quay/nguoi-nop-thu-chi', $payload);
     }
 
     // ---------- Công nợ (Thu chi → Công nợ) ----------

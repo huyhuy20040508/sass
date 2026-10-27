@@ -77,7 +77,7 @@
 
         {{-- Xuất Excel đứng TRƯỚC nút thêm, cùng hàng với tiêu đề trang. --}}
         @if (count($hopDong))
-            <form method="POST" action="{{ route('platform.customer-orders.contracts.xuat') }}"
+            <form method="POST" action="{{ route('platform.khach-hang-order.hop-dong.xuat') }}"
                   data-xuat style="margin:0">
                 @csrf
                 <input type="hidden" name="nhom" value="{{ $nhom }}">
@@ -431,7 +431,7 @@
                                      — đó là đường đọc, và trang bên kia tự xét lại
                                      quyền để quyết định hiện form sửa hay chỉ in ra. --}}
                                 <a class="btn-mini"
-                                   href="{{ route('platform.customer-orders.contracts.chi-tiet', data_get($hd, 'id')) }}">
+                                   href="{{ route('platform.khach-hang-order.hop-dong.chi-tiet', data_get($hd, 'id')) }}">
                                     Chi tiết
                                 </a>
 

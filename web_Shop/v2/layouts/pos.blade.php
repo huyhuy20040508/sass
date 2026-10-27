@@ -29,9 +29,9 @@
         ['nhan' => 'Đơn online', 'tieu_de' => 'Đơn online', 'anh' => 'icons/pos/online-order.png', 'route' => null],
         ['nhan' => 'Lịch sử', 'tieu_de' => 'Lịch sử đơn hàng', 'anh' => 'icons/pos/history.png', 'route' => 'thu-ngan.don-hang.index', 'dang' => 'thu-ngan.don-hang.*'],
         ['nhan' => 'Điều phối ca', 'tieu_de' => 'Điều phối ca', 'anh' => 'icons/pos/shift.png', 'route' => 'thu-ngan.ca-lam-viec.index', 'dang' => 'thu-ngan.ca-lam-viec.*'],
-        ['nhan' => 'Thu chi', 'tieu_de' => 'Thu chi tiền mặt', 'anh' => 'icons/pos/cash-in-out.png', 'route' => null],
-        ['nhan' => 'Trả hàng', 'tieu_de' => 'Trả hàng', 'anh' => 'icons/pos/return.png', 'route' => null],
-        ['nhan' => 'CRM', 'tieu_de' => 'CRM', 'anh' => 'icons/pos/crm.png', 'route' => null],
+        ['nhan' => 'Thu chi', 'tieu_de' => 'Thu chi', 'anh' => 'icons/pos/cash-in-out.png', 'route' => 'thu-ngan.thu-chi.index', 'dang' => 'thu-ngan.thu-chi.*'],
+        ['nhan' => 'Trả hàng', 'tieu_de' => 'Trả hàng', 'anh' => 'icons/pos/return.png', 'route' => 'thu-ngan.tra-hang.index', 'dang' => 'thu-ngan.tra-hang.index'],
+        ['nhan' => 'CRM', 'tieu_de' => 'Khách hàng', 'anh' => 'icons/pos/crm.png', 'route' => 'thu-ngan.crm.index', 'dang' => 'thu-ngan.crm.*'],
     ];
 
     $tnModuleDs = \App\Services\SubscriptionExpiry::daKhoa() ? [] : \App\Services\WorkspaceModule::danhSach();

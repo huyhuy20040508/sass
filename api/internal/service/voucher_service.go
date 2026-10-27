@@ -187,6 +187,16 @@ func (s *voucherService) CheckDon(ctx context.Context, code string, subtotal flo
 		return nil, 0, domain.ErrVoucherNotStarted
 	}
 
+	// Mã riêng (quà sinh nhật): đơn phải gắn đúng khách được tặng. Chưa chọn khách
+	// (userID 0) cũng từ chối — quầy chọn khách rồi áp lại.
+	chu, err := s.repo.ChuMaRieng(ctx, v.ID)
+	if err != nil {
+		return nil, 0, err
+	}
+	if chu > 0 && chu != userID {
+		return nil, 0, domain.ErrVoucherSaiKhach
+	}
+
 	// Hạn mức theo từng khách: nhận diện bằng tài khoản, hoặc bằng số điện thoại
 	// người nhận khi khách không đăng nhập. Chưa biết cả hai (khách gõ mã trước khi
 	// điền số) thì bỏ qua ở đây — bước đặt hàng luôn có số nên sẽ kiểm lại.

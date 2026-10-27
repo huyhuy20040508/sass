@@ -68,6 +68,16 @@ class _AdminShellState extends ConsumerState<AdminShell> {
     if (moi != null) ref.read(ordersFilterProvider.notifier).set(moi);
   }
 
+  /// Từ dòng "đơn chưa thu tiền" ở Tổng quan sang màn Đơn hàng, lọc sẵn đơn
+  /// còn nợ — cùng bộ lọc mà ô "Chưa thu" của thẻ tổng bên ấy đang dùng.
+  void _moDonChuaThu(OrderTime ky) {
+    final f = ref.read(ordersFilterProvider);
+    ref
+        .read(ordersFilterProvider.notifier)
+        .set(f.copyWith(tab: OrderTab.all, time: ky, pays: const {'unpaid', 'partial'}));
+    setState(() => _tab = AdminTab.orders);
+  }
+
   void _goHome(VoidCallback then) {
     if (_tab == AdminTab.home) return then();
     setState(() => _tab = AdminTab.home);
@@ -305,7 +315,7 @@ class _AdminShellState extends ConsumerState<AdminShell> {
                             }
                             return false;
                           },
-                          child: DashboardScreen(key: _dash, onAccount: _openAccount),
+                          child: DashboardScreen(key: _dash, onAccount: _openAccount, onUnpaid: _moDonChuaThu),
                         ),
                         OrdersScreen(onNewOrder: () => setState(() => _tab = AdminTab.pos)),
                         SkeletonTab(key: const Key('skeleton_pos'), name: AdminTab.pos.label),

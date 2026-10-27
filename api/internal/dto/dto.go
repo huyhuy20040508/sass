@@ -2641,6 +2641,8 @@ type CaChiTietResponse struct {
 	Ca       *domain.CaLamViec  `json:"ca"`
 	SoQuy    []domain.SoQuy     `json:"so_quy"`
 	DoanhThu *domain.DoanhThuCa `json:"doanh_thu"`
+	// ThuChiSua — phiếu thu chi của ca đã bị sửa / xoá, để người đóng ca biết.
+	ThuChiSua []domain.NhatKyThuChi `json:"thu_chi_sua"`
 }
 
 // GhiSoQuyRequest — ghi tay một khoản thu/chi tiền mặt.
@@ -2672,8 +2674,8 @@ type DoiHangRequest struct {
 	OrderID uint `json:"order_id" binding:"required,min=1"`
 	// Tra là các món trả lại, theo dòng hàng của đơn cũ.
 	Tra []DoiHangTraItem `json:"tra" binding:"required,min=1,max=50,dive"`
-	// Moi là các món khách lấy về. Được phép RỖNG: khách trả hàng rồi không lấy
-	// gì thêm cũng là một lượt đổi hợp lệ, chỉ khác là cửa hàng trả lại tiền.
+	// Moi là các món khách lấy về, ít nhất một món — service trả 422 ô `moi` khi
+	// rỗng, kèm câu chỉ sang POST /admin/quay/tra-hang (khách chỉ trả hàng).
 	Moi []POSItemRequest `json:"moi" binding:"omitempty,max=50,dive"`
 
 	// Reason — lý do đổi, dùng chung bộ mã với phiếu trả hàng.
@@ -2851,7 +2853,14 @@ type ThuChiRequest struct {
 	Type   *uint8  `json:"type" binding:"required,oneof=0 1"`
 	Amount float64 `json:"amount" binding:"required,gt=0"`
 
+	// Bắt buộc: DTO này chỉ dùng cho phiếu LẬP TAY (phiếu tự sinh đi đường
+	// GhiThuChiTuSinh và không mang phân loại). Phiếu tay thiếu phân loại là
+	// lọt khỏi mọi báo cáo theo phân loại — bản cũ v2 cũng bắt buộc.
 	CategoryID uint `json:"category_id"`
+
+	// Kind = "deposit": nộp tiền về công ty — tiền mặt, người nhận là nhân viên,
+	// không cần phân loại. Chỉ đọc lúc lập; sửa không đổi được loại phiếu.
+	Kind string `json:"kind" binding:"omitempty,oneof=deposit"`
 
 	// PayerType rỗng = không khai đối tượng. Khai rồi thì PayerID phải có, và
 	// service tra đúng bảng theo loại này.
@@ -2864,6 +2873,25 @@ type ThuChiRequest struct {
 	// bằng một lượt riêng rồi gửi kèm địa chỉ ở đây.
 	Attachment string `json:"attachment" binding:"omitempty,max=2048"`
 	Note       string `json:"note" binding:"omitempty,max=255"`
+
+	// Tài khoản chủ / quản trị duyệt phiếu chi vượt "Hạn mức phiếu chi ở quầy".
+	// Chỉ đường quầy đọc hai ô này; mật khẩu không được lưu hay ghi log.
+	ApproverUsername string `json:"approver_username" binding:"omitempty,max=100"`
+	ApproverPassword string `json:"approver_password" binding:"omitempty,max=72"`
+	// BankAccountID — tài khoản của phiếu chuyển khoản (id payment_method_details
+	// loại bank_transfer cùng chi nhánh). Phiếu tiền mặt thì bỏ qua.
+	BankAccountID *uint `json:"bank_account_id"`
+	// AdjustsID — lập phiếu ĐIỀU CHỈNH cho phiếu này (phiếu tay của ca đã đóng).
+	// Chỉ đọc lúc lập; sửa phiếu không đổi được liên kết.
+	AdjustsID *uint `json:"adjusts_id"`
+	// LoaiGoc — phân loại của phiếu gốc: phiếu điều chỉnh được giữ đúng phân loại
+	// ấy dù đảo vế. Service đặt, không nhận từ JSON.
+	LoaiGoc *uint `json:"-"`
+	// Reason — lý do sửa, bắt buộc khi SỬA (kiểm sau các lớp khoá), vào nhật ký.
+	Reason string `json:"reason" binding:"omitempty,max=200"`
+	// Quay / VaiTro — handler quầy đặt, không nhận từ JSON.
+	Quay   bool   `json:"-"`
+	VaiTro string `json:"-"`
 }
 
 // NguoiNopThuChiRequest — thêm nhanh một người nộp / người nhận vãng lai.
@@ -2885,6 +2913,43 @@ type NguoiNopThuChiRequest struct {
 type ThuChiMeta struct {
 	response.Pagination
 	domain.ThuChiTongKet
+}
+
+// TraTaiQuayRequest — trả hàng ở quầy một bước: nhận hàng + hoàn tiền ngay.
+// Không có phí ship hoàn (đơn quầy không giao) và số tài khoản (chuyển tại chỗ).
+type TraTaiQuayRequest struct {
+	OrderID      uint                `json:"order_id" binding:"required"`
+	Reason       string              `json:"reason" binding:"required,oneof=defective wrong_item wrong_size not_as_described changed_mind other"`
+	ReasonNote   string              `json:"reason_note" binding:"omitempty,max=500"`
+	RefundMethod string              `json:"refund_method" binding:"required,oneof=cash bank_transfer"`
+	Deduction    float64             `json:"deduction" binding:"gte=0"`
+	Restock      *bool               `json:"restock"`
+	Items        []ReturnItemRequest `json:"items" binding:"required,min=1,max=50,dive"`
+}
+
+// KhachHangQuayMeta — `meta` của danh sách khách ở quầy: phân trang + cờ quyền.
+type KhachHangQuayMeta struct {
+	response.Pagination
+	// CoTheSua — người xem có quyền khach-hang.sua; chỉ để giao diện khoá sẵn nút
+	// Sửa, lượt PUT vẫn bị API gác như cũ.
+	CoTheSua bool `json:"co_the_sua"`
+}
+
+// TraHangQuayMeta — `meta` của sổ phiếu trả ở quầy: phân trang + thẻ tổng.
+type TraHangQuayMeta struct {
+	response.Pagination
+	domain.TongTraQuay
+	// CoTheTra — người xem có quyền đổi / trả ở quầy (Laravel không giữ bộ quyền).
+	CoTheTra bool `json:"co_the_tra"`
+}
+
+// ThuChiQuayMeta — `meta` của sổ thu chi ở quầy: như ThuChiMeta, thêm ca đang
+// mở (nil = chưa mở ca, màn khoá nút lập phiếu) và người xem có lập được phiếu
+// không — Laravel không giữ bộ quyền của phiên nên hỏi luôn ở đây.
+type ThuChiQuayMeta struct {
+	ThuChiMeta
+	CaDangMo *uint `json:"ca_dang_mo"`
+	CoTheLap bool  `json:"co_the_lap"`
 }
 
 // CongNoMeta — khối `meta` của danh sách công nợ: phân trang GỘP bốn con số của
@@ -3540,6 +3605,8 @@ type POSVoucherRequest struct {
 	Items []POSDongGiaItem `json:"items" binding:"max=50,dive"`
 	Code  string           `json:"code" binding:"required,max=50"`
 	Phone string           `json:"phone" binding:"omitempty,max=20"`
+	// UserID — khách đang gắn vào giỏ; mã riêng (quà sinh nhật) chỉ nhận đúng khách.
+	UserID uint `json:"user_id"`
 }
 
 // POSVoucherResponse — số giảm để quầy trừ NGAY vào tổng, trước khi thu tiền.
@@ -3609,4 +3676,12 @@ type PointConversionRequest struct {
 	Money   float64 `json:"money" binding:"gte=0,lte=1000000000"`
 	Point   uint    `json:"point" binding:"max=1000000000"`
 	Enabled bool    `json:"enabled"`
+}
+
+// GhiChuKhachRequest — một dòng sổ ghi chú khách ở quầy. NgayHen (YYYY-MM-DD) chỉ
+// đọc khi loai = "hen".
+type GhiChuKhachRequest struct {
+	Loai    string `json:"loai"`
+	NoiDung string `json:"noi_dung"`
+	NgayHen string `json:"ngay_hen"`
 }

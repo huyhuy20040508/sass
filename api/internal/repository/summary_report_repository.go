@@ -34,13 +34,22 @@ func (r *reportRepository) CashbookTotals(ctx context.Context, p domain.ReportPe
 		q = q.Where("ie.shop_id = ?", p.ShopID)
 	}
 
+	// Nộp về công ty (kind deposit) là chuyển két, không phải chi phí: tách khỏi
+	// expense / expense_count, vẫn nằm trong cash_expense vì két giảm thật.
+	// DB chưa chạy 0096 thì chưa có cột — coi như không có phiếu nộp về.
+	nopVe := "0"
+	if coCot(r.db.WithContext(ctx), &domain.ThuChi{}, "kind") {
+		nopVe = "ie.kind = '" + domain.ThuChiNopVe + "'"
+	}
 	err := q.Select(`
 			COALESCE(SUM(CASE WHEN ie.type = ? THEN 1 ELSE 0 END), 0) AS income_count,
-			COALESCE(SUM(CASE WHEN ie.type = ? THEN 1 ELSE 0 END), 0) AS expense_count,
+			COALESCE(SUM(CASE WHEN ie.type = ? AND NOT (`+nopVe+`) THEN 1 ELSE 0 END), 0) AS expense_count,
 			COALESCE(SUM(CASE WHEN ie.type = ? THEN ie.amount ELSE 0 END), 0) AS income,
-			COALESCE(SUM(CASE WHEN ie.type = ? THEN ie.amount ELSE 0 END), 0) AS expense,
+			COALESCE(SUM(CASE WHEN ie.type = ? AND NOT (`+nopVe+`) THEN ie.amount ELSE 0 END), 0) AS expense,
 			COALESCE(SUM(CASE WHEN ie.type = ? AND ie.payment_method = ? THEN ie.amount ELSE 0 END), 0) AS cash_income,
-			COALESCE(SUM(CASE WHEN ie.type = ? AND ie.payment_method = ? THEN ie.amount ELSE 0 END), 0) AS cash_expense`,
+			COALESCE(SUM(CASE WHEN ie.type = ? AND ie.payment_method = ? THEN ie.amount ELSE 0 END), 0) AS cash_expense,
+			COALESCE(SUM(CASE WHEN `+nopVe+` THEN ie.amount ELSE 0 END), 0) AS deposit,
+			COALESCE(SUM(CASE WHEN `+nopVe+` THEN 1 ELSE 0 END), 0) AS deposit_count`,
 		domain.ThuChiPhieuThu, domain.ThuChiPhieuChi, domain.ThuChiPhieuThu, domain.ThuChiPhieuChi,
 		domain.ThuChiPhieuThu, domain.ThuChiTienMat, domain.ThuChiPhieuChi, domain.ThuChiTienMat).
 		Scan(&out).Error

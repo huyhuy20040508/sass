@@ -118,6 +118,8 @@ type OrderService interface {
 	SoDon(ctx context.Context, filter domain.OrderFilter) ([]domain.DongSoDon, domain.TongSoDon, error)
 	// GhiLuotThu ghi một lượt thu tiền cho đơn chưa thu đủ (thanh toán một phần).
 	GhiLuotThu(ctx context.Context, id uint, req *dto.OrderThuTienRequest, actorID uint) (*OrderDetail, error)
+	// DonConNoCuaKhach — đơn khách còn nợ, cũ trước (khung chi tiết khách ở quầy).
+	DonConNoCuaKhach(ctx context.Context, userID uint) ([]domain.DonConNo, error)
 	GetByID(ctx context.Context, id uint) (*OrderDetail, error)
 	Create(ctx context.Context, req *dto.OrderCreateRequest, actorID uint) (*OrderDetail, error)
 	// Checkout — khách đặt hàng từ storefront (giá tra lại từ DB, trừ tồn kho).
@@ -356,6 +358,10 @@ func (s *orderService) List(ctx context.Context, filter domain.OrderFilter) ([]d
 // tầng SQL, không có luật nghiệp vụ nào để tầng này thêm vào.
 func (s *orderService) SoDon(ctx context.Context, filter domain.OrderFilter) ([]domain.DongSoDon, domain.TongSoDon, error) {
 	return s.orderRepo.SoDon(ctx, filter)
+}
+
+func (s *orderService) DonConNoCuaKhach(ctx context.Context, userID uint) ([]domain.DonConNo, error) {
+	return s.orderRepo.DonConNoCuaKhach(ctx, userID)
 }
 
 // GhiLuotThu ghi một lượt thu rồi trả về đơn đã cập nhật.
@@ -1207,7 +1213,7 @@ func (s *orderService) POSXemTruocVoucher(ctx context.Context, req dto.POSVouche
 	if s.vouchers == nil {
 		return nil, domain.ErrVoucherNotFound
 	}
-	v, giam, err := s.vouchers.CheckDon(ctx, req.Code, subtotal, tienTheoDanhMuc(items, found), 0, req.Phone)
+	v, giam, err := s.vouchers.CheckDon(ctx, req.Code, subtotal, tienTheoDanhMuc(items, found), req.UserID, req.Phone)
 	if err != nil {
 		return nil, err
 	}
@@ -2317,6 +2323,22 @@ func (s *orderService) UpdateStatus(ctx context.Context, id uint, req *dto.Order
 		}
 		if count > 0 {
 			return nil, domain.ErrReturnInProgress
+		}
+	}
+
+	// Huỷ đơn quầy còn chờ QR / máy mPOS (KB #83): chốt lần thử ở cổng thành HUỶ
+	// trước, như nút "Huỷ mã QR" ở quầy — không thì khách quét mã cũ và tiền vẫn
+	// ghi vào đơn đã huỷ. Tiền vừa về đúng lúc này thì không huỷ nữa.
+	if req.Status == domain.OrderStatusCancelled && s.payments != nil {
+		if cu, err := s.orderRepo.FindByID(ctx, id); err == nil && choTienQuay(cu) &&
+			cu.Status == domain.OrderStatusPending && cu.PaymentStatus != domain.OrderPaymentPaid {
+			duoc, err := s.payments.HuyTheoDon(ctx, cu)
+			if err != nil {
+				return nil, err
+			}
+			if !duoc {
+				return nil, fmt.Errorf("%w: khách vừa trả qua %s — đơn đã thu đủ, không huỷ được", domain.ErrInvalidStatus, quaCong(cu.PaymentMethod))
+			}
 		}
 	}
 

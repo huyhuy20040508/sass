@@ -91,7 +91,7 @@ const moreModules = [
   MoreModule('cai_dat', 'Cài đặt', AppIcons.gear, [
     MoreItem('Chi nhánh'),
     MoreItem('Phương thức thanh toán'),
-    MoreItem('Cài đặt thiết bị', null, printerSettingsPage),
+    MoreItem('Cài đặt thiết bị', null, null, printerSettingsView),
   ]),
 ];
 

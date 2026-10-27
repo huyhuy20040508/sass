@@ -52,7 +52,7 @@
 
     // Bộ lọc đang bật — để câu "bảng rỗng" nói đúng lý do.
     $coLoc = collect($filters)
-        ->only(['keyword', 'type', 'category_id', 'source', 'created_by'])
+        ->only(['keyword', 'type', 'category_id', 'source', 'created_by', 'bank_account_id'])
         ->contains(fn ($v) => $v !== '' && $v !== null);
 
     // Ba danh sách đổ thẳng sang JS. Dựng ở đây rồi @json một biến trần: viết
@@ -413,6 +413,16 @@
            đây to bằng ba dòng chữ bên cạnh. Kéo về đúng cỡ chữ và cho nó nằm
            thẳng hàng với dòng chữ thay vì đội lên trên. */
         #detailIncomeExpense .ly-do-khoa,
+        /* Lập phiếu điều chỉnh */
+        #addIncomeExpense .div-tc-adjust { margin-bottom: 12px; padding: 10px 12px; border: 1px dashed #d9d9d9; border-radius: 6px; }
+        #addIncomeExpense .tc-adj-goc, #addIncomeExpense .tc-adj-kq { margin: 0 0 6px; font-size: 13px; color: #595959; }
+        #addIncomeExpense .tc-adj-kq { margin: 6px 0 0; }
+
+        /* Nhật ký sửa / xoá phiếu */
+        #nhatKyThuChi .nk-ds { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+        #nhatKyThuChi .nk-ds li { padding: 8px 10px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 13px; line-height: 1.5; }
+        #nhatKyThuChi .nk-ds li.is-xoa { border-color: #f5c2c7; background: #fff5f5; }
+        #nhatKyThuChi .nk-ds s, #nhatKyThuChi .nk-trong { color: #8c8c8c; }
         #offcanvasDetail .ly-do-khoa {
             display: flex;
             align-items: center;
@@ -653,6 +663,23 @@
                             </div>
                         </div>
 
+                        {{-- Đối sao kê: phiếu ghi vào một tài khoản ngân hàng. --}}
+                        @if ($taiKhoan)
+                            <div id="filterBankAccount" class="mb-3">
+                                <div class="inner-modal-in-mobile">
+                                    <span class="title_search d-none d-lg-block">Tài khoản</span>
+                                    <select class="form-control form-select mt-1" id="tc-bank-account-filter" name="bank_account_id">
+                                        <option value="">Tất cả tài khoản</option>
+                                        @foreach ($taiKhoan as $tk)
+                                            <option value="{{ $tk['id'] }}" @selected((string) $tk['id'] === (string) $filters['bank_account_id'])>
+                                                {{ $tk['label'] }}{{ count(collect($taiKhoan)->pluck('shop_id')->unique()) > 1 ? ' · '.$tk['branch_name'] : '' }}{{ empty($tk['status']) ? ' (đã tắt)' : '' }}
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                            </div>
+                        @endif
+
                         {{-- KHÔNG có ô "Phương thức thanh toán": khung lọc của v2 không có ô
                              ấy (controller v2 có đọc `payment_method` nhưng chẳng ô nào gửi
                              lên — một nhánh chết). --}}
@@ -754,7 +781,7 @@
                                 <tr class="item" data-id="{{ $id }}"
                                     data-code="{{ $item['code'] ?? '' }}"
                                     data-type="{{ $loai }}"
-                                    data-type-name="{{ $C::LOAI[$loai] ?? '' }}"
+                                    data-type-name="{{ ($item['kind'] ?? '') === 'deposit' ? 'Nộp về công ty' : ($C::LOAI[$loai] ?? '') }}"
                                     data-amount="{{ (float) ($item['amount'] ?? 0) }}"
                                     data-amount-text="{{ $tien($item['amount'] ?? 0) }}"
                                     data-branch="{{ $item['branch_name'] ?? '' }}"
@@ -766,12 +793,21 @@
                                     data-creator="{{ $item['created_by_name'] ?? '' }}"
                                     data-payment-method="{{ $item['payment_method'] ?? '' }}"
                                     data-payment-method-name="{{ $C::PHUONG_THUC[$item['payment_method'] ?? ''] ?? '' }}"
+                                    data-bank-account-id="{{ $item['bank_account_id'] ?? '' }}"
+                                    data-bank-account="{{ $item['bank_account_label'] ?? '' }}"
                                     data-attachment="{{ $item['attachment_url'] ?? '' }}"
                                     data-note="{{ $item['note'] ?? '' }}"
                                     data-source="{{ $nguon }}"
                                     data-source-name="{{ $C::NGUON[$nguon] ?? '' }}"
                                     data-source-code="{{ $item['source_code'] ?? '' }}"
                                     data-created-at="{{ $ngayVN($item['created_at'] ?? '') }}"
+                                    data-kind="{{ $item['kind'] ?? '' }}"
+                                    data-can-adjust="{{ ! empty($item['can_adjust']) ? 1 : 0 }}"
+                                    data-shift-id="{{ $item['shift_id'] ?? '' }}"
+                                    data-adjusts-id="{{ $item['adjusts_id'] ?? '' }}"
+                                    data-adjusts-code="{{ $item['adjusts_code'] ?? '' }}"
+                                    data-adjusted-by="{{ ! empty($item['adjusted_by']) ? json_encode($item['adjusted_by'], JSON_UNESCAPED_UNICODE) : '' }}"
+                                    data-last-edit="{{ ! empty($item['last_edit']) ? json_encode($item['last_edit'], JSON_UNESCAPED_UNICODE) : '' }}"
                                     data-locked="{{ $khoa ? 1 : 0 }}"
                                     data-locked-reason="{{ $lyDo }}">
                                     <td class="text-center">{{ $stt + $i + 1 }}</td>
@@ -780,14 +816,14 @@
                                          được — thứ người dùng làm với một mã nhiều hơn hẳn là bấm vào nó. --}}
                                     <td class="text-left item-code show_code {{ $columns['show_code'] ? '' : 'hide' }}" title="{{ $item['code'] ?? '' }}">{{ $item['code'] ?? '' }}</td>
                                     <td class="text-left show_type {{ $columns['show_type'] ? '' : 'hide' }}">
-                                        <b class="{{ $C::CHU_LOAI[$loai] ?? '' }}">{{ $C::LOAI[$loai] ?? '' }}</b>
+                                        <b class="{{ $C::CHU_LOAI[$loai] ?? '' }}">{{ ($item['kind'] ?? '') === 'deposit' ? 'Nộp về công ty' : ($C::LOAI[$loai] ?? '') }}</b>
                                     </td>
                                     <td class="text-right show_amount {{ $columns['show_amount'] ? '' : 'hide' }}">{{ $tien($item['amount'] ?? 0) }}</td>
                                     <td class="text-left show_branch {{ $columns['show_branch'] ? '' : 'hide' }}">{{ $item['branch_name'] ?? '' }}</td>
                                     <td class="text-left show_payer {{ $columns['show_payer'] ? '' : 'hide' }}" title="{{ $item['payer_name'] ?? '' }}">{{ $item['payer_name'] ?? '' }}</td>
                                     <td class="text-left show_creator {{ $columns['show_creator'] ? '' : 'hide' }}" title="{{ $item['created_by_name'] ?? '' }}">{{ $item['created_by_name'] ?? '' }}</td>
                                     <td class="text-left show_category {{ $columns['show_category'] ? '' : 'hide' }}" title="{{ $item['category_name'] ?? '' }}">{{ $item['category_name'] ?? '' }}</td>
-                                    <td class="text-left show_payment_method {{ $columns['show_payment_method'] ? '' : 'hide' }}">{{ $C::PHUONG_THUC[$item['payment_method'] ?? ''] ?? '' }}</td>
+                                    <td class="text-left show_payment_method {{ $columns['show_payment_method'] ? '' : 'hide' }}" title="{{ $item['bank_account_label'] ?? '' }}">{{ $C::PHUONG_THUC[$item['payment_method'] ?? ''] ?? '' }}@if (($item['bank_account_label'] ?? '') !== '')<br><small class="text-muted">{{ $item['bank_account_label'] }}</small>@endif</td>
                                     <td class="text-center action show_attachment {{ $columns['show_attachment'] ? '' : 'hide' }}">
                                         @if (! empty($item['attachment_url']))
                                             <a href="{{ $item['attachment_url'] }}" target="_blank" rel="noopener"
@@ -802,7 +838,7 @@
                                              Sửa / Xoá thì ngược lại — bày nút rồi báo lỗi lúc bấm là
                                              bẫy người dùng. --}}
                                         <a class="detail-item" type="button" title="{{ __('message.view-detail') }}"><i class="fa fa-eye"></i></a>
-                                        @unless ($khoa)
+                                        @unless ($khoa || ($item['kind'] ?? '') === 'deposit')
                                             <a class="edit_bt edit-item" type="button" title="{{ __('message.edit') }}"><i class="fa fa-edit"></i></a>
                                             <a class="dele_bt delete-item" type="button" title="{{ __('message.delete') }}"><i class="fa fa-times"></i></a>
                                         @endunless
@@ -834,7 +870,7 @@
                                 <div class="item" data-id="{{ (int) ($item['id'] ?? 0) }}"
                                     data-code="{{ $item['code'] ?? '' }}"
                                     data-type="{{ $loai }}"
-                                    data-type-name="{{ $C::LOAI[$loai] ?? '' }}"
+                                    data-type-name="{{ ($item['kind'] ?? '') === 'deposit' ? 'Nộp về công ty' : ($C::LOAI[$loai] ?? '') }}"
                                     data-amount="{{ (float) ($item['amount'] ?? 0) }}"
                                     data-amount-text="{{ $tien($item['amount'] ?? 0) }}"
                                     data-branch="{{ $item['branch_name'] ?? '' }}"
@@ -846,12 +882,21 @@
                                     data-creator="{{ $item['created_by_name'] ?? '' }}"
                                     data-payment-method="{{ $item['payment_method'] ?? '' }}"
                                     data-payment-method-name="{{ $C::PHUONG_THUC[$item['payment_method'] ?? ''] ?? '' }}"
+                                    data-bank-account-id="{{ $item['bank_account_id'] ?? '' }}"
+                                    data-bank-account="{{ $item['bank_account_label'] ?? '' }}"
                                     data-attachment="{{ $item['attachment_url'] ?? '' }}"
                                     data-note="{{ $item['note'] ?? '' }}"
                                     data-source="{{ $nguon }}"
                                     data-source-name="{{ $C::NGUON[$nguon] ?? '' }}"
                                     data-source-code="{{ $item['source_code'] ?? '' }}"
                                     data-created-at="{{ $ngayVN($item['created_at'] ?? '') }}"
+                                    data-kind="{{ $item['kind'] ?? '' }}"
+                                    data-can-adjust="{{ ! empty($item['can_adjust']) ? 1 : 0 }}"
+                                    data-shift-id="{{ $item['shift_id'] ?? '' }}"
+                                    data-adjusts-id="{{ $item['adjusts_id'] ?? '' }}"
+                                    data-adjusts-code="{{ $item['adjusts_code'] ?? '' }}"
+                                    data-adjusted-by="{{ ! empty($item['adjusted_by']) ? json_encode($item['adjusted_by'], JSON_UNESCAPED_UNICODE) : '' }}"
+                                    data-last-edit="{{ ! empty($item['last_edit']) ? json_encode($item['last_edit'], JSON_UNESCAPED_UNICODE) : '' }}"
                                     data-locked="{{ $khoa ? 1 : 0 }}"
                                     data-locked-reason="{{ $item['locked_reason'] ?? '' }}">
                                     <div class="d-flex flex-column" style="flex: 1">
@@ -899,6 +944,14 @@
                 </div>
                 <div class="modal-body">
                     <input type="hidden" class="id">
+                    <input type="hidden" id="tc-adjusts-id">
+                    {{-- Lập phiếu điều chỉnh: gõ số ĐÚNG của phiếu gốc, hộp tự ra vế + số chênh. --}}
+                    <div class="div-tc-adjust d-none">
+                        <p class="tc-adj-goc"></p>
+                        <label class="form-label" for="tc-dung">Số đúng <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="tc-dung" inputmode="numeric" autocomplete="off" placeholder="0">
+                        <p class="tc-adj-kq"></p>
+                    </div>
                     <div class="row">
                         <div class="col-md-6">
                             <div class="mb-3">
@@ -918,7 +971,9 @@
                                 </select>
                             </div>
                             <div class="mb-3">
-                                <label class="form-label" for="tc-category-id">{{ __('message.income_expense_category') }}</label>
+                                <label class="form-label" for="tc-category-id">
+                                    {{ __('message.income_expense_category') }} <span class="required" style="color:red">*</span>
+                                </label>
                                 <select class="form-control" id="tc-category-id">
                                     <option value="">{{ __('message.chose') }}</option>
                                 </select>
@@ -994,15 +1049,12 @@
                                 </div>
                             </div>
 
-                            {{-- CÒN THIẾU: ô "Tài khoản ngân hàng / thiết bị" của v2.
-                                 v2 nạp danh sách từ đường getPaymentMethod, bên này chưa có
-                                 API nào trả về tài khoản nhận tiền. Bày ra một ô bắt buộc mà
-                                 không bao giờ có gì để chọn thì khoá luôn đường Chuyển khoản,
-                                 nên tạm để trống chỗ này.
-
-                                 Khi API có: dựng lại <select id="tc-payment-account">, mở lại
-                                 doiPhuongThuc() ở cuối trang và chốt bắt buộc trong
-                                 CashbookController::validated(). --}}
+                            {{-- Chuyển khoản: tài khoản nhận / chuyển (Cài đặt → Phương thức thanh toán
+                                 của chi nhánh lập phiếu); một tài khoản thì chọn sẵn. --}}
+                            <div class="mb-3 div-tc-tai-khoan d-none">
+                                <label class="form-label" for="tc-payment-account">Tài khoản <span class="required" style="color:red">*</span></label>
+                                <select class="form-control" id="tc-payment-account"></select>
+                            </div>
                         </div>
 
                         <div class="col-md-12">
@@ -1012,6 +1064,14 @@
                                     <textarea class="form-control" rows="3" id="tc-note" style="height: 65px" maxlength="200"></textarea>
                                     <small class="char-counter">0/200</small>
                                 </div>
+                            </div>
+                        </div>
+
+                        {{-- Sửa phiếu: bắt buộc lý do, vào nhật ký cùng số cũ → mới. --}}
+                        <div class="col-md-12 div-tc-reason d-none">
+                            <div class="mb-3">
+                                <label class="form-label" for="tc-reason">Lý do sửa <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="tc-reason" maxlength="200" autocomplete="off" placeholder="vd. Gõ thiếu một số 0">
                             </div>
                         </div>
                     </div>
@@ -1094,11 +1154,28 @@
                             <div class="col"><label class="form-label">{{ __('message.delete-confirm') }}</label></div>
                         </div>
                     </div>
+                    <div class="mt-2">
+                        <label class="form-label" for="deleteReason">Lý do xoá <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="deleteReason" maxlength="200" autocomplete="off" placeholder="vd. Lập trùng phiếu">
+                    </div>
                 </div>
                 <div class="modal-footer justify-content-center">
                     <button type="button" class="bt btn_red" data-bs-dismiss="modal">{{ __('message.close') }}</button>
                     <button type="button" class="bt btn_green delete-value">{{ __('message.delete') }}</button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    {{-- Nhật ký sửa / xoá của một phiếu. --}}
+    <div class="modal" id="nhatKyThuChi">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h6 class="modal-title">Nhật ký phiếu <span class="nk-ma"></span></h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body"><ol class="nk-ds"></ol></div>
             </div>
         </div>
     </div>
@@ -1159,6 +1236,7 @@
     <script>
         const URL_TC = @json(url('/admin/cashbook/entries'));
         const URL_TC_STORE = @json(route('admin.cashbook.store'));
+        const URL_TC_TAI_KHOAN = @json(route('admin.cashbook.taiKhoan'));
         const URL_TC_PHAN_LOAI = @json(route('admin.cashbook.phanLoai'));
         const URL_TC_NGUOI_NOP = @json(route('admin.cashbook.nguoiNop'));
         const URL_TC_TAO_NGUOI_NOP = @json(route('admin.cashbook.taoNguoiNop'));
@@ -1191,6 +1269,8 @@
                 const g = oLoc(ten).val() || [];
                 if (g.length) q.set(ten, [].concat(g).join(','));
             });
+            const tk = oLoc('bank_account_id').val();
+            if (tk) q.set('bank_account_id', tk);
 
             // Hai ô ngày LUÔN gửi, kể cả khi trống: controller chỉ tự điền tháng
             // này khi tham số VẮNG MẶT, nên không gửi là người dùng xoá ngày xong
@@ -1217,7 +1297,7 @@
         });
         $(document).on('change',
             '.fillter-box [name="type"], .fillter-box [name="created_by"], '
-            + '.fillter-box [name="category_id"], .fillter-box [name="source"], '
+            + '.fillter-box [name="category_id"], .fillter-box [name="source"], .fillter-box [name="bank_account_id"], '
             + '.fillter-box [name="from_date"], .fillter-box [name="to_date"]',
             locLai);
 
@@ -1458,7 +1538,14 @@
             $('#tc-payer-id').html(O_TRONG);
             $('.div-add-payer').addClass('d-none');
             $('#tc-payment-method').val('cash');
+            $hop.find('.div-tc-tai-khoan').addClass('d-none');
             $('#tc-note').val('').trigger('input');
+            $('#tc-reason').val('');
+            $('#tc-adjusts-id').val('');
+            $('#tc-dung').val('');
+            $hop.find('.div-tc-adjust').addClass('d-none');
+            $('#tc-type, #tc-category-id').prop('disabled', false);
+            $('#tc-amount').prop('readonly', false);
             datDinhKem('');
             $('#tc-attachment').val('');
 
@@ -1470,6 +1557,7 @@
         function moHop(mode, $tr) {
             donHop();
             $hop.attr('data-mode', mode);
+            $hop.find('.div-tc-reason').toggleClass('d-none', mode !== 'edit');
             $hop.find('.modal-title').text(mode === 'edit'
                 ? @json(__('message.edit_receipt'))
                 : @json(__('message.add_receipt')));
@@ -1487,6 +1575,7 @@
                 napNguoiNop(d('payer-type'), d('payer-id'));
                 datDinhKem(d('attachment'));
             }
+            veTaiKhoan(mode === 'edit' && $tr ? $tr.attr('data-bank-account-id') : '', mode === 'edit' && $tr ? $tr.attr('data-bank-account') : '');
 
             $hop.modal('show');
         }
@@ -1507,6 +1596,13 @@
             // nhập số tiền" thì người dùng đã kịp bấm Lưu lần thứ hai.
             if (loai === '') { toastr.error('Chọn phiếu thu hay phiếu chi.'); return; }
             if (!tien || Number(tien) <= 0) { toastr.error('Nhập số tiền lớn hơn 0.'); return; }
+            if (!$('#tc-category-id').val()) { toastr.error('Chọn phân loại cho phiếu.'); return; }
+            if (id && !$('#tc-reason').val().trim()) { toastr.error('Ghi lý do sửa phiếu.'); $('#tc-reason').trigger('focus'); return; }
+            if (pt === 'transfer' && !$hop.find('.div-tc-tai-khoan').hasClass('d-none') && !$('#tc-payment-account').val()) {
+                toastr.error('Chọn tài khoản nhận / chuyển của phiếu chuyển khoản.');
+                return;
+            }
+            const dieuChinh = $('#tc-adjusts-id').val();
 
             V2.luuHop($hop, id ? URL_TC + '/' + id : URL_TC_STORE, id ? 'PUT' : 'POST', {
                 type: loai,
@@ -1515,8 +1611,11 @@
                 payer_type: $('#tc-payer-type').val() || '',
                 payer_id: $('#tc-payer-id').val() || '',
                 payment_method: pt,
+                bank_account_id: pt === 'transfer' ? ($('#tc-payment-account').val() || '') : '',
                 attachment: $('#tc-attachment-url').val(),
                 note: $('#tc-note').val(),
+                ...(id ? { reason: $('#tc-reason').val().trim() } : {}),
+                ...(dieuChinh ? { adjusts_id: dieuChinh } : {}),
             }, $(this));
         });
 
@@ -1701,10 +1800,34 @@
             h += dongChiTiet(@json(__('message.amount')), thoat(d('amount-text')) + ' đ');
             h += dongChiTiet(@json(__('message.payer')) + '/ ' + @json(__('message.payee')), thoat(d('payer')));
             h += dongChiTiet(@json(__('message.payment-method')), thoat(d('payment-method-name')));
+            if (d('bank-account')) h += dongChiTiet('Tài khoản', thoat(d('bank-account')));
             h += dongChiTiet(@json(__('message.type')), thoat(d('source-name')));
             h += dongChiTiet(@json(__('message.description')), thoat(d('note')));
             h += dongChiTiet(@json(__('message.recorded-time')), thoat(d('created-at')));
             h += dongChiTiet(@json(__('message.creator')), thoat(d('creator')));
+            // Hai phiếu điều chỉnh / bị điều chỉnh nối nhau: bấm mã là lọc ra phiếu ấy.
+            const denPhieu = function (ma, id) {
+                return '<a href="?keyword=' + encodeURIComponent(ma) + '" class="den-phieu">' + thoat(ma || ('#' + id)) + '</a>';
+            };
+            if (d('adjusts-id')) {
+                h += dongChiTiet('Điều chỉnh cho', denPhieu(d('adjusts-code'), d('adjusts-id'))
+                    + '<br><small>Phiếu gốc ở ca đã đóng — số của ca ấy giữ nguyên</small>');
+            }
+            if (d('adjusted-by')) {
+                h += dongChiTiet('Đã điều chỉnh bởi', JSON.parse(d('adjusted-by')).map(function (x) { return denPhieu(x.code, x.id); }).join(', '));
+            }
+            // Sửa lần cuối 11:33 18/10 bởi Quản trị viên (200.000 → 320.000) — bấm xem cả nhật ký.
+            if (d('last-edit')) {
+                const e = JSON.parse(d('last-edit'));
+                const luc = new Date(e.at);
+                const so = function (n) { return Math.round(Number(n) || 0).toLocaleString('vi-VN'); };
+                const p2 = function (n) { return String(n).padStart(2, '0'); };
+                h += dongChiTiet('Sửa lần cuối', '<a href="#" class="xem-nhat-ky" data-id="' + thoat(d('id')) + '" data-code="' + thoat(d('code')) + '">'
+                    + p2(luc.getHours()) + ':' + p2(luc.getMinutes()) + ' ' + p2(luc.getDate()) + '/' + p2(luc.getMonth() + 1)
+                    + ' bởi ' + thoat(e.by_name || 'không rõ')
+                    + (e.amount_old !== e.amount_new ? ' (' + so(e.amount_old) + ' → ' + so(e.amount_new) + ')' : '')
+                    + '</a><br><small>Lý do: ' + thoat(e.reason) + '</small>');
+            }
 
             // Ô đính kèm luôn có mặt, kể cả khi rỗng — v2 cũng vậy. Một hàng trống
             // nói "phiếu này không có chứng từ kèm theo", còn giấu hàng đi thì
@@ -1727,6 +1850,12 @@
                     + lyDo.charAt(0).toUpperCase() + lyDo.slice(1) + '</span></p>';
             }
 
+            if (d('can-adjust') === '1') {
+                h += '<div class="mt-2"><button type="button" class="bt btn_green lap-dieu-chinh" data-id="' + thoat(d('id')) + '">'
+                    + '<i class="fa fa-balance-scale"></i> Lập phiếu điều chỉnh</button>'
+                    + '<small class="d-block text-muted mt-1">Phiếu của ca đã đóng không sửa được — lập phiếu mới vào ca đang mở.</small></div>';
+            }
+
             return h;
         }
 
@@ -1742,6 +1871,8 @@
             $('#offcanvasDetail').attr('data-id', $tr.attr('data-id')).data('tr', $tr);
             $('#offcanvasDetail .modal-view-materials').html(htmlChiTiet($tr));
             $('#offcanvasDetail .button-header').toggleClass('d-none', $tr.attr('data-locked') === '1');
+            // Phiếu nộp về công ty không có phân loại — hộp sửa của màn này đòi phân loại, nên sửa ở quầy.
+            $('#offcanvasDetail .edit-item-canvas').toggleClass('d-none', $tr.attr('data-kind') === 'deposit');
             bootstrap.Offcanvas.getOrCreateInstance(document.getElementById('offcanvasDetail')).show();
         });
 
@@ -1770,9 +1901,124 @@
             if (!id) return;
             // Đi đường hộp thoại (JSON): xoá xong hộp tự đóng và bắn toast; hỏng
             // (phiếu thuộc ca đã đóng) thì hộp giữ nguyên và báo đúng lý do.
-            V2.luuHop($('#deleteItem'), URL_TC + '/' + id, 'DELETE', {}, $(this));
+            const lyDo = $('#deleteReason').val().trim();
+            if (!lyDo) { toastr.error('Ghi lý do xoá phiếu.'); $('#deleteReason').trigger('focus'); return; }
+            V2.luuHop($('#deleteItem'), URL_TC + '/' + id, 'DELETE', { reason: lyDo }, $(this));
         });
 
-        $('#deleteItem').on('hidden.bs.modal', function () { $('#deleteValue').val(''); });
+        $('#deleteItem').on('hidden.bs.modal', function () { $('#deleteValue').val(''); $('#deleteReason').val(''); });
+
+        // ================= Tài khoản của phiếu chuyển khoản =================
+        // Danh sách tài khoản đang bật của chi nhánh lập phiếu, nạp một lần. Mặc định
+        // tài khoản đánh dấu mặc định; một tài khoản thì chọn sẵn luôn.
+        let dsTaiKhoan = null;
+        function napTaiKhoan() {
+            if (dsTaiKhoan) return $.Deferred().resolve(dsTaiKhoan).promise();
+            return $.getJSON(URL_TC_TAI_KHOAN).then(function (r) { dsTaiKhoan = r.data || []; return dsTaiKhoan; },
+                function () { dsTaiKhoan = []; return $.Deferred().resolve([]).promise(); });
+        }
+        function veTaiKhoan(chon, nhanCu) {
+            const ck = $('#tc-payment-method').val() === 'transfer';
+            napTaiKhoan().done(function (ds) {
+                const ra = ds.slice();
+                // Phiếu cũ ghi tài khoản nay đã tắt: vẫn bày để sửa phiếu không mất tài khoản.
+                if (chon && !ra.some(function (t) { return String(t.id) === String(chon); }) && nhanCu) {
+                    ra.push({ id: chon, label: nhanCu + ' (đã tắt)' });
+                }
+                const md = chon || ((ra.find(function (t) { return t.is_default; }) || ra[0] || {}).id) || '';
+                $('#tc-payment-account').html(ra.map(function (t) {
+                    return '<option value="' + t.id + '">' + $('<div>').text(t.label).html() + '</option>';
+                }).join('')).val(String(md));
+                $hop.find('.div-tc-tai-khoan').toggleClass('d-none', !ck || !ra.length);
+            });
+        }
+        $(document).on('change', '#tc-payment-method', function () { veTaiKhoan($('#tc-payment-account').val(), ''); });
+
+        // ================= Phiếu điều chỉnh =================
+        // Phiếu gốc khoá vì ca đã đóng: lập phiếu MỚI vào ca đang mở, giữ phân loại
+        // gốc; người dùng chỉ gõ số đúng, vế và số chênh tự ra.
+        let gocDieuChinh = null;
+        $(document).on('click', '.lap-dieu-chinh', function () {
+            const $tr = $('.item[data-id="' + $(this).attr('data-id') + '"]').first();
+            if (!$tr.length) return;
+            $('.modal.show').modal('hide');
+            const oc = bootstrap.Offcanvas.getInstance(document.getElementById('offcanvasDetail'));
+            if (oc) oc.hide();
+            const d = function (k) { return $tr.attr('data-' + k) || ''; };
+            gocDieuChinh = { id: d('id'), code: d('code'), type: d('type'), amount: Number(d('amount')) || 0 };
+            moHop('add', null);
+            $hop.find('.modal-title').text('Điều chỉnh ' + (gocDieuChinh.code || '#' + gocDieuChinh.id));
+            $('#tc-adjusts-id').val(gocDieuChinh.id);
+            $hop.find('.div-tc-adjust').removeClass('d-none');
+            $hop.find('.tc-adj-goc').html('Phiếu gốc <b>' + $('<div>').text(gocDieuChinh.code).html() + '</b> · ' + $('<div>').text(d('type-name')).html() + ' <b>'
+                + d('amount-text') + ' đ</b> · ca #' + d('shift-id') + ' đã đóng — số của ca ấy giữ nguyên, phiếu mới vào ca đang mở.');
+            $hop.find('.tc-adj-kq').text('Gõ số đúng — vế và số chênh tự ra.');
+            $('#tc-category-id').html('<option value="' + d('category-id') + '">' + $('<div>').text(d('category') || 'Chưa phân loại').html() + '</option>').val(d('category-id'));
+            $('#tc-type').val(d('type'));
+            $('#tc-type, #tc-category-id').prop('disabled', true);
+            $('#tc-amount').prop('readonly', true).val('');
+            veLaiSelect2($('#tc-category-id'));
+            $(O_TINH).each(function () { veChon($(this)); });
+        });
+        $(document).on('input', '#tc-dung', function () {
+            if (!gocDieuChinh || !$('#tc-adjusts-id').val()) return;
+            const so = function (n) { return Math.round(Number(n) || 0).toLocaleString('vi-VN'); };
+            const g = gocDieuChinh;
+            const dung = Number(soTu(this.value)) || 0;
+            this.value = this.value.trim() === '' ? '' : so(dung);
+            const chenh = Math.abs(g.amount - dung);
+            if (this.value === '' || chenh === 0) {
+                $('#tc-amount').val('');
+                $hop.find('.tc-adj-kq').text(this.value === '' ? 'Gõ số đúng — vế và số chênh tự ra.' : 'Số đúng bằng số cũ — không cần điều chỉnh.');
+                return;
+            }
+            const loai = dung < g.amount ? String(1 - Number(g.type)) : g.type;
+            $('#tc-type').val(loai); veChon($('#tc-type'));
+            $('#tc-amount').val(so(chenh));
+            $hop.find('.tc-adj-kq').html('→ Lập phiếu <b>' + (loai === '0' ? 'thu' : 'chi') + ' ' + so(chenh) + ' đ</b> ('
+                + (dung < g.amount ? 'đảo vế, trả lại phần dư' : 'cùng vế, bù phần thiếu') + ').');
+            if (!$('#tc-note').data('tay')) {
+                $('#tc-note').val('Điều chỉnh ' + (g.code || '#' + g.id) + ' (' + (g.type === '0' ? 'thu' : 'chi') + ' ' + so(g.amount) + ' → đúng ' + so(dung) + ')').trigger('input');
+            }
+        });
+        $(document).on('keydown', '#tc-note', function () { $(this).data('tay', true); });
+        $hop.on('hidden.bs.modal', function () { $('#tc-note').removeData('tay'); gocDieuChinh = null; });
+
+        // ================= Nhật ký sửa / xoá =================
+        $(document).on('click', '.xem-nhat-ky', function (e) {
+            e.preventDefault();
+            const id = $(this).attr('data-id');
+            const $ds = $('#nhatKyThuChi .nk-ds').html('<li class="nk-trong">Đang tải…</li>');
+            $('#nhatKyThuChi .nk-ma').text($(this).attr('data-code') || ('#' + id));
+            $('#nhatKyThuChi').modal('show');
+            const so = function (n) { return Math.round(Number(n) || 0).toLocaleString('vi-VN'); };
+            const thoat = function (s) { return $('<div>').text(s == null ? '' : s).html(); };
+            const ht = function (v) { return v === 'cash' ? 'Tiền mặt' : (v ? 'Chuyển khoản' : null); };
+            $.getJSON(URL_TC + '/' + id + '/log')
+                .done(function (r) {
+                    const dong = (r.data || []).map(function (n) {
+                        const c = n.changes || {};
+                        const doi = [];
+                        const them = function (nhan, cu, moi, tien) {
+                            if (moi === undefined || moi === null || cu === moi) return;
+                            doi.push('<div>' + nhan + ': <s>' + (tien ? so(cu) : thoat(cu || '—')) + '</s> → <b>' + (tien ? so(moi) : thoat(moi || '—')) + '</b></div>');
+                        };
+                        them('Số tiền', c.so_tien_cu, c.so_tien_moi, true);
+                        them('Phân loại', c.phan_loai_cu, c.phan_loai_moi);
+                        them('Hình thức', ht(c.hinh_thuc_cu), ht(c.hinh_thuc_moi));
+                        them('Mô tả', c.mo_ta_cu, c.mo_ta_moi);
+                        const xoa = n.action === 'thu_chi.xoa';
+                        const luc = new Date(n.at);
+                        return '<li class="' + (xoa ? 'is-xoa' : '') + '"><b>' + (xoa ? 'Xoá' : 'Sửa') + '</b> · '
+                            + luc.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) + ' ' + luc.toLocaleDateString('vi-VN')
+                            + ' · ' + thoat(n.by_name || 'không rõ') + '<div>Lý do: ' + thoat(n.reason) + '</div>'
+                            + (doi.length ? doi.join('') : '<div class="nk-trong">Không đổi số liệu</div>') + '</li>';
+                    });
+                    $ds.html(dong.join('') || '<li class="nk-trong">Phiếu chưa bị sửa lần nào.</li>');
+                })
+                .fail(function (x) {
+                    $ds.html('<li class="nk-trong">' + thoat((x.responseJSON && x.responseJSON.message) || 'Không tải được nhật ký.') + '</li>');
+                });
+        });
     </script>
 @endpush
