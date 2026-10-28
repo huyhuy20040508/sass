@@ -1,32 +1,40 @@
 # ecommerce_web
 
-Web bán online cho nhiều shop trên một tên miền. Đơn hàng gửi về POS huyshop qua API.
+Web bán hàng riêng cho từng shop, theo mô hình web bán hàng của KiotViet: mỗi shop một
+địa chỉ, quản trị bằng chính tài khoản POS, đơn hàng gửi về POS huyshop qua API.
 
-Shop được chọn bằng link (mã shop = mã cửa hàng bên POS):
+**Mỗi shop một địa chỉ.** Shop nhận diện theo tên miền đang mở (bảng `shop_domains`):
 
-| Link | Dùng khi |
+| Địa chỉ | Có khi |
 |---|---|
-| `/?store_id=kimhana&branch_code=CN1` | QR riêng của từng chi nhánh |
-| `/cua-hang?slug=kimhana` | Link chung của shop, chưa chọn chi nhánh |
+| `<mã>.<WEB_BASE_DOMAIN>` — vd `kimhana.huyweb.selliotech.store` | Tự có khi `bin/create-shop.php` |
+| Tên miền riêng của tiệm — vd `shop.kimhana.vn` | `bin/shop-domain.php kimhana shop.kimhana.vn [--chinh]`, rồi khai tên miền đó vào nginx + cấp chứng chỉ |
+| Thêm `?branch_code=CN1` | QR riêng của từng chi nhánh; web nhớ chi nhánh cho lần sau |
 
-Web nhớ shop + chi nhánh ở trình duyệt, nên lần sau vào thẳng tên miền vẫn đúng tiệm.
-Backend: route của một shop khai `shop: true` trong `src/routes.php`, lấy shop qua `CurrentShop::id()`.
-Frontend: link trong trang khách dùng `<StoreLink>` để giữ `store_id`.
+Tên miền gốc (không phải shop nào) chỉ báo "Không tìm thấy cửa hàng".
+
+**Quản trị** ở `<địa chỉ shop>/admin`, dùng chung tài khoản POS: mã cửa hàng (điền sẵn theo
+địa chỉ, không sửa được) + tên đăng nhập + mật khẩu; chỉ người có cửa Quản lý bên POS. Web
+không giữ mật khẩu: đăng nhập qua `POS_API_URL`, 5 phút hỏi lại POS một lần nên khoá tài
+khoản hay cửa hàng hết hạn bên POS là web cũng đá ra. Phiên chỉ dùng được trên đúng shop đó.
+
+Backend: route của một shop khai `shop: true` trong `src/routes.php`, route quản trị khai
+`admin: true`; cả hai lấy shop qua `CurrentShop::id()`. Frontend: trang quản trị gọi API bằng `adminApi()`.
 
 | Môi trường | Tên miền |
 |---|---|
-| Test | https://huyweb.selliotech.store (nginx: `/etc/nginx/sites-available/huyweb.selliotech.store`) |
-| Prod | https://web.selliotech.store (chưa dựng) |
+| Test | `*.huyweb.selliotech.store` (nginx: `/etc/nginx/sites-available/huyweb.selliotech.store`, database `ecommerce_web`) |
+| Prod | `*.web.selliotech.store`, database `selliotech_web` — triển khai cùng POS, xem `deploy/README.md` mục "Web bán hàng" |
 
 ```
 ecommerce_web/
 ├── backend/            PHP thuần (không framework), PDO MySQL
 │   ├── public/         index.php — cổng vào duy nhất, mọi /api/* đi qua đây
-│   ├── src/Core/       Env, Db, Router, Request, Response, CurrentShop
+│   ├── src/Core/       Env, Db, Router, Request, Response, CurrentShop, CurrentAdmin, Secret
 │   ├── src/Controllers/
-│   ├── src/Services/
+│   ├── src/Services/   PosClient, PosAdmin — gọi API POS
 │   ├── src/routes.php  khai đường dẫn
-│   ├── bin/            create-shop.php
+│   ├── bin/            create-shop.php, shop-domain.php
 │   └── database/       schema.sql
 └── frontend/           React + Vite: trang khách (/) và quản trị (/admin)
 ```
@@ -35,9 +43,10 @@ ecommerce_web/
 
 ```bash
 # backend — cổng 8097
-cd backend && cp .env.example .env   # điền thông tin DB
+cd backend && cp .env.example .env   # điền DB, APP_KEY, POS_API_URL, WEB_BASE_DOMAIN
 mysql ecommerce_web < database/schema.sql
-php bin/create-shop.php kimhana "Kim Hana"   # mã phải trùng mã cửa hàng POS
+php bin/create-shop.php kimhana "Kim Hana"            # mã phải trùng mã cửa hàng POS
+php bin/shop-domain.php kimhana kimhana.localhost     # để mở http://kimhana.localhost:5180
 php -S 127.0.0.1:8097 -t public public/index.php
 
 # frontend — cổng 5180, tự chuyển /api sang 8097
@@ -47,3 +56,4 @@ cd frontend && npm install && npm run dev
 ## Chạy thật
 
 nginx phục vụ `frontend/dist/` (sau `npm run build`), chuyển `/api` về `backend/public/index.php`. Mọi đường khác trả `index.html` để React Router xử lý.
+Prod do `deploy/scripts/05-web-ban.sh` dựng mỗi lượt triển khai; thêm shop bằng `sudo selliotech-web-them-shop <mã> "<tên>"`.

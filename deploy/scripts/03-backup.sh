@@ -283,6 +283,26 @@ lam_sao_luu() {
         vang "  control plane ($DB_NEN_TANG) chưa có bảng nào — bỏ qua"
     fi
 
+    # Web bán hàng (database selliotech_web) — database thứ ba, tệp dump riêng. Chưa dựng
+    # thì bỏ qua; hỏng thì cảnh báo chứ không dừng, phần POS vẫn phải được lưu.
+    local SO_BANG_WEB
+    SO_BANG_WEB="$(mysql "${MY[@]}" -N -B -e \
+        "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='selliotech_web' AND table_type='BASE TABLE'" \
+        2>/dev/null || echo 0)"
+    if (( SO_BANG_WEB > 0 )); then
+        if mysqldump "${MY[@]}" \
+            --single-transaction --quick --no-tablespaces \
+            --set-gtid-purged=OFF \
+            --default-character-set=utf8mb4 \
+            selliotech_web 2>/dev/null | gzip -6 > "$TAM/web-ban.sql.gz" \
+           && [[ "$(gzip -dc "$TAM/web-ban.sql.gz" | tail -3)" == *'-- Dump completed'* ]]; then
+            xanh "  web bán hàng: $SO_BANG_WEB bảng, $(doc "$(stat -c %s "$TAM/web-ban.sql.gz")") (đã nén)"
+        else
+            rm -f "$TAM/web-ban.sql.gz"
+            vang "  web bán hàng (selliotech_web): dump KHÔNG thành công — bỏ qua lượt này"
+        fi
+    fi
+
     # -----------------------------------------------------------------
     buoc "3/6  Ảnh người bán tải lên"
     # -----------------------------------------------------------------
@@ -324,7 +344,7 @@ lam_sao_luu() {
     # APP_KEY thì không: Laravel dùng nó mã hoá dữ liệu nằm trong database.
     local CO_ENV=0
     local -a ENVS=()
-    for f in api/.env web_Shop/.env admin-Selliotech/.env; do
+    for f in api/.env web_Shop/.env admin-Selliotech/.env ecommerce_web/backend/.env; do
         [[ -f "$APP_DIR/$f" ]] && { ENVS+=("$f"); CO_ENV=$((CO_ENV+1)); }
     done
     if (( CO_ENV > 0 )); then

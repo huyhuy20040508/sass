@@ -1,10 +1,3 @@
-let currentStore = '';
-
-/** ShopLayout gọi sau khi backend xác nhận shop; từ đó mọi lượt gọi tự mang mã shop. */
-export function setApiStore(code) {
-  currentStore = code;
-}
-
 export class ApiError extends Error {
   constructor(message, status, errors) {
     super(message);
@@ -13,11 +6,13 @@ export class ApiError extends Error {
   }
 }
 
-/** Gọi backend; trả {data, meta, message} hoặc ném ApiError mang câu báo lỗi của máy chủ. */
-export async function api(path, { method = 'GET', body, store } = {}) {
+/**
+ * Gọi backend; trả {data, meta, message} hoặc ném ApiError mang câu báo lỗi của máy chủ.
+ * Không cần gửi mã shop: backend nhận shop theo tên miền đang mở.
+ */
+export async function api(path, { method = 'GET', body, token } = {}) {
   const headers = { Accept: 'application/json' };
-  const storeCode = store ?? currentStore;
-  if (storeCode) headers['X-Store-Id'] = storeCode;
+  if (token) headers.Authorization = `Bearer ${token}`;
   if (body !== undefined) headers['Content-Type'] = 'application/json';
 
   let res;

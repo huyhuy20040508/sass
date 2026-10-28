@@ -220,6 +220,14 @@ cd "$APP_DIR/web_Shop"
 xanh "  web_Shop: đã có symlink public/storage"
 
 # ---------------------------------------------------------------------
+buoc "5b/10  Web bán hàng (ecommerce_web)"
+# ---------------------------------------------------------------------
+# Tiến trình riêng, hỏng thì chỉ cảnh báo: web bán hàng lỗi không được chặn
+# lượt triển khai POS. Lý do tách tệp ghi ở đầu 05-web-ban.sh.
+bash "$APP_DIR/deploy/scripts/05-web-ban.sh" \
+    || vang "  web bán hàng KHÔNG cập nhật được — POS vẫn triển khai tiếp. Chạy lại riêng: sudo bash $APP_DIR/deploy/scripts/05-web-ban.sh"
+
+# ---------------------------------------------------------------------
 buoc "6/10  Quyền thư mục"
 # ---------------------------------------------------------------------
 # PHP-FPM của Selliotech chạy dưới chính người dùng `selliotech` (pool riêng ở
@@ -231,6 +239,7 @@ chown -R "$APP_USER:$APP_USER" "$APP_DIR"
 find "$APP_DIR" -type d -exec chmod 755 {} +
 find "$APP_DIR" -type f -exec chmod 644 {} +
 chmod 600 "$APP_DIR"/{api,web_Shop,admin-Selliotech}/.env
+[[ -f "$APP_DIR/ecommerce_web/backend/.env" ]] && chmod 600 "$APP_DIR/ecommerce_web/backend/.env"
 chmod 755 "$APP_DIR/api/api.new"
 
 for app in web_Shop admin-Selliotech; do
@@ -446,4 +455,7 @@ Sau khi có HTTPS, sửa lại 3 tệp .env cho đúng https:// rồi chạy l�
 Sao lưu chạy mỗi 12 giờ, tự động:
     sudo selliotech-sao-luu trang-thai      <- xem lượt gần nhất
     sudo selliotech-phuc-hoi                <- xem có những bản nào
+
+Web bán hàng (mỗi shop một địa chỉ <mã>.web.selliotech.store, cần DNS *.web):
+    sudo selliotech-web-them-shop <mã cửa hàng POS> "<tên shop>"
 HD
