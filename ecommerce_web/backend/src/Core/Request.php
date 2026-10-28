@@ -10,6 +10,7 @@ final class Request
     private function __construct(
         public readonly string $method,
         public readonly string $path,
+        public readonly string $host,
         public readonly array $query,
         public readonly array $body,
         private readonly array $headers,
@@ -32,6 +33,8 @@ final class Request
         return new self(
             strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET'),
             rtrim($path, '/') ?: '/',
+            // Bỏ cổng và dấu chấm cuối: "Kimhana.huyweb.selliotech.store.:443" vẫn là một shop.
+            rtrim(strtolower((string) preg_replace('/:\d+$/', '', (string) ($_SERVER['HTTP_HOST'] ?? ''))), '.'),
             $_GET,
             is_array($body) ? $body : [],
             $headers,

@@ -6,38 +6,40 @@ namespace App\Core;
 
 final class Router
 {
-    /** @var list<array{method: string, regex: string, handler: array{class-string, string}, shop: bool}> */
+    /** @var list<array{method: string, regex: string, handler: array{class-string, string}, shop: bool, admin: bool}> */
     private array $routes = [];
 
     /**
      * @param array{class-string, string} $handler
-     * @param bool $shop true = route của một shop, phải xác định được shop trước khi vào controller
+     * @param bool $shop true = route của một shop, phải xác định được shop (theo tên miền) trước khi vào controller
+     * @param bool $admin true = route quản trị, phải đăng nhập đúng shop của tên miền
      */
-    public function get(string $pattern, array $handler, bool $shop = false): void
+    public function get(string $pattern, array $handler, bool $shop = false, bool $admin = false): void
     {
-        $this->add('GET', $pattern, $handler, $shop);
+        $this->add('GET', $pattern, $handler, $shop, $admin);
     }
 
     /** @param array{class-string, string} $handler */
-    public function post(string $pattern, array $handler, bool $shop = false): void
+    public function post(string $pattern, array $handler, bool $shop = false, bool $admin = false): void
     {
-        $this->add('POST', $pattern, $handler, $shop);
+        $this->add('POST', $pattern, $handler, $shop, $admin);
     }
 
     /** @param array{class-string, string} $handler */
-    public function put(string $pattern, array $handler, bool $shop = false): void
+    public function put(string $pattern, array $handler, bool $shop = false, bool $admin = false): void
     {
-        $this->add('PUT', $pattern, $handler, $shop);
+        $this->add('PUT', $pattern, $handler, $shop, $admin);
     }
 
     /** @param array{class-string, string} $handler */
-    private function add(string $method, string $pattern, array $handler, bool $shop): void
+    private function add(string $method, string $pattern, array $handler, bool $shop, bool $admin): void
     {
         $this->routes[] = [
             'method' => $method,
             'regex' => '#^' . preg_replace('#\{(\w+)\}#', '(?P<$1>[^/]+)', $pattern) . '$#',
             'handler' => $handler,
             'shop' => $shop,
+            'admin' => $admin,
         ];
     }
 
@@ -52,8 +54,11 @@ final class Router
             if ($route['method'] !== $req->method) {
                 continue;
             }
-            if ($route['shop']) {
+            if ($route['shop'] || $route['admin']) {
                 CurrentShop::resolve($req);
+            }
+            if ($route['admin']) {
+                CurrentAdmin::resolve($req);
             }
             [$class, $action] = $route['handler'];
             (new $class())->$action($req, array_filter($m, 'is_string', ARRAY_FILTER_USE_KEY));

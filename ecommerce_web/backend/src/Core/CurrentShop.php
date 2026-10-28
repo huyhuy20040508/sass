@@ -5,34 +5,28 @@ declare(strict_types=1);
 namespace App\Core;
 
 /**
- * Shop đang được phục vụ trong lượt gọi này.
+ * Shop đang được phục vụ trong lượt gọi này, nhận diện theo TÊN MIỀN đang mở
+ * (như web bán hàng KiotViet: mỗi shop một địa chỉ).
  *
- * Route khai `shop: true` thì Router gọi resolve() trước controller; controller
- * và câu truy vấn chỉ lấy shop qua id() — không tự đọc store_id từ request,
- * để không có chỗ nào quên kiểm shop còn hoạt động.
+ * Route khai `shop: true` (và mọi route `admin: true`) thì Router gọi resolve()
+ * trước controller; controller và câu truy vấn chỉ lấy shop qua id().
  */
 final class CurrentShop
 {
-    // Cùng luật mã cửa hàng bên POS (trial_service.go).
-    private const CODE_PATTERN = '/^[a-z0-9][a-z0-9._-]{1,29}$/';
-
     /** @var array{id: int, code: string, name: string}|null */
     private static ?array $shop = null;
 
     /** @return array{id: int, code: string, name: string} */
     public static function resolve(Request $req): array
     {
-        // Frontend gửi qua header cho mọi lượt gọi; query để mở thử bằng trình duyệt cũng được.
-        $code = $req->header('x-store-id') ?: (string) ($req->query['store_id'] ?? $req->query['slug'] ?? '');
-        $code = strtolower(trim($code));
-        if ($code === '') {
-            throw new HttpException(400, 'Thiếu mã cửa hàng');
-        }
-
-        // Mã sai khuôn, không có, hay đã tắt đều chung một câu: không để dò ra tiệm nào từng tồn tại.
-        $row = preg_match(self::CODE_PATTERN, $code)
-            ? Db::one('SELECT id, code, name FROM shops WHERE code = ? AND is_active = 1', [$code])
-            : null;
+        $row = $req->host === '' ? null : Db::one(
+            'SELECT s.id, s.code, s.name
+               FROM shop_domains d
+               JOIN shops s ON s.id = d.shop_id AND s.is_active = 1
+              WHERE d.host = ?',
+            [$req->host],
+        );
+        // Tên miền lạ hay shop đã tắt đều chung một câu: không để dò ra tiệm nào từng tồn tại.
         if ($row === null) {
             throw new HttpException(404, 'Không tìm thấy cửa hàng');
         }

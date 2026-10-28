@@ -375,6 +375,38 @@ Dấu hiệu nhận ra: `ls -1 /etc/nginx/sites-enabled/` thiếu tệp mà bạ
 
 ---
 
+## Web bán hàng (`ecommerce_web/`)
+
+Web bán hàng riêng cho từng shop, kiểu web bán hàng KiotViet: mỗi shop một địa chỉ
+`<mã>.web.selliotech.store`, chủ tiệm vào `<địa chỉ>/admin` bằng chính tài khoản POS.
+Nó đi cùng lượt triển khai POS ở bước **5b/10** của `02-deploy.sh` — gọi
+`deploy/scripts/05-web-ban.sh` như tiến trình riêng, hỏng thì chỉ cảnh báo, POS vẫn lên.
+
+| Lần đầu `05-web-ban.sh` tự làm | Mỗi lượt |
+|---|---|
+| Cài `nodejs npm` nếu thiếu; tạo database + người dùng `selliotech_web`, sinh `ecommerce_web/backend/.env` (mật khẩu, `APP_KEY` ngẫu nhiên, `POS_API_URL` theo `APP_PORT` của `api/.env`) | Nạp `schema.sql`, `npm ci` + build React, dựng nginx `web.selliotech.store` (HTTP, hoặc HTTPS khi đã có chứng chỉ `selliotech-web`) |
+
+> Database tên `selliotech_web`, **không** phải `ecommerce_web`: máy chủ prod dùng chung
+> MySQL với bản dev, mà database dev mang đúng tên `ecommerce_web`.
+
+**Một lần ở DNS (Hostinger):** bản ghi `A` tên `*.web` trỏ về IP máy chủ — cùng IP với
+`api.selliotech.store` (`dig +short api.selliotech.store`).
+
+**Thêm shop** — mã phải trùng mã cửa hàng bên POS:
+
+```bash
+sudo selliotech-web-them-shop kimhana "Kim Hana"
+# → https://kimhana.web.selliotech.store  (quản trị: /admin)
+```
+
+Lệnh tạo shop, xin chứng chỉ cho địa chỉ của nó (gộp mọi shop vào **một** chứng chỉ
+`selliotech-web`, xác minh qua `/var/www/letsencrypt` nên không đụng cấu hình nginx), rồi bật
+HTTPS. Không dùng wildcard vì wildcard phải xác minh DNS bằng tay mỗi 90 ngày; certbot tự gia
+hạn chứng chỉ này.
+
+Sao lưu đã gồm database `selliotech_web` (`web-ban.sql.gz`) và `.env` của nó. `04-restore.sh`
+chưa tự nạp lại phần này — cần thì: `gunzip -c web-ban.sql.gz | mysql selliotech_web`.
+
 ## CI/CD — tự động kiểm tra và triển khai
 
 Toàn bộ nằm trong một tệp: [`.github/workflows/ci.yml`](../.github/workflows/ci.yml).
