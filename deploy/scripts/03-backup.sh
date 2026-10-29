@@ -336,6 +336,16 @@ lam_sao_luu() {
         vang "  chưa có $ANH_DIR — bỏ qua"
     fi
 
+    # Ảnh riêng của web bán hàng (logo, banner — mỗi shop một thư mục). Ít và nhỏ,
+    # chép thẳng mỗi lượt; storage/cache bên cạnh là bản sao từ POS nên không chép.
+    local ANH_WEB="$APP_DIR/ecommerce_web/backend/storage/media"
+    if [[ -d "$ANH_WEB" ]] && [[ -n "$(ls -A "$ANH_WEB")" ]]; then
+        tar -cf "$TAM/anh-web-ban.tar" -C "$ANH_WEB" . 2>/dev/null
+        tar -tf "$TAM/anh-web-ban.tar" >/dev/null 2>&1 \
+            || { rm -rf "$TAM"; chet "anh-web-ban.tar hỏng"; }
+        xanh "  web bán hàng: $(find "$ANH_WEB" -type f | wc -l) ảnh, $(doc "$(stat -c %s "$TAM/anh-web-ban.tar")")"
+    fi
+
     # -----------------------------------------------------------------
     buoc "4/6  Ba tệp .env"
     # -----------------------------------------------------------------

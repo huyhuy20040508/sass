@@ -378,9 +378,11 @@ func dungHeThongVoi(t *testing.T, banHang, dieuHanh bool) *heThong {
 	contactSvc := service.NewContactService(contactRepo, newsletterRepo)
 	reportSvc := service.NewReportService(reportRepo)
 
+	khoaTichHopRepo := repository.NewIntegrationKeyRepository(db)
 	r := router.New(cfg, jwtMgr, tenMienRepo, nguoiDieuHanhRepo, nil, chiNhanhRepo,
-		repository.NewNhanVienRepository(db), repository.NewQuyenRepository(db), router.Handlers{
+		repository.NewNhanVienRepository(db), repository.NewQuyenRepository(db), khoaTichHopRepo, router.Handlers{
 			Health:        handler.NewHealthHandler("test"),
+			TichHop:       handler.NewTichHopHandler(service.NewTichHopService(khoaTichHopRepo)),
 			Auth:          handler.NewAuthHandler(authSvc),
 			Category:      handler.NewCategoryHandler(categorySvc),
 			Product:       handler.NewProductHandler(productSvc, promotionSvc),

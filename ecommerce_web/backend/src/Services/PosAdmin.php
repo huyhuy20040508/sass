@@ -45,10 +45,12 @@ final class PosAdmin
     }
 
     /**
-     * Hỏi lại POS phiên còn sống không: tài khoản còn hoạt động, cửa hàng còn hạn,
-     * người còn quyền Quản lý. Trả refresh token mới (POS cấp lại mỗi lượt).
+     * Đổi refresh token lấy cặp token mới — đồng thời là lượt hỏi lại POS phiên còn sống
+     * không: tài khoản còn hoạt động, cửa hàng còn hạn, người còn quyền Quản lý.
+     *
+     * @return array{access: string, refresh: string}
      */
-    public static function recheck(string $refreshToken, string $clientIp): string
+    public static function refresh(string $refreshToken, string $clientIp): array
     {
         $data = self::data(PosClient::post('/auth/refresh', ['refresh_token' => $refreshToken], $clientIp));
         if (!empty($data['cua_hang_khoa'])) {
@@ -58,7 +60,7 @@ final class PosAdmin
             self::guardManager($data['user']);
         }
 
-        return (string) ($data['refresh_token'] ?? '');
+        return ['access' => (string) ($data['access_token'] ?? ''), 'refresh' => (string) ($data['refresh_token'] ?? '')];
     }
 
     /** @param array{status: int, body: array<string, mixed>} $res */

@@ -49,7 +49,31 @@ final class CurrentAdmin
         return self::$admin ?? throw new \LogicException('Route này chưa khai admin: true');
     }
 
+    /**
+     * Access token POS của người đang đăng nhập, để gọi khu quản trị POS thay họ
+     * (vd xin cấp khoá tích hợp khi bấm "Kết nối"). Chỉ dùng trong route `admin: true`.
+     */
+    public static function posAccessToken(Request $req): string
+    {
+        $row = Db::one('SELECT pos_refresh_token FROM admin_sessions WHERE id = ?', [self::get()['session_id']]);
+        $access = self::refresh(self::get()['session_id'], (string) ($row['pos_refresh_token'] ?? ''), $req->ip(), true);
+        if ($access === '') {
+            throw new HttpException(503, 'Không lấy được phiên POS, vui lòng thử lại');
+        }
+
+        return $access;
+    }
+
     private static function recheck(int $sessionId, string $sealed, string $ip): void
+    {
+        self::refresh($sessionId, $sealed, $ip, false);
+    }
+
+    /**
+     * Hỏi POS bằng refresh token đã cất; POS cấp lại cặp mới nên phải cất ngay refresh mới.
+     * $batBuoc = false (lượt kiểm định kỳ): POS không trả lời thì cho qua, trả ''.
+     */
+    private static function refresh(int $sessionId, string $sealed, string $ip, bool $batBuoc): string
     {
         // Không giải mã được (đã đổi APP_KEY) thì không còn gì để hỏi POS.
         $old = Secret::open($sealed);
@@ -57,20 +81,25 @@ final class CurrentAdmin
             self::kill($sessionId);
         }
         try {
-            $refresh = PosAdmin::recheck($old, $ip);
+            $tokens = PosAdmin::refresh($old, $ip);
         } catch (HttpException $e) {
             // Chỉ đá ra khi POS nói rõ phiên không còn (401/403). POS bảo trì hay đang
             // chặn vì gọi dày (429) thì cho qua, lượt sau hỏi lại vì pos_checked_at chưa đổi.
             if ($e->status !== 401 && $e->status !== 403) {
-                return;
+                if ($batBuoc) {
+                    throw $e;
+                }
+                return '';
             }
             // 403 mang lý do cụ thể (hết hạn, mất quyền) — chuyển cho màn đăng nhập hiện ra.
             self::kill($sessionId, $e->status === 403 ? $e->getMessage() : null);
         }
         Db::exec(
             'UPDATE admin_sessions SET pos_refresh_token = ?, pos_checked_at = NOW(), expires_at = NOW() + INTERVAL ' . self::SESSION_DAYS . ' DAY WHERE id = ?',
-            [Secret::seal($refresh), $sessionId],
+            [Secret::seal($tokens['refresh']), $sessionId],
         );
+
+        return $tokens['access'];
     }
 
     private static function kill(int $sessionId, ?string $reason = null): never

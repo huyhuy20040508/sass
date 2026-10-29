@@ -484,7 +484,9 @@ func main() {
 	}
 
 	// 7. Handler
+	khoaTichHopRepo := repository.NewIntegrationKeyRepository(db)
 	handlers := router.Handlers{
+		TichHop:       handler.NewTichHopHandler(service.NewTichHopService(khoaTichHopRepo)),
 		Health:        handler.NewHealthHandler(version),
 		Auth:          handler.NewAuthHandler(authSvc),
 		Category:      handler.NewCategoryHandler(categorySvc),
@@ -548,7 +550,7 @@ func main() {
 	// tiếp cho tới khi access token hết hạn. Xem middleware.JWTAuth.
 	r := router.New(cfg, jwtMgr, tenMienRepo, nguoiDieuHanhRepo,
 		repository.NewPhienRepository(db), chiNhanhRepo, nhanSuRepo,
-		quyenRepo, handlers)
+		quyenRepo, khoaTichHopRepo, handlers)
 	srv := &http.Server{
 		Addr:        announcedAddr(cfg.App.Port),
 		Handler:     r,
