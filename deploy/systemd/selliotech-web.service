@@ -1,0 +1,20 @@
+# Web bán hàng (ecommerce_web) — app Next.js, bản standalone.
+# 05-web-ban.sh thay __NODE__ bằng đường dẫn node trên máy rồi chép vào /etc/systemd/system/.
+[Unit]
+Description=Selliotech — web bán hàng (Next.js)
+After=network.target
+
+[Service]
+User=selliotech
+Group=selliotech
+WorkingDirectory=/var/www/selliotech/ecommerce_web/storefront/.next/standalone
+Environment=NODE_ENV=production
+Environment=PORT=3100
+Environment=HOSTNAME=127.0.0.1
+Environment=WEB_API_INTERNAL=http://127.0.0.1:8099
+ExecStart=__NODE__ server.js
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

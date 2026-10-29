@@ -30,6 +30,12 @@ final class Secret
         return $plain === false ? null : $plain;
     }
 
+    /** Chữ ký HMAC bằng APP_KEY — cho mã ngắn hạn (vd mã xem bản nháp giao diện). */
+    public static function ky(string $noiDung): string
+    {
+        return hash_hmac('sha256', $noiDung, self::key());
+    }
+
     private static function key(): string
     {
         $key = base64_decode(Env::get('APP_KEY'), true);

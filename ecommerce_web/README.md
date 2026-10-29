@@ -19,11 +19,16 @@ không giữ mật khẩu: đăng nhập qua `POS_API_URL`, 5 phút hỏi lại 
 khoản hay cửa hàng hết hạn bên POS là web cũng đá ra. Phiên chỉ dùng được trên đúng shop đó.
 
 Backend: route của một shop khai `shop: true` trong `src/routes.php`, route quản trị khai
-`admin: true`; cả hai lấy shop qua `CurrentShop::id()`. Frontend: trang quản trị gọi API bằng `adminApi()`.
+`admin: true`; cả hai lấy shop qua `CurrentShop::id()`.
+
+Giao diện là app **Next.js** (`storefront/`): trang khách dựng phía máy chủ (gọi PHP qua cổng nội bộ
+của nginx, giữ Host của shop — `lib/shop-api.ts`), khu quản trị `/admin` chạy phía trình duyệt và gọi
+API bằng `adminApi()`. Menu quản trị khai ở `lib/menu.ts`; màn chưa làm tự hiện trang giữ chỗ.
+Thiết kế đầy đủ: `docs/thiet-ke.md`.
 
 | Môi trường | Tên miền |
 |---|---|
-| Test | `*.huyweb.selliotech.store` (nginx: `/etc/nginx/sites-available/huyweb.selliotech.store`, database `ecommerce_web`) |
+| Test | `*.huyweb.selliotech.store` (nginx: `/etc/nginx/sites-available/huyweb.selliotech.store`, Next: systemd `huyweb-next` cổng 3101, API nội bộ 8098, database `ecommerce_web`) |
 | Prod | `*.web.selliotech.store`, database `selliotech_web` — triển khai cùng POS, xem `deploy/README.md` mục "Web bán hàng" |
 
 ```
@@ -36,7 +41,12 @@ ecommerce_web/
 │   ├── src/routes.php  khai đường dẫn
 │   ├── bin/            create-shop.php, shop-domain.php
 │   └── database/       schema.sql
-└── frontend/           React + Vite: trang khách (/) và quản trị (/admin)
+├── storefront/         Next.js: trang khách (/) và quản trị (/admin)
+│   ├── app/(shop)/     trang khách theo shop của tên miền
+│   ├── app/admin/      đăng nhập + khung quản trị
+│   ├── lib/            api, adminAuth, menu, shop-api
+│   └── proxy.ts        nhớ chi nhánh từ QR vào cookie
+└── docs/               thiet-ke.md (+ bản PDF)
 ```
 
 ## Chạy dev
@@ -49,11 +59,12 @@ php bin/create-shop.php kimhana "Kim Hana"            # mã phải trùng mã c�
 php bin/shop-domain.php kimhana kimhana.localhost     # để mở http://kimhana.localhost:5180
 php -S 127.0.0.1:8097 -t public public/index.php
 
-# frontend — cổng 5180, tự chuyển /api sang 8097
-cd frontend && npm install && npm run dev
+# giao diện — cổng 5180; cần nginx cho /api (xem cấu hình dev huyweb)
+cd storefront && npm install && npm run dev
 ```
 
 ## Chạy thật
 
-nginx phục vụ `frontend/dist/` (sau `npm run build`), chuyển `/api` về `backend/public/index.php`. Mọi đường khác trả `index.html` để React Router xử lý.
+`npm run build` ra bản standalone (`.next/standalone/server.js`) chạy dưới systemd. nginx chuyển `/api` về
+`backend/public/index.php`, còn lại sang Next; thêm một cổng nội bộ 127.0.0.1 để Next gọi `/api` phía máy chủ.
 Prod do `deploy/scripts/05-web-ban.sh` dựng mỗi lượt triển khai; thêm shop bằng `sudo selliotech-web-them-shop <mã> "<tên>"`.

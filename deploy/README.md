@@ -384,10 +384,13 @@ Nó đi cùng lượt triển khai POS ở bước **5b/10** của `02-deploy.sh
 
 | Lần đầu `05-web-ban.sh` tự làm | Mỗi lượt |
 |---|---|
-| Cài `nodejs npm` nếu thiếu; tạo database + người dùng `selliotech_web`, sinh `ecommerce_web/backend/.env` (mật khẩu, `APP_KEY` ngẫu nhiên, `POS_API_URL` theo `APP_PORT` của `api/.env`) | Nạp `schema.sql`, `npm ci` + build React, dựng nginx `web.selliotech.store` (HTTP, hoặc HTTPS khi đã có chứng chỉ `selliotech-web`) |
+| Tạo database + người dùng `selliotech_web`, sinh `ecommerce_web/backend/.env` (mật khẩu, `APP_KEY` ngẫu nhiên, `POS_API_URL` theo `APP_PORT` của `api/.env`) | Nạp `schema.sql`; `npm ci` + build Next.js, khởi động lại systemd `selliotech-web` (127.0.0.1:3100); dựng nginx `web.selliotech.store` (HTTP, hoặc HTTPS khi đã có chứng chỉ `selliotech-web`) + cổng nội bộ 127.0.0.1:8099 cho Next gọi API |
 
 > Database tên `selliotech_web`, **không** phải `ecommerce_web`: máy chủ prod dùng chung
-> MySQL với bản dev, mà database dev mang đúng tên `ecommerce_web`.
+> MySQL với bản dev, mà database dev mang đúng tên `ecommerce_web`. Cũng vì chung máy mà cổng
+> tách đôi: dev Next 3101 + API nội bộ 8098, prod 3100 + 8099.
+>
+> Cần Node.js **>= 20.9** (Next 16); script không tự cài vì `nodejs` của Ubuntu 24.04 là bản 18.
 
 **Một lần ở DNS (Hostinger):** bản ghi `A` tên `*.web` trỏ về IP máy chủ — cùng IP với
 `api.selliotech.store` (`dig +short api.selliotech.store`).

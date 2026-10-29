@@ -44,3 +44,61 @@ CREATE TABLE IF NOT EXISTS admin_sessions (
     KEY idx_admin_sessions_shop (shop_id),
     CONSTRAINT fk_admin_sessions_shop FOREIGN KEY (shop_id) REFERENCES shops (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Kết nối POS của shop: khoá tích hợp POS cấp khi chủ tiệm bấm "Kết nối" ở admin web.
+-- Web đọc hàng và gửi đơn bằng khoá này, kể cả lúc không ai đăng nhập. Lưu mã hoá bằng
+-- APP_KEY; POS chỉ giữ băm nên mất khoá ở đây thì phải bấm kết nối lại để POS cấp khoá mới.
+CREATE TABLE IF NOT EXISTS pos_integrations (
+    shop_id      INT UNSIGNED PRIMARY KEY,
+    key_sealed   TEXT         NOT NULL,
+    key_prefix   VARCHAR(16)  NOT NULL,
+    connected_by VARCHAR(150) NOT NULL,
+    connected_at DATETIME     NOT NULL,
+    CONSTRAINT fk_pos_integrations_shop FOREIGN KEY (shop_id) REFERENCES shops (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Cài đặt chung của shop hiện lên web: tên, logo, liên hệ, màu/font. Dùng cho đầu trang,
+-- chân trang và mọi trang — không theo theme (đổi theme không mất màu của shop, như KiotViet).
+-- Một cục JSON vì các ô còn thêm dần; khuôn và giá trị mặc định ở Services/CaiDatShop.php.
+CREATE TABLE IF NOT EXISTS shop_settings (
+    shop_id    INT UNSIGNED PRIMARY KEY,
+    data       JSON         NOT NULL,
+    updated_by VARCHAR(150) NOT NULL,
+    updated_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_shop_settings_shop FOREIGN KEY (shop_id) REFERENCES shops (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Giao diện của shop (màn Chỉnh sửa giao diện): bản NHÁP đang sửa và bản ĐANG CHẠY khách
+-- thấy. Sửa chỉ ghi nháp; bấm Áp dụng mới chép nháp sang đang chạy. Khuôn dữ liệu theo
+-- tệp theme storefront/themes/<theme>/theme.json, kiểm ở Services/GiaoDien.php.
+CREATE TABLE IF NOT EXISTS shop_themes (
+    shop_id     INT UNSIGNED PRIMARY KEY,
+    theme       VARCHAR(40)  NOT NULL,
+    nhap        JSON         NOT NULL,
+    dang_chay   JSON         NULL,
+    sua_luc     DATETIME     NOT NULL,
+    sua_boi     VARCHAR(150) NOT NULL,
+    ap_dung_luc DATETIME     NULL,
+    ap_dung_boi VARCHAR(150) NULL,
+    CONSTRAINT fk_shop_themes_shop FOREIGN KEY (shop_id) REFERENCES shops (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Lượt xem trang khách theo ngày (thẻ Tổng quan ở trang Website của tôi). Đếm ở máy chủ
+-- web, không dùng Google Analytics: chủ tiệm có số ngay, không phải gắn thêm gì.
+CREATE TABLE IF NOT EXISTS web_truy_cap (
+    shop_id INT UNSIGNED NOT NULL,
+    ngay    DATE         NOT NULL,
+    luot    INT UNSIGNED NOT NULL DEFAULT 0,
+    khach   INT UNSIGNED NOT NULL DEFAULT 0,
+    PRIMARY KEY (shop_id, ngay),
+    CONSTRAINT fk_web_truy_cap_shop FOREIGN KEY (shop_id) REFERENCES shops (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Khách đã đếm trong ngày (để mỗi khách chỉ tính một lần/ngày). Mã khách là số ngẫu nhiên
+-- trình duyệt tự sinh, không gắn với người thật; dòng cũ hơn 2 ngày được dọn dần.
+CREATE TABLE IF NOT EXISTS web_khach_ngay (
+    shop_id INT UNSIGNED NOT NULL,
+    ngay    DATE         NOT NULL,
+    ma      CHAR(16)     NOT NULL,
+    PRIMARY KEY (shop_id, ngay, ma)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

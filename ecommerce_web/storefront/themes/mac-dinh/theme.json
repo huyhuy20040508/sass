@@ -1,0 +1,469 @@
+{
+  "ma": "mac-dinh",
+  "ten": "Mặc định",
+  "nganh": "Mọi ngành hàng",
+  "mo_ta": "Gọn, sáng, dễ dùng — hợp mọi cửa hàng.",
+  "thu_tu": 1,
+  "mau": [
+    "#1e2a4a",
+    "#0f62fe",
+    "#0b7285",
+    "#0e7c66",
+    "#2b8a3e",
+    "#c62828",
+    "#e8590c",
+    "#f08c00",
+    "#d6336c",
+    "#ae3ec9",
+    "#7048e8",
+    "#8d6e63",
+    "#495057",
+    "#111827"
+  ],
+  "font": [
+    {
+      "khoa": "be-vietnam-pro",
+      "ten": "Be Vietnam Pro"
+    },
+    {
+      "khoa": "inter",
+      "ten": "Inter"
+    },
+    {
+      "khoa": "roboto",
+      "ten": "Roboto"
+    },
+    {
+      "khoa": "montserrat",
+      "ten": "Montserrat"
+    },
+    {
+      "khoa": "nunito",
+      "ten": "Nunito"
+    },
+    {
+      "khoa": "lora",
+      "ten": "Lora (có chân)"
+    }
+  ],
+  "chung": {
+    "mau_chinh": "#1e2a4a",
+    "font": "be-vietnam-pro"
+  },
+  "dau_trang": {
+    "ten": "Đầu trang",
+    "icon": "fa-window-maximize",
+    "o": [
+      {
+        "khoa": "hien_menu",
+        "loai": "bat_tat",
+        "nhan": "Hiện thanh menu nhóm hàng",
+        "mac_dinh": true
+      },
+      {
+        "khoa": "hien_hotline",
+        "loai": "bat_tat",
+        "nhan": "Hiện hotline",
+        "mac_dinh": true
+      }
+    ]
+  },
+  "chan_trang": {
+    "ten": "Chân trang",
+    "icon": "fa-window-minimize",
+    "o": [
+      {
+        "khoa": "hien_danh_muc",
+        "loai": "bat_tat",
+        "nhan": "Hiện cột Danh mục",
+        "mac_dinh": true
+      },
+      {
+        "khoa": "ban_quyen",
+        "loai": "chu",
+        "nhan": "Dòng bản quyền",
+        "max": 120,
+        "mac_dinh": "",
+        "goi_y": "Để trống = © năm + tên cửa hàng"
+      },
+      {
+        "khoa": "hien_nut_noi",
+        "loai": "bat_tat",
+        "nhan": "Nút gọi / Zalo nổi góc màn hình",
+        "mac_dinh": true
+      }
+    ]
+  },
+  "khoi": {
+    "banner-top": {
+      "ten": "Banner top",
+      "icon": "fa-bullhorn",
+      "mo_ta": "Dòng thông báo chạy ngang",
+      "o": [
+        {
+          "khoa": "noi_dung",
+          "loai": "chu",
+          "nhan": "Nội dung",
+          "max": 150,
+          "mac_dinh": "Miễn phí giao hàng cho đơn từ 500.000đ"
+        },
+        {
+          "khoa": "link",
+          "loai": "link",
+          "nhan": "Đường dẫn khi bấm",
+          "mac_dinh": "",
+          "goi_y": "/danh-muc/... hoặc https://..."
+        },
+        {
+          "khoa": "mau_nen",
+          "loai": "mau",
+          "nhan": "Màu nền",
+          "mac_dinh": "",
+          "goi_y": "Để trống = màu chủ đạo"
+        },
+        {
+          "khoa": "chay",
+          "loai": "bat_tat",
+          "nhan": "Chữ chạy ngang",
+          "mac_dinh": false
+        }
+      ]
+    },
+    "banner-chinh": {
+      "ten": "Banner chính",
+      "icon": "fa-image",
+      "mo_ta": "Ảnh lớn đầu trang, tiêu đề và nút",
+      "o": [
+        {
+          "khoa": "anh_nen",
+          "loai": "anh",
+          "nhan": "Ảnh nền",
+          "mac_dinh": "",
+          "goi_y": "Khuyên dùng 1920×700px. Không có ảnh thì dùng nền màu chủ đạo"
+        },
+        {
+          "khoa": "do_phu",
+          "loai": "so",
+          "nhan": "Độ phủ tối trên ảnh (%)",
+          "min": 0,
+          "max": 80,
+          "mac_dinh": 35
+        },
+        {
+          "khoa": "canh",
+          "loai": "chon",
+          "nhan": "Căn chữ",
+          "mac_dinh": "trai",
+          "lua_chon": [
+            {
+              "gt": "trai",
+              "nhan": "Trái"
+            },
+            {
+              "gt": "giua",
+              "nhan": "Giữa"
+            }
+          ]
+        },
+        {
+          "khoa": "tieu_de",
+          "loai": "chu",
+          "nhan": "Tiêu đề",
+          "max": 60,
+          "mac_dinh": "Chào mừng đến cửa hàng"
+        },
+        {
+          "khoa": "mo_ta",
+          "loai": "doan",
+          "nhan": "Mô tả",
+          "max": 300,
+          "mac_dinh": "Hàng chính hãng, giá tốt mỗi ngày. Đặt online, giao tận nơi."
+        },
+        {
+          "khoa": "nut_chu",
+          "loai": "chu",
+          "nhan": "Chữ trên nút",
+          "max": 30,
+          "mac_dinh": "Mua ngay"
+        },
+        {
+          "khoa": "nut_link",
+          "loai": "link",
+          "nhan": "Nút dẫn tới",
+          "mac_dinh": "#san-pham"
+        }
+      ]
+    },
+    "dich-vu": {
+      "ten": "Dịch vụ",
+      "icon": "fa-thumbs-up",
+      "mo_ta": "Các điểm mạnh của cửa hàng",
+      "o": [
+        {
+          "khoa": "nen",
+          "loai": "chon",
+          "nhan": "Kiểu nền",
+          "mac_dinh": "trang",
+          "lua_chon": [
+            {
+              "gt": "trang",
+              "nhan": "Trắng"
+            },
+            {
+              "gt": "nhat",
+              "nhan": "Màu nhạt"
+            }
+          ]
+        },
+        {
+          "khoa": "muc",
+          "loai": "danh_sach",
+          "nhan": "Danh sách dịch vụ",
+          "toi_da": 4,
+          "ten_muc": "Dịch vụ",
+          "o": [
+            {
+              "khoa": "icon",
+              "loai": "chon",
+              "nhan": "Biểu tượng",
+              "mac_dinh": "fa-truck-fast",
+              "lua_chon": [
+                {
+                  "gt": "fa-truck-fast",
+                  "nhan": "Giao hàng"
+                },
+                {
+                  "gt": "fa-shield-halved",
+                  "nhan": "Bảo hành"
+                },
+                {
+                  "gt": "fa-rotate-left",
+                  "nhan": "Đổi trả"
+                },
+                {
+                  "gt": "fa-headset",
+                  "nhan": "Hỗ trợ"
+                },
+                {
+                  "gt": "fa-tags",
+                  "nhan": "Giá tốt"
+                },
+                {
+                  "gt": "fa-gift",
+                  "nhan": "Quà tặng"
+                },
+                {
+                  "gt": "fa-credit-card",
+                  "nhan": "Thanh toán"
+                },
+                {
+                  "gt": "fa-award",
+                  "nhan": "Chất lượng"
+                }
+              ]
+            },
+            {
+              "khoa": "tieu_de",
+              "loai": "chu",
+              "nhan": "Tiêu đề",
+              "max": 40,
+              "mac_dinh": ""
+            },
+            {
+              "khoa": "mo_ta",
+              "loai": "chu",
+              "nhan": "Mô tả",
+              "max": 100,
+              "mac_dinh": ""
+            }
+          ],
+          "mac_dinh": [
+            {
+              "icon": "fa-truck-fast",
+              "tieu_de": "Giao hàng nhanh",
+              "mo_ta": "Nội thành trong ngày, toàn quốc 2–4 ngày"
+            },
+            {
+              "icon": "fa-shield-halved",
+              "tieu_de": "Hàng chính hãng",
+              "mo_ta": "Cam kết nguồn gốc rõ ràng"
+            },
+            {
+              "icon": "fa-rotate-left",
+              "tieu_de": "Đổi trả dễ dàng",
+              "mo_ta": "Đổi trong 7 ngày nếu lỗi"
+            },
+            {
+              "icon": "fa-headset",
+              "tieu_de": "Hỗ trợ tận tình",
+              "mo_ta": "Tư vấn từ 8:00 đến 21:00"
+            }
+          ]
+        }
+      ]
+    },
+    "hang-hoa": {
+      "ten": "Hàng hoá",
+      "icon": "fa-box-open",
+      "mo_ta": "Lưới sản phẩm lấy từ POS",
+      "o": [
+        {
+          "khoa": "tieu_de",
+          "loai": "chu",
+          "nhan": "Tiêu đề",
+          "max": 60,
+          "mac_dinh": "Sản phẩm mới"
+        },
+        {
+          "khoa": "nguon",
+          "loai": "chon",
+          "nhan": "Lấy hàng",
+          "mac_dinh": "moi",
+          "lua_chon": [
+            {
+              "gt": "moi",
+              "nhan": "Mới nhất"
+            },
+            {
+              "gt": "ban_chay",
+              "nhan": "Bán chạy"
+            },
+            {
+              "gt": "giam",
+              "nhan": "Đang giảm giá"
+            },
+            {
+              "gt": "nhom",
+              "nhan": "Theo nhóm hàng"
+            }
+          ]
+        },
+        {
+          "khoa": "nhom",
+          "loai": "nhom_hang",
+          "nhan": "Nhóm hàng",
+          "mac_dinh": 0,
+          "hien_khi": {
+            "nguon": "nhom"
+          }
+        },
+        {
+          "khoa": "so_luong",
+          "loai": "chon",
+          "nhan": "Số món",
+          "mac_dinh": "8",
+          "lua_chon": [
+            {
+              "gt": "4",
+              "nhan": "4 món"
+            },
+            {
+              "gt": "8",
+              "nhan": "8 món"
+            },
+            {
+              "gt": "12",
+              "nhan": "12 món"
+            }
+          ]
+        }
+      ]
+    },
+    "nhom-hang": {
+      "ten": "Nhóm hàng",
+      "icon": "fa-layer-group",
+      "mo_ta": "Các nhóm hàng chính để khách bấm vào",
+      "o": [
+        {
+          "khoa": "tieu_de",
+          "loai": "chu",
+          "nhan": "Tiêu đề",
+          "max": 60,
+          "mac_dinh": "Danh mục sản phẩm"
+        }
+      ]
+    },
+    "gioi-thieu": {
+      "ten": "Giới thiệu",
+      "icon": "fa-quote-left",
+      "mo_ta": "Ảnh và đoạn giới thiệu cửa hàng",
+      "o": [
+        {
+          "khoa": "anh",
+          "loai": "anh",
+          "nhan": "Ảnh",
+          "mac_dinh": "",
+          "goi_y": "Khuyên dùng 800×600px"
+        },
+        {
+          "khoa": "tieu_de",
+          "loai": "chu",
+          "nhan": "Tiêu đề",
+          "max": 60,
+          "mac_dinh": "Về chúng tôi"
+        },
+        {
+          "khoa": "noi_dung",
+          "loai": "doan",
+          "nhan": "Nội dung",
+          "max": 800,
+          "mac_dinh": "Giới thiệu đôi nét về cửa hàng: bắt đầu từ đâu, bán gì, vì sao khách nên chọn mình."
+        },
+        {
+          "khoa": "nut_chu",
+          "loai": "chu",
+          "nhan": "Chữ trên nút",
+          "max": 30,
+          "mac_dinh": ""
+        },
+        {
+          "khoa": "nut_link",
+          "loai": "link",
+          "nhan": "Nút dẫn tới",
+          "mac_dinh": ""
+        }
+      ]
+    },
+    "banner-phu": {
+      "ten": "Banner phụ",
+      "icon": "fa-images",
+      "mo_ta": "Hai ảnh khuyến mãi nằm cạnh nhau",
+      "o": [
+        {
+          "khoa": "anh_1",
+          "loai": "anh",
+          "nhan": "Ảnh 1",
+          "mac_dinh": "",
+          "goi_y": "Khuyên dùng 600×300px"
+        },
+        {
+          "khoa": "link_1",
+          "loai": "link",
+          "nhan": "Ảnh 1 dẫn tới",
+          "mac_dinh": ""
+        },
+        {
+          "khoa": "anh_2",
+          "loai": "anh",
+          "nhan": "Ảnh 2",
+          "mac_dinh": ""
+        },
+        {
+          "khoa": "link_2",
+          "loai": "link",
+          "nhan": "Ảnh 2 dẫn tới",
+          "mac_dinh": ""
+        }
+      ]
+    }
+  },
+  "trang_chu": [
+    "banner-top",
+    "banner-chinh",
+    "dich-vu",
+    "hang-hoa",
+    "nhom-hang",
+    "gioi-thieu",
+    "banner-phu"
+  ]
+}

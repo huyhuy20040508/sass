@@ -32,6 +32,12 @@ final class Router
     }
 
     /** @param array{class-string, string} $handler */
+    public function delete(string $pattern, array $handler, bool $shop = false, bool $admin = false): void
+    {
+        $this->add('DELETE', $pattern, $handler, $shop, $admin);
+    }
+
+    /** @param array{class-string, string} $handler */
     private function add(string $method, string $pattern, array $handler, bool $shop, bool $admin): void
     {
         $this->routes[] = [

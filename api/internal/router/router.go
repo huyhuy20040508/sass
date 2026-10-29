@@ -39,7 +39,9 @@ const (
 
 // Handlers gom các handler cần thiết để đăng ký route.
 type Handlers struct {
-	Health   *handler.HealthHandler
+	Health *handler.HealthHandler
+	// TichHop cấp/thu hồi khoá tích hợp cho web bán hàng — xem handler.TichHopHandler.
+	TichHop  *handler.TichHopHandler
 	Auth     *handler.AuthHandler
 	Category *handler.CategoryHandler
 	Product  *handler.ProductHandler
@@ -177,6 +179,9 @@ func New(
 	// nil = không tra được quyền của ai, nên mọi đường có gắn quyền đều đóng.
 	// ĐỪNG truyền nil ở cmd/api.
 	quyenRepo domain.QuyenRepository,
+	// khoaTichHop tra KHOÁ TÍCH HỢP (header X-Integration-Key) của hệ thống gọi thay
+	// cửa hàng — web bán hàng. nil = không nhận khoá nào, mọi đường như cũ.
+	khoaTichHop domain.IntegrationKeyRepository,
 	h Handlers,
 ) *gin.Engine {
 	// q gắn PHÂN QUYỀN THEO CHỨC NĂNG cho từng đường của khu quản trị, và giữ sổ
@@ -272,6 +277,10 @@ func New(
 		khachLa := func(g *gin.RouterGroup) *gin.RouterGroup {
 			return g.Group("",
 				middleware.OptionalJWTAuth(jwtMgr),
+				// Web bán hàng gọi từ máy chủ của nó bằng khoá tích hợp: không token,
+				// không tên miền của tiệm. Đặt trước TenantFromHost để tên miền vẫn
+				// được đối chiếu với cửa hàng của khoá.
+				middleware.TenantFromIntegrationKey(khoaTichHop),
 				middleware.TenantFromHost(tenMien),
 				middleware.TenantRequired(),
 				// CHI NHÁNH ĐANG LÀM VIỆC cũng đọc ở đây, không chỉ ở nhóm admin.
@@ -1015,6 +1024,13 @@ func New(
 			// GHI vẫn chỉ quản trị viên.
 			admin.GET("/settings", h.Setting.List)
 			q.Dat(manage, http.MethodPut, "/settings", "cau-hinh.sua", h.Setting.Update)
+
+			// Kết nối WEB BÁN HÀNG: web gọi các đường này bằng phiên POS của chủ tiệm
+			// khi họ bấm "Kết nối" ở trang quản trị web. Cả xem cũng đòi quyền cấu
+			// hình — khoá này mở được dữ liệu cửa hàng không cần đăng nhập.
+			q.Dat(manage, http.MethodGet, "/tich-hop/web-ban-hang", "cau-hinh.sua", h.TichHop.TrangThaiWeb)
+			q.Dat(manage, http.MethodPost, "/tich-hop/web-ban-hang", "cau-hinh.sua", h.TichHop.CapKhoaWeb)
+			q.Dat(manage, http.MethodDelete, "/tich-hop/web-ban-hang", "cau-hinh.sua", h.TichHop.ThuHoiKhoaWeb)
 
 			// Tài khoản NỘI BỘ (quản trị & nhân viên) + vai trò.
 			// Khách hàng KHÔNG đi đường này — họ có /admin/customers riêng, và
