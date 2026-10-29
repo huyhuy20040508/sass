@@ -6,39 +6,40 @@ namespace App\Core;
 
 final class Router
 {
-    /** @var list<array{method: string, regex: string, handler: array{class-string, string}, shop: bool, admin: bool}> */
+    /** @var list<array{method: string, regex: string, handler: array{class-string, string}, shop: bool, admin: bool, khach: bool}> */
     private array $routes = [];
 
     /**
      * @param array{class-string, string} $handler
      * @param bool $shop true = route của một shop, phải xác định được shop (theo tên miền) trước khi vào controller
      * @param bool $admin true = route quản trị, phải đăng nhập đúng shop của tên miền
+     * @param bool $khach true = route của KHÁCH mua hàng, phải đăng nhập tài khoản khách của shop đó
      */
-    public function get(string $pattern, array $handler, bool $shop = false, bool $admin = false): void
+    public function get(string $pattern, array $handler, bool $shop = false, bool $admin = false, bool $khach = false): void
     {
-        $this->add('GET', $pattern, $handler, $shop, $admin);
+        $this->add('GET', $pattern, $handler, $shop, $admin, $khach);
     }
 
     /** @param array{class-string, string} $handler */
-    public function post(string $pattern, array $handler, bool $shop = false, bool $admin = false): void
+    public function post(string $pattern, array $handler, bool $shop = false, bool $admin = false, bool $khach = false): void
     {
-        $this->add('POST', $pattern, $handler, $shop, $admin);
+        $this->add('POST', $pattern, $handler, $shop, $admin, $khach);
     }
 
     /** @param array{class-string, string} $handler */
-    public function put(string $pattern, array $handler, bool $shop = false, bool $admin = false): void
+    public function put(string $pattern, array $handler, bool $shop = false, bool $admin = false, bool $khach = false): void
     {
-        $this->add('PUT', $pattern, $handler, $shop, $admin);
+        $this->add('PUT', $pattern, $handler, $shop, $admin, $khach);
     }
 
     /** @param array{class-string, string} $handler */
-    public function delete(string $pattern, array $handler, bool $shop = false, bool $admin = false): void
+    public function delete(string $pattern, array $handler, bool $shop = false, bool $admin = false, bool $khach = false): void
     {
-        $this->add('DELETE', $pattern, $handler, $shop, $admin);
+        $this->add('DELETE', $pattern, $handler, $shop, $admin, $khach);
     }
 
     /** @param array{class-string, string} $handler */
-    private function add(string $method, string $pattern, array $handler, bool $shop, bool $admin): void
+    private function add(string $method, string $pattern, array $handler, bool $shop, bool $admin, bool $khach = false): void
     {
         $this->routes[] = [
             'method' => $method,
@@ -46,6 +47,7 @@ final class Router
             'handler' => $handler,
             'shop' => $shop,
             'admin' => $admin,
+            'khach' => $khach,
         ];
     }
 
@@ -60,11 +62,14 @@ final class Router
             if ($route['method'] !== $req->method) {
                 continue;
             }
-            if ($route['shop'] || $route['admin']) {
+            if ($route['shop'] || $route['admin'] || $route['khach']) {
                 CurrentShop::resolve($req);
             }
             if ($route['admin']) {
                 CurrentAdmin::resolve($req);
+            }
+            if ($route['khach']) {
+                CurrentKhach::resolve($req);
             }
             [$class, $action] = $route['handler'];
             (new $class())->$action($req, array_filter($m, 'is_string', ARRAY_FILTER_USE_KEY));

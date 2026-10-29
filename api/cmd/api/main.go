@@ -493,6 +493,7 @@ func main() {
 		Product:       handler.NewProductHandler(productSvc, promotionSvc),
 		Tep:           handler.NewTepHandler(cfg.App.UploadDir, cfg.App.BaseURL),
 		Customer:      handler.NewCustomerHandler(customerSvc),
+		WebKhach:      handler.NewWebKhachHandler(customerSvc),
 		NhomKhach:     handler.NewCustomerGroupHandler(nhomKhachSvc),
 		GhiChuKhach:   handler.NewGhiChuKhachHandler(service.NewGhiChuKhachService(repository.NewGhiChuKhachRepository(db))),
 		QuaSinhNhat:   handler.NewQuaSinhNhatHandler(service.NewQuaSinhNhatService(repository.NewQuaSinhNhatRepository(db), settingSvc)),

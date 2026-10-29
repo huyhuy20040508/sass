@@ -7,6 +7,7 @@ use App\Controllers\AdminCaiDatController;
 use App\Controllers\AdminGiaoDienController;
 use App\Controllers\AdminPosController;
 use App\Controllers\HealthController;
+use App\Controllers\KhachAuthController;
 use App\Controllers\ShopController;
 use App\Core\Router;
 
@@ -20,6 +21,12 @@ return static function (Router $r): void {
     $r->get('/api/trang-chu', [ShopController::class, 'trangChu'], shop: true);
     $r->get('/api/hang', [ShopController::class, 'hang'], shop: true);
     $r->post('/api/dem', [ShopController::class, 'dem'], shop: true);
+
+    // Tài khoản KHÁCH MUA HÀNG: đăng ký ở đây thì bên POS có ngay hồ sơ khách.
+    $r->post('/api/khach/dang-ky', [KhachAuthController::class, 'dangKy'], shop: true);
+    $r->post('/api/khach/dang-nhap', [KhachAuthController::class, 'dangNhap'], shop: true);
+    $r->get('/api/khach/toi', [KhachAuthController::class, 'toi'], khach: true);
+    $r->post('/api/khach/dang-xuat', [KhachAuthController::class, 'dangXuat'], khach: true);
 
     // Route quản trị khai `admin: true`: phải có token đăng nhập của đúng shop đó.
     $r->post('/api/admin/login', [AdminAuthController::class, 'login'], shop: true);

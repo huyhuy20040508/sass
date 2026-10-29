@@ -125,3 +125,163 @@
   .sf-nav { display: none; }
   .sf-foot__cot { grid-template-columns: 1fr; gap: 24px; padding-top: 32px; }
 }
+
+/* ---------- Tài khoản khách: đăng nhập / đăng ký ----------
+   Một bộ kiểu cho cả hai màn, vì chúng dùng chung một form (FormTaiKhoan).
+   Màu chữ và nền lấy biến của shop nên theme nào cũng hợp tông. */
+.tk-trang {
+    display: flex;
+    justify-content: center;
+    padding: 32px 16px 56px;
+}
+
+.tk-form {
+    width: 100%;
+    max-width: 420px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 24px;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    background: #fff;
+}
+
+.tk-form h1 {
+    margin: 0 0 2px;
+    font-size: 22px;
+    font-weight: 700;
+    text-align: center;
+}
+
+/* Câu lỗi chung (sai mật khẩu, POS chưa kết nối) — đứng trên cùng để người dùng
+   thấy ngay, không phải dò từng ô. */
+.tk-loi-chung {
+    margin: 0;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: #fef2f2;
+    color: #b91c1c;
+    font-size: 14px;
+}
+
+.tk-o {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 14px;
+}
+
+.tk-o > span {
+    font-weight: 600;
+}
+
+.tk-o > span i {
+    font-weight: 400;
+    font-style: normal;
+    color: #6b7280;
+}
+
+.tk-o input {
+    width: 100%;
+    height: 42px;
+    padding: 0 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    font-size: 15px;
+}
+
+.tk-o input:focus {
+    outline: none;
+    border-color: var(--sf-chinh, #1f3a8a);
+}
+
+/* Lỗi của TỪNG ô nằm ngay dưới ô ấy: người dùng sửa đúng chỗ đang sai. */
+.tk-o em {
+    font-style: normal;
+    font-size: 13px;
+    color: #b91c1c;
+}
+
+.tk-mk {
+    position: relative;
+    display: block;
+}
+
+.tk-mk input {
+    padding-right: 44px;
+}
+
+.tk-mk button {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 44px;
+    height: 42px;
+    border: 0;
+    background: none;
+    color: #6b7280;
+    cursor: pointer;
+}
+
+.tk-gui {
+    height: 44px;
+    margin-top: 4px;
+    border: 0;
+    border-radius: 8px;
+    background: var(--sf-chinh, #1f3a8a);
+    color: #fff;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.tk-gui:disabled {
+    opacity: .6;
+    cursor: default;
+}
+
+.tk-doi {
+    margin: 0;
+    text-align: center;
+    font-size: 14px;
+}
+
+/* Nút tài khoản đứng cạnh giỏ hàng: cùng dáng với khối Hotline cho hàng trên đều nhau. */
+.sf-tk {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: inherit;
+    text-decoration: none;
+    font-size: 14px;
+    white-space: nowrap;
+}
+
+/* Ô giữ chỗ lúc chưa biết đã đăng nhập hay chưa — giữ đúng bề ngang để hàng trên không giật. */
+.sf-tk-cho {
+    width: 96px;
+    height: 20px;
+}
+
+.sf-tk small {
+    display: block;
+    font-size: 11px;
+    opacity: .75;
+}
+
+.sf-tk b {
+    display: block;
+    max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sf-tk button {
+    border: 0;
+    background: none;
+    color: inherit;
+    cursor: pointer;
+    padding: 4px;
+}

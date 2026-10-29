@@ -102,3 +102,39 @@ CREATE TABLE IF NOT EXISTS web_khach_ngay (
     ma      CHAR(16)     NOT NULL,
     PRIMARY KEY (shop_id, ngay, ma)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Khách mua hàng có tài khoản trên web của một shop.
+--
+-- Mật khẩu và phiên nằm ở ĐÂY, hồ sơ khách nằm ở POS: web không giữ bản sao hồ
+-- sơ (tên, nhóm khách, công nợ), chỉ giữ con trỏ `pos_customer_id`. Nhờ vậy
+-- khách sửa hồ sơ ở quầy hay ở web đều ra một nơi, không có hai bản lệch nhau.
+CREATE TABLE IF NOT EXISTS khach_web (
+    id               INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    shop_id          INT UNSIGNED NOT NULL,
+    -- Khách của POS mà tài khoản này trỏ tới (users.id bên database cửa hàng).
+    pos_customer_id  INT UNSIGNED NOT NULL,
+    -- Số điện thoại là DANH TÍNH: đăng nhập bằng nó, và POS cũng tra khách bằng
+    -- nó. Chỉ chữ số, không dấu cách — chuẩn hoá trước khi ghi.
+    phone            VARCHAR(20)  NOT NULL,
+    email            VARCHAR(191) NOT NULL DEFAULT '',
+    full_name        VARCHAR(150) NOT NULL,
+    password_hash    VARCHAR(255) NOT NULL,
+    created_at       DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at       DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_khach_web_sdt (shop_id, phone),
+    KEY idx_khach_web_pos (shop_id, pos_customer_id),
+    CONSTRAINT fk_khach_web_shop FOREIGN KEY (shop_id) REFERENCES shops (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Phiên đăng nhập của khách. Cùng khuôn admin_sessions: chỉ lưu băm của token.
+CREATE TABLE IF NOT EXISTS khach_sessions (
+    id         INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    shop_id    INT UNSIGNED NOT NULL,
+    khach_id   INT UNSIGNED NOT NULL,
+    token_hash CHAR(64)     NOT NULL UNIQUE,
+    expires_at DATETIME     NOT NULL,
+    created_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_khach_sessions_khach (khach_id),
+    CONSTRAINT fk_khach_sessions_shop FOREIGN KEY (shop_id) REFERENCES shops (id) ON DELETE CASCADE,
+    CONSTRAINT fk_khach_sessions_khach FOREIGN KEY (khach_id) REFERENCES khach_web (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

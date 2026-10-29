@@ -41,7 +41,9 @@ const (
 type Handlers struct {
 	Health *handler.HealthHandler
 	// TichHop cấp/thu hồi khoá tích hợp cho web bán hàng — xem handler.TichHopHandler.
-	TichHop  *handler.TichHopHandler
+	TichHop *handler.TichHopHandler
+	// WebKhach — khách của web bán hàng đăng ký, tạo hồ sơ khách trong POS.
+	WebKhach *handler.WebKhachHandler
 	Auth     *handler.AuthHandler
 	Category *handler.CategoryHandler
 	Product  *handler.ProductHandler
@@ -377,6 +379,19 @@ func New(
 		//
 		// Đọc token nếu có: cùng một endpoint, nhưng chỉ nhân viên quản trị mới thấy
 		// giá vốn. Khách và người lạ nhận đúng dữ liệu như trước.
+		// WEB BÁN HÀNG gọi thay cửa hàng bằng khoá tích hợp, không ai đăng nhập.
+		//
+		// Tách riêng khỏi cụm storefront (`auth/register`…) vì hai thứ khác nhau:
+		// storefront là gian hàng của chính POS, còn đây là một hệ thống bên ngoài
+		// đã được chủ tiệm cấp khoá. Nó bật theo khoá, không theo cờ EnableStorefront.
+		if h.WebKhach != nil {
+			// YeuCauKhoaTichHop phải đứng SAU khachLa: nó đọc dấu mà
+			// TenantFromIntegrationKey (nằm trong khachLa) để lại. Đặt trước là
+			// chốt chặn chạy lúc khoá còn chưa được tra, và mọi lượt gọi đều 401.
+			webBan := khachLa(v1).Group("/web-ban", middleware.YeuCauKhoaTichHop())
+			webBan.POST("/khach", han("web-dang-ky-khach", 30, 10*time.Minute), h.WebKhach.DangKy)
+		}
+
 		catalog := khachLa(v1)
 		catalog.GET("/categories", h.Category.List)
 		catalog.GET("/categories/:id", h.Category.Get)

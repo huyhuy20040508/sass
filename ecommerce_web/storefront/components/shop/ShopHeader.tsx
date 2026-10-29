@@ -1,4 +1,5 @@
 import type { CaiDat, GiaoDien, NhomHang } from '@/lib/khung';
+import NutTaiKhoan from '@/components/khach/NutTaiKhoan';
 import GioHangNut from './GioHangNut';
 import MenuDiDong from './MenuDiDong';
 
@@ -49,6 +50,7 @@ export default function ShopHeader({ cd, gd, nhom, chiNhanh }: { cd: CaiDat; gd:
             </span>
           </a>
         )}
+        <NutTaiKhoan />
         <GioHangNut />
       </div>
 
