@@ -3685,3 +3685,26 @@ type GhiChuKhachRequest struct {
 	NoiDung string `json:"noi_dung"`
 	NgayHen string `json:"ngay_hen"`
 }
+
+// ---------- Web bán hàng (khoá tích hợp) ----------
+
+// WebKhachRequest — khách đăng ký trên web bán hàng của cửa hàng.
+//
+// Chỉ ba ô: web hỏi đúng thứ cần để gọi lại khách. Mật khẩu KHÔNG đi qua đây,
+// nó nằm ở database của web — POS không giữ mật khẩu khách web.
+type WebKhachRequest struct {
+	FullName string `json:"full_name" binding:"required,max=150"`
+	Phone    string `json:"phone" binding:"required,max=20"`
+	Email    string `json:"email" binding:"omitempty,email,max=191"`
+}
+
+// WebKhachResponse — hồ sơ khách trong POS sau lượt đăng ký.
+type WebKhachResponse struct {
+	ID       uint   `json:"id"`
+	FullName string `json:"full_name"`
+	Phone    string `json:"phone"`
+	Email    string `json:"email"`
+	// Moi = false: số điện thoại này đã là khách của tiệm từ trước, web gắn tài
+	// khoản vào đúng hồ sơ ấy thay vì đẻ thêm một người trùng.
+	Moi bool `json:"moi"`
+}

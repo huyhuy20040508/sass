@@ -79,3 +79,21 @@ func TenantFromIntegrationKey(repo domain.IntegrationKeyRepository) gin.HandlerF
 		c.Next()
 	}
 }
+
+// YeuCauKhoaTichHop đóng đường với mọi lượt gọi KHÔNG mang khoá tích hợp.
+//
+// Dùng cho cụm /web-ban: những đường này tạo ra dữ liệu thật trong cửa hàng
+// (hồ sơ khách) mà không có ai đăng nhập, nên chỉ hệ thống đã được chủ tiệm cấp
+// khoá mới gọi được. Khách vãng lai mở thẳng URL thì nhận 401, không phải một
+// lượt tạo khách vô danh.
+//
+// Đặt SAU TenantFromIntegrationKey: nó đọc dấu mà middleware kia để lại.
+func YeuCauKhoaTichHop() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if _, co := c.Get(CtxKhoaTichHop); !co {
+			response.Error(c, 401, "Đường này chỉ dành cho hệ thống đã được cấp khoá tích hợp")
+			return
+		}
+		c.Next()
+	}
+}

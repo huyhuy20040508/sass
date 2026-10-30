@@ -387,6 +387,7 @@ func dungHeThongVoi(t *testing.T, banHang, dieuHanh bool) *heThong {
 			Category:      handler.NewCategoryHandler(categorySvc),
 			Product:       handler.NewProductHandler(productSvc, promotionSvc),
 			Customer:      handler.NewCustomerHandler(customerSvc),
+			WebKhach:      handler.NewWebKhachHandler(customerSvc),
 			Order:         handler.NewOrderHandler(orderSvc),
 			Return:        handler.NewOrderReturnHandler(returnSvc),
 			Notif:         handler.NewNotificationHandler(notifSvc, hub),

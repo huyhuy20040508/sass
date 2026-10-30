@@ -150,8 +150,13 @@ class DashboardTest extends TestCase
     /**
      * Mốc lịch khác cửa sổ trượt.
      *
-     * "Tháng này" bắt đầu từ ngày 1; "30 ngày qua" lùi đúng 30 ngày. Nếu hai mã
-     * này quy về cùng một khoảng thì một trong hai nút đang nói dối.
+     * "Tháng này" bắt đầu từ ngày 1; "30 ngày qua" lùi đúng 30 ngày kể cả hôm
+     * nay. Mỗi mã phải tính theo ĐÚNG định nghĩa của nó.
+     *
+     * Đo bằng giá trị cụ thể chứ không bằng "hai mã phải khác nhau": ngày 30 của
+     * tháng có 30 ngày thì hai khoảng TRÙNG nhau thật (01→30), và phép so khác
+     * nhau sẽ đỏ đúng một ngày mỗi tháng mà chẳng có gì hỏng — CI ngày 30/10/2026
+     * đã vấp đúng chỗ này.
      */
     public function test_moc_lich_khac_cua_so_truot(): void
     {
@@ -160,7 +165,9 @@ class DashboardTest extends TestCase
 
         $this->assertSame(date('Y-m-01'), $thang['from']);
         $this->assertSame(date('Y-m-d'), $thang['to']);
-        $this->assertNotSame($thang['from'], $ba0['from']);
+        // Cửa sổ trượt: 30 ngày tính cả hôm nay, nên lùi 29 ngày.
+        $this->assertSame(date('Y-m-d', strtotime('-29 days')), $ba0['from']);
+        $this->assertSame(date('Y-m-d'), $ba0['to']);
 
         // Kỳ đang chạy cắt ở hôm nay, không chạy tới cuối tháng / cuối năm.
         $this->assertSame(date('Y-m-d'), Period::resolve('this-year')['to']);

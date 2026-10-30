@@ -5,8 +5,13 @@ Thumbs.db
 *.tmp
 ~$*
 .idea/
-.vscode/
 *.swp
+old-soft/
+go/
+.cache/
+.config/
+.local/
+.npm/
 
 # Bí mật: mật khẩu DB, khoá JWT, khoá cổng thanh toán, APP_KEY của Laravel.
 # Chặn cả .env.local, .env.prod, .env.bak — chỉ chừa .env.example.
