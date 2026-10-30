@@ -98,6 +98,7 @@ func main() {
 		planHandler       *handler.PlanHandler
 		khachHangHandler  *handler.KhachHangHandler
 		dungThuHandler    *handler.DungThuHandler
+		webCNHandler      *handler.WebChiNhanhHandler
 		// goiDichVuHandler là trang "Các gói dịch vụ" của Shop Admin — chủ tiệm tự
 		// tra hợp đồng của chính mình. Cũng đọc control plane nên cũng nil khi chưa
 		// nối được sổ; lúc đó Shop Admin nói rõ là chưa tra được, thay vì hiện một
@@ -220,6 +221,11 @@ func main() {
 				repository.NewTaiKhoanCuaHangRepository(db),
 				cfg.App.Code,
 				cfg.App.ShopAdminURL,
+			))
+			webCNHandler = handler.NewWebChiNhanhHandler(service.NewWebChiNhanhService(
+				repository.NewHopDongRepository(platformDB),
+				repository.NewWebChiNhanhRepository(db, platformDB),
+				cfg.App.WebBaseDomain,
 			))
 
 			// Hai sổ của control plane mà TRANG GÓI DỊCH VỤ và CỬA XÉT HẠN MỨC cùng
@@ -538,6 +544,7 @@ func main() {
 		Plan:      planHandler,
 		KhachHang: khachHangHandler,
 		DungThu:   dungThuHandler,
+		WebCN:     webCNHandler,
 		GoiDichVu: goiDichVuHandler,
 		CauHinh:   cauHinhHandler,
 		GiaHan:    giaHanHandler,

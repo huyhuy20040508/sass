@@ -31,7 +31,7 @@
         </button>
     </div>
 
-    <form method="POST" data-mau="{{ route('platform.khach-hang-order.hop-dong.thu-tien', ['hopDong' => '__ID__']) }}">
+    <form method="POST" data-mau="{{ route('platform.'.$tuyen.'.hop-dong.thu-tien', ['hopDong' => '__ID__']) }}">
         @csrf
 
         <div class="sheet-body">

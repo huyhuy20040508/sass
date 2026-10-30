@@ -386,19 +386,21 @@ func (r *hopDongRepository) DanhDauDaNhac(
 }
 
 // ConHopDongSong lọc ra khách vẫn còn một hợp đồng CHƯA tới hạn.
-func (r *hopDongRepository) ConHopDongSong(ctx context.Context, tenantIDs []uint, moc time.Time) ([]uint, error) {
+func (r *hopDongRepository) ConHopDongSong(ctx context.Context, tenantIDs []uint, moc time.Time, boQuaApp []string) ([]uint, error) {
 	if len(tenantIDs) == 0 {
 		return nil, nil
 	}
 
 	var ids []uint
-	err := r.db.WithContext(ctx).
-		Model(&domain.Subscription{}).
-		Where("tenant_id IN ?", tenantIDs).
-		Where("status IN ?", []string{domain.SubscriptionTrial, domain.SubscriptionActive}).
-		Where("ends_at >= ?", moc).
-		Distinct().
-		Pluck("tenant_id", &ids).Error
+	q := r.db.WithContext(ctx).
+		Table("subscriptions AS s").
+		Where("s.tenant_id IN ?", tenantIDs).
+		Where("s.status IN ?", []string{domain.SubscriptionTrial, domain.SubscriptionActive}).
+		Where("s.ends_at >= ?", moc)
+	if len(boQuaApp) > 0 {
+		q = q.Joins("JOIN apps a ON a.id = s.app_id").Where("a.code NOT IN ?", boQuaApp)
+	}
+	err := q.Distinct().Pluck("s.tenant_id", &ids).Error
 
 	return ids, err
 }

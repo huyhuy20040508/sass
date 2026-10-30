@@ -13,9 +13,9 @@
 
 @section('content')
     <div class="page-head">
-        <span class="eyebrow">QLTK khách hàng order</span>
+        <span class="eyebrow">{{ $nhanKhu }}</span>
         <h2>Các gói dịch vụ</h2>
-        <p>Bảng giá đang áp cho phần mềm Sellio Order. Sửa ở đây không đụng tới khách đang dùng: hợp đồng đã ký chép hạn mức ra lúc ký và sống độc lập với bảng giá.</p>
+        <p>Bảng giá đang áp cho phần mềm {{ $tenApp }}. Sửa ở đây không đụng tới khách đang dùng: hợp đồng đã ký chép hạn mức ra lúc ký và sống độc lập với bảng giá.</p>
     </div>
 
     @if ($loi)
@@ -29,7 +29,7 @@
             <span class="muted">·</span>
             <span>{{ $dang_ban }} đang bán</span>
             <span class="spacer"></span>
-            <a href="{{ route('platform.khach-hang-order.tinh-nang-goi') }}" class="btn btn-plum">Sửa tính năng gói</a>
+            <a href="{{ route('platform.'.$tuyen.'.tinh-nang-goi') }}" class="btn btn-plum">Sửa tính năng gói</a>
         </div>
 
         @if (count($plans))
@@ -83,7 +83,7 @@
                                     <button type="button" class="btn-mini is-primary"
                                             data-sua
                                             data-id="{{ data_get($p, 'id') }}"
-                                            data-action="{{ route('platform.khach-hang-order.goi-dich-vu.luu', ['plan' => data_get($p, 'id')]) }}"
+                                            data-action="{{ route('platform.'.$tuyen.'.goi-dich-vu.luu', ['plan' => data_get($p, 'id')]) }}"
                                             data-ma="{{ data_get($p, 'code') }}"
                                             data-chu-ky="{{ data_get($p, 'billing_cycle') === 'nam' ? 'Theo năm' : 'Theo tháng' }}"
                                             data-ten="{{ data_get($p, 'name') }}"
@@ -107,7 +107,7 @@
                     Bảng trống vì lần gọi API vừa rồi hỏng, không phải vì bảng giá rỗng.
                 @else
                     <strong>Bảng giá đang rỗng</strong>
-                    Chưa có mức giá nào cho Sellio Order — chưa ai mua được phần mềm này.
+                    Chưa có mức giá nào cho {{ $tenApp }} — chưa ai mua được phần mềm này.
                 @endif
             </div>
         @endif

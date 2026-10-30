@@ -136,7 +136,7 @@ func (f *fakeHopDongGiaHan) TenantDangCoHopDong(context.Context, string) ([]uint
 func (f *fakeHopDongGiaHan) QuaHan(context.Context, time.Time) ([]domain.HopDongQuaHan, error) {
 	return nil, nil
 }
-func (f *fakeHopDongGiaHan) ConHopDongSong(context.Context, []uint, time.Time) ([]uint, error) {
+func (f *fakeHopDongGiaHan) ConHopDongSong(context.Context, []uint, time.Time, []string) ([]uint, error) {
 	return nil, nil
 }
 

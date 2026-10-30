@@ -36,7 +36,7 @@
         </button>
     </div>
 
-    <form method="POST" action="{{ route('platform.khach-hang-order.dung-thu.tao') }}">
+    <form method="POST" action="{{ route('platform.'.$tuyen.'.dung-thu.tao') }}">
         @csrf
 
         <div class="sheet-body">

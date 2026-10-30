@@ -47,6 +47,16 @@
         // vào đấy xong: mở trang mới ra mà nhóm đã cụp lại thì đọc như menu quên
         // mất mình đang ở đâu.
         $order_dang_mo = request()->routeIs('platform.khach-hang-order.*');
+
+        // Website bán hàng: bán thêm cho cửa hàng POS đã có, nên không có Database
+        // (sổ khách là sổ của POS).
+        $muc_web = [
+            ['route' => 'platform.khach-hang-web.nguoi-dung-thu',  'nhan' => 'Người dùng thử'],
+            ['route' => 'platform.khach-hang-web.nguoi-chinh-thuc', 'nhan' => 'Người chính thức'],
+            ['route' => 'platform.khach-hang-web.goi-dich-vu',      'nhan' => 'Các gói dịch vụ'],
+            ['route' => 'platform.khach-hang-web.tinh-nang-goi',    'nhan' => 'Tính năng gói'],
+        ];
+        $web_dang_mo = request()->routeIs('platform.khach-hang-web.*');
     @endphp
 
     <nav class="rail-nav">
@@ -73,6 +83,24 @@
                  thấy được" thì phím Tab vẫn nhảy vào 5 đường dẫn đang bị giấu. --}}
             <div class="rail-drop-panel" id="drop-order" @unless ($order_dang_mo) hidden @endunless>
                 @foreach ($muc_order as $muc)
+                    <a href="{{ route($muc['route']) }}"
+                       class="rail-sublink {{ request()->routeIs($muc['route']) ? 'is-current' : '' }}"
+                       @if (request()->routeIs($muc['route'])) aria-current="page" @endif>
+                        {{ $muc['nhan'] }}
+                    </a>
+                @endforeach
+            </div>
+        </div>
+
+        <div class="rail-drop {{ $web_dang_mo ? 'is-open' : '' }}" data-rail-drop>
+            <button type="button" class="rail-link rail-drop-toggle {{ $web_dang_mo ? 'is-parent' : '' }}"
+                    aria-expanded="{{ $web_dang_mo ? 'true' : 'false' }}"
+                    aria-controls="drop-web">
+                <span>QLTK khách hàng web</span>
+                <span class="rail-caret" aria-hidden="true"></span>
+            </button>
+            <div class="rail-drop-panel" id="drop-web" @unless ($web_dang_mo) hidden @endunless>
+                @foreach ($muc_web as $muc)
                     <a href="{{ route($muc['route']) }}"
                        class="rail-sublink {{ request()->routeIs($muc['route']) ? 'is-current' : '' }}"
                        @if (request()->routeIs($muc['route'])) aria-current="page" @endif>

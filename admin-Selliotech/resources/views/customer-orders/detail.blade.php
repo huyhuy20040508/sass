@@ -62,8 +62,8 @@
                  hình dùng thử, còn lại về màn hình chính thức. --}}
             <a class="eyebrow" style="text-decoration:none"
                href="{{ route($la_dung_thu
-                    ? 'platform.khach-hang-order.nguoi-dung-thu'
-                    : 'platform.khach-hang-order.nguoi-chinh-thuc') }}">
+                    ? 'platform.'.$tuyen.'.nguoi-dung-thu'
+                    : 'platform.'.$tuyen.'.nguoi-chinh-thuc') }}">
                 ← {{ $la_dung_thu ? 'Người dùng thử' : 'Người dùng chính thức' }}
             </a>
             <h2>{{ data_get($hd, 'ten_cua_hang') ?: data_get($hd, 'ma_cua_hang') }}</h2>
@@ -207,7 +207,7 @@
                             </dd>
                         </dl>
 
-                        @if ($sua_duoc)
+                        @if ($sua_duoc && $taoKhachMoi)
                             <button type="button" class="btn-ghost" style="margin-top:14px" data-mo="sheet-matkhau">
                                 Đổi mật khẩu
                             </button>
@@ -257,7 +257,7 @@
                         @endunless
                     </div>
                 @else
-                    <form method="POST" action="{{ route('platform.khach-hang-order.hop-dong.luu', data_get($hd, 'id')) }}">
+                    <form method="POST" action="{{ route('platform.'.$tuyen.'.hop-dong.luu', data_get($hd, 'id')) }}">
                         @csrf
                         <div class="panel-body">
                             <div class="grid2">
@@ -343,6 +343,82 @@
         </div>
     </div>
 
+    @isset($webChiNhanh)
+        {{-- Web của từng chi nhánh (chỉ khu web). Mở = cấp tên miền theo tên chi nhánh;
+             không vượt số chi nhánh của hợp đồng. --}}
+        @php
+            $toi_da = (int) data_get($webChiNhanh, 'toi_da');
+            $dang_mo = (int) data_get($webChiNhanh, 'dang_mo');
+            $het_cho = $toi_da > 0 && $dang_mo >= $toi_da;
+            $mo_duoc = $ghiDuoc && data_get($hd, 'trang_thai') !== 'canceled';
+        @endphp
+        <section class="panel" style="margin-top:14px" id="web-chi-nhanh">
+            <div class="panel-head">
+                Web của chi nhánh
+                <span class="muted" style="font-weight:400">
+                    · đang mở {{ $dang_mo }} / {{ $toi_da > 0 ? $toi_da : 'không giới hạn' }} chi nhánh
+                </span>
+            </div>
+            @if ($loiWeb)
+                <div class="panel-body"><div class="notice">{{ $loiWeb }}</div></div>
+            @elseif (! count(data_get($webChiNhanh, 'chi_nhanh', [])))
+                <div class="panel-body"><p class="hint">Cửa hàng chưa có chi nhánh nào bên POS.</p></div>
+            @else
+                <div class="tbl">
+                    <table>
+                        <thead>
+                        <tr>
+                            <th>Chi nhánh</th>
+                            <th>Địa chỉ web</th>
+                            <th class="tight"></th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        @foreach (data_get($webChiNhanh, 'chi_nhanh', []) as $cn)
+                            @php $ten_mien = data_get($cn, 'ten_mien'); @endphp
+                            <tr>
+                                <td>
+                                    {{ data_get($cn, 'ten') }}
+                                    @unless (data_get($cn, 'dang_hoat_dong'))
+                                        <span class="tag tag-mute">Ngừng hoạt động</span>
+                                    @endunless
+                                </td>
+                                <td>
+                                    @if ($ten_mien)
+                                        <a href="https://{{ $ten_mien }}" target="_blank" rel="noopener" class="mono">{{ $ten_mien }}</a>
+                                    @else
+                                        <span class="muted">Chưa mở</span>
+                                    @endif
+                                </td>
+                                <td class="tight">
+                                    @if ($ghiDuoc && $ten_mien)
+                                        <form method="POST" style="margin:0"
+                                              action="{{ route('platform.'.$tuyen.'.web-chi-nhanh.go', ['hopDong' => data_get($hd, 'id'), 'shop' => data_get($cn, 'id')]) }}"
+                                              onsubmit="return confirm('Gỡ web của {{ data_get($cn, 'ten') }}? Khách vào địa chỉ này sẽ thấy trang không tìm thấy cửa hàng.')">
+                                            @csrf
+                                            <button type="submit" class="btn-ghost is-bad">Gỡ web</button>
+                                        </form>
+                                    @elseif ($mo_duoc && data_get($cn, 'dang_hoat_dong'))
+                                        <form method="POST" style="margin:0"
+                                              action="{{ route('platform.'.$tuyen.'.web-chi-nhanh.mo', data_get($hd, 'id')) }}">
+                                            @csrf
+                                            <input type="hidden" name="shop_id" value="{{ data_get($cn, 'id') }}">
+                                            <button type="submit" class="btn btn-plum" @if ($het_cho) disabled title="Đã mở đủ số chi nhánh của hợp đồng" @endif>Mở web</button>
+                                        </form>
+                                    @endif
+                                </td>
+                            </tr>
+                        @endforeach
+                        </tbody>
+                    </table>
+                </div>
+                @if ($het_cho && $mo_duoc)
+                    <div class="panel-body"><p class="hint">Đã mở đủ {{ $toi_da }} chi nhánh theo hợp đồng. Muốn mở thêm thì gỡ web một chi nhánh khác, hoặc ký lại với số chi nhánh lớn hơn.</p></div>
+                @endif
+            @endif
+        </section>
+    @endisset
+
     @if ($sua_duoc)
         @include('customer-orders.partials.contract-actions', ['laDungThu' => $la_dung_thu])
 
@@ -350,6 +426,7 @@
              Hộp riêng chứ không gộp vào form sửa thông tin: mật khẩu không phải
              một ô hồ sơ. Gộp vào thì mỗi lần sửa số điện thoại cũng phải đi ngang
              qua hai ô mật khẩu trống, và ai đó sẽ gõ vào đấy. --}}
+        @if ($taoKhachMoi)
         <dialog class="sheet" id="sheet-matkhau" style="width:min(460px,calc(100vw - 32px))"
                 @if ($errors->hasAny(['mat_khau'])) data-mo-san @endif>
             <div class="sheet-head">
@@ -368,7 +445,7 @@
                 </button>
             </div>
 
-            <form method="POST" action="{{ route('platform.khach-hang-order.hop-dong.doi-mat-khau', data_get($hd, 'id')) }}">
+            <form method="POST" action="{{ route('platform.'.$tuyen.'.hop-dong.doi-mat-khau', data_get($hd, 'id')) }}">
                 @csrf
 
                 <div class="sheet-body">
@@ -411,6 +488,7 @@
                 </div>
             </form>
         </dialog>
+        @endif
     @endif
 @endsection
 

@@ -5,7 +5,7 @@ import { request } from 'node:http';
 // fetch của Node không cho đặt header Host, mà PHP nhận shop theo đúng Host của trang đang mở.
 const NOI_BO = new URL(process.env.WEB_API_INTERNAL || 'http://127.0.0.1:8098');
 
-export type KetQua<T> = { status: number; success: boolean; data?: T; message?: string };
+export type KetQua<T> = { status: number; success: boolean; data?: T; message?: string; errors?: Record<string, string> };
 
 export function goiApi<T>(path: string, host: string): Promise<KetQua<T>> {
   return new Promise((resolve) => {
@@ -18,7 +18,7 @@ export function goiApi<T>(path: string, host: string): Promise<KetQua<T>> {
         res.on('end', () => {
           try {
             const j = JSON.parse(raw);
-            resolve({ status: res.statusCode || 0, success: !!j.success, data: j.data, message: j.message });
+            resolve({ status: res.statusCode || 0, success: !!j.success, data: j.data, message: j.message, errors: j.errors });
           } catch {
             resolve({ status: res.statusCode || 0, success: false, message: 'API trả dữ liệu lạ' });
           }

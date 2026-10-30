@@ -21,9 +21,9 @@
 
 @section('content')
     <div class="page-head">
-        <span class="eyebrow">QLTK khách hàng order</span>
+        <span class="eyebrow">{{ $nhanKhu }}</span>
         <h2>Tính năng gói</h2>
-        <p>Hạn mức của bảng giá Sellio Order. Sửa ở đây <strong>không</strong> đụng tới khách đang dùng — hợp đồng đã ký chép hạn mức ra lúc ký và sống độc lập với bảng giá.</p>
+        <p>Hạn mức của bảng giá {{ $tenApp }}. Sửa ở đây <strong>không</strong> đụng tới khách đang dùng — hợp đồng đã ký chép hạn mức ra lúc ký và sống độc lập với bảng giá.</p>
     </div>
 
     @if ($loi)
@@ -93,7 +93,7 @@
                     Trang trống vì lần gọi API vừa rồi hỏng, không phải vì bảng giá rỗng.
                 @else
                     <strong>Bảng giá đang rỗng</strong>
-                    Chưa có mức giá nào cho Sellio Order nên chưa có gì để khai hạn mức.
+                    Chưa có mức giá nào cho {{ $tenApp }} nên chưa có gì để khai hạn mức.
                 @endif
             </div>
         </section>
@@ -115,7 +115,7 @@
                         — ngừng bán
                     @endif
                 </div>
-                <form method="POST" action="{{ route('platform.khach-hang-order.tinh-nang-goi.luu', $id_goi) }}">
+                <form method="POST" action="{{ route('platform.'.$tuyen.'.tinh-nang-goi.luu', $id_goi) }}">
                     @csrf
                     <div class="panel-body">
                         <div class="row g-3">

@@ -19,6 +19,7 @@ GRANT INSERT, UPDATE, DELETE ON <db_pos>.web_cai_dat TO '<nguoi_dung>'@'localhos
 -- tên miền, chặn cửa hàng khoá / hết hạn. Không cho đọc platform_users, invoices…
 GRANT SELECT ON <db_nen_tang>.tenants TO '<nguoi_dung>'@'localhost';
 GRANT SELECT ON <db_nen_tang>.tenant_domains TO '<nguoi_dung>'@'localhost';
+GRANT SELECT ON <db_nen_tang>.apps TO '<nguoi_dung>'@'localhost';
 GRANT SELECT ON <db_nen_tang>.subscriptions TO '<nguoi_dung>'@'localhost';
 GRANT SELECT ON <db_nen_tang>.plans TO '<nguoi_dung>'@'localhost';
 GRANT SELECT ON <db_nen_tang>.plan_features TO '<nguoi_dung>'@'localhost';

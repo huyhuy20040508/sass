@@ -25,13 +25,16 @@ type fakeHopDongQuet struct {
 	loiKhoa   error
 	sapHetHan []domain.HopDongQuaHan
 	daNhac    map[uint]bool
+	boQuaApp  []string
 }
 
 func (f *fakeHopDongQuet) QuaHan(_ context.Context, _ time.Time) ([]domain.HopDongQuaHan, error) {
 	return f.quaHan, f.loiQuaHa
 }
 
-func (f *fakeHopDongQuet) ConHopDongSong(_ context.Context, _ []uint, _ time.Time) ([]uint, error) {
+func (f *fakeHopDongQuet) ConHopDongSong(_ context.Context, _ []uint, _ time.Time, boQua []string) ([]uint, error) {
+	f.boQuaApp = boQua
+
 	return f.conSong, nil
 }
 
@@ -386,5 +389,59 @@ func TestNhacHan_ThieuSoThongBaoVanKhoaCuaHang(t *testing.T) {
 func TestSoNgayNhacTruoc_LaNam(t *testing.T) {
 	if SoNgayNhacTruoc != 5 {
 		t.Errorf("mong 5 ngày, nhận %d", SoNgayNhacTruoc)
+	}
+}
+
+// Hết hạn POS mà còn hợp đồng web: vẫn phải khoá. Hợp đồng web không được tính
+// là "còn sống" — lượt quét phải dặn repository bỏ qua app bán thêm.
+func TestQuetHan_HopDongWebKhongGiuPOSMo(t *testing.T) {
+	hd := &fakeHopDongQuet{quaHan: []domain.HopDongQuaHan{hopDongChet(7, 42, "order1", false)}}
+	ch := &fakeCuaHangQuet{}
+
+	kq, err := NewQuetHanService(hd, ch, nil).QuetMotLuot(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hd.boQuaApp) != 1 || hd.boQuaApp[0] != domain.AppWeb {
+		t.Fatalf("phải bỏ qua hợp đồng app web khi xét còn sống, nhận %v", hd.boQuaApp)
+	}
+	if kq.DaKhoa != 1 {
+		t.Fatalf("POS hết hạn phải khoá, nhận %+v", kq)
+	}
+}
+
+// Hết hạn web: chỉ web đóng (web tự kiểm), KHÔNG khoá cửa hàng — nhưng hợp đồng
+// vẫn sang past_due như mọi hợp đồng quá hạn.
+func TestQuetHan_HetHanWebKhongKhoaCuaHang(t *testing.T) {
+	web := hopDongChet(8, 42, "order1", false)
+	web.MaApp = domain.AppWeb
+	hd := &fakeHopDongQuet{quaHan: []domain.HopDongQuaHan{web}}
+	ch := &fakeCuaHangQuet{}
+
+	kq, err := NewQuetHanService(hd, ch, nil).QuetMotLuot(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if kq.DaKhoa != 0 || len(ch.daDoi) != 0 || len(hd.daDoiSo) != 0 {
+		t.Fatalf("hết hạn web không được khoá cửa hàng, nhận %+v / %v / %v", kq, ch.daDoi, hd.daDoiSo)
+	}
+	if len(hd.daDanh) != 1 || hd.daDanh[0] != 8 {
+		t.Fatalf("hợp đồng web quá hạn vẫn phải sang past_due, nhận %v", hd.daDanh)
+	}
+}
+
+// Cùng lượt: POS và web của một khách cùng hết hạn → khoá đúng một lần, cả hai sang past_due.
+func TestQuetHan_CaPOSVaWebCungHetHan(t *testing.T) {
+	web := hopDongChet(8, 42, "order1", false)
+	web.MaApp = domain.AppWeb
+	hd := &fakeHopDongQuet{quaHan: []domain.HopDongQuaHan{hopDongChet(7, 42, "order1", false), web}}
+	ch := &fakeCuaHangQuet{}
+
+	kq, err := NewQuetHanService(hd, ch, nil).QuetMotLuot(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if kq.DaKhoa != 1 || len(ch.daDoi) != 1 || len(hd.daDanh) != 2 {
+		t.Fatalf("phải khoá 1 cửa hàng và đánh dấu 2 hợp đồng, nhận %+v / %v / %v", kq, ch.daDoi, hd.daDanh)
 	}
 }

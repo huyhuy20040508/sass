@@ -380,6 +380,23 @@ class ApiClient
         return $this->post("/platform/subscriptions/{$hopDong}/thu-tien", $du_lieu);
     }
 
+    /** Chi nhánh của khách và web của từng chi nhánh — chỉ hợp đồng Website bán hàng. */
+    public function webChiNhanh(int $hopDong): Response
+    {
+        return $this->get("/platform/subscriptions/{$hopDong}/web-chi-nhanh");
+    }
+
+    /** Mở web cho một chi nhánh: API tự đặt tên miền theo tên chi nhánh. */
+    public function moWebChiNhanh(int $hopDong, int $shopId): Response
+    {
+        return $this->post("/platform/subscriptions/{$hopDong}/web-chi-nhanh", ['shop_id' => $shopId]);
+    }
+
+    public function goWebChiNhanh(int $hopDong, int $shopId): Response
+    {
+        return $this->delete("/platform/subscriptions/{$hopDong}/web-chi-nhanh/{$shopId}");
+    }
+
     /** Chi tiết một hợp đồng kèm hồ sơ khách đứng sau nó. */
     public function hopDongChiTiet(int $id): Response
     {
