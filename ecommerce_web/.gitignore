@@ -3,4 +3,5 @@
 /storefront/next-env.d.ts
 /storefront/*.tsbuildinfo
 /backend/.env
-/backend/storage/
+/backend/storage/*
+!/backend/storage/.gitkeep

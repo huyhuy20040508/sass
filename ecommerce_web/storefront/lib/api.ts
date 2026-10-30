@@ -1,39 +1,32 @@
-export class ApiError extends Error {
-  status: number;
-  errors: Record<string, string>;
+import 'server-only';
+import { request } from 'node:http';
 
-  constructor(message: string, status: number, errors?: Record<string, string>) {
-    super(message);
-    this.status = status;
-    this.errors = errors || {};
-  }
-}
+// Gọi API PHP từ PHÍA MÁY CHỦ qua cổng nội bộ của nginx. Dùng node:http chứ không dùng fetch:
+// fetch của Node không cho đặt header Host, mà PHP nhận shop theo đúng Host của trang đang mở.
+const NOI_BO = new URL(process.env.WEB_API_INTERNAL || 'http://127.0.0.1:8098');
 
-export type ApiResult<T> = { data: T; meta: Record<string, unknown>; message: string };
+export type KetQua<T> = { status: number; success: boolean; data?: T; message?: string };
 
-/**
- * Gọi backend từ trình duyệt; trả {data, meta, message} hoặc ném ApiError mang câu báo lỗi của máy chủ.
- * Không cần gửi mã shop: backend nhận shop theo tên miền đang mở.
- */
-export async function api<T = unknown>(
-  path: string,
-  { method = 'GET', body, token }: { method?: string; body?: unknown; token?: string } = {},
-): Promise<ApiResult<T>> {
-  const headers: Record<string, string> = { Accept: 'application/json' };
-  if (token) headers.Authorization = `Bearer ${token}`;
-  // FormData (tải ảnh) để trình duyệt tự đặt Content-Type kèm boundary.
-  const laForm = body instanceof FormData;
-  if (body !== undefined && !laForm) headers['Content-Type'] = 'application/json';
-
-  let res: Response;
-  try {
-    res = await fetch(`/api${path}`, { method, headers, body: body === undefined ? undefined : laForm ? body : JSON.stringify(body) });
-  } catch {
-    throw new ApiError('Không kết nối được máy chủ, kiểm tra mạng rồi thử lại', 0);
-  }
-  const json = await res.json().catch(() => ({}));
-  if (!res.ok || !json.success) {
-    throw new ApiError(json.message || `Lỗi ${res.status}`, res.status, json.errors);
-  }
-  return { data: json.data as T, meta: json.meta || {}, message: json.message || '' };
+export function goiApi<T>(path: string, host: string): Promise<KetQua<T>> {
+  return new Promise((resolve) => {
+    const req = request(
+      { hostname: NOI_BO.hostname, port: NOI_BO.port, path: `/api${path}`, method: 'GET', headers: { Host: host, Accept: 'application/json' }, timeout: 8000 },
+      (res) => {
+        let raw = '';
+        res.setEncoding('utf8');
+        res.on('data', (c) => (raw += c));
+        res.on('end', () => {
+          try {
+            const j = JSON.parse(raw);
+            resolve({ status: res.statusCode || 0, success: !!j.success, data: j.data, message: j.message });
+          } catch {
+            resolve({ status: res.statusCode || 0, success: false, message: 'API trả dữ liệu lạ' });
+          }
+        });
+      },
+    );
+    req.on('timeout', () => req.destroy(new Error('API nội bộ không trả lời')));
+    req.on('error', (e) => resolve({ status: 0, success: false, message: e.message }));
+    req.end();
+  });
 }
