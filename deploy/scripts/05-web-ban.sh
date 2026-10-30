@@ -20,10 +20,15 @@ APP_USER="selliotech"
 APP_DIR="/var/www/selliotech"
 WEB="$APP_DIR/ecommerce_web"
 BASE_DOMAIN="web.selliotech.store"
-# KHÔNG đặt "ecommerce_web": máy chủ prod dùng chung MySQL với bản dev, và
-# database dev mang đúng tên đó — trùng tên là script đổi mật khẩu rồi ghi
-# thẳng vào dữ liệu dev. Đặt theo lối selliotech / selliotech_platform.
-DB="selliotech_web"
+# Web KHÔNG có database riêng: đọc thẳng DB bán hàng của POS, và dữ liệu riêng của web nằm ở
+# các bảng web_ trong chính DB đó (migration của POS tạo). Tên DB theo đúng 01/03/04-*.sh.
+DB_POS="selliotech"
+DB_NEN_TANG="selliotech_platform"
+# Tài khoản MySQL của web, KHÁC user 'ecw' của bản dev: prod và dev chung một máy MySQL, tài
+# khoản web dev không được với tới DB prod.
+DB_USER="ecw_prod"
+# Mật khẩu nằm ngoài git và ngoài $APP_DIR: .env bị dựng lại mỗi lượt, mất mật khẩu là web chết.
+MK_FILE="/root/.config/ecw-prod-db.env"
 CERT="selliotech-web"
 SITE="/etc/nginx/sites-available/web.selliotech.store"
 # Cache npm phải nằm NGOÀI $APP_DIR, cùng lý do với cache Go ở 02-deploy.sh:
@@ -44,42 +49,56 @@ node -e 'const [a,b]=process.versions.node.split(".").map(Number);process.exit(a
     || chet "Node $(node -v) quá cũ — Next.js cần >= 20.9"
 NODE_BIN="$(command -v node)"
 
-# --- Database + .env (chỉ lần đầu) -------------------------------------
-ENV="$WEB/backend/.env"
-if [[ ! -f "$ENV" ]]; then
-    vang "  chưa có backend/.env — tạo database $DB và sinh .env"
+# --- Tài khoản DB + .env --------------------------------------------------
+# Bảng web_ do migration của POS tạo (02-deploy.sh chạy trước script này). GRANT trên bảng
+# chưa tồn tại thì MySQL báo lỗi, nên kiểm trước để thông báo rõ thay vì chết giữa bước cấp quyền.
+mysql -N -e "SELECT COUNT(*) FROM information_schema.tables
+    WHERE table_schema='$DB_POS' AND table_name='web_cai_dat'" | grep -qx 1 \
+    || chet "DB $DB_POS chưa có bảng web_cai_dat — chạy migration của POS (02-deploy.sh) rồi quay lại"
+
+[[ -d "$(dirname "$MK_FILE")" ]] || install -d -m 700 "$(dirname "$MK_FILE")"
+if [[ -f "$MK_FILE" ]]; then
+    MATKHAU="$(sed -n 's/^DB_PASSWORD=//p' "$MK_FILE" | head -1)"
+    [[ -n "$MATKHAU" ]] || chet "$MK_FILE không có DB_PASSWORD"
+else
+    vang "  chưa có $MK_FILE — sinh mật khẩu cho $DB_USER"
     MATKHAU="$(openssl rand -hex 24)"
-    mysql <<SQL
-CREATE DATABASE IF NOT EXISTS \`$DB\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER IF NOT EXISTS '$DB'@'localhost' IDENTIFIED BY '$MATKHAU';
-ALTER USER '$DB'@'localhost' IDENTIFIED BY '$MATKHAU';
-GRANT ALL PRIVILEGES ON \`$DB\`.* TO '$DB'@'localhost';
-FLUSH PRIVILEGES;
-SQL
-    # Gọi thẳng Go API ở cổng nội bộ, không vòng ra Internet.
-    CONG="$(sed -n 's/^APP_PORT=//p' "$APP_DIR/api/.env" | head -1 | tr -d '[:space:]')"
-    cat > "$ENV" <<ENV
+    printf 'DB_PASSWORD=%s\n' "$MATKHAU" > "$MK_FILE"
+    chmod 600 "$MK_FILE"
+    # Tài khoản có thể đã tồn tại với mật khẩu khác (dựng tay trước đó): đặt lại cho khớp tệp.
+    mysql -e "CREATE USER IF NOT EXISTS '$DB_USER'@'localhost' IDENTIFIED BY '$MATKHAU';
+              ALTER USER '$DB_USER'@'localhost' IDENTIFIED BY '$MATKHAU';"
+fi
+
+# Quyền lấy từ chính tệp của web, không chép lại vào đây: thêm bảng web_ mới chỉ sửa một chỗ.
+QUYEN="$WEB/backend/database/quyen-db.sql"
+[[ -f "$QUYEN" ]] || chet "không thấy $QUYEN"
+sed -e "s/<nguoi_dung>/$DB_USER/g" -e "s/<db_pos>/$DB_POS/g" -e "s/<db_nen_tang>/$DB_NEN_TANG/g" \
+    -e "s/<mat_khau>/$MATKHAU/g" "$QUYEN" | mysql
+xanh "  tài khoản DB $DB_USER: quyền đã cấp"
+
+# Dựng lại .env mỗi lượt: mọi giá trị đều suy ra được (mật khẩu ở $MK_FILE), nên không có gì
+# để giữ lại — mà giữ lại thì bản .env theo lược đồ cũ sẽ nằm mãi trên máy chủ.
+ENV="$WEB/backend/.env"
+CONG="$(sed -n 's/^APP_PORT=//p' "$APP_DIR/api/.env" | head -1 | tr -d '[:space:]')"
+cat > "$ENV" <<ENV
 APP_DEBUG=false
 APP_TIMEZONE=Asia/Ho_Chi_Minh
 
 DB_HOST=127.0.0.1
 DB_PORT=3306
-DB_DATABASE=$DB
-DB_USERNAME=$DB
+DB_DATABASE=$DB_POS
+DB_USERNAME=$DB_USER
 DB_PASSWORD=$MATKHAU
 
-WEB_BASE_DOMAIN=$BASE_DOMAIN
-# Mất khoá này thì mọi phiên quản trị web phải đăng nhập lại — không mất dữ liệu.
-APP_KEY=$(openssl rand -base64 32)
+PLATFORM_DB_DATABASE=$DB_NEN_TANG
+
+# Gọi thẳng Go API ở cổng nội bộ, không vòng ra Internet.
 POS_API_URL=http://127.0.0.1:${CONG:-8090}/api/v1
 ENV
-fi
 chown "$APP_USER:$APP_USER" "$ENV"
 chmod 600 "$ENV"
-
-# Lược đồ chỉ có CREATE TABLE IF NOT EXISTS nên nạp lại mỗi lượt không hại gì.
-mysql "$DB" < "$WEB/backend/database/schema.sql"
-xanh "  database $DB: lược đồ đã nạp"
+xanh "  backend/.env đã dựng"
 
 # Ảnh shop tải lên (storage/media) và bản sao menu từ POS (storage/cache). Không nằm
 # trong git (02-deploy reset --hard không đụng tới), PHP-FPM chạy bằng $APP_USER ghi vào.
@@ -102,10 +121,10 @@ systemctl daemon-reload
 systemctl enable selliotech-web >/dev/null 2>&1 || true
 systemctl restart selliotech-web
 for i in $(seq 1 20); do
-    curl -fsS -o /dev/null --max-time 2 http://127.0.0.1:3100/admin/dang-nhap && break
+    curl -fsS -o /dev/null --max-time 2 http://127.0.0.1:3100/ && break
     sleep 1
 done
-curl -fsS -o /dev/null --max-time 3 http://127.0.0.1:3100/admin/dang-nhap \
+curl -fsS -o /dev/null --max-time 3 http://127.0.0.1:3100/ \
     || chet "Next.js không trả lời ở 127.0.0.1:3100. Xem: journalctl -u selliotech-web -n 50"
 xanh "  dịch vụ selliotech-web đang chạy"
 
