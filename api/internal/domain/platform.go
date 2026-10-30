@@ -699,7 +699,9 @@ type HopDongRepository interface {
 	// phần mềm: khách mua hai phần mềm, hết hạn một cái, mà khoá luôn cửa hàng
 	// thì họ mất nốt cái đang còn trả tiền. Hôm nay mới bán một app nên danh sách
 	// này gần như luôn rỗng — và đó chính là lúc dễ quên nhất.
-	ConHopDongSong(ctx context.Context, tenantIDs []uint, moc time.Time) ([]uint, error)
+	//
+	// boQuaApp: hợp đồng của các app này không tính là "còn sống" (AppBanThem).
+	ConHopDongSong(ctx context.Context, tenantIDs []uint, moc time.Time, boQuaApp []string) ([]uint, error)
 	// DanhDauQuaHan đưa các hợp đồng sang `past_due`. Trả về số dòng đã đổi.
 	//
 	// KHÔNG đụng `ends_at`: cái mốc đó là ngày hợp đồng chết, và nó phải đứng

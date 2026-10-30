@@ -70,14 +70,14 @@
          mà "mở tài khoản cho khách mới" thì không phải việc của bảng. --}}
     <div class="page-bar">
         <div class="page-head">
-            <span class="eyebrow">QLTK khách hàng order</span>
+            <span class="eyebrow">{{ $nhanKhu }}</span>
             <h2>{{ $tieuDe }}</h2>
             <p>{{ $moTa }}</p>
         </div>
 
         {{-- Xuất Excel đứng TRƯỚC nút thêm, cùng hàng với tiêu đề trang. --}}
         @if (count($hopDong))
-            <form method="POST" action="{{ route('platform.khach-hang-order.hop-dong.xuat') }}"
+            <form method="POST" action="{{ route('platform.'.$tuyen.'.hop-dong.xuat') }}"
                   data-xuat style="margin:0">
                 @csrf
                 <input type="hidden" name="nhom" value="{{ $nhom }}">
@@ -86,7 +86,7 @@
             </form>
         @endif
 
-        @if ($ghiDuoc && count($plans))
+        @if ($ghiDuoc && count($plans) && ($taoKhachMoi || (! $la_dung_thu && count($cuaHangChuaKy))))
             @if ($la_dung_thu)
                 <button type="button" class="btn btn-plum" data-mo="sheet-them">Thêm tài khoản dùng thử</button>
             @else
@@ -94,7 +94,7 @@
                      khoản đăng nhập + hợp đồng trong một lượt, chỉ khác là hợp đồng
                      ra `active` ngay. Hộp thoại còn có chế độ thứ hai cho cửa hàng
                      đã tồn tại — xem partial. --}}
-                <button type="button" class="btn btn-plum" data-mo="sheet-chinhthuc">Thêm hợp đồng chính thức</button>
+                <button type="button" class="btn btn-plum" data-mo="sheet-chinhthuc">{{ $taoKhachMoi ? 'Thêm hợp đồng chính thức' : 'Ký hợp đồng' }}</button>
             @endif
         @endif
     </div>
@@ -431,7 +431,7 @@
                                      — đó là đường đọc, và trang bên kia tự xét lại
                                      quyền để quyết định hiện form sửa hay chỉ in ra. --}}
                                 <a class="btn-mini"
-                                   href="{{ route('platform.khach-hang-order.hop-dong.chi-tiet', data_get($hd, 'id')) }}">
+                                   href="{{ route('platform.'.$tuyen.'.hop-dong.chi-tiet', data_get($hd, 'id')) }}">
                                     Chi tiết
                                 </a>
 
@@ -514,7 +514,7 @@
                     Bảng trống vì lần gọi API vừa rồi hỏng, không phải vì chưa có hợp đồng nào.
                 @elseif ($la_dung_thu)
                     <strong>Chưa có ai đang dùng thử</strong>
-                    @if ($ghiDuoc && count($plans))
+                    @if ($ghiDuoc && count($plans) && $taoKhachMoi)
                         {{-- <b> chứ không <strong>: `.empty strong` là display:block
                              (nó dành cho dòng tiêu đề của khối rỗng), nên một
                              <strong> nằm GIỮA CÂU sẽ cắt câu đó làm ba dòng. --}}
@@ -542,7 +542,7 @@
         @endif
     @endif
 
-    @if ($la_dung_thu && $ghiDuoc && count($plans))
+    @if ($la_dung_thu && $ghiDuoc && count($plans) && $taoKhachMoi)
         @include('customer-orders.partials.add-trial', [
             'plans' => $plans,
             'moLai' => $mo_lai_form,

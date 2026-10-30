@@ -792,14 +792,27 @@ func (s *dungThuService) KyHopDong(ctx context.Context, quyen domain.QuyenApp, r
 	}
 
 	batDau := time.Now()
+	trangThai, ketThuc := domain.SubscriptionActive, batDau.AddDate(0, soThang, 0)
+	var hetThu *time.Time
+	if req.DungThu {
+		// Cùng luật với kỳ thử của khách mới: hạn hợp đồng CHÍNH LÀ ngày hết thử.
+		if bg.TrialDays == 0 {
+			return rong, loiO(map[string]string{
+				"dung_thu": "Gói này không có ngày dùng thử trong bảng giá — khai số ngày thử ở màn Các gói dịch vụ",
+			})
+		}
+		trangThai, ketThuc = domain.SubscriptionTrial, batDau.AddDate(0, 0, int(bg.TrialDays))
+		hetThu = &ketThuc
+	}
 	hd := domain.Subscription{
 		TenantID: ch.ID,
 		AppID:    bg.AppID,
 		Plan:     bg.Code,
 		PlanID:   &bg.ID,
-		// `active` ngay, KHÔNG qua `trial`: đây là hợp đồng đã bán, không phải kỳ
-		// dùng thử. Và trial_ends_at để nil — hợp đồng này không có giai đoạn thử.
-		Status:       domain.SubscriptionActive,
+		// Không chọn dùng thử thì `active` ngay: đây là hợp đồng đã bán, và
+		// trial_ends_at để nil — hợp đồng không có giai đoạn thử.
+		Status:       trangThai,
+		TrialEndsAt:  hetThu,
 		BillingCycle: bg.BillingCycle,
 		Price:        dieuKhoan.Gia,
 		MaxShops:     dieuKhoan.ChiNhanh,
@@ -807,7 +820,7 @@ func (s *dungThuService) KyHopDong(ctx context.Context, quyen domain.QuyenApp, r
 		MaxProducts:  dieuKhoan.SanPham,
 		OwnDomain:    dieuKhoan.TenMienRieng,
 		StartedAt:    batDau,
-		EndsAt:       batDau.AddDate(0, soThang, 0),
+		EndsAt:       ketThuc,
 		Note:         domain.StringOrNull(strings.TrimSpace(req.GhiChu)),
 	}
 

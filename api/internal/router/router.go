@@ -136,6 +136,9 @@ type Handlers struct {
 	// hạn, huỷ). Khác hai cái trên ở chỗ nó cầm CẢ HAI kết nối: cửa hàng và tài
 	// khoản đăng nhập của khách nằm ở data plane.
 	DungThu *handler.DungThuHandler
+	// WebCN mở / gỡ web cho chi nhánh của hợp đồng Website bán hàng — dựng
+	// cùng DungThu (cũng cầm cả hai kết nối).
+	WebCN *handler.WebChiNhanhHandler
 	// GiaHan là luồng KHÁCH TỰ GIA HẠN: đặt đơn, hỏi trạng thái, và nhận webhook
 	// của cổng thanh toán. Cần control plane nên cũng nil khi chưa dựng.
 	GiaHan *handler.GiaHanHandler
@@ -1309,6 +1312,11 @@ func New(
 				// gia hạn báo một khoản doanh thu chưa ai trả.
 				nenTang.POST("/subscriptions/:id/thu-tien", h.DungThu.ThuTien)
 				nenTang.POST("/subscriptions/:id/huy", h.DungThu.Huy)
+				if h.WebCN != nil {
+					nenTang.GET("/subscriptions/:id/web-chi-nhanh", h.WebCN.DanhSach)
+					nenTang.POST("/subscriptions/:id/web-chi-nhanh", h.WebCN.Mo)
+					nenTang.DELETE("/subscriptions/:id/web-chi-nhanh/:shopId", h.WebCN.Go)
+				}
 			}
 		}
 	}

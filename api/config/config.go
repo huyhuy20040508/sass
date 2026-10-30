@@ -51,6 +51,9 @@ type AppConfig struct {
 	// ShopAdminURL là gốc địa chỉ khu quản trị cửa hàng. Dùng để dựng đường quay
 	// về sau khi khách trả tiền gia hạn ở cổng thanh toán.
 	ShopAdminURL string
+	// WebBaseDomain là gốc tên miền của Website bán hàng: web chi nhánh nằm ở
+	// <tên chi nhánh>.<gốc>. Dev huyweb.selliotech.store, prod web.selliotech.store.
+	WebBaseDomain string
 	// Code là MÃ PHẦN MỀM mà tiến trình này phục vụ — khớp `apps.code` của
 	// control plane ("order", "bida"...).
 	//
@@ -406,6 +409,7 @@ func Load() (*Config, error) {
 	// để client tự khai địa chỉ quay về là mở một đường chuyển hướng sang bất cứ
 	// đâu, ký sẵn bằng tên miền của mình.
 	v.SetDefault("SHOP_ADMIN_URL", "http://localhost:8001")
+	v.SetDefault("WEB_BASE_DOMAIN", "web.selliotech.store")
 	// Pool nhỏ hơn hẳn DB_*: control plane phục vụ khu điều hành (vài người) và
 	// vài lượt tra sổ, không phải luồng bán hàng. Cấp cho nó 50 kết nối là lấy
 	// mất chỗ của chính data plane trong hạn mức max_connections của MySQL.
@@ -565,6 +569,7 @@ func Load() (*Config, error) {
 	cfg.Platform.Name = strings.TrimSpace(v.GetString("PLATFORM_DB_NAME"))
 	cfg.Platform.SecretKey = strings.TrimSpace(v.GetString("PLATFORM_SECRET_KEY"))
 	cfg.App.ShopAdminURL = strings.TrimRight(strings.TrimSpace(v.GetString("SHOP_ADMIN_URL")), "/")
+	cfg.App.WebBaseDomain = strings.ToLower(strings.Trim(strings.TrimSpace(v.GetString("WEB_BASE_DOMAIN")), "."))
 	cfg.Platform.MaxOpenConns = v.GetInt("PLATFORM_DB_MAX_OPEN_CONNS")
 	cfg.Platform.MaxIdleConns = v.GetInt("PLATFORM_DB_MAX_IDLE_CONNS")
 	if s := strings.TrimSpace(v.GetString("PLATFORM_DB_HOST")); s != "" {

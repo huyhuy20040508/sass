@@ -27,14 +27,19 @@
     // có trong old() nghĩa là người dùng đang ở chế độ khách mới (chế độ kia gửi
     // ô cùng tên nhưng là <select>, nên phân biệt bằng `ten_dang_nhap`).
     $mo_lai = $errors->hasAny($o_moi) || old('ten_dang_nhap') !== null;
-    $che_do_cu = old('ten_dang_nhap') !== null ? 'moi' : (old('ma_cua_hang') !== null ? 'cu' : 'moi');
+    $che_do_cu = old('ten_dang_nhap') !== null ? 'moi' : (old('ma_cua_hang') !== null || ! $taoKhachMoi ? 'cu' : 'moi');
 @endphp
 
 <dialog class="sheet" id="sheet-chinhthuc" @if ($mo_lai) data-mo-san data-che-do="{{ $che_do_cu }}" @endif>
     <div class="sheet-head">
         <div style="flex:1">
-            <h3>Thêm hợp đồng chính thức</h3>
-            <p>Hợp đồng có hiệu lực ngay, không qua giai đoạn dùng thử.</p>
+            @if ($taoKhachMoi)
+                <h3>Thêm hợp đồng chính thức</h3>
+                <p>Hợp đồng có hiệu lực ngay, không qua giai đoạn dùng thử.</p>
+            @else
+                <h3>Ký hợp đồng {{ $tenApp }}</h3>
+                <p>Bán thêm cho cửa hàng đang dùng POS — có thể cho dùng thử trước.</p>
+            @endif
         </div>
         <button type="button" class="sheet-x" data-dong aria-label="Đóng">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor"
@@ -46,17 +51,20 @@
 
     {{-- Bộ chọn chế độ. Nằm NGOÀI cả hai form để đổi qua lại không mất thứ đã gõ
          ở form kia. --}}
-    <div style="padding:14px 20px 0">
+    <div style="padding:14px 20px 0" @unless ($taoKhachMoi) hidden @endunless>
         <div class="loc-han" role="group" aria-label="Chọn kiểu khách">
-            <button type="button" class="chip is-on" data-che-do="moi">Khách mới</button>
+            @if ($taoKhachMoi)
+                <button type="button" class="chip is-on" data-che-do="moi">Khách mới</button>
+            @endif
             @if (count($cuaHangChuaKy))
-                <button type="button" class="chip" data-che-do="cu">Cửa hàng đã có</button>
+                <button type="button" class="chip {{ $taoKhachMoi ? '' : 'is-on' }}" data-che-do="cu">Cửa hàng đã có</button>
             @endif
         </div>
     </div>
 
     {{-- ---------- CHẾ ĐỘ 1: khách mới ---------- --}}
-    <form method="POST" action="{{ route('platform.khach-hang-order.chinh-thuc.tao') }}" data-form-che-do="moi">
+    @if ($taoKhachMoi)
+    <form method="POST" action="{{ route('platform.'.$tuyen.'.chinh-thuc.tao') }}" data-form-che-do="moi">
         @csrf
 
         <div class="sheet-body">
@@ -191,11 +199,12 @@
             <button type="submit" class="btn btn-plum">Thêm hợp đồng</button>
         </div>
     </form>
+    @endif
 
     {{-- ---------- CHẾ ĐỘ 2: cửa hàng đã có ---------- --}}
     @if (count($cuaHangChuaKy))
-        <form method="POST" action="{{ route('platform.khach-hang-order.hop-dong.ky') }}"
-              data-form-che-do="cu" hidden>
+        <form method="POST" action="{{ route('platform.'.$tuyen.'.hop-dong.ky') }}"
+              data-form-che-do="cu" @if ($taoKhachMoi) hidden @endif>
             @csrf
 
             <div class="sheet-body">
@@ -291,11 +300,27 @@
                         <input type="text" class="form-control" id="ky-ghichu" name="ghi_chu"
                                maxlength="500" placeholder="thoả thuận riêng, ai giới thiệu…" autocomplete="off">
                     </div>
+
+                    @unless ($taoKhachMoi)
+                        {{-- App bán thêm: cho cửa hàng đang dùng POS dùng thử trước. Hạn = số ngày
+                             thử của gói, bỏ qua ô Thời hạn. --}}
+                        <div class="rong">
+                            <label class="f-check">
+                                <input type="checkbox" name="dung_thu" value="1" data-ky-dung-thu>
+                                <span>Cho dùng thử trước — theo số ngày thử của gói, hết thử chưa gia hạn thì tự đóng</span>
+                            </label>
+                        </div>
+                    @endunless
                 </div>
 
                 <p class="sheet-note">
-                    Cửa hàng và tài khoản đăng nhập đã có sẵn — chỉ ghi thêm hợp đồng.
-                    Dùng cho khách cũ quay lại, hoặc cửa hàng dựng bằng công cụ dòng lệnh.
+                    @if ($taoKhachMoi)
+                        Cửa hàng và tài khoản đăng nhập đã có sẵn — chỉ ghi thêm hợp đồng.
+                        Dùng cho khách cũ quay lại, hoặc cửa hàng dựng bằng công cụ dòng lệnh.
+                    @else
+                        Ký xong vào trang hợp đồng, bấm <strong>Mở web</strong> cho từng chi nhánh.
+                        Việc này <strong>không</strong> ghi tiền vào sổ thu.
+                    @endif
                 </p>
             </div>
 
@@ -529,9 +554,19 @@
                 theoGoi(true);
             }
 
-            var khungs = hop.querySelectorAll('[data-han]');
-            noiGoiVoiHan(hop.querySelector('[data-ct-plan]'), khungs[0]);
-            noiGoiVoiHan(hop.querySelector('[data-ky-plan]'), khungs[1]);
+            // Lấy ô thời hạn theo FORM, không theo thứ tự: khu web không có form khách mới.
+            noiGoiVoiHan(hop.querySelector('[data-ct-plan]'), hop.querySelector('[data-form-che-do="moi"] [data-han]'));
+            noiGoiVoiHan(hop.querySelector('[data-ky-plan]'), hop.querySelector('[data-form-che-do="cu"] [data-han]'));
+
+            // Dùng thử: hạn theo ngày thử của gói, ô Thời hạn không áp — tắt nó để
+            // trình duyệt không đòi `required` và người ký khỏi tưởng con số đó có tác dụng.
+            var oDungThu = hop.querySelector('[data-ky-dung-thu]');
+            if (oDungThu) {
+                var oHanKy = hop.querySelector('[data-form-che-do="cu"] [data-han-so]');
+                oDungThu.addEventListener('change', function () {
+                    oHanKy.disabled = oDungThu.checked;
+                });
+            }
 
             // Máy chủ vừa trả lỗi: mở lại hộp ĐÚNG chế độ vừa gửi, kèm dữ liệu đã gõ.
             if (hop.hasAttribute('data-mo-san')) {

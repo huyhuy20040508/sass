@@ -32,7 +32,28 @@ class CustomerOrderController extends Controller
     /** Mã phần mềm của cả khu này. Xem chú thích đầu lớp về việc vì sao luôn phải kèm. */
     public const APP = 'order';
 
-    public function __construct(protected ApiClient $api) {}
+    /** Tiền tố tên route của khu — lớp con (khu của app khác) đổi ba hằng dưới đây. */
+    public const TUYEN = 'khach-hang-order';
+
+    public const TEN_APP = 'Sellio Order';
+
+    public const NHAN_KHU = 'QLTK khách hàng order';
+
+    /**
+     * App này tự DỰNG cửa hàng + tài khoản quản trị cho khách (dùng thử, khách mới, đổi mật
+     * khẩu). App bán thêm như web thì không: chỉ ký hợp đồng cho cửa hàng POS đã có.
+     */
+    public const TAO_KHACH_MOI = true;
+
+    public function __construct(protected ApiClient $api)
+    {
+        view()->share([
+            'tuyen' => static::TUYEN,
+            'tenApp' => static::TEN_APP,
+            'nhanKhu' => static::NHAN_KHU,
+            'taoKhachMoi' => static::TAO_KHACH_MOI,
+        ]);
+    }
 
     /**
      * Người dùng thử — hợp đồng đang trong thời gian dùng thử.
@@ -47,7 +68,7 @@ class CustomerOrderController extends Controller
      */
     public function nguoiDungThu()
     {
-        [$dataGoi, $loiGoi] = $this->goi('bảng giá', fn () => $this->api->plans(self::APP));
+        [$dataGoi, $loiGoi] = $this->goi('bảng giá', fn () => $this->api->plans(static::APP));
 
         // Chỉ gói ĐANG BÁN mới ký mới được — API cũng từ chối gói 'retired', nên
         // để chúng trong bộ chọn là mời người ta chọn một thứ chắc chắn hỏng.
@@ -59,7 +80,7 @@ class CustomerOrderController extends Controller
         return $this->manHinhHopDong(
             nhom: 'dung_thu',
             tieuDe: 'Người dùng thử',
-            moTa: 'Mọi khách đã mở tài khoản dùng thử Sellio Order — kể cả kỳ thử đã hết hạn hoặc đã huỷ. Sắp theo ngày hết hạn gần nhất trước.',
+            moTa: 'Mọi khách đã dùng thử '.static::TEN_APP.' — kể cả kỳ thử đã hết hạn hoặc đã huỷ. Sắp theo ngày hết hạn gần nhất trước.',
             them: [
                 'plans' => $plans,
                 'loiGoi' => $loiGoi,
@@ -149,7 +170,7 @@ class CustomerOrderController extends Controller
         );
 
         return redirect()
-            ->route('platform.khach-hang-order.nguoi-dung-thu')
+            ->route('platform.'.static::TUYEN.'.nguoi-dung-thu')
             ->with('success', $cau);
     }
 
@@ -211,7 +232,7 @@ class CustomerOrderController extends Controller
         );
 
         return redirect()
-            ->route('platform.khach-hang-order.nguoi-chinh-thuc')
+            ->route('platform.'.static::TUYEN.'.nguoi-chinh-thuc')
             ->with('success', $cau);
     }
 
@@ -231,9 +252,11 @@ class CustomerOrderController extends Controller
             'ma_cua_hang' => ['required', 'string', 'max:30'],
             'so_thang' => ['nullable', 'integer', 'min:1', 'max:60'],
             'ghi_chu' => ['nullable', 'string', 'max:500'],
+            'dung_thu' => ['nullable', 'boolean'],
         ]);
 
         $du_lieu['plan_id'] = (int) $du_lieu['plan_id'];
+        $du_lieu['dung_thu'] = (bool) ($du_lieu['dung_thu'] ?? false);
         $du_lieu['so_thang'] = (int) ($du_lieu['so_thang'] ?? 0);
         $du_lieu['ghi_chu'] = (string) ($du_lieu['ghi_chu'] ?? '');
 
@@ -250,7 +273,7 @@ class CustomerOrderController extends Controller
         }
 
         return redirect()
-            ->route('platform.khach-hang-order.nguoi-chinh-thuc')
+            ->route('platform.'.static::TUYEN.'.nguoi-chinh-thuc')
             ->with('success', $res->json('message') ?: 'Đã ký hợp đồng.');
     }
 
@@ -334,7 +357,7 @@ class CustomerOrderController extends Controller
 
         [$res, $loi] = $this->goi(
             'danh sách hợp đồng',
-            fn () => $this->api->hopDong(self::APP, nhom: $data['nhom'])
+            fn () => $this->api->hopDong(static::APP, nhom: $data['nhom'])
         );
         if ($loi) {
             return back()->with('error', $loi);
@@ -453,14 +476,20 @@ class CustomerOrderController extends Controller
         // 500 thay vì câu "không tìm thấy".
         if ($loi || ! $hd) {
             return redirect()
-                ->route('platform.khach-hang-order.nguoi-dung-thu')
+                ->route('platform.'.static::TUYEN.'.nguoi-dung-thu')
                 ->with('error', $loi ?: 'Không tìm thấy hợp đồng này.');
         }
 
-        return view('customer-orders.detail', [
+        return view('customer-orders.detail', array_merge([
             'hd' => $hd,
             'ghiDuoc' => in_array(data_get(session('api.user'), 'role'), ['owner', 'operator'], true),
-        ]);
+        ], $this->themChiTiet($hopDong)));
+    }
+
+    /** Khối riêng của app trên trang chi tiết hợp đồng — khu Order không có. */
+    protected function themChiTiet(int $hopDong): array
+    {
+        return [];
     }
 
     /**
@@ -617,9 +646,9 @@ class CustomerOrderController extends Controller
      */
     public function nguoiChinhThuc()
     {
-        [$dataThu, $loiThu] = $this->goi('doanh thu', fn () => $this->api->doanhThu(self::APP));
-        [$dataCh, $loiCh] = $this->goi('danh sách cửa hàng', fn () => $this->api->cuaHangChuaKy(self::APP));
-        [$dataGoi, $loiGoi] = $this->goi('bảng giá', fn () => $this->api->plans(self::APP));
+        [$dataThu, $loiThu] = $this->goi('doanh thu', fn () => $this->api->doanhThu(static::APP));
+        [$dataCh, $loiCh] = $this->goi('danh sách cửa hàng', fn () => $this->api->cuaHangChuaKy(static::APP));
+        [$dataGoi, $loiGoi] = $this->goi('bảng giá', fn () => $this->api->plans(static::APP));
 
         // Đánh chỉ mục theo MÃ cửa hàng: đó là khoá chung giữa hai lượt gọi (API
         // doanh thu không trả tenant_id ra ngoài). Mã là duy nhất toàn hệ thống
@@ -638,7 +667,7 @@ class CustomerOrderController extends Controller
         return $this->manHinhHopDong(
             nhom: 'chinh_thuc',
             tieuDe: 'Người dùng chính thức',
-            moTa: 'Mọi khách đã ký hợp đồng Sellio Order — kể cả hợp đồng đã quá hạn hoặc đã huỷ.',
+            moTa: 'Mọi khách đã ký hợp đồng '.static::TEN_APP.' — kể cả hợp đồng đã quá hạn hoặc đã huỷ.',
             them: [
                 'daThu' => $daThu,
                 'loiThu' => $loiThu,
@@ -659,7 +688,7 @@ class CustomerOrderController extends Controller
      */
     public function goiDichVu()
     {
-        [$data, $loi] = $this->goi('bảng giá', fn () => $this->api->plans(self::APP));
+        [$data, $loi] = $this->goi('bảng giá', fn () => $this->api->plans(static::APP));
 
         return view('customer-orders.service-packages', [
             'plans' => data_get($data, 'plans') ?: [],
@@ -737,7 +766,7 @@ class CustomerOrderController extends Controller
      */
     public function tinhNangGoi()
     {
-        [$data, $loi] = $this->goi('tính năng gói', fn () => $this->api->plans(self::APP));
+        [$data, $loi] = $this->goi('tính năng gói', fn () => $this->api->plans(static::APP));
 
         return view('customer-orders.package-features', [
             'plans' => data_get($data, 'plans') ?: [],
@@ -794,7 +823,7 @@ class CustomerOrderController extends Controller
     /** Database — sổ khách hàng của phần mềm Order. Xem chú thích đầu lớp. */
     public function database()
     {
-        [$data, $loi] = $this->goi('sổ khách hàng', fn () => $this->api->khachHang(self::APP));
+        [$data, $loi] = $this->goi('sổ khách hàng', fn () => $this->api->khachHang(static::APP));
 
         return view('customer-orders.database', [
             'khachHang' => data_get($data, 'khach_hang') ?: [],
@@ -823,7 +852,7 @@ class CustomerOrderController extends Controller
     {
         [$data, $loi] = $this->goi(
             'danh sách hợp đồng',
-            fn () => $this->api->hopDong(self::APP, nhom: $nhom)
+            fn () => $this->api->hopDong(static::APP, nhom: $nhom)
         );
 
         return view('customer-orders.contracts', array_merge([

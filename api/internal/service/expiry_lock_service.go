@@ -197,6 +197,12 @@ func (s *quetHanService) nhacSapHetHan(ctx context.Context) int {
 				hd.HetHan.Format("15:04 02/01/2006") +
 				". Hết thời gian này cửa hàng sẽ tạm khoá cho tới khi chuyển sang gói chính thức."
 		}
+		if domain.LaAppBanThem(hd.MaApp) {
+			// Hết hạn app bán thêm chỉ đóng app đó, POS vẫn chạy — nói "khoá cửa hàng" là doạ sai.
+			tieuDe = "Website bán hàng sắp hết hạn"
+			noiDung = "Hợp đồng website bán hàng còn " + strconv.Itoa(conLai) + " ngày, hết hạn " +
+				hd.HetHan.Format("15:04 02/01/2006") + ". Hết hạn thì website tạm đóng, bán hàng trên POS vẫn bình thường."
+		}
 
 		// userID = nil: kênh QUẢN TRỊ của cửa hàng đó. Chủ tiệm và quản trị viên
 		// thấy trong chuông, đồng thời trình duyệt đang mở nhận ngay qua SSE.
@@ -237,16 +243,26 @@ func (s *quetHanService) QuetMotLuot(ctx context.Context) (KetQuaQuet, error) {
 
 	// Khách nào còn hợp đồng sống ở phần mềm khác thì KHÔNG khoá: `tenants.status`
 	// là của cả khách hàng, không của riêng một phần mềm.
+	//
+	// App bán thêm (web) đứng ngoài cả hai chiều: hết hạn thì chỉ nó đóng (web tự
+	// kiểm hợp đồng), còn sống thì cũng không giữ POS mở hộ.
 	ungVien := make([]uint, 0, len(ds))
 	daCo := make(map[uint]bool, len(ds))
 	for _, hd := range ds {
+		if domain.LaAppBanThem(hd.MaApp) {
+			logger.Info("hợp đồng app bán thêm đã quá hạn — app tự đóng, không khoá cửa hàng",
+				zap.Uint("hop_dong_id", hd.ID), zap.String("ma_cua_hang", hd.MaCuaHang),
+				zap.String("ma_app", hd.MaApp), zap.Time("het_han", hd.HetHan))
+
+			continue
+		}
 		if !daCo[hd.TenantID] {
 			daCo[hd.TenantID] = true
 			ungVien = append(ungVien, hd.TenantID)
 		}
 	}
 
-	conSong, err := s.hopDong.ConHopDongSong(ctx, ungVien, bayGio)
+	conSong, err := s.hopDong.ConHopDongSong(ctx, ungVien, bayGio, domain.AppBanThem)
 	if err != nil {
 		return kq, err
 	}
@@ -269,7 +285,7 @@ func (s *quetHanService) QuetMotLuot(ctx context.Context) (KetQuaQuet, error) {
 	// nay tôi không vào được" thì đây là chỗ trả lời, và câu trả lời phải có kể cả
 	// khi lượt ghi bên dưới hỏng nửa chừng.
 	for _, hd := range ds {
-		if thaRa[hd.TenantID] {
+		if thaRa[hd.TenantID] || domain.LaAppBanThem(hd.MaApp) {
 			continue
 		}
 		logger.Info("hợp đồng đã quá hạn — khoá cửa hàng",

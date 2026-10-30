@@ -2115,6 +2115,10 @@ type KyHopDongRequest struct {
 	// trường hợp, nên không bắt gõ lại.
 	SoThang int    `json:"so_thang" binding:"omitempty,min=1,max=60" example:"12"`
 	GhiChu  string `json:"ghi_chu" binding:"max=500"`
+	// DungThu = ký dạng DÙNG THỬ theo số ngày thử của gói (bỏ qua SoThang): hợp
+	// đồng ra `trial`, hết thử mà chưa gia hạn thì quá hạn như mọi kỳ thử. Dùng cho
+	// app bán thêm (web) — cửa hàng đã có, chỉ cho dùng thử tính năng mới.
+	DungThu bool `json:"dung_thu" example:"false"`
 }
 
 // ThuTienRequest — POST /platform/subscriptions/{id}/thu-tien.
@@ -3707,4 +3711,28 @@ type WebKhachResponse struct {
 	// Moi = false: số điện thoại này đã là khách của tiệm từ trước, web gắn tài
 	// khoản vào đúng hồ sơ ấy thay vì đẻ thêm một người trùng.
 	Moi bool `json:"moi"`
+}
+
+// WebChiNhanhItem — một chi nhánh của cửa hàng và web của nó (nếu đã mở).
+type WebChiNhanhItem struct {
+	ID  uint   `json:"id" example:"5"`
+	Ma  string `json:"ma" example:"chi-nhanh-2"`
+	Ten string `json:"ten" example:"Chi nhánh 2"`
+	// DangHoatDong = shops.is_active. Chi nhánh đã tắt thì không mở web mới được.
+	DangHoatDong bool `json:"dang_hoat_dong" example:"true"`
+	// TenMien nil = chi nhánh chưa mở web.
+	TenMien *string `json:"ten_mien" example:"chinhanh2.web.selliotech.store"`
+}
+
+// WebChiNhanhResponse — GET /platform/subscriptions/{id}/web-chi-nhanh.
+type WebChiNhanhResponse struct {
+	ChiNhanh []WebChiNhanhItem `json:"chi_nhanh"`
+	// ToiDa = số chi nhánh hợp đồng cho mở web (subscriptions.max_shops); 0 = không giới hạn.
+	ToiDa  uint `json:"toi_da" example:"1"`
+	DangMo int  `json:"dang_mo" example:"1"`
+}
+
+// MoWebChiNhanhRequest — POST /platform/subscriptions/{id}/web-chi-nhanh.
+type MoWebChiNhanhRequest struct {
+	ShopID uint `json:"shop_id" binding:"required" example:"5"`
 }

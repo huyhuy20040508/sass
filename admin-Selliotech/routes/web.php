@@ -4,6 +4,7 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\CustomerOrderController;
+use App\Http\Controllers\CustomerWebController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -133,5 +134,38 @@ Route::middleware('platform.auth')->name('platform.')->group(function () {
         Route::post('/contracts/sign', [CustomerOrderController::class, 'kyHopDong'])->name('hop-dong.ky');
         Route::post('/contracts/{hopDong}/payment', [CustomerOrderController::class, 'thuTien'])
             ->whereNumber('hopDong')->name('hop-dong.thu-tien');
+    });
+
+    /*
+     * Khu của Website bán hàng (app `web`) — cùng màn hình với khu Order, bớt những đường dựng
+     * cửa hàng / tài khoản (dùng thử mới, khách mới, đổi mật khẩu, Database): web chỉ bán thêm
+     * cho cửa hàng POS đã có.
+     */
+    Route::prefix('web-customers')->name('khach-hang-web.')->group(function () {
+        Route::get('/trials', [CustomerWebController::class, 'nguoiDungThu'])->name('nguoi-dung-thu');
+        Route::get('/subscribers', [CustomerWebController::class, 'nguoiChinhThuc'])->name('nguoi-chinh-thuc');
+        Route::get('/plans', [CustomerWebController::class, 'goiDichVu'])->name('goi-dich-vu');
+        Route::post('/plans/{plan}', [CustomerWebController::class, 'luuGoi'])
+            ->whereNumber('plan')->name('goi-dich-vu.luu');
+        Route::get('/plan-features', [CustomerWebController::class, 'tinhNangGoi'])->name('tinh-nang-goi');
+        Route::post('/plan-features/{plan}', [CustomerWebController::class, 'luuTinhNangGoi'])
+            ->whereNumber('plan')->name('tinh-nang-goi.luu');
+        Route::post('/contracts/export', [CustomerWebController::class, 'xuatHopDong'])->name('hop-dong.xuat');
+        Route::post('/contracts/sign', [CustomerWebController::class, 'kyHopDong'])->name('hop-dong.ky');
+        Route::get('/contracts/{hopDong}', [CustomerWebController::class, 'chiTiet'])
+            ->whereNumber('hopDong')->name('hop-dong.chi-tiet');
+        Route::post('/contracts/{hopDong}', [CustomerWebController::class, 'luuChiTiet'])
+            ->whereNumber('hopDong')->name('hop-dong.luu');
+        Route::post('/contracts/{hopDong}/renew', [CustomerWebController::class, 'giaHan'])
+            ->whereNumber('hopDong')->name('hop-dong.gia-han');
+        Route::post('/contracts/{hopDong}/cancel', [CustomerWebController::class, 'huy'])
+            ->whereNumber('hopDong')->name('hop-dong.huy');
+        Route::post('/contracts/{hopDong}/payment', [CustomerWebController::class, 'thuTien'])
+            ->whereNumber('hopDong')->name('hop-dong.thu-tien');
+        // Mở / gỡ web cho từng chi nhánh của hợp đồng — tên miền do API đặt theo tên chi nhánh.
+        Route::post('/contracts/{hopDong}/branches', [CustomerWebController::class, 'moWeb'])
+            ->whereNumber('hopDong')->name('web-chi-nhanh.mo');
+        Route::post('/contracts/{hopDong}/branches/{shop}/remove', [CustomerWebController::class, 'goWeb'])
+            ->whereNumber(['hopDong', 'shop'])->name('web-chi-nhanh.go');
     });
 });
