@@ -384,11 +384,17 @@ Nó đi cùng lượt triển khai POS ở bước **5b/10** của `02-deploy.sh
 
 | Lần đầu `05-web-ban.sh` tự làm | Mỗi lượt |
 |---|---|
-| Tạo database + người dùng `selliotech_web`, sinh `ecommerce_web/backend/.env` (mật khẩu, `APP_KEY` ngẫu nhiên, `POS_API_URL` theo `APP_PORT` của `api/.env`) | Nạp `schema.sql`; `npm ci` + build Next.js, khởi động lại systemd `selliotech-web` (127.0.0.1:3100); dựng nginx `web.selliotech.store` (HTTP, hoặc HTTPS khi đã có chứng chỉ `selliotech-web`) + cổng nội bộ 127.0.0.1:8099 cho Next gọi API |
+| Sinh mật khẩu cho người dùng MySQL `ecw_prod` và lưu ở `/root/.config/ecw-prod-db.env` | Cấp quyền theo `ecommerce_web/backend/database/quyen-db.sql`, dựng lại `ecommerce_web/backend/.env`; `npm ci` + build Next.js, khởi động lại systemd `selliotech-web` (127.0.0.1:3100); dựng nginx `web.selliotech.store` (HTTP, hoặc HTTPS khi đã có chứng chỉ `selliotech-web`) + cổng nội bộ 127.0.0.1:8099 cho Next gọi API |
 
-> Database tên `selliotech_web`, **không** phải `ecommerce_web`: máy chủ prod dùng chung
-> MySQL với bản dev, mà database dev mang đúng tên `ecommerce_web`. Cũng vì chung máy mà cổng
-> tách đôi: dev Next 3101 + API nội bộ 8098, prod 3100 + 8099.
+> Web **không có database riêng**: nó đọc thẳng database bán hàng của POS (`selliotech`) và
+> ghi đúng các bảng `web_` trong chính database đó — các bảng ấy do migration của POS tạo, nên
+> phải chạy sau bước migration. Database nền tảng (`selliotech_platform`) chỉ đọc vài bảng.
+> Người dùng MySQL là `ecw_prod`, **khác** `ecw` của bản dev: prod và dev chung một máy MySQL,
+> tài khoản của web dev không được với tới database prod. Cũng vì chung máy mà cổng tách đôi:
+> dev Next 3101 + API nội bộ 8098, prod 3100 + 8099.
+>
+> Mật khẩu `ecw_prod` nằm ở `/root/.config/ecw-prod-db.env`, ngoài git và ngoài `/var/www/selliotech`:
+> `.env` được dựng lại mỗi lượt triển khai, mất tệp mật khẩu là web không vào được database.
 >
 > Cần Node.js **>= 20.9** (Next 16); script không tự cài vì `nodejs` của Ubuntu 24.04 là bản 18.
 
@@ -407,8 +413,9 @@ Lệnh tạo shop, xin chứng chỉ cho địa chỉ của nó (gộp mọi sho
 HTTPS. Không dùng wildcard vì wildcard phải xác minh DNS bằng tay mỗi 90 ngày; certbot tự gia
 hạn chứng chỉ này.
 
-Sao lưu đã gồm database `selliotech_web` (`web-ban.sql.gz`) và `.env` của nó. `04-restore.sh`
-chưa tự nạp lại phần này — cần thì: `gunzip -c web-ban.sql.gz | mysql selliotech_web`.
+Dữ liệu của web nằm trong database `selliotech`, nên bản sao lưu POS đã gồm luôn. Ảnh shop
+tải lên được đóng riêng (`anh-web-ban.tar`). Tệp `web-ban.sql.gz` trong các bản sao lưu cũ là
+database `selliotech_web` của bản thiết kế trước — không còn dùng.
 
 ## CI/CD — tự động kiểm tra và triển khai
 
